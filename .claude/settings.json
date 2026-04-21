@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kill -9 32412)",
+      "Bash(taskkill //F //PID 32412)",
+      "Bash(git fetch *)",
+      "Bash(git add *)"
+    ]
+  }
+}
