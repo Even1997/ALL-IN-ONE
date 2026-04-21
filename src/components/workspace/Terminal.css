@@ -1,0 +1,162 @@
+.terminal {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #cccccc;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #323233;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-dots .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminal-dots .dot.red {
+  background: #ff5f57;
+}
+
+.terminal-dots .dot.yellow {
+  background: #febc2e;
+}
+
+.terminal-dots .dot.green {
+  background: #28c840;
+}
+
+.terminal-title {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  color: #888888;
+}
+
+.terminal-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.terminal-action {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #888888;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.terminal-action:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cccccc;
+}
+
+.terminal-output {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+.terminal-line {
+  margin-bottom: 2px;
+}
+
+.terminal-line pre {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.terminal-line.command {
+  color: #ffffff;
+}
+
+.terminal-line.command pre::before {
+  content: none;
+}
+
+.terminal-line.output {
+  color: #cccccc;
+}
+
+.terminal-line.error {
+  color: #ff5f57;
+}
+
+.terminal-line.success {
+  color: #28c840;
+}
+
+.terminal-input-line {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #1e1e1e;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.terminal-prompt {
+  color: #28c840;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+  caret-color: #28c840;
+}
+
+.terminal-input::placeholder {
+  color: #666666;
+}
+
+/* Scrollbar */
+.terminal-output::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-output::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+
+.terminal-output::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
+}
+
+.terminal-output::-webkit-scrollbar-corner {
+  background: transparent;
+}

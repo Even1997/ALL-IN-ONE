@@ -1,0 +1,156 @@
+.file-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #252526;
+  color: #cccccc;
+  font-size: 13px;
+  user-select: none;
+}
+
+.explorer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.explorer-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888888;
+}
+
+.explorer-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.explorer-actions .icon-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #888888;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.explorer-actions .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cccccc;
+}
+
+.explorer-content {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  white-space: nowrap;
+}
+
+.file-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.file-item.selected {
+  background: rgba(0, 122, 255, 0.25);
+}
+
+.file-item.selected:hover {
+  background: rgba(0, 122, 255, 0.3);
+}
+
+.expand-btn {
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: transparent;
+  color: #888888;
+  cursor: pointer;
+  font-size: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.expand-btn:hover {
+  color: #cccccc;
+}
+
+.file-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: #3c3c3c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 10000;
+}
+
+.context-menu-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #cccccc;
+  transition: background 0.1s ease;
+}
+
+.context-menu-item:hover {
+  background: #094771;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 4px 0;
+}
+
+/* Scrollbar */
+.explorer-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.explorer-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.explorer-content::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+
+.explorer-content::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
+}
