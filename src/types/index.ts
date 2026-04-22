@@ -58,8 +58,10 @@ export interface ProjectMemory {
 export interface RequirementDoc {
   id: string;
   title: string;
+  content: string;
   summary: string;
   authorRole: '产品经理' | 'UI设计' | '开发' | '测试' | '运维';
+  sourceType?: 'manual' | 'upload' | 'ai';
   updatedAt: string;
   status: 'draft' | 'ready';
 }
@@ -218,6 +220,12 @@ export interface CodeFileRef {
 export interface FeatureNode {
   id: string;
   name: string;
+  description?: string;
+  details?: string[];
+  inputs?: string[];
+  outputs?: string[];
+  dependencies?: string[];
+  acceptanceCriteria?: string[];
   status: FeatureStatus;
   priority: FeaturePriority;
   progress: number;

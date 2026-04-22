@@ -190,6 +190,7 @@ export const useGlobalAIStore = create<GlobalAIState>()(
     }),
     {
       name: 'devflow-ai-store',
+      version: 1,
       storage: createJSONStorage(() => localStorage),
       onRehydrateStorage: () => (state) => {
         if (!state) {

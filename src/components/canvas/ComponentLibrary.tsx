@@ -9,45 +9,22 @@ interface ComponentItem {
 }
 
 const COMPONENT_LIBRARY: ComponentItem[] = [
-  // Basic
-  { type: 'button', name: '按钮', icon: '🔘', description: '点击触发操作', category: '基础' },
-  { type: 'text', name: '文本', icon: '📃', description: '展示文字信息', category: '基础' },
-  { type: 'image', name: '图片', icon: '🖼️', description: '展示图片内容', category: '基础' },
-  { type: 'input', name: '输入框', icon: '📝', description: '用户输入文本', category: '基础' },
-  { type: 'textarea', name: '多行文本', icon: '📝', description: '多行文本输入', category: '基础' },
-
-  // Form
-  { type: 'select', name: '下拉选择', icon: '📂', description: '下拉选择框', category: '表单' },
-  { type: 'checkbox', name: '复选框', icon: '☑️', description: '多选选项', category: '表单' },
-  { type: 'radio', name: '单选框', icon: '🔘', description: '单选选项', category: '表单' },
-  { type: 'switch', name: '开关', icon: '🔃', description: '切换开关', category: '表单' },
-  { type: 'slider', name: '滑块', icon: '🎚️', description: '范围选择', category: '表单' },
-  { type: 'progress', name: '进度条', icon: '📈', description: '展示进度', category: '表单' },
-
-  // Layout
-  { type: 'container', name: '容器', icon: '📦', description: '分组容器', category: '布局' },
-  { type: 'card', name: '卡片', icon: '🃏', description: '卡片容器', category: '布局' },
-  { type: 'form', name: '表单', icon: '📝', description: '表单容器', category: '布局' },
-  { type: 'table', name: '表格', icon: '📊', description: '数据表格', category: '布局' },
-  { type: 'list', name: '列表', icon: '📋', description: '列表视图', category: '布局' },
-
-  // Navigation
-  { type: 'navbar', name: '导航栏', icon: '🧭', description: '顶部导航', category: '导航' },
-  { type: 'sidebar', name: '侧边栏', icon: '📐', description: '侧边导航', category: '导航' },
-  { type: 'header', name: '头部', icon: '🏗️', description: '页面头部', category: '导航' },
-  { type: 'footer', name: '底部', icon: '📋', description: '页面底部', category: '导航' },
-
-  // Feedback
-  { type: 'modal', name: '弹窗', icon: '🪟', description: '模态弹窗', category: '反馈' },
-  { type: 'alert', name: '提示', icon: '⚠️', description: '警告提示', category: '反馈' },
-  { type: 'badge', name: '徽章', icon: '🏷️', description: '角标徽章', category: '反馈' },
-  { type: 'tooltip', name: '气泡', icon: '💬', description: '悬浮提示', category: '反馈' },
-
-  // Data Display
-  { type: 'avatar', name: '头像', icon: '👤', description: '用户头像', category: '数据' },
+  { type: 'header', name: '页头', icon: '▭', description: '页面顶部标题区', category: '结构' },
+  { type: 'sidebar', name: '侧栏', icon: '▥', description: '侧边导航区', category: '结构' },
+  { type: 'card', name: '卡片', icon: '▣', description: '摘要或信息块', category: '结构' },
+  { type: 'list', name: '列表', icon: '☰', description: '列表或表格主内容', category: '结构' },
+  { type: 'container', name: '容器', icon: '⬚', description: '大区块占位', category: '结构' },
+  { type: 'text', name: '文本', icon: 'T', description: '标题或说明文本', category: '内容' },
+  { type: 'image', name: '图片', icon: '✕', description: '图片或插图占位', category: '内容' },
+  { type: 'input', name: '输入框', icon: '⌸', description: '输入或搜索框', category: '表单' },
+  { type: 'textarea', name: '多行输入', icon: '≣', description: '多行文本区域', category: '表单' },
+  { type: 'select', name: '选择框', icon: '∨', description: '下拉选择器', category: '表单' },
+  { type: 'button', name: '按钮', icon: '◫', description: '主操作或次操作按钮', category: '表单' },
+  { type: 'modal', name: '弹层', icon: '□', description: '弹窗或二次确认层', category: '反馈' },
+  { type: 'alert', name: '提示条', icon: '!', description: '状态反馈或提示信息', category: '反馈' },
 ];
 
-const CATEGORIES = ['基础', '表单', '布局', '导航', '反馈', '数据'];
+const CATEGORIES = ['结构', '内容', '表单', '反馈'];
 
 interface ComponentLibraryProps {
   onComponentSelect?: (type: string) => void;
@@ -80,30 +57,33 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onComponentS
   return (
     <div
       style={{
-        width: '220px',
+        width: '100%',
+        minWidth: 0,
         height: '100%',
         backgroundColor: '#ffffff',
-        borderRight: '1px solid rgba(0, 0, 0, 0.08)',
+        border: '1px solid rgba(0, 0, 0, 0.08)',
+        borderRadius: '16px',
+        overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
       }}
     >
       {/* Header */}
-      <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(0, 0, 0, 0.06)' }}>
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#1d1d1f' }}>
-          组件库
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(0, 0, 0, 0.06)' }}>
+        <h3 style={{ margin: '0 0 6px 0', fontSize: '12px', fontWeight: 600, color: '#1d1d1f' }}>
+          线框组件
         </h3>
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="搜索组件..."
+          placeholder="搜索线框块..."
           style={{
             width: '100%',
-            padding: '7px 10px',
+            padding: '6px 8px',
             border: '1px solid #d2d2d7',
-            borderRadius: '7px',
-            fontSize: '12px',
+            borderRadius: '6px',
+            fontSize: '11px',
             outline: 'none',
             boxSizing: 'border-box',
             transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
@@ -123,7 +103,7 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onComponentS
       {/* Categories */}
       <div
         style={{
-          padding: '8px 10px',
+          padding: '6px 8px',
           display: 'flex',
           flexWrap: 'wrap',
           gap: '4px',
@@ -133,8 +113,8 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onComponentS
         <button
           onClick={() => setActiveCategory(null)}
           style={{
-            padding: '4px 8px',
-            fontSize: '10px',
+            padding: '3px 7px',
+            fontSize: '9px',
             border: 'none',
             borderRadius: '5px',
             cursor: 'pointer',
@@ -150,8 +130,8 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onComponentS
             key={cat}
             onClick={() => setActiveCategory(cat)}
             style={{
-              padding: '4px 8px',
-              fontSize: '10px',
+              padding: '3px 7px',
+              fontSize: '9px',
               border: 'none',
               borderRadius: '5px',
               cursor: 'pointer',
@@ -170,10 +150,10 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onComponentS
         style={{
           flex: 1,
           overflow: 'auto',
-          padding: '8px',
+          padding: '6px',
           display: 'grid',
           gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: '7px',
+          gap: '6px',
           alignContent: 'start',
         }}
       >
@@ -185,9 +165,9 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onComponentS
             onDragEnd={handleDragEnd}
             onClick={() => onComponentSelect?.(comp.type)}
             style={{
-              padding: '10px 6px',
+              padding: '8px 5px',
               border: '1px solid rgba(0, 0, 0, 0.08)',
-              borderRadius: '8px',
+              borderRadius: '7px',
               cursor: 'grab',
               textAlign: 'center',
               backgroundColor: draggedType === comp.type ? 'rgba(0, 122, 255, 0.06)' : '#ffffff',
@@ -196,9 +176,9 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onComponentS
             }}
             title={comp.description}
           >
-            <div style={{ fontSize: '22px', marginBottom: '3px' }}>{comp.icon}</div>
-            <div style={{ fontSize: '11px', fontWeight: 500, color: '#1d1d1f' }}>{comp.name}</div>
-            <div style={{ fontSize: '9px', color: '#86868b', marginTop: '2px' }}>{comp.type}</div>
+            <div style={{ fontSize: '18px', marginBottom: '2px' }}>{comp.icon}</div>
+            <div style={{ fontSize: '10px', fontWeight: 500, color: '#1d1d1f' }}>{comp.name}</div>
+            <div style={{ fontSize: '8px', color: '#86868b', marginTop: '1px' }}>{comp.type}</div>
           </div>
         ))}
       </div>
@@ -206,15 +186,15 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({ onComponentS
       {/* Hint */}
       <div
         style={{
-          padding: '10px 12px',
+          padding: '8px 10px',
           borderTop: '1px solid rgba(0, 0, 0, 0.06)',
           backgroundColor: 'rgba(0, 0, 0, 0.01)',
-          fontSize: '10px',
+          fontSize: '9px',
           color: '#86868b',
           textAlign: 'center',
         }}
       >
-        拖拽组件到画布添加
+        点击或拖拽到画布，生成低保真线框
       </div>
     </div>
   );

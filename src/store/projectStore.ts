@@ -9,6 +9,7 @@ import {
   CanvasElement,
   DeployPlanDoc,
   DesignSystemDoc,
+  DesignTokenGroup,
   DevTask,
   GeneratedFile,
   PageStructureNode,
@@ -21,6 +22,8 @@ import {
   UISpecDoc,
   WireframeDocument,
 } from '../types';
+import { featureTreeToMarkdown, markdownToFeatureTree } from '../utils/featureTreeToMarkdown';
+import { buildWireframesMarkdown } from '../utils/wireframe';
 
 export interface CreateProjectInput {
   name: string;
@@ -37,6 +40,8 @@ interface ProjectState {
   graph: ProjectGraph;
   memory: ProjectMemory | null;
   rawRequirementInput: string;
+  featuresMarkdown: string;
+  wireframesMarkdown: string;
   requirementDocs: RequirementDoc[];
   prd: ProductPRD | null;
   pageStructure: PageStructureNode[];
@@ -50,9 +55,16 @@ interface ProjectState {
   createProject: (input: CreateProjectInput) => { project: ProjectConfig; featureTree: FeatureTree };
   updateProject: (updates: Partial<Omit<ProjectConfig, 'id' | 'createdAt'>>) => void;
   setRawRequirementInput: (value: string) => void;
-  updateRequirementDoc: (id: string, updates: Partial<Pick<RequirementDoc, 'title' | 'summary' | 'status'>>) => void;
+  setFeaturesMarkdown: (value: string) => void;
+  updateRequirementDoc: (
+    id: string,
+    updates: Partial<Pick<RequirementDoc, 'title' | 'content' | 'summary' | 'status' | 'sourceType'>>
+  ) => void;
   addRequirementDoc: () => void;
+  ingestRequirementDoc: (input: { title: string; content: string; sourceType?: RequirementDoc['sourceType'] }) => void;
   generatePlanningArtifacts: (featureTree: FeatureTree | null) => FeatureTree | null;
+  generateProductArtifactsFromRequirements: () => FeatureTree | null;
+  saveWireframeDraft: (page: Pick<PageStructureNode, 'id' | 'name'>, elements: CanvasElement[]) => void;
   upsertWireframe: (page: Pick<PageStructureNode, 'id' | 'name'>, elements: CanvasElement[]) => void;
   updatePageStructureNode: (
     pageId: string,
@@ -71,16 +83,20 @@ const buildStarterRequirementDocs = (projectName: string): RequirementDoc[] => {
     {
       id: uuidv4(),
       title: `${projectName} 初始需求`,
+      content: `${projectName} 需要承接产品经理从需求输入到功能规划再到线稿设计的完整流程。`,
       summary: '整理核心目标、主要角色和 MVP 范围，作为后续 PRD 和功能树的基础输入。',
       authorRole: '产品经理',
+      sourceType: 'manual',
       updatedAt: now,
       status: 'ready',
     },
     {
       id: uuidv4(),
       title: '信息架构草案',
+      content: '左侧维护需求与功能菜单，中间和右侧根据点击内容切换文档、功能树和线稿查看器。',
       summary: '拆分页面结构、关键工作流与线框图入口，衔接产品与设计工作区。',
       authorRole: 'UI设计',
+      sourceType: 'manual',
       updatedAt: now,
       status: 'draft',
     },
@@ -123,6 +139,142 @@ const buildStarterFeatureTree = (projectName: string): FeatureTree => ({
     },
   ],
 });
+
+const createFeature = (
+  name: string,
+  overrides: Partial<FeatureNode> = {},
+  children: FeatureNode[] = []
+): FeatureNode => ({
+  id: uuidv4(),
+  name,
+  description: '',
+  details: [],
+  inputs: [],
+  outputs: [],
+  dependencies: [],
+  acceptanceCriteria: [],
+  status: 'pending',
+  priority: 'medium',
+  progress: 0,
+  linkedPrototypePageIds: [],
+  linkedCodeFiles: [],
+  children,
+  ...overrides,
+});
+
+const summarizeRequirement = (content: string) => {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+};
+
+const collectRequirementLines = (rawRequirementInput: string, docs: RequirementDoc[]) =>
+  [rawRequirementInput, ...docs.map((doc) => `${doc.title}\n${doc.content}\n${doc.summary}`)]
+    .join('\n')
+    .split('\n')
+    .map((line) => line.replace(/^[-*#\d.\s]+/, '').trim())
+    .filter((line) => line.length > 4);
+
+const buildFeatureTreeFromRequirements = (
+  projectName: string,
+  rawRequirementInput: string,
+  docs: RequirementDoc[]
+): FeatureTree => {
+  const lines = collectRequirementLines(rawRequirementInput, docs);
+  const hasWireframe = lines.some((line) => /线稿|草图|wireframe/i.test(line));
+  const hasMarkdown = lines.some((line) => /markdown|树状|层级|功能清单/i.test(line));
+  const hasAI = lines.some((line) => /\bai\b|智能|头脑风暴|skill/i.test(line));
+  const firstSummary = summarizeRequirement(lines[0] || rawRequirementInput || `${projectName} 产品规划`);
+
+  return {
+    id: uuidv4(),
+    name: `${projectName} 产品规划`,
+    children: [
+      createFeature(
+        '需求协作流程',
+        {
+          description: '让产品经理可以描述需求、选择技能并通过 AI 头脑风暴快速形成产品资料。',
+          details: ['支持直接输入需求', '支持选择 skill', '保留 AI 生成上下文'],
+          inputs: ['原始需求文本', '需求文档上传', '选中的 skill'],
+          outputs: ['PRD 草案', '功能清单', '线稿任务'],
+          acceptanceCriteria: ['能从需求输入进入规划', 'AI 提示词可复用', '产品文档可持续修改'],
+          priority: 'critical',
+          progress: 60,
+          status: 'in_progress',
+        },
+        [
+          createFeature('输入需求与文档沉淀', {
+            description: firstSummary,
+            details: lines.slice(0, 3),
+            priority: 'high',
+          }),
+          createFeature('Skill 选择与 AI 头脑风暴', {
+            description: '把需求、skill 与上下文组合成 AI 可继续执行的规划入口。',
+            details: ['记录当前选中的 skill', '生成可复用 prompt', '打开 AI 协作面板'],
+            priority: hasAI ? 'critical' : 'high',
+          }),
+        ]
+      ),
+      createFeature(
+        '树状功能清单',
+        {
+          description: '功能清单需要支持多层级树结构，并以 Markdown 形式长期保存在本地。',
+          details: ['层级结构代表父子概念', 'Markdown 需要可编辑和回灌', '方便后续 AI 查询与引用'],
+          outputs: ['features.md', '功能节点上下文'],
+          acceptanceCriteria: ['支持多层级编辑', '支持 Markdown 回灌', '节点与页面/线稿存在关联'],
+          priority: hasMarkdown ? 'critical' : 'high',
+          progress: 55,
+          status: 'in_progress',
+        },
+        [
+          createFeature('功能树编辑', {
+            description: '增删改查树节点并维护层级关系。',
+            details: ['节点描述', '输入输出', '依赖与验收'],
+          }),
+          createFeature('Markdown 本地存储', {
+            description: '将功能树以 Markdown 形式存储在本地，并可被 AI 检索。',
+            outputs: ['src/generated/planning/features.md'],
+          }),
+        ]
+      ),
+      createFeature(
+        '功能线稿绑定',
+        {
+          description: '每个功能需要对应线稿图，线稿图支持拖拉拽、修改与后续 UI 设计。',
+          details: ['页面级线稿档案', '元素坐标与尺寸持久化', '线稿与功能信息绑定'],
+          outputs: ['wireframes.json', 'wireframes.md'],
+          acceptanceCriteria: ['能选择页面继续编辑', '元素位置信息可回放', 'AI 可读取线稿上下文'],
+          priority: hasWireframe ? 'critical' : 'high',
+          progress: 50,
+          status: 'in_progress',
+        },
+        [
+          createFeature('线稿编辑画布', {
+            description: '支持拖拽组件、调整位置和尺寸。',
+          }),
+          createFeature('线稿结构化存储', {
+            description: '存储页面、功能、元素位置与说明，方便后续 UI 生成。',
+          }),
+        ]
+      ),
+      createFeature(
+        '产品经理工作台布局',
+        {
+          description: '界面左侧展示需求/功能菜单，中间和右侧根据当前点击展示文档、功能或线稿。',
+          details: ['左侧导航树', '中右双显示器', '上下文侧栏'],
+          acceptanceCriteria: ['产品经理无需频繁切 tab', '点击不同条目直接切换查看器'],
+          priority: 'high',
+          progress: 45,
+          status: 'in_progress',
+        },
+        [
+          createFeature('左侧需求与功能导航'),
+          createFeature('中区主查看器'),
+          createFeature('右区上下文与 AI 协作'),
+        ]
+      ),
+    ],
+  };
+};
 
 const buildProjectMemory = (project: ProjectConfig): ProjectMemory => ({
   techStack: {
@@ -652,6 +804,112 @@ const buildGeneratedFiles = (
   return files;
 };
 
+const buildPlanningFiles = (
+  project: ProjectConfig,
+  rawRequirementInput: string,
+  requirementDocs: RequirementDoc[],
+  featureTree: FeatureTree | null,
+  fallbackFeaturesMarkdown: string,
+  prd: ProductPRD | null,
+  pageStructure: PageStructureNode[],
+  wireframes: Record<string, WireframeDocument>
+): { featuresMarkdown: string; wireframesMarkdown: string; files: GeneratedFile[] } => {
+  const now = new Date().toISOString();
+  const effectiveTree =
+    featureTree || (fallbackFeaturesMarkdown.trim()
+      ? markdownToFeatureTree(fallbackFeaturesMarkdown, `${project.name} 产品规划`)
+      : null);
+  const featuresMarkdown = featureTree ? featureTreeToMarkdown(featureTree) : fallbackFeaturesMarkdown || '# 功能清单\n';
+  const wireframesMarkdown = buildWireframesMarkdown(pageStructure, wireframes, effectiveTree, project.appType);
+  const wireframeRegistry = collectDesignPages(pageStructure).map((page) => ({
+    pageId: page.id,
+    pageName: page.name,
+    route: getPageMetadata(page).route,
+    featureIds: page.featureIds,
+    elements:
+      wireframes[page.id]?.elements.map((element) => ({
+        id: element.id,
+        type: element.type,
+        x: element.x,
+        y: element.y,
+        width: element.width,
+        height: element.height,
+        props: element.props,
+      })) || [],
+  }));
+
+  const files: GeneratedFile[] = [
+    {
+      path: 'src/generated/planning/requirements.md',
+      content: [
+        `# ${project.name} 需求资料`,
+        '',
+        `> 项目：${project.name}`,
+        `> 技术栈：${project.frontendFramework} / ${project.backendFramework} / ${project.database}`,
+        '',
+        '## 原始需求',
+        '',
+        rawRequirementInput || '暂无原始需求输入。',
+        '',
+        ...requirementDocs.flatMap((doc) => [
+          `## ${doc.title}`,
+          '',
+          doc.content || doc.summary,
+          '',
+          `- summary: ${doc.summary}`,
+          `- source: ${doc.sourceType || 'manual'}`,
+          '',
+        ]),
+      ].join('\n'),
+      language: 'md',
+      category: 'design',
+      summary: '需求资料入口',
+      sourceTaskIds: [],
+      updatedAt: now,
+    },
+    {
+      path: 'src/generated/planning/features.md',
+      content: featuresMarkdown,
+      language: 'md',
+      category: 'design',
+      summary: '功能清单 Markdown',
+      sourceTaskIds: [],
+      updatedAt: now,
+    },
+    {
+      path: 'src/generated/planning/prd.md',
+      content: prd
+        ? `# ${prd.title}\n\n${prd.summary}\n\n${prd.sections.map((section) => `## ${section.title}\n\n${section.content}`).join('\n\n')}\n`
+        : '# PRD\n\n暂无内容。\n',
+      language: 'md',
+      category: 'design',
+      summary: 'PRD 文档',
+      sourceTaskIds: [],
+      updatedAt: now,
+    },
+    {
+      path: 'src/generated/planning/wireframes.md',
+      content: wireframesMarkdown,
+      language: 'md',
+      category: 'design',
+      summary: '线稿说明 Markdown',
+      sourceTaskIds: [],
+      updatedAt: now,
+    },
+    {
+      path: 'src/generated/planning/wireframes.json',
+      content: JSON.stringify(wireframeRegistry, null, 2),
+      language: 'json',
+      category: 'design',
+      summary: '线稿结构化存储',
+      sourceTaskIds: [],
+      updatedAt: now,
+    },
+  ];
+
+  return { featuresMarkdown, wireframesMarkdown, files };
+};
+
 const buildTestPlan = (features: FeatureNode[], pages: PageStructureNode[], uiSpecs: UISpecDoc[]): TestPlanDoc => {
   const now = new Date().toISOString();
   const cases = [
@@ -740,6 +998,14 @@ const buildDeliveryArtifacts = (
     testPlan,
     deployPlan,
   };
+};
+
+const mergeGeneratedFiles = (planningFiles: GeneratedFile[], deliveryFiles: GeneratedFile[]) => {
+  const merged = new Map<string, GeneratedFile>();
+  [...planningFiles, ...deliveryFiles].forEach((file) => {
+    merged.set(file.path, file);
+  });
+  return Array.from(merged.values());
 };
 
 const buildProjectGraph = (
@@ -1045,6 +1311,337 @@ const syncFeatureTreeWithPageStructure = (featureTree: FeatureTree | null, pageS
 
 const emptyGraph: ProjectGraph = { nodes: [], edges: [] };
 
+const normalizeStringArray = (value: unknown) =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
+const normalizeGraph = (value: unknown): ProjectGraph => {
+  if (!value || typeof value !== 'object') {
+    return emptyGraph;
+  }
+
+  const graph = value as Partial<ProjectGraph>;
+
+  return {
+    nodes: Array.isArray(graph.nodes) ? graph.nodes.filter(Boolean) as GraphNodeBase[] : [],
+    edges: Array.isArray(graph.edges) ? graph.edges.filter(Boolean) as GraphEdge[] : [],
+  };
+};
+
+const normalizeProjectConfig = (value: unknown): ProjectConfig | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const project = value as Partial<ProjectConfig>;
+  const now = new Date().toISOString();
+
+  return {
+    id: typeof project.id === 'string' ? project.id : uuidv4(),
+    name: typeof project.name === 'string' && project.name.trim().length > 0 ? project.name : '未命名项目',
+    appType: project.appType === 'mobile' || project.appType === 'mini_program' || project.appType === 'desktop' || project.appType === 'backend' || project.appType === 'api'
+      ? project.appType
+      : 'web',
+    frontendFramework: typeof project.frontendFramework === 'string' ? project.frontendFramework : '',
+    backendFramework: typeof project.backendFramework === 'string' ? project.backendFramework : '',
+    database: typeof project.database === 'string' ? project.database : '',
+    uiFramework: typeof project.uiFramework === 'string' ? project.uiFramework : '',
+    deployment: typeof project.deployment === 'string' ? project.deployment : '',
+    createdAt: typeof project.createdAt === 'string' ? project.createdAt : now,
+    updatedAt: typeof project.updatedAt === 'string' ? project.updatedAt : typeof project.createdAt === 'string' ? project.createdAt : now,
+  };
+};
+
+const normalizeRequirementDocs = (value: unknown): RequirementDoc[] =>
+  Array.isArray(value)
+    ? value
+        .filter((item): item is Partial<RequirementDoc> => Boolean(item) && typeof item === 'object')
+        .map((doc) => ({
+          id: typeof doc.id === 'string' ? doc.id : uuidv4(),
+          title: typeof doc.title === 'string' ? doc.title : '未命名需求',
+          content: typeof doc.content === 'string' ? doc.content : '',
+          summary: typeof doc.summary === 'string' ? doc.summary : '',
+          authorRole:
+            doc.authorRole === 'UI设计' || doc.authorRole === '开发' || doc.authorRole === '测试' || doc.authorRole === '运维'
+              ? doc.authorRole
+              : '产品经理',
+          sourceType: doc.sourceType === 'upload' || doc.sourceType === 'ai' ? doc.sourceType : 'manual',
+          updatedAt: typeof doc.updatedAt === 'string' ? doc.updatedAt : new Date().toISOString(),
+          status: doc.status === 'ready' ? 'ready' : 'draft',
+        }))
+    : [];
+
+const normalizePrd = (value: unknown): ProductPRD | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const prd = value as Partial<ProductPRD>;
+
+  return {
+    id: typeof prd.id === 'string' ? prd.id : uuidv4(),
+    title: typeof prd.title === 'string' ? prd.title : 'PRD',
+    summary: typeof prd.summary === 'string' ? prd.summary : '',
+    sections: Array.isArray(prd.sections)
+      ? prd.sections
+          .filter((section) => Boolean(section) && typeof section === 'object')
+          .map((section) => ({
+            id: typeof section.id === 'string' ? section.id : uuidv4(),
+            title: typeof section.title === 'string' ? section.title : '未命名章节',
+            content: typeof section.content === 'string' ? section.content : '',
+          }))
+      : [],
+    updatedAt: typeof prd.updatedAt === 'string' ? prd.updatedAt : new Date().toISOString(),
+    status: prd.status === 'ready' ? 'ready' : 'draft',
+  };
+};
+
+const normalizePageStructureNode = (value: unknown): PageStructureNode | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const node = value as Partial<PageStructureNode>;
+  const name = typeof node.name === 'string' ? node.name : '未命名页面';
+  const kind = node.kind === 'flow' || node.kind === 'module' ? node.kind : 'page';
+  const description = typeof node.description === 'string' ? node.description : '';
+  const metadata = getPageMetadata({
+    name,
+    kind,
+    description,
+    metadata: node.metadata,
+  });
+
+  return {
+    id: typeof node.id === 'string' ? node.id : uuidv4(),
+    name,
+    kind,
+    description,
+    featureIds: normalizeStringArray(node.featureIds),
+    metadata,
+    children: Array.isArray(node.children)
+      ? node.children
+          .map((child) => normalizePageStructureNode(child))
+          .filter((child): child is PageStructureNode => Boolean(child))
+      : [],
+  };
+};
+
+const normalizePageStructure = (value: unknown): PageStructureNode[] =>
+  Array.isArray(value)
+    ? value.map((node) => normalizePageStructureNode(node)).filter((node): node is PageStructureNode => Boolean(node))
+    : [];
+
+const normalizeCanvasElements = (value: unknown): CanvasElement[] =>
+  Array.isArray(value) ? value.filter(Boolean) as CanvasElement[] : [];
+
+const normalizeWireframes = (value: unknown): Record<string, WireframeDocument> => {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => {
+      const wireframe = item as Partial<WireframeDocument> | undefined;
+      return [
+        key,
+        {
+          id: typeof wireframe?.id === 'string' ? wireframe.id : uuidv4(),
+          pageId: typeof wireframe?.pageId === 'string' ? wireframe.pageId : key,
+          pageName: typeof wireframe?.pageName === 'string' ? wireframe.pageName : '未命名页面',
+          elements: normalizeCanvasElements(wireframe?.elements),
+          updatedAt: typeof wireframe?.updatedAt === 'string' ? wireframe.updatedAt : new Date().toISOString(),
+          status: wireframe?.status === 'ready' ? 'ready' : 'draft',
+        } satisfies WireframeDocument,
+      ];
+    })
+  );
+};
+
+const normalizeDesignTokenGroup = (value: unknown, label: string) => {
+  const group = value as Partial<DesignTokenGroup> | undefined;
+
+  return {
+    label: typeof group?.label === 'string' ? group.label : label,
+    values: normalizeStringArray(group?.values),
+  };
+};
+
+const normalizeDesignSystem = (value: unknown): DesignSystemDoc | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const designSystem = value as Partial<DesignSystemDoc>;
+
+  return {
+    id: typeof designSystem.id === 'string' ? designSystem.id : uuidv4(),
+    name: typeof designSystem.name === 'string' ? designSystem.name : '设计系统',
+    summary: typeof designSystem.summary === 'string' ? designSystem.summary : '',
+    principles: normalizeStringArray(designSystem.principles),
+    tokens: {
+      color: normalizeDesignTokenGroup(designSystem.tokens?.color, 'Color'),
+      typography: normalizeDesignTokenGroup(designSystem.tokens?.typography, 'Typography'),
+      spacing: normalizeDesignTokenGroup(designSystem.tokens?.spacing, 'Spacing'),
+      radius: normalizeDesignTokenGroup(designSystem.tokens?.radius, 'Radius'),
+    },
+    componentPatterns: Array.isArray(designSystem.componentPatterns)
+      ? designSystem.componentPatterns
+          .filter((item) => Boolean(item) && typeof item === 'object')
+          .map((item) => ({
+            id: typeof item.id === 'string' ? item.id : uuidv4(),
+            name: typeof item.name === 'string' ? item.name : '未命名模式',
+            description: typeof item.description === 'string' ? item.description : '',
+            sourcePageIds: normalizeStringArray(item.sourcePageIds),
+          }))
+      : [],
+    updatedAt: typeof designSystem.updatedAt === 'string' ? designSystem.updatedAt : new Date().toISOString(),
+    status: designSystem.status === 'ready' ? 'ready' : 'draft',
+  };
+};
+
+const normalizeUISpecs = (value: unknown): UISpecDoc[] =>
+  Array.isArray(value)
+    ? value
+        .filter((item): item is Partial<UISpecDoc> => Boolean(item) && typeof item === 'object')
+        .map((spec) => ({
+          id: typeof spec.id === 'string' ? spec.id : uuidv4(),
+          pageId: typeof spec.pageId === 'string' ? spec.pageId : '',
+          pageName: typeof spec.pageName === 'string' ? spec.pageName : '未命名页面',
+          route: typeof spec.route === 'string' ? spec.route : '',
+          template:
+            spec.template === 'dashboard' || spec.template === 'form' || spec.template === 'list' || spec.template === 'detail' || spec.template === 'workspace'
+              ? spec.template
+              : 'custom',
+          sections: normalizeStringArray(spec.sections),
+          interactionNotes: normalizeStringArray(spec.interactionNotes),
+          components: Array.isArray(spec.components)
+            ? spec.components
+                .filter((item) => Boolean(item) && typeof item === 'object')
+                .map((component) => ({
+                  id: typeof component.id === 'string' ? component.id : uuidv4(),
+                  type: typeof component.type === 'string' ? component.type : 'section',
+                  label: typeof component.label === 'string' ? component.label : '未命名组件',
+                  behavior: typeof component.behavior === 'string' ? component.behavior : '',
+                }))
+            : [],
+          status: spec.status === 'ready' ? 'ready' : 'draft',
+          updatedAt: typeof spec.updatedAt === 'string' ? spec.updatedAt : new Date().toISOString(),
+        }))
+    : [];
+
+const normalizeDevTasks = (value: unknown): DevTask[] =>
+  Array.isArray(value)
+    ? value
+        .filter((item): item is Partial<DevTask> => Boolean(item) && typeof item === 'object')
+        .map((task) => ({
+          id: typeof task.id === 'string' ? task.id : uuidv4(),
+          title: typeof task.title === 'string' ? task.title : '未命名任务',
+          summary: typeof task.summary === 'string' ? task.summary : '',
+          owner: task.owner === 'backend' || task.owner === 'qa' || task.owner === 'devops' ? task.owner : 'frontend',
+          status: task.status === 'ready' ? 'ready' : 'draft',
+          pageId: typeof task.pageId === 'string' ? task.pageId : undefined,
+          featureId: typeof task.featureId === 'string' ? task.featureId : undefined,
+          relatedFilePaths: normalizeStringArray(task.relatedFilePaths),
+          acceptanceCriteria: normalizeStringArray(task.acceptanceCriteria),
+        }))
+    : [];
+
+const normalizeGeneratedFiles = (value: unknown): GeneratedFile[] =>
+  Array.isArray(value)
+    ? value
+        .filter((item): item is Partial<GeneratedFile> => Boolean(item) && typeof item === 'object')
+        .map((file) => {
+          const language: GeneratedFile['language'] =
+            file.language === 'tsx' || file.language === 'ts' || file.language === 'css' || file.language === 'json' || file.language === 'md' || file.language === 'sh'
+              ? file.language
+              : 'yml';
+          const category: GeneratedFile['category'] =
+            file.category === 'frontend' || file.category === 'backend' || file.category === 'test' || file.category === 'deploy'
+              ? file.category
+              : 'design';
+
+          return {
+            path: typeof file.path === 'string' ? file.path : '',
+            content: typeof file.content === 'string' ? file.content : '',
+            language,
+            category,
+            summary: typeof file.summary === 'string' ? file.summary : '',
+            sourceTaskIds: normalizeStringArray(file.sourceTaskIds),
+            updatedAt: typeof file.updatedAt === 'string' ? file.updatedAt : new Date().toISOString(),
+          };
+        })
+        .filter((file) => file.path.length > 0)
+    : [];
+
+const normalizeTestPlan = (value: unknown): TestPlanDoc | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const testPlan = value as Partial<TestPlanDoc>;
+
+  return {
+    id: typeof testPlan.id === 'string' ? testPlan.id : uuidv4(),
+    summary: typeof testPlan.summary === 'string' ? testPlan.summary : '',
+    coverage: {
+      featureCount: typeof testPlan.coverage?.featureCount === 'number' ? testPlan.coverage.featureCount : 0,
+      pageCount: typeof testPlan.coverage?.pageCount === 'number' ? testPlan.coverage.pageCount : 0,
+      caseCount: typeof testPlan.coverage?.caseCount === 'number' ? testPlan.coverage.caseCount : 0,
+    },
+    cases: Array.isArray(testPlan.cases)
+      ? testPlan.cases
+          .filter((item) => Boolean(item) && typeof item === 'object')
+          .map((item) => ({
+            id: typeof item.id === 'string' ? item.id : uuidv4(),
+            title: typeof item.title === 'string' ? item.title : '未命名用例',
+            type: item.type === 'integration' || item.type === 'e2e' ? item.type : 'unit',
+            module: typeof item.module === 'string' ? item.module : '',
+            priority: item.priority === 'medium' || item.priority === 'low' ? item.priority : 'high',
+            steps: normalizeStringArray(item.steps),
+            expected: typeof item.expected === 'string' ? item.expected : '',
+            status: item.status === 'ready' ? 'ready' : 'draft',
+          }))
+      : [],
+    updatedAt: typeof testPlan.updatedAt === 'string' ? testPlan.updatedAt : new Date().toISOString(),
+    status: testPlan.status === 'ready' ? 'ready' : 'draft',
+  };
+};
+
+const normalizeDeployPlan = (value: unknown): DeployPlanDoc | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const deployPlan = value as Partial<DeployPlanDoc>;
+
+  return {
+    id: typeof deployPlan.id === 'string' ? deployPlan.id : uuidv4(),
+    target: typeof deployPlan.target === 'string' ? deployPlan.target : 'Workspace',
+    summary: typeof deployPlan.summary === 'string' ? deployPlan.summary : '',
+    environments: normalizeStringArray(deployPlan.environments),
+    envVars: normalizeStringArray(deployPlan.envVars),
+    steps: normalizeStringArray(deployPlan.steps),
+    artifacts: normalizeStringArray(deployPlan.artifacts),
+    commands: normalizeStringArray(deployPlan.commands),
+    updatedAt: typeof deployPlan.updatedAt === 'string' ? deployPlan.updatedAt : new Date().toISOString(),
+    status: deployPlan.status === 'ready' ? 'ready' : 'draft',
+  };
+};
+
+const normalizeProjectMemory = (value: unknown): ProjectMemory | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const memory = value as Partial<ProjectMemory>;
+
+  return {
+    techStack: memory.techStack && typeof memory.techStack === 'object' ? memory.techStack as Record<string, string> : {},
+    designSystem: memory.designSystem && typeof memory.designSystem === 'object' ? memory.designSystem as Record<string, unknown> : {},
+    codeStructure: memory.codeStructure && typeof memory.codeStructure === 'object' ? memory.codeStructure as Record<string, unknown> : {},
+  };
+};
+
 const updatePageNodeById = (
   nodes: PageStructureNode[],
   pageId: string,
@@ -1077,6 +1674,8 @@ export const useProjectStore = create<ProjectState>()(
       graph: emptyGraph,
       memory: null,
       rawRequirementInput: '',
+      featuresMarkdown: '',
+      wireframesMarkdown: '',
       requirementDocs: [],
       prd: null,
       pageStructure: [],
@@ -1110,7 +1709,18 @@ export const useProjectStore = create<ProjectState>()(
         const pageStructure = buildPageStructureFromFeatureTree(featureTree);
         const wireframes = buildWireframesFromPages(collectDesignPages(pageStructure));
         const memory = buildProjectMemory(project);
+        const planningArtifacts = buildPlanningFiles(
+          project,
+          rawRequirementInput,
+          requirementDocs,
+          featureTree,
+          '',
+          prd,
+          pageStructure,
+          wireframes
+        );
         const deliveryArtifacts = buildDeliveryArtifacts(project, featureTree, pageStructure, wireframes);
+        const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
         const graph = buildProjectGraph(
           project,
           requirementDocs,
@@ -1121,7 +1731,7 @@ export const useProjectStore = create<ProjectState>()(
           deliveryArtifacts.designSystem,
           deliveryArtifacts.uiSpecs,
           deliveryArtifacts.devTasks,
-          deliveryArtifacts.generatedFiles,
+          generatedFiles,
           deliveryArtifacts.testPlan,
           deliveryArtifacts.deployPlan
         );
@@ -1131,6 +1741,8 @@ export const useProjectStore = create<ProjectState>()(
           graph,
           memory,
           rawRequirementInput,
+          featuresMarkdown: planningArtifacts.featuresMarkdown,
+          wireframesMarkdown: planningArtifacts.wireframesMarkdown,
           requirementDocs,
           prd,
           pageStructure,
@@ -1138,7 +1750,7 @@ export const useProjectStore = create<ProjectState>()(
           designSystem: deliveryArtifacts.designSystem,
           uiSpecs: deliveryArtifacts.uiSpecs,
           devTasks: deliveryArtifacts.devTasks,
-          generatedFiles: deliveryArtifacts.generatedFiles,
+          generatedFiles,
           testPlan: deliveryArtifacts.testPlan,
           deployPlan: deliveryArtifacts.deployPlan,
         });
@@ -1180,7 +1792,34 @@ export const useProjectStore = create<ProjectState>()(
           };
         }),
 
-      setRawRequirementInput: (value) => set({ rawRequirementInput: value }),
+      setRawRequirementInput: (value) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return { rawRequirementInput: value };
+          }
+
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            value,
+            state.requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            state.pageStructure,
+            state.wireframes
+          );
+
+          return {
+            rawRequirementInput: value,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
+            generatedFiles: mergeGeneratedFiles(
+              planningArtifacts.files,
+              state.generatedFiles.filter((file) => !file.path.startsWith('src/generated/planning/'))
+            ),
+          };
+        }),
+
+      setFeaturesMarkdown: (value) => set({ featuresMarkdown: value }),
 
       updateRequirementDoc: (id, updates) =>
         set((state) => {
@@ -1198,8 +1837,24 @@ export const useProjectStore = create<ProjectState>()(
               : doc
           );
 
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            state.pageStructure,
+            state.wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(
+            planningArtifacts.files,
+            state.generatedFiles.filter((file) => !file.path.startsWith('src/generated/planning/'))
+          );
+
           return {
             requirementDocs,
+            generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
               requirementDocs,
@@ -1210,11 +1865,10 @@ export const useProjectStore = create<ProjectState>()(
               state.designSystem,
               state.uiSpecs,
               state.devTasks,
-              state.generatedFiles,
+              generatedFiles,
               state.testPlan,
               state.deployPlan
             ),
-            
           };
         }),
 
@@ -1229,15 +1883,33 @@ export const useProjectStore = create<ProjectState>()(
             {
               id: uuidv4(),
               title: '新增需求条目',
+              content: '补充新的用户故事、约束条件或业务规则。',
               summary: '补充新的用户故事、约束条件或业务规则。',
               authorRole: '产品经理',
+              sourceType: 'manual',
               updatedAt: new Date().toISOString(),
               status: 'draft',
             },
           ];
 
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            state.pageStructure,
+            state.wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(
+            planningArtifacts.files,
+            state.generatedFiles.filter((file) => !file.path.startsWith('src/generated/planning/'))
+          );
+
           return {
             requirementDocs,
+            generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
               requirementDocs,
@@ -1248,7 +1920,63 @@ export const useProjectStore = create<ProjectState>()(
               state.designSystem,
               state.uiSpecs,
               state.devTasks,
-              state.generatedFiles,
+              generatedFiles,
+              state.testPlan,
+              state.deployPlan
+            ),
+          };
+        }),
+
+      ingestRequirementDoc: (input) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return state;
+          }
+
+          const content = input.content.trim();
+          const requirementDocs = [
+            ...state.requirementDocs,
+            {
+              id: uuidv4(),
+              title: input.title,
+              content,
+              summary: summarizeRequirement(content),
+              authorRole: '产品经理' as const,
+              sourceType: input.sourceType || 'upload',
+              updatedAt: new Date().toISOString(),
+              status: 'ready' as const,
+            },
+          ];
+
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            state.pageStructure,
+            state.wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(
+            planningArtifacts.files,
+            state.generatedFiles.filter((file) => !file.path.startsWith('src/generated/planning/'))
+          );
+
+          return {
+            requirementDocs,
+            generatedFiles,
+            graph: buildProjectGraph(
+              state.currentProject,
+              requirementDocs,
+              null,
+              state.prd,
+              state.pageStructure,
+              state.wireframes,
+              state.designSystem,
+              state.uiSpecs,
+              state.devTasks,
+              generatedFiles,
               state.testPlan,
               state.deployPlan
             ),
@@ -1270,12 +1998,23 @@ export const useProjectStore = create<ProjectState>()(
             state.rawRequirementInput,
             syncedFeatureTree
           );
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            state.requirementDocs,
+            syncedFeatureTree,
+            state.featuresMarkdown,
+            prd,
+            pageStructure,
+            wireframes
+          );
           const deliveryArtifacts = buildDeliveryArtifacts(
             state.currentProject,
             syncedFeatureTree,
             pageStructure,
             wireframes
           );
+          const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
           const graph = buildProjectGraph(
             state.currentProject,
             state.requirementDocs,
@@ -1286,7 +2025,7 @@ export const useProjectStore = create<ProjectState>()(
             deliveryArtifacts.designSystem,
             deliveryArtifacts.uiSpecs,
             deliveryArtifacts.devTasks,
-            deliveryArtifacts.generatedFiles,
+            generatedFiles,
             deliveryArtifacts.testPlan,
             deliveryArtifacts.deployPlan
           );
@@ -1295,10 +2034,12 @@ export const useProjectStore = create<ProjectState>()(
             prd,
             pageStructure,
             wireframes,
+            featuresMarkdown: planningArtifacts.featuresMarkdown,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
             designSystem: deliveryArtifacts.designSystem,
             uiSpecs: deliveryArtifacts.uiSpecs,
             devTasks: deliveryArtifacts.devTasks,
-            generatedFiles: deliveryArtifacts.generatedFiles,
+            generatedFiles,
             testPlan: deliveryArtifacts.testPlan,
             deployPlan: deliveryArtifacts.deployPlan,
             graph,
@@ -1306,6 +2047,45 @@ export const useProjectStore = create<ProjectState>()(
 
           return syncedFeatureTree;
         },
+
+      generateProductArtifactsFromRequirements: () => {
+        const state = get();
+        if (!state.currentProject) {
+          return null;
+        }
+
+        const featureTree = buildFeatureTreeFromRequirements(
+          state.currentProject.name,
+          state.rawRequirementInput,
+          state.requirementDocs
+        );
+
+        return get().generatePlanningArtifacts(featureTree);
+      },
+
+      saveWireframeDraft: (page, elements) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return state;
+          }
+
+          const current = state.wireframes[page.id];
+          const wireframe: WireframeDocument = {
+            id: current?.id || uuidv4(),
+            pageId: page.id,
+            pageName: page.name,
+            elements,
+            updatedAt: new Date().toISOString(),
+            status: elements.length > 0 ? 'ready' : 'draft',
+          };
+
+          return {
+            wireframes: {
+              ...state.wireframes,
+              [page.id]: wireframe,
+            },
+          };
+        }),
 
       upsertWireframe: (page, elements) =>
         set((state) => {
@@ -1326,19 +2106,31 @@ export const useProjectStore = create<ProjectState>()(
             ...state.wireframes,
             [page.id]: wireframe,
           };
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            state.requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            state.pageStructure,
+            wireframes
+          );
           const deliveryArtifacts = buildDeliveryArtifacts(
             state.currentProject,
             null,
             state.pageStructure,
             wireframes
           );
+          const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
 
           return {
             wireframes,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
             designSystem: deliveryArtifacts.designSystem,
             uiSpecs: deliveryArtifacts.uiSpecs,
             devTasks: deliveryArtifacts.devTasks,
-            generatedFiles: deliveryArtifacts.generatedFiles,
+            generatedFiles,
             testPlan: deliveryArtifacts.testPlan,
             deployPlan: deliveryArtifacts.deployPlan,
             graph: buildProjectGraph(
@@ -1351,7 +2143,7 @@ export const useProjectStore = create<ProjectState>()(
               deliveryArtifacts.designSystem,
               deliveryArtifacts.uiSpecs,
               deliveryArtifacts.devTasks,
-              deliveryArtifacts.generatedFiles,
+              generatedFiles,
               deliveryArtifacts.testPlan,
               deliveryArtifacts.deployPlan
             ),
@@ -1377,20 +2169,32 @@ export const useProjectStore = create<ProjectState>()(
                   },
                 }
               : state.wireframes;
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            state.requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            pageStructure,
+            wireframes
+          );
           const deliveryArtifacts = buildDeliveryArtifacts(
             state.currentProject,
             null,
             pageStructure,
             wireframes
           );
+          const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
 
           return {
             pageStructure,
             wireframes,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
             designSystem: deliveryArtifacts.designSystem,
             uiSpecs: deliveryArtifacts.uiSpecs,
             devTasks: deliveryArtifacts.devTasks,
-            generatedFiles: deliveryArtifacts.generatedFiles,
+            generatedFiles,
             testPlan: deliveryArtifacts.testPlan,
             deployPlan: deliveryArtifacts.deployPlan,
             graph: buildProjectGraph(
@@ -1403,7 +2207,7 @@ export const useProjectStore = create<ProjectState>()(
               deliveryArtifacts.designSystem,
               deliveryArtifacts.uiSpecs,
               deliveryArtifacts.devTasks,
-              deliveryArtifacts.generatedFiles,
+              generatedFiles,
               deliveryArtifacts.testPlan,
               deliveryArtifacts.deployPlan
             ),
@@ -1422,12 +2226,25 @@ export const useProjectStore = create<ProjectState>()(
             state.pageStructure,
             state.wireframes
           );
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            state.requirementDocs,
+            featureTree,
+            state.featuresMarkdown,
+            state.prd,
+            state.pageStructure,
+            state.wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
 
           return {
+            featuresMarkdown: planningArtifacts.featuresMarkdown,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
             designSystem: deliveryArtifacts.designSystem,
             uiSpecs: deliveryArtifacts.uiSpecs,
             devTasks: deliveryArtifacts.devTasks,
-            generatedFiles: deliveryArtifacts.generatedFiles,
+            generatedFiles,
             testPlan: deliveryArtifacts.testPlan,
             deployPlan: deliveryArtifacts.deployPlan,
             graph: buildProjectGraph(
@@ -1440,7 +2257,7 @@ export const useProjectStore = create<ProjectState>()(
               deliveryArtifacts.designSystem,
               deliveryArtifacts.uiSpecs,
               deliveryArtifacts.devTasks,
-              deliveryArtifacts.generatedFiles,
+              generatedFiles,
               deliveryArtifacts.testPlan,
               deliveryArtifacts.deployPlan
             ),
@@ -1453,6 +2270,8 @@ export const useProjectStore = create<ProjectState>()(
           graph: emptyGraph,
           memory: null,
           rawRequirementInput: '',
+          featuresMarkdown: '',
+          wireframesMarkdown: '',
           requirementDocs: [],
           prd: null,
           pageStructure: [],
@@ -1467,7 +2286,58 @@ export const useProjectStore = create<ProjectState>()(
     }),
     {
       name: 'devflow-project-store',
+      version: 1,
       storage: createJSONStorage(() => localStorage),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<ProjectState>;
+        const currentProject = normalizeProjectConfig(persisted.currentProject);
+        const requirementDocs = normalizeRequirementDocs(persisted.requirementDocs);
+        const prd = normalizePrd(persisted.prd);
+        const pageStructure = normalizePageStructure(persisted.pageStructure);
+        const wireframes = normalizeWireframes(persisted.wireframes);
+        const designSystem = normalizeDesignSystem(persisted.designSystem);
+        const uiSpecs = normalizeUISpecs(persisted.uiSpecs);
+        const devTasks = normalizeDevTasks(persisted.devTasks);
+        const generatedFiles = normalizeGeneratedFiles(persisted.generatedFiles);
+        const testPlan = normalizeTestPlan(persisted.testPlan);
+        const deployPlan = normalizeDeployPlan(persisted.deployPlan);
+
+        return {
+          ...currentState,
+          ...persisted,
+          currentProject,
+          graph: currentProject
+            ? buildProjectGraph(
+                currentProject,
+                requirementDocs,
+                null,
+                prd,
+                pageStructure,
+                wireframes,
+                designSystem,
+                uiSpecs,
+                devTasks,
+                generatedFiles,
+                testPlan,
+                deployPlan
+              )
+            : normalizeGraph(persisted.graph),
+          memory: normalizeProjectMemory(persisted.memory),
+          rawRequirementInput: typeof persisted.rawRequirementInput === 'string' ? persisted.rawRequirementInput : '',
+          featuresMarkdown: typeof persisted.featuresMarkdown === 'string' ? persisted.featuresMarkdown : '',
+          wireframesMarkdown: typeof persisted.wireframesMarkdown === 'string' ? persisted.wireframesMarkdown : '',
+          requirementDocs,
+          prd,
+          pageStructure,
+          wireframes,
+          designSystem,
+          uiSpecs,
+          devTasks,
+          generatedFiles,
+          testPlan,
+          deployPlan,
+        };
+      },
     }
   )
 );

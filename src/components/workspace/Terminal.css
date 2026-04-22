@@ -160,3 +160,57 @@
 .terminal-output::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* DevFlow terminal overrides */
+
+.terminal {
+  background: linear-gradient(180deg, #0f1514 0%, #151c1b 100%);
+  color: #dfe6e4;
+}
+
+.terminal-header {
+  background: #202928;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.terminal-title {
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.terminal-action {
+  border-radius: 8px;
+}
+
+.terminal-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.terminal-line.command {
+  color: #a3faef;
+}
+
+.terminal-line.output {
+  color: #dfe6e4;
+}
+
+.terminal-line.error {
+  color: #ff8c8c;
+}
+
+.terminal-line.success,
+.terminal-prompt,
+.terminal-input {
+  color: #59d98d;
+}
+
+.terminal-input-line {
+  background: #121817;
+}
+
+.terminal-input::placeholder {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}

@@ -1,14 +1,28 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { Canvas } from '../canvas/Canvas';
-import { ComponentLibrary } from '../canvas/ComponentLibrary';
-import { FeatureTree } from '../feature-tree/FeatureTree';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import { usePreviewStore } from '../../store/previewStore';
 import { useProjectStore } from '../../store/projectStore';
-import { CanvasElement, FeatureNode, PageStructureNode } from '../../types';
-import { featureTreeToMarkdown, markdownToFeatureTree } from '../../utils/featureTreeToMarkdown';
+import { AppType, CanvasElement, FeatureNode, FeatureTree, PageStructureNode } from '../../types';
+import { featureTreeToMarkdown } from '../../utils/featureTreeToMarkdown';
+import { useShallow } from 'zustand/react/shallow';
+import {
+  buildPageWireframeMarkdown,
+  createWireframeModule,
+  findMarkdownModuleByOffset,
+  findMarkdownModuleMatch,
+  getCanvasPreset,
+  isMobileAppType,
+  MIN_MODULE_HEIGHT,
+  MIN_MODULE_WIDTH,
+  parsePageWireframeMarkdown,
+  snapToGrid,
+  toWireframeModuleDrafts,
+  WireframeModuleDraft,
+} from '../../utils/wireframe';
 
-type ProductTab = 'input' | 'feature' | 'wireframe';
+type SidebarTab = 'requirement' | 'page';
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [
@@ -16,139 +30,622 @@ const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
     ...collectDesignPages(node.children),
   ]);
 
-const joinLines = (items?: string[]) => (items || []).join('\n');
+const collectFeatureNodes = (nodes: FeatureNode[]): FeatureNode[] =>
+  nodes.flatMap((node) => [node, ...collectFeatureNodes(node.children)]);
 
-const parseLines = (value: string) =>
-  value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+const getPagePath = (nodes: PageStructureNode[], targetId: string, path: PageStructureNode[] = []): PageStructureNode[] => {
+  for (const node of nodes) {
+    if (node.id === targetId) {
+      return [...path, node];
+    }
 
-const buildPromptPreview = (feature: FeatureNode, path: FeatureNode[]) => {
-  const hierarchy = path.map((item, index) => `${index + 1}级功能：${item.name}`).join('\n');
-  const lines = [
-    '请围绕下面这个功能节点继续生成更详细的产品与实现建议：',
-    '',
-    hierarchy,
-    '',
-    `当前节点：${feature.name}`,
-    `功能描述：${feature.description || '待补充'}`,
-    `补充说明：${feature.details?.join(' | ') || '待补充'}`,
-    `输入：${feature.inputs?.join(' | ') || '待补充'}`,
-    `输出：${feature.outputs?.join(' | ') || '待补充'}`,
-    `依赖：${feature.dependencies?.join(' | ') || '待补充'}`,
-    `验收标准：${feature.acceptanceCriteria?.join(' | ') || '待补充'}`,
-  ];
+    const nextPath = getPagePath(node.children, targetId, [...path, node]);
+    if (nextPath.length > 0) {
+      return nextPath;
+    }
+  }
 
-  return lines.join('\n');
+  return [];
 };
 
-interface ProductWorkbenchProps {
-  onFeatureSelect?: (node: FeatureNode) => void;
+const createCanvasId = () =>
+  globalThis.crypto?.randomUUID?.() ?? `canvas-${Math.random().toString(36).slice(2, 10)}`;
+
+const buildSampleWireframe = (pageName: string, featureName: string, isMobile: boolean): CanvasElement[] =>
+  isMobile
+    ? [
+        createWireframeModule({ id: createCanvasId(), name: `${pageName} 顶部`, x: 20, y: 28, content: featureName }, 'mobile'),
+        createWireframeModule({ id: createCanvasId(), name: '搜索按钮', x: 20, y: 142, content: '搜索入口' }, 'mobile'),
+        createWireframeModule({ id: createCanvasId(), name: '主内容区', x: 20, y: 256, content: '列表或卡片主区域' }, 'mobile'),
+        createWireframeModule({ id: createCanvasId(), name: '底部操作', x: 20, y: 370, content: '提交 / 下一步' }, 'mobile'),
+      ]
+    : [
+        createWireframeModule({ id: createCanvasId(), name: `${pageName} 页头`, x: 28, y: 24, content: featureName }, 'web'),
+        createWireframeModule({ id: createCanvasId(), name: '左侧导航', x: 28, y: 138, content: '一级导航 / 二级导航' }, 'web'),
+        createWireframeModule({ id: createCanvasId(), name: '搜索按钮', x: 356, y: 138, content: '搜索与筛选' }, 'web'),
+        createWireframeModule({ id: createCanvasId(), name: '主内容区', x: 356, y: 252, content: '表格、卡片或列表区域' }, 'web'),
+      ];
+
+interface PageTreeNodeProps {
+  node: PageStructureNode;
+  depth: number;
+  selectedPageId: string | null;
+  onSelect: (pageId: string) => void;
 }
 
-export const ProductWorkbench: React.FC<ProductWorkbenchProps> = ({ onFeatureSelect }) => {
-  const [activeTab, setActiveTab] = useState<ProductTab>('input');
-  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const hydratedPageIdRef = useRef<string | null>(null);
-  const lastWireframeSnapshotRef = useRef<string>('[]');
-  const skipMarkdownHydrateRef = useRef(false);
-  const markdownApplyTimerRef = useRef<number | null>(null);
+const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onSelect }) => {
+  const childPages = collectDesignPages(node.children);
+  const isPage = node.kind === 'page';
+  const isSelected = selectedPageId === node.id;
 
-  const {
-    currentProject,
-    rawRequirementInput,
-    featuresMarkdown,
-    wireframesMarkdown,
-    requirementDocs,
-    pageStructure,
-    wireframes,
-    prd,
-    generatedFiles,
-    setRawRequirementInput,
-    setFeaturesMarkdown,
-    ingestRequirementDoc,
-    generateProductArtifactsFromRequirements,
-    upsertWireframe,
-  } = useProjectStore();
+  return (
+    <div className="pm-page-tree-group">
+      <div className="pm-page-tree-row" style={{ paddingLeft: `${depth * 16}px` }}>
+        {isPage ? (
+          <button
+            className={`pm-page-tree-node ${isSelected ? 'active' : ''}`}
+            onClick={() => onSelect(node.id)}
+            type="button"
+          >
+            <strong>{node.name}</strong>
+            <span>{node.metadata.route || node.kind}</span>
+          </button>
+        ) : (
+          <div className="pm-page-tree-label">
+            <strong>{node.name}</strong>
+            <span>
+              {node.kind === 'flow' ? '页面组' : '模块'}{childPages.length > 0 ? ` · ${childPages.length} 个页面` : ''}
+            </span>
+          </div>
+        )}
+      </div>
 
-  const {
-    tree,
-    setTree,
-    selectedFeatureId,
-    selectFeature,
-    updateFeature,
-    getFeaturePath,
-    getSelectedFeature,
-  } = useFeatureTreeStore();
+      {node.children.length > 0 && (
+        <div className="pm-page-tree-children">
+          {node.children.map((child) => (
+            <PageTreeNode key={child.id} node={child} depth={depth + 1} selectedPageId={selectedPageId} onSelect={onSelect} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
 
-  const { elements, clearCanvas, loadFromCode } = usePreviewStore();
+interface WireframeSidebarProps {
+  selectedPage: PageStructureNode;
+  appType?: AppType;
+  featureTree: FeatureTree | null;
+  draggingModuleId: string | null;
+  setDraggingModuleId: Dispatch<SetStateAction<string | null>>;
+  pagePathText: string;
+  linkedFeatureName: string;
+  childPageCount: number;
+  canvasLabel: string;
+  onAddModule: (position?: { x: number; y: number }) => void;
+  onGenerateSampleWireframe: () => void;
+  onClearCurrentWireframe: () => void;
+}
 
-  const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
-  const selectedPage = designPages.find((page) => page.id === selectedPageId) || designPages[0] || null;
-  const currentWireframe = selectedPage ? wireframes[selectedPage.id] : null;
-  const planningFiles = generatedFiles.filter((file) => file.path.startsWith('src/generated/planning/'));
-  const selectedFeature = getSelectedFeature();
-  const selectedFeaturePath = selectedFeatureId ? getFeaturePath(selectedFeatureId) : [];
-  const promptPreview = selectedFeature ? buildPromptPreview(selectedFeature, selectedFeaturePath) : '';
+const getModuleDraft = (element: CanvasElement): WireframeModuleDraft => ({
+  id: element.id,
+  name: String(element.props.name || element.props.title || element.props.text || '未命名模块'),
+  x: Number.isFinite(element.x) ? Math.max(0, Math.round(element.x)) : 0,
+  y: Number.isFinite(element.y) ? Math.max(0, Math.round(element.y)) : 0,
+  width: Number.isFinite(element.width) ? Math.max(MIN_MODULE_WIDTH, Math.round(element.width)) : MIN_MODULE_WIDTH,
+  height: Number.isFinite(element.height) ? Math.max(MIN_MODULE_HEIGHT, Math.round(element.height)) : MIN_MODULE_HEIGHT,
+  content: String(element.props.content || element.props.placeholder || element.props.text || ''),
+});
 
-  useEffect(() => {
-    if (!tree) {
+const getModuleContentSummary = (content: string) => {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '暂无内容说明';
+  }
+
+  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+};
+
+interface WireframeModuleCardProps {
+  moduleId: string;
+  draggingModuleId: string | null;
+  setDraggingModuleId: Dispatch<SetStateAction<string | null>>;
+  appType?: AppType;
+}
+
+const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, draggingModuleId, setDraggingModuleId, appType }) => {
+  const element = usePreviewStore((state) => state.elements.find((item) => item.id === moduleId) || null);
+  const isActive = usePreviewStore((state) => state.selectedElementId === moduleId);
+  const selectElement = usePreviewStore((state) => state.selectElement);
+  const deleteElement = usePreviewStore((state) => state.deleteElement);
+  const reorderElements = usePreviewStore((state) => state.reorderElements);
+  const updateElement = usePreviewStore((state) => state.updateElement);
+  const module = useMemo(() => (element ? getModuleDraft(element) : null), [element]);
+  const [numericDrafts, setNumericDrafts] = useState<{ x: string; y: string; width: string; height: string }>({
+    x: '0',
+    y: '0',
+    width: String(MIN_MODULE_WIDTH),
+    height: String(MIN_MODULE_HEIGHT),
+  });
+
+  const handleModuleFieldChange = useCallback((updates: Partial<{ name: string; x: number; y: number; width: number; height: number; content: string }>) => {
+    if (!element) {
       return;
     }
-    skipMarkdownHydrateRef.current = true;
-    setFeaturesMarkdown(featureTreeToMarkdown(tree));
-  }, [tree, setFeaturesMarkdown]);
 
-  useEffect(() => {
-    if (!featuresMarkdown.trim()) {
-      return;
-    }
-
-    if (skipMarkdownHydrateRef.current) {
-      skipMarkdownHydrateRef.current = false;
-      return;
-    }
-
-    if (markdownApplyTimerRef.current) {
-      window.clearTimeout(markdownApplyTimerRef.current);
-    }
-
-    markdownApplyTimerRef.current = window.setTimeout(() => {
-      const nextTree = markdownToFeatureTree(
-        featuresMarkdown,
-        currentProject ? `${currentProject.name} 产品规划` : '功能清单'
-      );
-      setTree(nextTree);
-      if (selectedFeatureId) {
-        const nextPath = useFeatureTreeStore.getState().getFeaturePath(selectedFeatureId);
-        if (nextPath.length === 0 && nextTree.children[0]) {
-          selectFeature(nextTree.children[0].id);
-          onFeatureSelect?.(nextTree.children[0]);
-        }
-      }
-    }, 500);
-
-    return () => {
-      if (markdownApplyTimerRef.current) {
-        window.clearTimeout(markdownApplyTimerRef.current);
-        markdownApplyTimerRef.current = null;
-      }
-    };
-  }, [currentProject, featuresMarkdown, onFeatureSelect, selectFeature, selectedFeatureId, setTree]);
-
-  useEffect(() => {
-    if (designPages.length === 0) {
-      setSelectedPageId(null);
-      clearCanvas();
-      return;
-    }
-
-    setSelectedPageId((currentId) =>
-      currentId && designPages.some((page) => page.id === currentId) ? currentId : designPages[0].id
+    const nextElement = createWireframeModule(
+      {
+        id: moduleId,
+        name: typeof updates.name === 'string' ? updates.name : String(element.props.name || element.props.title || '模块'),
+        x: typeof updates.x === 'number' ? Math.max(0, Math.round(updates.x)) : element.x,
+        y: typeof updates.y === 'number' ? Math.max(0, Math.round(updates.y)) : element.y,
+        width: typeof updates.width === 'number' ? Math.max(MIN_MODULE_WIDTH, Math.round(updates.width)) : element.width,
+        height: typeof updates.height === 'number' ? Math.max(MIN_MODULE_HEIGHT, Math.round(updates.height)) : element.height,
+        content: typeof updates.content === 'string' ? updates.content : String(element.props.content || ''),
+      },
+      appType
     );
-  }, [clearCanvas, designPages]);
+
+    updateElement(moduleId, nextElement);
+  }, [appType, element, moduleId, updateElement]);
+
+  useEffect(() => {
+    if (!module) {
+      return;
+    }
+
+    setNumericDrafts({
+      x: String(module.x),
+      y: String(module.y),
+      width: String(module.width ?? MIN_MODULE_WIDTH),
+      height: String(module.height ?? MIN_MODULE_HEIGHT),
+    });
+  }, [module]);
+
+  const handleNumericDraftChange = useCallback((
+    field: 'x' | 'y' | 'width' | 'height',
+    value: string
+  ) => {
+    setNumericDrafts((current) => ({ ...current, [field]: value }));
+  }, []);
+
+  const handleNumericFieldCommit = useCallback((field: 'x' | 'y' | 'width' | 'height') => {
+    if (!module) {
+      return;
+    }
+
+    const rawValue = numericDrafts[field].trim();
+    if (!rawValue) {
+      setNumericDrafts((current) => ({
+        ...current,
+        [field]: String(module[field] ?? (field === 'width' ? MIN_MODULE_WIDTH : MIN_MODULE_HEIGHT)),
+      }));
+      return;
+    }
+
+    const nextValue = Number(rawValue);
+    if (!Number.isFinite(nextValue)) {
+      setNumericDrafts((current) => ({
+        ...current,
+        [field]: String(module[field] ?? (field === 'width' ? MIN_MODULE_WIDTH : MIN_MODULE_HEIGHT)),
+      }));
+      return;
+    }
+
+    handleModuleFieldChange({ [field]: nextValue });
+  }, [handleModuleFieldChange, module, numericDrafts]);
+
+  if (!module) {
+    return null;
+  }
+
+  return (
+    <div
+      data-module-id={moduleId}
+      className={`pm-module-card ${isActive ? 'active' : ''} ${draggingModuleId === moduleId ? 'dragging' : ''}`}
+      onClick={() => selectElement(moduleId)}
+      role="button"
+      tabIndex={0}
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        if (draggingModuleId && draggingModuleId !== moduleId) {
+          reorderElements(draggingModuleId, moduleId);
+          selectElement(draggingModuleId);
+        }
+        setDraggingModuleId(null);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          selectElement(moduleId);
+        }
+      }}
+    >
+      <div className="pm-module-card-header">
+        <div className="pm-module-card-title">
+          <button
+            className="pm-drag-handle"
+            type="button"
+            draggable
+            onDragStart={() => setDraggingModuleId(moduleId)}
+            onDragEnd={() => setDraggingModuleId(null)}
+            onClick={(event) => event.stopPropagation()}
+            title="拖动调整层级"
+          >
+            ≡
+          </button>
+          <strong>{module.name}</strong>
+        </div>
+        <button
+          className="pm-link-btn"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            deleteElement(moduleId);
+          }}
+        >
+          删除
+        </button>
+      </div>
+
+      <div className="pm-module-card-meta">
+        <span>{`X ${module.x}`}</span>
+        <span>{`Y ${module.y}`}</span>
+        <span>{`宽 ${module.width}`}</span>
+        <span>{`高 ${module.height}`}</span>
+      </div>
+
+      {isActive ? (
+        <>
+          <input
+            className="product-input"
+            value={module.name}
+            onChange={(event) => handleModuleFieldChange({ name: event.target.value })}
+            placeholder="模块名称"
+          />
+          <div className="pm-form-grid">
+            <input
+              className="product-input"
+              type="number"
+              value={numericDrafts.x}
+              onChange={(event) => handleNumericDraftChange('x', event.target.value)}
+              onBlur={() => handleNumericFieldCommit('x')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur();
+                }
+              }}
+              placeholder="X"
+            />
+            <input
+              className="product-input"
+              type="number"
+              value={numericDrafts.y}
+              onChange={(event) => handleNumericDraftChange('y', event.target.value)}
+              onBlur={() => handleNumericFieldCommit('y')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur();
+                }
+              }}
+              placeholder="Y"
+            />
+            <input
+              className="product-input"
+              type="number"
+              value={numericDrafts.width}
+              onChange={(event) => handleNumericDraftChange('width', event.target.value)}
+              onBlur={() => handleNumericFieldCommit('width')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur();
+                }
+              }}
+              placeholder="宽"
+            />
+            <input
+              className="product-input"
+              type="number"
+              value={numericDrafts.height}
+              onChange={(event) => handleNumericDraftChange('height', event.target.value)}
+              onBlur={() => handleNumericFieldCommit('height')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur();
+                }
+              }}
+              placeholder="高"
+            />
+          </div>
+          <textarea
+            className="product-textarea compact"
+            value={module.content}
+            onChange={(event) => handleModuleFieldChange({ content: event.target.value })}
+            placeholder="模块内容说明"
+          />
+        </>
+      ) : (
+        <p className="pm-module-card-preview" title={module.content || '暂无内容说明'}>
+          {getModuleContentSummary(module.content)}
+        </p>
+      )}
+    </div>
+  );
+});
+
+const WireframeSidebar = memo<WireframeSidebarProps>(({
+  selectedPage,
+  appType,
+  featureTree,
+  draggingModuleId,
+  setDraggingModuleId,
+  pagePathText,
+  linkedFeatureName,
+  childPageCount,
+  canvasLabel,
+  onAddModule,
+  onGenerateSampleWireframe,
+  onClearCurrentWireframe,
+}) => {
+  const [isMarkdownEditorOpen, setIsMarkdownEditorOpen] = useState(false);
+  const [isArtifactsPanelOpen, setIsArtifactsPanelOpen] = useState(false);
+  const [isArtifactsRefreshing, setIsArtifactsRefreshing] = useState(false);
+  const [wireframesPreview, setWireframesPreview] = useState('');
+  const [pageMarkdownDraft, setPageMarkdownDraft] = useState('');
+  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const moduleListRef = useRef<HTMLDivElement | null>(null);
+  const lastSyncedMarkdownRef = useRef('');
+  const elements = usePreviewStore((state) => state.elements);
+  const selectedElementId = usePreviewStore((state) => state.selectedElementId);
+  const selectElement = usePreviewStore((state) => state.selectElement);
+  const loadFromCode = usePreviewStore((state) => state.loadFromCode);
+  const generateDeliveryArtifacts = useProjectStore((state) => state.generateDeliveryArtifacts);
+  const moduleIds = useMemo(() => elements.map((element) => element.id), [elements]);
+  const moduleDrafts = useMemo(() => toWireframeModuleDrafts(elements), [elements]);
+  const selectedModule = useMemo(
+    () => moduleDrafts.find((module) => module.id === selectedElementId) || null,
+    [moduleDrafts, selectedElementId]
+  );
+  const buildCurrentPageMarkdown = useCallback(() => {
+    const currentWireframe = useProjectStore.getState().wireframes[selectedPage.id] || null;
+
+    return buildPageWireframeMarkdown(
+      selectedPage,
+      {
+        id: currentWireframe?.id || `draft-${selectedPage.id}`,
+        pageId: selectedPage.id,
+        pageName: selectedPage.name,
+        elements: usePreviewStore.getState().elements,
+        updatedAt: currentWireframe?.updatedAt || new Date().toISOString(),
+        status: currentWireframe?.status || 'draft',
+      },
+      featureTree,
+      appType
+    );
+  }, [appType, featureTree, selectedPage]);
+
+  useEffect(() => {
+    setIsMarkdownEditorOpen(false);
+    setIsArtifactsPanelOpen(false);
+    setIsArtifactsRefreshing(false);
+    setPageMarkdownDraft('');
+    setWireframesPreview('');
+    lastSyncedMarkdownRef.current = '';
+  }, [selectedPage.id]);
+
+  useEffect(() => {
+    if (!isMarkdownEditorOpen || !selectedModule || !markdownTextareaRef.current) {
+      return;
+    }
+
+    const match = findMarkdownModuleMatch(pageMarkdownDraft, selectedModule);
+    if (!match) {
+      return;
+    }
+
+    const textarea = markdownTextareaRef.current;
+    const activeElement = document.activeElement;
+    const isEditingAnotherField =
+      activeElement instanceof HTMLInputElement ||
+      (activeElement instanceof HTMLTextAreaElement && activeElement !== textarea);
+
+    if (!isEditingAnotherField) {
+      textarea.focus();
+    }
+
+    textarea.setSelectionRange(match.start, match.end);
+    const linesBefore = pageMarkdownDraft.slice(0, match.start).split('\n').length - 1;
+    textarea.scrollTop = Math.max(0, linesBefore * 22 - 48);
+  }, [isMarkdownEditorOpen, pageMarkdownDraft, selectedModule]);
+
+  const handleMarkdownCursorSync = useCallback((cursorPosition: number) => {
+    const match = findMarkdownModuleByOffset(pageMarkdownDraft, cursorPosition);
+    if (!match) {
+      return;
+    }
+
+    const targetModule = moduleDrafts.find((module) =>
+      module.name === match.name &&
+      module.x === match.x &&
+      module.y === match.y
+    ) || moduleDrafts.find((module) => module.name === match.name);
+
+    if (!targetModule?.id) {
+      return;
+    }
+
+    selectElement(targetModule.id);
+    const moduleNode = moduleListRef.current?.querySelector<HTMLElement>(`[data-module-id="${targetModule.id}"]`);
+    moduleNode?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [moduleDrafts, pageMarkdownDraft, selectElement]);
+
+  const handleApplyMarkdown = useCallback(() => {
+    const parsedElements = parsePageWireframeMarkdown(pageMarkdownDraft, appType);
+    lastSyncedMarkdownRef.current = pageMarkdownDraft;
+    loadFromCode(parsedElements);
+  }, [appType, loadFromCode, pageMarkdownDraft]);
+
+  const handleToggleMarkdownEditor = useCallback(() => {
+    setIsMarkdownEditorOpen((current) => {
+      if (current) {
+        return false;
+      }
+
+      const nextMarkdown = buildCurrentPageMarkdown();
+      lastSyncedMarkdownRef.current = nextMarkdown;
+      setPageMarkdownDraft(nextMarkdown);
+      return true;
+    });
+  }, [buildCurrentPageMarkdown]);
+
+  const handleResetMarkdown = useCallback(() => {
+    const nextMarkdown = buildCurrentPageMarkdown();
+    lastSyncedMarkdownRef.current = nextMarkdown;
+    setPageMarkdownDraft(nextMarkdown);
+  }, [buildCurrentPageMarkdown]);
+
+  useEffect(() => {
+    if (!isMarkdownEditorOpen) {
+      return;
+    }
+
+    const nextMarkdown = buildCurrentPageMarkdown();
+    if (pageMarkdownDraft !== lastSyncedMarkdownRef.current || nextMarkdown === pageMarkdownDraft) {
+      return;
+    }
+
+    lastSyncedMarkdownRef.current = nextMarkdown;
+    setPageMarkdownDraft(nextMarkdown);
+  }, [buildCurrentPageMarkdown, elements, isMarkdownEditorOpen, pageMarkdownDraft]);
+
+  const handleRefreshArtifacts = useCallback(() => {
+    setIsArtifactsRefreshing(true);
+
+    window.requestAnimationFrame(() => {
+      generateDeliveryArtifacts(featureTree);
+      setWireframesPreview(useProjectStore.getState().wireframesMarkdown || '# 线框说明\n\n暂无页面线框。');
+      setIsArtifactsPanelOpen(true);
+      setIsArtifactsRefreshing(false);
+    });
+  }, [featureTree, generateDeliveryArtifacts]);
+
+  return (
+    <section className="pm-card pm-wireframe-side">
+      <div className="pm-wireframe-inline-meta">
+        <div className="pm-context-card pm-wireframe-page-card">
+          <div className="pm-wireframe-side-header">
+            <div>
+              <strong>{selectedPage.name}</strong>
+              <span>{selectedPage.metadata.route || canvasLabel}</span>
+            </div>
+            <div className="pm-inline-actions">
+              <button className="doc-action-btn" type="button" onClick={() => onAddModule()}>
+                添加模块
+              </button>
+              <button className="doc-action-btn secondary" type="button" onClick={onGenerateSampleWireframe}>
+                示例草图
+              </button>
+              <button className="doc-action-btn secondary" type="button" onClick={onClearCurrentWireframe}>
+                清空
+              </button>
+            </div>
+          </div>
+
+          <div className="pm-wireframe-meta-strip">
+            <span>{pagePathText}</span>
+            <span>{linkedFeatureName}</span>
+            <span>{moduleDrafts.length} 个模块</span>
+            <span>{childPageCount > 0 ? `${childPageCount} 个下级页面` : '无下级页面'}</span>
+          </div>
+
+          <span>右键画布空白处可在当前位置快速添加模块。</span>
+        </div>
+
+        <div className="pm-card-header pm-wireframe-section-header">
+          <div>
+            <h3>模块清单</h3>
+          </div>
+          <div className="pm-inline-actions">
+            <button className="doc-action-btn secondary" type="button" onClick={handleToggleMarkdownEditor}>
+              {isMarkdownEditorOpen ? '收起 Markdown' : '编辑 Markdown'}
+            </button>
+            <button className="doc-action-btn secondary" type="button" onClick={handleRefreshArtifacts}>
+              {isArtifactsRefreshing ? '生成中' : '生成线稿说明'}
+            </button>
+          </div>
+        </div>
+
+        <div className="pm-module-list" ref={moduleListRef}>
+          {moduleIds.length > 0 ? (
+            moduleIds.map((moduleId) => (
+              <WireframeModuleCard
+                key={moduleId}
+                moduleId={moduleId}
+                draggingModuleId={draggingModuleId}
+                setDraggingModuleId={setDraggingModuleId}
+                appType={appType}
+              />
+            ))
+          ) : (
+            <div className="pm-context-card">
+              <strong>暂无模块</strong>
+              <span>点击“添加模块”或“生成示例草图”开始编辑。</span>
+            </div>
+          )}
+        </div>
+
+        {isMarkdownEditorOpen && (
+          <div className="pm-context-card">
+            <strong>当前页面 Markdown</strong>
+            <span>需要时再展开编辑，避免实时生成拖慢草稿图。</span>
+            <textarea
+              ref={markdownTextareaRef}
+              className="product-textarea pm-markdown-editor"
+              value={pageMarkdownDraft}
+              onChange={(event) => {
+                setPageMarkdownDraft(event.target.value);
+              }}
+              onClick={(event) => handleMarkdownCursorSync(event.currentTarget.selectionStart)}
+              onKeyUp={(event) => handleMarkdownCursorSync(event.currentTarget.selectionStart)}
+            />
+            <div className="pm-inline-actions">
+              <button className="doc-action-btn" type="button" onClick={handleApplyMarkdown}>
+                应用到画布
+              </button>
+              <button className="doc-action-btn secondary" type="button" onClick={handleResetMarkdown}>
+                恢复当前页面
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isArtifactsPanelOpen && (
+          <div className="pm-context-card">
+            <strong>完整线稿文件</strong>
+            <span>按需生成，避免拖拽和输入时实时刷新整份文档。</span>
+            <pre className="pm-markdown-preview pm-markdown-preview-compact">
+              {wireframesPreview || '# 线框说明\n\n暂无页面线框。'}
+            </pre>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+});
+
+interface WireframeSyncBridgeProps {
+  selectedPage: PageStructureNode | null;
+}
+
+const WireframeSyncBridge = memo<WireframeSyncBridgeProps>(({ selectedPage }) => {
+  const hydratedPageIdRef = useRef<string | null>(null);
+  const lastWireframeSnapshotRef = useRef('[]');
+  const currentWireframe = useProjectStore((state) => selectedPage ? state.wireframes[selectedPage.id] || null : null);
+  const saveWireframeDraft = useProjectStore((state) => state.saveWireframeDraft);
+  const elements = usePreviewStore((state) => state.elements);
+  const loadFromCode = usePreviewStore((state) => state.loadFromCode);
 
   useEffect(() => {
     const nextElements = currentWireframe?.elements || [];
@@ -168,15 +665,134 @@ export const ProductWorkbench: React.FC<ProductWorkbenchProps> = ({ onFeatureSel
       return;
     }
 
-    upsertWireframe(
-      {
-        id: selectedPage.id,
-        name: selectedPage.name,
-      },
-      elements as CanvasElement[]
-    );
     lastWireframeSnapshotRef.current = snapshot;
-  }, [elements, selectedPage, upsertWireframe]);
+
+    const persistTimer = window.setTimeout(() => {
+      saveWireframeDraft(
+        {
+          id: selectedPage.id,
+          name: selectedPage.name,
+        },
+        elements as CanvasElement[]
+      );
+    }, 120);
+
+    return () => {
+      window.clearTimeout(persistTimer);
+    };
+  }, [elements, saveWireframeDraft, selectedPage]);
+
+  return null;
+});
+
+interface ProductWorkbenchProps {
+  onFeatureSelect?: (node: FeatureNode) => void;
+}
+
+export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => {
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('requirement');
+  const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
+  const [manualPageId, setManualPageId] = useState<string | null>(null);
+  const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const {
+    currentProject,
+    rawRequirementInput,
+    featuresMarkdown,
+    requirementDocs,
+    pageStructure,
+    setRawRequirementInput,
+    setFeaturesMarkdown,
+    updateRequirementDoc,
+    addRequirementDoc,
+    ingestRequirementDoc,
+    generateProductArtifactsFromRequirements,
+  } = useProjectStore(useShallow((state) => ({
+    currentProject: state.currentProject,
+    rawRequirementInput: state.rawRequirementInput,
+    featuresMarkdown: state.featuresMarkdown,
+    requirementDocs: state.requirementDocs,
+    pageStructure: state.pageStructure,
+    setRawRequirementInput: state.setRawRequirementInput,
+    setFeaturesMarkdown: state.setFeaturesMarkdown,
+    updateRequirementDoc: state.updateRequirementDoc,
+    addRequirementDoc: state.addRequirementDoc,
+    ingestRequirementDoc: state.ingestRequirementDoc,
+    generateProductArtifactsFromRequirements: state.generateProductArtifactsFromRequirements,
+  })));
+
+  const tree = useFeatureTreeStore((state) => state.tree);
+  const setTree = useFeatureTreeStore((state) => state.setTree);
+  const selectFeature = useFeatureTreeStore((state) => state.selectFeature);
+  const setCanvasSize = usePreviewStore((state) => state.setCanvasSize);
+  const clearCanvas = usePreviewStore((state) => state.clearCanvas);
+  const loadFromCode = usePreviewStore((state) => state.loadFromCode);
+  const selectElement = usePreviewStore((state) => state.selectElement);
+
+  const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
+  const selectedRequirement = requirementDocs.find((doc) => doc.id === selectedRequirementId) || requirementDocs[0] || null;
+  const selectedPage = designPages.find((page) => page.id === manualPageId) || designPages[0] || null;
+  const canvasPreset = useMemo(() => getCanvasPreset(currentProject?.appType), [currentProject?.appType]);
+  const selectedPagePath = selectedPage ? getPagePath(pageStructure, selectedPage.id) : [];
+  const selectedPageChildren = useMemo(() => collectDesignPages(selectedPage?.children || []), [selectedPage]);
+  const featureMap = useMemo(() => {
+    const nodes = tree ? collectFeatureNodes(tree.children) : [];
+    return new Map(nodes.map((node) => [node.id, node]));
+  }, [tree]);
+  const linkedFeatures = selectedPage?.featureIds.map((id) => featureMap.get(id)).filter(Boolean) as FeatureNode[] | undefined;
+  const linkedFeatureName = linkedFeatures?.map((feature) => feature.name).join(' / ') || '核心页面';
+
+  useEffect(() => {
+    if (!tree) {
+      return;
+    }
+
+    const nextMarkdown = featureTreeToMarkdown(tree);
+    if (nextMarkdown !== featuresMarkdown) {
+      setFeaturesMarkdown(nextMarkdown);
+    }
+  }, [featuresMarkdown, setFeaturesMarkdown, tree]);
+
+  useEffect(() => {
+    setCanvasSize(canvasPreset.width, canvasPreset.height);
+  }, [canvasPreset.height, canvasPreset.width, setCanvasSize]);
+
+  useEffect(() => {
+    if (requirementDocs.length === 0) {
+      setSelectedRequirementId(null);
+      return;
+    }
+
+    setSelectedRequirementId((current) =>
+      current && requirementDocs.some((doc) => doc.id === current) ? current : requirementDocs[0].id
+    );
+  }, [requirementDocs]);
+
+  useEffect(() => {
+    if (designPages.length === 0) {
+      setManualPageId(null);
+      clearCanvas();
+      return;
+    }
+
+    setManualPageId((current) =>
+      current && designPages.some((page) => page.id === current) ? current : designPages[0].id
+    );
+  }, [clearCanvas, designPages]);
+
+  useEffect(() => {
+    if (!selectedPage) {
+      selectFeature(null);
+      return;
+    }
+
+    const firstFeature = selectedPage.featureIds.map((id) => featureMap.get(id)).find(Boolean) || null;
+    selectFeature(firstFeature?.id || null);
+    if (firstFeature) {
+      onFeatureSelect?.(firstFeature);
+    }
+  }, [featureMap, onFeatureSelect, selectFeature, selectedPage]);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -195,291 +811,251 @@ export const ProductWorkbench: React.FC<ProductWorkbenchProps> = ({ onFeatureSel
     event.target.value = '';
   };
 
-  const handleGenerate = () => {
+  const handleGenerateFromRequirements = useCallback(() => {
     const nextTree = generateProductArtifactsFromRequirements();
     if (nextTree) {
       setTree(nextTree);
+      setSidebarTab('page');
       if (nextTree.children[0]) {
         selectFeature(nextTree.children[0].id);
         onFeatureSelect?.(nextTree.children[0]);
       }
-      setActiveTab('feature');
     }
-  };
+  }, [generateProductArtifactsFromRequirements, onFeatureSelect, selectFeature, setTree]);
 
-  const handleApplyMarkdownNow = () => {
-    if (!featuresMarkdown.trim()) {
+  const handleAddModule = useCallback(() => {
+    const currentElements = usePreviewStore.getState().elements;
+    const moduleCount = currentElements.length;
+    const offset = moduleCount * 28;
+    const nextModule = createWireframeModule(
+      {
+        name: `模块 ${moduleCount + 1}`,
+        x: isMobileAppType(currentProject?.appType) ? 40 : 72 + (moduleCount % 2) * 360,
+        y: isMobileAppType(currentProject?.appType) ? 56 + offset : 84 + Math.floor(moduleCount / 2) * 132,
+        content: '',
+      },
+      currentProject?.appType
+    );
+
+    usePreviewStore.getState().addMultipleElements([nextModule]);
+    selectElement(nextModule.id);
+  }, [currentProject?.appType, selectElement]);
+
+  const handleAddModuleAtPosition = useCallback((position?: { x: number; y: number }) => {
+    if (!position) {
+      handleAddModule();
       return;
     }
-    const nextTree = markdownToFeatureTree(
-      featuresMarkdown,
-      currentProject ? `${currentProject.name} 产品规划` : '功能清单'
-    );
-    setTree(nextTree);
-    if (nextTree.children[0]) {
-      selectFeature(nextTree.children[0].id);
-      onFeatureSelect?.(nextTree.children[0]);
-    }
-  };
 
-  const handleAddElement = (type: string) => {
-    usePreviewStore.getState().addElement(type, 120, 120);
+    const currentElements = usePreviewStore.getState().elements;
+    const moduleCount = currentElements.length;
+    const nextModule = createWireframeModule(
+      {
+        name: `模块 ${moduleCount + 1}`,
+        x: snapToGrid(position.x),
+        y: snapToGrid(position.y),
+        content: '',
+      },
+      currentProject?.appType
+    );
+
+    usePreviewStore.getState().addMultipleElements([nextModule]);
+    selectElement(nextModule.id);
+  }, [currentProject?.appType, handleAddModule, selectElement]);
+
+  const handleGenerateSampleWireframe = useCallback(() => {
+    if (!selectedPage) {
+      return;
+    }
+
+    const sampleElements = buildSampleWireframe(
+      selectedPage.name,
+      linkedFeatureName,
+      isMobileAppType(currentProject?.appType)
+    );
+    loadFromCode(sampleElements);
+  }, [currentProject?.appType, linkedFeatureName, loadFromCode, selectedPage]);
+
+  const handleClearCurrentWireframe = useCallback(() => {
+    if (!selectedPage) {
+      return;
+    }
+
+    loadFromCode([]);
+  }, [loadFromCode, selectedPage]);
+
+  const renderRequirementMain = () => (
+    <div className="pm-viewer-stack">
+      <section className="pm-card">
+        <div className="pm-card-header">
+          <div>
+            <h3>需求输入</h3>
+            <span>先把需求、场景和约束补全，再由系统自动整理成页面清单和草图入口。</span>
+          </div>
+          <div className="pm-inline-actions">
+            <button className="doc-action-btn secondary" type="button" onClick={handleUploadClick}>
+              上传文档
+            </button>
+            <button className="doc-action-btn secondary" type="button" onClick={addRequirementDoc}>
+              + 新需求
+            </button>
+            <button className="doc-action-btn" type="button" onClick={handleGenerateFromRequirements}>
+              生成页面清单
+            </button>
+          </div>
+        </div>
+        <textarea
+          className="product-textarea"
+          value={rawRequirementInput}
+          onChange={(event) => setRawRequirementInput(event.target.value)}
+          placeholder="描述首页、列表页、详情页、关键按钮、页面之间的跳转关系，以及你希望 AI 补出来的页面结构。"
+        />
+      </section>
+
+      {selectedRequirement && (
+        <section className="pm-card">
+          <div className="pm-card-header">
+            <div>
+              <h3>{selectedRequirement.title}</h3>
+              <span>{selectedRequirement.sourceType || 'manual'} · {selectedRequirement.status}</span>
+            </div>
+          </div>
+          <div className="pm-form-grid">
+            <input
+              className="product-input"
+              value={selectedRequirement.title}
+              onChange={(event) => updateRequirementDoc(selectedRequirement.id, { title: event.target.value })}
+              placeholder="需求标题"
+            />
+            <input
+              className="product-input"
+              value={selectedRequirement.summary}
+              onChange={(event) => updateRequirementDoc(selectedRequirement.id, { summary: event.target.value })}
+              placeholder="需求摘要"
+            />
+          </div>
+          <textarea
+            className="product-textarea compact"
+            value={selectedRequirement.content}
+            onChange={(event) => updateRequirementDoc(selectedRequirement.id, { content: event.target.value })}
+            placeholder="需求详细内容"
+          />
+        </section>
+      )}
+
+      <input
+        ref={fileInputRef}
+        className="product-hidden-input"
+        type="file"
+        accept=".txt,.md,.markdown,.json"
+        multiple
+        onChange={handleFileChange}
+      />
+    </div>
+  );
+
+  const renderPageMain = () => {
+    if (!selectedPage) {
+      return (
+        <section className="pm-card pm-empty-panel">
+          <div className="pm-card-header">
+            <div>
+              <h3>页面草图</h3>
+              <span>先从需求生成页面清单，或者在已有页面结构里选择一个页面。</span>
+            </div>
+          </div>
+          <div className="empty-state">当前还没有可展示的页面草图。</div>
+        </section>
+      );
+    }
+
+    return (
+      <div className="pm-page-workspace">
+        <section className="pm-card pm-wireframe-main">
+          <div className="pm-canvas-shell">
+            <Canvas
+              key={selectedPage.id}
+              width={canvasPreset.width}
+              height={canvasPreset.height}
+              frameType={canvasPreset.frameType}
+              frameLabel={canvasPreset.label}
+              onAddModuleAt={handleAddModuleAtPosition}
+            />
+          </div>
+        </section>
+
+        <WireframeSidebar
+          selectedPage={selectedPage}
+          appType={currentProject?.appType}
+          featureTree={tree}
+          draggingModuleId={draggingModuleId}
+          setDraggingModuleId={setDraggingModuleId}
+          pagePathText={selectedPagePath.map((item) => item.name).join(' / ') || selectedPage.name}
+          linkedFeatureName={linkedFeatureName}
+          childPageCount={selectedPageChildren.length}
+          canvasLabel={canvasPreset.label}
+          onAddModule={handleAddModuleAtPosition}
+          onGenerateSampleWireframe={handleGenerateSampleWireframe}
+          onClearCurrentWireframe={handleClearCurrentWireframe}
+        />
+      </div>
+    );
   };
 
   return (
-    <div className="product-workbench">
-      <div className="product-workbench-toolbar">
-        <div className="product-workbench-toolbar-main">
+    <div className="product-workbench-shell">
+      <aside className="pm-left-nav">
+        <div className="pm-nav-header">
           <strong>{currentProject?.name || '产品工作台'}</strong>
-          <span>{requirementDocs.length + (rawRequirementInput.trim() ? 1 : 0)} 条需求来源</span>
-          <span>{tree?.children.length || 0} 个一级功能</span>
-          <span>{designPages.length} 个线稿页面</span>
+          <span>{designPages.length} 个页面可继续出草图</span>
         </div>
-        <div className="product-workbench-actions">
-          <button className="doc-action-btn secondary" type="button" onClick={handleUploadClick}>
-            上传文档
+
+        <div className="pm-sidebar-tabs">
+          <button className={sidebarTab === 'requirement' ? 'active' : ''} onClick={() => setSidebarTab('requirement')} type="button">
+            需求
           </button>
-          <button className="doc-action-btn" type="button" onClick={handleGenerate}>
-            AI生成规划
+          <button className={sidebarTab === 'page' ? 'active' : ''} onClick={() => setSidebarTab('page')} type="button">
+            页面
           </button>
-          <input
-            ref={fileInputRef}
-            className="product-hidden-input"
-            type="file"
-            accept=".txt,.md,.markdown,.json"
-            multiple
-            onChange={handleFileChange}
-          />
         </div>
-      </div>
 
-      <div className="product-workbench-tabs">
-        <button className={activeTab === 'input' ? 'active' : ''} onClick={() => setActiveTab('input')} type="button">
-          需求输入
-        </button>
-        <button className={activeTab === 'feature' ? 'active' : ''} onClick={() => setActiveTab('feature')} type="button">
-          功能清单
-        </button>
-        <button className={activeTab === 'wireframe' ? 'active' : ''} onClick={() => setActiveTab('wireframe')} type="button">
-          线稿图
-        </button>
-      </div>
-
-      {activeTab === 'input' && (
-        <div className="product-workbench-grid">
-          <section className="product-workbench-panel">
-            <div className="product-panel-title">
-              <div>
-                <h3>需求输入</h3>
-                <span>可以粘贴原始需求，也可以让 AI 基于这些内容生成规划产物</span>
-              </div>
-            </div>
-            <textarea
-              className="product-textarea"
-              value={rawRequirementInput}
-              onChange={(event) => setRawRequirementInput(event.target.value)}
-              placeholder="例如：用户可以上传需求文档，也可以在 AI 窗口里直接描述需求；系统自动输出树状功能清单和可拖拽线稿图。"
-            />
+        {sidebarTab === 'requirement' && (
+          <section className="pm-nav-section">
+            <div className="pm-nav-title">需求列表</div>
+            {requirementDocs.map((doc) => (
+              <button
+                key={doc.id}
+                className={`pm-nav-item ${selectedRequirement?.id === doc.id ? 'active' : ''}`}
+                onClick={() => setSelectedRequirementId(doc.id)}
+                type="button"
+              >
+                {doc.title}
+              </button>
+            ))}
           </section>
+        )}
 
-          <section className="product-workbench-panel">
-            <div className="product-panel-title">
-              <div>
-                <h3>需求资料池</h3>
-                <span>上传文档后会先进入这里，作为后续规划生成的上下文</span>
-              </div>
-            </div>
-            <div className="product-doc-stack">
-              {requirementDocs.map((doc) => (
-                <article key={doc.id} className="product-doc-card">
-                  <div>
-                    <strong>{doc.title}</strong>
-                    <span>{doc.sourceType || 'manual'}</span>
-                  </div>
-                  <p>{doc.summary}</p>
-                </article>
-              ))}
-            </div>
-            <div className="product-output-section">
-              <strong>PRD 摘要</strong>
-              {prd ? (
-                <div className="prd-section-list">
-                  {prd.sections.slice(0, 2).map((section) => (
-                    <div key={section.id} className="prd-section-card">
-                      <strong>{section.title}</strong>
-                      <pre>{section.content}</pre>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="product-prd-summary">点击“AI生成规划”后，会自动产出 PRD 和规划文件。</p>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
-
-      {activeTab === 'feature' && (
-        <div className="product-feature-grid">
-          <section className="product-workbench-panel">
-            <div className="product-panel-title">
-              <div>
-                <h3>树状功能清单</h3>
-                <span>支持无限层级嵌套，功能节点可以持续追加</span>
-              </div>
-            </div>
-            <div className="product-tree-shell">
-              <FeatureTree onFeatureSelect={onFeatureSelect} />
-            </div>
-          </section>
-
-          <section className="product-workbench-panel">
-            <div className="product-panel-title">
-              <div>
-                <h3>节点规格与 Markdown</h3>
-                <span>Markdown 会自动回灌到树结构，也会同步记录固定字段</span>
-              </div>
-              <div className="product-inline-actions">
-                <button className="doc-action-btn secondary" type="button" onClick={handleApplyMarkdownNow}>
-                  立即识别
-                </button>
-              </div>
-            </div>
-
-            {selectedFeature ? (
-              <div className="product-feature-editor">
-                <div className="product-feature-meta">
-                  <span>层级：{selectedFeaturePath.length || 1} 级</span>
-                  <span>{selectedFeaturePath.map((item) => item.name).join(' / ')}</span>
-                </div>
-                <input
-                  className="product-input"
-                  value={selectedFeature.name}
-                  onChange={(event) => updateFeature(selectedFeature.id, { name: event.target.value })}
-                  placeholder="功能名称"
-                />
-                <textarea
-                  className="product-textarea compact"
-                  value={selectedFeature.description || ''}
-                  onChange={(event) => updateFeature(selectedFeature.id, { description: event.target.value })}
-                  placeholder="功能描述：说明这个功能解决什么问题、面向谁、关键价值是什么。"
-                />
-                <textarea
-                  className="product-textarea compact"
-                  value={joinLines(selectedFeature.details)}
-                  onChange={(event) => updateFeature(selectedFeature.id, { details: parseLines(event.target.value) })}
-                  placeholder={'补充说明：\n业务背景\n交互规则\n边界条件'}
-                />
-                <textarea
-                  className="product-textarea compact"
-                  value={joinLines(selectedFeature.inputs)}
-                  onChange={(event) => updateFeature(selectedFeature.id, { inputs: parseLines(event.target.value) })}
-                  placeholder={'输入：\n用户输入什么\n依赖什么上游数据'}
-                />
-                <textarea
-                  className="product-textarea compact"
-                  value={joinLines(selectedFeature.outputs)}
-                  onChange={(event) => updateFeature(selectedFeature.id, { outputs: parseLines(event.target.value) })}
-                  placeholder={'输出：\n页面输出什么\n返回什么结果'}
-                />
-                <textarea
-                  className="product-textarea compact"
-                  value={joinLines(selectedFeature.dependencies)}
-                  onChange={(event) =>
-                    updateFeature(selectedFeature.id, { dependencies: parseLines(event.target.value) })
-                  }
-                  placeholder={'依赖：\n依赖哪个模块\n依赖哪些接口或组件'}
-                />
-                <textarea
-                  className="product-textarea compact"
-                  value={joinLines(selectedFeature.acceptanceCriteria)}
-                  onChange={(event) =>
-                    updateFeature(selectedFeature.id, { acceptanceCriteria: parseLines(event.target.value) })
-                  }
-                  placeholder={'验收标准：\n用户完成什么算成功\n边界情况怎么判定'}
-                />
-                <div className="product-output-section">
-                  <strong>AI Prompt 预览</strong>
-                  <pre className="product-markdown-preview">{promptPreview}</pre>
-                </div>
+        {sidebarTab === 'page' && (
+          <section className="pm-nav-section">
+            <div className="pm-nav-title">页面清单</div>
+            {pageStructure.length > 0 ? (
+              <div className="pm-page-tree">
+                {pageStructure.map((node) => (
+                  <PageTreeNode key={node.id} node={node} depth={0} selectedPageId={selectedPage?.id || null} onSelect={setManualPageId} />
+                ))}
               </div>
             ) : (
-              <div className="empty-state">先在左侧树状功能清单中选择一个节点。</div>
+              <div className="pm-page-tree-empty">先从需求生成页面清单。</div>
             )}
-
-            <div className="product-output-section">
-              <strong>结构化 Markdown</strong>
-              <textarea
-                className="product-textarea product-textarea-compact"
-                value={featuresMarkdown}
-                onChange={(event) => setFeaturesMarkdown(event.target.value)}
-                placeholder="# 功能清单"
-              />
-            </div>
-
-            <div className="product-output-section">
-              <strong>当前存放的规划文件</strong>
-              <pre className="product-markdown-preview">
-                {planningFiles.length > 0
-                  ? planningFiles.map((file) => file.path).join('\n')
-                  : '点击“AI生成规划”后，会生成到 src/generated/planning/*.md'}
-              </pre>
-            </div>
-
-            <div className="product-output-section">
-              <strong>线稿说明 Markdown</strong>
-              <pre className="product-markdown-preview">{wireframesMarkdown || '生成后会自动出现线稿说明。'}</pre>
-            </div>
           </section>
-        </div>
-      )}
+        )}
+      </aside>
 
-      {activeTab === 'wireframe' && (
-        <div className="product-wireframe-shell">
-          <aside className="product-wireframe-pages">
-            <div className="product-panel-title">
-              <div>
-                <h3>页面清单</h3>
-                <span>选择一个页面继续调整线稿</span>
-              </div>
-            </div>
-            <div className="product-page-list">
-              {designPages.map((page) => (
-                <button
-                  key={page.id}
-                  type="button"
-                  className={`product-page-item ${selectedPage?.id === page.id ? 'active' : ''}`}
-                  onClick={() => setSelectedPageId(page.id)}
-                >
-                  <strong>{page.name}</strong>
-                  <span>{wireframes[page.id]?.elements.length || 0} 个组件</span>
-                  <p>{page.description}</p>
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <section className="product-wireframe-canvas">
-            <div className="product-panel-title">
-              <div>
-                <h3>{selectedPage?.name || '线稿图画布'}</h3>
-                <span>{selectedPage?.metadata.route || '选择页面后可编辑'}</span>
-              </div>
-            </div>
-            <Canvas />
-          </section>
-
-          <aside className="product-wireframe-library">
-            <div className="product-panel-title">
-              <div>
-                <h3>组件库</h3>
-                <span>拖拽或点击继续微调 AI 结果</span>
-              </div>
-            </div>
-            <ComponentLibrary onComponentSelect={handleAddElement} />
-          </aside>
-        </div>
-      )}
+      <main className="pm-main-viewer">
+        {sidebarTab === 'requirement' && renderRequirementMain()}
+        {sidebarTab === 'page' && renderPageMain()}
+        {sidebarTab === 'page' && <WireframeSyncBridge selectedPage={selectedPage} />}
+      </main>
     </div>
   );
 };

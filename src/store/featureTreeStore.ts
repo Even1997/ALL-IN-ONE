@@ -92,6 +92,55 @@ const collectAllNodes = (nodes: FeatureNode[]): FeatureNode[] => {
   return result;
 };
 
+const normalizeFeatureNode = (value: unknown): FeatureNode | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const node = value as Partial<FeatureNode>;
+
+  return {
+    id: typeof node.id === 'string' ? node.id : uuidv4(),
+    name: typeof node.name === 'string' ? node.name : '未命名功能',
+    description: typeof node.description === 'string' ? node.description : '',
+    details: Array.isArray(node.details) ? node.details.filter((item): item is string => typeof item === 'string') : [],
+    inputs: Array.isArray(node.inputs) ? node.inputs.filter((item): item is string => typeof item === 'string') : [],
+    outputs: Array.isArray(node.outputs) ? node.outputs.filter((item): item is string => typeof item === 'string') : [],
+    dependencies: Array.isArray(node.dependencies) ? node.dependencies.filter((item): item is string => typeof item === 'string') : [],
+    acceptanceCriteria: Array.isArray(node.acceptanceCriteria)
+      ? node.acceptanceCriteria.filter((item): item is string => typeof item === 'string')
+      : [],
+    status: node.status === 'in_progress' || node.status === 'completed' || node.status === 'failed' ? node.status : 'pending',
+    priority: node.priority === 'critical' || node.priority === 'high' || node.priority === 'low' ? node.priority : 'medium',
+    progress: typeof node.progress === 'number' ? node.progress : 0,
+    linkedRequirementId: typeof node.linkedRequirementId === 'string' ? node.linkedRequirementId : undefined,
+    linkedPrototypePageIds: Array.isArray(node.linkedPrototypePageIds)
+      ? node.linkedPrototypePageIds.filter((item): item is string => typeof item === 'string')
+      : [],
+    linkedCodeFiles: Array.isArray(node.linkedCodeFiles) ? node.linkedCodeFiles.filter(Boolean) : [],
+    aiContextId: typeof node.aiContextId === 'string' ? node.aiContextId : undefined,
+    children: Array.isArray(node.children)
+      ? node.children.map((child) => normalizeFeatureNode(child)).filter((child): child is FeatureNode => Boolean(child))
+      : [],
+  };
+};
+
+const normalizeFeatureTree = (value: unknown): FeatureTree | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const tree = value as Partial<FeatureTree>;
+
+  return {
+    id: typeof tree.id === 'string' ? tree.id : uuidv4(),
+    name: typeof tree.name === 'string' ? tree.name : '未命名项目',
+    children: Array.isArray(tree.children)
+      ? tree.children.map((node) => normalizeFeatureNode(node)).filter((node): node is FeatureNode => Boolean(node))
+      : [],
+  };
+};
+
 export const useFeatureTreeStore = create<FeatureTreeState>()(
   persist(
     (set, get) => ({
@@ -103,7 +152,9 @@ export const useFeatureTreeStore = create<FeatureTreeState>()(
 
       clearTree: () => set({ tree: null, selectedFeatureId: null, expandedNodeIds: new Set<string>() }),
 
-      selectFeature: (id) => set({ selectedFeatureId: id }),
+      selectFeature: (id) => set((state) => (
+        state.selectedFeatureId === id ? state : { selectedFeatureId: id }
+      )),
 
       toggleExpand: (id) => set(state => {
         const newExpanded = new Set(state.expandedNodeIds);
@@ -196,6 +247,7 @@ export const useFeatureTreeStore = create<FeatureTreeState>()(
     }),
     {
       name: 'devflow-feature-tree-store',
+      version: 1,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         tree: state.tree,
@@ -208,6 +260,7 @@ export const useFeatureTreeStore = create<FeatureTreeState>()(
         return {
           ...currentState,
           ...typedState,
+          tree: normalizeFeatureTree(typedState.tree),
           expandedNodeIds: new Set(typedState.expandedNodeIds || []),
         };
       },

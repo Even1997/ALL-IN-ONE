@@ -1,30 +1,21 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FeatureTree } from './components/feature-tree/FeatureTree';
-import { Canvas } from './components/canvas/Canvas';
-import { ComponentLibrary } from './components/canvas/ComponentLibrary';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AIPanel } from './components/ai/AIPanel';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
+import { ProductWorkbench } from './components/product/ProductWorkbench';
 import { usePreviewStore } from './store/previewStore';
 import { useFeatureTreeStore } from './store/featureTreeStore';
 import { useGlobalAIStore } from './modules/ai/store/globalAIStore';
 import { useProjectStore } from './store/projectStore';
 import {
-  CanvasElement,
   FeatureNode,
   GeneratedFile,
   PageStructureNode,
-  RequirementDoc,
 } from './types';
 import './App.css';
 
 type RoleView = 'product' | 'design' | 'develop' | 'test' | 'operations';
-
-const formatDate = (value: string) =>
-  new Date(value).toLocaleDateString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-  });
+type ThemeMode = 'dark' | 'light';
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [
@@ -32,50 +23,52 @@ const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
     ...collectDesignPages(node.children),
   ]);
 
-const renderPageTree = (nodes: PageStructureNode[], depth = 0): React.ReactNode =>
-  nodes.map((node) => (
-    <div key={node.id} className="page-structure-node" style={{ paddingLeft: `${depth * 18}px` }}>
-      <div className="page-structure-row">
-        <div>
-          <strong>{node.name}</strong>
-          <span>{node.kind}</span>
-        </div>
-        <p>{node.description}</p>
-      </div>
-      {node.children.length > 0 && renderPageTree(node.children, depth + 1)}
-    </div>
-  ));
-
-const PAGE_TEMPLATE_OPTIONS: Array<PageStructureNode['metadata']['template']> = [
-  'dashboard',
-  'form',
-  'list',
-  'detail',
-  'workspace',
-  'custom',
+const THEME_PACKS = [
+  {
+    id: 'clarity-light',
+    name: 'Clarity Light',
+    tone: '清晰企业风',
+    summary: '适合后台、工作台和数据产品，强调高对比层级与信息效率。',
+    tokens: ['主色 #0f766e', '字体 14/16 系统 sans', '圆角 12', '间距 8/12/16'],
+  },
+  {
+    id: 'warm-editorial',
+    name: 'Warm Editorial',
+    tone: '内容产品风',
+    summary: '适合文档、需求和协作产品，强调阅读舒适度与内容层次。',
+    tokens: ['主色 #9a3412', '字体 衬线标题 + sans 正文', '圆角 16', '间距 12/16/24'],
+  },
+  {
+    id: 'midnight-ops',
+    name: 'Midnight Ops',
+    tone: '运维控制台风',
+    summary: '适合运维、监控和开发者工具，强调状态色和密度控制。',
+    tokens: ['主色 #2563eb', '字体 Mono + Sans', '圆角 10', '间距 6/10/14'],
+  },
 ];
-
-const PAGE_OWNER_OPTIONS: Array<PageStructureNode['metadata']['ownerRole']> = ['产品经理', 'UI设计', '开发', '测试', '运维'];
 
 const renderGeneratedFileLabel = (file: GeneratedFile) => file.path.split('/').pop() || file.path;
 
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<RoleView>('product');
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') {
+      return 'dark';
+    }
+
+    const storedTheme = window.localStorage.getItem('devflow-theme-mode');
+    return storedTheme === 'light' ? 'light' : 'dark';
+  });
   const [selectedFeature, setSelectedFeature] = useState<FeatureNode | null>(null);
-  const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
-  const [selectedDesignPageId, setSelectedDesignPageId] = useState<string | null>(null);
-  const { isDirty, selectedElementId, elements, clearCanvas, loadFromCode, updateElement, deleteElement } = usePreviewStore();
-  const { setTree, tree: featureTree, clearTree, getAllFeatures } = useFeatureTreeStore();
+  const { isDirty, clearCanvas } = usePreviewStore();
+  const { setTree, tree: featureTree, clearTree } = useFeatureTreeStore();
   const { togglePanel, isStreaming } = useGlobalAIStore();
   const {
     currentProject,
     graph,
     memory,
-    rawRequirementInput,
     requirementDocs,
-    prd,
     pageStructure,
-    wireframes,
     designSystem,
     uiSpecs,
     devTasks,
@@ -84,41 +77,35 @@ const App: React.FC = () => {
     deployPlan,
     createProject,
     clearProject,
-    setRawRequirementInput,
-    updateRequirementDoc,
-    addRequirementDoc,
-    generatePlanningArtifacts,
-    upsertWireframe,
-    updatePageStructureNode,
+    updateProject,
     generateDeliveryArtifacts,
   } = useProjectStore();
 
-  const allFeatures = getAllFeatures();
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
-  const selectedDesignPage = designPages.find((page) => page.id === selectedDesignPageId) || designPages[0] || null;
-  const currentWireframe = selectedDesignPage ? wireframes[selectedDesignPage.id] : null;
-  const selectedCanvasElement = elements.find((element) => element.id === selectedElementId) || null;
-  const selectedRequirement =
-    requirementDocs.find((doc) => doc.id === selectedRequirementId) || requirementDocs[0] || null;
+  const selectedDesignPage = designPages[0] || null;
   const selectedUISpec = uiSpecs.find((spec) => spec.pageId === selectedDesignPage?.id) || null;
-  const hydratedPageIdRef = useRef<string | null>(null);
-  const lastWireframeSnapshotRef = useRef<string>('[]');
+  const designSystemPatterns = designSystem?.componentPatterns ?? [];
+  const designPrinciples = designSystem?.principles ?? [];
+  const designTokens = designSystem?.tokens ?? {
+    color: { label: 'Color', values: [] },
+    typography: { label: 'Typography', values: [] },
+    spacing: { label: 'Spacing', values: [] },
+    radius: { label: 'Radius', values: [] },
+  };
+  const testCases = testPlan?.cases ?? [];
+  const deploySteps = deployPlan?.steps ?? [];
+  const recommendedCommands = deployPlan?.commands ?? ['npm run build', 'npm run preview'];
 
-  const graphSummary = useMemo(
-    () => ({
-      nodeCount: graph.nodes.length,
-      edgeCount: graph.edges.length,
-    }),
-    [graph.edges.length, graph.nodes.length]
-  );
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    window.localStorage.setItem('devflow-theme-mode', themeMode);
+  }, [themeMode]);
 
   const handleCreateProject = (input: Parameters<typeof createProject>[0]) => {
     const { featureTree: starterFeatureTree } = createProject(input);
     setTree(starterFeatureTree);
     clearCanvas();
     setSelectedFeature(starterFeatureTree.children[0] || null);
-    setSelectedRequirementId(null);
-    setSelectedDesignPageId(null);
     setCurrentRole('product');
   };
 
@@ -127,714 +114,132 @@ const App: React.FC = () => {
     clearTree();
     clearCanvas();
     setSelectedFeature(null);
-    setSelectedRequirementId(null);
-    setSelectedDesignPageId(null);
     setCurrentRole('product');
   };
 
-  const handleFeatureSelect = (node: FeatureNode) => {
+  const handleFeatureSelect = useCallback((node: FeatureNode) => {
     setSelectedFeature(node);
-    setCurrentRole('design');
-  };
-
-  const handleAddElement = (type: string) => {
-    usePreviewStore.getState().addElement(type, 100, 100);
-  };
-
-  useEffect(() => {
-    if (designPages.length === 0) {
-      setSelectedDesignPageId(null);
-      return;
-    }
-
-    setSelectedDesignPageId((currentPageId) =>
-      currentPageId && designPages.some((page) => page.id === currentPageId) ? currentPageId : designPages[0].id
-    );
-  }, [designPages]);
-
-  useEffect(() => {
-    const nextElements = currentWireframe?.elements || [];
-    const snapshot = JSON.stringify(nextElements);
-
-    hydratedPageIdRef.current = selectedDesignPage?.id || null;
-    lastWireframeSnapshotRef.current = snapshot;
-    loadFromCode(nextElements);
-  }, [currentWireframe, loadFromCode, selectedDesignPage]);
-
-  useEffect(() => {
-    if (!selectedDesignPage || hydratedPageIdRef.current !== selectedDesignPage.id) {
-      return;
-    }
-
-    const snapshot = JSON.stringify(elements);
-    if (snapshot === lastWireframeSnapshotRef.current) {
-      return;
-    }
-
-    upsertWireframe(
-      {
-        id: selectedDesignPage.id,
-        name: selectedDesignPage.name,
-      },
-      elements as CanvasElement[]
-    );
-    lastWireframeSnapshotRef.current = snapshot;
-  }, [elements, selectedDesignPage, upsertWireframe]);
-
-  const handleGeneratePlanning = () => {
-    const nextTree = generatePlanningArtifacts(featureTree);
-    if (nextTree) {
-      setTree(nextTree);
-    }
-  };
+  }, []);
 
   const handleGenerateDelivery = () => {
     generateDeliveryArtifacts(featureTree);
   };
 
-  const renderRequirementDoc = (doc: RequirementDoc) => (
-    <button
-      key={doc.id}
-      className={`doc-item product-doc-button ${selectedRequirement?.id === doc.id ? 'active' : ''}`}
-      onClick={() => setSelectedRequirementId(doc.id)}
-      type="button"
-    >
-      <span className="doc-icon">📄</span>
-      <div className="doc-info">
-        <span className="doc-title">{doc.title}</span>
-        <span className="doc-meta">
-          {formatDate(doc.updatedAt)} · {doc.authorRole}
-        </span>
-      </div>
-    </button>
-  );
-
   const renderProductView = () => (
-    <div className="product-view">
-      <div className="product-sidebar">
-        <FeatureTree onFeatureSelect={handleFeatureSelect} />
-      </div>
-      <div className="product-content product-content-stage-two">
-        <div className="requirements-doc">
-          <div className="doc-header">
-            <div>
-              <h2>需求输入</h2>
-              <div className="section-meta">第二阶段：需求 → PRD → Page Structure</div>
-            </div>
-            <div className="header-actions">
-              <button className="doc-action-btn secondary" onClick={addRequirementDoc}>
-                + 条目
-              </button>
-              <button className="doc-action-btn" onClick={handleGeneratePlanning}>
-                生成规划产物
-              </button>
-            </div>
-          </div>
-          <div className="product-stage-grid">
-            <div className="product-panel">
-              <div className="product-panel-header">
-                <h3>原始需求</h3>
-                <span>Raw Input</span>
-              </div>
-              <textarea
-                className="product-textarea"
-                value={rawRequirementInput}
-                onChange={(e) => setRawRequirementInput(e.target.value)}
-                placeholder="在这里记录项目目标、用户、流程、约束和 MVP 范围。"
-              />
-            </div>
-
-            <div className="product-panel">
-              <div className="product-panel-header">
-                <h3>需求条目</h3>
-                <span>{requirementDocs.length} 条</span>
-              </div>
-              <div className="product-doc-list">{requirementDocs.map(renderRequirementDoc)}</div>
-              {selectedRequirement && (
-                <div className="requirement-editor">
-                  <input
-                    className="product-input"
-                    value={selectedRequirement.title}
-                    onChange={(e) =>
-                      updateRequirementDoc(selectedRequirement.id, {
-                        title: e.target.value,
-                      })
-                    }
-                  />
-                  <textarea
-                    className="product-textarea compact"
-                    value={selectedRequirement.summary}
-                    onChange={(e) =>
-                      updateRequirementDoc(selectedRequirement.id, {
-                        summary: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="product-preview product-planning-preview">
-          <div className="preview-header">
-            <h3>规划产物</h3>
-            <div className="preview-actions">
-              <button>PRD</button>
-              <button>Page Structure</button>
-              <button>Graph</button>
-              <button onClick={handleGenerateDelivery}>交付产物</button>
-            </div>
-          </div>
-          <div className="preview-content planning-preview-content">
-            <div className="graph-summary-card">
-              <strong>{currentProject?.name}</strong>
-              <span>
-                {currentProject?.appType} / {currentProject?.frontendFramework} / {currentProject?.backendFramework}
-              </span>
-            </div>
-
-            <div className="graph-metrics">
-              <div className="graph-metric">
-                <span>Graph Nodes</span>
-                <strong>{graphSummary.nodeCount}</strong>
-              </div>
-              <div className="graph-metric">
-                <span>Graph Edges</span>
-                <strong>{graphSummary.edgeCount}</strong>
-              </div>
-              <div className="graph-metric">
-                <span>Feature Count</span>
-                <strong>{allFeatures.length}</strong>
-              </div>
-              <div className="graph-metric">
-                <span>Generated Files</span>
-                <strong>{generatedFiles.length}</strong>
-              </div>
-            </div>
-
-            <div className="product-output-section">
-              <div className="product-panel-header">
-                <h3>{prd?.title || 'PRD'}</h3>
-                <span>{prd?.status || 'draft'}</span>
-              </div>
-              <p className="product-prd-summary">{prd?.summary || '点击“生成规划产物”后会生成 PRD。'}</p>
-              <div className="prd-section-list">
-                {prd?.sections.map((section) => (
-                  <div key={section.id} className="prd-section-card">
-                    <strong>{section.title}</strong>
-                    <pre>{section.content}</pre>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="product-output-section">
-              <div className="product-panel-header">
-                <h3>Page Structure</h3>
-                <span>{pageStructure.length} 个根节点</span>
-              </div>
-              <div className="page-structure-list">
-                {pageStructure.length > 0 ? (
-                  renderPageTree(pageStructure)
-                ) : (
-                  <div className="empty-state">生成 PRD 后，这里会同步页面结构。</div>
-                )}
-              </div>
-            </div>
-
-            <div className="product-output-section">
-              <div className="product-panel-header">
-                <h3>Wireframe Registry</h3>
-                <span>{designPages.length} 个页面</span>
-              </div>
-              <div className="wireframe-registry-list">
-                {designPages.length > 0 ? (
-                  designPages.map((page) => {
-                    const wireframe = wireframes[page.id];
-
-                    return (
-                      <div key={page.id} className="wireframe-registry-card">
-                        <div>
-                          <strong>{page.name}</strong>
-                          <span>{wireframe?.status || 'draft'}</span>
-                        </div>
-                        <p>
-                          {wireframe?.elements.length || 0} 个组件 · 最近更新{' '}
-                          {wireframe ? formatDate(wireframe.updatedAt) : '--'}
-                        </p>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="empty-state">生成 Page Structure 后，这里会建立页面级 wireframe 档案。</div>
-                )}
-              </div>
-            </div>
-
-            <div className="product-output-section">
-              <div className="product-panel-header">
-                <h3>Delivery Overview</h3>
-                <span>Phase 4-6</span>
-              </div>
-              <div className="graph-metrics">
-                <div className="graph-metric">
-                  <span>UI Spec</span>
-                  <strong>{uiSpecs.length}</strong>
-                </div>
-                <div className="graph-metric">
-                  <span>Dev Tasks</span>
-                  <strong>{devTasks.length}</strong>
-                </div>
-                <div className="graph-metric">
-                  <span>Test Cases</span>
-                  <strong>{testPlan?.coverage.caseCount || 0}</strong>
-                </div>
-                <div className="graph-metric">
-                  <span>Deploy Steps</span>
-                  <strong>{deployPlan?.steps.length || 0}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className="preview-note">
-              {selectedFeature ? (
-                <span>
-                  当前聚焦功能：{selectedFeature.name} · 已关联页面 {selectedFeature.linkedPrototypePageIds.length} 个
-                </span>
-              ) : (
-                <span>需求和页面结构生成后，左侧功能节点会自动带上页面关联信息。</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ProductWorkbench onFeatureSelect={handleFeatureSelect} />
   );
 
   const renderDesignView = () => (
-    <div className="design-view">
-      <div className="design-sidebar">
-        <div className="design-page-panel">
-          <div className="design-page-panel-header">
-            <div>
-              <strong>页面 Wireframe</strong>
-              <span>{designPages.length} 个页面</span>
-            </div>
-            <button className="mini-action-btn" onClick={handleGenerateDelivery} type="button">
-              生成 Spec
-            </button>
-          </div>
-          <div className="design-page-list">
-            {designPages.length > 0 ? (
-              designPages.map((page) => {
-                const pageWireframe = wireframes[page.id];
-                const isActive = selectedDesignPage?.id === page.id;
+    <div className="design-system-view">
+      <div className="design-system-header">
+        <div>
+          <h2>UI 标准与主题包</h2>
+          <p>设计页只负责规范 UI 标准，原型绘制和草图调整都留在产品原型页。</p>
+        </div>
+        <button className="doc-action-btn" onClick={handleGenerateDelivery} type="button">
+          刷新 UI 标准
+        </button>
+      </div>
 
-                return (
-                  <button
-                    key={page.id}
-                    className={`design-page-card ${isActive ? 'active' : ''}`}
-                    onClick={() => setSelectedDesignPageId(page.id)}
-                    type="button"
-                  >
-                    <div>
-                      <strong>{page.name}</strong>
-                      <span>{pageWireframe?.status || 'draft'}</span>
-                    </div>
-                    <p>{page.description}</p>
-                    <small>{pageWireframe?.elements.length || 0} 个组件</small>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="empty-state design-empty-state">先在产品工作区生成页面结构，再进入设计阶段。</div>
-            )}
+      <div className="design-system-grid">
+        <section className="design-system-panel">
+          <div className="design-system-panel-header">
+            <strong>推荐主题包</strong>
+            <span>{THEME_PACKS.length} 套</span>
           </div>
-        </div>
-        <div className="design-tabs">
-          <button className="design-tab active">组件</button>
-        </div>
-        <ComponentLibrary onComponentSelect={handleAddElement} />
-      </div>
-      <div className="design-canvas">
-        <Canvas />
-      </div>
-      <div className="design-properties">
-        <div className="properties-header">
-          <h3>属性</h3>
-        </div>
-        <div className="properties-content">
-          <div className="property-group">
-            <label>当前页面</label>
-            <input
-              type="text"
-              value={selectedDesignPage?.name || '未选择'}
-              onChange={(e) =>
-                selectedDesignPage &&
-                updatePageStructureNode(selectedDesignPage.id, {
-                  name: e.target.value,
-                })
-              }
-              readOnly={!selectedDesignPage}
-            />
+          <div className="theme-pack-list">
+            {THEME_PACKS.map((pack) => {
+              const active = currentProject?.uiFramework === pack.name;
+              return (
+                <button
+                  key={pack.id}
+                  className={`theme-pack-card ${active ? 'active' : ''}`}
+                  onClick={() =>
+                    updateProject({
+                      uiFramework: pack.name,
+                    })
+                  }
+                  type="button"
+                >
+                  <div>
+                    <strong>{pack.name}</strong>
+                    <span>{pack.tone}</span>
+                  </div>
+                  <p>{pack.summary}</p>
+                  <small>{pack.tokens.join(' · ')}</small>
+                </button>
+              );
+            })}
           </div>
-          <div className="property-group">
-            <label>页面标题</label>
-            <input
-              type="text"
-              value={selectedDesignPage?.metadata?.title || ''}
-              onChange={(e) =>
-                selectedDesignPage &&
-                updatePageStructureNode(selectedDesignPage.id, {
-                  metadata: {
-                    title: e.target.value,
-                  },
-                })
-              }
-              placeholder="页面标题"
-              readOnly={!selectedDesignPage}
-            />
+        </section>
+
+        <section className="design-system-panel">
+          <div className="design-system-panel-header">
+            <strong>当前 UI 标准</strong>
+            <span>{currentProject?.uiFramework || '未选择'}</span>
           </div>
-          <div className="property-group">
-            <label>页面路由</label>
-            <input
-              type="text"
-              value={selectedDesignPage?.metadata?.route || ''}
-              onChange={(e) =>
-                selectedDesignPage &&
-                updatePageStructureNode(selectedDesignPage.id, {
-                  metadata: {
-                    route: e.target.value,
-                  },
-                })
-              }
-              placeholder="/design/page"
-              readOnly={!selectedDesignPage}
-            />
-          </div>
-          <div className="property-group">
-            <label>页面目标</label>
-            <textarea
-              className="property-textarea"
-              value={selectedDesignPage?.metadata?.goal || ''}
-              onChange={(e) =>
-                selectedDesignPage &&
-                updatePageStructureNode(selectedDesignPage.id, {
-                  metadata: {
-                    goal: e.target.value,
-                  },
-                })
-              }
-              placeholder="这页要解决什么问题"
-              readOnly={!selectedDesignPage}
-            />
-          </div>
-          <div className="property-group">
-            <label>页面描述</label>
-            <textarea
-              className="property-textarea"
-              value={selectedDesignPage?.description || ''}
-              onChange={(e) =>
-                selectedDesignPage &&
-                updatePageStructureNode(selectedDesignPage.id, {
-                  description: e.target.value,
-                })
-              }
-              placeholder="描述页面结构和职责"
-              readOnly={!selectedDesignPage}
-            />
-          </div>
-          <div className="property-group">
-            <label>页面模板</label>
-            <select
-              value={selectedDesignPage?.metadata?.template || 'workspace'}
-              onChange={(e) =>
-                selectedDesignPage &&
-                updatePageStructureNode(selectedDesignPage.id, {
-                  metadata: {
-                    template: e.target.value as PageStructureNode['metadata']['template'],
-                  },
-                })
-              }
-              disabled={!selectedDesignPage}
-            >
-              {PAGE_TEMPLATE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="property-group">
-            <label>负责人角色</label>
-            <select
-              value={selectedDesignPage?.metadata?.ownerRole || 'UI设计'}
-              onChange={(e) =>
-                selectedDesignPage &&
-                updatePageStructureNode(selectedDesignPage.id, {
-                  metadata: {
-                    ownerRole: e.target.value as PageStructureNode['metadata']['ownerRole'],
-                  },
-                })
-              }
-              disabled={!selectedDesignPage}
-            >
-              {PAGE_OWNER_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="property-group">
-            <label>页面备注</label>
-            <textarea
-              className="property-textarea"
-              value={selectedDesignPage?.metadata?.notes || ''}
-              onChange={(e) =>
-                selectedDesignPage &&
-                updatePageStructureNode(selectedDesignPage.id, {
-                  metadata: {
-                    notes: e.target.value,
-                  },
-                })
-              }
-              placeholder="记录交互约束、布局想法或设计说明"
-              readOnly={!selectedDesignPage}
-            />
-          </div>
-          <div className="property-group">
-            <label>关联功能</label>
-            <input type="text" value={selectedFeature?.name || '未选择'} readOnly />
-          </div>
-          <div className="property-group">
-            <label>Wireframe 状态</label>
-            <input
-              type="text"
-              value={
-                selectedDesignPage
-                  ? `${currentWireframe?.status || 'draft'} / ${currentWireframe?.elements.length || 0} 个组件`
-                  : '未选择'
-              }
-              readOnly
-            />
-          </div>
-          <div className="property-group">
-            <label>UI Spec</label>
-            <input
-              type="text"
-              value={
-                selectedUISpec
-                  ? `${selectedUISpec.components.length} 个组件 / ${selectedUISpec.sections.length} 个区块`
-                  : '未生成'
-              }
-              readOnly
-            />
-          </div>
-          <div className="property-group">
-            <label>当前元素</label>
-            <input
-              type="text"
-              value={
-                selectedCanvasElement ? `${selectedCanvasElement.type} · ${selectedCanvasElement.id.slice(0, 8)}` : '未选择'
-              }
-              readOnly
-            />
-          </div>
-          {selectedCanvasElement && (
-            <>
-              <div className="property-grid">
-                <div className="property-group">
-                  <label>X</label>
-                  <input
-                    type="number"
-                    value={selectedCanvasElement.x}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        x: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <div className="property-group">
-                  <label>Y</label>
-                  <input
-                    type="number"
-                    value={selectedCanvasElement.y}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        y: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="property-grid">
-                <div className="property-group">
-                  <label>宽度</label>
-                  <input
-                    type="number"
-                    value={selectedCanvasElement.width}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        width: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <div className="property-group">
-                  <label>高度</label>
-                  <input
-                    type="number"
-                    value={selectedCanvasElement.height}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        height: Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-              </div>
-              {'text' in selectedCanvasElement.props && (
-                <div className="property-group">
-                  <label>文本</label>
-                  <input
-                    type="text"
-                    value={String(selectedCanvasElement.props.text || '')}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        props: {
-                          ...selectedCanvasElement.props,
-                          text: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </div>
-              )}
-              {'placeholder' in selectedCanvasElement.props && (
-                <div className="property-group">
-                  <label>占位文案</label>
-                  <input
-                    type="text"
-                    value={String(selectedCanvasElement.props.placeholder || '')}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        props: {
-                          ...selectedCanvasElement.props,
-                          placeholder: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </div>
-              )}
-              {'title' in selectedCanvasElement.props && (
-                <div className="property-group">
-                  <label>标题</label>
-                  <input
-                    type="text"
-                    value={String(selectedCanvasElement.props.title || '')}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        props: {
-                          ...selectedCanvasElement.props,
-                          title: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </div>
-              )}
-              {'content' in selectedCanvasElement.props && (
-                <div className="property-group">
-                  <label>内容</label>
-                  <textarea
-                    className="property-textarea"
-                    value={String(selectedCanvasElement.props.content || '')}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        props: {
-                          ...selectedCanvasElement.props,
-                          content: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                </div>
-              )}
-              {'fontSize' in selectedCanvasElement.props && (
-                <div className="property-group">
-                  <label>字号</label>
-                  <input
-                    type="number"
-                    value={Number(selectedCanvasElement.props.fontSize) || 16}
-                    onChange={(e) =>
-                      updateElement(selectedCanvasElement.id, {
-                        props: {
-                          ...selectedCanvasElement.props,
-                          fontSize: Number(e.target.value),
-                        },
-                      })
-                    }
-                  />
-                </div>
-              )}
-              <div className="property-group">
-                <label>组件语义</label>
-                <input type="text" value={selectedCanvasElement.type} readOnly />
-              </div>
-              <button
-                className="property-danger-btn"
-                onClick={() => deleteElement(selectedCanvasElement.id)}
-                type="button"
-              >
-                删除当前组件
-              </button>
-            </>
-          )}
-          <div className="property-group">
-            <label>UI 框架</label>
-            <input type="text" value={currentProject?.uiFramework || ''} readOnly />
-          </div>
-          <div className="property-group">
-            <label>项目状态</label>
-            <div className="color-picker">
-              <span className="color-swatch" style={{ background: isDirty ? '#ff9500' : '#30d158' }}></span>
-              <span>{isDirty ? '有待确认变更' : '已同步到工作区上下文'}</span>
+          <div className="theme-standard-grid">
+            <div className="theme-standard-card">
+              <span>设计系统</span>
+              <strong>{designSystem?.name || '未生成'}</strong>
+              <p>{designSystem?.summary || '先在原型页完善功能和草图后，再生成 UI 标准。'}</p>
+            </div>
+            <div className="theme-standard-card">
+              <span>组件模式</span>
+              <strong>{designSystemPatterns.length}</strong>
+              <p>来自原型页线稿中的结构化组件模式。</p>
+            </div>
+            <div className="theme-standard-card">
+              <span>页面规格</span>
+              <strong>{uiSpecs.length}</strong>
+              <p>UI 页面规格是从原型自动推导出来的，不在这里绘制。</p>
+            </div>
+            <div className="theme-standard-card">
+              <span>当前页面</span>
+              <strong>{selectedDesignPage?.name || '未选择'}</strong>
+              <p>{selectedUISpec?.route || '到原型页中选择具体页面并维护草图。'}</p>
             </div>
           </div>
-          {selectedUISpec && (
-            <div className="property-card-list">
-              {designSystem && (
-                <div className="property-card">
-                  <strong>Design System</strong>
-                  <ul>
-                    <li>{designSystem.componentPatterns.length} 个组件模式</li>
-                    <li>{designSystem.principles[0]}</li>
-                  </ul>
-                </div>
-              )}
-              <div className="property-card">
-                <strong>Page Sections</strong>
-                <ul>
-                  {selectedUISpec.sections.map((section) => (
-                    <li key={section}>{section}</li>
-                  ))}
-                </ul>
+        </section>
+
+        <section className="design-system-panel">
+          <div className="design-system-panel-header">
+            <strong>设计原则</strong>
+            <span>{designPrinciples.length} 条</span>
+          </div>
+          <div className="design-principle-list">
+            {(designPrinciples.length > 0 ? designPrinciples : ['统一间距系统', '统一组件语义', '统一主题包应用']).map((item) => (
+              <div key={item} className="design-principle-card">
+                <strong>{item}</strong>
               </div>
-              <div className="property-card">
-                <strong>Interaction Notes</strong>
-                <ul>
-                  {selectedUISpec.interactionNotes.map((note) => (
-                    <li key={note}>{note}</li>
-                  ))}
-                </ul>
-              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="design-system-panel">
+          <div className="design-system-panel-header">
+            <strong>Token 摘要</strong>
+            <span>由主题包和设计系统共同决定</span>
+          </div>
+          <div className="theme-token-list">
+            <div className="theme-token-card">
+              <span>Color</span>
+              <p>{designTokens.color.values.join(' · ') || '未生成'}</p>
             </div>
-          )}
-        </div>
+            <div className="theme-token-card">
+              <span>Typography</span>
+              <p>{designTokens.typography.values.join(' · ') || '未生成'}</p>
+            </div>
+            <div className="theme-token-card">
+              <span>Spacing</span>
+              <p>{designTokens.spacing.values.join(' · ') || '未生成'}</p>
+            </div>
+            <div className="theme-token-card">
+              <span>Radius</span>
+              <p>{designTokens.radius.values.join(' · ') || '未生成'}</p>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -871,7 +276,7 @@ const App: React.FC = () => {
         <Workspace
           files={generatedFiles}
           tasks={devTasks}
-          recommendedCommands={deployPlan?.commands || ['npm run build', 'npm run preview']}
+          recommendedCommands={recommendedCommands}
         />
       </div>
     </div>
@@ -921,7 +326,7 @@ const App: React.FC = () => {
           </div>
         </div>
         <div className="test-cases">
-          {testPlan?.cases.map((testCase) => (
+          {testCases.map((testCase) => (
             <div key={testCase.id} className="case-item">
               <div className={`case-status ${testCase.priority === 'high' ? 'pending' : 'passed'}`}></div>
               <div className="case-info">
@@ -1005,7 +410,7 @@ const App: React.FC = () => {
           <div className="deploy-history">
             <h3>部署步骤</h3>
             <div className="history-list">
-              {deployPlan.steps.map((step, index) => (
+              {deploySteps.map((step, index) => (
                 <div key={step} className="history-item">
                   <span className="history-status success">{index + 1}</span>
                   <span className="history-version">Step</span>
@@ -1043,10 +448,13 @@ const App: React.FC = () => {
     <div className="app">
       <header className="app-header">
         <div className="header-left">
-          <h1 className="app-title">{currentProject.name}</h1>
-          <span className="app-subtitle">
-            {currentProject.appType} · {currentProject.frontendFramework} · {currentProject.backendFramework}
-          </span>
+          <div className="app-brand">DevFlow</div>
+          <div className="header-project">
+            <h1 className="app-title">{currentProject.name}</h1>
+            <span className="app-subtitle">
+              {currentProject.appType} · {currentProject.frontendFramework} · {currentProject.backendFramework}
+            </span>
+          </div>
         </div>
 
         <nav className="role-tabs">
@@ -1076,12 +484,30 @@ const App: React.FC = () => {
         </nav>
 
         <div className="header-right">
-          <button className={`ai-header-btn ${isStreaming ? 'streaming' : ''}`} onClick={togglePanel}>
+          <label className="header-search">
+            <span className="header-search-icon">⌕</span>
+            <input placeholder="Search workbench..." type="text" />
+          </label>
+          <button className="header-icon-btn" type="button" aria-label="通知中心">
+            ○
+          </button>
+          <button className="header-icon-btn" type="button" aria-label="设置">
+            ✦
+          </button>
+          <button
+            className="theme-mode-btn"
+            type="button"
+            onClick={() => setThemeMode((current) => current === 'dark' ? 'light' : 'dark')}
+            aria-label={themeMode === 'dark' ? '切换到白天主题' : '切换到夜间主题'}
+          >
+            {themeMode === 'dark' ? '白天' : '夜间'}
+          </button>
+          <button className={`ai-header-btn ${isStreaming ? 'streaming' : ''}`} onClick={togglePanel} type="button">
             ◎ AI
           </button>
           <span className="status-indicator">{isDirty ? '● 设计变更中' : '✓ 项目上下文已保存'}</span>
           {selectedFeature && <span className="current-feature">当前: {selectedFeature.name}</span>}
-          <button className="reset-project-btn" onClick={handleResetProject}>
+          <button className="reset-project-btn" onClick={handleResetProject} type="button">
             重新创建
           </button>
         </div>

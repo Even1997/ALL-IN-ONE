@@ -25,6 +25,7 @@ interface PreviewStore extends PreviewState {
   duplicateElement: (id: string) => void;
   bringToFront: (id: string) => void;
   sendToBack: (id: string) => void;
+  reorderElements: (sourceId: string, targetId: string) => void;
 
   // Preview mode
   setDirty: (isDirty: boolean) => void;
@@ -39,31 +40,32 @@ interface PreviewStore extends PreviewState {
 }
 
 const DEFAULT_ELEMENT_PROPS: Record<string, Partial<CanvasElement>> = {
-  button: { width: 100, height: 40, props: { text: 'Button', variant: 'primary' } },
-  input: { width: 200, height: 40, props: { placeholder: 'Enter text...', type: 'text' } },
-  text: { width: 200, height: 30, props: { text: 'Text', fontSize: 16 } },
-  image: { width: 200, height: 150, props: { src: '', alt: 'Image' } },
-  card: { width: 300, height: 200, props: { title: 'Card Title', content: 'Card content' } },
-  container: { width: 400, height: 300, props: { title: 'Container' } },
-  list: { width: 300, height: 200, props: { items: ['Item 1', 'Item 2'] } },
-  form: { width: 400, height: 300, props: { title: 'Form', fields: [] } },
-  table: { width: 500, height: 300, props: { columns: [], data: [] } },
-  modal: { width: 400, height: 300, props: { title: 'Modal', isOpen: false } },
-  navbar: { width: 800, height: 60, props: { title: 'Navigation', links: [] } },
-  footer: { width: 800, height: 80, props: { copyright: '© 2024' } },
-  sidebar: { width: 250, height: 600, props: { items: [] } },
-  header: { width: 800, height: 60, props: { title: 'Header', subtitle: '' } },
-  avatar: { width: 50, height: 50, props: { src: '', name: 'User' } },
-  badge: { width: 80, height: 24, props: { text: 'Badge', variant: 'default' } },
-  checkbox: { width: 100, height: 24, props: { label: 'Checkbox', checked: false } },
-  radio: { width: 100, height: 24, props: { label: 'Radio', checked: false } },
-  switch: { width: 50, height: 26, props: { label: 'Switch', checked: false } },
-  select: { width: 200, height: 40, props: { options: ['Option 1', 'Option 2'], value: '' } },
-  textarea: { width: 300, height: 100, props: { placeholder: 'Enter text...', value: '' } },
-  slider: { width: 200, height: 24, props: { min: 0, max: 100, value: 50 } },
+  'wireframe-block': { width: 280, height: 86, props: { name: '模块', content: '' } },
+  button: { width: 88, height: 36, props: { text: 'Button', variant: 'primary' } },
+  input: { width: 176, height: 36, props: { placeholder: 'Enter text...', type: 'text' } },
+  text: { width: 180, height: 28, props: { text: 'Text', fontSize: 14 } },
+  image: { width: 180, height: 132, props: { src: '', alt: 'Image' } },
+  card: { width: 248, height: 168, props: { title: 'Card Title', content: 'Card content' } },
+  container: { width: 320, height: 240, props: { title: 'Container' } },
+  list: { width: 260, height: 180, props: { items: ['Item 1', 'Item 2'] } },
+  form: { width: 320, height: 240, props: { title: 'Form', fields: [] } },
+  table: { width: 420, height: 240, props: { columns: [], data: [] } },
+  modal: { width: 320, height: 240, props: { title: 'Modal', isOpen: false } },
+  navbar: { width: 720, height: 52, props: { title: 'Navigation', links: [] } },
+  footer: { width: 720, height: 64, props: { copyright: '© 2024' } },
+  sidebar: { width: 200, height: 420, props: { items: [] } },
+  header: { width: 720, height: 52, props: { title: 'Header', subtitle: '' } },
+  avatar: { width: 44, height: 44, props: { src: '', name: 'User' } },
+  badge: { width: 68, height: 22, props: { text: 'Badge', variant: 'default' } },
+  checkbox: { width: 88, height: 22, props: { label: 'Checkbox', checked: false } },
+  radio: { width: 88, height: 22, props: { label: 'Radio', checked: false } },
+  switch: { width: 44, height: 24, props: { label: 'Switch', checked: false } },
+  select: { width: 176, height: 36, props: { options: ['Option 1', 'Option 2'], value: '' } },
+  textarea: { width: 260, height: 88, props: { placeholder: 'Enter text...', value: '' } },
+  slider: { width: 176, height: 22, props: { min: 0, max: 100, value: 50 } },
   progress: { width: 200, height: 8, props: { value: 50, max: 100 } },
   tooltip: { width: 100, height: 30, props: { text: 'Tooltip', position: 'top' } },
-  alert: { width: 300, height: 60, props: { message: 'Alert message', variant: 'info' } },
+  alert: { width: 260, height: 52, props: { message: 'Alert message', variant: 'info' } },
 };
 
 export const usePreviewStore = create<PreviewStore>((set, get) => ({
@@ -79,7 +81,11 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
   selectedElementId: null,
 
   // Canvas actions
-  setCanvasSize: (width, height) => set({ canvasWidth: width, canvasHeight: height }),
+  setCanvasSize: (width, height) => set((state) => (
+    state.canvasWidth === width && state.canvasHeight === height
+      ? state
+      : { canvasWidth: width, canvasHeight: height }
+  )),
 
   setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(3, zoom)) }),
 
@@ -107,9 +113,22 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
   },
 
   updateElement: (id, updates) => set(state => {
-    const elements = state.elements.map(el =>
-      el.id === id ? { ...el, ...updates } : el
-    );
+    const targetIndex = state.elements.findIndex((el) => el.id === id);
+    if (targetIndex === -1) {
+      return state;
+    }
+
+    const currentElement = state.elements[targetIndex];
+    const updateEntries = Object.entries(updates);
+    if (updateEntries.length === 0 || updateEntries.every(([key, value]) => Object.is(currentElement[key as keyof CanvasElement], value))) {
+      return state;
+    }
+
+    const nextElement = { ...currentElement, ...updates };
+
+    const elements = [...state.elements];
+    elements[targetIndex] = nextElement;
+
     return {
       elements,
       isDirty: true,
@@ -117,18 +136,37 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     };
   }),
 
-  deleteElement: (id) => set(state => ({
-    elements: state.elements.filter(el => el.id !== id),
-    selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
-    isDirty: true,
-  })),
+  deleteElement: (id) => set(state => {
+    if (!state.elements.some((el) => el.id === id)) {
+      return state;
+    }
 
-  moveElement: (id, x, y) => set(state => ({
-    elements: state.elements.map(el =>
-      el.id === id ? { ...el, x, y } : el
-    ),
-    isDirty: true,
-  })),
+    return {
+      elements: state.elements.filter(el => el.id !== id),
+      selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
+      isDirty: true,
+    };
+  }),
+
+  moveElement: (id, x, y) => set(state => {
+    const targetIndex = state.elements.findIndex((el) => el.id === id);
+    if (targetIndex === -1) {
+      return state;
+    }
+
+    const currentElement = state.elements[targetIndex];
+    if (currentElement.x === x && currentElement.y === y) {
+      return state;
+    }
+
+    const elements = [...state.elements];
+    elements[targetIndex] = { ...currentElement, x, y };
+
+    return {
+      elements,
+      isDirty: true,
+    };
+  }),
 
   resizeElement: (id, width, height) => set(state => ({
     elements: state.elements.map(el =>
@@ -137,7 +175,9 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     isDirty: true,
   })),
 
-  selectElement: (id) => set({ selectedElementId: id }),
+  selectElement: (id) => set((state) => (
+    state.selectedElementId === id ? state : { selectedElementId: id }
+  )),
 
   duplicateElement: (id) => set(state => {
     const element = state.elements.find(el => el.id === id);
@@ -170,6 +210,29 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     if (!element) return state;
     return {
       elements: [element, ...state.elements.filter(el => el.id !== id)],
+    };
+  }),
+
+  reorderElements: (sourceId, targetId) => set(state => {
+    if (sourceId === targetId) {
+      return state;
+    }
+
+    const sourceIndex = state.elements.findIndex((element) => element.id === sourceId);
+    const targetIndex = state.elements.findIndex((element) => element.id === targetId);
+
+    if (sourceIndex === -1 || targetIndex === -1) {
+      return state;
+    }
+
+    const nextElements = [...state.elements];
+    const [sourceElement] = nextElements.splice(sourceIndex, 1);
+    nextElements.splice(targetIndex, 0, sourceElement);
+
+    return {
+      elements: nextElements,
+      isDirty: true,
+      pendingChanges: nextElements,
     };
   }),
 

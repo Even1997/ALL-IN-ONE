@@ -1111,3 +1111,135 @@
     max-height: 200px;
   }
 }
+
+/* DevFlow AI panel overrides */
+
+.ai-trigger-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0f766e 0%, #005c55 100%);
+  box-shadow: 0 20px 48px rgba(0, 92, 85, 0.28);
+}
+
+.ai-trigger-btn:hover {
+  box-shadow: 0 24px 56px rgba(0, 92, 85, 0.32);
+}
+
+.ai-trigger-btn.streaming {
+  background: linear-gradient(135deg, #30d158 0%, #1f8f48 100%);
+}
+
+.ai-panel-overlay {
+  background: rgba(24, 28, 28, 0.34);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.ai-panel {
+  top: 64px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: -12px 0 40px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+}
+
+.ai-panel-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.ai-panel-title {
+  font-family: 'Manrope', 'Inter', sans-serif;
+  font-weight: 700;
+  color: #181c1c;
+}
+
+.ai-position-select,
+.ai-close-btn,
+.ai-clear-btn,
+.copy-btn,
+.download-btn {
+  border-radius: 12px;
+}
+
+.ai-position-select {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.ai-close-btn {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.ai-tabs {
+  background: rgba(235, 239, 237, 0.8);
+}
+
+.ai-tab {
+  color: #64748b;
+}
+
+.ai-tab.active {
+  color: #005c55;
+  border-bottom-color: #0f766e;
+}
+
+.module-badge {
+  background: rgba(15, 118, 110, 0.1);
+  color: #005c55;
+}
+
+.action-badge {
+  background: rgba(15, 23, 42, 0.05);
+  color: #64748b;
+}
+
+.ai-response,
+.code-block-content {
+  background: linear-gradient(180deg, #17211f 0%, #1f2b29 100%);
+}
+
+.code-block-viewer,
+.history-item {
+  border-radius: 16px;
+}
+
+.code-block-header {
+  background: #f1f4f3;
+}
+
+.code-action {
+  background: #0f766e;
+}
+
+.download-btn {
+  background: linear-gradient(135deg, #0f766e, #005c55);
+}
+
+.history-item:hover,
+.history-item.selected {
+  border-color: rgba(15, 118, 110, 0.22);
+}
+
+.history-item.selected {
+  background: rgba(15, 118, 110, 0.05);
+}
+
+.ai-settings-shell {
+  background: #f5f5f7;
+}
+
+.provider-sidebar {
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.provider-search-input {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: #f1f4f3;
+}
+
+.provider-search-input:focus {
+  border-color: rgba(15, 118, 110, 0.38);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.08);
+}

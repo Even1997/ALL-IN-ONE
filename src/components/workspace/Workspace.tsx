@@ -247,7 +247,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           🔍
         </button>
         <button className="activity-btn" title="Git">
-          �_branch
+          🌿
         </button>
         <button className="activity-btn" title="Debug">
           🐛

@@ -131,11 +131,11 @@ The component has been generated. You can:
 </tool>
 </tool_use>
 
-Found 12 files containing "React":
+Found React-related files such as:
 • src/App.tsx
 • src/components/ai/AIPanel.tsx
 • src/components/canvas/Canvas.tsx
-• src/components/editor/CodeEditor.tsx
+• src/components/product/ProductWorkbench.tsx
 • src/components/feature-tree/FeatureTree.tsx
 
 Use glob to find specific file types or view to examine any of these files.`);
@@ -167,7 +167,7 @@ Build finished successfully!`);
 
 **Component Structure:**
 The codebase follows a modular architecture with:
-- **Components**: UI elements (ai, canvas, editor, feature-tree)
+- **Components**: UI elements (ai, canvas, product, feature-tree, workspace)
 - **Modules**: Core services (ai, scope-detector)
 - **Store**: State management (Zustand)
 - **Types**: TypeScript definitions

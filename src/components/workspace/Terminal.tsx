@@ -9,8 +9,6 @@ interface TerminalLine {
   timestamp: Date;
 }
 
-interface TerminalProps {}
-
 interface TerminalProps {
   recommendedCommands?: string[];
 }
