@@ -19,16 +19,16 @@ export const AIChat: React.FC<AIChatProps> = ({ onContextInject }) => {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `◎ AI Coding Assistant ready.
+      content: `AI Coding Assistant 已就绪。
 
-I can help you with:
-• Writing and editing code
-• Searching files (grep, glob)
-• Viewing and navigating code
-• Running terminal commands
-• Explaining code logic
+我可以帮你：
+- 写代码和改代码
+- 搜索文件与关键字
+- 查看和理解代码结构
+- 执行常用命令
+- 解释报错和实现逻辑
 
-Type your request or select code to get started.`,
+直接描述你的目标，或者让我先帮你定位相关文件。`,
       timestamp: new Date(),
     },
   ]);
@@ -58,7 +58,7 @@ Type your request or select code to get started.`,
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
 
@@ -70,9 +70,8 @@ Type your request or select code to get started.`,
         timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
 
-      // Use AI or simulate based on configuration
       if (isConfigured) {
         await processAIResponse(userMessage.content, assistantMessage.id);
       } else {
@@ -80,7 +79,7 @@ Type your request or select code to get started.`,
       }
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           id: `error_${Date.now()}`,
@@ -102,12 +101,16 @@ Type your request or select code to get started.`,
     updateMessage(messageId, response);
   };
 
-  // Original simulation for demo mode
   const simulateResponse = async (userInput: string, messageId: string) => {
     const lowerInput = userInput.toLowerCase();
 
-    if (lowerInput.includes('write') || lowerInput.includes('create') || lowerInput.includes('生成') || lowerInput.includes('写')) {
-      updateMessage(messageId, `I'll help you write code. Let me create a new file with the requested functionality.
+    if (
+      lowerInput.includes('write') ||
+      lowerInput.includes('create') ||
+      lowerInput.includes('生成') ||
+      lowerInput.includes('写')
+    ) {
+      updateMessage(messageId, `我可以先帮你生成一版代码草稿。
 
 <tool_use>
 <tool name="write">
@@ -115,15 +118,19 @@ Type your request or select code to get started.`,
 </tool>
 </tool_use>
 
-File created: src/generated/Component.tsx
+已创建示例文件：\`src/generated/Component.tsx\`
 
-The component has been generated. You can:
-• View the file in the editor
-• Edit if needed
-• Run it to test`);
-
-    } else if (lowerInput.includes('search') || lowerInput.includes('find') || lowerInput.includes('找')) {
-      updateMessage(messageId, `Searching for relevant files...
+接下来你可以继续让我：
+- 改成真实业务组件
+- 拆分样式
+- 补充交互逻辑`);
+    } else if (
+      lowerInput.includes('search') ||
+      lowerInput.includes('find') ||
+      lowerInput.includes('搜索') ||
+      lowerInput.includes('查找')
+    ) {
+      updateMessage(messageId, `我会先帮你定位相关文件。
 
 <tool_use>
 <tool name="grep">
@@ -131,17 +138,21 @@ The component has been generated. You can:
 </tool>
 </tool_use>
 
-Found React-related files such as:
-• src/App.tsx
-• src/components/ai/AIPanel.tsx
-• src/components/canvas/Canvas.tsx
-• src/components/product/ProductWorkbench.tsx
-• src/components/feature-tree/FeatureTree.tsx
+可能相关的文件有：
+- src/App.tsx
+- src/components/ai/AIPanel.tsx
+- src/components/canvas/Canvas.tsx
+- src/components/product/ProductWorkbench.tsx
+- src/components/feature-tree/FeatureTree.tsx
 
-Use glob to find specific file types or view to examine any of these files.`);
-
-    } else if (lowerInput.includes('run') || lowerInput.includes('command') || lowerInput.includes('执行') || lowerInput.includes('npm')) {
-      updateMessage(messageId, `Executing command...
+如果你愿意，我可以继续帮你缩小到某个模块。`);
+    } else if (
+      lowerInput.includes('run') ||
+      lowerInput.includes('command') ||
+      lowerInput.includes('执行') ||
+      lowerInput.includes('npm')
+    ) {
+      updateMessage(messageId, `可以，下面是一次示例执行结果。
 
 <tool_use>
 <tool name="bash">
@@ -152,41 +163,39 @@ Use glob to find specific file types or view to examine any of these files.`);
 <tool_result>
 Simulated: npm run build
 
-✓ 144 modules transformed.
+144 modules transformed.
 dist/index.html                   0.47 kB
-dist/assets/index.css   16.21 kB
-dist/assets/index.js   613.39 kB
+dist/assets/index.css           16.21 kB
+dist/assets/index.js           613.39 kB
 
 Build completed successfully.
 </tool_result>
 
-Build finished successfully!`);
+如果你要执行真实命令，也可以直接告诉我。`);
+    } else if (
+      lowerInput.includes('explain') ||
+      lowerInput.includes('解释') ||
+      lowerInput.includes('什么是')
+    ) {
+      updateMessage(messageId, `从当前代码结构看，这个项目的核心分层是：
 
-    } else if (lowerInput.includes('explain') || lowerInput.includes('解释') || lowerInput.includes('什么是')) {
-      updateMessage(messageId, `Based on the code analysis:
+- Components：界面层，包含 AI、画布、产品、工作区等模块
+- Modules：底层能力，比如 AI 服务和范围检测
+- Store：状态管理，基于 Zustand
+- Types：统一类型定义
 
-**Component Structure:**
-The codebase follows a modular architecture with:
-- **Components**: UI elements (ai, canvas, product, feature-tree, workspace)
-- **Modules**: Core services (ai, scope-detector)
-- **Store**: State management (Zustand)
-- **Types**: TypeScript definitions
+关键技术栈：
+- React 19 + TypeScript
+- Zustand
+- Vite
+- Tauri
 
-**Key Technologies:**
-• React 18 with TypeScript
-• Zustand for state management
-• Vite for bundling
-• Tauri for desktop deployment
-
-**AI Integration:**
-The GlobalAIStore manages AI requests across all modules, providing:
-• Streaming responses
-• Code block generation
-• Context-aware prompts
-
-Would you like me to dive deeper into any specific area?`);
-
-    } else if (lowerInput.includes('list') || lowerInput.includes('ls') || lowerInput.includes('目录')) {
+如果你指定某个文件或功能点，我可以继续往下解释。`);
+    } else if (
+      lowerInput.includes('list') ||
+      lowerInput.includes('ls') ||
+      lowerInput.includes('目录')
+    ) {
       updateMessage(messageId, `<tool_use>
 <tool name="ls">
 <tool_params>{"path": "/src"}</tool_params>
@@ -195,46 +204,38 @@ Would you like me to dive deeper into any specific area?`);
 
 <tool_result>
 /src/
-├── components/
-│   ├── ai/
-│   ├── canvas/
-│   ├── editor/
-│   ├── feature-tree/
-│   └── workspace/
-├── modules/
-│   ├── ai/
-│   └── scope-detector/
-├── store/
-├── types/
-├── App.tsx
-└── main.tsx
+  components/
+  modules/
+  store/
+  types/
+  App.tsx
+  main.tsx
 </tool_result>
 
-Project structure overview. Would you like to explore any specific directory?`);
-
+这是当前项目结构的简化预览。想看哪个目录，我可以继续展开。`);
     } else {
-      updateMessage(messageId, `I understand you want to: "${userInput}"
+      updateMessage(messageId, `我理解你的目标是：“${userInput}”
 
-I can help you with:
+我现在可以直接帮你做这些事：
 
-1. **Writing Code** - Just say "write a login form" or "create a user component"
-2. **Searching** - Try "find files with React" or "search for useState"
-3. **Running Commands** - "run npm install" or "execute git status"
-4. **Explaining** - "explain how the AI integration works"
-5. **Viewing Files** - "show me the App.tsx file"
+1. 写一个组件或页面
+2. 搜索相关文件
+3. 运行构建或检查命令
+4. 解释某段代码
+5. 定位某个 bug
 
-What would you like to do?`);
+你也可以直接说“先帮我找相关文件”。`);
     }
   };
 
   const appendToMessage = (messageId: string, content: string) => {
-    setMessages(prev => prev.map(msg =>
+    setMessages((prev) => prev.map((msg) =>
       msg.id === messageId ? { ...msg, content: msg.content + content } : msg
     ));
   };
 
   const updateMessage = (messageId: string, content: string) => {
-    setMessages(prev => prev.map(msg =>
+    setMessages((prev) => prev.map((msg) =>
       msg.id === messageId ? { ...msg, content } : msg
     ));
   };
@@ -252,31 +253,29 @@ What would you like to do?`);
 
   return (
     <div className="ai-chat">
-      {/* Chat Header */}
       <div className="chat-header">
         <div className="chat-model">
           <span className="model-badge">{provider}</span>
           <span className="model-name">{model}</span>
         </div>
         <div className="chat-actions">
-          <button className="chat-action-btn" onClick={handleInjectContext} title="Inject Context">
-            ◎
+          <button className="chat-action-btn" onClick={handleInjectContext} title="注入上下文" type="button">
+            +
           </button>
-          <button className="chat-action-btn" title="Clear Chat">
-            🗑️
+          <button className="chat-action-btn" title="清空对话" type="button">
+            C
           </button>
         </div>
       </div>
 
-      {/* Messages */}
       <div className="chat-messages">
-        {messages.map(msg => (
+        {messages.map((msg) => (
           <div key={msg.id} className={`message ${msg.role}`}>
             <div className="message-avatar">
-              {msg.role === 'user' && '👤'}
-              {msg.role === 'assistant' && '◎'}
-              {msg.role === 'tool' && '⚙️'}
-              {msg.role === 'system' && 'ℹ️'}
+              {msg.role === 'user' && '我'}
+              {msg.role === 'assistant' && 'AI'}
+              {msg.role === 'tool' && 'T'}
+              {msg.role === 'system' && 'S'}
             </div>
             <div className="message-content">
               <div className="message-text">
@@ -290,12 +289,12 @@ What would you like to do?`);
         ))}
         {isLoading && (
           <div className="message assistant">
-            <div className="message-avatar">◎</div>
+            <div className="message-avatar">AI</div>
             <div className="message-content">
               <div className="message-text typing">
-                <span className="typing-dot">●</span>
-                <span className="typing-dot">●</span>
-                <span className="typing-dot">●</span>
+                <span className="typing-dot">•</span>
+                <span className="typing-dot">•</span>
+                <span className="typing-dot">•</span>
               </div>
             </div>
           </div>
@@ -303,7 +302,6 @@ What would you like to do?`);
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <form className="chat-input-form" onSubmit={handleSubmit}>
         <div className="chat-input-container">
           <textarea
@@ -311,7 +309,7 @@ What would you like to do?`);
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask AI or describe what you want to build..."
+            placeholder="描述你想完成的开发任务..."
             className="chat-input"
             rows={1}
           />
@@ -320,27 +318,31 @@ What would you like to do?`);
             className="send-btn"
             disabled={!input.trim() || isLoading}
           >
-            ▶
+            发送
           </button>
         </div>
         <div className="chat-tools">
-          <button type="button" className="tool-btn" title="Insert Code">📝</button>
-          <button type="button" className="tool-btn" title="Attach File">📎</button>
-          <button type="button" className="tool-btn" title="Inject Context">◎</button>
+          <button type="button" className="tool-btn" title="插入代码">
+            {'</>'}
+          </button>
+          <button type="button" className="tool-btn" title="附加文件">
+            F
+          </button>
+          <button type="button" className="tool-btn" title="注入上下文">
+            +
+          </button>
         </div>
       </form>
 
-      {/* API Key Warning */}
       {!isConfigured && (
         <div className="api-warning">
-          ⚠️ 在 AI 设置中填写第三方 API Key / Base URL / Model 后，即可启用真实 AI 响应
+          完成 AI 设置中的 API Key、Base URL 和 Model 后，就可以启用真实 AI 响应。
         </div>
       )}
     </div>
   );
 };
 
-// Format message content with code blocks
 function formatMessageContent(content: string): React.ReactNode {
   if (!content) return null;
 

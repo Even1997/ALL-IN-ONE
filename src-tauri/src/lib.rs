@@ -6,6 +6,11 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
+    let bytes = fs::read(file_path)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ToolResult {
     pub success: bool,
@@ -78,7 +83,7 @@ fn tool_view(params: ViewParams) -> ToolResult {
         };
     }
 
-    let content = match fs::read_to_string(file_path) {
+    let content = match read_file_as_string(file_path) {
         Ok(c) => c,
         Err(e) => {
             return ToolResult {
@@ -162,7 +167,7 @@ fn tool_edit(params: EditParams) -> ToolResult {
         };
     }
 
-    let content = match fs::read_to_string(file_path) {
+    let content = match read_file_as_string(file_path) {
         Ok(c) => c,
         Err(e) => {
             return ToolResult {

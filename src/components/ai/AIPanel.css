@@ -1243,3 +1243,198 @@
   border-color: rgba(15, 118, 110, 0.38);
   box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.08);
 }
+
+/* 2026 refresh */
+
+.ai-trigger-btn {
+  background: var(--mode-button);
+  color: var(--mode-button-text);
+  border: 1px solid color-mix(in srgb, var(--mode-accent) 18%, transparent);
+  box-shadow: var(--mode-shadow-strong);
+}
+
+.ai-trigger-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+
+.ai-panel-overlay {
+  background: rgba(2, 8, 23, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.ai-panel {
+  top: 76px;
+  border-left: 1px solid var(--mode-border);
+  background: color-mix(in srgb, var(--mode-panel) 94%, transparent);
+  color: var(--mode-text);
+  box-shadow: var(--mode-shadow-strong);
+}
+
+.ai-panel.bottom {
+  border-left: 0;
+  border-top: 1px solid var(--mode-border);
+}
+
+.ai-panel-header,
+.ai-tabs,
+.ai-panel-footer {
+  background: transparent;
+  border-color: var(--mode-border);
+}
+
+.ai-panel-title,
+.code-blocks-section h4,
+.provider-meta strong,
+.provider-detail-title h3,
+.provider-field-header label,
+.provider-outline-btn,
+.provider-action-btn,
+.provider-icon-square {
+  color: var(--mode-text);
+}
+
+.ai-position-select,
+.ai-close-btn,
+.ai-clear-btn,
+.provider-search-input,
+.provider-strong-input,
+.provider-headers-input,
+.provider-action-btn,
+.provider-outline-btn,
+.provider-icon-square,
+.ai-quick-input {
+  background: var(--mode-input);
+  border-color: var(--mode-border);
+  color: var(--mode-text);
+}
+
+.ai-position-select:focus,
+.provider-search-input:focus,
+.provider-strong-input:focus,
+.provider-headers-input:focus,
+.ai-quick-input:focus {
+  border-color: color-mix(in srgb, var(--mode-accent) 42%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mode-accent) 12%, transparent);
+}
+
+.ai-tab {
+  color: var(--mode-muted);
+}
+
+.ai-tab:hover {
+  color: var(--mode-soft-text);
+}
+
+.ai-tab.active {
+  color: var(--mode-accent);
+  border-bottom-color: var(--mode-accent);
+}
+
+.module-badge {
+  background: var(--mode-accent-soft);
+  color: var(--mode-accent);
+  border: 1px solid color-mix(in srgb, var(--mode-accent) 18%, transparent);
+}
+
+.action-badge {
+  background: color-mix(in srgb, var(--mode-chip) 96%, transparent);
+  color: var(--mode-muted);
+}
+
+.ai-error,
+.provider-test-note.error {
+  background: color-mix(in srgb, var(--mode-danger) 14%, transparent);
+  color: color-mix(in srgb, var(--mode-danger) 72%, var(--mode-text));
+}
+
+.provider-test-note.success,
+.provider-status.on {
+  background: color-mix(in srgb, var(--mode-success) 12%, transparent);
+  color: var(--mode-success);
+}
+
+.provider-status.off,
+.history-time,
+.history-meta,
+.provider-preview-url,
+.provider-field-footer,
+.provider-doc-note,
+.ai-hint {
+  color: var(--mode-muted);
+}
+
+.ai-response,
+.code-block-content,
+.provider-model-board,
+.provider-sidebar,
+.provider-model-group-title,
+.provider-empty-state,
+.provider-setting-note {
+  background: color-mix(in srgb, var(--mode-panel-alt) 96%, transparent);
+  color: var(--mode-text);
+}
+
+.code-block-viewer,
+.history-item,
+.provider-model-board,
+.provider-list-item,
+.provider-add-btn {
+  border-color: var(--mode-border);
+}
+
+.history-item:hover,
+.history-item.selected,
+.provider-list-item:hover,
+.provider-list-item.active,
+.provider-model-row:hover,
+.provider-model-row.active {
+  border-color: color-mix(in srgb, var(--mode-accent) 22%, transparent);
+  background: color-mix(in srgb, var(--mode-accent) 10%, transparent);
+}
+
+.provider-search-input::placeholder,
+.provider-strong-input::placeholder,
+.provider-headers-input::placeholder,
+.ai-quick-input::placeholder {
+  color: var(--mode-muted);
+}
+
+.provider-list-item::before {
+  background: var(--mode-accent);
+}
+
+.provider-add-btn:hover,
+.provider-outline-btn:hover,
+.provider-icon-square:hover,
+.provider-action-btn:hover,
+.ghost-icon-btn:hover,
+.ai-clear-btn:hover {
+  border-color: color-mix(in srgb, var(--mode-accent) 28%, transparent);
+  color: var(--mode-accent);
+  background: color-mix(in srgb, var(--mode-accent) 8%, transparent);
+}
+
+.ghost-icon-btn {
+  border-color: var(--mode-border);
+  background: var(--mode-input);
+  color: var(--mode-soft-text);
+}
+
+.ai-send-btn,
+.download-btn {
+  background: var(--mode-button);
+  color: var(--mode-button-text);
+}
+
+.copy-btn {
+  background: color-mix(in srgb, var(--mode-chip) 96%, transparent);
+  color: var(--mode-soft-text);
+}
+
+.code-block-header,
+.provider-model-group-title,
+.ai-panel-footer {
+  border-color: var(--mode-border);
+  background: color-mix(in srgb, var(--mode-chip) 92%, transparent);
+}

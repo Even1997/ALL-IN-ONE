@@ -60,7 +60,7 @@ export interface RequirementDoc {
   title: string;
   content: string;
   summary: string;
-  authorRole: '产品经理' | 'UI设计' | '开发' | '测试' | '运维';
+  authorRole: '产品' | 'UI设计' | '开发' | '测试' | '运维';
   sourceType?: 'manual' | 'upload' | 'ai';
   updatedAt: string;
   status: 'draft' | 'ready';
@@ -92,7 +92,7 @@ export interface PageStructureNode {
     title: string;
     goal: string;
     template: 'dashboard' | 'form' | 'list' | 'detail' | 'workspace' | 'custom';
-    ownerRole: '产品经理' | 'UI设计' | '开发' | '测试' | '运维';
+    ownerRole: '产品' | 'UI设计' | '开发' | '测试' | '运维';
     notes: string;
     status: 'draft' | 'ready';
   };

@@ -19,9 +19,9 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
       id: 'welcome',
       type: 'output',
       content:
-        'DevFlow Terminal v1.0.0\nType "help" for available commands.\n' +
+        'DevFlow Terminal v1.0.0\n输入 "help" 查看可用命令。\n' +
         (recommendedCommands.length > 0
-          ? `\nSuggested:\n${recommendedCommands.map((command) => `  ${command}`).join('\n')}\n`
+          ? `\n推荐命令：\n${recommendedCommands.map((command) => `  ${command}`).join('\n')}\n`
           : ''),
       timestamp: new Date(),
     },
@@ -41,11 +41,9 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
     const trimmedCmd = cmd.trim();
     if (!trimmedCmd) return;
 
-    // Add to history
-    setCommandHistory(prev => [...prev, trimmedCmd]);
+    setCommandHistory((prev) => [...prev, trimmedCmd]);
     setHistoryIndex(-1);
 
-    // Add command line
     const commandLine: TerminalLine = {
       id: `cmd_${Date.now()}`,
       type: 'command',
@@ -53,13 +51,11 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
       timestamp: new Date(),
     };
 
-    setLines(prev => [...prev, commandLine]);
+    setLines((prev) => [...prev, commandLine]);
 
-    // Parse and execute command
     const [command, ...args] = trimmedCmd.split(' ');
     const output = await processCommand(command.toLowerCase(), args);
 
-    // Add output
     if (output) {
       const outputLine: TerminalLine = {
         id: `output_${Date.now()}`,
@@ -67,7 +63,7 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
         content: output.content,
         timestamp: new Date(),
       };
-      setLines(prev => [...prev, outputLine]);
+      setLines((prev) => [...prev, outputLine]);
     }
 
     setCurrentCommand('');
@@ -81,22 +77,22 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
       case 'help':
         return {
           type: 'output',
-          content: `Available commands:
-  help     - Show this help message
-  clear    - Clear terminal
-  pwd      - Print working directory
-  cd       - Change directory
-  ls       - List directory contents
-  cat      - Display file contents
-  npm      - Run npm commands
-  git      - Git commands
-  node     - Run Node.js
-  echo     - Print text
+          content: `可用命令：
+  help     - 显示帮助
+  clear    - 清空终端
+  pwd      - 显示当前目录
+  cd       - 切换目录
+  ls       - 列出目录内容
+  cat      - 查看文件内容
+  npm      - 执行 npm 命令
+  git      - 执行 git 命令
+  node     - 执行 Node.js
+  echo     - 输出文本
 
-Tips:
-  • Use ↑/↓ arrows for command history
-  • Tab for auto-completion (coming soon)
-${recommendedCommands.length > 0 ? `\nSuggested commands:\n${recommendedCommands.map((command) => `  ${command}`).join('\n')}` : ''}`,
+提示：
+  - 方向键上下可切换历史命令
+  - Tab 自动补全后续可以继续补
+${recommendedCommands.length > 0 ? `\n推荐命令：\n${recommendedCommands.map((command) => `  ${command}`).join('\n')}` : ''}`,
         };
 
       case 'clear':
@@ -106,18 +102,19 @@ ${recommendedCommands.length > 0 ? `\nSuggested commands:\n${recommendedCommands
       case 'pwd':
         return { type: 'output', content: cwd };
 
-      case 'cd':
+      case 'cd': {
         const newDir = args[0] || '~';
         if (newDir === '~') {
           setCwd('~/Documents/all-in-one');
         } else if (newDir === '..') {
-          setCwd(prev => prev.split('/').slice(0, -1).join('/') || '~');
+          setCwd((prev) => prev.split('/').slice(0, -1).join('/') || '~');
         } else if (newDir.startsWith('/')) {
           setCwd(newDir);
         } else {
           setCwd(`${cwd}/${newDir}`);
         }
         return null;
+      }
 
       case 'echo':
         return { type: 'output', content: args.join(' ') };
@@ -174,7 +171,6 @@ ${recommendedCommands.length > 0 ? `\nSuggested commands:\n${recommendedCommands
 
   return (
     <div className="terminal" onClick={handleContainerClick}>
-      {/* Terminal Header */}
       <div className="terminal-header">
         <div className="terminal-dots">
           <span className="dot red" />
@@ -183,20 +179,20 @@ ${recommendedCommands.length > 0 ? `\nSuggested commands:\n${recommendedCommands
         </div>
         <span className="terminal-title">{cwd}</span>
         <div className="terminal-actions">
-          <button className="terminal-action" onClick={() => setLines([])} title="Clear">🗑️</button>
+          <button className="terminal-action" onClick={() => setLines([])} title="清空" type="button">
+            C
+          </button>
         </div>
       </div>
 
-      {/* Terminal Output */}
       <div className="terminal-output" ref={outputRef}>
-        {lines.map(line => (
+        {lines.map((line) => (
           <div key={line.id} className={`terminal-line ${line.type}`}>
             <pre>{line.content}</pre>
           </div>
         ))}
       </div>
 
-      {/* Terminal Input */}
       <div className="terminal-input-line">
         <span className="terminal-prompt">{cwd}$</span>
         <input
@@ -211,6 +207,7 @@ ${recommendedCommands.length > 0 ? `\nSuggested commands:\n${recommendedCommands
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
+          placeholder="输入命令后回车..."
         />
       </div>
     </div>

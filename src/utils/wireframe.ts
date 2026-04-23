@@ -141,12 +141,13 @@ export const buildPageWireframeMarkdown = (
   page: PageStructureNode,
   wireframe: WireframeDocument | null | undefined,
   featureTree: FeatureTree | null,
-  appType?: AppType | null
+  appType?: AppType | null,
+  canvasPresetOverride?: CanvasPreset
 ) => {
   const featureMap = new Map((featureTree?.children || []).map((feature) => [feature.id, feature.name]));
   const featureNames = page.featureIds.map((id) => featureMap.get(id) || id).filter(Boolean);
   const metadata = getPageMetadata(page);
-  const canvasPreset = getCanvasPreset(appType);
+  const canvasPreset = canvasPresetOverride || getCanvasPreset(appType);
   const modules = toWireframeModuleDrafts(wireframe?.elements || []);
 
   return [

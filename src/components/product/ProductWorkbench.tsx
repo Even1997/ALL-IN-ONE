@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { Canvas } from '../canvas/Canvas';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import { usePreviewStore } from '../../store/previewStore';
@@ -17,12 +17,14 @@ import {
   MIN_MODULE_HEIGHT,
   MIN_MODULE_WIDTH,
   parsePageWireframeMarkdown,
-  snapToGrid,
   toWireframeModuleDrafts,
   WireframeModuleDraft,
 } from '../../utils/wireframe';
 
 type SidebarTab = 'requirement' | 'page';
+export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
+export type WorkbenchLayoutDensity = 'comfortable' | 'compact';
+type PreviewFrameMode = 'browser' | 'mobile';
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [
@@ -33,19 +35,24 @@ const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
 const collectFeatureNodes = (nodes: FeatureNode[]): FeatureNode[] =>
   nodes.flatMap((node) => [node, ...collectFeatureNodes(node.children)]);
 
-const getPagePath = (nodes: PageStructureNode[], targetId: string, path: PageStructureNode[] = []): PageStructureNode[] => {
-  for (const node of nodes) {
-    if (node.id === targetId) {
-      return [...path, node];
-    }
-
-    const nextPath = getPagePath(node.children, targetId, [...path, node]);
-    if (nextPath.length > 0) {
-      return nextPath;
-    }
+const filterPageTree = (nodes: PageStructureNode[], keyword: string): PageStructureNode[] => {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  if (!normalizedKeyword) {
+    return nodes;
   }
 
-  return [];
+  return nodes.flatMap((node) => {
+    const filteredChildren = filterPageTree(node.children, normalizedKeyword);
+    const matchesSelf = [node.name, node.description, node.metadata.route]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(normalizedKeyword));
+
+    if (!matchesSelf && filteredChildren.length === 0) {
+      return [];
+    }
+
+    return [{ ...node, children: filteredChildren }];
+  });
 };
 
 const createCanvasId = () =>
@@ -71,39 +78,103 @@ interface PageTreeNodeProps {
   depth: number;
   selectedPageId: string | null;
   onSelect: (pageId: string) => void;
+  onAddPage: (pageId: string) => void;
+  onDeletePage: (pageId: string) => void;
 }
 
-const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onSelect }) => {
-  const childPages = collectDesignPages(node.children);
+const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onSelect, onAddPage, onDeletePage }) => {
   const isPage = node.kind === 'page';
   const isSelected = selectedPageId === node.id;
+  const hasChildren = node.children.length > 0;
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  if (!isPage) {
+    if (node.children.length === 0) {
+      return null;
+    }
+
+    return (
+      <>
+        {node.children.map((child) => (
+          <PageTreeNode
+            key={child.id}
+            node={child}
+            depth={depth}
+            selectedPageId={selectedPageId}
+            onSelect={onSelect}
+            onAddPage={onAddPage}
+            onDeletePage={onDeletePage}
+          />
+        ))}
+      </>
+    );
+  }
 
   return (
     <div className="pm-page-tree-group">
       <div className="pm-page-tree-row" style={{ paddingLeft: `${depth * 16}px` }}>
-        {isPage ? (
+        <div className="pm-page-tree-entry">
+          <button
+            className={`pm-page-tree-caret ${hasChildren ? 'visible' : 'placeholder'} ${isExpanded ? 'expanded' : ''}`}
+            type="button"
+            aria-label={hasChildren ? `${isExpanded ? '??' : '??'} ${node.name}` : `${node.name} ????`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (hasChildren) {
+                setIsExpanded((current) => !current);
+              }
+            }}
+          >
+            {hasChildren ? '>' : ''}
+          </button>
           <button
             className={`pm-page-tree-node ${isSelected ? 'active' : ''}`}
             onClick={() => onSelect(node.id)}
             type="button"
           >
             <strong>{node.name}</strong>
-            <span>{node.metadata.route || node.kind}</span>
           </button>
-        ) : (
-          <div className="pm-page-tree-label">
-            <strong>{node.name}</strong>
-            <span>
-              {node.kind === 'flow' ? '页面组' : '模块'}{childPages.length > 0 ? ` · ${childPages.length} 个页面` : ''}
-            </span>
+          <div className="pm-page-tree-actions" aria-label={`${node.name} ????`}>
+            <button
+              className="pm-page-tree-action"
+              type="button"
+              title={`? ${node.name} ?????`}
+              aria-label={`? ${node.name} ?????`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onAddPage(node.id);
+              }}
+            >
+              +
+            </button>
+            <button
+              className="pm-page-tree-action danger"
+              type="button"
+              title={`?? ${node.name}`}
+              aria-label={`?? ${node.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDeletePage(node.id);
+              }}
+            >
+              x
+            </button>
           </div>
-        )}
+        </div>
       </div>
 
-      {node.children.length > 0 && (
+      {hasChildren && isExpanded && (
         <div className="pm-page-tree-children">
           {node.children.map((child) => (
-            <PageTreeNode key={child.id} node={child} depth={depth + 1} selectedPageId={selectedPageId} onSelect={onSelect} />
+            <PageTreeNode
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              selectedPageId={selectedPageId}
+              onSelect={onSelect}
+              onAddPage={onAddPage}
+              onDeletePage={onDeletePage}
+            />
           ))}
         </div>
       )}
@@ -117,11 +188,10 @@ interface WireframeSidebarProps {
   featureTree: FeatureTree | null;
   draggingModuleId: string | null;
   setDraggingModuleId: Dispatch<SetStateAction<string | null>>;
-  pagePathText: string;
   linkedFeatureName: string;
-  childPageCount: number;
   canvasLabel: string;
   onAddModule: (position?: { x: number; y: number }) => void;
+  onAddChildPage: () => void;
   onGenerateSampleWireframe: () => void;
   onClearCurrentWireframe: () => void;
 }
@@ -299,72 +369,90 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
 
       {isActive ? (
         <>
-          <input
-            className="product-input"
-            value={module.name}
-            onChange={(event) => handleModuleFieldChange({ name: event.target.value })}
-            placeholder="模块名称"
-          />
+          <label className="pm-field-stack pm-field-stack-compact">
+            <span>{'\u6a21\u5757\u540d\u79f0'}</span>
+            <input
+              className="product-input pm-form-input"
+              value={module.name}
+              onChange={(event) => handleModuleFieldChange({ name: event.target.value })}
+              placeholder={"\u8f93\u5165\u6a21\u5757\u540d\u79f0"}
+            />
+          </label>
           <div className="pm-form-grid">
-            <input
-              className="product-input"
-              type="number"
-              value={numericDrafts.x}
-              onChange={(event) => handleNumericDraftChange('x', event.target.value)}
-              onBlur={() => handleNumericFieldCommit('x')}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.currentTarget.blur();
-                }
-              }}
-              placeholder="X"
-            />
-            <input
-              className="product-input"
-              type="number"
-              value={numericDrafts.y}
-              onChange={(event) => handleNumericDraftChange('y', event.target.value)}
-              onBlur={() => handleNumericFieldCommit('y')}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.currentTarget.blur();
-                }
-              }}
-              placeholder="Y"
-            />
-            <input
-              className="product-input"
-              type="number"
-              value={numericDrafts.width}
-              onChange={(event) => handleNumericDraftChange('width', event.target.value)}
-              onBlur={() => handleNumericFieldCommit('width')}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.currentTarget.blur();
-                }
-              }}
-              placeholder="宽"
-            />
-            <input
-              className="product-input"
-              type="number"
-              value={numericDrafts.height}
-              onChange={(event) => handleNumericDraftChange('height', event.target.value)}
-              onBlur={() => handleNumericFieldCommit('height')}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.currentTarget.blur();
-                }
-              }}
-              placeholder="高"
-            />
+            <label className="pm-field-stack pm-field-stack-compact">
+              <span>{'X \u5750\u6807'}</span>
+              <input
+                className="product-input pm-form-input"
+                type="number"
+                value={numericDrafts.x}
+                onChange={(event) => handleNumericDraftChange('x', event.target.value)}
+                onBlur={() => handleNumericFieldCommit('x')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.currentTarget.blur();
+                  }
+                }}
+                placeholder="X"
+              />
+            </label>
+            <label className="pm-field-stack pm-field-stack-compact">
+              <span>{'Y \u5750\u6807'}</span>
+              <input
+                className="product-input pm-form-input"
+                type="number"
+                value={numericDrafts.y}
+                onChange={(event) => handleNumericDraftChange('y', event.target.value)}
+                onBlur={() => handleNumericFieldCommit('y')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.currentTarget.blur();
+                  }
+                }}
+                placeholder="Y"
+              />
+            </label>
+            <label className="pm-field-stack pm-field-stack-compact">
+              <span>{'\u6a21\u5757\u5bbd\u5ea6'}</span>
+              <input
+                className="product-input pm-form-input"
+                type="number"
+                value={numericDrafts.width}
+                onChange={(event) => handleNumericDraftChange('width', event.target.value)}
+                onBlur={() => handleNumericFieldCommit('width')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.currentTarget.blur();
+                  }
+                }}
+                placeholder={"\u5bbd\u5ea6"}
+              />
+            </label>
+            <label className="pm-field-stack pm-field-stack-compact">
+              <span>{'\u6a21\u5757\u9ad8\u5ea6'}</span>
+              <input
+                className="product-input pm-form-input"
+                type="number"
+                value={numericDrafts.height}
+                onChange={(event) => handleNumericDraftChange('height', event.target.value)}
+                onBlur={() => handleNumericFieldCommit('height')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.currentTarget.blur();
+                  }
+                }}
+                placeholder={"\u9ad8\u5ea6"}
+              />
+            </label>
           </div>
-          <textarea
-            className="product-textarea compact"
-            value={module.content}
-            onChange={(event) => handleModuleFieldChange({ content: event.target.value })}
-            placeholder="模块内容说明"
-          />
+          <label className="pm-field-stack pm-field-stack-compact">
+            <span>{'\u6a21\u5757\u5185\u5bb9'}</span>
+            <textarea
+              className="product-textarea compact pm-module-content-input"
+              value={module.content}
+              onChange={(event) => handleModuleFieldChange({ content: event.target.value })}
+              placeholder={"\u6a21\u5757\u5185\u5bb9"}
+            />
+          </label>
         </>
       ) : (
         <p className="pm-module-card-preview" title={module.content || '暂无内容说明'}>
@@ -381,18 +469,14 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
   featureTree,
   draggingModuleId,
   setDraggingModuleId,
-  pagePathText,
   linkedFeatureName,
-  childPageCount,
   canvasLabel,
   onAddModule,
+  onAddChildPage,
   onGenerateSampleWireframe,
   onClearCurrentWireframe,
 }) => {
   const [isMarkdownEditorOpen, setIsMarkdownEditorOpen] = useState(false);
-  const [isArtifactsPanelOpen, setIsArtifactsPanelOpen] = useState(false);
-  const [isArtifactsRefreshing, setIsArtifactsRefreshing] = useState(false);
-  const [wireframesPreview, setWireframesPreview] = useState('');
   const [pageMarkdownDraft, setPageMarkdownDraft] = useState('');
   const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const moduleListRef = useRef<HTMLDivElement | null>(null);
@@ -401,7 +485,7 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
   const selectedElementId = usePreviewStore((state) => state.selectedElementId);
   const selectElement = usePreviewStore((state) => state.selectElement);
   const loadFromCode = usePreviewStore((state) => state.loadFromCode);
-  const generateDeliveryArtifacts = useProjectStore((state) => state.generateDeliveryArtifacts);
+  const updatePageStructureNode = useProjectStore((state) => state.updatePageStructureNode);
   const moduleIds = useMemo(() => elements.map((element) => element.id), [elements]);
   const moduleDrafts = useMemo(() => toWireframeModuleDrafts(elements), [elements]);
   const selectedModule = useMemo(
@@ -428,10 +512,7 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
 
   useEffect(() => {
     setIsMarkdownEditorOpen(false);
-    setIsArtifactsPanelOpen(false);
-    setIsArtifactsRefreshing(false);
     setPageMarkdownDraft('');
-    setWireframesPreview('');
     lastSyncedMarkdownRef.current = '';
   }, [selectedPage.id]);
 
@@ -520,17 +601,6 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
     setPageMarkdownDraft(nextMarkdown);
   }, [buildCurrentPageMarkdown, elements, isMarkdownEditorOpen, pageMarkdownDraft]);
 
-  const handleRefreshArtifacts = useCallback(() => {
-    setIsArtifactsRefreshing(true);
-
-    window.requestAnimationFrame(() => {
-      generateDeliveryArtifacts(featureTree);
-      setWireframesPreview(useProjectStore.getState().wireframesMarkdown || '# 线框说明\n\n暂无页面线框。');
-      setIsArtifactsPanelOpen(true);
-      setIsArtifactsRefreshing(false);
-    });
-  }, [featureTree, generateDeliveryArtifacts]);
-
   return (
     <section className="pm-card pm-wireframe-side">
       <div className="pm-wireframe-inline-meta">
@@ -544,6 +614,9 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
               <button className="doc-action-btn" type="button" onClick={() => onAddModule()}>
                 添加模块
               </button>
+              <button className="doc-action-btn secondary" type="button" onClick={onAddChildPage}>
+                添加子页面
+              </button>
               <button className="doc-action-btn secondary" type="button" onClick={onGenerateSampleWireframe}>
                 示例草图
               </button>
@@ -553,14 +626,31 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
             </div>
           </div>
 
-          <div className="pm-wireframe-meta-strip">
-            <span>{pagePathText}</span>
-            <span>{linkedFeatureName}</span>
-            <span>{moduleDrafts.length} 个模块</span>
-            <span>{childPageCount > 0 ? `${childPageCount} 个下级页面` : '无下级页面'}</span>
+          <div className="pm-form-grid pm-page-form-grid">
+            <label className="pm-field-stack">
+              <span>{'\u9875\u9762\u540d\u79f0'}</span>
+              <input
+                className="product-input pm-form-input pm-page-form-input"
+              value={selectedPage.name}
+              onChange={(event) => updatePageStructureNode(selectedPage.id, { name: event.target.value })}
+              placeholder="\u9875\u9762\u540d\u79f0"
+              />
+            </label>
+            <label className="pm-field-stack">
+              <span>{'\u9875\u9762\u63cf\u8ff0'}</span>
+              <textarea
+                className="product-textarea compact pm-page-description-input pm-page-form-input"
+              value={selectedPage.description}
+              onChange={(event) => updatePageStructureNode(selectedPage.id, { description: event.target.value })}
+              placeholder="\u9875\u9762\u63cf\u8ff0"
+              />
+            </label>
           </div>
 
-          <span>右键画布空白处可在当前位置快速添加模块。</span>
+          <div className="pm-wireframe-meta-strip">
+            <span>{moduleDrafts.length} 个模块</span>
+            {linkedFeatureName ? <span>{linkedFeatureName}</span> : null}
+          </div>
         </div>
 
         <div className="pm-card-header pm-wireframe-section-header">
@@ -570,9 +660,6 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
           <div className="pm-inline-actions">
             <button className="doc-action-btn secondary" type="button" onClick={handleToggleMarkdownEditor}>
               {isMarkdownEditorOpen ? '收起 Markdown' : '编辑 Markdown'}
-            </button>
-            <button className="doc-action-btn secondary" type="button" onClick={handleRefreshArtifacts}>
-              {isArtifactsRefreshing ? '生成中' : '生成线稿说明'}
             </button>
           </div>
         </div>
@@ -598,8 +685,7 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
 
         {isMarkdownEditorOpen && (
           <div className="pm-context-card">
-            <strong>当前页面 Markdown</strong>
-            <span>需要时再展开编辑，避免实时生成拖慢草稿图。</span>
+            <strong>页面 Markdown</strong>
             <textarea
               ref={markdownTextareaRef}
               className="product-textarea pm-markdown-editor"
@@ -615,19 +701,9 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
                 应用到画布
               </button>
               <button className="doc-action-btn secondary" type="button" onClick={handleResetMarkdown}>
-                恢复当前页面
+                重置
               </button>
             </div>
-          </div>
-        )}
-
-        {isArtifactsPanelOpen && (
-          <div className="pm-context-card">
-            <strong>完整线稿文件</strong>
-            <span>按需生成，避免拖拽和输入时实时刷新整份文档。</span>
-            <pre className="pm-markdown-preview pm-markdown-preview-compact">
-              {wireframesPreview || '# 线框说明\n\n暂无页面线框。'}
-            </pre>
           </div>
         )}
       </div>
@@ -687,13 +763,17 @@ const WireframeSyncBridge = memo<WireframeSyncBridgeProps>(({ selectedPage }) =>
 
 interface ProductWorkbenchProps {
   onFeatureSelect?: (node: FeatureNode) => void;
+  layoutFocus: WorkbenchLayoutFocus;
+  layoutDensity: WorkbenchLayoutDensity;
 }
 
-export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => {
+export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }: ProductWorkbenchProps) => {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('requirement');
   const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
   const [manualPageId, setManualPageId] = useState<string | null>(null);
   const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
+  const [pageSearch, setPageSearch] = useState('');
+  const [previewFrameMode, setPreviewFrameMode] = useState<PreviewFrameMode | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -708,6 +788,10 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
     addRequirementDoc,
     ingestRequirementDoc,
     generateProductArtifactsFromRequirements,
+    addRootPage,
+    addSiblingPage,
+    addChildPage,
+    deletePageStructureNode,
   } = useProjectStore(useShallow((state) => ({
     currentProject: state.currentProject,
     rawRequirementInput: state.rawRequirementInput,
@@ -720,6 +804,10 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
     addRequirementDoc: state.addRequirementDoc,
     ingestRequirementDoc: state.ingestRequirementDoc,
     generateProductArtifactsFromRequirements: state.generateProductArtifactsFromRequirements,
+    addRootPage: state.addRootPage,
+    addSiblingPage: state.addSiblingPage,
+    addChildPage: state.addChildPage,
+    deletePageStructureNode: state.deletePageStructureNode,
   })));
 
   const tree = useFeatureTreeStore((state) => state.tree);
@@ -731,17 +819,45 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
   const selectElement = usePreviewStore((state) => state.selectElement);
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
+  const filteredPageStructure = useMemo(() => filterPageTree(pageStructure, pageSearch), [pageSearch, pageStructure]);
+  const filteredDesignPages = useMemo(() => collectDesignPages(filteredPageStructure), [filteredPageStructure]);
   const selectedRequirement = requirementDocs.find((doc) => doc.id === selectedRequirementId) || requirementDocs[0] || null;
   const selectedPage = designPages.find((page) => page.id === manualPageId) || designPages[0] || null;
-  const canvasPreset = useMemo(() => getCanvasPreset(currentProject?.appType), [currentProject?.appType]);
-  const selectedPagePath = selectedPage ? getPagePath(pageStructure, selectedPage.id) : [];
-  const selectedPageChildren = useMemo(() => collectDesignPages(selectedPage?.children || []), [selectedPage]);
+  const effectiveAppType = useMemo<AppType | undefined>(() => {
+    if (previewFrameMode === 'mobile') {
+      return 'mobile';
+    }
+
+    if (previewFrameMode === 'browser') {
+      return 'web';
+    }
+
+    return currentProject?.appType;
+  }, [currentProject?.appType, previewFrameMode]);
+  const canvasPreset = useMemo(() => getCanvasPreset(effectiveAppType), [effectiveAppType]);
   const featureMap = useMemo(() => {
     const nodes = tree ? collectFeatureNodes(tree.children) : [];
     return new Map(nodes.map((node) => [node.id, node]));
   }, [tree]);
   const linkedFeatures = selectedPage?.featureIds.map((id) => featureMap.get(id)).filter(Boolean) as FeatureNode[] | undefined;
   const linkedFeatureName = linkedFeatures?.map((feature) => feature.name).join(' / ') || '核心页面';
+  const layoutStyle = useMemo<CSSProperties>(() => {
+    const pageColumns =
+      layoutFocus === 'canvas'
+        ? 'minmax(0, 1.62fr) minmax(300px, 0.58fr)'
+        : layoutFocus === 'sidebar'
+          ? 'minmax(0, 1.1fr) minmax(360px, 0.9fr)'
+          : 'minmax(0, 1.42fr) minmax(320px, 0.66fr)';
+
+    return {
+      ['--pm-left-width' as string]: layoutFocus === 'canvas' ? '212px' : layoutFocus === 'sidebar' ? '252px' : '228px',
+      ['--pm-page-columns' as string]: pageColumns,
+      ['--pm-shell-gap' as string]: layoutDensity === 'compact' ? '8px' : '12px',
+      ['--pm-card-gap' as string]: layoutDensity === 'compact' ? '8px' : '12px',
+      ['--pm-card-padding' as string]: layoutDensity === 'compact' ? '12px' : '16px',
+      ['--pm-canvas-height' as string]: layoutDensity === 'compact' ? 'clamp(620px, 78vh, 920px)' : 'clamp(700px, 84vh, 1020px)',
+    };
+  }, [layoutDensity, layoutFocus]);
 
   useEffect(() => {
     if (!tree) {
@@ -823,6 +939,65 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
     }
   }, [generateProductArtifactsFromRequirements, onFeatureSelect, selectFeature, setTree]);
 
+  const handleAddPageAfter = useCallback((pageId: string) => {
+    const nextPage = addSiblingPage(pageId);
+    if (nextPage) {
+      setManualPageId(nextPage.id);
+      setSidebarTab('page');
+    }
+  }, [addSiblingPage]);
+
+  const handleAddRootPage = useCallback(() => {
+    const nextPage = addRootPage();
+    if (nextPage) {
+      setManualPageId(nextPage.id);
+      setSidebarTab('page');
+    }
+  }, [addRootPage]);
+
+  const handleAddPageFromSidebar = useCallback(() => {
+    const referencePageId = selectedPage?.id || designPages[designPages.length - 1]?.id;
+    if (!referencePageId) {
+      handleAddRootPage();
+      return;
+    }
+
+    handleAddPageAfter(referencePageId);
+  }, [designPages, handleAddPageAfter, handleAddRootPage, selectedPage]);
+
+  const handleAddChildPageById = useCallback((pageId: string) => {
+    const nextPage = addChildPage(pageId);
+    if (nextPage) {
+      setManualPageId(nextPage.id);
+    }
+  }, [addChildPage]);
+
+  const handleAddChildPage = useCallback(() => {
+    if (!selectedPage) {
+      return;
+    }
+
+    handleAddChildPageById(selectedPage.id);
+  }, [handleAddChildPageById, selectedPage]);
+
+  const handleDeletePageById = useCallback((pageId: string) => {
+    const page = designPages.find((item) => item.id === pageId);
+    if (!page) {
+      return;
+    }
+
+    if (!window.confirm(`确定删除页面“${page.name}”吗？该页面下的所有子页面都会一起删除。`)) {
+      return;
+    }
+
+    deletePageStructureNode(pageId);
+
+    if (selectedPage?.id === pageId) {
+      setManualPageId(null);
+      loadFromCode([]);
+    }
+  }, [deletePageStructureNode, designPages, loadFromCode, selectedPage]);
+
   const handleAddModule = useCallback(() => {
     const currentElements = usePreviewStore.getState().elements;
     const moduleCount = currentElements.length;
@@ -830,38 +1005,16 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
     const nextModule = createWireframeModule(
       {
         name: `模块 ${moduleCount + 1}`,
-        x: isMobileAppType(currentProject?.appType) ? 40 : 72 + (moduleCount % 2) * 360,
-        y: isMobileAppType(currentProject?.appType) ? 56 + offset : 84 + Math.floor(moduleCount / 2) * 132,
+        x: isMobileAppType(effectiveAppType) ? 40 : 72 + (moduleCount % 2) * 360,
+        y: isMobileAppType(effectiveAppType) ? 56 + offset : 84 + Math.floor(moduleCount / 2) * 132,
         content: '',
       },
-      currentProject?.appType
+      effectiveAppType
     );
 
     usePreviewStore.getState().addMultipleElements([nextModule]);
     selectElement(nextModule.id);
-  }, [currentProject?.appType, selectElement]);
-
-  const handleAddModuleAtPosition = useCallback((position?: { x: number; y: number }) => {
-    if (!position) {
-      handleAddModule();
-      return;
-    }
-
-    const currentElements = usePreviewStore.getState().elements;
-    const moduleCount = currentElements.length;
-    const nextModule = createWireframeModule(
-      {
-        name: `模块 ${moduleCount + 1}`,
-        x: snapToGrid(position.x),
-        y: snapToGrid(position.y),
-        content: '',
-      },
-      currentProject?.appType
-    );
-
-    usePreviewStore.getState().addMultipleElements([nextModule]);
-    selectElement(nextModule.id);
-  }, [currentProject?.appType, handleAddModule, selectElement]);
+  }, [effectiveAppType, selectElement]);
 
   const handleGenerateSampleWireframe = useCallback(() => {
     if (!selectedPage) {
@@ -871,10 +1024,10 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
     const sampleElements = buildSampleWireframe(
       selectedPage.name,
       linkedFeatureName,
-      isMobileAppType(currentProject?.appType)
+      isMobileAppType(effectiveAppType)
     );
     loadFromCode(sampleElements);
-  }, [currentProject?.appType, linkedFeatureName, loadFromCode, selectedPage]);
+  }, [effectiveAppType, linkedFeatureName, loadFromCode, selectedPage]);
 
   const handleClearCurrentWireframe = useCallback(() => {
     if (!selectedPage) {
@@ -890,17 +1043,16 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
         <div className="pm-card-header">
           <div>
             <h3>需求输入</h3>
-            <span>先把需求、场景和约束补全，再由系统自动整理成页面清单和草图入口。</span>
           </div>
           <div className="pm-inline-actions">
             <button className="doc-action-btn secondary" type="button" onClick={handleUploadClick}>
-              上传文档
+              上传
             </button>
             <button className="doc-action-btn secondary" type="button" onClick={addRequirementDoc}>
-              + 新需求
+              + 新建
             </button>
             <button className="doc-action-btn" type="button" onClick={handleGenerateFromRequirements}>
-              生成页面清单
+              生成草案
             </button>
           </div>
         </div>
@@ -908,7 +1060,7 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
           className="product-textarea"
           value={rawRequirementInput}
           onChange={(event) => setRawRequirementInput(event.target.value)}
-          placeholder="描述首页、列表页、详情页、关键按钮、页面之间的跳转关系，以及你希望 AI 补出来的页面结构。"
+          placeholder="输入业务目标、核心场景、约束和关键需求"
         />
       </section>
 
@@ -961,10 +1113,9 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
           <div className="pm-card-header">
             <div>
               <h3>页面草图</h3>
-              <span>先从需求生成页面清单，或者在已有页面结构里选择一个页面。</span>
             </div>
           </div>
-          <div className="empty-state">当前还没有可展示的页面草图。</div>
+          <div className="empty-state">还没有页面草图。</div>
         </section>
       );
     }
@@ -972,6 +1123,30 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
     return (
       <div className="pm-page-workspace">
         <section className="pm-card pm-wireframe-main">
+          <div className="pm-card-header pm-wireframe-section-header">
+            <div>
+              <h3>页面画布</h3>
+            </div>
+            <div className="pm-inline-actions">
+              <button
+                className={`doc-action-btn secondary ${canvasPreset.frameType === 'browser' ? 'active' : ''}`}
+                type="button"
+                onClick={() => setPreviewFrameMode('browser')}
+              >
+                网页端
+              </button>
+              <button
+                className={`doc-action-btn secondary ${canvasPreset.frameType === 'mobile' ? 'active' : ''}`}
+                type="button"
+                onClick={() => setPreviewFrameMode('mobile')}
+              >
+                手机端
+              </button>
+              <button className="doc-action-btn" type="button" onClick={handleAddModule}>
+                添加模块
+              </button>
+            </div>
+          </div>
           <div className="pm-canvas-shell">
             <Canvas
               key={selectedPage.id}
@@ -979,22 +1154,20 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
               height={canvasPreset.height}
               frameType={canvasPreset.frameType}
               frameLabel={canvasPreset.label}
-              onAddModuleAt={handleAddModuleAtPosition}
             />
           </div>
         </section>
 
         <WireframeSidebar
           selectedPage={selectedPage}
-          appType={currentProject?.appType}
+          appType={effectiveAppType}
           featureTree={tree}
           draggingModuleId={draggingModuleId}
           setDraggingModuleId={setDraggingModuleId}
-          pagePathText={selectedPagePath.map((item) => item.name).join(' / ') || selectedPage.name}
           linkedFeatureName={linkedFeatureName}
-          childPageCount={selectedPageChildren.length}
           canvasLabel={canvasPreset.label}
-          onAddModule={handleAddModuleAtPosition}
+          onAddModule={handleAddModule}
+          onAddChildPage={handleAddChildPage}
           onGenerateSampleWireframe={handleGenerateSampleWireframe}
           onClearCurrentWireframe={handleClearCurrentWireframe}
         />
@@ -1003,11 +1176,10 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
   };
 
   return (
-    <div className="product-workbench-shell">
+    <div className="product-workbench-shell" style={layoutStyle}>
       <aside className="pm-left-nav">
         <div className="pm-nav-header">
           <strong>{currentProject?.name || '产品工作台'}</strong>
-          <span>{designPages.length} 个页面可继续出草图</span>
         </div>
 
         <div className="pm-sidebar-tabs">
@@ -1037,15 +1209,39 @@ export const ProductWorkbench = ({ onFeatureSelect }: ProductWorkbenchProps) => 
 
         {sidebarTab === 'page' && (
           <section className="pm-nav-section">
-            <div className="pm-nav-title">页面清单</div>
-            {pageStructure.length > 0 ? (
-              <div className="pm-page-tree">
-                {pageStructure.map((node) => (
-                  <PageTreeNode key={node.id} node={node} depth={0} selectedPageId={selectedPage?.id || null} onSelect={setManualPageId} />
-                ))}
-              </div>
+            <div className="pm-nav-section-header">
+              <div className="pm-nav-title">{filteredDesignPages.length || designPages.length} 个页面</div>
+              <button className="pm-nav-mini-action" type="button" onClick={handleAddPageFromSidebar}>
+                + 页面
+              </button>
+            </div>
+            <input
+              className="product-input pm-page-search-input"
+              type="search"
+              value={pageSearch}
+              onChange={(event) => setPageSearch(event.target.value)}
+              placeholder="搜索页面"
+            />
+            {designPages.length > 0 ? (
+              filteredDesignPages.length > 0 ? (
+                <div className="pm-page-tree">
+                  {filteredPageStructure.map((node) => (
+                    <PageTreeNode
+                      key={node.id}
+                      node={node}
+                      depth={0}
+                      selectedPageId={selectedPage?.id || null}
+                      onSelect={setManualPageId}
+                      onAddPage={handleAddChildPageById}
+                      onDeletePage={handleDeletePageById}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="pm-page-tree-empty">没有匹配的页面</div>
+              )
             ) : (
-              <div className="pm-page-tree-empty">先从需求生成页面清单。</div>
+              <div className="pm-page-tree-empty">还没有页面，请先创建</div>
             )}
           </section>
         )}

@@ -132,7 +132,6 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     return {
       elements,
       isDirty: true,
-      pendingChanges: elements,
     };
   }),
 
@@ -232,7 +231,6 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     return {
       elements: nextElements,
       isDirty: true,
-      pendingChanges: nextElements,
     };
   }),
 

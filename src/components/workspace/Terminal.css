@@ -214,3 +214,86 @@
 .terminal-output::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.16);
 }
+
+/* 2026 refresh */
+
+.terminal {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--mode-accent) 10%, transparent), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--mode-panel-alt) 98%, transparent), color-mix(in srgb, var(--mode-panel) 94%, transparent));
+  color: var(--mode-text);
+}
+
+.terminal-header,
+.terminal-input-line {
+  background: color-mix(in srgb, var(--mode-panel) 96%, transparent);
+  border-color: var(--mode-border);
+}
+
+.terminal-header {
+  padding: 12px 14px;
+}
+
+.terminal-title {
+  color: var(--mode-muted);
+}
+
+.terminal-action {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  color: var(--mode-soft-text);
+}
+
+.terminal-action:hover {
+  background: color-mix(in srgb, var(--mode-chip-strong) 84%, transparent);
+}
+
+.terminal-output {
+  padding: 16px;
+}
+
+.terminal-line {
+  padding: 3px 0;
+}
+
+.terminal-line.command {
+  color: var(--mode-accent);
+}
+
+.terminal-line.output {
+  color: var(--mode-soft-text);
+}
+
+.terminal-line.error {
+  color: var(--mode-danger);
+}
+
+.terminal-line.success,
+.terminal-prompt,
+.terminal-input {
+  color: var(--mode-success);
+}
+
+.terminal-input-line {
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.terminal-input {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mode-input) 92%, transparent);
+  border: 1px solid var(--mode-border);
+  color: var(--mode-text);
+  caret-color: var(--mode-accent);
+}
+
+.terminal-input::placeholder {
+  color: var(--mode-muted);
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--mode-accent) 24%, var(--mode-border));
+}

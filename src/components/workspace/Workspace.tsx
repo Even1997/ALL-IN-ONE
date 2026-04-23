@@ -128,7 +128,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 
   return (
     <div className={`workspace ${className || ''}`}>
-      {/* Sidebar */}
       <div className="workspace-sidebar">
         <FileExplorer
           rootPath={projectRoot}
@@ -138,40 +137,41 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         />
       </div>
 
-      {/* Main Content */}
       <div className="workspace-main">
-        {/* View Toggle */}
         <div className="workspace-toolbar">
           <div className="view-toggle">
             <button
               className={`toggle-btn ${currentView === 'chat' ? 'active' : ''}`}
               onClick={() => setCurrentView('chat')}
+              type="button"
             >
-              💬 Chat
+              聊天
             </button>
             <button
               className={`toggle-btn ${currentView === 'terminal' ? 'active' : ''}`}
               onClick={() => setCurrentView('terminal')}
+              type="button"
             >
-              ⌨️ Terminal
+              终端
             </button>
             <button
               className={`toggle-btn ${currentView === 'split' ? 'active' : ''}`}
               onClick={() => setCurrentView('split')}
+              type="button"
             >
-              ⬜ Split
+              分栏
             </button>
           </div>
           {selectedFile && (
             <div className="current-file">
-              <span className="file-icon-small">📄</span>
+              <span className="file-icon-small">FILE</span>
               <span className="file-path">{selectedFile}</span>
             </div>
           )}
           {files.length > 0 && (
-            <button className="workspace-sync-btn" onClick={handleSyncGeneratedFiles}>
+            <button className="workspace-sync-btn" onClick={handleSyncGeneratedFiles} type="button">
               {syncState === 'syncing'
-                ? '写入中'
+                ? '写入中...'
                 : syncState === 'done'
                   ? '已写入'
                   : syncState === 'error'
@@ -195,9 +195,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         {selectedFile && (
           <div className="workspace-file-editor">
             <div className="workspace-file-editor-header">
-              <strong>真实文件编辑</strong>
-              <button className="workspace-sync-btn" onClick={handleSaveFile}>
-                {isSavingFile ? '保存中' : '保存'}
+              <strong>文件编辑器</strong>
+              <button className="workspace-sync-btn" onClick={handleSaveFile} type="button">
+                {isSavingFile ? '保存中...' : '保存'}
               </button>
             </div>
             <textarea
@@ -209,25 +209,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           </div>
         )}
 
-        {/* Content Area */}
         <div className="workspace-content">
-          {currentView === 'chat' && (
-            <AIChat onContextInject={handleInjectContext} />
-          )}
+          {currentView === 'chat' && <AIChat onContextInject={handleInjectContext} />}
 
-          {currentView === 'terminal' && (
-            <Terminal recommendedCommands={recommendedCommands} />
-          )}
+          {currentView === 'terminal' && <Terminal recommendedCommands={recommendedCommands} />}
 
           {currentView === 'split' && (
             <>
               <div className="split-chat" style={{ height: chatHeight }}>
                 <AIChat onContextInject={handleInjectContext} />
               </div>
-              <div
-                className="resize-handle"
-                onMouseDown={handleResizeStart}
-              >
+              <div className="resize-handle" onMouseDown={handleResizeStart}>
                 <div className="resize-bar" />
               </div>
               <div className="split-terminal" style={{ height: `calc(100% - ${chatHeight}px - 6px)` }}>
@@ -238,26 +230,25 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         </div>
       </div>
 
-      {/* Activity Bar */}
       <div className="workspace-activity">
-        <button className="activity-btn active" title="Explorer">
-          📁
+        <button className="activity-btn active" title="Explorer" type="button">
+          E
         </button>
-        <button className="activity-btn" title="Search">
-          🔍
+        <button className="activity-btn" title="Search" type="button">
+          S
         </button>
-        <button className="activity-btn" title="Git">
-          🌿
+        <button className="activity-btn" title="Git" type="button">
+          G
         </button>
-        <button className="activity-btn" title="Debug">
-          🐛
+        <button className="activity-btn" title="Debug" type="button">
+          D
         </button>
-        <button className="activity-btn" title="Extensions">
-          📦
+        <button className="activity-btn" title="Extensions" type="button">
+          X
         </button>
         <div className="activity-spacer" />
-        <button className="activity-btn" title="Settings">
-          ⚙️
+        <button className="activity-btn" title="Settings" type="button">
+          ...
         </button>
       </div>
     </div>

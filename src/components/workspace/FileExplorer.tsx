@@ -20,9 +20,9 @@ interface FileExplorerProps {
 
 const FileIcon: React.FC<{ type: 'file' | 'folder'; expanded?: boolean }> = ({ type, expanded }) => {
   if (type === 'folder') {
-    return <span className="file-icon">{expanded ? '📂' : '📁'}</span>;
+    return <span className="file-icon">{expanded ? 'DIR' : 'FOL'}</span>;
   }
-  return <span className="file-icon">📄</span>;
+  return <span className="file-icon">FILE</span>;
 };
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({
@@ -123,7 +123,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
 
   const toggleFolder = useCallback((path: string) => {
     const toggleNode = (nodes: FileNode[]): FileNode[] => {
-      return nodes.map(node => {
+      return nodes.map((node) => {
         if (node.path === path && node.type === 'folder') {
           return { ...node, expanded: !node.expanded };
         }
@@ -133,7 +133,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         return node;
       });
     };
-    setFileTree(prev => toggleNode(prev));
+    setFileTree((prev) => toggleNode(prev));
   }, []);
 
   const handleClick = useCallback(async (node: FileNode) => {
@@ -178,7 +178,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     setContextMenu(null);
   }, []);
 
-  const renderNode = (node: FileNode, depth: number = 0): React.ReactNode => {
+  const renderNode = (node: FileNode, depth = 0): React.ReactNode => {
     const isSelected = selectedPath === node.path;
     const paddingLeft = depth * 14 + 8;
 
@@ -192,14 +192,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           onContextMenu={(e) => handleContextMenu(e, node)}
         >
           {node.type === 'folder' && (
-            <button className="expand-btn" onClick={(e) => { e.stopPropagation(); toggleFolder(node.path); }}>
-              {node.expanded ? '▼' : '▶'}
+            <button className="expand-btn" onClick={(e) => { e.stopPropagation(); toggleFolder(node.path); }} type="button">
+              {node.expanded ? '-' : '+'}
             </button>
           )}
           <FileIcon type={node.type} expanded={node.expanded} />
           <span className="file-name">{node.name}</span>
         </div>
-        {node.type === 'folder' && node.expanded && node.children?.map(child => renderNode(child, depth + 1))}
+        {node.type === 'folder' && node.expanded && node.children?.map((child) => renderNode(child, depth + 1))}
       </React.Fragment>
     );
   };
@@ -209,15 +209,15 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       <div className="explorer-header">
         <span className="explorer-title">Explorer</span>
         <div className="explorer-actions">
-          <button className="icon-btn" title="New File">+</button>
-          <button className="icon-btn" title="New Folder">📁+</button>
-          <button className="icon-btn" title="Refresh">↻</button>
-          <button className="icon-btn" title="Collapse All">⌄</button>
+          <button className="icon-btn" title="New File" type="button">+</button>
+          <button className="icon-btn" title="New Folder" type="button">D+</button>
+          <button className="icon-btn" title="Refresh" type="button">R</button>
+          <button className="icon-btn" title="Collapse All" type="button">-</button>
         </div>
       </div>
 
       <div className="explorer-content">
-        {fileTree.map(node => renderNode(node))}
+        {fileTree.map((node) => renderNode(node))}
       </div>
 
       {contextMenu && (
@@ -226,17 +226,17 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="context-menu-item" onClick={() => { /* Open */ closeContextMenu(); }}>
+          <div className="context-menu-item" onClick={() => { closeContextMenu(); }}>
             <span>Open</span>
           </div>
-          <div className="context-menu-item" onClick={() => { /* Rename */ closeContextMenu(); }}>
+          <div className="context-menu-item" onClick={() => { closeContextMenu(); }}>
             <span>Rename</span>
           </div>
-          <div className="context-menu-item" onClick={() => { /* Delete */ closeContextMenu(); }}>
+          <div className="context-menu-item" onClick={() => { closeContextMenu(); }}>
             <span>Delete</span>
           </div>
           <div className="context-menu-divider" />
-          <div className="context-menu-item" onClick={() => { /* Copy Path */ closeContextMenu(); }}>
+          <div className="context-menu-item" onClick={() => { closeContextMenu(); }}>
             <span>Copy Path</span>
           </div>
         </div>

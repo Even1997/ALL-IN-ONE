@@ -66,6 +66,10 @@ interface ProjectState {
   generateProductArtifactsFromRequirements: () => FeatureTree | null;
   saveWireframeDraft: (page: Pick<PageStructureNode, 'id' | 'name'>, elements: CanvasElement[]) => void;
   upsertWireframe: (page: Pick<PageStructureNode, 'id' | 'name'>, elements: CanvasElement[]) => void;
+  addRootPage: () => PageStructureNode | null;
+  addSiblingPage: (referencePageId: string) => PageStructureNode | null;
+  addChildPage: (parentPageId: string) => PageStructureNode | null;
+  deletePageStructureNode: (pageId: string) => void;
   updatePageStructureNode: (
     pageId: string,
     updates: Partial<Pick<PageStructureNode, 'name' | 'description'>> & {
@@ -83,9 +87,9 @@ const buildStarterRequirementDocs = (projectName: string): RequirementDoc[] => {
     {
       id: uuidv4(),
       title: `${projectName} 初始需求`,
-      content: `${projectName} 需要承接产品经理从需求输入到功能规划再到线稿设计的完整流程。`,
+      content: `${projectName} 需要承接产品从需求输入到功能规划再到线稿设计的完整流程。`,
       summary: '整理核心目标、主要角色和 MVP 范围，作为后续 PRD 和功能树的基础输入。',
-      authorRole: '产品经理',
+      authorRole: '产品',
       sourceType: 'manual',
       updatedAt: now,
       status: 'ready',
@@ -192,7 +196,7 @@ const buildFeatureTreeFromRequirements = (
       createFeature(
         '需求协作流程',
         {
-          description: '让产品经理可以描述需求、选择技能并通过 AI 头脑风暴快速形成产品资料。',
+          description: '让产品可以描述需求、选择技能并通过 AI 头脑风暴快速形成产品资料。',
           details: ['支持直接输入需求', '支持选择 skill', '保留 AI 生成上下文'],
           inputs: ['原始需求文本', '需求文档上传', '选中的 skill'],
           outputs: ['PRD 草案', '功能清单', '线稿任务'],
@@ -257,11 +261,11 @@ const buildFeatureTreeFromRequirements = (
         ]
       ),
       createFeature(
-        '产品经理工作台布局',
+        '产品工作台布局',
         {
           description: '界面左侧展示需求/功能菜单，中间和右侧根据当前点击展示文档、功能或线稿。',
           details: ['左侧导航树', '中右双显示器', '上下文侧栏'],
-          acceptanceCriteria: ['产品经理无需频繁切 tab', '点击不同条目直接切换查看器'],
+          acceptanceCriteria: ['产品无需频繁切 tab', '点击不同条目直接切换查看器'],
           priority: 'high',
           progress: 45,
           status: 'in_progress',
@@ -326,7 +330,7 @@ const buildDefaultPageMetadata = (
   title: node.name,
   goal: node.description,
   template: node.kind === 'page' ? 'detail' : 'workspace',
-  ownerRole: node.kind === 'flow' ? '产品经理' : node.kind === 'page' ? 'UI设计' : '开发',
+  ownerRole: node.kind === 'flow' ? '产品' : node.kind === 'page' ? 'UI设计' : '开发',
   notes: '',
   status: 'draft',
 });
@@ -375,7 +379,7 @@ const buildPRDFromProject = (
   };
 };
 
-const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | null): PageStructureNode[] => {
+export const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | null): PageStructureNode[] => {
   const features = featureTree?.children || [];
 
   return [
@@ -390,7 +394,7 @@ const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | null): Pag
         title: '产品门户',
         goal: '集中查看需求、PRD 与规划结果。',
         template: 'workspace',
-        ownerRole: '产品经理',
+        ownerRole: '产品',
         notes: '作为需求到规划产物的统一入口。',
         status: 'ready',
       },
@@ -406,7 +410,7 @@ const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | null): Pag
             title: '需求工作台',
             goal: '沉淀原始需求并生成 PRD。',
             template: 'form',
-            ownerRole: '产品经理',
+            ownerRole: '产品',
             notes: '适合放置需求输入区、需求条目列表和规划操作。',
             status: 'ready',
           },
@@ -530,7 +534,7 @@ const createComponentLabel = (element: CanvasElement, index: number) => {
   return textValue || `${element.type}-${index + 1}`;
 };
 
-const buildWireframesFromPages = (pages: PageStructureNode[]): Record<string, WireframeDocument> => {
+export const buildWireframesFromPages = (pages: PageStructureNode[]): Record<string, WireframeDocument> => {
   const now = new Date().toISOString();
 
   return pages.reduce<Record<string, WireframeDocument>>((acc, page) => {
@@ -1355,19 +1359,25 @@ const normalizeRequirementDocs = (value: unknown): RequirementDoc[] =>
   Array.isArray(value)
     ? value
         .filter((item): item is Partial<RequirementDoc> => Boolean(item) && typeof item === 'object')
-        .map((doc) => ({
-          id: typeof doc.id === 'string' ? doc.id : uuidv4(),
-          title: typeof doc.title === 'string' ? doc.title : '未命名需求',
-          content: typeof doc.content === 'string' ? doc.content : '',
-          summary: typeof doc.summary === 'string' ? doc.summary : '',
-          authorRole:
-            doc.authorRole === 'UI设计' || doc.authorRole === '开发' || doc.authorRole === '测试' || doc.authorRole === '运维'
-              ? doc.authorRole
-              : '产品经理',
-          sourceType: doc.sourceType === 'upload' || doc.sourceType === 'ai' ? doc.sourceType : 'manual',
-          updatedAt: typeof doc.updatedAt === 'string' ? doc.updatedAt : new Date().toISOString(),
-          status: doc.status === 'ready' ? 'ready' : 'draft',
-        }))
+        .map((doc) => {
+          const authorRole = typeof doc.authorRole === 'string' ? String(doc.authorRole) : '';
+
+          return {
+            id: typeof doc.id === 'string' ? doc.id : uuidv4(),
+            title: typeof doc.title === 'string' ? doc.title : '未命名需求',
+            content: typeof doc.content === 'string' ? doc.content : '',
+            summary: typeof doc.summary === 'string' ? doc.summary : '',
+            authorRole:
+              authorRole === '产品经理'
+                ? '产品'
+                : authorRole === '产品' || authorRole === 'UI设计' || authorRole === '开发' || authorRole === '测试' || authorRole === '运维'
+                  ? authorRole
+                  : '产品',
+            sourceType: doc.sourceType === 'upload' || doc.sourceType === 'ai' ? doc.sourceType : 'manual',
+            updatedAt: typeof doc.updatedAt === 'string' ? doc.updatedAt : new Date().toISOString(),
+            status: doc.status === 'ready' ? 'ready' : 'draft',
+          };
+        })
     : [];
 
 const normalizePrd = (value: unknown): ProductPRD | null => {
@@ -1667,6 +1677,123 @@ const updatePageNodeById = (
     };
   });
 
+const insertChildPageNodeById = (
+  nodes: PageStructureNode[],
+  parentPageId: string,
+  onCreate: (parent: PageStructureNode) => PageStructureNode
+): PageStructureNode[] =>
+  nodes.map((node) => {
+    if (node.id === parentPageId) {
+      return {
+        ...node,
+        children: [...node.children, onCreate(node)],
+      };
+    }
+
+    return {
+      ...node,
+      children: insertChildPageNodeById(node.children, parentPageId, onCreate),
+    };
+  });
+
+const insertPageNodeAfterId = (
+  nodes: PageStructureNode[],
+  referencePageId: string,
+  onCreate: (reference: PageStructureNode) => PageStructureNode
+): PageStructureNode[] => {
+  const targetIndex = nodes.findIndex((node) => node.id === referencePageId);
+
+  if (targetIndex >= 0) {
+    const nextNodes = [...nodes];
+    nextNodes.splice(targetIndex + 1, 0, onCreate(nodes[targetIndex]));
+    return nextNodes;
+  }
+
+  return nodes.map((node) => ({
+    ...node,
+    children: insertPageNodeAfterId(node.children, referencePageId, onCreate),
+  }));
+};
+
+const findPageContextById = (
+  nodes: PageStructureNode[],
+  pageId: string,
+  parent: PageStructureNode | null = null
+): {
+  page: PageStructureNode;
+  parent: PageStructureNode | null;
+  siblings: PageStructureNode[];
+} | null => {
+  for (const node of nodes) {
+    if (node.id === pageId) {
+      return {
+        page: node,
+        parent,
+        siblings: nodes,
+      };
+    }
+
+    const nested = findPageContextById(node.children, pageId, node);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+};
+
+const createPageNodeDraft = ({
+  name,
+  description,
+  featureIds,
+  routeBase,
+  template,
+  ownerRole,
+  goal,
+  notes,
+}: {
+  name: string;
+  description: string;
+  featureIds: string[];
+  routeBase: string;
+  template: PageStructureNode['metadata']['template'];
+  ownerRole: PageStructureNode['metadata']['ownerRole'];
+  goal: string;
+  notes: string;
+}): PageStructureNode => {
+  const cleanRouteBase = routeBase.replace(/\/+$/, '') || '/pages';
+  const routeSuffix = toKebabCase(name) || `page-${Date.now()}`;
+
+  return {
+    id: uuidv4(),
+    name,
+    kind: 'page',
+    description,
+    featureIds,
+    metadata: {
+      route: `${cleanRouteBase}/${routeSuffix}`.replace(/\/{2,}/g, '/'),
+      title: name,
+      goal,
+      template,
+      ownerRole,
+      notes,
+      status: 'draft',
+    },
+    children: [],
+  };
+};
+
+const deletePageNodeById = (
+  nodes: PageStructureNode[],
+  pageId: string
+): PageStructureNode[] =>
+  nodes
+    .filter((node) => node.id !== pageId)
+    .map((node) => ({
+      ...node,
+      children: deletePageNodeById(node.children, pageId),
+    }));
+
 export const useProjectStore = create<ProjectState>()(
   persist(
     (set, get) => ({
@@ -1706,8 +1833,8 @@ export const useProjectStore = create<ProjectState>()(
         const featureTree = buildStarterFeatureTree(project.name);
         const rawRequirementInput = buildStarterRawRequirementInput(project.name);
         const prd = buildPRDFromProject(project, requirementDocs, rawRequirementInput, featureTree);
-        const pageStructure = buildPageStructureFromFeatureTree(featureTree);
-        const wireframes = buildWireframesFromPages(collectDesignPages(pageStructure));
+        const pageStructure: PageStructureNode[] = [];
+        const wireframes: Record<string, WireframeDocument> = {};
         const memory = buildProjectMemory(project);
         const planningArtifacts = buildPlanningFiles(
           project,
@@ -1885,7 +2012,7 @@ export const useProjectStore = create<ProjectState>()(
               title: '新增需求条目',
               content: '补充新的用户故事、约束条件或业务规则。',
               summary: '补充新的用户故事、约束条件或业务规则。',
-              authorRole: '产品经理',
+              authorRole: '产品',
               sourceType: 'manual',
               updatedAt: new Date().toISOString(),
               status: 'draft',
@@ -1941,7 +2068,7 @@ export const useProjectStore = create<ProjectState>()(
               title: input.title,
               content,
               summary: summarizeRequirement(content),
-              authorRole: '产品经理' as const,
+              authorRole: '产品' as const,
               sourceType: input.sourceType || 'upload',
               updatedAt: new Date().toISOString(),
               status: 'ready' as const,
@@ -1989,9 +2116,7 @@ export const useProjectStore = create<ProjectState>()(
             return null;
           }
 
-          const pageStructure = buildPageStructureFromFeatureTree(featureTree);
-          const syncedFeatureTree = syncFeatureTreeWithPageStructure(featureTree, pageStructure) || featureTree;
-          const wireframes = reconcileWireframes(collectDesignPages(pageStructure), state.wireframes);
+          const syncedFeatureTree = syncFeatureTreeWithPageStructure(featureTree, state.pageStructure) || featureTree;
           const prd = buildPRDFromProject(
             state.currentProject,
             state.requirementDocs,
@@ -2005,14 +2130,14 @@ export const useProjectStore = create<ProjectState>()(
             syncedFeatureTree,
             state.featuresMarkdown,
             prd,
-            pageStructure,
-            wireframes
+            state.pageStructure,
+            state.wireframes
           );
           const deliveryArtifacts = buildDeliveryArtifacts(
             state.currentProject,
             syncedFeatureTree,
-            pageStructure,
-            wireframes
+            state.pageStructure,
+            state.wireframes
           );
           const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
           const graph = buildProjectGraph(
@@ -2020,8 +2145,8 @@ export const useProjectStore = create<ProjectState>()(
             state.requirementDocs,
             syncedFeatureTree,
             prd,
-            pageStructure,
-            wireframes,
+            state.pageStructure,
+            state.wireframes,
             deliveryArtifacts.designSystem,
             deliveryArtifacts.uiSpecs,
             deliveryArtifacts.devTasks,
@@ -2032,8 +2157,6 @@ export const useProjectStore = create<ProjectState>()(
 
           set({
             prd,
-            pageStructure,
-            wireframes,
             featuresMarkdown: planningArtifacts.featuresMarkdown,
             wireframesMarkdown: planningArtifacts.wireframesMarkdown,
             designSystem: deliveryArtifacts.designSystem,
@@ -2139,6 +2262,311 @@ export const useProjectStore = create<ProjectState>()(
               null,
               state.prd,
               state.pageStructure,
+              wireframes,
+              deliveryArtifacts.designSystem,
+              deliveryArtifacts.uiSpecs,
+              deliveryArtifacts.devTasks,
+              generatedFiles,
+              deliveryArtifacts.testPlan,
+              deliveryArtifacts.deployPlan
+            ),
+          };
+        }),
+
+      addRootPage: () => {
+        const state = get();
+        if (!state.currentProject) {
+          return null;
+        }
+
+        const nextIndex = collectDesignPages(state.pageStructure).length + 1;
+        const nextPage = createPageNodeDraft({
+          name: `新页面 ${nextIndex}`,
+          description: '由页面工作台直接维护的页面。',
+          featureIds: [],
+          routeBase: '/pages',
+          template: 'custom',
+          ownerRole: 'UI设计',
+          goal: '在页面侧独立维护页面结构、线框和后续 UI 产物。',
+          notes: '支持手动维护，也支持后续由 AI 直接生成页面内容。',
+        });
+
+        set((current) => {
+          if (!current.currentProject) {
+            return current;
+          }
+
+          const pageStructure = [...current.pageStructure, nextPage];
+          const wireframes = reconcileWireframes(collectDesignPages(pageStructure), current.wireframes);
+          const planningArtifacts = buildPlanningFiles(
+            current.currentProject,
+            current.rawRequirementInput,
+            current.requirementDocs,
+            null,
+            current.featuresMarkdown,
+            current.prd,
+            pageStructure,
+            wireframes
+          );
+          const deliveryArtifacts = buildDeliveryArtifacts(
+            current.currentProject,
+            null,
+            pageStructure,
+            wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
+
+          return {
+            pageStructure,
+            wireframes,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
+            designSystem: deliveryArtifacts.designSystem,
+            uiSpecs: deliveryArtifacts.uiSpecs,
+            devTasks: deliveryArtifacts.devTasks,
+            generatedFiles,
+            testPlan: deliveryArtifacts.testPlan,
+            deployPlan: deliveryArtifacts.deployPlan,
+            graph: buildProjectGraph(
+              current.currentProject,
+              current.requirementDocs,
+              null,
+              current.prd,
+              pageStructure,
+              wireframes,
+              deliveryArtifacts.designSystem,
+              deliveryArtifacts.uiSpecs,
+              deliveryArtifacts.devTasks,
+              generatedFiles,
+              deliveryArtifacts.testPlan,
+              deliveryArtifacts.deployPlan
+            ),
+          };
+        });
+
+        return nextPage;
+      },
+
+      addSiblingPage: (referencePageId) => {
+        const state = get();
+        if (!state.currentProject) {
+          return null;
+        }
+
+        const pageContext = findPageContextById(state.pageStructure, referencePageId);
+        if (!pageContext || pageContext.page.kind !== 'page') {
+          return null;
+        }
+
+        const { page: referencePage, parent, siblings } = pageContext;
+        const siblingPages = siblings.filter((node) => node.kind === 'page');
+        const nextIndex = siblingPages.length + 1;
+        const nextName = `新页面 ${nextIndex}`;
+        const parentRoute =
+          parent?.metadata.route.replace(/\/+$/, '') ||
+          referencePage.metadata.route.replace(/\/[^/]+$/, '') ||
+          '/pages';
+        const nextPage = createPageNodeDraft({
+          name: nextName,
+          description: `与 ${referencePage.name} 同级的新页面。`,
+          featureIds: parent?.featureIds.length ? [...parent.featureIds] : [...referencePage.featureIds],
+          routeBase: parentRoute,
+          template: referencePage.metadata.template,
+          ownerRole: referencePage.metadata.ownerRole,
+          goal: referencePage.metadata.goal || `补充 ${referencePage.name} 所在层级的页面流程`,
+          notes: `作为 ${referencePage.name} 的同级页面继续补充结构。`,
+        });
+
+        set((current) => {
+          if (!current.currentProject) {
+            return current;
+          }
+
+          const pageStructure = insertPageNodeAfterId(current.pageStructure, referencePageId, () => nextPage);
+          const wireframes = reconcileWireframes(collectDesignPages(pageStructure), current.wireframes);
+          const planningArtifacts = buildPlanningFiles(
+            current.currentProject,
+            current.rawRequirementInput,
+            current.requirementDocs,
+            null,
+            current.featuresMarkdown,
+            current.prd,
+            pageStructure,
+            wireframes
+          );
+          const deliveryArtifacts = buildDeliveryArtifacts(
+            current.currentProject,
+            null,
+            pageStructure,
+            wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
+
+          return {
+            pageStructure,
+            wireframes,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
+            designSystem: deliveryArtifacts.designSystem,
+            uiSpecs: deliveryArtifacts.uiSpecs,
+            devTasks: deliveryArtifacts.devTasks,
+            generatedFiles,
+            testPlan: deliveryArtifacts.testPlan,
+            deployPlan: deliveryArtifacts.deployPlan,
+            graph: buildProjectGraph(
+              current.currentProject,
+              current.requirementDocs,
+              null,
+              current.prd,
+              pageStructure,
+              wireframes,
+              deliveryArtifacts.designSystem,
+              deliveryArtifacts.uiSpecs,
+              deliveryArtifacts.devTasks,
+              generatedFiles,
+              deliveryArtifacts.testPlan,
+              deliveryArtifacts.deployPlan
+            ),
+          };
+        });
+
+        return nextPage;
+      },
+
+      addChildPage: (parentPageId) => {
+        const state = get();
+        if (!state.currentProject) {
+          return null;
+        }
+
+        const parentPage = collectPageNodes(state.pageStructure).find((node) => node.id === parentPageId);
+        if (!parentPage) {
+          return null;
+        }
+
+        const siblingPages = parentPage.children.filter((node) => node.kind === 'page');
+        const nextIndex = siblingPages.length + 1;
+        const nextName = `新页面 ${nextIndex}`;
+        const parentRoute = parentPage.metadata.route.replace(/\/+$/, '');
+        const routeSuffix = toKebabCase(nextName) || `page-${nextIndex}`;
+        const childPage: PageStructureNode = {
+          id: uuidv4(),
+          name: nextName,
+          kind: 'page',
+          description: `由 ${parentPage.name} 拆分出的子页面。`,
+          featureIds: [...parentPage.featureIds],
+          metadata: {
+            route: `${parentRoute}/${routeSuffix}`.replace(/\/{2,}/g, '/'),
+            title: nextName,
+            goal: parentPage.metadata.goal || `承接 ${parentPage.name} 的后续操作`,
+            template: parentPage.metadata.template,
+            ownerRole: parentPage.metadata.ownerRole,
+            notes: `作为 ${parentPage.name} 的子页面继续补充流程。`,
+            status: 'draft',
+          },
+          children: [],
+        };
+
+        set((current) => {
+          if (!current.currentProject) {
+            return current;
+          }
+
+          const pageStructure = insertChildPageNodeById(current.pageStructure, parentPageId, () => childPage);
+          const wireframes = reconcileWireframes(collectDesignPages(pageStructure), current.wireframes);
+          const planningArtifacts = buildPlanningFiles(
+            current.currentProject,
+            current.rawRequirementInput,
+            current.requirementDocs,
+            null,
+            current.featuresMarkdown,
+            current.prd,
+            pageStructure,
+            wireframes
+          );
+          const deliveryArtifacts = buildDeliveryArtifacts(
+            current.currentProject,
+            null,
+            pageStructure,
+            wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
+
+          return {
+            pageStructure,
+            wireframes,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
+            designSystem: deliveryArtifacts.designSystem,
+            uiSpecs: deliveryArtifacts.uiSpecs,
+            devTasks: deliveryArtifacts.devTasks,
+            generatedFiles,
+            testPlan: deliveryArtifacts.testPlan,
+            deployPlan: deliveryArtifacts.deployPlan,
+            graph: buildProjectGraph(
+              current.currentProject,
+              current.requirementDocs,
+              null,
+              current.prd,
+              pageStructure,
+              wireframes,
+              deliveryArtifacts.designSystem,
+              deliveryArtifacts.uiSpecs,
+              deliveryArtifacts.devTasks,
+              generatedFiles,
+              deliveryArtifacts.testPlan,
+              deliveryArtifacts.deployPlan
+            ),
+          };
+        });
+
+        return childPage;
+      },
+
+      deletePageStructureNode: (pageId) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return state;
+          }
+
+          const pageExists = collectPageNodes(state.pageStructure).some((node) => node.id === pageId);
+          if (!pageExists) {
+            return state;
+          }
+
+          const pageStructure = deletePageNodeById(state.pageStructure, pageId);
+          const wireframes = reconcileWireframes(collectDesignPages(pageStructure), state.wireframes);
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            state.requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            pageStructure,
+            wireframes
+          );
+          const deliveryArtifacts = buildDeliveryArtifacts(
+            state.currentProject,
+            null,
+            pageStructure,
+            wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
+
+          return {
+            pageStructure,
+            wireframes,
+            wireframesMarkdown: planningArtifacts.wireframesMarkdown,
+            designSystem: deliveryArtifacts.designSystem,
+            uiSpecs: deliveryArtifacts.uiSpecs,
+            devTasks: deliveryArtifacts.devTasks,
+            generatedFiles,
+            testPlan: deliveryArtifacts.testPlan,
+            deployPlan: deliveryArtifacts.deployPlan,
+            graph: buildProjectGraph(
+              state.currentProject,
+              state.requirementDocs,
+              null,
+              state.prd,
+              pageStructure,
               wireframes,
               deliveryArtifacts.designSystem,
               deliveryArtifacts.uiSpecs,
