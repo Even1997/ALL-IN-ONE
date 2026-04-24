@@ -534,6 +534,34 @@
   min-height: 0;
 }
 
+.workspace-inline-note {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-height: 320px;
+  padding: 28px;
+  border-radius: 22px;
+  border: 1px solid var(--mode-border);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--mode-accent) 14%, transparent), transparent 32%),
+    linear-gradient(180deg, color-mix(in srgb, var(--mode-panel-alt) 96%, transparent), color-mix(in srgb, var(--mode-panel) 92%, transparent));
+  box-shadow: var(--mode-shadow-soft);
+}
+
+.workspace-inline-note strong {
+  color: var(--mode-text);
+  font-size: 18px;
+}
+
+.workspace-inline-note p,
+.workspace-inline-note span {
+  margin: 0;
+  max-width: 720px;
+  color: var(--mode-soft-text);
+  line-height: 1.7;
+}
+
 .resize-handle {
   height: 10px;
   margin: 2px 0;

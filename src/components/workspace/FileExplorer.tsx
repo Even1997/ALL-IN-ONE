@@ -29,7 +29,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onFileSelect,
   onFileDoubleClick,
   files = [],
-  rootPath = '/Users/apple/Documents/all-in-one',
+  rootPath = '.',
 }) => {
   const buildTreeFromFiles = useCallback((generatedFiles: GeneratedFile[]): FileNode[] => {
     if (generatedFiles.length === 0) {

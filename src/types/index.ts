@@ -19,6 +19,7 @@ export type GraphNodeType =
 export interface ProjectConfig {
   id: string;
   name: string;
+  description: string;
   appType: AppType;
   frontendFramework: string;
   backendFramework: string;
@@ -60,6 +61,7 @@ export interface RequirementDoc {
   title: string;
   content: string;
   summary: string;
+  filePath?: string;
   authorRole: '产品' | 'UI设计' | '开发' | '测试' | '运维';
   sourceType?: 'manual' | 'upload' | 'ai';
   updatedAt: string;
@@ -167,10 +169,105 @@ export interface DevTask {
 export interface GeneratedFile {
   path: string;
   content: string;
-  language: 'tsx' | 'ts' | 'css' | 'json' | 'md' | 'sh' | 'yml';
+  language: 'tsx' | 'ts' | 'css' | 'json' | 'md' | 'sh' | 'yml' | 'html';
   category: 'design' | 'frontend' | 'backend' | 'test' | 'deploy';
   summary: string;
   sourceTaskIds: string[];
+  updatedAt: string;
+}
+
+export type AIWorkflowStage =
+  | 'project_brief'
+  | 'requirements_spec'
+  | 'feature_tree'
+  | 'page_structure'
+  | 'wireframes'
+  | 'html_prototype';
+
+export type AIWorkflowPackage = 'requirements' | 'prototype' | 'page';
+
+export type AISkillName =
+  | 'requirements_spec_skill'
+  | 'feature_tree_skill'
+  | 'page_structure_skill'
+  | 'wireframe_skill'
+  | 'html_prototype_skill';
+
+export type AIExperienceMode = 'standard' | 'high_quality_docs' | 'high_quality_execution';
+
+export interface SkillExecution {
+  id: string;
+  skill: AISkillName;
+  stage: AIWorkflowStage;
+  status: 'pending' | 'running' | 'completed' | 'error' | 'fallback';
+  promptVersion: string;
+  schemaVersion: string;
+  provider?: string;
+  model?: string;
+  retries: number;
+  startedAt: string;
+  completedAt?: string;
+  summary?: string;
+  error?: string;
+  inputSnapshot?: Record<string, unknown>;
+  outputSnapshot?: Record<string, unknown>;
+}
+
+export interface AIWorkflowRun {
+  id: string;
+  projectId: string;
+  targetPackage: AIWorkflowPackage;
+  mode: AIExperienceMode;
+  status: 'idle' | 'running' | 'awaiting_confirmation' | 'completed' | 'error';
+  currentStage: AIWorkflowStage;
+  completedStages: AIWorkflowStage[];
+  confirmedStages: AIWorkflowStage[];
+  skillExecutions: SkillExecution[];
+  inputSummary: string;
+  stageSummaries: Partial<Record<AIWorkflowStage, string>>;
+  error?: string;
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface StyleProfile {
+  id: string;
+  name: string;
+  summary: string;
+  industry: string;
+  direction: string;
+  colorMood: string;
+  referenceBrand?: string;
+  appType: AppType;
+  palette: string[];
+  typography: {
+    heading: string;
+    body: string;
+  };
+  radius: string;
+  notes: string[];
+  status: 'draft' | 'ready';
+  updatedAt: string;
+}
+
+export interface HTMLPrototypePage {
+  id: string;
+  pageId: string;
+  pageName: string;
+  path: string;
+  title: string;
+  html: string;
+  cssTokensUsed: string[];
+}
+
+export interface HTMLPrototypeDoc {
+  id: string;
+  projectId: string;
+  styleProfileId?: string;
+  summary: string;
+  pages: HTMLPrototypePage[];
+  manifest: string;
+  status: 'draft' | 'ready';
   updatedAt: string;
 }
 

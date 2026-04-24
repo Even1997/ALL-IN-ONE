@@ -1641,6 +1641,386 @@ body {
   gap: 10px;
 }
 
+.requirement-file-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.requirement-file-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.requirement-file-meta strong {
+  display: block;
+  font-size: 14px;
+  color: #1d1d1f;
+}
+
+.requirement-file-meta span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.requirement-file-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.requirement-storage-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.requirement-storage-note strong {
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.requirement-storage-note span {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
+}
+
+.requirement-editor-shell,
+.requirement-preview-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.requirement-editor-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.requirement-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.requirement-live-preview-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.requirement-file-name-input,
+.requirement-file-textarea {
+  background: linear-gradient(180deg, #12202f 0%, #0f172a 100%);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.26);
+}
+
+.requirement-file-name-input::placeholder,
+.requirement-file-textarea::placeholder {
+  color: rgba(226, 232, 240, 0.55);
+}
+
+.requirement-file-name-input:focus,
+.requirement-file-textarea:focus {
+  border-color: rgba(56, 189, 248, 0.42);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14);
+}
+
+.requirement-file-name-input {
+  font-weight: 600;
+}
+
+.requirement-file-textarea {
+  min-height: 420px;
+}
+
+.requirement-editor-actions,
+.requirement-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.requirement-preview-shortcut {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.requirement-save-message {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.requirement-markdown-preview {
+  min-height: 420px;
+  padding: 18px;
+  border-radius: 18px;
+  overflow: auto;
+  background: linear-gradient(180deg, #12202f 0%, #0f172a 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  line-height: 1.8;
+}
+
+.requirement-markdown-heading {
+  margin: 0 0 14px;
+  color: #f8fafc;
+  line-height: 1.3;
+}
+
+.requirement-markdown-heading.level-1 {
+  font-size: 28px;
+}
+
+.requirement-markdown-heading.level-2 {
+  font-size: 22px;
+}
+
+.requirement-markdown-heading.level-3 {
+  font-size: 18px;
+}
+
+.requirement-markdown-paragraph,
+.requirement-markdown-quote p {
+  margin: 0 0 14px;
+}
+
+.requirement-markdown-list {
+  margin: 0 0 14px;
+  padding-left: 20px;
+}
+
+.requirement-markdown-list.ordered {
+  list-style: decimal;
+}
+
+.requirement-markdown-list.unordered {
+  list-style: disc;
+}
+
+.requirement-markdown-list li {
+  margin-bottom: 8px;
+}
+
+.requirement-markdown-task {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.requirement-markdown-task input {
+  margin-top: 4px;
+}
+
+.requirement-markdown-quote {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-left: 3px solid rgba(56, 189, 248, 0.46);
+  background: rgba(30, 41, 59, 0.52);
+  border-radius: 0 12px 12px 0;
+}
+
+.requirement-markdown-code {
+  margin: 0 0 14px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  overflow: auto;
+}
+
+.requirement-markdown-code code {
+  display: block;
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.requirement-markdown-code-lang {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.14);
+  color: #7dd3fc;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.requirement-markdown-divider {
+  border: 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  margin: 4px 0 18px;
+}
+
+.requirement-markdown-preview code {
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #93c5fd;
+}
+
+.requirement-markdown-preview a {
+  color: #7dd3fc;
+}
+
+.product-hidden-input {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .requirement-editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.project-manager-shell {
+  padding: 32px;
+}
+
+.project-manager-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 420px);
+  gap: 20px;
+  width: min(1100px, 100%);
+}
+
+.project-manager-panel {
+  min-height: 0;
+}
+
+.project-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.project-manager-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.project-manager-item.active {
+  border-color: rgba(14, 116, 144, 0.24);
+  background: linear-gradient(180deg, #e0f2fe 0%, #ecfeff 100%);
+}
+
+.project-manager-open {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-manager-open strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.project-manager-open span {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.project-manager-delete {
+  border: 1px solid rgba(239, 68, 68, 0.14);
+  background: rgba(254, 242, 242, 0.9);
+  color: #b91c1c;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.setup-field textarea {
+  width: 100%;
+  min-height: 144px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  font: inherit;
+  resize: vertical;
+  outline: none;
+}
+
+.setup-field textarea:focus {
+  border-color: rgba(14, 116, 144, 0.34);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.project-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.project-switcher span {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.project-switcher select {
+  min-width: 180px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.4);
+  color: #f8fafc;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: inherit;
+}
+
+@media (max-width: 1000px) {
+  .project-manager-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-switcher {
+    order: 1;
+    width: 100%;
+  }
+
+  .project-switcher select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 .planning-preview-content {
   padding: 16px;
   overflow: auto;
@@ -6918,4 +7298,290 @@ body::before {
 .design-sketch-tree-item {
   border-color: var(--design-floating-border);
   background: color-mix(in srgb, var(--design-node-chip) 88%, transparent);
+}
+
+/* ========== Project Manager Refresh ========== */
+
+.project-manager-shell.project-setup-shell {
+  min-height: 100vh;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 24px;
+  padding: 28px;
+  align-items: stretch;
+}
+
+.project-manager-sidebar,
+.project-manager-form {
+  margin: 0;
+}
+
+.project-manager-sidebar {
+  position: sticky;
+  top: 28px;
+  align-self: start;
+  min-height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
+  padding: 24px;
+  gap: 18px;
+  overflow: hidden;
+}
+
+.project-manager-sidebar-top {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.project-manager-sidebar-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.project-manager-stat {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--mode-chip) 94%, transparent);
+  border: 1px solid var(--mode-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.project-manager-stat span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--mode-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.project-manager-stat strong {
+  display: block;
+  color: var(--mode-text);
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.project-manager-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.project-manager-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--mode-panel-alt) 92%, transparent);
+  border: 1px solid var(--mode-border);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--mode-shadow-soft) 30%, transparent);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.project-manager-item:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--mode-accent) 26%, var(--mode-border));
+  box-shadow: var(--mode-shadow-soft);
+}
+
+.project-manager-item.active {
+  border-color: color-mix(in srgb, var(--mode-accent) 36%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mode-accent) 14%, var(--mode-panel-alt)),
+    color-mix(in srgb, var(--mode-panel-alt) 96%, transparent)
+  );
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--mode-accent) 12%, transparent);
+}
+
+.project-manager-open strong,
+.project-manager-open span {
+  color: inherit;
+}
+
+.project-manager-open strong {
+  color: var(--mode-text);
+}
+
+.project-manager-open span {
+  color: var(--mode-muted);
+}
+
+.project-manager-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-manager-current-tag {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mode-accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mode-accent) 24%, transparent);
+  color: var(--mode-accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.project-manager-delete {
+  border-color: color-mix(in srgb, var(--mode-danger) 24%, transparent);
+  background: color-mix(in srgb, var(--mode-danger) 8%, var(--mode-panel-alt));
+  color: var(--mode-danger);
+}
+
+.project-manager-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.project-manager-hero {
+  margin: 0;
+  min-height: auto;
+  padding: 40px 42px;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--mode-accent) 18%, transparent), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.28));
+  border: 1px solid var(--mode-border);
+  box-shadow: var(--mode-shadow-soft);
+}
+
+.project-manager-points span {
+  background: color-mix(in srgb, var(--mode-chip-strong) 94%, transparent);
+  border-color: var(--mode-border);
+  color: var(--mode-soft-text);
+}
+
+.project-manager-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.project-manager-back-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--mode-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mode-chip) 94%, transparent);
+  color: var(--mode-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+
+.project-manager-back-btn:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--mode-accent) 28%, var(--mode-border));
+  background: color-mix(in srgb, var(--mode-chip-strong) 92%, transparent);
+}
+
+.project-manager-form {
+  width: min(760px, 100%);
+  padding: 28px;
+}
+
+.project-manager-form .setup-field input,
+.project-manager-form .setup-field textarea,
+.project-switcher select {
+  background: color-mix(in srgb, var(--mode-input) 96%, transparent);
+  border: 1px solid var(--mode-border);
+  color: var(--mode-text);
+  caret-color: var(--mode-text);
+}
+
+.project-manager-form .setup-field input::placeholder,
+.project-manager-form .setup-field textarea::placeholder {
+  color: var(--mode-muted);
+}
+
+.project-manager-form .setup-field textarea {
+  min-height: 168px;
+}
+
+.project-manager-form .setup-field input:focus,
+.project-manager-form .setup-field textarea:focus,
+.project-switcher select:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--mode-accent) 44%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mode-accent) 12%, transparent);
+}
+
+.project-switcher {
+  background: color-mix(in srgb, var(--mode-chip) 92%, transparent);
+  border: 1px solid var(--mode-border);
+}
+
+.project-switcher span {
+  color: var(--mode-muted);
+}
+
+.project-switcher select {
+  min-width: 200px;
+}
+
+@media (max-width: 1100px) {
+  .project-manager-shell.project-setup-shell {
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    gap: 18px;
+    padding: 20px;
+  }
+
+  .project-manager-hero,
+  .project-manager-form {
+    padding: 28px;
+  }
+}
+
+@media (max-width: 900px) {
+  .project-manager-shell.project-setup-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-manager-sidebar {
+    position: static;
+    min-height: auto;
+    max-height: none;
+  }
+
+  .project-manager-sidebar-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-manager-form {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .project-manager-shell.project-setup-shell {
+    padding: 14px;
+  }
+
+  .project-manager-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-manager-item-actions {
+    justify-content: space-between;
+  }
+
+  .project-manager-hero,
+  .project-manager-form,
+  .project-manager-sidebar {
+    padding: 20px;
+  }
 }

@@ -1,6 +1,7 @@
 import { ChangeScope, AIStreamChunk } from '../../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { ToolExecutor, formatToolResult, parseToolCalls } from '../../../components/workspace/tools';
+import { buildAIConfigurationError, hasUsableAIConfiguration, listModelsSupportMode } from './configStatus';
 
 export type AIModule = 'feature-tree' | 'canvas' | 'code-editor' | 'backend' | 'bug-fix' | 'deploy';
 export type AIAction = 'generate' | 'modify' | 'review' | 'fix' | 'explain' | 'optimize';
@@ -68,7 +69,7 @@ interface ChatMessage {
   content: string;
 }
 
-const DEFAULT_PROJECT_ROOT = '/Users/apple/Documents/all-in-one';
+const DEFAULT_PROJECT_ROOT = '.';
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
 class AIService {
@@ -88,12 +89,17 @@ class AIService {
   private toolExecutor = new ToolExecutor(DEFAULT_PROJECT_ROOT);
 
   setConfig(config: Partial<AIConfig>) {
+    void this.simulateStream;
     this.config = { ...this.config, ...config };
     this.toolExecutor.setProjectRoot(this.config.projectRoot);
   }
 
   getConfig(): AIConfig {
     return { ...this.config };
+  }
+
+  isConfigured() {
+    return hasUsableAIConfiguration(this.config);
   }
 
   async request(request: Omit<AIRequest, 'id'>, handler: AIStreamHandler): Promise<string> {
@@ -109,23 +115,23 @@ class AIService {
     try {
       const systemPrompt = this.buildPrecisePrompt(fullRequest);
 
-      if (!this.config.apiKey) {
-        await this.simulateStream(requestId, systemPrompt, handler);
-      } else {
-        const content = await this.runAgentLoop(
-          [{ role: 'user', content: fullRequest.prompt }],
-          systemPrompt,
-          abortController.signal,
-          handler
-        );
-
-        handler.onComplete({
-          requestId,
-          status: 'completed',
-          content,
-          codeBlocks: this.extractCodeBlocks(content),
-        });
+      if (!this.isConfigured()) {
+        throw buildAIConfigurationError();
       }
+
+      const content = await this.runAgentLoop(
+        [{ role: 'user', content: fullRequest.prompt }],
+        systemPrompt,
+        abortController.signal,
+        handler
+      );
+
+      handler.onComplete({
+        requestId,
+        status: 'completed',
+        content,
+        codeBlocks: this.extractCodeBlocks(content),
+      });
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
         handler.onInterrupt();
@@ -168,6 +174,36 @@ class AIService {
     return content;
   }
 
+  async completeText(options: {
+    prompt: string;
+    systemPrompt: string;
+    onChunk?: (text: string) => void;
+    signal?: AbortSignal;
+  }): Promise<string> {
+    const { prompt, systemPrompt, onChunk, signal } = options;
+
+    if (!this.isConfigured()) {
+      throw buildAIConfigurationError();
+    }
+
+    if (!this.config.apiKey) {
+      throw new Error('AI provider is not configured');
+    }
+
+    const content = await this.callProvider([{ role: 'user', content: prompt }], systemPrompt, signal);
+    if (onChunk) {
+      this.emitChunkText(content, {
+        onStart: () => undefined,
+        onChunk: (chunk) => onChunk(chunk.content),
+        onComplete: () => undefined,
+        onError: () => undefined,
+        onInterrupt: () => undefined,
+      });
+    }
+
+    return content;
+  }
+
   async testConnection(override?: Partial<AIConfig>): Promise<{ ok: boolean; message: string }> {
     const previous = this.getConfig();
     if (override) {
@@ -175,6 +211,10 @@ class AIService {
     }
 
     try {
+      if (!this.isConfigured()) {
+        throw buildAIConfigurationError();
+      }
+
       const models = await this.listModels();
       const activeModel = models[0] || this.config.model;
       return {
@@ -200,11 +240,15 @@ class AIService {
     }
 
     try {
+      if (!this.isConfigured()) {
+        throw buildAIConfigurationError();
+      }
+
       if (!this.config.apiKey) {
         return [this.config.model];
       }
 
-      if (this.config.provider === 'anthropic') {
+      if (listModelsSupportMode(this.config.provider) === 'preset-only') {
         return [this.config.model];
       }
 

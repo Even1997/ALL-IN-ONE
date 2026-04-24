@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { AIPanel } from './components/ai/AIPanel';
+import { AIWorkspace } from './components/ai/AIWorkspace';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
 import {
@@ -10,10 +10,26 @@ import {
 } from './components/product/ProductWorkbench';
 import { usePreviewStore } from './store/previewStore';
 import { useFeatureTreeStore } from './store/featureTreeStore';
+import { aiService } from './modules/ai/core/AIService';
 import { useGlobalAIStore } from './modules/ai/store/globalAIStore';
+import { useAIWorkflowStore } from './modules/ai/store/workflowStore';
 import { useProjectStore } from './store/projectStore';
-import type { AppType, FeatureNode, GeneratedFile, PageStructureNode, WireframeDocument } from './types';
+import type { ProjectWorkspaceSnapshot } from './store/projectStore';
+import type { AppType, FeatureNode, GeneratedFile, PageStructureNode, ProjectConfig, WireframeDocument } from './types';
 import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
+import {
+  getProjectDir,
+  loadDesignBoardStateFromDisk,
+  loadProjectIndexFromDisk,
+  loadProjectSnapshotFromDisk,
+  loadWorkflowStateFromDisk,
+  removeProjectDirectoryFromDisk,
+  saveDesignBoardStateToDisk,
+  saveProjectIndexToDisk,
+  saveProjectSnapshotToDisk,
+  saveWorkflowStateToDisk,
+  syncGeneratedFilesToProjectDir,
+} from './utils/projectPersistence';
 import './App.css';
 
 type RoleView = 'product' | 'design' | 'develop' | 'test' | 'operations';
@@ -118,11 +134,80 @@ type SketchLibraryTreeNode = {
   pageId: string;
   children: SketchLibraryTreeNode[];
 };
+type PersistedProjectSnapshot = {
+  workspace: ProjectWorkspaceSnapshot;
+  featureTree: ReturnType<typeof useFeatureTreeStore.getState>['tree'];
+};
+
+const readProjectIndex = (): ProjectConfig[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(PROJECT_INDEX_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown[];
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is ProjectConfig => Boolean(item) && typeof item === 'object') as ProjectConfig[]
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeProjectIndex = (projects: ProjectConfig[]) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(PROJECT_INDEX_STORAGE_KEY, JSON.stringify(projects));
+};
+
+const getProjectSnapshotStorageKey = (projectId: string) => `${PROJECT_SNAPSHOT_STORAGE_PREFIX}:${projectId}`;
+
+const readProjectSnapshot = (projectId: string): PersistedProjectSnapshot | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(getProjectSnapshotStorageKey(projectId));
+    if (!raw) {
+      return null;
+    }
+
+    return JSON.parse(raw) as PersistedProjectSnapshot;
+  } catch {
+    return null;
+  }
+};
+
+const writeProjectSnapshot = (projectId: string, snapshot: PersistedProjectSnapshot) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(getProjectSnapshotStorageKey(projectId), JSON.stringify(snapshot));
+};
+
+const removeProjectSnapshot = (projectId: string) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem(getProjectSnapshotStorageKey(projectId));
+};
 
 const THEME_STORAGE_KEY = 'devflow-theme-mode';
 const LAYOUT_FOCUS_STORAGE_KEY = 'devflow-layout-focus';
 const LAYOUT_DENSITY_STORAGE_KEY = 'devflow-layout-density';
 const DESIGN_BOARD_STORAGE_PREFIX = 'devflow-design-board';
+const PROJECT_INDEX_STORAGE_KEY = 'devflow-project-index';
+const PROJECT_SNAPSHOT_STORAGE_PREFIX = 'devflow-project-snapshot';
 const DESIGN_PAGE_CARD_WIDTH = 232;
 const DESIGN_PAGE_CARD_HEIGHT = 196;
 const DESIGN_FLOW_CARD_WIDTH = 220;
@@ -730,6 +815,9 @@ const SketchLibraryTreeItem: React.FC<SketchLibraryTreeItemProps> = ({
 
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<RoleView>('product');
+  const [projects, setProjects] = useState<ProjectConfig[]>(() => readProjectIndex());
+  const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
+  const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window === 'undefined') {
       return 'dark';
@@ -817,20 +905,31 @@ const App: React.FC = () => {
 
   const { clearCanvas } = usePreviewStore();
   const { setTree, tree: featureTree, clearTree } = useFeatureTreeStore();
-  const { togglePanel, isStreaming } = useGlobalAIStore();
+  const workflowProjects = useAIWorkflowStore((state) => state.projects);
+  const replaceWorkflowProjectState = useAIWorkflowStore((state) => state.replaceProjectState);
+  const clearWorkflowProjectState = useAIWorkflowStore((state) => state.clearProjectState);
   const {
+    currentProjectId,
     currentProject,
     graph,
     memory,
+    rawRequirementInput,
+    featuresMarkdown,
+    wireframesMarkdown,
     requirementDocs,
+    prd,
     pageStructure,
     wireframes,
+    designSystem,
     uiSpecs,
     devTasks,
     generatedFiles,
     testPlan,
     deployPlan,
     createProject,
+    loadProjectWorkspace,
+    switchProject,
+    deleteProject,
     clearProject,
     addRootPage,
     updatePageStructureNode,
@@ -1185,6 +1284,32 @@ const App: React.FC = () => {
   }, [sketchLibraryNodeIds]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    void loadProjectIndexFromDisk()
+      .then((diskProjects) => {
+        if (!isMounted || diskProjects.length === 0) {
+          return;
+        }
+
+        setProjects((current) => {
+          const byId = new Map(current.map((project) => [project.id, project]));
+          diskProjects.forEach((project) => byId.set(project.id, project));
+          const nextProjects = Array.from(byId.values()).sort(
+            (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+          );
+          writeProjectIndex(nextProjects);
+          return nextProjects;
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
@@ -1197,8 +1322,111 @@ const App: React.FC = () => {
     window.localStorage.setItem(LAYOUT_DENSITY_STORAGE_KEY, layoutDensity);
   }, [layoutDensity]);
 
+  const persistActiveProjectSnapshot = useCallback(
+    (projectOverride?: ProjectConfig | null, featureTreeOverride = featureTree) => {
+      const activeProject = projectOverride || currentProject;
+      if (!activeProject) {
+        return;
+      }
+
+      const workspace: ProjectWorkspaceSnapshot = {
+        currentProject: activeProject,
+        graph,
+        memory,
+        rawRequirementInput,
+        featuresMarkdown,
+        wireframesMarkdown,
+        requirementDocs,
+        prd,
+        pageStructure,
+        wireframes,
+        designSystem,
+        uiSpecs,
+        devTasks,
+        generatedFiles,
+        testPlan,
+        deployPlan,
+      };
+
+      writeProjectSnapshot(activeProject.id, {
+        workspace,
+        featureTree: featureTreeOverride,
+      });
+
+      const workflowProjectState = workflowProjects[activeProject.id];
+
+      void saveProjectSnapshotToDisk(activeProject, {
+        workspace,
+        featureTree: featureTreeOverride,
+      })
+        .then(() => syncGeneratedFilesToProjectDir(activeProject.id, generatedFiles))
+        .catch(() => undefined);
+
+      if (workflowProjectState) {
+        void saveWorkflowStateToDisk(activeProject.id, workflowProjectState).catch(() => undefined);
+      }
+
+      setProjects((current) => {
+        const nextProjects = [...current.filter((item) => item.id !== activeProject.id), activeProject].sort(
+          (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+        );
+        writeProjectIndex(nextProjects);
+        void saveProjectIndexToDisk(nextProjects).catch(() => undefined);
+        return nextProjects;
+      });
+    },
+    [
+      currentProject,
+      deployPlan,
+      designSystem,
+      devTasks,
+      featureTree,
+      featuresMarkdown,
+      generatedFiles,
+      graph,
+      memory,
+      pageStructure,
+      prd,
+      rawRequirementInput,
+      requirementDocs,
+      testPlan,
+      uiSpecs,
+      wireframes,
+      wireframesMarkdown,
+      workflowProjects,
+    ]
+  );
+
   useEffect(() => {
     if (!currentProject) {
+      return;
+    }
+
+    persistActiveProjectSnapshot();
+  }, [currentProject, persistActiveProjectSnapshot]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      return;
+    }
+
+    setProjects((current) => {
+      if (current.some((item) => item.id === currentProject.id)) {
+        return current;
+      }
+
+      const nextProjects = [...current, currentProject].sort(
+        (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+      );
+      writeProjectIndex(nextProjects);
+      void saveProjectIndexToDisk(nextProjects).catch(() => undefined);
+      return nextProjects;
+    });
+  }, [currentProject]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      setCurrentProjectDir(null);
       setDesignPageNodes([]);
       setDesignFlowNodes([]);
       setDesignTextNodes([]);
@@ -1217,23 +1445,114 @@ const App: React.FC = () => {
       return;
     }
 
-    const persisted = readPersistedDesignBoardState(currentProject.id);
-    setDesignPageNodes(persisted.pageNodes);
-    setDesignFlowNodes(persisted.flowNodes);
-    setDesignTextNodes(persisted.textNodes || []);
-    setDesignAINodes(persisted.aiNodes || []);
-    setDesignStyleNodes(persisted.styleNodes || []);
-    setDesignFlowEdges(persisted.edges);
-    setDesignNodeLayers({});
-    setDesignSelectionIds([]);
-    setDesignMarqueeSelection(null);
-    hasAutoFramedDesignBoardRef.current = false;
-    designLayerCounterRef.current = 1;
-    setConnectionDraft(null);
-    designConnectionRef.current = null;
-    designMarqueeRef.current = null;
-    setSketchLibrarySearch('');
+    let isMounted = true;
+
+    const applyPersistedDesignBoard = (persisted: PersistedDesignBoardState) => {
+      setDesignPageNodes(persisted.pageNodes);
+      setDesignFlowNodes(persisted.flowNodes);
+      setDesignTextNodes(persisted.textNodes || []);
+      setDesignAINodes(persisted.aiNodes || []);
+      setDesignStyleNodes(persisted.styleNodes || []);
+      setDesignFlowEdges(persisted.edges);
+      setDesignNodeLayers({});
+      setDesignSelectionIds([]);
+      setDesignMarqueeSelection(null);
+      hasAutoFramedDesignBoardRef.current = false;
+      designLayerCounterRef.current = 1;
+      setConnectionDraft(null);
+      designConnectionRef.current = null;
+      designMarqueeRef.current = null;
+      setSketchLibrarySearch('');
+    };
+
+    applyPersistedDesignBoard(readPersistedDesignBoardState(currentProject.id));
+
+    void loadDesignBoardStateFromDisk(currentProject.id)
+      .then((persisted) => {
+        if (!isMounted || !persisted) {
+          return;
+        }
+
+        applyPersistedDesignBoard({
+          pageNodes: Array.isArray(persisted.pageNodes) ? persisted.pageNodes as DesignPageReferenceNode[] : [],
+          flowNodes: Array.isArray(persisted.flowNodes) ? persisted.flowNodes as DesignFlowNode[] : [],
+          textNodes: Array.isArray(persisted.textNodes) ? persisted.textNodes as DesignTextNode[] : [],
+          aiNodes: Array.isArray(persisted.aiNodes) ? persisted.aiNodes as DesignAINode[] : [],
+          styleNodes: Array.isArray(persisted.styleNodes) ? persisted.styleNodes as DesignStyleNode[] : [],
+          edges: Array.isArray(persisted.edges) ? persisted.edges as DesignFlowEdge[] : [],
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentProject]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      return;
+    }
+
+    let isMounted = true;
+
+    void getProjectDir(currentProject.id)
+      .then((projectDir) => {
+        if (isMounted) {
+          setCurrentProjectDir(projectDir);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setCurrentProjectDir(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentProject]);
+
+  useEffect(() => {
+    if (!currentProjectDir) {
+      return;
+    }
+
+    aiService.setConfig({ projectRoot: currentProjectDir });
+  }, [currentProjectDir]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      return;
+    }
+
+    let isMounted = true;
+
+    void loadWorkflowStateFromDisk(currentProject.id)
+      .then((workflowState) => {
+        if (isMounted && workflowState) {
+          replaceWorkflowProjectState(currentProject.id, workflowState);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentProject, replaceWorkflowProjectState]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      return;
+    }
+
+    const workflowProjectState = workflowProjects[currentProject.id];
+    if (!workflowProjectState) {
+      return;
+    }
+
+    void saveWorkflowStateToDisk(currentProject.id, workflowProjectState).catch(() => undefined);
+  }, [currentProject, workflowProjects]);
 
   useEffect(() => {
     if (designAINodes.length === 0) {
@@ -1290,17 +1609,20 @@ const App: React.FC = () => {
       return;
     }
 
+    const persistedState = {
+      pageNodes: designPageNodes,
+      flowNodes: designFlowNodes,
+      textNodes: designTextNodes,
+      aiNodes: designAINodes,
+      styleNodes: designStyleNodes,
+      edges: designFlowEdges,
+    } satisfies PersistedDesignBoardState;
+
     window.localStorage.setItem(
       getDesignBoardStorageKey(currentProject.id),
-      JSON.stringify({
-        pageNodes: designPageNodes,
-        flowNodes: designFlowNodes,
-        textNodes: designTextNodes,
-        aiNodes: designAINodes,
-        styleNodes: designStyleNodes,
-        edges: designFlowEdges,
-      } satisfies PersistedDesignBoardState)
+      JSON.stringify(persistedState)
     );
+    void saveDesignBoardStateToDisk(currentProject.id, persistedState).catch(() => undefined);
   }, [currentProject, designAINodes, designFlowEdges, designFlowNodes, designPageNodes, designStyleNodes, designTextNodes]);
 
   useEffect(() => {
@@ -1403,7 +1725,82 @@ const App: React.FC = () => {
     clearCanvas();
     setSelectedFeature(starterFeatureTree.children[0] || null);
     setCurrentRole('product');
+    setIsProjectManagerOpen(false);
   };
+
+  const handleOpenProject = useCallback(async (projectId: string) => {
+    const targetProject = projects.find((item) => item.id === projectId);
+    if (!targetProject) {
+      return;
+    }
+
+    if (currentProject?.id && currentProject.id !== projectId) {
+      persistActiveProjectSnapshot();
+    }
+
+    switchProject(targetProject);
+    const snapshot = (await loadProjectSnapshotFromDisk(projectId)) || readProjectSnapshot(projectId);
+    if (snapshot?.workspace) {
+      loadProjectWorkspace(snapshot.workspace);
+    }
+
+    if (snapshot?.featureTree) {
+      setTree(snapshot.featureTree);
+      setSelectedFeature(snapshot.featureTree.children[0] || null);
+    } else {
+      clearTree();
+      setSelectedFeature(null);
+    }
+
+    const workflowState = await loadWorkflowStateFromDisk(projectId);
+    if (workflowState) {
+      replaceWorkflowProjectState(projectId, workflowState);
+    }
+
+    clearCanvas();
+    setCurrentRole('product');
+    setIsProjectManagerOpen(false);
+  }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, replaceWorkflowProjectState, setTree, switchProject]);
+
+  const handleDeleteProject = useCallback(async (projectId: string) => {
+    const targetProject = projects.find((item) => item.id === projectId);
+    if (!targetProject) {
+      return;
+    }
+
+    if (!window.confirm(`确定删除项目“${targetProject.name}”吗？`)) {
+      return;
+    }
+
+    deleteProject(projectId);
+    removeProjectSnapshot(projectId);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(getDesignBoardStorageKey(projectId));
+    }
+    clearWorkflowProjectState(projectId);
+
+    await removeProjectDirectoryFromDisk(projectId).catch(() => undefined);
+
+    setProjects((current) => {
+      const nextProjects = current.filter((item) => item.id !== projectId);
+      writeProjectIndex(nextProjects);
+      void saveProjectIndexToDisk(nextProjects).catch(() => undefined);
+      return nextProjects;
+    });
+
+    if (currentProject?.id === projectId) {
+      const fallbackProject = projects.find((item) => item.id !== projectId) || null;
+      if (fallbackProject) {
+        void handleOpenProject(fallbackProject.id);
+      } else {
+        clearProject();
+        clearTree();
+        clearCanvas();
+        setSelectedFeature(null);
+        setIsProjectManagerOpen(true);
+      }
+    }
+  }, [clearCanvas, clearProject, clearTree, clearWorkflowProjectState, currentProject?.id, deleteProject, handleOpenProject, projects]);
 
   const handleResetProject = () => {
     if (currentProject && typeof window !== 'undefined') {
@@ -1415,11 +1812,8 @@ const App: React.FC = () => {
     clearCanvas();
     setSelectedFeature(null);
     setCurrentRole('product');
+    setIsProjectManagerOpen(true);
   };
-
-  const handleFeatureSelect = useCallback((node: FeatureNode) => {
-    setSelectedFeature(node);
-  }, []);
 
   const handleGenerateDelivery = () => {
     generateDeliveryArtifacts(featureTree);
@@ -2706,7 +3100,7 @@ ${formattedSelection}
 
   const renderProductView = () => (
     <ProductWorkbench
-      onFeatureSelect={handleFeatureSelect}
+      onFeatureSelect={(node) => setSelectedFeature(node)}
       layoutFocus={layoutFocus}
       layoutDensity={layoutDensity}
     />
@@ -3681,7 +4075,12 @@ ${formattedSelection}
           ))}
         </div>
 
-        <Workspace files={generatedFiles} tasks={devTasks} recommendedCommands={recommendedCommands} />
+        <Workspace
+          files={generatedFiles}
+          tasks={devTasks}
+          recommendedCommands={recommendedCommands}
+          projectRoot={currentProjectDir || undefined}
+        />
       </div>
     </div>
   );
@@ -3854,7 +4253,15 @@ ${formattedSelection}
   );
 
   if (!currentProject) {
-    return <ProjectSetup onCreateProject={handleCreateProject} />;
+    return (
+      <ProjectSetup
+        projects={projects}
+        activeProjectId={currentProjectId}
+        onCreateProject={handleCreateProject}
+        onOpenProject={handleOpenProject}
+        onDeleteProject={handleDeleteProject}
+      />
+    );
   }
 
   return (
@@ -3865,14 +4272,14 @@ ${formattedSelection}
           <div className="header-project">
             <h1 className="app-title">{currentProject.name}</h1>
             <span className="app-subtitle">
-              {currentProject.appType} · {currentProject.frontendFramework} · {currentProject.backendFramework}
+              {currentProject.description || `${currentProject.appType} · ${currentProject.frontendFramework} · ${currentProject.backendFramework}`}
             </span>
           </div>
         </div>
 
         <nav className="role-tabs">
           <button className={`role-tab ${currentRole === 'product' ? 'active' : ''}`} onClick={() => setCurrentRole('product')} type="button">
-            <span className="role-name">产品</span>
+            <span className="role-name">项目</span>
           </button>
           <button className={`role-tab ${currentRole === 'design' ? 'active' : ''}`} onClick={() => setCurrentRole('design')} type="button">
             <span className="role-name">设计</span>
@@ -3883,6 +4290,21 @@ ${formattedSelection}
         </nav>
 
         <div className="header-right">
+          <label className="project-switcher">
+            <span>项目</span>
+            <select value={currentProject.id} onChange={(event) => handleOpenProject(event.target.value)}>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button className="reset-project-btn" onClick={() => setIsProjectManagerOpen(true)} type="button">
+            查看项目列表
+          </button>
+
           <label className="header-search">
             <span className="header-search-icon">⌕</span>
             <input placeholder="搜索项目..." type="text" />
@@ -3943,27 +4365,36 @@ ${formattedSelection}
             {themeMode === 'dark' ? '浅色' : '夜间'}
           </button>
 
-          <button className={`ai-header-btn ${isStreaming ? 'streaming' : ''}`} onClick={togglePanel} type="button">
-            AI 助手
-          </button>
-
           {selectedFeature ? <span className="current-feature">当前功能：{selectedFeature.name}</span> : null}
 
           <button className="reset-project-btn" onClick={handleResetProject} type="button">
-            重新创建
+            新建项目
           </button>
         </div>
       </header>
 
       <main className="app-main">
-        {currentRole === 'product' ? renderProductView() : null}
-        {currentRole === 'design' ? renderDesignView() : null}
-        {currentRole === 'develop' ? renderDevelopView() : null}
-        {currentRole === 'test' ? renderTestView() : null}
-        {currentRole === 'operations' ? renderOperationsView() : null}
+        {isProjectManagerOpen ? (
+          <ProjectSetup
+            projects={projects}
+            activeProjectId={currentProjectId}
+            currentProjectName={currentProject?.name ?? null}
+            onCreateProject={handleCreateProject}
+            onOpenProject={handleOpenProject}
+            onDeleteProject={handleDeleteProject}
+            onClose={() => setIsProjectManagerOpen(false)}
+          />
+        ) : (
+          <>
+            {currentRole === 'product' ? renderProductView() : null}
+            {currentRole === 'design' ? renderDesignView() : null}
+            {currentRole === 'develop' ? renderDevelopView() : null}
+            {currentRole === 'test' ? renderTestView() : null}
+            {currentRole === 'operations' ? renderOperationsView() : null}
+          </>
+        )}
       </main>
-
-      <AIPanel />
+      <AIWorkspace />
     </div>
   );
 };

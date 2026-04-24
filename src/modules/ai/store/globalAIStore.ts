@@ -11,6 +11,13 @@ import {
   AISuggestion,
 } from '../core/AIService';
 import { AIStreamChunk } from '../../../types';
+import { hasUsableAIConfiguration } from '../core/configStatus';
+
+const resolveConfiguredState = (state: {
+  provider: AIProviderType;
+  apiKey: string;
+  model: string;
+}) => hasUsableAIConfiguration(state);
 
 interface GlobalAIState {
   // Config
@@ -96,12 +103,26 @@ export const useGlobalAIStore = create<GlobalAIState>()(
 
       setProvider: (provider) => {
         aiService.setConfig({ provider });
-        set({ provider, isConfigured: !!get().apiKey });
+        set({
+          provider,
+          isConfigured: resolveConfiguredState({
+            provider,
+            apiKey: get().apiKey,
+            model: get().model,
+          }),
+        });
       },
 
       setApiKey: (key) => {
         aiService.setConfig({ apiKey: key });
-        set({ apiKey: key, isConfigured: !!key });
+        set({
+          apiKey: key,
+          isConfigured: resolveConfiguredState({
+            provider: get().provider,
+            apiKey: key,
+            model: get().model,
+          }),
+        });
       },
 
       setBaseURL: (baseURL) => {
@@ -111,7 +132,14 @@ export const useGlobalAIStore = create<GlobalAIState>()(
 
       setModel: (model) => {
         aiService.setConfig({ model });
-        set({ model });
+        set({
+          model,
+          isConfigured: resolveConfiguredState({
+            provider: get().provider,
+            apiKey: get().apiKey,
+            model,
+          }),
+        });
       },
 
       setCustomHeaders: (customHeaders) => {
@@ -203,6 +231,11 @@ export const useGlobalAIStore = create<GlobalAIState>()(
           baseURL: state.baseURL,
           model: state.model,
           customHeaders: state.customHeaders,
+        });
+        state.isConfigured = resolveConfiguredState({
+          provider: state.provider,
+          apiKey: state.apiKey,
+          model: state.model,
         });
       },
     }

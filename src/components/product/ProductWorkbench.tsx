@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, Dispatch, SetStateAction } from 'react';
+import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Canvas } from '../canvas/Canvas';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import { usePreviewStore } from '../../store/previewStore';
@@ -25,6 +26,26 @@ type SidebarTab = 'requirement' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
 export type WorkbenchLayoutDensity = 'comfortable' | 'compact';
 type PreviewFrameMode = 'browser' | 'mobile';
+type RequirementViewMode = 'preview' | 'edit';
+type MarkdownListItem = {
+  kind: 'bullet' | 'ordered' | 'task';
+  text: string;
+  checked?: boolean;
+};
+
+const normalizeRequirementFilename = (value: string) => {
+  const normalized = value.trim().replace(/[\\/:*?"<>|]/g, '-');
+  if (!normalized) {
+    return '未命名需求.md';
+  }
+
+  return /\.(md|markdown)$/i.test(normalized) ? normalized : `${normalized}.md`;
+};
+
+const joinDiskPath = (basePath: string, fileName: string) => {
+  const separator = basePath.includes('\\') ? '\\' : '/';
+  return `${basePath.replace(/[\\/]+$/, '')}${separator}${fileName}`;
+};
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [
@@ -72,6 +93,257 @@ const buildSampleWireframe = (pageName: string, featureName: string, isMobile: b
         createWireframeModule({ id: createCanvasId(), name: '搜索按钮', x: 356, y: 138, content: '搜索与筛选' }, 'web'),
         createWireframeModule({ id: createCanvasId(), name: '主内容区', x: 356, y: 252, content: '表格、卡片或列表区域' }, 'web'),
       ];
+
+const renderInlineMarkdown = (text: string) => {
+  const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*|~~[^~]+~~|\*[^*]+\*|\[[^\]]+\]\(([^)]+)\))/g).filter(Boolean);
+
+  return tokens.map((token, index) => {
+    if (/^`[^`]+`$/.test(token)) {
+      return <code key={`${token}-${index}`}>{token.slice(1, -1)}</code>;
+    }
+
+    if (/^\*\*[^*]+\*\*$/.test(token)) {
+      return <strong key={`${token}-${index}`}>{token.slice(2, -2)}</strong>;
+    }
+
+    if (/^~~[^~]+~~$/.test(token)) {
+      return <del key={`${token}-${index}`}>{token.slice(2, -2)}</del>;
+    }
+
+    if (/^\*[^*]+\*$/.test(token)) {
+      return <em key={`${token}-${index}`}>{token.slice(1, -1)}</em>;
+    }
+
+    const linkMatch = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
+    if (linkMatch) {
+      return (
+        <a key={`${token}-${index}`} href={linkMatch[2]} rel="noreferrer" target="_blank">
+          {linkMatch[1]}
+        </a>
+      );
+    }
+
+    return <span key={`${token}-${index}`}>{token}</span>;
+  });
+};
+
+const renderMarkdownPreview = (markdown: string) => {
+  const lines = markdown.replace(/\r/g, '').split('\n');
+  const blocks: ReactNode[] = [];
+  let paragraphLines: string[] = [];
+  let listItems: MarkdownListItem[] = [];
+  let quoteLines: string[] = [];
+  let codeLines: string[] = [];
+  let inCodeBlock = false;
+  let codeFenceLanguage = '';
+
+  const flushParagraph = () => {
+    if (paragraphLines.length === 0) {
+      return;
+    }
+
+    blocks.push(
+      <p key={`paragraph-${blocks.length}`} className="requirement-markdown-paragraph">
+        {renderInlineMarkdown(paragraphLines.join(' '))}
+      </p>
+    );
+    paragraphLines = [];
+  };
+
+  const flushList = () => {
+    if (listItems.length === 0) {
+      return;
+    }
+
+    const isOrdered = listItems.every((item) => item.kind === 'ordered');
+    const ListTag = isOrdered ? 'ol' : 'ul';
+
+    blocks.push(
+      <ListTag key={`list-${blocks.length}`} className={`requirement-markdown-list ${isOrdered ? 'ordered' : 'unordered'}`}>
+        {listItems.map((item, index) => (
+          <li key={`list-item-${index}`} className={item.kind === 'task' ? 'task-item' : ''}>
+            {item.kind === 'task' ? (
+              <label className="requirement-markdown-task">
+                <input checked={Boolean(item.checked)} readOnly type="checkbox" />
+                <span>{renderInlineMarkdown(item.text)}</span>
+              </label>
+            ) : (
+              renderInlineMarkdown(item.text)
+            )}
+          </li>
+        ))}
+      </ListTag>
+    );
+    listItems = [];
+  };
+
+  const flushQuote = () => {
+    if (quoteLines.length === 0) {
+      return;
+    }
+
+    blocks.push(
+      <blockquote key={`quote-${blocks.length}`} className="requirement-markdown-quote">
+        {quoteLines.map((line, index) => (
+          <p key={`quote-line-${index}`}>{renderInlineMarkdown(line)}</p>
+        ))}
+      </blockquote>
+    );
+    quoteLines = [];
+  };
+
+  const flushCode = () => {
+    if (codeLines.length === 0 && !codeFenceLanguage) {
+      return;
+    }
+
+    blocks.push(
+      <pre key={`code-${blocks.length}`} className="requirement-markdown-code">
+        {codeFenceLanguage ? <span className="requirement-markdown-code-lang">{codeFenceLanguage}</span> : null}
+        <code>{codeLines.join('\n')}</code>
+      </pre>
+    );
+    codeLines = [];
+    codeFenceLanguage = '';
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+
+      if (inCodeBlock) {
+        flushCode();
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+        codeFenceLanguage = trimmed.slice(3).trim();
+      }
+      return;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+      return;
+    }
+
+    if (/^---+$/.test(trimmed) || /^\*\*\*+$/.test(trimmed)) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+      blocks.push(<hr key={`hr-${blocks.length}`} className="requirement-markdown-divider" />);
+      return;
+    }
+
+    const headingMatch = /^(#{1,6})\s+(.+)$/.exec(trimmed);
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+
+      const level = headingMatch[1].length;
+      const content = renderInlineMarkdown(headingMatch[2]);
+
+      if (level === 1) {
+        blocks.push(
+          <h1 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-1">
+            {content}
+          </h1>
+        );
+      } else if (level === 2) {
+        blocks.push(
+          <h2 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-2">
+            {content}
+          </h2>
+        );
+      } else if (level === 3) {
+        blocks.push(
+          <h3 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-3">
+            {content}
+          </h3>
+        );
+      } else if (level === 4) {
+        blocks.push(
+          <h4 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-4">
+            {content}
+          </h4>
+        );
+      } else if (level === 5) {
+        blocks.push(
+          <h5 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-5">
+            {content}
+          </h5>
+        );
+      } else {
+        blocks.push(
+          <h6 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-6">
+            {content}
+          </h6>
+        );
+      }
+      return;
+    }
+
+    const quoteMatch = /^>\s?(.*)$/.exec(trimmed);
+    if (quoteMatch) {
+      flushParagraph();
+      flushList();
+      quoteLines.push(quoteMatch[1]);
+      return;
+    }
+
+    const taskMatch = /^[-*+]\s+\[([ xX])\]\s+(.+)$/.exec(trimmed);
+    if (taskMatch) {
+      flushParagraph();
+      flushQuote();
+      listItems.push({
+        kind: 'task',
+        text: taskMatch[2],
+        checked: taskMatch[1].toLowerCase() === 'x',
+      });
+      return;
+    }
+
+    const listMatch = /^[-*+]\s+(.+)$/.exec(trimmed);
+    if (listMatch) {
+      flushParagraph();
+      flushQuote();
+      listItems.push({ kind: 'bullet', text: listMatch[1] });
+      return;
+    }
+
+    const orderedListMatch = /^\d+\.\s+(.+)$/.exec(trimmed);
+    if (orderedListMatch) {
+      flushParagraph();
+      flushQuote();
+      listItems.push({ kind: 'ordered', text: orderedListMatch[1] });
+      return;
+    }
+
+    paragraphLines.push(trimmed);
+  });
+
+  flushParagraph();
+  flushList();
+  flushQuote();
+  flushCode();
+
+  if (blocks.length === 0) {
+    return <div className="empty-state">这个 Markdown 文件还是空的。</div>;
+  }
+
+  return blocks;
+};
 
 interface PageTreeNodeProps {
   node: PageStructureNode;
@@ -769,41 +1041,47 @@ interface ProductWorkbenchProps {
 
 export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }: ProductWorkbenchProps) => {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('requirement');
+  const [requirementViewMode, setRequirementViewMode] = useState<RequirementViewMode>('preview');
   const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
+  const [requirementDraftTitle, setRequirementDraftTitle] = useState('');
+  const [requirementDraftContent, setRequirementDraftContent] = useState('');
+  const [requirementSaveMessage, setRequirementSaveMessage] = useState<string | null>(null);
+  const [requirementsDir, setRequirementsDir] = useState<string | null>(null);
+  const [requirementStorageMode, setRequirementStorageMode] = useState<'disk' | 'local'>('local');
+  const [isSavingRequirement, setIsSavingRequirement] = useState(false);
   const [manualPageId, setManualPageId] = useState<string | null>(null);
   const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
   const [pageSearch, setPageSearch] = useState('');
   const [previewFrameMode, setPreviewFrameMode] = useState<PreviewFrameMode | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const requirementTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const {
     currentProject,
-    rawRequirementInput,
     featuresMarkdown,
     requirementDocs,
     pageStructure,
-    setRawRequirementInput,
     setFeaturesMarkdown,
     updateRequirementDoc,
     addRequirementDoc,
+    deleteRequirementDoc,
     ingestRequirementDoc,
-    generateProductArtifactsFromRequirements,
+    replaceRequirementDocs,
     addRootPage,
     addSiblingPage,
     addChildPage,
     deletePageStructureNode,
   } = useProjectStore(useShallow((state) => ({
     currentProject: state.currentProject,
-    rawRequirementInput: state.rawRequirementInput,
     featuresMarkdown: state.featuresMarkdown,
     requirementDocs: state.requirementDocs,
     pageStructure: state.pageStructure,
-    setRawRequirementInput: state.setRawRequirementInput,
     setFeaturesMarkdown: state.setFeaturesMarkdown,
     updateRequirementDoc: state.updateRequirementDoc,
     addRequirementDoc: state.addRequirementDoc,
+    deleteRequirementDoc: state.deleteRequirementDoc,
     ingestRequirementDoc: state.ingestRequirementDoc,
-    generateProductArtifactsFromRequirements: state.generateProductArtifactsFromRequirements,
+    replaceRequirementDocs: state.replaceRequirementDocs,
     addRootPage: state.addRootPage,
     addSiblingPage: state.addSiblingPage,
     addChildPage: state.addChildPage,
@@ -811,7 +1089,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   })));
 
   const tree = useFeatureTreeStore((state) => state.tree);
-  const setTree = useFeatureTreeStore((state) => state.setTree);
   const selectFeature = useFeatureTreeStore((state) => state.selectFeature);
   const setCanvasSize = usePreviewStore((state) => state.setCanvasSize);
   const clearCanvas = usePreviewStore((state) => state.clearCanvas);
@@ -823,6 +1100,15 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const filteredDesignPages = useMemo(() => collectDesignPages(filteredPageStructure), [filteredPageStructure]);
   const selectedRequirement = requirementDocs.find((doc) => doc.id === selectedRequirementId) || requirementDocs[0] || null;
   const selectedPage = designPages.find((page) => page.id === manualPageId) || designPages[0] || null;
+  const hasRequirementChanges = selectedRequirement
+    ? requirementDraftTitle !== selectedRequirement.title || requirementDraftContent !== selectedRequirement.content
+    : false;
+  const canPersistRequirementToDisk = requirementStorageMode === 'disk' && Boolean(requirementsDir);
+  const canSaveRequirement = Boolean(
+    selectedRequirement &&
+    !isSavingRequirement &&
+    (hasRequirementChanges || !selectedRequirement.filePath)
+  );
   const effectiveAppType = useMemo<AppType | undefined>(() => {
     if (previewFrameMode === 'mobile') {
       return 'mobile';
@@ -886,6 +1172,157 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   }, [requirementDocs]);
 
   useEffect(() => {
+    if (!selectedRequirement) {
+      setRequirementDraftTitle('');
+      setRequirementDraftContent('');
+      return;
+    }
+
+    setRequirementDraftTitle(selectedRequirement.title);
+    setRequirementDraftContent(selectedRequirement.content);
+    setRequirementSaveMessage(null);
+  }, [selectedRequirement]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      setRequirementsDir(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    invoke<string>('get_requirements_dir', { projectId: currentProject.id })
+      .then((dirPath) => {
+        if (isMounted) {
+          setRequirementsDir(dirPath);
+          setRequirementStorageMode('disk');
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setRequirementsDir(null);
+          setRequirementStorageMode('local');
+          setRequirementSaveMessage('当前运行在浏览器开发环境，需求文档会先保存到项目状态；桌面版会同步到磁盘。');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentProject]);
+
+  const writeRequirementFile = useCallback(async (filePath: string, content: string) => {
+    const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_write', {
+      params: {
+        file_path: filePath,
+        content,
+      },
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || `写入文件失败：${filePath}`);
+    }
+  }, []);
+
+  const removeRequirementFile = useCallback(async (filePath: string) => {
+    const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_remove', {
+      params: {
+        file_path: filePath,
+      },
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || `删除文件失败：${filePath}`);
+    }
+  }, []);
+
+  const readRequirementFile = useCallback(async (filePath: string) => {
+    const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_view', {
+      params: {
+        file_path: filePath,
+        offset: 0,
+        limit: 2000,
+      },
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || `读取文件失败：${filePath}`);
+    }
+
+    return result.content
+      .replace(/^<file>\n/, '')
+      .replace(/\n<\/file>\n?$/, '')
+      .split('\n')
+      .map((line) => line.replace(/^\s*\d+\|/, ''))
+      .join('\n');
+  }, []);
+
+  useEffect(() => {
+    if (!currentProject || !requirementsDir || requirementStorageMode !== 'disk') {
+      return;
+    }
+
+    let isMounted = true;
+
+    const syncRequirementDocsFromDisk = async () => {
+      try {
+        const listResult = await invoke<{ success: boolean; content: string; error: string | null }>('tool_ls', {
+          params: {
+            path: requirementsDir,
+          },
+        });
+
+        if (!listResult.success) {
+          throw new Error(listResult.error || '读取需求目录失败');
+        }
+
+        const fileNames = listResult.content
+          .split('\n')
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0 && /\.(md|markdown)$/i.test(item));
+
+        if (fileNames.length === 0) {
+          return;
+        }
+
+        const docs = await Promise.all(
+          fileNames.map(async (fileName) => {
+            const filePath = joinDiskPath(requirementsDir, fileName);
+            const content = await readRequirementFile(filePath);
+
+            return {
+              id: filePath,
+              title: fileName,
+              content,
+              summary: content.replace(/\s+/g, ' ').trim().slice(0, 96),
+              filePath,
+              authorRole: '产品' as const,
+              sourceType: 'manual' as const,
+              updatedAt: new Date().toISOString(),
+              status: 'ready' as const,
+            };
+          })
+        );
+
+        if (isMounted) {
+          replaceRequirementDocs(docs);
+          setRequirementSaveMessage(`已从 ${requirementsDir} 读取 ${docs.length} 个 Markdown 文件。`);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
+        }
+      }
+    };
+
+    void syncRequirementDocsFromDisk();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentProject, readRequirementFile, replaceRequirementDocs, requirementStorageMode, requirementsDir]);
+
+  useEffect(() => {
     if (designPages.length === 0) {
       setManualPageId(null);
       clearCanvas();
@@ -914,30 +1351,241 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     fileInputRef.current?.click();
   };
 
+  const applyRequirementEditorTransform = useCallback(
+    (
+      transform: (input: { value: string; start: number; end: number; selectedText: string }) => {
+        value: string;
+        start: number;
+        end: number;
+      }
+    ) => {
+      const textarea = requirementTextareaRef.current;
+      const value = requirementDraftContent;
+      const start = textarea?.selectionStart ?? value.length;
+      const end = textarea?.selectionEnd ?? value.length;
+      const selectedText = value.slice(start, end);
+      const next = transform({ value, start, end, selectedText });
+
+      setRequirementDraftContent(next.value);
+
+      requestAnimationFrame(() => {
+        textarea?.focus();
+        textarea?.setSelectionRange(next.start, next.end);
+      });
+    },
+    [requirementDraftContent]
+  );
+
+  const handleWrapSelection = useCallback(
+    (prefix: string, suffix = prefix, placeholder = '') => {
+      applyRequirementEditorTransform(({ value, start, end, selectedText }) => {
+        const content = selectedText || placeholder;
+        const nextValue = `${value.slice(0, start)}${prefix}${content}${suffix}${value.slice(end)}`;
+        const selectionStart = start + prefix.length;
+        const selectionEnd = selectionStart + content.length;
+
+        return {
+          value: nextValue,
+          start: selectionStart,
+          end: selectionEnd,
+        };
+      });
+    },
+    [applyRequirementEditorTransform]
+  );
+
+  const handleInsertLinePrefix = useCallback(
+    (prefix: string, placeholder: string) => {
+      applyRequirementEditorTransform(({ value, start, end, selectedText }) => {
+        const content = selectedText || placeholder;
+        const prefixed = content
+          .split('\n')
+          .map((line) => `${prefix}${line}`)
+          .join('\n');
+        const nextValue = `${value.slice(0, start)}${prefixed}${value.slice(end)}`;
+
+        return {
+          value: nextValue,
+          start,
+          end: start + prefixed.length,
+        };
+      });
+    },
+    [applyRequirementEditorTransform]
+  );
+
+  const handleInsertLink = useCallback(() => {
+    handleWrapSelection('[', '](https://example.com)', '链接文字');
+  }, [handleWrapSelection]);
+
+  const handleInsertCodeBlock = useCallback(() => {
+    applyRequirementEditorTransform(({ value, start, end, selectedText }) => {
+      const blockContent = selectedText || '在这里写代码';
+      const insertion = `\n\`\`\`md\n${blockContent}\n\`\`\`\n`;
+      const nextValue = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
+      const cursorStart = start + 7;
+
+      return {
+        value: nextValue,
+        start: cursorStart,
+        end: cursorStart + blockContent.length,
+      };
+    });
+  }, [applyRequirementEditorTransform]);
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    for (const file of files) {
-      const content = await file.text();
-      ingestRequirementDoc({
-        title: file.name,
-        content,
-        sourceType: 'upload',
-      });
+    const markdownFiles = files.filter((file) => /\.(md|markdown)$/i.test(file.name));
+    const invalidFiles = files.filter((file) => !/\.(md|markdown)$/i.test(file.name));
+
+    if (invalidFiles.length > 0) {
+      window.alert(`只能上传 Markdown 文件：${invalidFiles.map((file) => file.name).join('、')}`);
+    }
+
+    if (!canPersistRequirementToDisk || !requirementsDir) {
+      window.alert('当前环境不支持直接导入到磁盘目录，请在桌面版中使用上传。');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      for (const file of markdownFiles) {
+        const content = await file.text();
+        const normalizedTitle = normalizeRequirementFilename(file.name);
+        const filePath = joinDiskPath(requirementsDir, normalizedTitle);
+
+        await writeRequirementFile(filePath, content);
+
+        ingestRequirementDoc({
+          title: normalizedTitle,
+          content,
+          sourceType: 'upload',
+          filePath,
+        });
+      }
+
+      setRequirementSaveMessage(`已导入 ${markdownFiles.length} 个 Markdown 文件到 ${requirementsDir}`);
+    } catch (error) {
+      setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
     }
     event.target.value = '';
   };
 
-  const handleGenerateFromRequirements = useCallback(() => {
-    const nextTree = generateProductArtifactsFromRequirements();
-    if (nextTree) {
-      setTree(nextTree);
-      setSidebarTab('page');
-      if (nextTree.children[0]) {
-        selectFeature(nextTree.children[0].id);
-        onFeatureSelect?.(nextTree.children[0]);
+  const handleDeleteRequirement = useCallback(async () => {
+    if (!selectedRequirement) {
+      return;
+    }
+
+    if (!window.confirm(`确定删除文件“${selectedRequirement.title}”吗？`)) {
+      return;
+    }
+
+    if (canPersistRequirementToDisk && selectedRequirement.filePath) {
+      try {
+        await removeRequirementFile(selectedRequirement.filePath);
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : String(error));
+        return;
       }
     }
-  }, [generateProductArtifactsFromRequirements, onFeatureSelect, selectFeature, setTree]);
+
+    deleteRequirementDoc(selectedRequirement.id);
+    setRequirementSaveMessage(canPersistRequirementToDisk ? '文件已从项目和磁盘中删除。' : '文件已从当前项目状态中删除。');
+  }, [canPersistRequirementToDisk, deleteRequirementDoc, removeRequirementFile, selectedRequirement]);
+
+  const handleCreateRequirement = useCallback(() => {
+    const nextDoc = addRequirementDoc();
+    if (!nextDoc) {
+      return;
+    }
+
+    setSelectedRequirementId(nextDoc.id);
+    setRequirementDraftTitle(nextDoc.title);
+    setRequirementDraftContent(nextDoc.content);
+    setRequirementViewMode('edit');
+    setRequirementSaveMessage(null);
+  }, [addRequirementDoc]);
+
+  const handleEditRequirement = useCallback(() => {
+    if (!selectedRequirement) {
+      return;
+    }
+
+    setRequirementDraftTitle(selectedRequirement.title);
+    setRequirementDraftContent(selectedRequirement.content);
+    setRequirementViewMode('edit');
+    setRequirementSaveMessage(null);
+  }, [selectedRequirement]);
+
+  const handleCancelRequirementEdit = useCallback(() => {
+    if (!selectedRequirement) {
+      return;
+    }
+
+    setRequirementDraftTitle(selectedRequirement.title);
+    setRequirementDraftContent(selectedRequirement.content);
+    setRequirementViewMode('preview');
+    setRequirementSaveMessage(null);
+  }, [selectedRequirement]);
+
+  const handleSaveRequirement = useCallback(async () => {
+    if (!selectedRequirement) {
+      return;
+    }
+
+    const nextTitle = normalizeRequirementFilename(requirementDraftTitle);
+    const nextFilePath =
+      canPersistRequirementToDisk && requirementsDir
+        ? joinDiskPath(requirementsDir, nextTitle)
+        : selectedRequirement.filePath;
+
+    try {
+      setIsSavingRequirement(true);
+
+      if (canPersistRequirementToDisk && selectedRequirement.filePath && nextFilePath && selectedRequirement.filePath !== nextFilePath) {
+        await removeRequirementFile(selectedRequirement.filePath);
+      }
+
+      if (canPersistRequirementToDisk && nextFilePath) {
+        await writeRequirementFile(nextFilePath, requirementDraftContent);
+      }
+
+      updateRequirementDoc(selectedRequirement.id, {
+        title: nextTitle,
+        content: requirementDraftContent,
+        filePath: nextFilePath,
+      });
+      setRequirementDraftTitle(nextTitle);
+      setRequirementViewMode('preview');
+      setRequirementSaveMessage(
+        canPersistRequirementToDisk && nextFilePath
+          ? `已保存到 ${nextFilePath}`
+          : '已保存到当前项目状态。桌面版运行时会同步到磁盘。'
+      );
+    } catch (error) {
+      setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSavingRequirement(false);
+    }
+  }, [canPersistRequirementToDisk, removeRequirementFile, requirementDraftContent, requirementDraftTitle, requirementsDir, selectedRequirement, updateRequirementDoc, writeRequirementFile]);
+
+  useEffect(() => {
+    if (requirementViewMode !== 'edit') {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (canSaveRequirement) {
+          void handleSaveRequirement();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canSaveRequirement, handleSaveRequirement, requirementViewMode]);
 
   const handleAddPageAfter = useCallback((pageId: string) => {
     const nextPage = addSiblingPage(pageId);
@@ -1042,64 +1690,152 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       <section className="pm-card">
         <div className="pm-card-header">
           <div>
-            <h3>需求输入</h3>
+            <h3>需求文件</h3>
+            <span>只支持 Markdown 上传、阅读、编辑、保存和删除</span>
           </div>
           <div className="pm-inline-actions">
+            <button className="doc-action-btn secondary" type="button" onClick={handleCreateRequirement}>
+              新建 Markdown
+            </button>
             <button className="doc-action-btn secondary" type="button" onClick={handleUploadClick}>
-              上传
-            </button>
-            <button className="doc-action-btn secondary" type="button" onClick={addRequirementDoc}>
-              + 新建
-            </button>
-            <button className="doc-action-btn" type="button" onClick={handleGenerateFromRequirements}>
-              生成草案
+              上传 Markdown
             </button>
           </div>
         </div>
-        <textarea
-          className="product-textarea"
-          value={rawRequirementInput}
-          onChange={(event) => setRawRequirementInput(event.target.value)}
-          placeholder="输入业务目标、核心场景、约束和关键需求"
-        />
-      </section>
+        {selectedRequirement ? (
+          <div className="requirement-file-editor">
+            <div className="requirement-file-meta">
+              <div>
+                <strong>{selectedRequirement.title}</strong>
+                <span>
+                  {selectedRequirement.sourceType || 'manual'} · {selectedRequirement.status} ·{' '}
+                  {new Date(selectedRequirement.updatedAt).toLocaleString()}
+                </span>
+              </div>
+              <div className="requirement-file-toolbar">
+                <div className="pm-segmented-control">
+                  <button
+                    className={requirementViewMode === 'preview' ? 'active' : ''}
+                    type="button"
+                    onClick={() => {
+                      if (requirementViewMode === 'edit') {
+                        handleCancelRequirementEdit();
+                        return;
+                      }
 
-      {selectedRequirement && (
-        <section className="pm-card">
-          <div className="pm-card-header">
-            <div>
-              <h3>{selectedRequirement.title}</h3>
-              <span>{selectedRequirement.sourceType || 'manual'} · {selectedRequirement.status}</span>
+                      setRequirementViewMode('preview');
+                    }}
+                  >
+                    阅读
+                  </button>
+                  <button
+                    className={requirementViewMode === 'edit' ? 'active' : ''}
+                    type="button"
+                    onClick={handleEditRequirement}
+                  >
+                    编辑
+                  </button>
+                </div>
+                <button className="doc-action-btn" type="button" onClick={handleDeleteRequirement}>
+                  删除
+                </button>
+              </div>
             </div>
+
+            <div className="requirement-storage-note">
+              <strong>保存位置</strong>
+              <span>
+                {selectedRequirement.filePath
+                  ? selectedRequirement.filePath
+                  : canPersistRequirementToDisk && requirementsDir
+                    ? `当前项目目录：${requirementsDir}`
+                    : '当前运行在浏览器开发环境，保存会进入项目状态；桌面版运行时会同步到磁盘。'}
+              </span>
+            </div>
+
+            {requirementViewMode === 'edit' ? (
+              <div className="requirement-editor-shell">
+                <input
+                  className="product-input requirement-file-name-input"
+                  value={requirementDraftTitle}
+                  onChange={(event) => setRequirementDraftTitle(event.target.value)}
+                  placeholder="文件名，例如 product-requirements.md"
+                />
+                <div className="requirement-editor-toolbar">
+                  <button className="doc-action-btn secondary" type="button" onClick={() => handleInsertLinePrefix('# ', '标题')}>
+                    H1
+                  </button>
+                  <button className="doc-action-btn secondary" type="button" onClick={() => handleWrapSelection('**', '**', '加粗')}>
+                    加粗
+                  </button>
+                  <button className="doc-action-btn secondary" type="button" onClick={() => handleWrapSelection('*', '*', '斜体')}>
+                    斜体
+                  </button>
+                  <button className="doc-action-btn secondary" type="button" onClick={() => handleInsertLinePrefix('- ', '列表项')}>
+                    列表
+                  </button>
+                  <button className="doc-action-btn secondary" type="button" onClick={() => handleInsertLinePrefix('> ', '引用内容')}>
+                    引用
+                  </button>
+                  <button className="doc-action-btn secondary" type="button" onClick={handleInsertLink}>
+                    链接
+                  </button>
+                  <button className="doc-action-btn secondary" type="button" onClick={handleInsertCodeBlock}>
+                    代码块
+                  </button>
+                </div>
+                <div className="requirement-editor-layout">
+                  <textarea
+                    ref={requirementTextareaRef}
+                    className="product-textarea requirement-file-textarea"
+                    value={requirementDraftContent}
+                    onChange={(event) => setRequirementDraftContent(event.target.value)}
+                    placeholder="在这里编辑 Markdown 内容"
+                  />
+                  <div className="requirement-live-preview-shell">
+                    <div className="requirement-preview-header">
+                      <span>实时预览</span>
+                      <span className="requirement-preview-shortcut">Ctrl+S 保存</span>
+                    </div>
+                    <article className="requirement-markdown-preview">{renderMarkdownPreview(requirementDraftContent)}</article>
+                  </div>
+                </div>
+                <div className="requirement-editor-actions">
+                  <span className="requirement-save-message">
+                    {requirementSaveMessage || '编辑完成后点击保存。'}
+                  </span>
+                  <div className="pm-inline-actions">
+                    <button className="doc-action-btn secondary" type="button" onClick={handleCancelRequirementEdit}>
+                      取消
+                    </button>
+                    <button className="doc-action-btn" type="button" onClick={handleSaveRequirement} disabled={!canSaveRequirement}>
+                      {isSavingRequirement ? '保存中...' : '保存'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="requirement-preview-shell">
+                <div className="requirement-preview-header">
+                  <span>{selectedRequirement.title}</span>
+                  <button className="doc-action-btn secondary" type="button" onClick={handleEditRequirement}>
+                    进入编辑
+                  </button>
+                </div>
+                <article className="requirement-markdown-preview">{renderMarkdownPreview(selectedRequirement.content)}</article>
+              </div>
+            )}
           </div>
-          <div className="pm-form-grid">
-            <input
-              className="product-input"
-              value={selectedRequirement.title}
-              onChange={(event) => updateRequirementDoc(selectedRequirement.id, { title: event.target.value })}
-              placeholder="需求标题"
-            />
-            <input
-              className="product-input"
-              value={selectedRequirement.summary}
-              onChange={(event) => updateRequirementDoc(selectedRequirement.id, { summary: event.target.value })}
-              placeholder="需求摘要"
-            />
-          </div>
-          <textarea
-            className="product-textarea compact"
-            value={selectedRequirement.content}
-            onChange={(event) => updateRequirementDoc(selectedRequirement.id, { content: event.target.value })}
-            placeholder="需求详细内容"
-          />
-        </section>
-      )}
+        ) : (
+          <div className="empty-state">还没有需求文件，可以直接新建，或上传 `.md` / `.markdown` 文件。</div>
+        )}
+      </section>
 
       <input
         ref={fileInputRef}
         className="product-hidden-input"
         type="file"
-        accept=".txt,.md,.markdown,.json"
+        accept=".md,.markdown,text/markdown"
         multiple
         onChange={handleFileChange}
       />
@@ -1193,7 +1929,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
 
         {sidebarTab === 'requirement' && (
           <section className="pm-nav-section">
-            <div className="pm-nav-title">需求列表</div>
+            <div className="pm-nav-title">Markdown 文件</div>
             {requirementDocs.map((doc) => (
               <button
                 key={doc.id}

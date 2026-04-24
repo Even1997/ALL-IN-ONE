@@ -2,8 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
@@ -60,6 +61,25 @@ pub struct GlobParams {
 pub struct BashParams {
     pub command: String,
     pub timeout: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RemoveParams {
+    pub file_path: String,
+}
+
+fn get_workspace_root_path() -> Result<PathBuf, String> {
+    env::current_dir().map_err(|e| format!("Failed to resolve workspace root: {}", e))
+}
+
+fn get_projects_root_path() -> Result<PathBuf, String> {
+    let workspace_root = get_workspace_root_path()?;
+    let projects_root = workspace_root.join("projects");
+
+    fs::create_dir_all(&projects_root)
+        .map_err(|e| format!("Failed to create projects directory: {}", e))?;
+
+    Ok(projects_root)
 }
 
 // View tool - read file contents with line numbers
@@ -150,6 +170,38 @@ fn tool_write(params: WriteParams) -> ToolResult {
             success: false,
             content: String::new(),
             error: Some(format!("Error writing file: {}", e)),
+        },
+    }
+}
+
+#[tauri::command]
+fn tool_remove(params: RemoveParams) -> ToolResult {
+    let file_path = Path::new(&params.file_path);
+
+    if !file_path.exists() {
+        return ToolResult {
+            success: true,
+            content: format!("File already removed: {}", params.file_path),
+            error: None,
+        };
+    }
+
+    let result = if file_path.is_dir() {
+        fs::remove_dir_all(file_path)
+    } else {
+        fs::remove_file(file_path)
+    };
+
+    match result {
+        Ok(_) => ToolResult {
+            success: true,
+            content: format!("Removed: {}", params.file_path),
+            error: None,
+        },
+        Err(e) => ToolResult {
+            success: false,
+            content: String::new(),
+            error: Some(format!("Error removing path: {}", e)),
         },
     }
 }
@@ -474,17 +526,71 @@ fn tool_bash(params: BashParams) -> ToolResult {
     }
 }
 
+#[tauri::command]
+fn get_requirements_dir(project_id: String) -> Result<String, String> {
+    let dir_path: PathBuf = get_projects_root_path()?
+        .join(project_id)
+        .join("requirements");
+
+    fs::create_dir_all(&dir_path)
+        .map_err(|e| format!("Failed to create requirements directory: {}", e))?;
+
+    dir_path
+        .canonicalize()
+        .map(|path| path.to_string_lossy().to_string())
+        .or_else(|_| Ok(dir_path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn get_project_dir(project_id: String) -> Result<String, String> {
+    let dir_path: PathBuf = get_projects_root_path()?.join(project_id);
+
+    fs::create_dir_all(&dir_path)
+        .map_err(|e| format!("Failed to create project directory: {}", e))?;
+
+    dir_path
+        .canonicalize()
+        .map(|path| path.to_string_lossy().to_string())
+        .or_else(|_| Ok(dir_path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn get_projects_index_path() -> Result<String, String> {
+    let file_path = get_projects_root_path()?.join("index.json");
+
+    if !file_path.exists() {
+        fs::write(&file_path, "[]")
+            .map_err(|e| format!("Failed to initialize projects index: {}", e))?;
+    }
+
+    file_path
+        .canonicalize()
+        .map(|path| path.to_string_lossy().to_string())
+        .or_else(|_| Ok(file_path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn read_text_file(file_path: String) -> Result<String, String> {
+    read_file_as_string(Path::new(&file_path))
+        .map_err(|e| format!("Error reading file: {}", e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             tool_view,
             tool_write,
+            tool_remove,
             tool_edit,
             tool_ls,
             tool_glob,
             tool_grep,
             tool_bash,
+            get_requirements_dir,
+            get_project_dir,
+            get_projects_index_path,
+            read_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

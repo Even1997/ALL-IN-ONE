@@ -27,15 +27,31 @@ import { buildWireframesMarkdown } from '../utils/wireframe';
 
 export interface CreateProjectInput {
   name: string;
-  appType: ProjectConfig['appType'];
-  frontendFramework: string;
-  backendFramework: string;
-  database: string;
-  uiFramework: string;
-  deployment: string;
+  description: string;
+}
+
+export interface ProjectWorkspaceSnapshot {
+  currentProject: ProjectConfig | null;
+  graph: ProjectGraph;
+  memory: ProjectMemory | null;
+  rawRequirementInput: string;
+  featuresMarkdown: string;
+  wireframesMarkdown: string;
+  requirementDocs: RequirementDoc[];
+  prd: ProductPRD | null;
+  pageStructure: PageStructureNode[];
+  wireframes: Record<string, WireframeDocument>;
+  designSystem: DesignSystemDoc | null;
+  uiSpecs: UISpecDoc[];
+  devTasks: DevTask[];
+  generatedFiles: GeneratedFile[];
+  testPlan: TestPlanDoc | null;
+  deployPlan: DeployPlanDoc | null;
 }
 
 interface ProjectState {
+  projects: ProjectConfig[];
+  currentProjectId: string | null;
   currentProject: ProjectConfig | null;
   graph: ProjectGraph;
   memory: ProjectMemory | null;
@@ -53,15 +69,23 @@ interface ProjectState {
   testPlan: TestPlanDoc | null;
   deployPlan: DeployPlanDoc | null;
   createProject: (input: CreateProjectInput) => { project: ProjectConfig; featureTree: FeatureTree };
+  loadProjectWorkspace: (snapshot: ProjectWorkspaceSnapshot) => void;
+  switchProject: (project: ProjectConfig) => void;
+  deleteProject: (projectId: string) => void;
   updateProject: (updates: Partial<Omit<ProjectConfig, 'id' | 'createdAt'>>) => void;
   setRawRequirementInput: (value: string) => void;
   setFeaturesMarkdown: (value: string) => void;
   updateRequirementDoc: (
     id: string,
-    updates: Partial<Pick<RequirementDoc, 'title' | 'content' | 'summary' | 'status' | 'sourceType'>>
+    updates: Partial<Pick<RequirementDoc, 'title' | 'content' | 'summary' | 'status' | 'sourceType' | 'filePath'>>
   ) => void;
-  addRequirementDoc: () => void;
-  ingestRequirementDoc: (input: { title: string; content: string; sourceType?: RequirementDoc['sourceType'] }) => void;
+  addRequirementDoc: () => RequirementDoc | null;
+  deleteRequirementDoc: (id: string) => void;
+  ingestRequirementDoc: (input: { title: string; content: string; sourceType?: RequirementDoc['sourceType']; filePath?: string }) => void;
+  replaceRequirementDocs: (docs: RequirementDoc[]) => void;
+  replacePageStructure: (pageStructure: PageStructureNode[], featureTree: FeatureTree | null) => void;
+  replaceWireframes: (wireframes: Record<string, WireframeDocument>, featureTree: FeatureTree | null) => void;
+  mergeGeneratedFilesFromAI: (files: GeneratedFile[]) => void;
   generatePlanningArtifacts: (featureTree: FeatureTree | null) => FeatureTree | null;
   generateProductArtifactsFromRequirements: () => FeatureTree | null;
   saveWireframeDraft: (page: Pick<PageStructureNode, 'id' | 'name'>, elements: CanvasElement[]) => void;
@@ -80,27 +104,29 @@ interface ProjectState {
   clearProject: () => void;
 }
 
-const buildStarterRequirementDocs = (projectName: string): RequirementDoc[] => {
+const buildStarterRequirementDocs = (projectName: string, projectDescription = ''): RequirementDoc[] => {
   const now = new Date().toISOString();
 
   return [
     {
       id: uuidv4(),
-      title: `${projectName} 初始需求`,
-      content: `${projectName} 需要承接产品从需求输入到功能规划再到线稿设计的完整流程。`,
-      summary: '整理核心目标、主要角色和 MVP 范围，作为后续 PRD 和功能树的基础输入。',
+      title: `${projectName} 初始需求.md`,
+      content: projectDescription || `${projectName} 需要承接产品从需求输入到功能规划再到线稿设计的完整流程。`,
+      summary: summarizeRequirement(projectDescription || `${projectName} 需要承接产品从需求输入到功能规划再到线稿设计的完整流程。`),
       authorRole: '产品',
       sourceType: 'manual',
+      filePath: undefined,
       updatedAt: now,
       status: 'ready',
     },
     {
       id: uuidv4(),
-      title: '信息架构草案',
+      title: '信息架构草案.md',
       content: '左侧维护需求与功能菜单，中间和右侧根据点击内容切换文档、功能树和线稿查看器。',
       summary: '拆分页面结构、关键工作流与线框图入口，衔接产品与设计工作区。',
       authorRole: 'UI设计',
       sourceType: 'manual',
+      filePath: undefined,
       updatedAt: now,
       status: 'draft',
     },
@@ -144,6 +170,15 @@ const buildStarterFeatureTree = (projectName: string): FeatureTree => ({
   ],
 });
 
+const getDefaultProjectSettings = () => ({
+  appType: 'desktop' as const,
+  frontendFramework: 'React',
+  backendFramework: 'Tauri',
+  database: 'SQLite',
+  uiFramework: 'Tailwind',
+  deployment: 'Local Server',
+});
+
 const createFeature = (
   name: string,
   overrides: Partial<FeatureNode> = {},
@@ -169,6 +204,15 @@ const createFeature = (
 const summarizeRequirement = (content: string) => {
   const normalized = content.replace(/\s+/g, ' ').trim();
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+};
+
+const normalizeRequirementTitle = (value: string) => {
+  const normalized = value.trim().replace(/[\\/:*?"<>|]/g, '-');
+  if (!normalized) {
+    return '未命名需求.md';
+  }
+
+  return /\.(md|markdown)$/i.test(normalized) ? normalized : `${normalized}.md`;
 };
 
 const collectRequirementLines = (rawRequirementInput: string, docs: RequirementDoc[]) =>
@@ -299,8 +343,10 @@ const buildProjectMemory = (project: ProjectConfig): ProjectMemory => ({
   },
 });
 
-const buildStarterRawRequirementInput = (projectName: string) =>
-  `${projectName} 需要成为一个可视化的软件生产工作台。\n支持需求梳理、功能拆分、页面结构设计、线框图编辑，并逐步衔接代码、测试和部署流程。`;
+const buildStarterRawRequirementInput = (projectName: string, projectDescription = '') =>
+  projectDescription.trim()
+    ? `${projectName}\n${projectDescription.trim()}`
+    : `${projectName} 需要成为一个可视化的软件生产工作台。\n支持需求梳理、功能拆分、页面结构设计、线框图编辑，并逐步衔接代码、测试和部署流程。`;
 
 const mapRequirementStatus = (status: RequirementDoc['status']): GraphNodeBase['status'] =>
   status === 'ready' ? 'ready' : 'draft';
@@ -1313,6 +1359,59 @@ const syncFeatureTreeWithPageStructure = (featureTree: FeatureTree | null, pageS
   };
 };
 
+const buildReconciledArtifacts = (
+  project: ProjectConfig,
+  rawRequirementInput: string,
+  requirementDocs: RequirementDoc[],
+  featureTree: FeatureTree | null,
+  pageStructure: PageStructureNode[],
+  wireframes: Record<string, WireframeDocument>,
+  existingGeneratedFiles: GeneratedFile[]
+) => {
+  const syncedFeatureTree = syncFeatureTreeWithPageStructure(featureTree, pageStructure) || featureTree;
+  const prd = buildPRDFromProject(project, requirementDocs, rawRequirementInput, syncedFeatureTree);
+  const planningArtifacts = buildPlanningFiles(
+    project,
+    rawRequirementInput,
+    requirementDocs,
+    syncedFeatureTree,
+    syncedFeatureTree ? featureTreeToMarkdown(syncedFeatureTree) : '',
+    prd,
+    pageStructure,
+    wireframes
+  );
+  const deliveryArtifacts = buildDeliveryArtifacts(project, syncedFeatureTree, pageStructure, wireframes);
+  const preservedFiles = existingGeneratedFiles.filter(
+    (file) => !file.path.startsWith('src/generated/planning/') && !file.path.startsWith('src/generated/pages/') && !file.path.startsWith('src/generated/design/')
+  );
+  const generatedFiles = mergeGeneratedFiles(
+    mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles),
+    preservedFiles
+  );
+
+  return {
+    syncedFeatureTree,
+    prd,
+    planningArtifacts,
+    deliveryArtifacts,
+    generatedFiles,
+    graph: buildProjectGraph(
+      project,
+      requirementDocs,
+      syncedFeatureTree,
+      prd,
+      pageStructure,
+      wireframes,
+      deliveryArtifacts.designSystem,
+      deliveryArtifacts.uiSpecs,
+      deliveryArtifacts.devTasks,
+      generatedFiles,
+      deliveryArtifacts.testPlan,
+      deliveryArtifacts.deployPlan
+    ),
+  };
+};
+
 const emptyGraph: ProjectGraph = { nodes: [], edges: [] };
 
 const normalizeStringArray = (value: unknown) =>
@@ -1342,6 +1441,7 @@ const normalizeProjectConfig = (value: unknown): ProjectConfig | null => {
   return {
     id: typeof project.id === 'string' ? project.id : uuidv4(),
     name: typeof project.name === 'string' && project.name.trim().length > 0 ? project.name : '未命名项目',
+    description: typeof project.description === 'string' ? project.description : '',
     appType: project.appType === 'mobile' || project.appType === 'mini_program' || project.appType === 'desktop' || project.appType === 'backend' || project.appType === 'api'
       ? project.appType
       : 'web',
@@ -1364,9 +1464,13 @@ const normalizeRequirementDocs = (value: unknown): RequirementDoc[] =>
 
           return {
             id: typeof doc.id === 'string' ? doc.id : uuidv4(),
-            title: typeof doc.title === 'string' ? doc.title : '未命名需求',
+            title: normalizeRequirementTitle(typeof doc.title === 'string' ? doc.title : '未命名需求'),
             content: typeof doc.content === 'string' ? doc.content : '',
-            summary: typeof doc.summary === 'string' ? doc.summary : '',
+            summary:
+              typeof doc.summary === 'string' && doc.summary.trim().length > 0
+                ? doc.summary
+                : summarizeRequirement(typeof doc.content === 'string' ? doc.content : ''),
+            filePath: typeof doc.filePath === 'string' && doc.filePath.trim().length > 0 ? doc.filePath : undefined,
             authorRole:
               authorRole === '产品经理'
                 ? '产品'
@@ -1562,7 +1666,7 @@ const normalizeGeneratedFiles = (value: unknown): GeneratedFile[] =>
         .filter((item): item is Partial<GeneratedFile> => Boolean(item) && typeof item === 'object')
         .map((file) => {
           const language: GeneratedFile['language'] =
-            file.language === 'tsx' || file.language === 'ts' || file.language === 'css' || file.language === 'json' || file.language === 'md' || file.language === 'sh'
+            file.language === 'tsx' || file.language === 'ts' || file.language === 'css' || file.language === 'json' || file.language === 'md' || file.language === 'sh' || file.language === 'html'
               ? file.language
               : 'yml';
           const category: GeneratedFile['category'] =
@@ -1797,6 +1901,8 @@ const deletePageNodeById = (
 export const useProjectStore = create<ProjectState>()(
   persist(
     (set, get) => ({
+      projects: [],
+      currentProjectId: null,
       currentProject: null,
       graph: emptyGraph,
       memory: null,
@@ -1816,22 +1922,24 @@ export const useProjectStore = create<ProjectState>()(
 
       createProject: (input) => {
         const now = new Date().toISOString();
+        const defaults = getDefaultProjectSettings();
         const project: ProjectConfig = {
           id: uuidv4(),
           name: input.name.trim(),
-          appType: input.appType,
-          frontendFramework: input.frontendFramework,
-          backendFramework: input.backendFramework,
-          database: input.database,
-          uiFramework: input.uiFramework,
-          deployment: input.deployment,
+          description: input.description.trim(),
+          appType: defaults.appType,
+          frontendFramework: defaults.frontendFramework,
+          backendFramework: defaults.backendFramework,
+          database: defaults.database,
+          uiFramework: defaults.uiFramework,
+          deployment: defaults.deployment,
           createdAt: now,
           updatedAt: now,
         };
 
-        const requirementDocs = buildStarterRequirementDocs(project.name);
+        const requirementDocs = buildStarterRequirementDocs(project.name, project.description);
         const featureTree = buildStarterFeatureTree(project.name);
-        const rawRequirementInput = buildStarterRawRequirementInput(project.name);
+        const rawRequirementInput = buildStarterRawRequirementInput(project.name, project.description);
         const prd = buildPRDFromProject(project, requirementDocs, rawRequirementInput, featureTree);
         const pageStructure: PageStructureNode[] = [];
         const wireframes: Record<string, WireframeDocument> = {};
@@ -1864,6 +1972,8 @@ export const useProjectStore = create<ProjectState>()(
         );
 
         set({
+          projects: [...get().projects.filter((item) => item.id !== project.id), project],
+          currentProjectId: project.id,
           currentProject: project,
           graph,
           memory,
@@ -1888,6 +1998,40 @@ export const useProjectStore = create<ProjectState>()(
         };
       },
 
+      loadProjectWorkspace: (snapshot) =>
+        set(() => ({
+          currentProjectId: snapshot.currentProject?.id || null,
+          currentProject: snapshot.currentProject,
+          graph: snapshot.graph,
+          memory: snapshot.memory,
+          rawRequirementInput: snapshot.rawRequirementInput,
+          featuresMarkdown: snapshot.featuresMarkdown,
+          wireframesMarkdown: snapshot.wireframesMarkdown,
+          requirementDocs: snapshot.requirementDocs,
+          prd: snapshot.prd,
+          pageStructure: snapshot.pageStructure,
+          wireframes: snapshot.wireframes,
+          designSystem: snapshot.designSystem,
+          uiSpecs: snapshot.uiSpecs,
+          devTasks: snapshot.devTasks,
+          generatedFiles: snapshot.generatedFiles,
+          testPlan: snapshot.testPlan,
+          deployPlan: snapshot.deployPlan,
+        })),
+
+      switchProject: (project) =>
+        set((state) => ({
+          currentProjectId: project.id,
+          currentProject: project,
+          projects: state.projects.map((item) => (item.id === project.id ? project : item)),
+        })),
+
+      deleteProject: (projectId) =>
+        set((state) => ({
+          projects: state.projects.filter((item) => item.id !== projectId),
+          currentProjectId: state.currentProjectId === projectId ? null : state.currentProjectId,
+        })),
+
       updateProject: (updates) =>
         set((state) => {
           if (!state.currentProject) {
@@ -1901,6 +2045,8 @@ export const useProjectStore = create<ProjectState>()(
           };
 
           return {
+            projects: state.projects.map((item) => (item.id === nextProject.id ? nextProject : item)),
+            currentProjectId: nextProject.id,
             currentProject: nextProject,
             graph: buildProjectGraph(
               nextProject,
@@ -1959,6 +2105,13 @@ export const useProjectStore = create<ProjectState>()(
               ? {
                   ...doc,
                   ...updates,
+                  title: typeof updates.title === 'string' ? normalizeRequirementTitle(updates.title) : doc.title,
+                  summary:
+                    typeof updates.summary === 'string'
+                      ? updates.summary
+                      : typeof updates.content === 'string'
+                        ? summarizeRequirement(updates.content)
+                        : doc.summary,
                   updatedAt: new Date().toISOString(),
                 }
               : doc
@@ -1999,26 +2152,74 @@ export const useProjectStore = create<ProjectState>()(
           };
         }),
 
-      addRequirementDoc: () =>
+      addRequirementDoc: () => {
+        let createdDoc: RequirementDoc | null = null;
+
         set((state) => {
           if (!state.currentProject) {
             return state;
           }
 
-          const requirementDocs: RequirementDoc[] = [
-            ...state.requirementDocs,
-            {
-              id: uuidv4(),
-              title: '新增需求条目',
-              content: '补充新的用户故事、约束条件或业务规则。',
-              summary: '补充新的用户故事、约束条件或业务规则。',
-              authorRole: '产品',
-              sourceType: 'manual',
-              updatedAt: new Date().toISOString(),
-              status: 'draft',
-            },
-          ];
+          const nextDoc: RequirementDoc = {
+            id: uuidv4(),
+            title: '新增需求条目.md',
+            content: '# 新增需求条目\n\n补充新的用户故事、约束条件或业务规则。',
+            summary: '补充新的用户故事、约束条件或业务规则。',
+            filePath: undefined,
+            authorRole: '产品',
+            sourceType: 'manual',
+            updatedAt: new Date().toISOString(),
+            status: 'draft',
+          };
 
+          const requirementDocs: RequirementDoc[] = [...state.requirementDocs, nextDoc];
+          createdDoc = nextDoc;
+
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            state.pageStructure,
+            state.wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(
+            planningArtifacts.files,
+            state.generatedFiles.filter((file) => !file.path.startsWith('src/generated/planning/'))
+          );
+
+          return {
+            requirementDocs,
+            generatedFiles,
+            graph: buildProjectGraph(
+              state.currentProject,
+              requirementDocs,
+              null,
+              state.prd,
+              state.pageStructure,
+              state.wireframes,
+              state.designSystem,
+              state.uiSpecs,
+              state.devTasks,
+              generatedFiles,
+              state.testPlan,
+              state.deployPlan
+            ),
+          };
+        });
+
+        return createdDoc;
+      },
+
+      deleteRequirementDoc: (id) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return state;
+          }
+
+          const requirementDocs = state.requirementDocs.filter((doc) => doc.id !== id);
           const planningArtifacts = buildPlanningFiles(
             state.currentProject,
             state.rawRequirementInput,
@@ -2065,9 +2266,10 @@ export const useProjectStore = create<ProjectState>()(
             ...state.requirementDocs,
             {
               id: uuidv4(),
-              title: input.title,
+              title: normalizeRequirementTitle(input.title),
               content,
               summary: summarizeRequirement(content),
+              filePath: input.filePath,
               authorRole: '产品' as const,
               sourceType: input.sourceType || 'upload',
               updatedAt: new Date().toISOString(),
@@ -2096,6 +2298,146 @@ export const useProjectStore = create<ProjectState>()(
             graph: buildProjectGraph(
               state.currentProject,
               requirementDocs,
+              null,
+              state.prd,
+              state.pageStructure,
+              state.wireframes,
+              state.designSystem,
+              state.uiSpecs,
+              state.devTasks,
+              generatedFiles,
+              state.testPlan,
+              state.deployPlan
+            ),
+          };
+        }),
+
+      replaceRequirementDocs: (docs) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return state;
+          }
+
+          const requirementDocs = docs.map((doc) => ({
+            ...doc,
+            title: normalizeRequirementTitle(doc.title),
+            summary: doc.summary?.trim() ? doc.summary : summarizeRequirement(doc.content),
+            updatedAt: doc.updatedAt || new Date().toISOString(),
+          }));
+
+          const planningArtifacts = buildPlanningFiles(
+            state.currentProject,
+            state.rawRequirementInput,
+            requirementDocs,
+            null,
+            state.featuresMarkdown,
+            state.prd,
+            state.pageStructure,
+            state.wireframes
+          );
+          const generatedFiles = mergeGeneratedFiles(
+            planningArtifacts.files,
+            state.generatedFiles.filter((file) => !file.path.startsWith('src/generated/planning/'))
+          );
+
+          return {
+            requirementDocs,
+            generatedFiles,
+            graph: buildProjectGraph(
+              state.currentProject,
+              requirementDocs,
+              null,
+              state.prd,
+              state.pageStructure,
+              state.wireframes,
+              state.designSystem,
+              state.uiSpecs,
+              state.devTasks,
+              generatedFiles,
+              state.testPlan,
+              state.deployPlan
+            ),
+          };
+        }),
+
+      replacePageStructure: (pageStructure, featureTree) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return state;
+          }
+
+          const wireframes = reconcileWireframes(collectDesignPages(pageStructure), state.wireframes);
+          const next = buildReconciledArtifacts(
+            state.currentProject,
+            state.rawRequirementInput,
+            state.requirementDocs,
+            featureTree,
+            pageStructure,
+            wireframes,
+            state.generatedFiles
+          );
+
+          return {
+            pageStructure,
+            wireframes,
+            prd: next.prd,
+            featuresMarkdown: next.planningArtifacts.featuresMarkdown,
+            wireframesMarkdown: next.planningArtifacts.wireframesMarkdown,
+            designSystem: next.deliveryArtifacts.designSystem,
+            uiSpecs: next.deliveryArtifacts.uiSpecs,
+            devTasks: next.deliveryArtifacts.devTasks,
+            generatedFiles: next.generatedFiles,
+            testPlan: next.deliveryArtifacts.testPlan,
+            deployPlan: next.deliveryArtifacts.deployPlan,
+            graph: next.graph,
+          };
+        }),
+
+      replaceWireframes: (wireframes, featureTree) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return state;
+          }
+
+          const nextWireframes = reconcileWireframes(collectDesignPages(state.pageStructure), wireframes);
+          const next = buildReconciledArtifacts(
+            state.currentProject,
+            state.rawRequirementInput,
+            state.requirementDocs,
+            featureTree,
+            state.pageStructure,
+            nextWireframes,
+            state.generatedFiles
+          );
+
+          return {
+            wireframes: nextWireframes,
+            prd: next.prd,
+            featuresMarkdown: next.planningArtifacts.featuresMarkdown,
+            wireframesMarkdown: next.planningArtifacts.wireframesMarkdown,
+            designSystem: next.deliveryArtifacts.designSystem,
+            uiSpecs: next.deliveryArtifacts.uiSpecs,
+            devTasks: next.deliveryArtifacts.devTasks,
+            generatedFiles: next.generatedFiles,
+            testPlan: next.deliveryArtifacts.testPlan,
+            deployPlan: next.deliveryArtifacts.deployPlan,
+            graph: next.graph,
+          };
+        }),
+
+      mergeGeneratedFilesFromAI: (files) =>
+        set((state) => {
+          if (!state.currentProject || files.length === 0) {
+            return state;
+          }
+
+          const generatedFiles = mergeGeneratedFiles(state.generatedFiles, files);
+
+          return {
+            generatedFiles,
+            graph: buildProjectGraph(
+              state.currentProject,
+              state.requirementDocs,
               null,
               state.prd,
               state.pageStructure,
@@ -2694,6 +3036,7 @@ export const useProjectStore = create<ProjectState>()(
 
       clearProject: () =>
         set({
+          currentProjectId: null,
           currentProject: null,
           graph: emptyGraph,
           memory: null,
@@ -2718,6 +3061,11 @@ export const useProjectStore = create<ProjectState>()(
       storage: createJSONStorage(() => localStorage),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<ProjectState>;
+        const projects = Array.isArray(persisted.projects)
+          ? persisted.projects
+              .map((project) => normalizeProjectConfig(project))
+              .filter((project): project is ProjectConfig => Boolean(project))
+          : [];
         const currentProject = normalizeProjectConfig(persisted.currentProject);
         const requirementDocs = normalizeRequirementDocs(persisted.requirementDocs);
         const prd = normalizePrd(persisted.prd);
@@ -2733,6 +3081,11 @@ export const useProjectStore = create<ProjectState>()(
         return {
           ...currentState,
           ...persisted,
+          projects,
+          currentProjectId:
+            typeof persisted.currentProjectId === 'string'
+              ? persisted.currentProjectId
+              : currentProject?.id || null,
           currentProject,
           graph: currentProject
             ? buildProjectGraph(

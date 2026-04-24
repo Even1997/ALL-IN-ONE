@@ -1,12 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { FileExplorer } from './FileExplorer';
-import { AIChat } from './AIChat';
 import { Terminal } from './Terminal';
-import { DevTask, GeneratedFile } from '../../types';
+import type { DevTask, GeneratedFile } from '../../types';
 import './Workspace.css';
 
-type WorkspaceView = 'chat' | 'terminal' | 'split';
+type WorkspaceView = 'files' | 'terminal';
 
 interface WorkspaceProps {
   className?: string;
@@ -21,17 +20,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   files = [],
   tasks = [],
   recommendedCommands = [],
-  projectRoot = '/Users/apple/Documents/all-in-one',
+  projectRoot = '.',
 }) => {
-  const [currentView, setCurrentView] = useState<WorkspaceView>('split');
+  const [currentView, setCurrentView] = useState<WorkspaceView>('files');
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState('');
   const [isSavingFile, setIsSavingFile] = useState(false);
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
-  const [chatHeight, setChatHeight] = useState(300);
 
   const handleFileSelect = useCallback(async (path: string) => {
     setSelectedFile(path);
+
     try {
       const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_view', {
         params: {
@@ -40,6 +39,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           limit: 2000,
         },
       });
+
       setSelectedFileContent(
         result.success
           ? result.content
@@ -58,10 +58,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const handleFileDoubleClick = useCallback((path: string) => {
     setSelectedFile(path);
     console.log('Open file:', path);
-  }, []);
-
-  const handleInjectContext = useCallback((content: string) => {
-    console.log('Inject context:', content);
   }, []);
 
   const handleSaveFile = useCallback(async () => {
@@ -89,6 +85,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 
     try {
       setSyncState('syncing');
+
       for (const file of files) {
         const absolutePath = file.path.startsWith('/')
           ? file.path
@@ -101,30 +98,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           },
         });
       }
+
       setSyncState('done');
     } catch {
       setSyncState('error');
     }
   }, [files, projectRoot]);
-
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startY = e.clientY;
-    const startHeight = chatHeight;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = startY - moveEvent.clientY;
-      setChatHeight(Math.max(150, Math.min(600, startHeight + delta)));
-    };
-
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [chatHeight]);
 
   return (
     <div className={`workspace ${className || ''}`}>
@@ -141,11 +120,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         <div className="workspace-toolbar">
           <div className="view-toggle">
             <button
-              className={`toggle-btn ${currentView === 'chat' ? 'active' : ''}`}
-              onClick={() => setCurrentView('chat')}
+              className={`toggle-btn ${currentView === 'files' ? 'active' : ''}`}
+              onClick={() => setCurrentView('files')}
               type="button"
             >
-              聊天
+              文件
             </button>
             <button
               className={`toggle-btn ${currentView === 'terminal' ? 'active' : ''}`}
@@ -154,21 +133,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             >
               终端
             </button>
-            <button
-              className={`toggle-btn ${currentView === 'split' ? 'active' : ''}`}
-              onClick={() => setCurrentView('split')}
-              type="button"
-            >
-              分栏
-            </button>
           </div>
-          {selectedFile && (
+
+          {selectedFile ? (
             <div className="current-file">
               <span className="file-icon-small">FILE</span>
               <span className="file-path">{selectedFile}</span>
             </div>
-          )}
-          {files.length > 0 && (
+          ) : null}
+
+          {files.length > 0 ? (
             <button className="workspace-sync-btn" onClick={handleSyncGeneratedFiles} type="button">
               {syncState === 'syncing'
                 ? '写入中...'
@@ -178,10 +152,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                     ? '写入失败'
                     : '写入生成文件'}
             </button>
-          )}
+          ) : null}
         </div>
 
-        {tasks.length > 0 && (
+        {tasks.length > 0 ? (
           <div className="workspace-task-strip">
             {tasks.slice(0, 4).map((task) => (
               <div key={task.id} className="workspace-task-chip">
@@ -190,9 +164,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               </div>
             ))}
           </div>
-        )}
+        ) : null}
 
-        {selectedFile && (
+        {selectedFile ? (
           <div className="workspace-file-editor">
             <div className="workspace-file-editor-header">
               <strong>文件编辑器</strong>
@@ -203,29 +177,23 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             <textarea
               className="workspace-file-textarea"
               value={selectedFileContent}
-              onChange={(e) => setSelectedFileContent(e.target.value)}
+              onChange={(event) => setSelectedFileContent(event.target.value)}
               spellCheck={false}
             />
           </div>
-        )}
+        ) : null}
 
         <div className="workspace-content">
-          {currentView === 'chat' && <AIChat onContextInject={handleInjectContext} />}
-
-          {currentView === 'terminal' && <Terminal recommendedCommands={recommendedCommands} />}
-
-          {currentView === 'split' && (
-            <>
-              <div className="split-chat" style={{ height: chatHeight }}>
-                <AIChat onContextInject={handleInjectContext} />
-              </div>
-              <div className="resize-handle" onMouseDown={handleResizeStart}>
-                <div className="resize-bar" />
-              </div>
-              <div className="split-terminal" style={{ height: `calc(100% - ${chatHeight}px - 6px)` }}>
-                <Terminal recommendedCommands={recommendedCommands} />
-              </div>
-            </>
+          {currentView === 'terminal' ? (
+            <div className="split-terminal">
+              <Terminal recommendedCommands={recommendedCommands} />
+            </div>
+          ) : (
+            <div className="workspace-inline-note">
+              <strong>AI 入口已统一</strong>
+              <p>需求整理、草图推进和 HTML 原型生成都已收敛到右下角悬浮智能体入口，这里只保留文件与终端工作区。</p>
+              <span>如果要继续推进流程，直接在右下角输入需求、修改意见，或输入“继续”。</span>
+            </div>
           )}
         </div>
       </div>

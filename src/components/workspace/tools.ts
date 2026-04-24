@@ -206,7 +206,7 @@ PARAMETERS:
 export class ToolExecutor {
   private projectRoot: string;
 
-  constructor(projectRoot: string = '/Users/apple/Documents/all-in-one/src') {
+  constructor(projectRoot: string = '.') {
     this.projectRoot = projectRoot;
   }
 
