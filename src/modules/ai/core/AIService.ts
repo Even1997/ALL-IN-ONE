@@ -1,7 +1,7 @@
-import { ChangeScope, AIStreamChunk } from '../../../types';
+import type { ChangeScope, AIStreamChunk } from '../../../types/index.ts';
 import { v4 as uuidv4 } from 'uuid';
-import { ToolExecutor, formatToolResult, parseToolCalls } from '../../../components/workspace/tools';
-import { buildAIConfigurationError, hasUsableAIConfiguration, listModelsSupportMode } from './configStatus';
+import { ToolExecutor, formatToolResult, parseToolCalls } from '../../../components/workspace/tools.ts';
+import { buildAIConfigurationError, hasUsableAIConfiguration, listModelsSupportMode } from './configStatus.ts';
 
 export type AIModule = 'feature-tree' | 'canvas' | 'code-editor' | 'backend' | 'bug-fix' | 'deploy';
 export type AIAction = 'generate' | 'modify' | 'review' | 'fix' | 'explain' | 'optimize';
@@ -57,6 +57,7 @@ export interface AIConfig {
   apiKey: string;
   baseURL: string;
   model: string;
+  contextWindowTokens: number;
   maxTokens: number;
   temperature: number;
   systemPrompt?: string;
@@ -78,6 +79,7 @@ class AIService {
     apiKey: '',
     baseURL: DEFAULT_BASE_URL,
     model: 'gpt-4o-mini',
+    contextWindowTokens: 200000,
     maxTokens: 4096,
     temperature: 0.4,
     customHeaders: '',
@@ -152,8 +154,8 @@ class AIService {
       onChunk?: (text: string) => void;
     }
   ): Promise<string> {
-    if (!this.config.apiKey) {
-      return `AI 未配置。请先在设置中填写第三方 API Key、Base URL 和模型。\n\n推荐配置：\n- Provider: openai-compatible\n- Base URL: ${DEFAULT_BASE_URL}\n- Model: 由第三方平台提供`;
+    if (!this.isConfigured()) {
+      throw buildAIConfigurationError();
     }
 
     const content = await this.runAgentLoop(

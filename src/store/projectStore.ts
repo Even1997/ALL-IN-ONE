@@ -38,6 +38,8 @@ export interface ProjectWorkspaceSnapshot {
   featuresMarkdown: string;
   wireframesMarkdown: string;
   requirementDocs: RequirementDoc[];
+  activeKnowledgeFileId: string | null;
+  selectedKnowledgeContextIds: string[];
   prd: ProductPRD | null;
   pageStructure: PageStructureNode[];
   wireframes: Record<string, WireframeDocument>;
@@ -59,6 +61,8 @@ interface ProjectState {
   featuresMarkdown: string;
   wireframesMarkdown: string;
   requirementDocs: RequirementDoc[];
+  activeKnowledgeFileId: string | null;
+  selectedKnowledgeContextIds: string[];
   prd: ProductPRD | null;
   pageStructure: PageStructureNode[];
   wireframes: Record<string, WireframeDocument>;
@@ -75,9 +79,12 @@ interface ProjectState {
   updateProject: (updates: Partial<Omit<ProjectConfig, 'id' | 'createdAt'>>) => void;
   setRawRequirementInput: (value: string) => void;
   setFeaturesMarkdown: (value: string) => void;
+  setActiveKnowledgeFileId: (id: string | null) => void;
+  setSelectedKnowledgeContextIds: (ids: string[]) => void;
+  toggleKnowledgeContextId: (id: string) => void;
   updateRequirementDoc: (
     id: string,
-    updates: Partial<Pick<RequirementDoc, 'title' | 'content' | 'summary' | 'status' | 'sourceType' | 'filePath'>>
+    updates: Partial<Pick<RequirementDoc, 'title' | 'content' | 'summary' | 'status' | 'sourceType' | 'filePath' | 'kind' | 'tags' | 'relatedIds'>>
   ) => void;
   addRequirementDoc: () => RequirementDoc | null;
   deleteRequirementDoc: (id: string) => void;
@@ -103,35 +110,6 @@ interface ProjectState {
   generateDeliveryArtifacts: (featureTree: FeatureTree | null) => void;
   clearProject: () => void;
 }
-
-const buildStarterRequirementDocs = (projectName: string, projectDescription = ''): RequirementDoc[] => {
-  const now = new Date().toISOString();
-
-  return [
-    {
-      id: uuidv4(),
-      title: `${projectName} 初始需求.md`,
-      content: projectDescription || `${projectName} 需要承接产品从需求输入到功能规划再到线稿设计的完整流程。`,
-      summary: summarizeRequirement(projectDescription || `${projectName} 需要承接产品从需求输入到功能规划再到线稿设计的完整流程。`),
-      authorRole: '产品',
-      sourceType: 'manual',
-      filePath: undefined,
-      updatedAt: now,
-      status: 'ready',
-    },
-    {
-      id: uuidv4(),
-      title: '信息架构草案.md',
-      content: '左侧维护需求与功能菜单，中间和右侧根据点击内容切换文档、功能树和线稿查看器。',
-      summary: '拆分页面结构、关键工作流与线框图入口，衔接产品与设计工作区。',
-      authorRole: 'UI设计',
-      sourceType: 'manual',
-      filePath: undefined,
-      updatedAt: now,
-      status: 'draft',
-    },
-  ];
-};
 
 const buildStarterFeatureTree = (projectName: string): FeatureTree => ({
   id: uuidv4(),
@@ -1417,6 +1395,9 @@ const emptyGraph: ProjectGraph = { nodes: [], edges: [] };
 const normalizeStringArray = (value: unknown) =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
+const normalizeRequirementKind = (value: unknown): RequirementDoc['kind'] =>
+  value === 'sketch' || value === 'spec' ? value : 'note';
+
 const normalizeGraph = (value: unknown): ProjectGraph => {
   if (!value || typeof value !== 'object') {
     return emptyGraph;
@@ -1471,6 +1452,9 @@ const normalizeRequirementDocs = (value: unknown): RequirementDoc[] =>
                 ? doc.summary
                 : summarizeRequirement(typeof doc.content === 'string' ? doc.content : ''),
             filePath: typeof doc.filePath === 'string' && doc.filePath.trim().length > 0 ? doc.filePath : undefined,
+            kind: normalizeRequirementKind(doc.kind),
+            tags: normalizeStringArray(doc.tags),
+            relatedIds: normalizeStringArray(doc.relatedIds),
             authorRole:
               authorRole === '产品经理'
                 ? '产品'
@@ -1681,6 +1665,12 @@ const normalizeGeneratedFiles = (value: unknown): GeneratedFile[] =>
             category,
             summary: typeof file.summary === 'string' ? file.summary : '',
             sourceTaskIds: normalizeStringArray(file.sourceTaskIds),
+            sourceRequirementId:
+              typeof file.sourceRequirementId === 'string' && file.sourceRequirementId.trim().length > 0
+                ? file.sourceRequirementId
+                : undefined,
+            relatedRequirementIds: normalizeStringArray(file.relatedRequirementIds),
+            tags: normalizeStringArray(file.tags),
             updatedAt: typeof file.updatedAt === 'string' ? file.updatedAt : new Date().toISOString(),
           };
         })
@@ -1910,6 +1900,8 @@ export const useProjectStore = create<ProjectState>()(
       featuresMarkdown: '',
       wireframesMarkdown: '',
       requirementDocs: [],
+      activeKnowledgeFileId: null,
+      selectedKnowledgeContextIds: [],
       prd: null,
       pageStructure: [],
       wireframes: {},
@@ -1937,7 +1929,8 @@ export const useProjectStore = create<ProjectState>()(
           updatedAt: now,
         };
 
-        const requirementDocs = buildStarterRequirementDocs(project.name, project.description);
+        const requirementDocs: RequirementDoc[] = [];
+        const activeKnowledgeFileId = null;
         const featureTree = buildStarterFeatureTree(project.name);
         const rawRequirementInput = buildStarterRawRequirementInput(project.name, project.description);
         const prd = buildPRDFromProject(project, requirementDocs, rawRequirementInput, featureTree);
@@ -1981,6 +1974,8 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: planningArtifacts.featuresMarkdown,
           wireframesMarkdown: planningArtifacts.wireframesMarkdown,
           requirementDocs,
+          activeKnowledgeFileId,
+          selectedKnowledgeContextIds: activeKnowledgeFileId ? [activeKnowledgeFileId] : [],
           prd,
           pageStructure,
           wireframes,
@@ -2008,6 +2003,13 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: snapshot.featuresMarkdown,
           wireframesMarkdown: snapshot.wireframesMarkdown,
           requirementDocs: snapshot.requirementDocs,
+          activeKnowledgeFileId: snapshot.activeKnowledgeFileId || snapshot.requirementDocs[0]?.id || null,
+          selectedKnowledgeContextIds:
+            snapshot.selectedKnowledgeContextIds.length > 0
+              ? snapshot.selectedKnowledgeContextIds
+              : snapshot.activeKnowledgeFileId
+                ? [snapshot.activeKnowledgeFileId]
+                : [],
           prd: snapshot.prd,
           pageStructure: snapshot.pageStructure,
           wireframes: snapshot.wireframes,
@@ -2094,6 +2096,27 @@ export const useProjectStore = create<ProjectState>()(
 
       setFeaturesMarkdown: (value) => set({ featuresMarkdown: value }),
 
+      setActiveKnowledgeFileId: (id) =>
+        set((state) => ({
+          activeKnowledgeFileId: id,
+          selectedKnowledgeContextIds:
+            id && !state.selectedKnowledgeContextIds.includes(id)
+              ? [id, ...state.selectedKnowledgeContextIds]
+              : state.selectedKnowledgeContextIds,
+        })),
+
+      setSelectedKnowledgeContextIds: (ids) =>
+        set({
+          selectedKnowledgeContextIds: Array.from(new Set(ids.filter(Boolean))),
+        }),
+
+      toggleKnowledgeContextId: (id) =>
+        set((state) => ({
+          selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.includes(id)
+            ? state.selectedKnowledgeContextIds.filter((item) => item !== id)
+            : [...state.selectedKnowledgeContextIds, id],
+        })),
+
       updateRequirementDoc: (id, updates) =>
         set((state) => {
           if (!state.currentProject) {
@@ -2112,6 +2135,9 @@ export const useProjectStore = create<ProjectState>()(
                       : typeof updates.content === 'string'
                         ? summarizeRequirement(updates.content)
                         : doc.summary,
+                  kind: updates.kind ?? doc.kind ?? 'note',
+                  tags: updates.tags ?? doc.tags ?? [],
+                  relatedIds: updates.relatedIds ?? doc.relatedIds ?? [],
                   updatedAt: new Date().toISOString(),
                 }
               : doc
@@ -2166,6 +2192,9 @@ export const useProjectStore = create<ProjectState>()(
             content: '# 新增需求条目\n\n补充新的用户故事、约束条件或业务规则。',
             summary: '补充新的用户故事、约束条件或业务规则。',
             filePath: undefined,
+            kind: 'note',
+            tags: [],
+            relatedIds: [],
             authorRole: '产品',
             sourceType: 'manual',
             updatedAt: new Date().toISOString(),
@@ -2192,6 +2221,11 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             requirementDocs,
+            activeKnowledgeFileId:
+              state.activeKnowledgeFileId || state.selectedKnowledgeContextIds[0] || nextDoc.id,
+            selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.includes(nextDoc.id)
+              ? state.selectedKnowledgeContextIds
+              : [...state.selectedKnowledgeContextIds, nextDoc.id],
             generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
@@ -2237,6 +2271,9 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             requirementDocs,
+            activeKnowledgeFileId:
+              state.activeKnowledgeFileId === id ? requirementDocs[0]?.id || null : state.activeKnowledgeFileId,
+            selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.filter((item) => item !== id),
             generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
@@ -2270,6 +2307,9 @@ export const useProjectStore = create<ProjectState>()(
               content,
               summary: summarizeRequirement(content),
               filePath: input.filePath,
+              kind: 'note' as const,
+              tags: [],
+              relatedIds: [],
               authorRole: '产品' as const,
               sourceType: input.sourceType || 'upload',
               updatedAt: new Date().toISOString(),
@@ -2322,6 +2362,9 @@ export const useProjectStore = create<ProjectState>()(
             ...doc,
             title: normalizeRequirementTitle(doc.title),
             summary: doc.summary?.trim() ? doc.summary : summarizeRequirement(doc.content),
+            kind: doc.kind || 'note',
+            tags: doc.tags || [],
+            relatedIds: doc.relatedIds || [],
             updatedAt: doc.updatedAt || new Date().toISOString(),
           }));
 
@@ -2342,6 +2385,13 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             requirementDocs,
+            activeKnowledgeFileId:
+              requirementDocs.some((doc) => doc.id === state.activeKnowledgeFileId)
+                ? state.activeKnowledgeFileId
+                : requirementDocs[0]?.id || null,
+            selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.filter((id) =>
+              requirementDocs.some((doc) => doc.id === id)
+            ),
             generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
@@ -3044,6 +3094,8 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: '',
           wireframesMarkdown: '',
           requirementDocs: [],
+          activeKnowledgeFileId: null,
+          selectedKnowledgeContextIds: [],
           prd: null,
           pageStructure: [],
           wireframes: {},
@@ -3108,6 +3160,13 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: typeof persisted.featuresMarkdown === 'string' ? persisted.featuresMarkdown : '',
           wireframesMarkdown: typeof persisted.wireframesMarkdown === 'string' ? persisted.wireframesMarkdown : '',
           requirementDocs,
+          activeKnowledgeFileId:
+            typeof persisted.activeKnowledgeFileId === 'string'
+              ? persisted.activeKnowledgeFileId
+              : requirementDocs[0]?.id || null,
+          selectedKnowledgeContextIds: Array.isArray(persisted.selectedKnowledgeContextIds)
+            ? persisted.selectedKnowledgeContextIds.filter((item): item is string => typeof item === 'string')
+            : [],
           prd,
           pageStructure,
           wireframes,

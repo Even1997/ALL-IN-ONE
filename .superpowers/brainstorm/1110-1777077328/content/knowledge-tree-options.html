@@ -1,0 +1,93 @@
+<h2>知识库树状结构方案</h2>
+<p class="subtitle">目标：真实项目目录、简约文字、可快速理解，不再使用现在的方框卡片感</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. 推荐：真实目录树 + 纯文字</div>
+        <div class="mockup-body" style="font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; line-height: 1.8;">
+          <div>▾ demo-project</div>
+          <div style="padding-left: 18px;">▾ docs</div>
+          <div style="padding-left: 36px;">product.md</div>
+          <div style="padding-left: 36px;">flow.md</div>
+          <div style="padding-left: 18px;">▾ pages</div>
+          <div style="padding-left: 36px;">home.md</div>
+          <div style="padding-left: 36px;">detail.md</div>
+          <div style="padding-left: 18px;">index.html</div>
+          <div style="padding-left: 18px;">style.css</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>真实目录树</h3>
+      <p>完全按项目根目录组织，文件夹可展开收起，文件只保留名称和轻量状态。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. 真实目录树 + 次级元信息</div>
+        <div class="mockup-body" style="font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; line-height: 1.8;">
+          <div>▾ demo-project</div>
+          <div style="padding-left: 18px;">▾ docs</div>
+          <div style="padding-left: 36px; display:flex; justify-content:space-between;"><span>product.md</span><span style="opacity:.55;">规范</span></div>
+          <div style="padding-left: 36px; display:flex; justify-content:space-between;"><span>flow.md</span><span style="opacity:.55;">草图</span></div>
+          <div style="padding-left: 18px;">▾ pages</div>
+          <div style="padding-left: 36px; display:flex; justify-content:space-between;"><span>home.md</span><span style="opacity:.55;">需求</span></div>
+          <div style="padding-left: 36px; display:flex; justify-content:space-between;"><span>detail.md</span><span style="opacity:.55;">需求</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>目录树加轻标签</h3>
+      <p>仍以真实目录为主，但在右侧保留极轻的类型说明，信息量更高。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. 左树右详情更强分离</div>
+        <div class="mockup-body" style="display:grid; grid-template-columns: 1fr 1.1fr; gap: 12px; min-height: 190px;">
+          <div style="font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; line-height: 1.7;">
+            <div>▾ demo-project</div>
+            <div style="padding-left: 16px;">▾ docs</div>
+            <div style="padding-left: 32px;">product.md</div>
+            <div style="padding-left: 32px;">flow.md</div>
+          </div>
+          <div style="border-left: 1px solid rgba(255,255,255,.08); padding-left: 12px; font-size: 12px;">
+            <div style="margin-bottom: 8px; opacity:.7;">当前文件</div>
+            <div style="font-weight: 600; margin-bottom: 6px;">product.md</div>
+            <div style="opacity:.75;">右侧只展示文件内容和关系信息，树区域极度克制。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>树更简单，详情更重</h3>
+      <p>左侧只做导航，所有状态和说明都尽量移到右侧，阅读压力最低。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>我的推荐</h4>
+      <ul>
+        <li>A 最贴合你说的“文件夹结构”和“方便查看理解”</li>
+        <li>实现最直接，数据也最干净，后续读写项目目录最顺</li>
+        <li>视觉最克制，能明显摆脱现在的方框卡片感</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>需要注意</h4>
+      <ul>
+        <li>没有真实路径的历史知识条目，需要补落盘或映射到项目根目录</li>
+        <li>左树不宜塞太多标签，否则又会回到“复杂看不清”的问题</li>
+      </ul>
+    </div>
+  </div>
+</div>

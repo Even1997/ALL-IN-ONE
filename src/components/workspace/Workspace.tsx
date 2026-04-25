@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { FileExplorer } from './FileExplorer';
 import { Terminal } from './Terminal';
 import type { DevTask, GeneratedFile } from '../../types';
+import { isAbsoluteFilePath, joinFileSystemPath } from '../../utils/fileSystemPaths.ts';
 import './Workspace.css';
 
 type WorkspaceView = 'files' | 'terminal';
@@ -87,9 +88,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       setSyncState('syncing');
 
       for (const file of files) {
-        const absolutePath = file.path.startsWith('/')
-          ? file.path
-          : `${projectRoot}/${file.path.replace(/^\/+/, '')}`;
+        const absolutePath = isAbsoluteFilePath(file.path) ? file.path : joinFileSystemPath(projectRoot, file.path);
 
         await invoke('tool_write', {
           params: {

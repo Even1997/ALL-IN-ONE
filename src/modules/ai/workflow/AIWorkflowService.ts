@@ -8,6 +8,8 @@ import {
   getCanvasPreset,
   isMobileAppType,
 } from '../../../utils/wireframe';
+import { buildKnowledgeContextSections } from '../../knowledge/knowledgeContext';
+import { buildKnowledgeContextSelection, buildKnowledgeEntries } from '../../knowledge/knowledgeEntries';
 import {
   AIExperienceMode,
   AISkillName,
@@ -906,7 +908,11 @@ const buildHTMLPrototypeFallback = (
   };
 };
 
-const buildHTMLGeneratedFiles = (prototype: HTMLPrototypeDoc): GeneratedFile[] => [
+const buildHTMLGeneratedFiles = (
+  prototype: HTMLPrototypeDoc,
+  sourceRequirementId?: string,
+  relatedRequirementIds: string[] = []
+): GeneratedFile[] => [
   ...prototype.pages.map((page) => ({
     path: `src/generated/prototypes/${page.path}`,
     content: page.html,
@@ -914,6 +920,9 @@ const buildHTMLGeneratedFiles = (prototype: HTMLPrototypeDoc): GeneratedFile[] =
     category: 'frontend' as const,
     summary: `${page.pageName} HTML 原型`,
     sourceTaskIds: [],
+    sourceRequirementId,
+    relatedRequirementIds,
+    tags: ['design', 'html-prototype'],
     updatedAt: prototype.updatedAt,
   })),
   {
@@ -923,6 +932,9 @@ const buildHTMLGeneratedFiles = (prototype: HTMLPrototypeDoc): GeneratedFile[] =
     category: 'design' as const,
     summary: 'HTML prototype manifest',
     sourceTaskIds: [],
+    sourceRequirementId,
+    relatedRequirementIds,
+    tags: ['design', 'manifest'],
     updatedAt: prototype.updatedAt,
   },
 ];
@@ -930,16 +942,48 @@ const buildHTMLGeneratedFiles = (prototype: HTMLPrototypeDoc): GeneratedFile[] =
 const flattenFeatureNames = (nodes: FeatureNode[]): string[] =>
   nodes.flatMap((node) => [node.name, ...flattenFeatureNames(node.children)]);
 
-const buildContextPrompt = (projectName: string, rawInput: string, docs: RequirementDoc[]) =>
-  trimAndJoin(
+const buildContextPrompt = (
+  projectName: string,
+  rawInput: string,
+  docs: RequirementDoc[],
+  generatedFiles: GeneratedFile[],
+  activeKnowledgeFileId: string | null,
+  selectedKnowledgeContextIds: string[]
+) => {
+  const knowledgeEntries = buildKnowledgeEntries(docs, generatedFiles);
+  const knowledgeSelection = buildKnowledgeContextSelection(
+    knowledgeEntries,
+    activeKnowledgeFileId,
+    selectedKnowledgeContextIds
+  );
+  const knowledgeContext = buildKnowledgeContextSections({
+    currentFile: knowledgeSelection.currentFile
+      ? {
+          title: knowledgeSelection.currentFile.title,
+          type: knowledgeSelection.currentFile.type,
+          summary: knowledgeSelection.currentFile.summary,
+          content: knowledgeSelection.currentFile.content,
+        }
+      : null,
+    relatedFiles: knowledgeSelection.relatedFiles.map((file) => ({
+      title: file.title,
+      type: file.type,
+      summary: file.summary,
+      content: file.content,
+    })),
+  });
+
+  return trimAndJoin(
     `project: ${projectName}`,
     `raw_requirement:\n${rawInput}`,
     docs.length > 0
       ? `existing_requirement_docs:\n${docs
           .map((doc) => `title: ${doc.title}\nsummary: ${doc.summary}\ncontent:\n${doc.content}`)
           .join('\n\n---\n\n')}`
-      : undefined
+      : undefined,
+    knowledgeContext ? `knowledge_context:\n${knowledgeContext}` : undefined
   );
+};
 
 const buildSkillSchema = (skill: AISkillName) => {
   switch (skill) {
@@ -1111,7 +1155,14 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
       const requirementsExecution = createSkillExecution('requirements_spec_skill', 'requirements_spec');
       applyRunUpdate(upsertRunWithSkill(run, requirementsExecution));
 
-      const requirementsPrompt = buildContextPrompt(project.name, projectStore.rawRequirementInput, projectStore.requirementDocs);
+      const requirementsPrompt = buildContextPrompt(
+        project.name,
+        projectStore.rawRequirementInput,
+        projectStore.requirementDocs,
+        projectStore.generatedFiles,
+        projectStore.activeKnowledgeFileId,
+        projectStore.selectedKnowledgeContextIds
+      );
       const requirementsResult = await executeWithAI(
         'requirements_spec_skill',
         requirementsPrompt,
@@ -1165,7 +1216,14 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
       applyRunUpdate(upsertRunWithSkill(run, featureExecution));
 
       const featurePrompt = trimAndJoin(
-        buildContextPrompt(project.name, projectStore.rawRequirementInput, mergedDocs),
+        buildContextPrompt(
+          project.name,
+          projectStore.rawRequirementInput,
+          mergedDocs,
+          projectStore.generatedFiles,
+          projectStore.activeKnowledgeFileId,
+          projectStore.selectedKnowledgeContextIds
+        ),
         `requirement_spec_markdown:\n${aiRequirementDoc.content}`
       );
       const featureResult = await executeWithAI('feature_tree_skill', featurePrompt, validateFeatureTree);
@@ -1213,7 +1271,14 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
       applyRunUpdate(upsertRunWithSkill(run, pageExecution));
 
       const pagePrompt = trimAndJoin(
-        buildContextPrompt(project.name, projectStore.rawRequirementInput, projectStore.requirementDocs),
+        buildContextPrompt(
+          project.name,
+          projectStore.rawRequirementInput,
+          projectStore.requirementDocs,
+          projectStore.generatedFiles,
+          projectStore.activeKnowledgeFileId,
+          projectStore.selectedKnowledgeContextIds
+        ),
         `feature_tree_nodes:\n${flattenFeatureNames(currentFeatureTree.children).join('\n')}`
       );
       const pageResult = await executeWithAI('page_structure_skill', pagePrompt, validatePageStructure);
@@ -1313,6 +1378,14 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
       applyRunUpdate(upsertRunWithSkill(run, htmlExecution));
 
       const htmlPrompt = trimAndJoin(
+        buildContextPrompt(
+          project.name,
+          projectStore.rawRequirementInput,
+          projectStore.requirementDocs,
+          projectStore.generatedFiles,
+          projectStore.activeKnowledgeFileId,
+          projectStore.selectedKnowledgeContextIds
+        ),
         `style_profile: ${selected.name}`,
         `style_summary: ${selected.summary}`,
         `page_names:\n${collectDesignPages(projectStore.pageStructure).map((page) => page.name).join('\n')}`,
@@ -1323,6 +1396,16 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
       const htmlResult = await executeWithAI('html_prototype_skill', htmlPrompt, validateHTMLPrototype);
       const fallbackPrototype = buildHTMLPrototypeFallback(project.id, projectStore.pageStructure, projectStore.wireframes, selected);
       const pages = collectDesignPages(projectStore.pageStructure);
+      const knowledgeSelection = buildKnowledgeContextSelection(
+        buildKnowledgeEntries(projectStore.requirementDocs, projectStore.generatedFiles),
+        projectStore.activeKnowledgeFileId,
+        projectStore.selectedKnowledgeContextIds
+      );
+      const sourceRequirementId =
+        knowledgeSelection.currentFile?.source === 'requirement' ? knowledgeSelection.currentFile.id : undefined;
+      const relatedRequirementIds = knowledgeSelection.relatedFiles
+        .filter((file) => file.source === 'requirement')
+        .map((file) => file.id);
       const htmlPrototype = {
         prototype: {
           ...fallbackPrototype,
@@ -1356,7 +1439,9 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
       };
 
       workflowStore.saveHTMLPrototype(project.id, htmlPrototype.prototype);
-      projectStore.mergeGeneratedFilesFromAI(buildHTMLGeneratedFiles(htmlPrototype.prototype));
+      projectStore.mergeGeneratedFilesFromAI(
+        buildHTMLGeneratedFiles(htmlPrototype.prototype, sourceRequirementId, relatedRequirementIds)
+      );
 
       applyRunUpdate({
         ...run,

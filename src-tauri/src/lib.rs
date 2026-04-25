@@ -2,10 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tauri::Manager;
 
 fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
     let bytes = fs::read(file_path)?;
@@ -68,18 +68,135 @@ pub struct RemoveParams {
     pub file_path: String,
 }
 
-fn get_workspace_root_path() -> Result<PathBuf, String> {
-    env::current_dir().map_err(|e| format!("Failed to resolve workspace root: {}", e))
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectStorageSettingsPayload {
+    root_path: Option<String>,
 }
 
-fn get_projects_root_path() -> Result<PathBuf, String> {
-    let workspace_root = get_workspace_root_path()?;
-    let projects_root = workspace_root.join("projects");
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectStorageSettings {
+    root_path: String,
+    default_path: String,
+    is_default: bool,
+}
+
+fn normalize_project_storage_root_path(root_path: Option<String>) -> Result<Option<PathBuf>, String> {
+    let Some(root_path) = root_path else {
+        return Ok(None);
+    };
+
+    let trimmed = root_path.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let normalized = PathBuf::from(trimmed);
+    if !normalized.is_absolute() {
+        return Err("Project storage path must be an absolute path.".to_string());
+    }
+
+    Ok(Some(normalized))
+}
+
+fn normalize_saved_project_storage_root_path(root_path: Option<String>) -> Result<Option<PathBuf>, String> {
+    match normalize_project_storage_root_path(root_path) {
+        Ok(path) => Ok(path),
+        Err(_) => Ok(None),
+    }
+}
+
+fn get_default_projects_root_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app_handle
+        .path()
+        .document_dir()
+        .map_err(|e| format!("Failed to resolve documents directory: {}", e))
+        .map(|path| path.join("DevFlow").join("projects"))
+}
+
+fn get_project_storage_settings_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let config_dir = app_handle
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to resolve app config directory: {}", e))?;
+
+    fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("Failed to create app config directory: {}", e))?;
+
+    Ok(config_dir.join("project-storage.json"))
+}
+
+fn read_project_storage_settings_payload(
+    app_handle: &tauri::AppHandle,
+) -> Result<ProjectStorageSettingsPayload, String> {
+    let settings_path = get_project_storage_settings_path(app_handle)?;
+    if !settings_path.exists() {
+        return Ok(ProjectStorageSettingsPayload::default());
+    }
+
+    let content = read_file_as_string(&settings_path)
+        .map_err(|e| format!("Failed to read project storage settings: {}", e))?;
+
+    serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse project storage settings: {}", e))
+}
+
+fn write_project_storage_settings_payload(
+    app_handle: &tauri::AppHandle,
+    payload: &ProjectStorageSettingsPayload,
+) -> Result<(), String> {
+    let settings_path = get_project_storage_settings_path(app_handle)?;
+
+    if payload.root_path.is_none() {
+        if settings_path.exists() {
+            fs::remove_file(&settings_path)
+                .map_err(|e| format!("Failed to clear project storage settings: {}", e))?;
+        }
+        return Ok(());
+    }
+
+    let content = serde_json::to_string_pretty(payload)
+        .map_err(|e| format!("Failed to serialize project storage settings: {}", e))?;
+
+    fs::write(&settings_path, content)
+        .map_err(|e| format!("Failed to save project storage settings: {}", e))
+}
+
+fn resolve_project_storage_root_path(
+    default_path: PathBuf,
+    override_path: Option<PathBuf>,
+) -> (PathBuf, bool) {
+    match override_path {
+        Some(path) if path != default_path => (path, false),
+        _ => (default_path, true),
+    }
+}
+
+fn build_project_storage_settings(app_handle: &tauri::AppHandle) -> Result<ProjectStorageSettings, String> {
+    let default_path = get_default_projects_root_path(app_handle)?;
+    let payload = read_project_storage_settings_payload(app_handle)?;
+    let override_path = normalize_saved_project_storage_root_path(payload.root_path)?;
+    let (projects_root, is_default) = resolve_project_storage_root_path(default_path.clone(), override_path);
 
     fs::create_dir_all(&projects_root)
         .map_err(|e| format!("Failed to create projects directory: {}", e))?;
 
-    Ok(projects_root)
+    let root_path = projects_root
+        .canonicalize()
+        .unwrap_or(projects_root)
+        .to_string_lossy()
+        .to_string();
+
+    Ok(ProjectStorageSettings {
+        root_path,
+        default_path: default_path.to_string_lossy().to_string(),
+        is_default,
+    })
+}
+
+fn get_projects_root_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    build_project_storage_settings(app_handle).map(|settings| PathBuf::from(settings.root_path))
 }
 
 // View tool - read file contents with line numbers
@@ -202,6 +319,24 @@ fn tool_remove(params: RemoveParams) -> ToolResult {
             success: false,
             content: String::new(),
             error: Some(format!("Error removing path: {}", e)),
+        },
+    }
+}
+
+#[tauri::command]
+fn tool_mkdir(params: RemoveParams) -> ToolResult {
+    let dir_path = Path::new(&params.file_path);
+
+    match fs::create_dir_all(dir_path) {
+        Ok(_) => ToolResult {
+            success: true,
+            content: format!("Directory created: {}", params.file_path),
+            error: None,
+        },
+        Err(e) => ToolResult {
+            success: false,
+            content: String::new(),
+            error: Some(format!("Error creating directory: {}", e)),
         },
     }
 }
@@ -527,8 +662,36 @@ fn tool_bash(params: BashParams) -> ToolResult {
 }
 
 #[tauri::command]
-fn get_requirements_dir(project_id: String) -> Result<String, String> {
-    let dir_path: PathBuf = get_projects_root_path()?
+fn get_project_storage_settings(app_handle: tauri::AppHandle) -> Result<ProjectStorageSettings, String> {
+    build_project_storage_settings(&app_handle)
+}
+
+#[tauri::command]
+fn set_project_storage_root(app_handle: tauri::AppHandle, root_path: Option<String>) -> Result<ProjectStorageSettings, String> {
+    let default_path = get_default_projects_root_path(&app_handle)?;
+    let normalized_root = normalize_project_storage_root_path(root_path)?;
+    let stored_root = normalized_root
+        .filter(|path| path != &default_path)
+        .map(|path| path.to_string_lossy().to_string());
+
+    if let Some(path) = stored_root.as_ref() {
+        fs::create_dir_all(path)
+            .map_err(|e| format!("Failed to create selected projects directory: {}", e))?;
+    }
+
+    write_project_storage_settings_payload(
+        &app_handle,
+        &ProjectStorageSettingsPayload {
+            root_path: stored_root,
+        },
+    )?;
+
+    build_project_storage_settings(&app_handle)
+}
+
+#[tauri::command]
+fn get_requirements_dir(app_handle: tauri::AppHandle, project_id: String) -> Result<String, String> {
+    let dir_path: PathBuf = get_projects_root_path(&app_handle)?
         .join(project_id)
         .join("requirements");
 
@@ -542,8 +705,8 @@ fn get_requirements_dir(project_id: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn get_project_dir(project_id: String) -> Result<String, String> {
-    let dir_path: PathBuf = get_projects_root_path()?.join(project_id);
+fn get_project_dir(app_handle: tauri::AppHandle, project_id: String) -> Result<String, String> {
+    let dir_path: PathBuf = get_projects_root_path(&app_handle)?.join(project_id);
 
     fs::create_dir_all(&dir_path)
         .map_err(|e| format!("Failed to create project directory: {}", e))?;
@@ -555,8 +718,8 @@ fn get_project_dir(project_id: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn get_projects_index_path() -> Result<String, String> {
-    let file_path = get_projects_root_path()?.join("index.json");
+fn get_projects_index_path(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let file_path = get_projects_root_path(&app_handle)?.join("index.json");
 
     if !file_path.exists() {
         fs::write(&file_path, "[]")
@@ -578,15 +741,19 @@ fn read_text_file(file_path: String) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             tool_view,
             tool_write,
             tool_remove,
+            tool_mkdir,
             tool_edit,
             tool_ls,
             tool_glob,
             tool_grep,
             tool_bash,
+            get_project_storage_settings,
+            set_project_storage_root,
             get_requirements_dir,
             get_project_dir,
             get_projects_index_path,
@@ -594,4 +761,63 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        normalize_project_storage_root_path, normalize_saved_project_storage_root_path,
+        resolve_project_storage_root_path,
+    };
+    use std::path::PathBuf;
+
+    #[test]
+    fn project_storage_root_normalizer_treats_blank_as_default() {
+        assert_eq!(normalize_project_storage_root_path(Some("   ".into())).unwrap(), None);
+        assert_eq!(normalize_project_storage_root_path(None).unwrap(), None);
+    }
+
+    #[test]
+    fn project_storage_root_normalizer_rejects_relative_paths() {
+        let error = normalize_project_storage_root_path(Some("projects/custom".into())).unwrap_err();
+        assert!(error.contains("absolute path"));
+    }
+
+    #[test]
+    fn project_storage_root_resolver_uses_override_only_when_it_differs_from_default() {
+        let default_path = PathBuf::from("C:/Users/test/Documents/DevFlow/projects");
+        let override_path = PathBuf::from("D:/DevFlow/projects");
+
+        assert_eq!(
+            resolve_project_storage_root_path(default_path.clone(), Some(default_path.clone())),
+            (default_path.clone(), true)
+        );
+        assert_eq!(
+            resolve_project_storage_root_path(default_path.clone(), Some(override_path.clone())),
+            (override_path, false)
+        );
+        assert_eq!(
+            resolve_project_storage_root_path(default_path.clone(), None),
+            (default_path, true)
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn saved_project_storage_root_ignores_posix_path_on_windows() {
+        assert_eq!(
+            normalize_saved_project_storage_root_path(Some("/Users/test/DevFlow/projects".into())).unwrap(),
+            None
+        );
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn saved_project_storage_root_ignores_windows_path_on_posix() {
+        assert_eq!(
+            normalize_saved_project_storage_root_path(Some("C:/Users/test/Documents/DevFlow/projects".into()))
+                .unwrap(),
+            None
+        );
+    }
 }

@@ -62,6 +62,9 @@ export interface RequirementDoc {
   content: string;
   summary: string;
   filePath?: string;
+  kind?: 'note' | 'sketch' | 'spec';
+  tags?: string[];
+  relatedIds?: string[];
   authorRole: '产品' | 'UI设计' | '开发' | '测试' | '运维';
   sourceType?: 'manual' | 'upload' | 'ai';
   updatedAt: string;
@@ -173,6 +176,9 @@ export interface GeneratedFile {
   category: 'design' | 'frontend' | 'backend' | 'test' | 'deploy';
   summary: string;
   sourceTaskIds: string[];
+  sourceRequirementId?: string;
+  relatedRequirementIds?: string[];
+  tags?: string[];
   updatedAt: string;
 }
 

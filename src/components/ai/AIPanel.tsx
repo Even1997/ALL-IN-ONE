@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useGlobalAIStore, AIRequestRecord } from '../../modules/ai/store/globalAIStore';
 import { aiService, CodeBlock } from '../../modules/ai/core/AIService';
 import { PROVIDER_PRESETS } from '../../modules/ai/providerPresets';
+import { isAbsoluteFilePath, joinFileSystemPath } from '../../utils/fileSystemPaths.ts';
 import { ToolExecutor } from '../workspace/tools';
 import './AIPanel.css';
 
@@ -561,12 +562,10 @@ const CodeBlockViewer: React.FC<{ block: CodeBlock }> = ({ block }) => {
                 try {
                   setApplyState('saving');
                   const projectRoot = aiService.getConfig().projectRoot || '.';
-                  const separator = projectRoot.includes('\\') ? '\\' : '/';
                   const toolExecutor = new ToolExecutor(projectRoot);
-                  const normalizedPath =
-                    block.filePath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(block.filePath)
-                      ? block.filePath
-                      : `${projectRoot.replace(/[\\/]+$/, '')}${separator}${block.filePath.replace(/^\/+/, '')}`;
+                  const normalizedPath = isAbsoluteFilePath(block.filePath)
+                    ? block.filePath
+                    : joinFileSystemPath(projectRoot, block.filePath);
 
                   await toolExecutor.execute({
                     id: `write_${Date.now()}`,

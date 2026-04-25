@@ -1,0 +1,213 @@
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+
+export type StoredChatMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  tone?: 'default' | 'error';
+  createdAt: number;
+};
+
+export type ChatSession = {
+  id: string;
+  projectId: string;
+  title: string;
+  messages: StoredChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+};
+
+type ChatProjectState = {
+  activeSessionId: string | null;
+  sessions: ChatSession[];
+};
+
+type AIChatStoreState = {
+  projects: Record<string, ChatProjectState>;
+  ensureProjectState: (projectId: string) => void;
+  upsertSession: (projectId: string, session: ChatSession) => void;
+  setActiveSession: (projectId: string, sessionId: string) => void;
+  appendMessage: (projectId: string, sessionId: string, message: StoredChatMessage) => void;
+  updateMessage: (
+    projectId: string,
+    sessionId: string,
+    messageId: string,
+    updater: (message: StoredChatMessage) => StoredChatMessage
+  ) => void;
+  renameSession: (projectId: string, sessionId: string, title: string) => void;
+  removeSession: (projectId: string, sessionId: string) => void;
+};
+
+const createSessionId = () => `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const createMessageId = (role: StoredChatMessage['role']) =>
+  `${role}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const createProjectState = (): ChatProjectState => ({
+  activeSessionId: null,
+  sessions: [],
+});
+
+const sortSessions = (sessions: ChatSession[]) =>
+  [...sessions].sort((left, right) => right.updatedAt - left.updatedAt);
+
+export const createStoredChatMessage = (
+  role: StoredChatMessage['role'],
+  content: string,
+  tone: StoredChatMessage['tone'] = 'default'
+): StoredChatMessage => ({
+  id: createMessageId(role),
+  role,
+  content,
+  tone,
+  createdAt: Date.now(),
+});
+
+export const createChatSession = (projectId: string, title = '新对话'): ChatSession => {
+  const now = Date.now();
+  return {
+    id: createSessionId(),
+    projectId,
+    title,
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+};
+
+export const useAIChatStore = create<AIChatStoreState>()(
+  persist(
+    (set) => ({
+      projects: {},
+
+      ensureProjectState: (projectId) =>
+        set((state) => ({
+          projects: state.projects[projectId]
+            ? state.projects
+            : { ...state.projects, [projectId]: createProjectState() },
+        })),
+
+      upsertSession: (projectId, session) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = sortSessions([session, ...project.sessions.filter((item) => item.id !== session.id)]);
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                activeSessionId: project.activeSessionId || session.id,
+                sessions,
+              },
+            },
+          };
+        }),
+
+      setActiveSession: (projectId, sessionId) =>
+        set((state) => ({
+          projects: {
+            ...state.projects,
+            [projectId]: {
+              ...(state.projects[projectId] || createProjectState()),
+              activeSessionId: sessionId,
+            },
+          },
+        })),
+
+      appendMessage: (projectId, sessionId, message) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  messages: [...session.messages, message],
+                  updatedAt: Date.now(),
+                }
+              : session
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                activeSessionId: project.activeSessionId || sessionId,
+                sessions: sortSessions(sessions),
+              },
+            },
+          };
+        }),
+
+      updateMessage: (projectId, sessionId, messageId, updater) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  messages: session.messages.map((message) =>
+                    message.id === messageId ? updater(message) : message
+                  ),
+                  updatedAt: Date.now(),
+                }
+              : session
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                activeSessionId: project.activeSessionId || sessionId,
+                sessions: sortSessions(sessions),
+              },
+            },
+          };
+        }),
+
+      renameSession: (projectId, sessionId, title) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  title,
+                  updatedAt: Date.now(),
+                }
+              : session
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                ...project,
+                sessions: sortSessions(sessions),
+              },
+            },
+          };
+        }),
+
+      removeSession: (projectId, sessionId) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.filter((session) => session.id !== sessionId);
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                activeSessionId:
+                  project.activeSessionId === sessionId ? sessions[0]?.id || null : project.activeSessionId,
+                sessions,
+              },
+            },
+          };
+        }),
+    }),
+    {
+      name: 'devflow-ai-chat-store',
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+);

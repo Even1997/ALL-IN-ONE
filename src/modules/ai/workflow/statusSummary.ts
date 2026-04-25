@@ -1,16 +1,27 @@
-import type { AIWorkflowRun } from '../../../types';
-
 export type AIStatusCard = {
   title: string;
   content: string;
   tone: 'neutral' | 'success' | 'warning' | 'error';
 };
 
-export const buildAIStatusCards = (
-  latestInstruction: string,
-  run: AIWorkflowRun | null
-): AIStatusCard[] => {
+export const buildAIStatusCards = (options: {
+  latestInstruction: string;
+  latestResponse: string;
+  activeSkillLabel?: string | null;
+  knowledgeContextSummary?: string;
+  isLoading: boolean;
+  isConfigured: boolean;
+}): AIStatusCard[] => {
+  const { latestInstruction, latestResponse, activeSkillLabel, knowledgeContextSummary, isLoading, isConfigured } = options;
   const cards: AIStatusCard[] = [];
+
+  if (activeSkillLabel) {
+    cards.push({
+      title: '当前模式',
+      content: activeSkillLabel,
+      tone: 'neutral',
+    });
+  }
 
   if (latestInstruction.trim()) {
     cards.push({
@@ -20,44 +31,37 @@ export const buildAIStatusCards = (
     });
   }
 
-  if (!run) {
+  if (!isConfigured) {
     cards.push({
       title: '当前状态',
-      content: '还没有开始生成。输入一句需求或想法，我会从当前阶段继续推进。',
+      content: '配置 provider、API Key 和 model 后即可开始自由对话。',
+      tone: 'warning',
+    });
+  } else if (isLoading) {
+    cards.push({
+      title: '当前状态',
+      content: 'AI 正在直接处理当前请求，不会自动进入下一阶段。',
+      tone: 'warning',
+    });
+  } else if (latestResponse.trim()) {
+    cards.push({
+      title: '最近回复',
+      content: latestResponse.trim(),
+      tone: 'success',
+    });
+  } else {
+    cards.push({
+      title: '当前状态',
+      content: '直接输入问题、整理指令，或用 @技能 指定能力即可。',
       tone: 'neutral',
     });
-    return cards;
   }
 
-  cards.push({
-    title: '当前状态',
-    content:
-      run.status === 'error'
-        ? run.error || '本轮执行失败，请检查配置或重新发送指令。'
-        : run.status === 'awaiting_confirmation'
-          ? '当前结果已经生成，等待你确认后继续下一步。'
-          : run.status === 'completed'
-            ? '当前阶段已经确认完成。'
-            : 'AI 正在处理当前指令。',
-    tone:
-      run.status === 'error'
-        ? 'error'
-        : run.status === 'awaiting_confirmation'
-          ? 'warning'
-          : run.status === 'completed'
-            ? 'success'
-            : 'neutral',
-  });
-
-  const summaries = Object.entries(run.stageSummaries)
-    .filter(([, value]) => Boolean(value))
-    .map(([stage, value]) => `${stage}: ${value}`);
-
-  if (summaries.length > 0) {
+  if (knowledgeContextSummary) {
     cards.push({
-      title: '阶段摘要',
-      content: summaries.join('\n'),
-      tone: run.status === 'error' ? 'error' : 'success',
+      title: '知识上下文',
+      content: knowledgeContextSummary,
+      tone: 'neutral',
     });
   }
 

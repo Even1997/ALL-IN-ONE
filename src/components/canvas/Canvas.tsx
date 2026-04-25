@@ -8,7 +8,6 @@ interface CanvasProps {
   width?: number;
   height?: number;
   frameType?: 'mobile' | 'browser';
-  frameLabel?: string;
 }
 
 interface ElementRendererProps {
@@ -47,7 +46,7 @@ interface CanvasPalette {
   accent: string;
 }
 
-const GRID_SIZE = 8;
+const GRID_SIZE = 4;
 
 const readCssVariable = (styles: CSSStyleDeclaration, name: string, fallback: string) =>
   styles.getPropertyValue(name).trim() || fallback;
@@ -338,7 +337,22 @@ export const Canvas = memo<CanvasProps>(({
   const hasManualViewportRef = useRef(false);
   const skipStoreSelectionSyncRef = useRef(false);
   const [themeVersion, setThemeVersion] = useState(0);
-  const frameChrome = useMemo(() => getFrameChrome(frameType, width, height), [frameType, height, width]);
+  const logicalBoardHeight = useMemo(() => {
+    const maxElementBottom = elements.reduce((currentMax, element) => {
+      const elementHeight = Number.isFinite(element.height) ? Math.max(MIN_MODULE_HEIGHT, Math.round(element.height)) : MIN_MODULE_HEIGHT;
+      return Math.max(currentMax, element.y + elementHeight);
+    }, height);
+
+    return Math.max(height, maxElementBottom + 160);
+  }, [elements, height]);
+  const canvasViewportHeight = useMemo(
+    () => Math.max(680, Math.ceil(logicalBoardHeight * scale + (frameType === 'mobile' ? 140 : 120))),
+    [frameType, logicalBoardHeight, scale]
+  );
+  const frameChrome = useMemo(
+    () => getFrameChrome(frameType, width, logicalBoardHeight),
+    [frameType, logicalBoardHeight, width]
+  );
   const palette = useMemo<CanvasPalette>(() => {
     if (typeof window === 'undefined') {
       return {
@@ -394,14 +408,14 @@ export const Canvas = memo<CanvasProps>(({
   const stageMetrics = useMemo(() => {
     // Stage needs to be large enough to contain scaled content without clipping
     const scaledWidth = Math.max(viewportSize.width, width * scale);
-    const scaledHeight = Math.max(viewportSize.height, height * scale);
+    const scaledHeight = Math.max(viewportSize.height, logicalBoardHeight * scale);
     return {
       stageWidth: scaledWidth,
       stageHeight: scaledHeight,
       frameX: (scaledWidth - width) / 2,
-      frameY: (scaledHeight - height) / 2,
+      frameY: (scaledHeight - logicalBoardHeight) / 2,
     };
-  }, [height, scale, viewportSize.height, viewportSize.width]);
+  }, [logicalBoardHeight, scale, viewportSize.height, viewportSize.width, width]);
 
   useEffect(() => {
     if (typeof MutationObserver === 'undefined') {
@@ -652,7 +666,11 @@ export const Canvas = memo<CanvasProps>(({
   const handleElementResize = useCallback((element: CanvasElement, nextWidth: number, nextHeight: number) => {
     updateElement(
       element.id,
-      { ...element, width: nextWidth, height: nextHeight }
+      {
+        ...element,
+        width: Math.max(MIN_MODULE_WIDTH, Math.round(nextWidth)),
+        height: Math.max(MIN_MODULE_HEIGHT, Math.round(nextHeight)),
+      }
     );
   }, [updateElement]);
 
@@ -679,12 +697,12 @@ export const Canvas = memo<CanvasProps>(({
     if (clampToBoard) {
       return {
         x: Math.max(0, Math.min(width, localX)),
-        y: Math.max(0, Math.min(height, localY)),
+        y: Math.max(0, Math.min(logicalBoardHeight, localY)),
       };
     }
 
     return { x: localX, y: localY };
-  }, [height, scale, stageMetrics.frameX, stageMetrics.frameY, viewportOffset.x, viewportOffset.y, width]);
+  }, [logicalBoardHeight, scale, stageMetrics.frameX, stageMetrics.frameY, viewportOffset.x, viewportOffset.y, width]);
 
   const deleteSelectedElements = useCallback(() => {
     const idsToDelete = deletePopupRef.current?.elementIds ?? [];
@@ -765,16 +783,13 @@ export const Canvas = memo<CanvasProps>(({
       }}
       style={{
         flex: 1,
-        minHeight: 0,
-        height: '100%',
+        minHeight: `${canvasViewportHeight}px`,
+        height: `${canvasViewportHeight}px`,
         overflow: 'hidden',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         cursor: isPanning ? 'grabbing' : isSpacePressed ? 'grab' : 'default',
-        backgroundColor: 'var(--canvas-bg)',
-        backgroundImage: 'linear-gradient(180deg, var(--canvas-bg-start), var(--canvas-bg-end)), radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px)',
-        backgroundSize: 'auto, 16px 16px',
       }}
     >
       {deletePopup.visible && (
@@ -833,11 +848,11 @@ export const Canvas = memo<CanvasProps>(({
       )}
 
       <div
+        className={`design-board-scroll page-canvas-board ${isSpacePressed ? 'is-space-panning' : ''} ${isPanning ? 'is-panning' : ''} is-select-mode`}
         style={{
-          position: 'relative',
-          flex: 1,
-          minHeight: 0,
-          overflow: 'hidden',
+          borderRadius: '28px',
+          border: '1px solid rgba(148, 163, 184, 0.16)',
+          boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 44px rgba(2, 8, 23, 0.18)',
         }}
       >
         <Stage
@@ -849,7 +864,12 @@ export const Canvas = memo<CanvasProps>(({
 
               clearDeletePopup();
 
-              if (!stage || event.evt.button !== 0 || isSpacePressed || hasCanvasElementAncestor(target)) {
+              if (
+                !stage ||
+                event.evt.button !== 0 ||
+                isSpacePressed ||
+                hasCanvasElementAncestor(target)
+              ) {
                 return;
               }
 
@@ -1004,45 +1024,42 @@ export const Canvas = memo<CanvasProps>(({
                   )}
                   <Rect
                     width={width}
-                    height={height}
+                    height={logicalBoardHeight}
                     fill={palette.boardFill}
                     stroke={palette.boardStroke}
                     strokeWidth={1}
                     cornerRadius={frameChrome.boardCornerRadius}
                     listening={false}
                   />
+                  {elements.map((element) => (
+                    <ElementRenderer
+                      key={element.id}
+                      element={element}
+                      isSelected={selectedIds.includes(element.id)}
+                      gridSize={GRID_SIZE}
+                      scale={scale}
+                      interactionMode={isSpacePressed || isPanning ? 'pan' : 'select'}
+                      palette={palette}
+                      onSelect={handleElementSelect}
+                      onDragEnd={handleElementDragEnd}
+                      onResize={handleElementResize}
+                      onContextMenu={handleElementContextMenu}
+                    />
+                  ))}
+                  {selectionRect && (
+                    <Rect
+                      x={selectionRect.x}
+                      y={selectionRect.y}
+                      width={selectionRect.width}
+                      height={selectionRect.height}
+                      fill="rgba(139, 233, 214, 0.18)"
+                      stroke={palette.accent}
+                      dash={[6, 4]}
+                      strokeWidth={1}
+                      listening={false}
+                    />
+                  )}
                 </Group>
-
-                <Group>
-                {elements.map((element) => (
-                  <ElementRenderer
-                    key={element.id}
-                    element={element}
-                    isSelected={selectedIds.includes(element.id)}
-                    gridSize={GRID_SIZE}
-                    scale={scale}
-                    interactionMode={isSpacePressed || isPanning ? 'pan' : 'select'}
-                    palette={palette}
-                    onSelect={handleElementSelect}
-                    onDragEnd={handleElementDragEnd}
-                    onResize={handleElementResize}
-                    onContextMenu={handleElementContextMenu}
-                  />
-                ))}
-                {selectionRect && (
-                  <Rect
-                    x={selectionRect.x}
-                    y={selectionRect.y}
-                    width={selectionRect.width}
-                    height={selectionRect.height}
-                    fill="rgba(139, 233, 214, 0.18)"
-                    stroke={palette.accent}
-                    dash={[6, 4]}
-                    strokeWidth={1}
-                    listening={false}
-                  />
-                )}
-              </Group>
               </Group>
             </Layer>
           </Stage>

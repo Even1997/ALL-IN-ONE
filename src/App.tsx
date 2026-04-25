@@ -1,39 +1,55 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
 import { AIWorkspace } from './components/ai/AIWorkspace';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
-import {
-  ProductWorkbench,
-  WorkbenchLayoutDensity,
-  WorkbenchLayoutFocus,
-} from './components/product/ProductWorkbench';
+import { ProductWorkbench } from './components/product/ProductWorkbench';
 import { usePreviewStore } from './store/previewStore';
 import { useFeatureTreeStore } from './store/featureTreeStore';
 import { aiService } from './modules/ai/core/AIService';
-import { useGlobalAIStore } from './modules/ai/store/globalAIStore';
+import {
+  buildDesignStyleMarkdown,
+  getBuiltInStylePackFiles,
+  parseDesignStyleMarkdown,
+  toStylePackPath,
+} from './modules/design/stylePack';
+import { buildDesignStyleReferencePath, buildSketchReferencePath } from './modules/knowledge/referenceFiles';
 import { useAIWorkflowStore } from './modules/ai/store/workflowStore';
 import { useProjectStore } from './store/projectStore';
+import { APP_STYLE_OPTIONS, APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appTheme';
+import { VISIBLE_ROLE_TABS, type RoleView } from './appNavigation';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type { AppType, FeatureNode, GeneratedFile, PageStructureNode, ProjectConfig, WireframeDocument } from './types';
 import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
 import {
   getProjectDir,
+  ensureProjectFilesystemStructure,
+  getProjectStorageSettings,
+  isTauriRuntimeAvailable,
   loadDesignBoardStateFromDisk,
   loadProjectIndexFromDisk,
+  loadSketchPageArtifactsFromProjectDir,
   loadProjectSnapshotFromDisk,
+  loadProjectStylePackPresets,
   loadWorkflowStateFromDisk,
   removeProjectDirectoryFromDisk,
+  resetProjectStorageRoot,
   saveDesignBoardStateToDisk,
   saveProjectIndexToDisk,
   saveProjectSnapshotToDisk,
+  saveProjectStylePackFile,
   saveWorkflowStateToDisk,
+  setProjectStorageRoot,
   syncGeneratedFilesToProjectDir,
+  syncSketchFilesToProjectDir,
+  writeSketchPageFile,
+  type ProjectStorageSettings,
 } from './utils/projectPersistence';
 import './App.css';
 
-type RoleView = 'product' | 'design' | 'develop' | 'test' | 'operations';
 type ThemeMode = 'dark' | 'light';
+type ProjectStorageState = 'idle' | 'loading' | 'saving' | 'saved' | 'error';
 type DesignNodePosition = {
   x: number;
   y: number;
@@ -76,6 +92,7 @@ type DesignStyleNode = DesignCanvasNodeBase & {
   keywords: string[];
   palette: string[];
   prompt: string;
+  styleFilePath?: string;
 };
 type DesignFlowEdge = {
   id: string;
@@ -203,8 +220,6 @@ const removeProjectSnapshot = (projectId: string) => {
 };
 
 const THEME_STORAGE_KEY = 'devflow-theme-mode';
-const LAYOUT_FOCUS_STORAGE_KEY = 'devflow-layout-focus';
-const LAYOUT_DENSITY_STORAGE_KEY = 'devflow-layout-density';
 const DESIGN_BOARD_STORAGE_PREFIX = 'devflow-design-board';
 const PROJECT_INDEX_STORAGE_KEY = 'devflow-project-index';
 const PROJECT_SNAPSHOT_STORAGE_PREFIX = 'devflow-project-snapshot';
@@ -224,53 +239,43 @@ const DESIGN_ZOOM_MIN = 0.35;
 const DESIGN_ZOOM_MAX = 2.4;
 const DESIGN_ZOOM_STEP = 0.0015;
 const DESIGN_STYLE_PALETTE_SIZE = 5;
-const DESIGN_STYLE_PRESETS: Omit<DesignStyleNode, 'id' | 'x' | 'y' | 'width' | 'height'>[] = [
-  {
-    title: 'Aurora Glass',
-    summary: '高级感玻璃拟态，适合数据面板、AI 工作台、控制中心。',
-    keywords: ['glassmorphism', 'aurora gradient', 'soft glow', 'floating panel', 'premium dashboard'],
-    palette: ['#08111f', '#123456', '#7dd3fc', '#8b5cf6', '#f8fafc'],
-    prompt: '使用通透玻璃卡片、极暗背景、蓝青到紫色极光高光、柔和发光描边、悬浮面板层级和精细数据组件。',
-  },
-  {
-    title: 'Bento Spotlight',
-    summary: 'Bento Grid 信息编排，适合首页、概览页、产品能力总览。',
-    keywords: ['bento grid', 'editorial cards', 'modular layout', 'feature spotlight', 'clean metrics'],
-    palette: ['#0f172a', '#1e293b', '#38bdf8', '#f59e0b', '#f8fafc'],
-    prompt: '采用 bento grid 模块化布局，大卡片突出核心数据与 CTA，小卡片承载状态、能力点和摘要，整体克制但信息密度高。',
-  },
-  {
-    title: 'Neo Brutal Pop',
-    summary: '粗边框高对比风格，适合营销页、创意工具、年轻化产品。',
-    keywords: ['neo brutalism', 'bold outline', 'high contrast', 'playful blocks', 'statement UI'],
-    palette: ['#111111', '#fef08a', '#fb7185', '#60a5fa', '#ffffff'],
-    prompt: '使用粗黑边框、强对比撞色、硬阴影、块状按钮和夸张标题，强调辨识度与年轻感，但保持层级清晰。',
-  },
-  {
-    title: 'Editorial Minimal',
-    summary: '杂志感极简界面，适合内容产品、品牌官网、作品集。',
-    keywords: ['editorial minimal', 'luxury whitespace', 'serif headline', 'clean composition', 'art direction'],
-    palette: ['#f6f1e8', '#d6c3a5', '#33261d', '#8c6a43', '#ffffff'],
-    prompt: '大量留白、强排版、衬线标题与无衬线正文组合，弱化边框，用版式、节奏和材质感取胜。',
-  },
-  {
-    title: 'Warm Commerce',
-    summary: '温暖电商体验，适合商品推荐、生活方式、内容导购。',
-    keywords: ['warm commerce', 'lifestyle card', 'soft gradient', 'friendly CTA', 'trustful retail'],
-    palette: ['#fff7ed', '#fed7aa', '#fb923c', '#7c2d12', '#1f2937'],
-    prompt: '暖米色背景搭配橙棕色点缀，卡片圆角偏大，营造可信、柔和、带生活方式质感的购买氛围。',
-  },
-  {
-    title: 'Midnight Terminal',
-    summary: '深色科技控制台，适合开发者平台、运维面板、Agent 系统。',
-    keywords: ['dark console', 'developer platform', 'cyan accent', 'command center', 'system status'],
-    palette: ['#020617', '#0f172a', '#22d3ee', '#10b981', '#e2e8f0'],
-    prompt: '深色主界面，青绿色强调色，卡片像终端模块一样严谨排列，突出状态、日志、执行流与技术感。',
-  },
-];
+const BUILTIN_STYLE_PACK_FILES = getBuiltInStylePackFiles();
+const DEFAULT_DESIGN_STYLE_PRESETS: Omit<DesignStyleNode, 'id' | 'x' | 'y' | 'width' | 'height'>[] = BUILTIN_STYLE_PACK_FILES.map(
+  (file) => ({
+    title: file.seed.title,
+    summary: file.seed.summary,
+    keywords: file.seed.keywords,
+    palette: file.seed.palette,
+    prompt: file.seed.prompt,
+    styleFilePath: file.path,
+  })
+);
+const BUILTIN_STYLE_PACK_PATHS = new Set(BUILTIN_STYLE_PACK_FILES.map((file) => file.path));
+
+const resolveStyleNodeFilePath = (
+  node: Pick<DesignStyleNode, 'id' | 'title' | 'styleFilePath'>,
+  presets: Array<Pick<DesignStyleNode, 'title' | 'styleFilePath'>>
+) => {
+  if (node.styleFilePath) {
+    return node.styleFilePath;
+  }
+
+  const matchingPreset = presets.find((preset) => preset.title === node.title && preset.styleFilePath);
+  if (matchingPreset?.styleFilePath) {
+    return matchingPreset.styleFilePath;
+  }
+
+  return toStylePackPath(node.title || node.id);
+};
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [...(node.kind === 'page' ? [node] : []), ...collectDesignPages(node.children)]);
+
+const getSketchPageFileName = (pageId: string) => {
+  const normalized = pageId.replace(/\\/g, '/');
+  const segments = normalized.split('/');
+  return segments[segments.length - 1] || normalized;
+};
 
 const buildSketchLibraryTree = (nodes: PageStructureNode[]): SketchLibraryTreeNode[] =>
   nodes.flatMap((node) => {
@@ -283,7 +288,7 @@ const buildSketchLibraryTree = (nodes: PageStructureNode[]): SketchLibraryTreeNo
     return [
       {
         id: node.id,
-        name: node.name,
+        name: getSketchPageFileName(node.id),
         pageId: node.id,
         children,
       },
@@ -379,80 +384,6 @@ const getDesignStyleNodeTheme = (node: DesignStyleNode): CSSProperties => {
   } as CSSProperties;
 };
 
-const buildDesignStyleMarkdown = (node: Pick<DesignStyleNode, 'title' | 'summary' | 'keywords' | 'palette' | 'prompt'>) =>
-  [
-    `# ${node.title || 'Untitled Style'}`,
-    '',
-    '## Summary',
-    node.summary || '',
-    '',
-    '## Keywords',
-    ...(node.keywords.length ? node.keywords.map((keyword) => `- ${keyword}`) : ['- ']),
-    '',
-    '## Palette',
-    ...(node.palette.length ? node.palette.map((color) => `- ${color}`) : ['- #ffffff']),
-    '',
-    '## Prompt',
-    node.prompt || '',
-  ].join('\n');
-
-const parseDesignStyleMarkdown = (
-  markdown: string,
-  fallback: Pick<DesignStyleNode, 'title' | 'summary' | 'keywords' | 'palette' | 'prompt'>
-) => {
-  const sections = new Map<string, string[]>();
-  let currentSection: string | null = null;
-  let title = fallback.title;
-
-  markdown.replace(/\r/g, '').split('\n').forEach((line) => {
-    const trimmed = line.trim();
-    const sectionMatch = /^##\s+(.+)$/.exec(trimmed);
-    if (sectionMatch) {
-      currentSection = sectionMatch[1].trim().toLowerCase();
-      if (!sections.has(currentSection)) {
-        sections.set(currentSection, []);
-      }
-      return;
-    }
-
-    const titleMatch = /^#\s+(.+)$/.exec(trimmed);
-    if (titleMatch) {
-      title = titleMatch[1].trim() || fallback.title;
-      currentSection = null;
-      return;
-    }
-
-    if (!currentSection) {
-      return;
-    }
-
-    const bucket = sections.get(currentSection) || [];
-    bucket.push(line);
-    sections.set(currentSection, bucket);
-  });
-
-  const readTextSection = (name: string, currentValue: string) => {
-    const nextValue = (sections.get(name.toLowerCase()) || []).join('\n').trim();
-    return nextValue || currentValue;
-  };
-
-  const readListSection = (name: string, currentValue: string[]) => {
-    const nextValue = (sections.get(name.toLowerCase()) || [])
-      .flatMap((line) => line.replace(/^[-*+]\s*/, '').split(','))
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-    return nextValue.length ? nextValue : currentValue;
-  };
-
-  return {
-    title,
-    summary: readTextSection('summary', fallback.summary),
-    keywords: readListSection('keywords', fallback.keywords),
-    palette: readListSection('palette', fallback.palette),
-    prompt: readTextSection('prompt', fallback.prompt),
-  };
-};
 
 const convertAINodesToTextNodes = (nodes: DesignAINode[]): DesignTextNode[] =>
   nodes.map((node) => ({
@@ -698,17 +629,6 @@ const buildDesignDraftElements = (
 
 const renderGeneratedFileLabel = (file: GeneratedFile) => file.path.split('/').pop() || file.path;
 
-const SettingsGlyph = () => (
-  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none">
-    <path
-      d="M10.325 4.317a1 1 0 0 1 .95-.69h1.45a1 1 0 0 1 .95.69l.38 1.17a1 1 0 0 0 .63.64l1.12.42a1 1 0 0 0 .89-.08l1.02-.62a1 1 0 0 1 1.16.14l1.02 1.03a1 1 0 0 1 .14 1.16l-.62 1.01a1 1 0 0 0-.08.9l.42 1.11a1 1 0 0 0 .64.64l1.16.38a1 1 0 0 1 .69.95v1.46a1 1 0 0 1-.69.95l-1.16.38a1 1 0 0 0-.64.63l-.42 1.12a1 1 0 0 0 .08.89l.62 1.02a1 1 0 0 1-.14 1.16l-1.02 1.02a1 1 0 0 1-1.16.14l-1.02-.62a1 1 0 0 0-.89-.08l-1.12.42a1 1 0 0 0-.63.64l-.38 1.16a1 1 0 0 1-.95.69h-1.45a1 1 0 0 1-.95-.69l-.38-1.16a1 1 0 0 0-.64-.64l-1.11-.42a1 1 0 0 0-.9.08l-1.01.62a1 1 0 0 1-1.16-.14l-1.03-1.02a1 1 0 0 1-.14-1.16l.62-1.02a1 1 0 0 0 .08-.89l-.42-1.12a1 1 0 0 0-.64-.63l-1.17-.38A1 1 0 0 1 2 13.725v-1.46a1 1 0 0 1 .69-.95l1.17-.38a1 1 0 0 0 .64-.64l.42-1.11a1 1 0 0 0-.08-.9l-.62-1.01a1 1 0 0 1 .14-1.16L5.4 5.187a1 1 0 0 1 1.16-.14l1.01.62a1 1 0 0 0 .9.08l1.11-.42a1 1 0 0 0 .64-.64l.38-1.17Z"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-    <circle cx="12" cy="12" r="3.25" stroke="currentColor" strokeWidth="1.5" />
-  </svg>
-);
-
 const PointerToolGlyph = () => (
   <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none">
     <path
@@ -817,7 +737,14 @@ const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<RoleView>('product');
   const [projects, setProjects] = useState<ProjectConfig[]>(() => readProjectIndex());
   const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
+  const [stylePresets, setStylePresets] = useState<Omit<DesignStyleNode, 'id' | 'x' | 'y' | 'width' | 'height'>[]>(
+    () => DEFAULT_DESIGN_STYLE_PRESETS
+  );
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
+  const [projectStorageSettings, setProjectStorageSettings] = useState<ProjectStorageSettings | null>(null);
+  const [projectStorageDraftOverride, setProjectStorageDraftOverride] = useState<string | null>(null);
+  const [projectStorageState, setProjectStorageState] = useState<ProjectStorageState>('idle');
+  const [projectStorageMessage, setProjectStorageMessage] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window === 'undefined') {
       return 'dark';
@@ -825,28 +752,19 @@ const App: React.FC = () => {
 
     return window.localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
   });
-  const [layoutFocus, setLayoutFocus] = useState<WorkbenchLayoutFocus>(() => {
+  const [appStyle, setAppStyle] = useState<AppStyle>(() => {
     if (typeof window === 'undefined') {
-      return 'canvas';
+      return 'minimal';
     }
 
-    const stored = window.localStorage.getItem(LAYOUT_FOCUS_STORAGE_KEY);
-    return stored === 'balanced' || stored === 'sidebar' ? stored : 'canvas';
+    return getInitialAppStyle(() => window.localStorage.getItem(APP_STYLE_STORAGE_KEY));
   });
-  const [layoutDensity, setLayoutDensity] = useState<WorkbenchLayoutDensity>(() => {
-    if (typeof window === 'undefined') {
-      return 'compact';
-    }
-
-    return window.localStorage.getItem(LAYOUT_DENSITY_STORAGE_KEY) === 'comfortable' ? 'comfortable' : 'compact';
-  });
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<FeatureNode | null>(null);
   const [selectedDesignPageId, setSelectedDesignPageId] = useState<string | null>(null);
   const [designCanvasSelection, setDesignCanvasSelection] = useState<DesignCanvasSelection>(null);
   const [designSelectionIds, setDesignSelectionIds] = useState<string[]>([]);
   const [designMarqueeSelection, setDesignMarqueeSelection] = useState<DesignMarqueeSelection | null>(null);
-  const [designPrompt, setDesignPrompt] = useState('');
+  const [designPrompt] = useState('');
   const [designPageNodes, setDesignPageNodes] = useState<DesignPageReferenceNode[]>([]);
   const [designFlowNodes, setDesignFlowNodes] = useState<DesignFlowNode[]>([]);
   const [designTextNodes, setDesignTextNodes] = useState<DesignTextNode[]>([]);
@@ -869,7 +787,6 @@ const App: React.FC = () => {
   const [styleInspectorMode, setStyleInspectorMode] = useState<'fields' | 'markdown'>('fields');
   const [styleMarkdownDraft, setStyleMarkdownDraft] = useState('');
   const [expandedSketchLibraryNodeIds, setExpandedSketchLibraryNodeIds] = useState<Set<string>>(() => new Set());
-  const settingsRef = useRef<HTMLDivElement | null>(null);
   const designBoardScrollRef = useRef<HTMLDivElement | null>(null);
   const designContextMenuRef = useRef<HTMLDivElement | null>(null);
   const designMarqueeRef = useRef<DesignMarqueeSelection | null>(null);
@@ -895,8 +812,10 @@ const App: React.FC = () => {
   const designLayerCounterRef = useRef(1);
   const designConnectionRef = useRef<DesignConnectionDraft | null>(null);
   const hasAutoFramedDesignBoardRef = useRef(false);
+  const lastPersistedSketchSnapshotRef = useRef('');
   const lastSelectedStyleNodeIdRef = useRef<string | null>(null);
   const lastSyncedStyleMarkdownRef = useRef('');
+  const lastSavedStyleFileSnapshotsRef = useRef<Record<string, string>>({});
   const [designBoardViewport, setDesignBoardViewport] = useState({ width: 0, height: 0 });
   const isConnectorMode = false;
   const pendingConnectionStartId = connectionDraft?.fromId ?? null;
@@ -917,6 +836,8 @@ const App: React.FC = () => {
     featuresMarkdown,
     wireframesMarkdown,
     requirementDocs,
+    activeKnowledgeFileId,
+    selectedKnowledgeContextIds,
     prd,
     pageStructure,
     wireframes,
@@ -932,6 +853,8 @@ const App: React.FC = () => {
     deleteProject,
     clearProject,
     addRootPage,
+    replacePageStructure,
+    replaceWireframes,
     updatePageStructureNode,
     upsertWireframe,
     generateDeliveryArtifacts,
@@ -949,6 +872,10 @@ const App: React.FC = () => {
   const selectedDesignPage = designPages.find((page) => page.id === selectedDesignPageId) || null;
   const selectedUISpec = uiSpecs.find((spec) => spec.pageId === selectedDesignPage?.id) || null;
   const selectedWireframe = selectedDesignPage ? wireframes[selectedDesignPage.id] || null : null;
+  const selectedSketchFilePath = useMemo(
+    () => (selectedDesignPage ? buildSketchReferencePath(selectedDesignPage) : ''),
+    [selectedDesignPage]
+  );
   const selectedDesignPageModuleMarkdown = useMemo(
     () => (selectedDesignPage ? buildDesignPageModuleMarkdown(selectedDesignPage, selectedWireframe) : ''),
     [selectedDesignPage, selectedWireframe]
@@ -974,14 +901,32 @@ const App: React.FC = () => {
     }
 
     return Array.from({ length: Math.max(DESIGN_STYLE_PALETTE_SIZE, selectedStyleNode.palette.length) }, (_, index) => {
-      const fallbackColor = DESIGN_STYLE_PRESETS[0].palette[index] || '#ffffff';
+      const fallbackColor = (stylePresets[0] || DEFAULT_DESIGN_STYLE_PRESETS[0]).palette[index] || '#ffffff';
       return (
         normalizeHexColor(selectedStyleNode.palette[index] || fallbackColor) ||
         normalizeHexColor(fallbackColor) ||
         '#ffffff'
       );
     });
-  }, [selectedStyleNode]);
+  }, [selectedStyleNode, stylePresets]);
+  const selectedStylePackFilePath = useMemo(
+    () =>
+      selectedStyleNode
+        ? buildDesignStyleReferencePath({
+            id: selectedStyleNode.id,
+            title: selectedStyleNode.title,
+            filePath: resolveStyleNodeFilePath(selectedStyleNode, stylePresets),
+          })
+        : '',
+    [selectedStyleNode, stylePresets]
+  );
+  const selectedStylePackFileSourceLabel = useMemo(() => {
+    if (!selectedStylePackFilePath) {
+      return '';
+    }
+
+    return BUILTIN_STYLE_PACK_PATHS.has(selectedStylePackFilePath) ? '内置样式包' : '项目样式包';
+  }, [selectedStylePackFilePath]);
   const selectedDesignContextItems = useMemo<DesignSelectionContextItem[]>(() => {
     const pageNodeMap = new Map(designPageNodes.map((node) => [node.id, node]));
     const flowNodeMap = new Map(designFlowNodes.map((node) => [node.id, node]));
@@ -1067,6 +1012,17 @@ const App: React.FC = () => {
     () => designStyleNodes.filter((node) => designSelectionIds.includes(node.id)),
     [designSelectionIds, designStyleNodes]
   );
+  const canUseProjectFilesystem = isTauriRuntimeAvailable();
+  const refreshSketchArtifactsFromDisk = useCallback(async () => {
+    if (!canUseProjectFilesystem || !currentProject) {
+      return null;
+    }
+
+    const sketchArtifacts = await loadSketchPageArtifactsFromProjectDir(currentProject.id);
+    replacePageStructure(sketchArtifacts.pageStructure, featureTree);
+    replaceWireframes(sketchArtifacts.wireframes, featureTree);
+    return sketchArtifacts;
+  }, [canUseProjectFilesystem, currentProject, featureTree, replacePageStructure, replaceWireframes]);
   const isPageSelected = designCanvasSelection?.type === 'page' && !!selectedDesignPage && !!selectedPageNode;
   const testCases = testPlan?.cases ?? [];
   const deploySteps = deployPlan?.steps ?? [];
@@ -1310,17 +1266,46 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!isTauriRuntimeAvailable()) {
+      return;
+    }
+
+    let isMounted = true;
+    setProjectStorageState('loading');
+    setProjectStorageMessage(null);
+
+    void getProjectStorageSettings()
+      .then((settings) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setProjectStorageSettings(settings);
+        setProjectStorageState('idle');
+      })
+      .catch(() => {
+        if (!isMounted) {
+          return;
+        }
+
+        setProjectStorageState('error');
+        setProjectStorageMessage('项目存储路径读取失败。');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
 
   useEffect(() => {
-    window.localStorage.setItem(LAYOUT_FOCUS_STORAGE_KEY, layoutFocus);
-  }, [layoutFocus]);
-
-  useEffect(() => {
-    window.localStorage.setItem(LAYOUT_DENSITY_STORAGE_KEY, layoutDensity);
-  }, [layoutDensity]);
+    document.documentElement.dataset.style = appStyle;
+    window.localStorage.setItem(APP_STYLE_STORAGE_KEY, appStyle);
+  }, [appStyle]);
 
   const persistActiveProjectSnapshot = useCallback(
     (projectOverride?: ProjectConfig | null, featureTreeOverride = featureTree) => {
@@ -1337,6 +1322,8 @@ const App: React.FC = () => {
         featuresMarkdown,
         wireframesMarkdown,
         requirementDocs,
+        activeKnowledgeFileId,
+        selectedKnowledgeContextIds,
         prd,
         pageStructure,
         wireframes,
@@ -1359,7 +1346,12 @@ const App: React.FC = () => {
         workspace,
         featureTree: featureTreeOverride,
       })
-        .then(() => syncGeneratedFilesToProjectDir(activeProject.id, generatedFiles))
+        .then(() =>
+          Promise.all([
+            syncGeneratedFilesToProjectDir(activeProject.id, generatedFiles),
+            syncSketchFilesToProjectDir(activeProject.id, designPages, wireframes),
+          ])
+        )
         .catch(() => undefined);
 
       if (workflowProjectState) {
@@ -1380,6 +1372,7 @@ const App: React.FC = () => {
       deployPlan,
       designSystem,
       devTasks,
+      designPages,
       featureTree,
       featuresMarkdown,
       generatedFiles,
@@ -1389,6 +1382,8 @@ const App: React.FC = () => {
       prd,
       rawRequirementInput,
       requirementDocs,
+      activeKnowledgeFileId,
+      selectedKnowledgeContextIds,
       testPlan,
       uiSpecs,
       wireframes,
@@ -1491,6 +1486,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!currentProject) {
+      setStylePresets(DEFAULT_DESIGN_STYLE_PRESETS);
+      return;
+    }
+
+    if (!canUseProjectFilesystem) {
+      setCurrentProjectDir(null);
+      setStylePresets(DEFAULT_DESIGN_STYLE_PRESETS);
       return;
     }
 
@@ -1508,10 +1510,35 @@ const App: React.FC = () => {
         }
       });
 
+    void loadProjectStylePackPresets(currentProject.id)
+      .then((presets) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setStylePresets(
+          presets.length > 0
+            ? presets.map((preset) => ({
+                title: preset.title,
+                summary: preset.summary,
+                keywords: preset.keywords,
+                palette: preset.palette,
+                prompt: preset.prompt,
+                styleFilePath: preset.filePath,
+              }))
+            : DEFAULT_DESIGN_STYLE_PRESETS
+        );
+      })
+      .catch(() => {
+        if (isMounted) {
+          setStylePresets(DEFAULT_DESIGN_STYLE_PRESETS);
+        }
+      });
+
     return () => {
       isMounted = false;
     };
-  }, [currentProject]);
+  }, [canUseProjectFilesystem, currentProject]);
 
   useEffect(() => {
     if (!currentProjectDir) {
@@ -1520,6 +1547,57 @@ const App: React.FC = () => {
 
     aiService.setConfig({ projectRoot: currentProjectDir });
   }, [currentProjectDir]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      return;
+    }
+
+    setDesignStyleNodes((current) => {
+      let changed = false;
+      const next = current.map((node) => {
+        const resolvedFilePath = resolveStyleNodeFilePath(node, stylePresets);
+        if (node.styleFilePath === resolvedFilePath) {
+          return node;
+        }
+
+        changed = true;
+        return {
+          ...node,
+          styleFilePath: resolvedFilePath,
+        };
+      });
+
+      return changed ? next : current;
+    });
+  }, [currentProject, stylePresets]);
+
+  useEffect(() => {
+    if (!canUseProjectFilesystem || !currentProject) {
+      lastPersistedSketchSnapshotRef.current = '';
+      return;
+    }
+
+    let isMounted = true;
+
+    void refreshSketchArtifactsFromDisk()
+      .then((sketchArtifacts) => {
+        if (!isMounted || !sketchArtifacts) {
+          return;
+        }
+
+        setSelectedDesignPageId((current) =>
+          current && sketchArtifacts.pageStructure.some((page) => page.id === current)
+            ? current
+            : sketchArtifacts.pageStructure[0]?.id || null
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [canUseProjectFilesystem, currentProject, refreshSketchArtifactsFromDisk]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -1553,6 +1631,36 @@ const App: React.FC = () => {
 
     void saveWorkflowStateToDisk(currentProject.id, workflowProjectState).catch(() => undefined);
   }, [currentProject, workflowProjects]);
+
+  useEffect(() => {
+    if (!canUseProjectFilesystem || !currentProject || !selectedDesignPage) {
+      lastPersistedSketchSnapshotRef.current = '';
+      return;
+    }
+
+    const snapshot = JSON.stringify({
+      id: selectedDesignPage.id,
+      name: selectedDesignPage.name,
+      description: selectedDesignPage.description,
+      route: selectedDesignPage.metadata.route,
+      goal: selectedDesignPage.metadata.goal,
+      elements: selectedWireframe?.elements || [],
+    });
+
+    if (snapshot === lastPersistedSketchSnapshotRef.current) {
+      return;
+    }
+
+    lastPersistedSketchSnapshotRef.current = snapshot;
+
+    const persistTimer = window.setTimeout(() => {
+      void writeSketchPageFile(currentProject.id, selectedDesignPage, selectedWireframe).catch(() => undefined);
+    }, 120);
+
+    return () => {
+      window.clearTimeout(persistTimer);
+    };
+  }, [canUseProjectFilesystem, currentProject, selectedDesignPage, selectedWireframe]);
 
   useEffect(() => {
     if (designAINodes.length === 0) {
@@ -1692,40 +1800,130 @@ const App: React.FC = () => {
   }, [selectedStyleNode, styleInspectorMode, styleMarkdownDraft]);
 
   useEffect(() => {
-    if (!isSettingsOpen) {
+    if (!currentProject || !currentProjectDir || !selectedStyleNode) {
       return;
     }
 
-    const handlePointerDown = (event: PointerEvent) => {
-      if (settingsRef.current?.contains(event.target as Node)) {
+    const resolvedFilePath = resolveStyleNodeFilePath(selectedStyleNode, stylePresets);
+    const sourceType = BUILTIN_STYLE_PACK_PATHS.has(resolvedFilePath) ? 'builtin' : 'user-text';
+    const markdown = buildDesignStyleMarkdown(selectedStyleNode, {
+      sourceType,
+      confidence: sourceType === 'builtin' ? 1 : 0.82,
+    });
+
+    if (lastSavedStyleFileSnapshotsRef.current[resolvedFilePath] === markdown) {
+      return;
+    }
+
+    const persistTimer = window.setTimeout(() => {
+      void saveProjectStylePackFile(currentProject.id, resolvedFilePath, markdown)
+        .then(() => {
+          lastSavedStyleFileSnapshotsRef.current[resolvedFilePath] = markdown;
+          setDesignStyleNodes((current) =>
+            current.map((node) =>
+              node.id === selectedStyleNode.id && node.styleFilePath !== resolvedFilePath
+                ? { ...node, styleFilePath: resolvedFilePath }
+                : node
+            )
+          );
+          setStylePresets((current) => {
+            const nextPreset = {
+              title: selectedStyleNode.title,
+              summary: selectedStyleNode.summary,
+              keywords: selectedStyleNode.keywords,
+              palette: selectedStyleNode.palette,
+              prompt: selectedStyleNode.prompt,
+              styleFilePath: resolvedFilePath,
+            };
+            const existingIndex = current.findIndex((preset) => preset.styleFilePath === resolvedFilePath);
+            if (existingIndex < 0) {
+              return [...current, nextPreset];
+            }
+
+            return current.map((preset, index) => (index === existingIndex ? nextPreset : preset));
+          });
+        })
+        .catch(() => undefined);
+    }, 120);
+
+    return () => {
+      window.clearTimeout(persistTimer);
+    };
+  }, [currentProject, currentProjectDir, selectedStyleNode, stylePresets]);
+
+  const handleSaveProjectStoragePath = useCallback(async (rootPath: string) => {
+    if (!isTauriRuntimeAvailable()) {
+      return;
+    }
+
+    setProjectStorageState('saving');
+    setProjectStorageMessage(null);
+
+    try {
+      const nextSettings = await setProjectStorageRoot(rootPath);
+      setProjectStorageSettings(nextSettings);
+      setProjectStorageDraftOverride(null);
+      setProjectStorageState('saved');
+      setProjectStorageMessage('项目存储路径已更新。');
+    } catch (error) {
+      setProjectStorageState('error');
+      setProjectStorageMessage(error instanceof Error ? error.message : '项目存储路径保存失败。');
+    }
+  }, []);
+
+  const handlePickProjectStoragePath = useCallback(async () => {
+    if (!isTauriRuntimeAvailable() || !projectStorageSettings) {
+      return;
+    }
+
+    try {
+      const selectedPath = await open({
+        directory: true,
+        multiple: false,
+        defaultPath: projectStorageSettings?.rootPath || projectStorageSettings?.defaultPath,
+      });
+
+      if (typeof selectedPath !== 'string') {
         return;
       }
 
-      setIsSettingsOpen(false);
-    };
+      setProjectStorageDraftOverride(selectedPath);
+      setProjectStorageState('idle');
+      setProjectStorageMessage('已选择目录，点击“保存路径”后生效。');
+    } catch (error) {
+      setProjectStorageState('error');
+      setProjectStorageMessage(error instanceof Error ? error.message : '目录选择失败。');
+    }
+  }, [projectStorageSettings]);
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsSettingsOpen(false);
-      }
-    };
+  const handleResetProjectStoragePath = useCallback(async () => {
+    if (!isTauriRuntimeAvailable()) {
+      return;
+    }
 
-    document.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
+    setProjectStorageState('saving');
+    setProjectStorageMessage(null);
 
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isSettingsOpen]);
+    try {
+      const nextSettings = await resetProjectStorageRoot();
+      setProjectStorageSettings(nextSettings);
+      setProjectStorageDraftOverride(null);
+      setProjectStorageState('saved');
+      setProjectStorageMessage('已恢复默认项目路径。');
+    } catch (error) {
+      setProjectStorageState('error');
+      setProjectStorageMessage(error instanceof Error ? error.message : '恢复默认项目路径失败。');
+    }
+  }, []);
 
   const handleCreateProject = (input: Parameters<typeof createProject>[0]) => {
-    const { featureTree: starterFeatureTree } = createProject(input);
+    const { project, featureTree: starterFeatureTree } = createProject(input);
     setTree(starterFeatureTree);
     clearCanvas();
     setSelectedFeature(starterFeatureTree.children[0] || null);
     setCurrentRole('product');
     setIsProjectManagerOpen(false);
+    void ensureProjectFilesystemStructure(project.id).catch(() => undefined);
   };
 
   const handleOpenProject = useCallback(async (projectId: string) => {
@@ -2326,26 +2524,70 @@ ${selectedContextPrompt}` : '',
     };
   }, []);
 
-  const handleAddDesignPage = useCallback(() => {
-    const nextPage = addRootPage();
-    if (!nextPage) {
+  const handleAddDesignPage = useCallback(async () => {
+    if (!currentProject) {
       return;
     }
 
+    if (!canUseProjectFilesystem) {
+      const nextPage = addRootPage();
+      if (!nextPage) {
+        return;
+      }
+
+      const position = buildFreeCanvasPosition(designPageNodes.length, DESIGN_PAGE_CARD_WIDTH, DESIGN_PAGE_CARD_HEIGHT);
+      const nextNode: DesignPageReferenceNode = {
+        id: createId(),
+        pageId: nextPage.id,
+        x: position.x,
+        y: position.y,
+        width: DESIGN_PAGE_CARD_WIDTH,
+        height: DESIGN_PAGE_CARD_HEIGHT,
+      };
+      setDesignPageNodes((current) => [...current, nextNode]);
+      setSelectedDesignPageId(nextPage.id);
+      setDesignCanvasSelection({ type: 'page', id: nextNode.id });
+      setDesignSelectionIds([nextNode.id]);
+      return;
+    }
+
+    const nextIndex = designPages.length + 1;
+    const nextName = `新页面 ${nextIndex}`;
+    const nextPage: PageStructureNode = {
+      id: `page-${Date.now()}`,
+      name: nextName,
+      kind: 'page',
+      description: `在 design workspace 中创建的 ${nextName}`,
+      featureIds: [],
+      metadata: {
+        route: `/pages/${nextIndex}`,
+        title: nextName,
+        goal: `继续完善 ${nextName} 的页面结构与模块布局`,
+        template: 'custom',
+        ownerRole: 'UI设计',
+        notes: '',
+        status: 'draft',
+      },
+      children: [],
+    };
+
+    const nextPageId = await writeSketchPageFile(currentProject.id, nextPage, null);
+    const sketchArtifacts = await refreshSketchArtifactsFromDisk();
+    const resolvedPageId = sketchArtifacts?.pageStructure.find((page) => page.id === nextPageId)?.id || nextPageId;
     const position = buildFreeCanvasPosition(designPageNodes.length, DESIGN_PAGE_CARD_WIDTH, DESIGN_PAGE_CARD_HEIGHT);
     const nextNode: DesignPageReferenceNode = {
       id: createId(),
-      pageId: nextPage.id,
+      pageId: resolvedPageId,
       x: position.x,
       y: position.y,
       width: DESIGN_PAGE_CARD_WIDTH,
       height: DESIGN_PAGE_CARD_HEIGHT,
     };
     setDesignPageNodes((current) => [...current, nextNode]);
-    setSelectedDesignPageId(nextPage.id);
+    setSelectedDesignPageId(resolvedPageId);
     setDesignCanvasSelection({ type: 'page', id: nextNode.id });
     setDesignSelectionIds([nextNode.id]);
-  }, [addRootPage, designPageNodes.length]);
+  }, [addRootPage, canUseProjectFilesystem, currentProject, designPageNodes.length, designPages.length, refreshSketchArtifactsFromDisk]);
 
   const handleAddPageReferenceNode = useCallback((pageId: string) => {
     const position = designCanvasContextMenu
@@ -2410,7 +2652,7 @@ ${selectedContextPrompt}` : '',
   }, [designCanvasContextMenu]);
 
   const handleAddStyleNode = useCallback((preset?: Omit<DesignStyleNode, 'id' | 'x' | 'y' | 'width' | 'height'>) => {
-    const activePreset = preset || DESIGN_STYLE_PRESETS[0];
+    const activePreset = preset || stylePresets[0] || DEFAULT_DESIGN_STYLE_PRESETS[0];
     const position = designCanvasContextMenu
       ? {
           x: designCanvasContextMenu.boardX,
@@ -2429,6 +2671,10 @@ ${selectedContextPrompt}` : '',
       keywords: activePreset.keywords,
       palette: activePreset.palette,
       prompt: activePreset.prompt,
+      styleFilePath: resolveStyleNodeFilePath(
+        { id: activePreset.title, title: activePreset.title, styleFilePath: activePreset.styleFilePath },
+        stylePresets
+      ),
       x: position.x,
       y: position.y,
       width: DESIGN_STYLE_CARD_WIDTH,
@@ -2439,7 +2685,7 @@ ${selectedContextPrompt}` : '',
     setDesignCanvasContextMenu(null);
     setDesignCanvasSelection({ type: 'style', id: nextNode.id });
     setDesignSelectionIds([nextNode.id]);
-  }, [designAINodes.length, designCanvasContextMenu, designFlowNodes.length, designPageNodes.length, designStyleNodes.length, designTextNodes.length]);
+  }, [designAINodes.length, designCanvasContextMenu, designFlowNodes.length, designPageNodes.length, designStyleNodes.length, designTextNodes.length, stylePresets]);
 
   const handleDeleteSelectedFlowNode = useCallback(() => {
     if (!selectedFlowNode) {
@@ -2554,12 +2800,12 @@ ${selectedContextPrompt}` : '',
 
       const nextPalette = [...selectedStyleNode.palette];
       while (nextPalette.length < Math.max(DESIGN_STYLE_PALETTE_SIZE, index + 1)) {
-        nextPalette.push(DESIGN_STYLE_PRESETS[0].palette[nextPalette.length] || '#ffffff');
+        nextPalette.push((stylePresets[0] || DEFAULT_DESIGN_STYLE_PRESETS[0]).palette[nextPalette.length] || '#ffffff');
       }
       nextPalette[index] = value;
       handleStyleNodeUpdate({ palette: nextPalette });
     },
-    [handleStyleNodeUpdate, selectedStyleNode]
+    [handleStyleNodeUpdate, selectedStyleNode, stylePresets]
   );
 
   const handleApplyStyleMarkdown = useCallback(() => {
@@ -2669,54 +2915,6 @@ ${selectedContextPrompt}` : '',
         designZoom,
     };
   }, [designMarqueeSelection, designZoom, worldToDesignViewportPoint]);
-
-  const handleSendSelectionToAI = useCallback(() => {
-    const prompt = designPrompt.trim();
-    if (!prompt || selectedDesignContextItems.length === 0) {
-      return;
-    }
-
-    const featureName = selectedDesignContextItems
-      .filter((item) => item.type === 'page')
-      .map((item) => item.title)
-      .join(' / ');
-    const formattedSelection = selectedDesignContextItems
-      .map((item, index) => `${index + 1}. [${getDesignNodeTypeLabel(item.type)}] ${item.title}${item.summary ? ` - ${item.summary}` : ''}`)
-      .join('\n');
-
-    useGlobalAIStore.getState().generateForModule(
-      'canvas',
-      'generate',
-      {
-        target: {
-          type: 'component',
-          id: selectedDesignContextItems[0]?.id || 'design-canvas-selection',
-          filePath: 'src/App.tsx',
-        },
-        change: {
-          type: 'modify',
-          after: prompt,
-        },
-        related: {
-          files: ['src/App.tsx', 'src/App.css'],
-          elements: selectedDesignContextItems.map((item) => item.id),
-        },
-      },
-      `你现在在 DevFlow 的自由画布协作模式。用户已经通过点击/框选选中了一组节点，这些都应该作为 AI 的本次上下文。
-
-用户指令：
-${prompt}
-
-已选中节点：
-${formattedSelection}
-
-请围绕这些节点给出具体的 UI/UX 方向、结构建议或后续生成步骤。`,
-      {
-        featureName: featureName || undefined,
-        previewData: selectedDesignContextItems,
-      }
-    );
-  }, [designPrompt, selectedDesignContextItems]);
 
   useEffect(() => {
     if (hasAutoFramedDesignBoardRef.current) {
@@ -3101,8 +3299,8 @@ ${formattedSelection}
   const renderProductView = () => (
     <ProductWorkbench
       onFeatureSelect={(node) => setSelectedFeature(node)}
-      layoutFocus={layoutFocus}
-      layoutDensity={layoutDensity}
+      layoutFocus="balanced"
+      layoutDensity="comfortable"
     />
   );
 
@@ -3246,7 +3444,11 @@ ${formattedSelection}
                     />
                   </label>
                   <span className="design-style-markdown-hint">基于当前草图实时生成，可选中节点喂给AI</span>
-                                  </div>
+                  <div className="design-linked-file">
+                    <span>当前草图文件</span>
+                    <code>{selectedSketchFilePath}</code>
+                  </div>
+                </div>
               ) : null}
 
               {designCanvasSelection?.type === 'flow' && selectedFlowNode ? (
@@ -3291,6 +3493,13 @@ ${formattedSelection}
 
               {designCanvasSelection?.type === 'style' && selectedStyleNode ? (
                 <div className="design-inspector-form">
+                  <div className="design-linked-file">
+                    <span>当前样式包文件</span>
+                    <code>{selectedStylePackFilePath}</code>
+                  </div>
+                  {selectedStylePackFileSourceLabel ? (
+                    <span className="design-style-markdown-hint">{selectedStylePackFileSourceLabel}</span>
+                  ) : null}
                   <div className="design-style-editor-switch">
                     <button
                       className={`doc-action-btn secondary ${styleInspectorMode === 'fields' ? 'active' : ''}`}
@@ -3382,7 +3591,7 @@ ${formattedSelection}
                         />
                       </label>
                       <span className="design-style-markdown-hint">
-                        支持直接编辑标题、摘要、关键词、配色和提示词，点击“应用 Markdown”后会同步回节点字段。
+                        支持直接编辑 Style Pack v1 Markdown；会优先解析固定 frontmatter 和标准章节，并同步回节点字段。
                       </span>
                       <div className="design-style-markdown-actions">
                         <button className="doc-action-btn" type="button" onClick={handleApplyStyleMarkdown}>
@@ -3891,7 +4100,7 @@ ${formattedSelection}
                       </div>
                       {designCanvasContextMenu.submenu === 'style' ? (
                         <div className="design-context-menu-list" onWheel={handleScrollableAreaWheel}>
-                          {DESIGN_STYLE_PRESETS.map((preset) => (
+                          {stylePresets.map((preset) => (
                             <button
                               key={preset.title}
                               className="design-context-menu-item"
@@ -3959,84 +4168,6 @@ ${formattedSelection}
               ) : null}
           </div>
 
-          <div className="design-stitch-bar">
-            <div className="design-bottom-bar-head">
-              <div>
-                <strong>AI Context</strong>
-                <span>
-                  {designSelectionIds.length > 0
-                    ? `已选中 ${designSelectionIds.length} 个节点，框选后可以直接给 AI`
-                    : designCanvasMode === 'select'
-                      ? '当前是框选模式，在空白处拖出选择框即可选择 AI 上下文'
-                      : '当前是拖拽模式，可平移画布；按住 Shift 也能临时拉框选择'}
-                </span>
-              </div>
-              <div className="design-bottom-bar-actions">
-                <button className="doc-action-btn secondary" onClick={() => setDesignSelectionIds([])} type="button" disabled={designSelectionIds.length === 0}>
-                                    清除选择
-                </button>
-                <button className="doc-action-btn" onClick={handleGenerateDesignDraft} type="button" disabled={!isPageSelected}>
-                  生成当前页 UI 草图
-                </button>
-              </div>
-            </div>
-
-            {selectedDesignContextItems.length > 0 ? (
-              <div className="design-selection-chip-list">
-                {selectedDesignContextItems.map((item) => (
-                  <span key={item.id} className="design-selection-chip">
-                    <strong>{getDesignNodeTypeLabel(item.type)}</strong>
-                    <span>{item.title}</span>
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="design-stitch-input-shell">
-              <textarea
-                className="design-workbench-prompt-input"
-                value={designPrompt}
-                onChange={(event) => setDesignPrompt(event.target.value)}
-                placeholder="直接说出你想要的内容、风络、信息层级或交互..."
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    handleSendSelectionToAI();
-                  }
-                }}
-              />
-              <div className="design-workbench-prompt-bar">
-                <span>
-                  {selectedDesignContextItems.length > 0
-                    ? selectedDesignContextItems.slice(0, 2).map((item) => item.title).join(' / ')
-                    : '先选择几个节点，再把任务交给 AI'}
-                </span>
-                <button
-                  className="doc-action-btn"
-                  onClick={handleSendSelectionToAI}
-                  type="button"
-                  disabled={!designPrompt.trim() || selectedDesignContextItems.length === 0}
-                >
-                  发送给 AI
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="design-workbench-prompt design-workbench-prompt-floating design-bottom-bar">
-            <div className="design-workbench-prompt-bar">
-              <span>
-                {isPageSelected
-                  ? `当前生成目标：${selectedDesignPage?.name}`
-                  : selectedFlowNode
-                    ? `当前选中流程节点：${selectedFlowNode.title}`
-                    : selectedStyleNode
-                      ? `当前选中样式节点：${selectedStyleNode.title}`
-                    : '请选择一个草图页或流程节点'}
-              </span>
-                生成当前页 UI 草图
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -4257,9 +4388,16 @@ ${formattedSelection}
       <ProjectSetup
         projects={projects}
         activeProjectId={currentProjectId}
+        projectStorageSettings={projectStorageSettings}
+        projectStorageDraftOverride={projectStorageDraftOverride}
+        projectStorageState={projectStorageState}
+        projectStorageMessage={projectStorageMessage}
         onCreateProject={handleCreateProject}
         onOpenProject={handleOpenProject}
         onDeleteProject={handleDeleteProject}
+        onSaveProjectStoragePath={handleSaveProjectStoragePath}
+        onPickProjectStoragePath={handlePickProjectStoragePath}
+        onResetProjectStoragePath={handleResetProjectStoragePath}
       />
     );
   }
@@ -4278,15 +4416,16 @@ ${formattedSelection}
         </div>
 
         <nav className="role-tabs">
-          <button className={`role-tab ${currentRole === 'product' ? 'active' : ''}`} onClick={() => setCurrentRole('product')} type="button">
-            <span className="role-name">项目</span>
-          </button>
-          <button className={`role-tab ${currentRole === 'design' ? 'active' : ''}`} onClick={() => setCurrentRole('design')} type="button">
-            <span className="role-name">设计</span>
-          </button>
-          <button className={`role-tab ${currentRole === 'develop' ? 'active' : ''}`} onClick={() => setCurrentRole('develop')} type="button">
-            <span className="role-name">开发</span>
-          </button>
+          {VISIBLE_ROLE_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              className={`role-tab ${currentRole === tab.id ? 'active' : ''}`}
+              onClick={() => setCurrentRole(tab.id)}
+              type="button"
+            >
+              <span className="role-name">{tab.label}</span>
+            </button>
+          ))}
         </nav>
 
         <div className="header-right">
@@ -4310,60 +4449,25 @@ ${formattedSelection}
             <input placeholder="搜索项目..." type="text" />
           </label>
 
-          <div className="header-settings" ref={settingsRef}>
-            <button
-              className={`theme-mode-btn header-settings-btn ${isSettingsOpen ? 'active' : ''}`}
-              type="button"
-              onClick={() => setIsSettingsOpen((current) => !current)}
-              aria-expanded={isSettingsOpen}
-              aria-label="打开布局设置"
-            >
-              <SettingsGlyph />
-              <span>设置</span>
-            </button>
-
-            {isSettingsOpen ? (
-              <div className="header-settings-popover">
-                <div className="header-settings-section">
-                  <span>布局设置</span>
-                  <div className="pm-segmented-control">
-                    <button className={layoutFocus === 'canvas' ? 'active' : ''} onClick={() => setLayoutFocus('canvas')} type="button">
-                      画布优先
-                    </button>
-                    <button className={layoutFocus === 'balanced' ? 'active' : ''} onClick={() => setLayoutFocus('balanced')} type="button">
-                      均衡
-                    </button>
-                    <button className={layoutFocus === 'sidebar' ? 'active' : ''} onClick={() => setLayoutFocus('sidebar')} type="button">
-                      侧栏优先
-                    </button>
-                  </div>
-                  <small>调整主工作区与侧栏的空间分配。</small>
-                </div>
-
-                <div className="header-settings-section">
-                  <span>紧凑程度</span>
-                  <div className="pm-segmented-control">
-                    <button className={layoutDensity === 'compact' ? 'active' : ''} onClick={() => setLayoutDensity('compact')} type="button">
-                      紧凑
-                    </button>
-                    <button className={layoutDensity === 'comfortable' ? 'active' : ''} onClick={() => setLayoutDensity('comfortable')} type="button">
-                      舒适
-                    </button>
-                  </div>
-                  <small>控制信息密度与组件之间的留白。</small>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
           <button
             className="theme-mode-btn"
             type="button"
             onClick={() => setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'))}
             aria-label={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
           >
-            {themeMode === 'dark' ? '浅色' : '夜间'}
+            {themeMode === 'dark' ? '浅色' : '深色'}
           </button>
+
+          <label className="app-style-switcher">
+            <span>样式</span>
+            <select value={appStyle} onChange={(event) => setAppStyle(event.target.value as AppStyle)}>
+              {APP_STYLE_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {selectedFeature ? <span className="current-feature">当前功能：{selectedFeature.name}</span> : null}
 
@@ -4379,9 +4483,16 @@ ${formattedSelection}
             projects={projects}
             activeProjectId={currentProjectId}
             currentProjectName={currentProject?.name ?? null}
+            projectStorageSettings={projectStorageSettings}
+            projectStorageDraftOverride={projectStorageDraftOverride}
+            projectStorageState={projectStorageState}
+            projectStorageMessage={projectStorageMessage}
             onCreateProject={handleCreateProject}
             onOpenProject={handleOpenProject}
             onDeleteProject={handleDeleteProject}
+            onSaveProjectStoragePath={handleSaveProjectStoragePath}
+            onPickProjectStoragePath={handlePickProjectStoragePath}
+            onResetProjectStoragePath={handleResetProjectStoragePath}
             onClose={() => setIsProjectManagerOpen(false)}
           />
         ) : (

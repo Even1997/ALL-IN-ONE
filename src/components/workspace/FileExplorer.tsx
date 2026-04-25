@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './FileExplorer.css';
 import { GeneratedFile } from '../../types';
+import { joinFileSystemPath, normalizeRelativeFileSystemPath } from '../../utils/fileSystemPaths.ts';
 
 interface FileNode {
   name: string;
@@ -35,7 +36,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     if (generatedFiles.length === 0) {
       return [
         {
-          name: rootPath.split('/').pop() || 'project',
+          name: normalizeRelativeFileSystemPath(rootPath).split('/').pop() || rootPath || 'project',
           type: 'folder',
           path: rootPath,
           expanded: true,
@@ -48,10 +49,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
 
     const ensureFolder = (segments: string[]) => {
       let current = root;
-      let currentPath = '';
+      let currentPath = rootPath;
 
       segments.forEach((segment) => {
-        currentPath = `${currentPath}/${segment}`;
+        currentPath = joinFileSystemPath(currentPath, segment);
         let folder = current.find((item) => item.path === currentPath && item.type === 'folder');
 
         if (!folder) {
@@ -73,7 +74,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     };
 
     generatedFiles.forEach((file) => {
-      const cleanPath = file.path.replace(/^\/+/, '');
+      const cleanPath = normalizeRelativeFileSystemPath(file.path);
       const segments = cleanPath.split('/');
       const fileName = segments.pop();
       if (!fileName) return;
@@ -81,7 +82,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       folders.push({
         name: fileName,
         type: 'file',
-        path: `${rootPath}/${cleanPath}`,
+        path: joinFileSystemPath(rootPath, cleanPath),
       });
     });
 
@@ -114,7 +115,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         return {
           name,
           type: isFolder ? 'folder' : 'file',
-          path: `${path}/${name}`,
+          path: joinFileSystemPath(path, name),
           expanded: false,
           children: isFolder ? [] : undefined,
         };
