@@ -112,6 +112,20 @@ test('product knowledge reading view keeps chrome compact for content-first read
   assert.doesNotMatch(source, /编辑完成后点击保存。/);
 });
 
+test('product workbench keeps page and knowledge labels in readable chinese', async () => {
+  const source = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(source, /新建草图\.md/);
+  assert.match(source, /新建设计\.md/);
+  assert.match(source, /新建项目文件\.md/);
+  assert.match(source, /添加模块/);
+  assert.match(source, /模块清单/);
+  assert.match(source, /页面画布/);
+  assert.match(source, /关联文件/);
+  assert.match(source, /实时预览/);
+  assert.doesNotMatch(source, /鏂板缓鑽夊浘|鏂板缓璁捐|鏂板缓椤圭洰鏂囦欢|妯″潡娓呭崟|椤甸潰鐢诲竷|鍏宠仈鏂囦欢|瀹炴椂棰勮|鍒犻櫎|缂栬緫|鍔犵矖|閾炬帴|鈮\?/);
+});
+
 test('markdown reading surfaces use theme tokens instead of fixed dark colors', async () => {
   const source = await readFile(appCssPath, 'utf8');
 

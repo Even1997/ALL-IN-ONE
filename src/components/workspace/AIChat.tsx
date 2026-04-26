@@ -1,10 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
 import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
 import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
 import { buildContextIndex } from '../../modules/ai/chat/contextIndex';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
+import {
+  CHAT_AGENTS,
+  type ChatAgentId,
+  type LocalAgentCommandResult,
+} from '../../modules/ai/chat/chatAgents';
 import {
   type AIReferenceScopeMode,
   buildChatContextSnapshot,
@@ -32,7 +38,7 @@ import {
 } from '../../modules/knowledge/referenceFiles';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
-import { loadDesignBoardStateFromDisk, saveContextIndexToDisk } from '../../utils/projectPersistence';
+import { getProjectDir, loadDesignBoardStateFromDisk, saveContextIndexToDisk } from '../../utils/projectPersistence';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -246,6 +252,36 @@ const SendIcon = () => (
   </svg>
 );
 
+const AgentIcon = ({ agentId }: { agentId: ChatAgentId }) => {
+  if (agentId === 'claude') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+        <path d="M10 2.8V17.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M2.8 10H17.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M4.9 4.9L15.1 15.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M15.1 4.9L4.9 15.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (agentId === 'codex') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+        <path d="M7.2 5.2L3.6 10L7.2 14.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12.8 5.2L16.4 10L12.8 14.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M11.2 4.4L8.8 15.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+      <path d="M10 2.8L11.9 7.2L16.3 9.1L11.9 11L10 15.4L8.1 11L3.7 9.1L8.1 7.2L10 2.8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M15 13.2L15.65 14.7L17.2 15.35L15.65 16L15 17.5L14.35 16L12.8 15.35L14.35 14.7L15 13.2Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    </svg>
+  );
+};
+
 const renderMessagePart = (messageId: string, part: AIChatMessagePart, index: number) => {
   if (part.type === 'thinking') {
     return (
@@ -323,6 +359,9 @@ export const AIChat: React.FC = () => {
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>({});
   const [selectedSettingsConfigId, setSelectedSettingsConfigId] = useState<string | null>(null);
+  const [selectedChatAgentId, setSelectedChatAgentId] = useState<ChatAgentId>('built-in');
+  const [localAgentLaunchState, setLocalAgentLaunchState] = useState<'idle' | 'opening' | 'opened' | 'error'>('idle');
+  const [localAgentLaunchMessage, setLocalAgentLaunchMessage] = useState('');
   const [isKnowledgeReferenceEnabled] = useState(true);
   const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
   const [persistedDesignStyleNodes, setPersistedDesignStyleNodes] = useState<DesignStyleReferenceNode[]>([]);
@@ -463,6 +502,11 @@ export const AIChat: React.FC = () => {
   const selectedRuntimeConfig = useMemo(
     () => aiConfigs.find((item) => item.id === selectedConfigId) || null,
     [aiConfigs, selectedConfigId]
+  );
+
+  const selectedChatAgent = useMemo(
+    () => CHAT_AGENTS.find((agent) => agent.id === selectedChatAgentId) || CHAT_AGENTS[2],
+    [selectedChatAgentId]
   );
 
   const selectedSettingsConfig = useMemo(
@@ -1004,6 +1048,31 @@ export const AIChat: React.FC = () => {
     setShowReferenceMenu(false);
   }, [currentProject, setActiveSession, upsertSession]);
 
+  const handleOpenLocalAgentInterface = useCallback(async () => {
+    if (!currentProject || selectedChatAgentId === 'built-in') {
+      return;
+    }
+
+    setLocalAgentLaunchState('opening');
+    setLocalAgentLaunchMessage('');
+
+    try {
+      const projectRoot = await getProjectDir(currentProject.id);
+      const result = await invoke<LocalAgentCommandResult>('open_local_agent_interface', {
+        params: {
+          agent: selectedChatAgentId,
+          projectRoot: projectRoot,
+        },
+      });
+
+      setLocalAgentLaunchState(result.success ? 'opened' : 'error');
+      setLocalAgentLaunchMessage(result.success ? result.content : result.error || 'Failed to open local agent.');
+    } catch (error) {
+      setLocalAgentLaunchState('error');
+      setLocalAgentLaunchMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [currentProject, selectedChatAgentId]);
+
   const insertSkillToken = useCallback((token: string) => {
     setShowSkillMenu(false);
     setInput((current) => {
@@ -1056,7 +1125,7 @@ export const AIChat: React.FC = () => {
         renameSession(currentProject.id, targetSessionId, summarizeSessionTitle(rawContent));
       }
 
-      if (!isConfigured) {
+      if (selectedChatAgentId === 'built-in' && !isConfigured) {
         appendMessage(
           currentProject.id,
           targetSessionId,
@@ -1169,6 +1238,7 @@ export const AIChat: React.FC = () => {
       referenceFiles,
       selectedReferenceFileIds,
       selectedRuntimeConfig,
+      selectedChatAgentId,
       renameSession,
       setActiveSession,
       setRawRequirementInput,
@@ -1197,6 +1267,26 @@ export const AIChat: React.FC = () => {
           <div className="chat-shell-header-actions">
             {!isCollapsed ? (
               <>
+                <div className="chat-shell-agent-tabs" role="tablist" aria-label="AI agent">
+                  {CHAT_AGENTS.map((agent) => (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      role="tab"
+                      aria-label={agent.label}
+                      aria-selected={agent.id === selectedChatAgentId}
+                      className={`chat-agent-tab ${agent.id === selectedChatAgentId ? 'active' : ''}`}
+                      title={agent.title}
+                      onClick={() => {
+                        setSelectedChatAgentId(agent.id);
+                        setLocalAgentLaunchState('idle');
+                        setLocalAgentLaunchMessage('');
+                      }}
+                    >
+                      <AgentIcon agentId={agent.id} />
+                    </button>
+                  ))}
+                </div>
                 <div className="chat-header-menu">
                   <button
                     className="chat-shell-icon-btn"
@@ -1276,7 +1366,8 @@ export const AIChat: React.FC = () => {
 
         {!isCollapsed ? (
           <>
-            <div className="chat-message-list">
+            {selectedChatAgentId === 'built-in' ? (
+              <div className="chat-message-list">
               {messages.map((message) => {
                 const parts = parseAIChatMessageParts(message.content);
                 return (
@@ -1293,8 +1384,31 @@ export const AIChat: React.FC = () => {
 
               <div ref={messagesEndRef} />
             </div>
+            ) : (
+              <div className="chat-local-agent-pane">
+                <div className="chat-local-agent-card">
+                  <span className="chat-local-agent-kicker">{selectedChatAgent.title}</span>
+                  <strong>{selectedChatAgent.label}</strong>
+                  <p>在当前项目目录打开本机 {selectedChatAgent.label} 界面，使用它自己的会话、工具和 skills。</p>
+                  <button
+                    type="button"
+                    className="chat-local-agent-open-btn"
+                    onClick={() => void handleOpenLocalAgentInterface()}
+                    disabled={localAgentLaunchState === 'opening' || !currentProject}
+                  >
+                    {localAgentLaunchState === 'opening' ? '打开中...' : `打开 ${selectedChatAgent.label}`}
+                  </button>
+                  {localAgentLaunchMessage ? (
+                    <span className={`chat-local-agent-status ${localAgentLaunchState}`}>
+                      {localAgentLaunchMessage}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            )}
 
-            <form className="chat-composer" onSubmit={handleSubmit}>
+            {selectedChatAgentId === 'built-in' ? (
+              <form className="chat-composer" onSubmit={handleSubmit}>
               <div className="chat-composer-shell">
                 {showSkillMenu ? (
                   <div className="chat-skill-menu">
@@ -1449,6 +1563,7 @@ export const AIChat: React.FC = () => {
                 </div>
               </div>
             </form>
+            ) : null}
           </>
         ) : (
           <div className="chat-collapsed-state">

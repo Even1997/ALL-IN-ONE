@@ -244,7 +244,7 @@
 .explorer-actions .icon-btn {
   width: 28px;
   height: 28px;
-  border-radius: 10px;
+  border-radius: var(--style-radius-xs);
   color: var(--mode-soft-text);
   font-size: 11px;
   font-weight: 800;
@@ -264,7 +264,7 @@
   min-height: 38px;
   margin: 0 4px;
   padding: 7px 12px;
-  border-radius: 14px;
+  border-radius: var(--style-radius-md);
   color: var(--mode-soft-text);
 }
 
@@ -322,14 +322,14 @@
 .context-menu {
   min-width: 180px;
   padding: 6px;
-  border-radius: 16px;
+  border-radius: var(--style-radius-md);
   background: color-mix(in srgb, var(--mode-panel-alt) 98%, transparent);
   border: 1px solid var(--mode-border);
   box-shadow: var(--mode-shadow-strong);
 }
 
 .context-menu-item {
-  border-radius: 10px;
+  border-radius: var(--style-radius-xs);
   color: var(--mode-soft-text);
 }
 

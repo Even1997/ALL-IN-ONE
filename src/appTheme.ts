@@ -1,4 +1,4 @@
-export type AppStyle = 'minimal' | 'cartoon';
+export type AppStyle = 'minimal' | 'workbench' | 'cartoon';
 
 export type AppStyleOption = {
   id: AppStyle;
@@ -8,6 +8,7 @@ export type AppStyleOption = {
 export const APP_STYLE_STORAGE_KEY = 'devflow-app-style';
 
 export const APP_STYLE_OPTIONS: AppStyleOption[] = [
+  { id: 'workbench', label: '蓝白工具' },
   { id: 'minimal', label: '简约' },
   { id: 'cartoon', label: '卡通' },
 ];
@@ -17,5 +18,5 @@ export const isAppStyle = (value: string | null): value is AppStyle =>
 
 export const getInitialAppStyle = (readStoredStyle: () => string | null): AppStyle => {
   const storedStyle = readStoredStyle();
-  return isAppStyle(storedStyle) ? storedStyle : 'minimal';
+  return isAppStyle(storedStyle) ? storedStyle : 'workbench';
 };

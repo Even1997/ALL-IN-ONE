@@ -8,4 +8,5 @@ test('visible role tabs hide development pages for now', () => {
     VISIBLE_ROLE_TABS.map((tab) => tab.id),
     ['product', 'design']
   );
+  assert.equal(VISIBLE_ROLE_TABS.find((tab) => tab.id === 'product')?.label, '产品');
 });

@@ -68,6 +68,22 @@ pub struct RemoveParams {
     pub file_path: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalAgentParams {
+    pub agent: String,
+    pub project_root: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalAgentResult {
+    pub success: bool,
+    pub content: String,
+    pub error: Option<String>,
+    pub exit_code: Option<i32>,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ProjectStorageSettingsPayload {
@@ -197,6 +213,87 @@ fn build_project_storage_settings(app_handle: &tauri::AppHandle) -> Result<Proje
 
 fn get_projects_root_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     build_project_storage_settings(app_handle).map(|settings| PathBuf::from(settings.root_path))
+}
+
+fn escape_powershell_single_quoted(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+fn build_local_agent_interface_command(agent: &str, project_root: &str) -> Result<(&'static str, String), String> {
+    let project_root_arg = escape_powershell_single_quoted(project_root);
+    match agent {
+        "claude" => Ok(("Claude", "claude".to_string())),
+        "codex" => Ok(("Codex", format!("codex --cd '{}'", project_root_arg))),
+        _ => Err("Unsupported local agent. Expected claude or codex.".to_string()),
+    }
+}
+
+#[tauri::command]
+fn open_local_agent_interface(params: LocalAgentParams) -> LocalAgentResult {
+    let project_root = PathBuf::from(params.project_root.trim());
+    if !project_root.is_dir() {
+        return LocalAgentResult {
+            success: false,
+            content: String::new(),
+            error: Some("Project root does not exist or is not a directory.".to_string()),
+            exit_code: None,
+        };
+    }
+
+    let project_root_text = project_root.to_string_lossy().to_string();
+    let (agent_label, agent_command) =
+        match build_local_agent_interface_command(params.agent.trim(), &project_root_text) {
+            Ok(command) => command,
+            Err(error) => {
+                return LocalAgentResult {
+                    success: false,
+                    content: String::new(),
+                    error: Some(error),
+                    exit_code: None,
+                }
+            }
+        };
+
+    let project_root_arg = escape_powershell_single_quoted(&project_root_text);
+    let powershell_command = format!(
+        "Set-Location -LiteralPath '{}'; {}",
+        project_root_arg, agent_command
+    );
+
+    #[cfg(target_os = "windows")]
+    let launch_result = Command::new("cmd")
+        .args([
+            "/C",
+            "start",
+            agent_label,
+            "powershell",
+            "-NoExit",
+            "-Command",
+            &powershell_command,
+        ])
+        .current_dir(&project_root)
+        .spawn();
+
+    #[cfg(not(target_os = "windows"))]
+    let launch_result = Command::new("sh")
+        .args(["-lc", &powershell_command])
+        .current_dir(&project_root)
+        .spawn();
+
+    match launch_result {
+        Ok(_) => LocalAgentResult {
+            success: true,
+            content: format!("Opened {} CLI in the project directory.", agent_label),
+            error: None,
+            exit_code: None,
+        },
+        Err(error) => LocalAgentResult {
+            success: false,
+            content: String::new(),
+            error: Some(format!("Failed to open {} CLI: {}", agent_label, error)),
+            exit_code: None,
+        },
+    }
 }
 
 // View tool - read file contents with line numbers
@@ -757,6 +854,7 @@ pub fn run() {
             get_requirements_dir,
             get_project_dir,
             get_projects_index_path,
+            open_local_agent_interface,
             read_text_file,
         ])
         .run(tauri::generate_context!())

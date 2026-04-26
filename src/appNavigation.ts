@@ -6,6 +6,6 @@ export type RoleTab = {
 };
 
 export const VISIBLE_ROLE_TABS: RoleTab[] = [
-  { id: 'product', label: '项目' },
+  { id: 'product', label: '产品' },
   { id: 'design', label: '设计' },
 ];

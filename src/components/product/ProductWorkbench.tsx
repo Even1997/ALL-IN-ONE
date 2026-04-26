@@ -1,10 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from 'react';
+import { Allotment } from 'allotment';
 import { invoke } from '@tauri-apps/api/core';
 import { Canvas } from '../canvas/Canvas';
 import {
   buildKnowledgeEntries,
   findKnowledgeEntry,
+  type KnowledgeEntry,
 } from '../../modules/knowledge/knowledgeEntries';
 import {
   buildKnowledgeTree,
@@ -37,6 +39,7 @@ import {
 } from '../../utils/wireframe';
 import {
   deleteSketchPageFile,
+  ensureBuiltInStylePackFiles,
   ensureProjectFilesystemStructure,
   isTauriRuntimeAvailable,
   loadSketchPageArtifactsFromProjectDir,
@@ -48,13 +51,13 @@ import {
   joinFileSystemPath,
   normalizeRelativeFileSystemPath,
 } from '../../utils/fileSystemPaths.ts';
+import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from '../../utils/layoutPreferences';
 
 type SidebarTab = 'requirement' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
 export type WorkbenchLayoutDensity = 'comfortable' | 'compact';
 type PreviewFrameMode = 'browser' | 'mobile';
 type RequirementViewMode = 'preview' | 'edit';
-type KnowledgeSourceFilter = 'all' | 'requirement' | 'generated';
 type MarkdownListItem = {
   kind: 'bullet' | 'ordered' | 'task';
   text: string;
@@ -78,6 +81,7 @@ const normalizeRequirementFilename = (value: string) => {
 const joinDiskPath = (basePath: string, fileName: string) => joinFileSystemPath(basePath, fileName);
 
 const normalizeRelativePath = (value: string) => normalizeRelativeFileSystemPath(value);
+const PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS = { min: 200, max: 420 };
 
 const getKnowledgeGroupOverridesStorageKey = (projectId: string) =>
   `devflow:knowledge-group-overrides:${projectId}`;
@@ -812,7 +816,7 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
             onClick={(event) => event.stopPropagation()}
             title="拖动调整层级"
           >
-            ≡
+            ⋮⋮
           </button>
           <strong>{module.name}</strong>
         </div>
@@ -1252,10 +1256,20 @@ interface ProductWorkbenchProps {
 }
 
 export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }: ProductWorkbenchProps) => {
+  const defaultProductWorkbenchLeftNavWidth =
+    layoutFocus === 'canvas' ? 212 : layoutFocus === 'sidebar' ? 252 : 228;
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('requirement');
+  const [productWorkbenchLeftNavWidth, setProductWorkbenchLeftNavWidth] = useState(() =>
+    readLayoutSize(
+      LAYOUT_PREFERENCE_KEYS.productWorkbenchLeftNavWidth,
+      defaultProductWorkbenchLeftNavWidth,
+      PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS
+    )
+  );
   const [requirementViewMode, setRequirementViewMode] = useState<RequirementViewMode>('preview');
   const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
   const [selectedKnowledgeNodeId, setSelectedKnowledgeNodeId] = useState<string | null>(null);
+  const [openKnowledgeTabIds, setOpenKnowledgeTabIds] = useState<string[]>([]);
   const [requirementDraftTitle, setRequirementDraftTitle] = useState('');
   const [requirementDraftContent, setRequirementDraftContent] = useState('');
   const [requirementSaveMessage, setRequirementSaveMessage] = useState<string | null>(null);
@@ -1264,7 +1278,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const [manualPageId, setManualPageId] = useState<string | null>(null);
   const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
-  const [knowledgeSourceFilter, setKnowledgeSourceFilter] = useState<KnowledgeSourceFilter>('all');
   const [knowledgeDiskItems, setKnowledgeDiskItems] = useState<KnowledgeDiskItem[]>([]);
   const [knowledgeGroupOverrides, setKnowledgeGroupOverrides] = useState<Record<string, KnowledgeGroupId>>({});
   const [expandedKnowledgeNodeIds, setExpandedKnowledgeNodeIds] = useState<Set<string>>(
@@ -1273,6 +1286,9 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const [knowledgeContextMenu, setKnowledgeContextMenu] = useState<KnowledgeContextMenuState>(null);
   const [pageSearch, setPageSearch] = useState('');
   const [previewFrameMode, setPreviewFrameMode] = useState<PreviewFrameMode | null>(null);
+  const [isNarrowProductWorkbench, setIsNarrowProductWorkbench] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= 900 : false
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const requirementTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const knowledgeRefreshRequestIdRef = useRef(0);
@@ -1334,24 +1350,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     () => buildKnowledgeEntries(requirementDocs, generatedFiles),
     [generatedFiles, requirementDocs]
   );
-  const filteredKnowledgeEntries = useMemo(() => {
-    const keyword = knowledgeSearch.trim().toLowerCase();
-
-    return knowledgeEntries.filter((entry) => {
-      if (knowledgeSourceFilter !== 'all' && entry.source !== knowledgeSourceFilter) {
-        return false;
-      }
-
-      if (!keyword) {
-        return true;
-      }
-
-      return [entry.title, entry.summary, entry.filePath || '', entry.tags.join(' '), entry.content]
-        .join('\n')
-        .toLowerCase()
-        .includes(keyword);
-    });
-  }, [knowledgeEntries, knowledgeSearch, knowledgeSourceFilter]);
   const knowledgeTree = useMemo(
     () => buildKnowledgeTree(knowledgeEntries, knowledgeDiskItems, projectRootDir, knowledgeGroupOverrides),
     [knowledgeDiskItems, knowledgeEntries, knowledgeGroupOverrides, projectRootDir]
@@ -1369,6 +1367,12 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   );
   const selectedKnowledgeEntry =
     findKnowledgeEntry(knowledgeEntries, selectedRequirementId || selectedKnowledgeNode?.entryId || null) || null;
+  const openKnowledgeTabs = useMemo(
+    () => openKnowledgeTabIds
+      .map((id) => findKnowledgeEntry(knowledgeEntries, id))
+      .filter((entry): entry is KnowledgeEntry => Boolean(entry)),
+    [knowledgeEntries, openKnowledgeTabIds]
+  );
   const selectedRequirement =
     selectedKnowledgeEntry?.source === 'requirement'
       ? requirementDocs.find((doc) => doc.id === selectedKnowledgeEntry.id) || null
@@ -1431,13 +1435,12 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const layoutStyle = useMemo<CSSProperties>(() => {
     const pageColumns =
       layoutFocus === 'canvas'
-        ? 'minmax(0, 1.62fr) minmax(300px, 0.58fr)'
+        ? 'minmax(0, 1.84fr) minmax(292px, 0.46fr)'
         : layoutFocus === 'sidebar'
-          ? 'minmax(0, 1.1fr) minmax(360px, 0.9fr)'
-          : 'minmax(0, 1.42fr) minmax(320px, 0.66fr)';
+          ? 'minmax(0, 1.28fr) minmax(340px, 0.72fr)'
+          : 'minmax(0, 1.68fr) minmax(312px, 0.54fr)';
 
     return {
-      ['--pm-left-width' as string]: layoutFocus === 'canvas' ? '212px' : layoutFocus === 'sidebar' ? '252px' : '228px',
       ['--pm-page-columns' as string]: pageColumns,
       ['--pm-shell-gap' as string]: layoutDensity === 'compact' ? '8px' : '12px',
       ['--pm-card-gap' as string]: layoutDensity === 'compact' ? '8px' : '12px',
@@ -1445,6 +1448,19 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       ['--pm-canvas-height' as string]: layoutDensity === 'compact' ? 'clamp(620px, 78vh, 920px)' : 'clamp(700px, 84vh, 1020px)',
     };
   }, [layoutDensity, layoutFocus]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsNarrowProductWorkbench(window.innerWidth <= 900);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     if (!tree) {
@@ -1482,6 +1498,16 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       setSelectedRequirementId(selectedKnowledgeNode.entryId);
     }
   }, [selectedKnowledgeNode, selectedRequirementId]);
+
+  useEffect(() => {
+    if (!selectedKnowledgeEntry) {
+      return;
+    }
+
+    setOpenKnowledgeTabIds((current) =>
+      current.includes(selectedKnowledgeEntry.id) ? current : [...current, selectedKnowledgeEntry.id]
+    );
+  }, [selectedKnowledgeEntry]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -1630,6 +1656,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     }
 
     await ensureProjectFilesystemStructure(currentProject.id);
+    await ensureBuiltInStylePackFiles(currentProject.id);
     const diskItems = await listKnowledgeDiskItems(projectRootDir);
     if (requestId !== knowledgeRefreshRequestIdRef.current) {
       return;
@@ -2203,6 +2230,23 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     setSidebarTab('requirement');
   }, [knowledgeTree]);
 
+  const handleCloseKnowledgeTab = useCallback((entryId: string) => {
+    setOpenKnowledgeTabIds((current) => {
+      const closedIndex = current.indexOf(entryId);
+      const next = current.filter((id) => id !== entryId);
+
+      if (selectedKnowledgeEntry?.id === entryId) {
+        const fallbackId = next[Math.max(0, closedIndex - 1)] || next[closedIndex] || firstKnowledgeFileNode?.entryId || null;
+        setSelectedRequirementId(fallbackId);
+
+        const fallbackNode = fallbackId ? findKnowledgeNodeByEntryId(knowledgeTree, fallbackId) : null;
+        setSelectedKnowledgeNodeId(fallbackNode?.id || null);
+      }
+
+      return next;
+    });
+  }, [firstKnowledgeFileNode?.entryId, knowledgeTree, selectedKnowledgeEntry?.id]);
+
   const toggleKnowledgeNode = useCallback((nodeId: string) => {
     setExpandedKnowledgeNodeIds((current) => {
       const next = new Set(current);
@@ -2365,19 +2409,55 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
             </button>
           </div>
         </div>
+        {openKnowledgeTabs.length > 0 ? (
+          <div className="pm-knowledge-open-tabs">
+            {openKnowledgeTabs.map((tab) => (
+              <div
+                key={tab.id}
+                className={`pm-knowledge-open-tab ${selectedKnowledgeEntry?.id === tab.id ? 'active' : ''}`}
+              >
+                <button
+                  className="pm-knowledge-open-tab-main"
+                  type="button"
+                  title={tab.filePath || tab.title}
+                  onClick={() => {
+                    const node = findKnowledgeNodeByEntryId(knowledgeTree, tab.id);
+                    if (node) {
+                      setSelectedKnowledgeNodeId(node.id);
+                    }
+                    setSelectedRequirementId(tab.id);
+                  }}
+                >
+                  {tab.title}
+                </button>
+                <button
+                  className="pm-knowledge-open-tab-close"
+                  type="button"
+                  aria-label={`关闭 ${tab.title}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleCloseKnowledgeTab(tab.id);
+                  }}
+                >
+                  脳
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {selectedKnowledgeEntry ? (
           <div className="requirement-file-editor">
             <div className="requirement-file-meta">
               <div>
-                <strong>{selectedKnowledgeEntry.title}</strong>
-                <span>
-                  {selectedKnowledgeEntry.type === 'html'
-                    ? 'HTML 设计稿'
-                    : selectedRequirement?.kind === 'sketch'
-                      ? '草图 Markdown'
-                      : selectedRequirement?.kind === 'spec'
-                        ? '规范 Markdown'
-                        : '知识 Markdown'}
+                  <strong>{selectedKnowledgeEntry.title}</strong>
+                  <span>
+                      {selectedKnowledgeEntry.type === 'html'
+                        ? 'HTML 设计稿'
+                        : selectedRequirement?.kind === 'sketch'
+                          ? '草图 Markdown'
+                          : selectedRequirement?.kind === 'spec'
+                            ? '规范 Markdown'
+                            : '知识 Markdown'}
                   {' / '}
                   {selectedKnowledgeEntry.status}
                   {' / '}
@@ -2583,12 +2663,12 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
 
     return (
       <div className="pm-page-workspace">
-        <section className="pm-card pm-wireframe-main">
-          <div className="pm-card-header pm-wireframe-section-header">
+        <section className="pm-card pm-wireframe-main pm-wireframe-main-canvas">
+          <div className="pm-card-header pm-wireframe-section-header pm-wireframe-canvas-header">
             <div>
               <h3>页面画布</h3>
             </div>
-            <div className="pm-inline-actions">
+            <div className="pm-inline-actions pm-wireframe-canvas-actions">
               <button
                 className={`doc-action-btn secondary ${canvasPreset.frameType === 'browser' ? 'active' : ''}`}
                 type="button"
@@ -2635,163 +2715,130 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     );
   };
 
+  const handleProductWorkbenchLayoutChange = useCallback((sizes: number[]) => {
+    const nextLeftNavWidth = sizes[0];
+    if (!Number.isFinite(nextLeftNavWidth)) {
+      return;
+    }
+
+    const persistedWidth = writeLayoutSize(
+      LAYOUT_PREFERENCE_KEYS.productWorkbenchLeftNavWidth,
+      nextLeftNavWidth,
+      PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS
+    );
+    setProductWorkbenchLeftNavWidth(persistedWidth);
+  }, []);
+
+  const productWorkbenchSidebar = (
+    <aside className="pm-left-nav">
+      <div className="pm-nav-header">
+        <strong>{currentProject?.name || '产品工作台'}</strong>
+      </div>
+
+      <div className="pm-sidebar-tabs">
+        <button className={sidebarTab === 'requirement' ? 'active' : ''} onClick={() => setSidebarTab('requirement')} type="button">
+          知识库
+        </button>
+        <span className="pm-sidebar-tab-divider" aria-hidden="true" />
+        <button className={sidebarTab === 'page' ? 'active' : ''} onClick={() => setSidebarTab('page')} type="button">
+          页面
+        </button>
+      </div>
+
+      {sidebarTab === 'requirement' && (
+        <section className="pm-nav-section">
+          <div className="pm-nav-section-header">
+            <div className="pm-nav-title">{knowledgeEntries.length} 条</div>
+            <div className="pm-inline-actions">
+              <button className="pm-nav-mini-action" type="button" onClick={() => void handleCreateKnowledgeFile('project')}>
+                + 文件
+              </button>
+            </div>
+          </div>
+          <input
+            className="product-input pm-knowledge-search-input"
+            type="search"
+            value={knowledgeSearch}
+            onChange={(event) => setKnowledgeSearch(event.target.value)}
+            placeholder="搜索文档"
+          />
+          <div className="pm-knowledge-tree">
+            {filteredKnowledgeTree.length > 0 ? renderKnowledgeTree(filteredKnowledgeTree) : (
+              <div className="pm-page-tree-empty">没有匹配的知识条目</div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {sidebarTab === 'page' && (
+        <section className="pm-nav-section">
+          <div className="pm-nav-section-header">
+            <div className="pm-nav-title">{filteredDesignPages.length || designPages.length} 个页面</div>
+            <button className="pm-nav-mini-action" type="button" onClick={handleAddPageFromSidebar}>
+              + 页面
+            </button>
+          </div>
+          <input
+            className="product-input pm-page-search-input"
+            type="search"
+            value={pageSearch}
+            onChange={(event) => setPageSearch(event.target.value)}
+            placeholder="搜索页面"
+          />
+          {designPages.length > 0 ? (
+            filteredDesignPages.length > 0 ? (
+              <div className="pm-page-tree">
+                {filteredPageStructure.map((node) => (
+                  <PageTreeNode
+                    key={node.id}
+                    node={node}
+                    depth={0}
+                    selectedPageId={selectedPage?.id || null}
+                    onSelect={setManualPageId}
+                    onAddPage={handleAddChildPageById}
+                    onDeletePage={handleDeletePageById}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="pm-page-tree-empty">没有匹配的页面</div>
+            )
+          ) : (
+            <div className="pm-page-tree-empty">还没有页面，请先创建</div>
+          )}
+        </section>
+      )}
+    </aside>
+  );
+  const productWorkbenchMainViewer = (
+    <main className="pm-main-viewer">
+      {sidebarTab === 'requirement' && renderRequirementMain()}
+      {sidebarTab === 'page' && renderPageMain()}
+      {sidebarTab === 'page' && <WireframeSyncBridge selectedPage={selectedPage} />}
+    </main>
+  );
+
   return (
     <div className="product-workbench-shell" style={layoutStyle} onClick={() => setKnowledgeContextMenu(null)}>
-      <aside className="pm-left-nav">
-        <div className="pm-nav-header">
-          <strong>{currentProject?.name || '产品工作台'}</strong>
-        </div>
-
-        <div className="pm-sidebar-tabs">
-          <button className={sidebarTab === 'requirement' ? 'active' : ''} onClick={() => setSidebarTab('requirement')} type="button">
-            知识库
-          </button>
-          <button className={sidebarTab === 'page' ? 'active' : ''} onClick={() => setSidebarTab('page')} type="button">
-            页面
-          </button>
-        </div>
-
-        {false && (
-          <section className="pm-nav-section">
-            <div className="pm-nav-section-header">
-              <div className="pm-nav-title">
-                {filteredKnowledgeEntries.length} / {knowledgeEntries.length} 条
-              </div>
-            </div>
-            <input
-              className="product-input pm-knowledge-search-input"
-              type="search"
-              value={knowledgeSearch}
-              onChange={(event) => setKnowledgeSearch(event.target.value)}
-              placeholder="搜索文档"
-            />
-            <div className="pm-knowledge-filter-tabs">
-              <button
-                className={knowledgeSourceFilter === 'all' ? 'active' : ''}
-                type="button"
-                onClick={() => setKnowledgeSourceFilter('all')}
-              >
-                全部
-              </button>
-              <button
-                className={knowledgeSourceFilter === 'requirement' ? 'active' : ''}
-                type="button"
-                onClick={() => setKnowledgeSourceFilter('requirement')}
-              >
-                Markdown
-              </button>
-              <button
-                className={knowledgeSourceFilter === 'generated' ? 'active' : ''}
-                type="button"
-                onClick={() => setKnowledgeSourceFilter('generated')}
-              >
-                设计稿
-              </button>
-            </div>
-            <div className="pm-knowledge-list">
-              {filteredKnowledgeEntries.length > 0 ? (
-                filteredKnowledgeEntries.map((entry) => (
-                  <button
-                    key={entry.id}
-                    className={`pm-nav-item pm-knowledge-nav-item ${selectedKnowledgeEntry?.id === entry.id ? 'active' : ''}`}
-                    onClick={() => {
-                      setSelectedRequirementId(entry.id);
-                    }}
-                    type="button"
-                  >
-                    <strong>{entry.title}</strong>
-                    {entry.summary ? <span className="pm-knowledge-summary">{entry.summary}</span> : null}
-                    <div className="pm-knowledge-nav-meta">
-                      <span>
-                        {entry.type === 'html'
-                          ? 'HTML'
-                          : entry.kind === 'sketch'
-                            ? '草图'
-                            : entry.kind === 'spec'
-                              ? '规范'
-                              : '知识'}
-                      </span>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <div className="pm-page-tree-empty">没有匹配的知识条目</div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {sidebarTab === 'requirement' && (
-          <section className="pm-nav-section">
-            <div className="pm-nav-section-header">
-              <div className="pm-nav-title">{knowledgeEntries.length} 条</div>
-              <div className="pm-inline-actions">
-                <button className="pm-nav-mini-action" type="button" onClick={() => void handleCreateKnowledgeFile('project')}>
-                  + 文件
-                </button>
-              </div>
-            </div>
-            <input
-              className="product-input pm-knowledge-search-input"
-              type="search"
-              value={knowledgeSearch}
-              onChange={(event) => setKnowledgeSearch(event.target.value)}
-              placeholder="搜索文档"
-            />
-            <div className="pm-knowledge-tree">
-              {filteredKnowledgeTree.length > 0 ? renderKnowledgeTree(filteredKnowledgeTree) : (
-                <div className="pm-page-tree-empty">没有匹配的知识条目</div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {sidebarTab === 'page' && (
-          <section className="pm-nav-section">
-            <div className="pm-nav-section-header">
-              <div className="pm-nav-title">{filteredDesignPages.length || designPages.length} 个页面</div>
-              <button className="pm-nav-mini-action" type="button" onClick={handleAddPageFromSidebar}>
-                + 页面
-              </button>
-            </div>
-            <input
-              className="product-input pm-page-search-input"
-              type="search"
-              value={pageSearch}
-              onChange={(event) => setPageSearch(event.target.value)}
-              placeholder="搜索页面"
-            />
-            {designPages.length > 0 ? (
-              filteredDesignPages.length > 0 ? (
-                <div className="pm-page-tree">
-                  {filteredPageStructure.map((node) => (
-                    <PageTreeNode
-                      key={node.id}
-                      node={node}
-                      depth={0}
-                      selectedPageId={selectedPage?.id || null}
-                      onSelect={setManualPageId}
-                      onAddPage={handleAddChildPageById}
-                      onDeletePage={handleDeletePageById}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="pm-page-tree-empty">没有匹配的页面</div>
-              )
-            ) : (
-              <div className="pm-page-tree-empty">还没有页面，请先创建</div>
-            )}
-          </section>
-        )}
-      </aside>
-
-      <main className="pm-main-viewer">
-        {sidebarTab === 'requirement' && renderRequirementMain()}
-        {sidebarTab === 'page' && renderPageMain()}
-        {sidebarTab === 'page' && <WireframeSyncBridge selectedPage={selectedPage} />}
-      </main>
-
+      {isNarrowProductWorkbench ? (
+        <>
+          {productWorkbenchSidebar}
+          {productWorkbenchMainViewer}
+        </>
+      ) : (
+        <Allotment className="product-workbench-allotment" onChange={handleProductWorkbenchLayoutChange}>
+          <Allotment.Pane
+            minSize={PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS.min}
+            maxSize={PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS.max}
+            preferredSize={productWorkbenchLeftNavWidth}
+          >
+            <div className="product-workbench-pane">{productWorkbenchSidebar}</div>
+          </Allotment.Pane>
+          <Allotment.Pane minSize={480}>
+            <div className="product-workbench-pane">{productWorkbenchMainViewer}</div>
+          </Allotment.Pane>
+        </Allotment>
+      )}
       {knowledgeContextMenu ? (
         <div
           className="pm-knowledge-context-menu"
@@ -2842,3 +2889,4 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     </div>
   );
 };
+

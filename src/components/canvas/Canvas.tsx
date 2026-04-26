@@ -314,7 +314,7 @@ export const Canvas = memo<CanvasProps>(({
   const selectElement = usePreviewStore((state) => state.selectElement);
   const updateElement = usePreviewStore((state) => state.updateElement);
   const [viewportSize, setViewportSize] = useState({ width, height });
-  const [scale, setScale] = useState(0.8);
+  const [scale, setScale] = useState(0.92);
   const [viewportOffset, setViewportOffset] = useState({ x: 0, y: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -353,6 +353,13 @@ export const Canvas = memo<CanvasProps>(({
     () => getFrameChrome(frameType, width, logicalBoardHeight),
     [frameType, logicalBoardHeight, width]
   );
+  const fitScale = useMemo(() => {
+    const safeWidth = Math.max(320, viewportSize.width - (frameType === 'mobile' ? 120 : 88));
+    const safeHeight = Math.max(320, viewportSize.height - (frameType === 'mobile' ? 132 : 104));
+    const nextScale = Math.min(safeWidth / frameChrome.outerWidth, safeHeight / frameChrome.outerHeight);
+
+    return Math.min(Math.max(nextScale, 0.72), frameType === 'mobile' ? 0.96 : 1.06);
+  }, [frameChrome.outerHeight, frameChrome.outerWidth, frameType, viewportSize.height, viewportSize.width]);
   const palette = useMemo<CanvasPalette>(() => {
     if (typeof window === 'undefined') {
       return {
@@ -527,6 +534,14 @@ export const Canvas = memo<CanvasProps>(({
       y: viewportSize.height * (1 - scale) / 2,
     });
   }, [scale, viewportSize.height, viewportSize.width]);
+
+  useEffect(() => {
+    if (hasManualViewportRef.current) {
+      return;
+    }
+
+    setScale(fitScale);
+  }, [fitScale]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

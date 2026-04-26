@@ -21,6 +21,8 @@ import { APP_STYLE_OPTIONS, APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppS
 import { VISIBLE_ROLE_TABS, type RoleView } from './appNavigation';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type { AppType, FeatureNode, GeneratedFile, PageStructureNode, ProjectConfig, WireframeDocument } from './types';
+import { Allotment } from 'allotment';
+import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
 import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
 import {
   getProjectDir,
@@ -46,6 +48,7 @@ import {
   writeSketchPageFile,
   type ProjectStorageSettings,
 } from './utils/projectPersistence';
+import 'allotment/dist/style.css';
 import './App.css';
 
 type ThemeMode = 'dark' | 'light';
@@ -220,6 +223,7 @@ const removeProjectSnapshot = (projectId: string) => {
 };
 
 const THEME_STORAGE_KEY = 'devflow-theme-mode';
+const DESKTOP_AI_PANE_WIDTH_BOUNDS = { min: 320, max: 640 };
 const DESIGN_BOARD_STORAGE_PREFIX = 'devflow-design-board';
 const PROJECT_INDEX_STORAGE_KEY = 'devflow-project-index';
 const PROJECT_SNAPSHOT_STORAGE_PREFIX = 'devflow-project-snapshot';
@@ -735,6 +739,13 @@ const SketchLibraryTreeItem: React.FC<SketchLibraryTreeItemProps> = ({
 
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<RoleView>('product');
+  const [desktopAiPaneWidth, setDesktopAiPaneWidth] = useState(() =>
+    readLayoutSize(
+      LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
+      420,
+      DESKTOP_AI_PANE_WIDTH_BOUNDS
+    )
+  );
   const [projects, setProjects] = useState<ProjectConfig[]>(() => readProjectIndex());
   const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
   const [stylePresets, setStylePresets] = useState<Omit<DesignStyleNode, 'id' | 'x' | 'y' | 'width' | 'height'>[]>(
@@ -747,10 +758,10 @@ const App: React.FC = () => {
   const [projectStorageMessage, setProjectStorageMessage] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window === 'undefined') {
-      return 'dark';
+      return 'light';
     }
 
-    return window.localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+    return window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
   });
   const [appStyle, setAppStyle] = useState<AppStyle>(() => {
     if (typeof window === 'undefined') {
@@ -1013,6 +1024,39 @@ const App: React.FC = () => {
     [designSelectionIds, designStyleNodes]
   );
   const canUseProjectFilesystem = isTauriRuntimeAvailable();
+  const isDesktopWorkbenchMode = Boolean(currentProject && currentRole !== 'design' && !isProjectManagerOpen);
+
+  const handleDesktopWorkbenchLayoutChange = useCallback((sizes: number[]) => {
+    const nextAiPaneWidth = sizes[1];
+    if (!Number.isFinite(nextAiPaneWidth)) {
+      return;
+    }
+
+    setDesktopAiPaneWidth(
+      writeLayoutSize(
+        LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
+        nextAiPaneWidth,
+        DESKTOP_AI_PANE_WIDTH_BOUNDS
+      )
+    );
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle('desktop-workbench-mode', isDesktopWorkbenchMode);
+
+    return () => {
+      document.body.classList.remove('desktop-workbench-mode');
+    };
+  }, [isDesktopWorkbenchMode]);
+
+  useEffect(() => {
+    writeLayoutSize(
+      LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
+      desktopAiPaneWidth,
+      DESKTOP_AI_PANE_WIDTH_BOUNDS
+    );
+  }, [desktopAiPaneWidth]);
+
   const refreshSketchArtifactsFromDisk = useCallback(async () => {
     if (!canUseProjectFilesystem || !currentProject) {
       return null;
@@ -3312,31 +3356,35 @@ ${selectedContextPrompt}` : '',
           >
           <div className="design-workbench-topbar design-workbench-topbar-floating">
             <div className="design-workbench-actions">
-              <button className="doc-action-btn secondary" onClick={() => setIsSketchLibraryOpen((current) => !current)} type="button">
-                草图库
-              </button>
-              <button className="doc-action-btn secondary" onClick={handleAddDesignPage} type="button">
-                新增草图页
-              </button>
-              <button className="doc-action-btn secondary" onClick={handleAddFlowNode} type="button">
-                新增流程节点
-              </button>
-              <button
-                className={`doc-action-btn secondary design-workbench-action-hidden ${isConnectorMode ? 'active' : ''}`}
-                onClick={() => {
-                  setIsConnectorMode((current) => !current);
-                  setPendingConnectionStartId(null);
-                }}
-                type="button"
-              >
-                {isConnectorMode ? '退出连线' : '开始连线'}
-              </button>
-              <button className="doc-action-btn secondary" onClick={handleGenerateDelivery} type="button">
-                更新交付物
-              </button>
-              <button className="doc-action-btn" onClick={handleGenerateDesignDraft} type="button" disabled={!isPageSelected}>
-                生成 UI 草图
-              </button>
+              <div className="design-workbench-action-group">
+                <button className="doc-action-btn secondary" onClick={() => setIsSketchLibraryOpen((current) => !current)} type="button">
+                  草图库
+                </button>
+                <button className="doc-action-btn secondary" onClick={handleAddDesignPage} type="button">
+                  新增草图页
+                </button>
+                <button className="doc-action-btn secondary" onClick={handleAddFlowNode} type="button">
+                  新增流程节点
+                </button>
+                <button
+                  className={`doc-action-btn secondary design-workbench-action-hidden ${isConnectorMode ? 'active' : ''}`}
+                  onClick={() => {
+                    setIsConnectorMode((current) => !current);
+                    setPendingConnectionStartId(null);
+                  }}
+                  type="button"
+                >
+                  {isConnectorMode ? '退出连线' : '开始连线'}
+                </button>
+              </div>
+              <div className="design-workbench-action-group design-workbench-action-group-primary">
+                <button className="doc-action-btn secondary" onClick={handleGenerateDelivery} type="button">
+                  更新交付物
+                </button>
+                <button className="doc-action-btn" onClick={handleGenerateDesignDraft} type="button" disabled={!isPageSelected}>
+                  生成 UI 草图
+                </button>
+              </div>
             </div>
           </div>
 
@@ -4402,8 +4450,35 @@ ${selectedContextPrompt}` : '',
     );
   }
 
+  const appMainContent = isProjectManagerOpen ? (
+    <ProjectSetup
+      projects={projects}
+      activeProjectId={currentProjectId}
+      currentProjectName={currentProject?.name ?? null}
+      projectStorageSettings={projectStorageSettings}
+      projectStorageDraftOverride={projectStorageDraftOverride}
+      projectStorageState={projectStorageState}
+      projectStorageMessage={projectStorageMessage}
+      onCreateProject={handleCreateProject}
+      onOpenProject={handleOpenProject}
+      onDeleteProject={handleDeleteProject}
+      onSaveProjectStoragePath={handleSaveProjectStoragePath}
+      onPickProjectStoragePath={handlePickProjectStoragePath}
+      onResetProjectStoragePath={handleResetProjectStoragePath}
+      onClose={() => setIsProjectManagerOpen(false)}
+    />
+  ) : (
+    <>
+      {currentRole === 'product' ? renderProductView() : null}
+      {currentRole === 'design' ? renderDesignView() : null}
+      {currentRole === 'develop' ? renderDevelopView() : null}
+      {currentRole === 'test' ? renderTestView() : null}
+      {currentRole === 'operations' ? renderOperationsView() : null}
+    </>
+  );
+
   return (
-    <div className="app">
+    <div className={`app app-shell-desktop ${isDesktopWorkbenchMode ? 'desktop-active' : ''}`}>
       <header className="app-header">
         <div className="header-left">
           <div className="app-brand">DevFlow</div>
@@ -4477,35 +4552,33 @@ ${selectedContextPrompt}` : '',
         </div>
       </header>
 
-      <main className="app-main">
-        {isProjectManagerOpen ? (
-          <ProjectSetup
-            projects={projects}
-            activeProjectId={currentProjectId}
-            currentProjectName={currentProject?.name ?? null}
-            projectStorageSettings={projectStorageSettings}
-            projectStorageDraftOverride={projectStorageDraftOverride}
-            projectStorageState={projectStorageState}
-            projectStorageMessage={projectStorageMessage}
-            onCreateProject={handleCreateProject}
-            onOpenProject={handleOpenProject}
-            onDeleteProject={handleDeleteProject}
-            onSaveProjectStoragePath={handleSaveProjectStoragePath}
-            onPickProjectStoragePath={handlePickProjectStoragePath}
-            onResetProjectStoragePath={handleResetProjectStoragePath}
-            onClose={() => setIsProjectManagerOpen(false)}
-          />
+      <div className="app-workbench-row">
+        {isDesktopWorkbenchMode ? (
+          <Allotment className="app-workbench-allotment" onChange={handleDesktopWorkbenchLayoutChange}>
+            <Allotment.Pane minSize={640}>
+              <div className="app-workbench-pane">
+                <main className="app-main app-main-desktop">{appMainContent}</main>
+              </div>
+            </Allotment.Pane>
+            <Allotment.Pane
+              minSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
+              maxSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
+              preferredSize={desktopAiPaneWidth}
+            >
+              <div className="app-workbench-pane">
+                <aside className="app-ai-activity-pane">
+                  <AIWorkspace />
+                </aside>
+              </div>
+            </Allotment.Pane>
+          </Allotment>
         ) : (
           <>
-            {currentRole === 'product' ? renderProductView() : null}
-            {currentRole === 'design' ? renderDesignView() : null}
-            {currentRole === 'develop' ? renderDevelopView() : null}
-            {currentRole === 'test' ? renderTestView() : null}
-            {currentRole === 'operations' ? renderOperationsView() : null}
+            <main className="app-main app-main-desktop">{appMainContent}</main>
+            <AIWorkspace />
           </>
         )}
-      </main>
-      <AIWorkspace />
+      </div>
     </div>
   );
 };

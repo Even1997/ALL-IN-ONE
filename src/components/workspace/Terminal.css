@@ -241,7 +241,7 @@
 .terminal-action {
   width: 30px;
   height: 30px;
-  border-radius: 10px;
+  border-radius: var(--style-radius-xs);
   color: var(--mode-soft-text);
 }
 
@@ -283,7 +283,7 @@
 .terminal-input {
   min-height: 38px;
   padding: 0 12px;
-  border-radius: 12px;
+  border-radius: var(--style-radius-sm);
   background: color-mix(in srgb, var(--mode-input) 92%, transparent);
   border: 1px solid var(--mode-border);
   color: var(--mode-text);
