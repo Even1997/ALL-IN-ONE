@@ -4570,7 +4570,7 @@ ${selectedContextPrompt}` : '',
         ) : (
           <>
             <main className="app-main app-main-desktop">{appMainContent}</main>
-            <AIWorkspace />
+            {currentRole !== 'design' ? <AIWorkspace /> : null}
           </>
         )}
       </div>
