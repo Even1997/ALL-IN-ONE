@@ -12,9 +12,15 @@ test('app keeps AI in the shared right pane instead of a dedicated Claude route'
   const source = await readFile(appPath, 'utf8');
 
   assert.doesNotMatch(source, /import\s+\{\s*ClaudePage\s*\}\s+from\s+'\.\/components\/ai\/ClaudePage';/);
+  assert.doesNotMatch(source, /<ClaudePage\s*\/>/);
   assert.doesNotMatch(source, /currentRole === 'ai'/);
-  assert.match(source, /const appMainContent = isProjectManagerOpen \?/);
-  assert.match(source, /<main className="app-main app-main-desktop">\{appMainContent\}<\/main>/);
-  assert.match(source, /<aside className="app-ai-activity-pane">[\s\S]*<AIWorkspace \/>[\s\S]*<\/aside>/);
-  assert.match(source, /<AIWorkspace \/>/);
+  assert.doesNotMatch(source, /isAIPage/);
+  assert.match(
+    source,
+    /{isDesktopWorkbenchMode\s*\?\s*\([\s\S]*<Allotment\.Pane minSize=\{640\}>[\s\S]*<main className="app-main app-main-desktop">\{appDesktopContent\}<\/main>[\s\S]*<\/Allotment\.Pane>[\s\S]*<Allotment\.Pane[\s\S]*<aside className="app-ai-activity-pane">[\s\S]*<AIWorkspace \/>[\s\S]*<\/aside>[\s\S]*<\/Allotment\.Pane>/
+  );
+  assert.match(
+    source,
+    /:\s*\([\s\S]*<main className="app-main app-main-desktop">\{appMainContent\}<\/main>[\s\S]*<AIWorkspace \/>[\s\S]*\)\s*}/
+  );
 });
