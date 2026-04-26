@@ -27,6 +27,11 @@ test('claudian chat page keeps only the actionable chat surface', async () => {
   assert.doesNotMatch(source, /ClaudianStatusPanel/);
   assert.doesNotMatch(source, /ClaudianRuntimeSummary/);
   assert.doesNotMatch(source, /ClaudianRuntimeBinding/);
+  assert.match(source, /useGlobalAIStore/);
+  assert.match(source, /resolvePreferredConfig/);
+  assert.match(source, /runtimeConfigIdOverride = boundConfigId \|\| preferredConfig\?\.id \|\| null/);
+  assert.match(source, /providerId === 'classic' && mode === 'panel'/);
+  assert.match(source, /\? 'claudian-embedded'/);
 });
 
 test('provider workspaces render ClaudianChatPage directly without demo session chrome', async () => {
