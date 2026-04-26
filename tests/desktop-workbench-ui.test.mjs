@@ -86,10 +86,11 @@ test('right app shell resizer only paints a one pixel line on hover', async () =
   assert.match(source, /desktopAiPaneWidth/);
   assert.match(source, /readLayoutSize/);
   assert.match(source, /writeLayoutSize/);
-  assert.match(css, /\.app-shell-resizer\s*{[\s\S]*?background:\s*transparent;/);
-  assert.match(css, /\.app-shell-resizer::before\s*{[\s\S]*?background:\s*transparent;/);
-  assert.match(css, /\.app-shell-resizer\.vertical::before\s*{[\s\S]*?width:\s*1px;/);
-  assert.match(css, /\.app-shell-resizer:hover::before\s*{[\s\S]*?background:\s*var\(--mode-border/);
+  assert.match(source, /<Allotment className="app-workbench-allotment"/);
+  assert.match(css, /\.app-workbench-allotment\s*\{/);
+  assert.match(css, /\.app-workbench-allotment\s*{[\s\S]*?--sash-size:\s*8px;/);
+  assert.match(css, /\.app-workbench-allotment\s*{[\s\S]*?--sash-hover-size:\s*4px;/);
+  assert.match(css, /\.app-ai-activity-pane\s*\{/);
 });
 
 test('desktop product knowledge and page panes fill the workbench height', async () => {
