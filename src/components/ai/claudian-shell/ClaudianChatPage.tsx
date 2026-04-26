@@ -33,8 +33,6 @@ export const ClaudianChatPage: React.FC<{
       ? 'claudian-embedded'
       : providerId === 'classic'
         ? 'default'
-      : mode === 'full-page'
-        ? 'claudian-full-page'
         : 'claudian-embedded';
 
   return (

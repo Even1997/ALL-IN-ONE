@@ -90,7 +90,7 @@ type AIProviderTypeOption = {
 };
 
 type AIChatProps = {
-  variant?: 'default' | 'claudian-embedded' | (string & {});
+  variant?: 'default' | 'claudian-embedded';
   runtimeConfigIdOverride?: string | null;
   providerExecutionMode?: 'claude' | 'codex' | null;
 };
