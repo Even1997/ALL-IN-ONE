@@ -69,33 +69,21 @@ export const ClaudianShell: React.FC<{ mode?: 'panel' | 'full-page' }> = ({ mode
 
   return (
     <section className={`claudian-shell claudian-shell-${mode}`} data-mode={currentMode}>
-      <aside className="claudian-launcher-rail">
-        <div className="claudian-launcher-rail-brand">
-          <span className="claudian-logo" aria-hidden="true">
-            <span className="claudian-logo-dot" />
-          </span>
-          <span className="claudian-launcher-rail-copy">
-            <strong>Claudian</strong>
-            <span>SDK Host</span>
-          </span>
+      <header className="claudian-header">
+        <div className="claudian-title-slot">
+          <span className="claudian-context-badge">Claudian</span>
+          <h4 className="claudian-title-text">{pageTitle}</h4>
+          <span className={`claudian-provider-badge claudian-provider-badge-${currentMode}`}>{providerThemeLabel}</span>
         </div>
-        <ClaudianModeSwitch />
-      </aside>
+        <div className="claudian-header-actions">
+          <ClaudianModeSwitch compact />
+          <div className="claudian-tab-bar-container">
+            <ClaudianTabBadges />
+          </div>
+        </div>
+      </header>
 
       <div className="claudian-shell-main">
-        <header className="claudian-header">
-          <div className="claudian-title-slot">
-            <span className="claudian-context-badge">Claudian</span>
-            <h4 className="claudian-title-text">{pageTitle}</h4>
-            <span className={`claudian-provider-badge claudian-provider-badge-${currentMode}`}>{providerThemeLabel}</span>
-          </div>
-          <div className="claudian-header-actions">
-            <div className="claudian-tab-bar-container">
-              <ClaudianTabBadges />
-            </div>
-          </div>
-        </header>
-
         <div className="claudian-tab-content-container">
           {currentMode === 'config' ? <ClaudianConfigPage /> : null}
           {currentMode === 'claude' ? <ClaudeWorkspace mode={mode} localSnapshot={localSnapshot} /> : null}

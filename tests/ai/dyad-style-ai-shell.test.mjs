@@ -17,8 +17,12 @@ test('provider workspace layout exposes dyad-style session sidebar, message view
   assert.match(source, /RuntimeStatusBar/);
 });
 
-test('ai shell css defines unified panel surfaces and provider workspace layout tokens', async () => {
+test('ai shell css defines the compact shared panel surface', async () => {
   const source = await readFile(shellCssPath, 'utf8');
+  const shellRule = source.match(/\.claudian-shell\s*\{([\s\S]*?)\n\}/);
+  assert.ok(shellRule, 'expected .claudian-shell rule');
   assert.match(source, /--claudian-bg/);
-  assert.match(source, /provider-workspace-layout/);
+  assert.match(shellRule[1], /display:\s*flex;/);
+  assert.match(shellRule[1], /flex-direction:\s*column;/);
+  assert.doesNotMatch(source, /\.claudian-launcher-hero\b/);
 });
