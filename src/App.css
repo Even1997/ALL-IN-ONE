@@ -559,6 +559,10 @@ body {
   gap: 4px;
 }
 
+.pm-nav-header-search {
+  width: 100%;
+}
+
 .pm-nav-header strong {
   font-size: 16px;
   color: #0f172a;

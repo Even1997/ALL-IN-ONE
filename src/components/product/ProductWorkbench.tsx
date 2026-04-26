@@ -2401,9 +2401,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
             <h3>知识库</h3>
           </div>
           <div className="pm-inline-actions">
-            <button className="doc-action-btn secondary" type="button" onClick={() => void handleCreateKnowledgeFile('project')}>
-              新建
-            </button>
             <button className="doc-action-btn secondary" type="button" onClick={handleUploadClick}>
               上传
             </button>
@@ -2449,20 +2446,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
           <div className="requirement-file-editor">
             <div className="requirement-file-meta">
               <div>
-                  <strong>{selectedKnowledgeEntry.title}</strong>
-                  <span>
-                      {selectedKnowledgeEntry.type === 'html'
-                        ? 'HTML 设计稿'
-                        : selectedRequirement?.kind === 'sketch'
-                          ? '草图 Markdown'
-                          : selectedRequirement?.kind === 'spec'
-                            ? '规范 Markdown'
-                            : '知识 Markdown'}
-                  {' / '}
-                  {selectedKnowledgeEntry.status}
-                  {' / '}
-                  {new Date(selectedKnowledgeEntry.updatedAt).toLocaleString()}
-                </span>
+                <strong>{selectedKnowledgeEntry.title}</strong>
               </div>
               <div className="requirement-file-toolbar">
                 {selectedRequirement ? (
@@ -2732,7 +2716,20 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const productWorkbenchSidebar = (
     <aside className="pm-left-nav">
       <div className="pm-nav-header">
-        <strong>{currentProject?.name || '产品工作台'}</strong>
+        <input
+          className="product-input pm-nav-header-search"
+          type="search"
+          value={sidebarTab === 'requirement' ? knowledgeSearch : pageSearch}
+          onChange={(event) => {
+            if (sidebarTab === 'requirement') {
+              setKnowledgeSearch(event.target.value);
+              return;
+            }
+
+            setPageSearch(event.target.value);
+          }}
+          placeholder={sidebarTab === 'requirement' ? '搜索文档' : '搜索页面'}
+        />
       </div>
 
       <div className="pm-sidebar-tabs">
@@ -2749,19 +2746,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
         <section className="pm-nav-section">
           <div className="pm-nav-section-header">
             <div className="pm-nav-title">{knowledgeEntries.length} 条</div>
-            <div className="pm-inline-actions">
-              <button className="pm-nav-mini-action" type="button" onClick={() => void handleCreateKnowledgeFile('project')}>
-                + 文件
-              </button>
-            </div>
           </div>
-          <input
-            className="product-input pm-knowledge-search-input"
-            type="search"
-            value={knowledgeSearch}
-            onChange={(event) => setKnowledgeSearch(event.target.value)}
-            placeholder="搜索文档"
-          />
           <div className="pm-knowledge-tree">
             {filteredKnowledgeTree.length > 0 ? renderKnowledgeTree(filteredKnowledgeTree) : (
               <div className="pm-page-tree-empty">没有匹配的知识条目</div>
@@ -2778,13 +2763,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
               + 页面
             </button>
           </div>
-          <input
-            className="product-input pm-page-search-input"
-            type="search"
-            value={pageSearch}
-            onChange={(event) => setPageSearch(event.target.value)}
-            placeholder="搜索页面"
-          />
           {designPages.length > 0 ? (
             filteredDesignPages.length > 0 ? (
               <div className="pm-page-tree">

@@ -112,6 +112,25 @@ test('product knowledge reading view keeps chrome compact for content-first read
   assert.doesNotMatch(source, /编辑完成后点击保存。/);
 });
 
+test('product workbench uses one left-nav search input and removes duplicate in-panel knowledge chrome', async () => {
+  const source = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(source, /className="product-input pm-nav-header-search"/);
+  assert.match(source, /value=\{sidebarTab === 'requirement' \? knowledgeSearch : pageSearch\}/);
+  assert.match(source, /placeholder=\{sidebarTab === 'requirement' \? '搜索文档' : '搜索页面'\}/);
+  assert.doesNotMatch(source, /className="product-input pm-knowledge-search-input"/);
+  assert.doesNotMatch(source, /className="product-input pm-page-search-input"/);
+  assert.doesNotMatch(source, /selectedKnowledgeEntry\.status/);
+  assert.doesNotMatch(source, /new Date\(selectedKnowledgeEntry\.updatedAt\)\.toLocaleString\(\)/);
+  assert.doesNotMatch(source, /handleCreateKnowledgeFile\('project'\)/);
+});
+
+test('product workbench left-nav search keeps the header compact in css', async () => {
+  const source = await readFile(appCssPath, 'utf8');
+
+  assert.match(source, /\.pm-nav-header-search\s*{/);
+});
+
 test('product workbench keeps page and knowledge labels in readable chinese', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
