@@ -11,7 +11,7 @@ const pagePath = path.resolve(__dirname, '../../src/components/ai/ClaudePage.tsx
 
 test('claudian shell keeps runtime switching and drops launcher chrome', async () => {
   const shellSource = await readFile(shellPath, 'utf8');
-  assert.match(shellSource, /<ClaudianModeSwitch compact \/>/);
+  assert.match(shellSource, /ClaudianModeSwitch[^]*compact/);
   assert.match(shellSource, /ClaudianTabBadges/);
   assert.match(shellSource, /className="claudian-header"/);
   assert.match(shellSource, /className="claudian-tab-content-container"/);

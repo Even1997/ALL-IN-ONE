@@ -38,6 +38,7 @@
 .claudian-shell-main {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-width: 0;
   min-height: 0;
   border: 1px solid var(--claudian-border);
