@@ -1809,6 +1809,31 @@ body {
   min-height: 0;
 }
 
+.pm-knowledge-editor-surface {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 420px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--mode-border);
+  background: var(--mode-panel-alt);
+}
+
+.pm-knowledge-editor-surface .milkdown,
+.pm-knowledge-editor-surface .editor {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+}
+
+.pm-knowledge-editor-surface .ProseMirror {
+  min-height: 100%;
+  padding: 24px 28px;
+  outline: none;
+  color: var(--mode-text);
+}
+
 .requirement-live-preview-shell {
   display: flex;
   flex-direction: column;
@@ -8607,7 +8632,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   min-height: 0;
 }
 
-.desktop-active .requirement-markdown-preview,
+.desktop-active .pm-knowledge-editor-surface,
 .desktop-active .pm-html-preview-frame {
   flex: 1 1 auto;
   min-height: 0;

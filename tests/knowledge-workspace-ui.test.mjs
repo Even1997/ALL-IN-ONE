@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
 const shellPath = path.resolve(__dirname, '../src/components/product/WorkbenchShell.tsx');
 const knowledgeWorkspacePath = path.resolve(__dirname, '../src/components/product/KnowledgeWorkspace.tsx');
+const editorPath = path.resolve(__dirname, '../src/components/product/MilkdownEditor.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
 
 test('product workbench delegates shell and workspace responsibilities to focused child components', async () => {
@@ -49,4 +50,16 @@ test('knowledge workspace owns search chrome and content slots', async () => {
   assert.match(source, /pm-knowledge-workspace-tabs/);
   assert.match(source, /pm-knowledge-workspace-content/);
   assert.match(source, /placeholder="搜索知识库"/);
+});
+
+test('knowledge workspace uses Milkdown editor instead of textarea-only reading view', async () => {
+  const editorSource = await readFile(editorPath, 'utf8');
+  const productSource = await readFile(productPath, 'utf8');
+
+  assert.match(editorSource, /@milkdown\/react/);
+  assert.match(editorSource, /MilkdownProvider/);
+  assert.match(editorSource, /defaultValueCtx/);
+  assert.match(editorSource, /onChange/);
+  assert.match(productSource, /<MilkdownEditor/);
+  assert.doesNotMatch(productSource, /requirement-markdown-preview/);
 });

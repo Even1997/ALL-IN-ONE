@@ -119,7 +119,7 @@ test('product knowledge reading view keeps chrome compact for content-first read
 
   assert.match(source, /新建/);
   assert.match(source, /上传/);
-  assert.match(source, /编辑/);
+  assert.match(source, /Markdown 自动保存已开启/);
   assert.doesNotMatch(source, /项目内的 Markdown 草稿、说明文档和 HTML 设计稿都统一沉淀在这里。/);
   assert.doesNotMatch(source, /知识库引用/);
   assert.doesNotMatch(source, /AI 会优先读取当前文档/);
@@ -143,7 +143,7 @@ test('product workbench keeps page and knowledge labels in readable chinese', as
   assert.match(source, /模块清单/);
   assert.match(source, /页面画布/);
   assert.match(source, /关联文件/);
-  assert.match(source, /实时预览/);
+  assert.match(source, /Ctrl\+S 保存文件名/);
   assert.doesNotMatch(source, /鏂板缓鑽夊浘|鏂板缓璁捐|鏂板缓椤圭洰鏂囦欢|妯″潡娓呭崟|椤甸潰鐢诲竷|鍏宠仈鏂囦欢|瀹炴椂棰勮|鍒犻櫎|缂栬緫|鍔犵矖|閾炬帴|鈮\?/);
 });
 
@@ -152,10 +152,9 @@ test('markdown reading surfaces use theme tokens instead of fixed dark colors', 
 
   assert.match(source, /\.requirement-file-name-input,[\s\S]*?background:\s*var\(--mode-input\)/);
   assert.match(source, /\.requirement-file-name-input,[\s\S]*?color:\s*var\(--mode-text\)/);
-  assert.match(source, /\.requirement-markdown-preview\s*{[\s\S]*?background:\s*var\(--mode-panel-alt\)/);
-  assert.match(source, /\.requirement-markdown-preview\s*{[\s\S]*?color:\s*var\(--mode-text\)/);
-  assert.match(source, /\.requirement-markdown-heading\s*{[\s\S]*?color:\s*var\(--mode-text\)/);
-  assert.doesNotMatch(source, /\.requirement-markdown-preview\s*{[\s\S]*?background:\s*linear-gradient\(180deg, #12202f 0%, #0f172a 100%\)/);
+  assert.match(source, /\.pm-knowledge-editor-surface\s*{[\s\S]*?background:\s*var\(--mode-panel-alt\)/);
+  assert.match(source, /\.pm-knowledge-editor-surface \.ProseMirror\s*{[\s\S]*?color:\s*var\(--mode-text\)/);
+  assert.doesNotMatch(source, /\.pm-knowledge-editor-surface\s*{[\s\S]*?background:\s*linear-gradient\(180deg, #12202f 0%, #0f172a 100%\)/);
 });
 
 

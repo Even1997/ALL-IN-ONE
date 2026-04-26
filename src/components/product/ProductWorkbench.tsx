@@ -53,18 +53,13 @@ import {
 import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from '../../utils/layoutPreferences';
 import { WorkbenchShell } from './WorkbenchShell';
 import { KnowledgeWorkspace } from './KnowledgeWorkspace';
+import { MilkdownEditor } from './MilkdownEditor';
 import { PageWorkspace } from './PageWorkspace';
 
 type SidebarTab = 'requirement' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
 export type WorkbenchLayoutDensity = 'comfortable' | 'compact';
 type PreviewFrameMode = 'browser' | 'mobile';
-type RequirementViewMode = 'preview' | 'edit';
-type MarkdownListItem = {
-  kind: 'bullet' | 'ordered' | 'task';
-  text: string;
-  checked?: boolean;
-};
 type KnowledgeContextMenuState = {
   x: number;
   y: number;
@@ -294,257 +289,6 @@ const buildSampleWireframe = (pageName: string, featureName: string, isMobile: b
         createWireframeModule({ id: createCanvasId(), name: '搜索按钮', x: 356, y: 138, content: '搜索与筛选' }, 'web'),
         createWireframeModule({ id: createCanvasId(), name: '主内容区', x: 356, y: 252, content: '表格、卡片或列表区域' }, 'web'),
       ];
-
-const renderInlineMarkdown = (text: string) => {
-  const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*|~~[^~]+~~|\*[^*]+\*|\[[^\]]+\]\(([^)]+)\))/g).filter(Boolean);
-
-  return tokens.map((token, index) => {
-    if (/^`[^`]+`$/.test(token)) {
-      return <code key={`${token}-${index}`}>{token.slice(1, -1)}</code>;
-    }
-
-    if (/^\*\*[^*]+\*\*$/.test(token)) {
-      return <strong key={`${token}-${index}`}>{token.slice(2, -2)}</strong>;
-    }
-
-    if (/^~~[^~]+~~$/.test(token)) {
-      return <del key={`${token}-${index}`}>{token.slice(2, -2)}</del>;
-    }
-
-    if (/^\*[^*]+\*$/.test(token)) {
-      return <em key={`${token}-${index}`}>{token.slice(1, -1)}</em>;
-    }
-
-    const linkMatch = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
-    if (linkMatch) {
-      return (
-        <a key={`${token}-${index}`} href={linkMatch[2]} rel="noreferrer" target="_blank">
-          {linkMatch[1]}
-        </a>
-      );
-    }
-
-    return <span key={`${token}-${index}`}>{token}</span>;
-  });
-};
-
-const renderMarkdownPreview = (markdown: string) => {
-  const lines = markdown.replace(/\r/g, '').split('\n');
-  const blocks: ReactNode[] = [];
-  let paragraphLines: string[] = [];
-  let listItems: MarkdownListItem[] = [];
-  let quoteLines: string[] = [];
-  let codeLines: string[] = [];
-  let inCodeBlock = false;
-  let codeFenceLanguage = '';
-
-  const flushParagraph = () => {
-    if (paragraphLines.length === 0) {
-      return;
-    }
-
-    blocks.push(
-      <p key={`paragraph-${blocks.length}`} className="requirement-markdown-paragraph">
-        {renderInlineMarkdown(paragraphLines.join(' '))}
-      </p>
-    );
-    paragraphLines = [];
-  };
-
-  const flushList = () => {
-    if (listItems.length === 0) {
-      return;
-    }
-
-    const isOrdered = listItems.every((item) => item.kind === 'ordered');
-    const ListTag = isOrdered ? 'ol' : 'ul';
-
-    blocks.push(
-      <ListTag key={`list-${blocks.length}`} className={`requirement-markdown-list ${isOrdered ? 'ordered' : 'unordered'}`}>
-        {listItems.map((item, index) => (
-          <li key={`list-item-${index}`} className={item.kind === 'task' ? 'task-item' : ''}>
-            {item.kind === 'task' ? (
-              <label className="requirement-markdown-task">
-                <input checked={Boolean(item.checked)} readOnly type="checkbox" />
-                <span>{renderInlineMarkdown(item.text)}</span>
-              </label>
-            ) : (
-              renderInlineMarkdown(item.text)
-            )}
-          </li>
-        ))}
-      </ListTag>
-    );
-    listItems = [];
-  };
-
-  const flushQuote = () => {
-    if (quoteLines.length === 0) {
-      return;
-    }
-
-    blocks.push(
-      <blockquote key={`quote-${blocks.length}`} className="requirement-markdown-quote">
-        {quoteLines.map((line, index) => (
-          <p key={`quote-line-${index}`}>{renderInlineMarkdown(line)}</p>
-        ))}
-      </blockquote>
-    );
-    quoteLines = [];
-  };
-
-  const flushCode = () => {
-    if (codeLines.length === 0 && !codeFenceLanguage) {
-      return;
-    }
-
-    blocks.push(
-      <pre key={`code-${blocks.length}`} className="requirement-markdown-code">
-        {codeFenceLanguage ? <span className="requirement-markdown-code-lang">{codeFenceLanguage}</span> : null}
-        <code>{codeLines.join('\n')}</code>
-      </pre>
-    );
-    codeLines = [];
-    codeFenceLanguage = '';
-  };
-
-  lines.forEach((line) => {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith('```')) {
-      flushParagraph();
-      flushList();
-      flushQuote();
-
-      if (inCodeBlock) {
-        flushCode();
-        inCodeBlock = false;
-      } else {
-        inCodeBlock = true;
-        codeFenceLanguage = trimmed.slice(3).trim();
-      }
-      return;
-    }
-
-    if (inCodeBlock) {
-      codeLines.push(line);
-      return;
-    }
-
-    if (!trimmed) {
-      flushParagraph();
-      flushList();
-      flushQuote();
-      return;
-    }
-
-    if (/^---+$/.test(trimmed) || /^\*\*\*+$/.test(trimmed)) {
-      flushParagraph();
-      flushList();
-      flushQuote();
-      blocks.push(<hr key={`hr-${blocks.length}`} className="requirement-markdown-divider" />);
-      return;
-    }
-
-    const headingMatch = /^(#{1,6})\s+(.+)$/.exec(trimmed);
-    if (headingMatch) {
-      flushParagraph();
-      flushList();
-      flushQuote();
-
-      const level = headingMatch[1].length;
-      const content = renderInlineMarkdown(headingMatch[2]);
-
-      if (level === 1) {
-        blocks.push(
-          <h1 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-1">
-            {content}
-          </h1>
-        );
-      } else if (level === 2) {
-        blocks.push(
-          <h2 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-2">
-            {content}
-          </h2>
-        );
-      } else if (level === 3) {
-        blocks.push(
-          <h3 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-3">
-            {content}
-          </h3>
-        );
-      } else if (level === 4) {
-        blocks.push(
-          <h4 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-4">
-            {content}
-          </h4>
-        );
-      } else if (level === 5) {
-        blocks.push(
-          <h5 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-5">
-            {content}
-          </h5>
-        );
-      } else {
-        blocks.push(
-          <h6 key={`heading-${blocks.length}`} className="requirement-markdown-heading level-6">
-            {content}
-          </h6>
-        );
-      }
-      return;
-    }
-
-    const quoteMatch = /^>\s?(.*)$/.exec(trimmed);
-    if (quoteMatch) {
-      flushParagraph();
-      flushList();
-      quoteLines.push(quoteMatch[1]);
-      return;
-    }
-
-    const taskMatch = /^[-*+]\s+\[([ xX])\]\s+(.+)$/.exec(trimmed);
-    if (taskMatch) {
-      flushParagraph();
-      flushQuote();
-      listItems.push({
-        kind: 'task',
-        text: taskMatch[2],
-        checked: taskMatch[1].toLowerCase() === 'x',
-      });
-      return;
-    }
-
-    const listMatch = /^[-*+]\s+(.+)$/.exec(trimmed);
-    if (listMatch) {
-      flushParagraph();
-      flushQuote();
-      listItems.push({ kind: 'bullet', text: listMatch[1] });
-      return;
-    }
-
-    const orderedListMatch = /^\d+\.\s+(.+)$/.exec(trimmed);
-    if (orderedListMatch) {
-      flushParagraph();
-      flushQuote();
-      listItems.push({ kind: 'ordered', text: orderedListMatch[1] });
-      return;
-    }
-
-    paragraphLines.push(trimmed);
-  });
-
-  flushParagraph();
-  flushList();
-  flushQuote();
-  flushCode();
-
-  if (blocks.length === 0) {
-    return <div className="empty-state">这个 Markdown 文件还是空的。</div>;
-  }
-
-  return blocks;
-};
 
 interface PageTreeNodeProps {
   node: PageStructureNode;
@@ -1292,7 +1036,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS
     )
   );
-  const [requirementViewMode, setRequirementViewMode] = useState<RequirementViewMode>('preview');
   const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
   const [selectedKnowledgeNodeId, setSelectedKnowledgeNodeId] = useState<string | null>(null);
   const [openKnowledgeTabIds, setOpenKnowledgeTabIds] = useState<string[]>([]);
@@ -1316,8 +1059,8 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     typeof window !== 'undefined' ? window.innerWidth <= 900 : false
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const requirementTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const knowledgeRefreshRequestIdRef = useRef(0);
+  const lastKnowledgeAutosaveSignatureRef = useRef('');
   const lastPersistedSketchSnapshotRef = useRef('');
 
   const {
@@ -1579,12 +1322,14 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     if (!selectedRequirement) {
       setRequirementDraftTitle('');
       setRequirementDraftContent('');
+      lastKnowledgeAutosaveSignatureRef.current = '';
       return;
     }
 
     setRequirementDraftTitle(selectedRequirement.title);
     setRequirementDraftContent(selectedRequirement.content);
     setRequirementSaveMessage(null);
+    lastKnowledgeAutosaveSignatureRef.current = '';
   }, [selectedRequirement]);
 
   useEffect(() => {
@@ -1807,87 +1552,34 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     fileInputRef.current?.click();
   };
 
-  const applyRequirementEditorTransform = useCallback(
-    (
-      transform: (input: { value: string; start: number; end: number; selectedText: string }) => {
-        value: string;
-        start: number;
-        end: number;
+  const handleSaveKnowledgeContent = useCallback(async (
+    entry: Pick<KnowledgeEntry, 'id' | 'filePath'>,
+    nextContent: string
+  ) => {
+    try {
+      setIsSavingRequirement(true);
+
+      if (!canPersistRequirementToDisk || !entry.filePath) {
+        updateRequirementDoc(entry.id, { content: nextContent });
+        setRequirementSaveMessage('已保存到当前项目状态。桌面版运行时会同步到磁盘。');
+        return;
       }
-    ) => {
-      const textarea = requirementTextareaRef.current;
-      const value = requirementDraftContent;
-      const start = textarea?.selectionStart ?? value.length;
-      const end = textarea?.selectionEnd ?? value.length;
-      const selectedText = value.slice(start, end);
-      const next = transform({ value, start, end, selectedText });
 
-      setRequirementDraftContent(next.value);
-
-      requestAnimationFrame(() => {
-        textarea?.focus();
-        textarea?.setSelectionRange(next.start, next.end);
-      });
-    },
-    [requirementDraftContent]
-  );
-
-  const handleWrapSelection = useCallback(
-    (prefix: string, suffix = prefix, placeholder = '') => {
-      applyRequirementEditorTransform(({ value, start, end, selectedText }) => {
-        const content = selectedText || placeholder;
-        const nextValue = `${value.slice(0, start)}${prefix}${content}${suffix}${value.slice(end)}`;
-        const selectionStart = start + prefix.length;
-        const selectionEnd = selectionStart + content.length;
-
-        return {
-          value: nextValue,
-          start: selectionStart,
-          end: selectionEnd,
-        };
-      });
-    },
-    [applyRequirementEditorTransform]
-  );
-
-  const handleInsertLinePrefix = useCallback(
-    (prefix: string, placeholder: string) => {
-      applyRequirementEditorTransform(({ value, start, end, selectedText }) => {
-        const content = selectedText || placeholder;
-        const prefixed = content
-          .split('\n')
-          .map((line) => `${prefix}${line}`)
-          .join('\n');
-        const nextValue = `${value.slice(0, start)}${prefixed}${value.slice(end)}`;
-
-        return {
-          value: nextValue,
-          start,
-          end: start + prefixed.length,
-        };
-      });
-    },
-    [applyRequirementEditorTransform]
-  );
-
-  const handleInsertLink = useCallback(() => {
-    handleWrapSelection('[', '](https://example.com)', '链接文字');
-  }, [handleWrapSelection]);
-
-  const handleInsertCodeBlock = useCallback(() => {
-    applyRequirementEditorTransform(({ value, start, end, selectedText }) => {
-      const blockContent = selectedText || '在这里写代码';
-      const insertion = `\n\`\`\`md\n${blockContent}\n\`\`\`\n`;
-      const nextValue = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
-      const cursorStart = start + 7;
-
-      return {
-        value: nextValue,
-        start: cursorStart,
-        end: cursorStart + blockContent.length,
-      };
-    });
-  }, [applyRequirementEditorTransform]);
+      await writeRequirementFile(entry.filePath, nextContent);
+      updateRequirementDoc(entry.id, { content: nextContent });
+      await refreshKnowledgeFilesystem();
+      setRequirementSaveMessage(`已自动保存到 ${entry.filePath}`);
+    } catch (error) {
+      setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSavingRequirement(false);
+    }
+  }, [
+    canPersistRequirementToDisk,
+    refreshKnowledgeFilesystem,
+    updateRequirementDoc,
+    writeRequirementFile,
+  ]);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -1975,34 +1667,11 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       setSelectedRequirementId(nextFilePath);
       setRequirementDraftTitle(normalizedTitle);
       setRequirementDraftContent('');
-      setRequirementViewMode('edit');
       setRequirementSaveMessage(`已创建 ${normalizedTitle}`);
     } catch (error) {
       setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
     }
   }, [currentProject?.id, knowledgeGroupOverrides, projectRootDir, refreshKnowledgeFilesystem, writeRequirementFile]);
-
-  const handleEditRequirement = useCallback(() => {
-    if (!selectedRequirement) {
-      return;
-    }
-
-    setRequirementDraftTitle(selectedRequirement.title);
-    setRequirementDraftContent(selectedRequirement.content);
-    setRequirementViewMode('edit');
-    setRequirementSaveMessage(null);
-  }, [selectedRequirement]);
-
-  const handleCancelRequirementEdit = useCallback(() => {
-    if (!selectedRequirement) {
-      return;
-    }
-
-    setRequirementDraftTitle(selectedRequirement.title);
-    setRequirementDraftContent(selectedRequirement.content);
-    setRequirementViewMode('preview');
-    setRequirementSaveMessage(null);
-  }, [selectedRequirement]);
 
   const handleSaveRequirement = useCallback(async () => {
     if (!selectedRequirement) {
@@ -2058,7 +1727,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
         setSelectedKnowledgeNodeId(`file:${selectedKnowledgeNode.group}:${nextRelativePath}`);
       }
       setRequirementDraftTitle(nextTitle);
-      setRequirementViewMode('preview');
       setRequirementSaveMessage(
         canPersistRequirementToDisk && nextFilePath
           ? `已保存到 ${nextFilePath}`
@@ -2085,7 +1753,27 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   ]);
 
   useEffect(() => {
-    if (requirementViewMode !== 'edit') {
+    if (!selectedRequirement || requirementDraftContent === selectedRequirement.content) {
+      return;
+    }
+
+    const autosaveSignature = `${selectedRequirement.id}:${requirementDraftContent}`;
+    if (lastKnowledgeAutosaveSignatureRef.current === autosaveSignature) {
+      return;
+    }
+
+    const saveTimer = window.setTimeout(() => {
+      lastKnowledgeAutosaveSignatureRef.current = autosaveSignature;
+      void handleSaveKnowledgeContent(selectedRequirement, requirementDraftContent);
+    }, 320);
+
+    return () => {
+      window.clearTimeout(saveTimer);
+    };
+  }, [handleSaveKnowledgeContent, requirementDraftContent, selectedRequirement]);
+
+  useEffect(() => {
+    if (!selectedRequirement) {
       return;
     }
 
@@ -2100,7 +1788,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canSaveRequirement, handleSaveRequirement, requirementViewMode]);
+  }, [canSaveRequirement, handleSaveRequirement, selectedRequirement]);
 
   const handleCreateSketchPage = useCallback(async () => {
     if (!currentProject) {
@@ -2506,39 +2194,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
               </div>
               <div className="requirement-file-toolbar">
                 {selectedRequirement ? (
-                  <>
-                    <div className="pm-segmented-control">
-                      <button
-                        className={requirementViewMode === 'preview' ? 'active' : ''}
-                        type="button"
-                        onClick={() => {
-                          if (requirementViewMode === 'edit') {
-                            handleCancelRequirementEdit();
-                            return;
-                          }
-
-                          setRequirementViewMode('preview');
-                        }}
-                      >
-                        阅读
-                      </button>
-                      <button
-                        className={requirementViewMode === 'edit' ? 'active' : ''}
-                        type="button"
-                        onClick={handleEditRequirement}
-                      >
-                        编辑
-                      </button>
-                    </div>
-                    {selectedRequirement.kind === 'sketch' ? (
-                      <button className="doc-action-btn secondary" type="button" onClick={handleUseKnowledgeForDesign}>
-                        用于设计
-                      </button>
-                    ) : null}
-                    <button className="doc-action-btn" type="button" onClick={handleDeleteRequirement}>
-                      删除
-                    </button>
-                  </>
+                  <span className="requirement-preview-shortcut">Ctrl+S 保存文件名</span>
                 ) : (
                   <>
                     {sourceKnowledgeEntry ? (
@@ -2592,72 +2248,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
               </div>
             ) : null}
 
-            {selectedRequirement ? (
-              requirementViewMode === 'edit' ? (
-                <div className="requirement-editor-shell">
-                  <input
-                    className="product-input requirement-file-name-input"
-                    value={requirementDraftTitle}
-                    onChange={(event) => setRequirementDraftTitle(event.target.value)}
-                    placeholder="文件名，例如 product-requirements.md"
-                  />
-                  <div className="requirement-editor-toolbar">
-                    <button className="doc-action-btn secondary" type="button" onClick={() => handleInsertLinePrefix('# ', '标题')}>
-                      H1
-                    </button>
-                    <button className="doc-action-btn secondary" type="button" onClick={() => handleWrapSelection('**', '**', '加粗')}>
-                      加粗
-                    </button>
-                    <button className="doc-action-btn secondary" type="button" onClick={() => handleWrapSelection('*', '*', '斜体')}>
-                      斜体
-                    </button>
-                    <button className="doc-action-btn secondary" type="button" onClick={() => handleInsertLinePrefix('- ', '列表项')}>
-                      列表
-                    </button>
-                    <button className="doc-action-btn secondary" type="button" onClick={() => handleInsertLinePrefix('> ', '引用内容')}>
-                      引用
-                    </button>
-                    <button className="doc-action-btn secondary" type="button" onClick={handleInsertLink}>
-                      链接
-                    </button>
-                    <button className="doc-action-btn secondary" type="button" onClick={handleInsertCodeBlock}>
-                      代码块
-                    </button>
-                  </div>
-                  <div className="requirement-editor-layout">
-                    <textarea
-                      ref={requirementTextareaRef}
-                      className="product-textarea requirement-file-textarea"
-                      value={requirementDraftContent}
-                      onChange={(event) => setRequirementDraftContent(event.target.value)}
-                      placeholder="在这里编辑 Markdown 内容"
-                    />
-                    <div className="requirement-live-preview-shell">
-                      <div className="requirement-preview-header">
-                        <span>实时预览</span>
-                        <span className="requirement-preview-shortcut">Ctrl+S 保存</span>
-                      </div>
-                      <article className="requirement-markdown-preview">{renderMarkdownPreview(requirementDraftContent)}</article>
-                    </div>
-                  </div>
-                  <div className="requirement-editor-actions">
-                    {requirementSaveMessage ? <span className="requirement-save-message">{requirementSaveMessage}</span> : null}
-                    <div className="pm-inline-actions">
-                      <button className="doc-action-btn secondary" type="button" onClick={handleCancelRequirementEdit}>
-                        取消
-                      </button>
-                      <button className="doc-action-btn" type="button" onClick={handleSaveRequirement} disabled={!canSaveRequirement}>
-                        {isSavingRequirement ? '保存中...' : '保存'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="requirement-preview-shell">
-                  <article className="requirement-markdown-preview">{renderMarkdownPreview(selectedRequirement.content)}</article>
-                </div>
-              )
-            ) : (
+            {selectedKnowledgeEntry.type === 'html' ? (
               <div className="pm-html-preview-shell">
                 <iframe
                   className="pm-html-preview-frame"
@@ -2666,6 +2257,46 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
                   sandbox="allow-scripts"
                 />
                 {selectedKnowledgeEntry.summary ? <div className="pm-html-preview-caption">{selectedKnowledgeEntry.summary}</div> : null}
+              </div>
+            ) : (
+              <div className="requirement-editor-shell">
+                {selectedRequirement ? (
+                  <div className="requirement-editor-toolbar">
+                    <input
+                      className="product-input requirement-file-name-input"
+                      value={requirementDraftTitle}
+                      onChange={(event) => setRequirementDraftTitle(event.target.value)}
+                      placeholder="文件名，例如 product-requirements.md"
+                    />
+                    <div className="pm-inline-actions">
+                      {selectedRequirement.kind === 'sketch' ? (
+                        <button className="doc-action-btn secondary" type="button" onClick={handleUseKnowledgeForDesign}>
+                          用于设计
+                        </button>
+                      ) : null}
+                      <button className="doc-action-btn secondary" type="button" onClick={handleDeleteRequirement}>
+                        删除
+                      </button>
+                      <button className="doc-action-btn" type="button" onClick={handleSaveRequirement} disabled={!canSaveRequirement}>
+                        {isSavingRequirement ? '保存中...' : '保存'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="pm-knowledge-editor-surface">
+                  <MilkdownEditor
+                    key={selectedKnowledgeEntry.id}
+                    value={selectedRequirement ? requirementDraftContent : selectedKnowledgeEntry.content}
+                    onChange={selectedRequirement ? setRequirementDraftContent : () => undefined}
+                    editable={Boolean(selectedRequirement)}
+                  />
+                </div>
+                <div className="requirement-editor-actions">
+                  {requirementSaveMessage ? <span className="requirement-save-message">{requirementSaveMessage}</span> : null}
+                  <span className="requirement-preview-shortcut">
+                    {selectedRequirement ? 'Markdown 自动保存已开启' : '只读 Markdown'}
+                  </span>
+                </div>
               </div>
             )}
           </div>
