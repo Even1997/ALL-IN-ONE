@@ -25,7 +25,7 @@ test('app keeps AI in the shared right pane instead of a dedicated Claude route'
   assert.doesNotMatch(source, /import\s+\{\s*ClaudePage\s*\}\s+from\s+'\.\/components\/ai\/ClaudePage';/);
   assert.doesNotMatch(source, /currentRole === 'ai'/);
   assert.match(source, /const appMainContent = isProjectManagerOpen \?/);
-  assert.match(source, /<main className="app-main app-main-desktop">\{appDesktopContent\}<\/main>/);
+  assert.match(source, /<main className="app-main app-main-desktop">\{appMainContent\}<\/main>/);
   assert.match(source, /<aside className="app-ai-activity-pane">[\s\S]*<AIWorkspace \/>[\s\S]*<\/aside>/);
   assert.match(source, /<AIWorkspace \/>/);
 });
