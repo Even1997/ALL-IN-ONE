@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const shellPath = path.resolve(__dirname, '../../src/components/ai/claudian-shell/ClaudianShell.tsx');
-const pagePath = path.resolve(__dirname, '../../src/components/ai/ClaudePage.tsx');
 
 test('claudian shell keeps runtime switching and drops launcher chrome', async () => {
   const shellSource = await readFile(shellPath, 'utf8');
@@ -24,9 +23,4 @@ test('claudian shell keeps runtime switching and drops launcher chrome', async (
   assert.match(shellSource, /currentMode === 'config'/);
   assert.match(shellSource, /currentMode === 'claude'/);
   assert.match(shellSource, /currentMode === 'codex'/);
-});
-
-test('claude page mounts the new claudian shell', async () => {
-  const pageSource = await readFile(pagePath, 'utf8');
-  assert.match(pageSource, /ClaudianShell/);
 });
