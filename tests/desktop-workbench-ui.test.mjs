@@ -107,3 +107,11 @@ test('desktop workbench disables legacy chat sidebar padding on the main pane', 
 
   assert.match(css, /body\.desktop-workbench-mode\.ai-chat-sidebar-expanded\s+\.app-main-desktop,[\s\S]*?body\.desktop-workbench-mode\.ai-chat-sidebar-collapsed\s+\.app-main-desktop\s*{[\s\S]*?padding-right:\s*0;/);
 });
+
+test('desktop product workbench uses dedicated shell and workspace files', async () => {
+  const productSource = await readFile(productPath, 'utf8');
+
+  assert.match(productSource, /WorkbenchShell/);
+  assert.match(productSource, /KnowledgeWorkspace/);
+  assert.match(productSource, /PageWorkspace/);
+});
