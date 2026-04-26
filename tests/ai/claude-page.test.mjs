@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const appPath = path.resolve(__dirname, '../../src/App.tsx');
+const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 
 test('app keeps AI in the shared right pane instead of a dedicated Claude route', async () => {
   const source = await readFile(appPath, 'utf8');
@@ -23,4 +24,10 @@ test('app keeps AI in the shared right pane instead of a dedicated Claude route'
     source,
     /:\s*\([\s\S]*<main className="app-main app-main-desktop">\{appMainContent\}<\/main>[\s\S]*<AIWorkspace \/>[\s\S]*\)\s*}/
   );
+});
+
+test('ai chat no longer exposes a dedicated claude full-page variant', async () => {
+  const source = await readFile(aiChatPath, 'utf8');
+
+  assert.doesNotMatch(source, /claudian-full-page/);
 });

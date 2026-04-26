@@ -22,8 +22,9 @@ test('claudian workspace follows the source-like header plus single chat view la
   const source = await readFile(claudianWorkspacePath, 'utf8');
 
   assert.match(source, /ClaudianShell/);
-  assert.match(source, /className=\{`claudian-workspace claudian-workspace-\$\{mode\}`\}/);
-  assert.match(source, /<ClaudianShell mode=\{mode\} \/>/);
+  assert.doesNotMatch(source, /'panel' \| 'full-page'/);
+  assert.doesNotMatch(source, /mode=\{mode\}/);
+  assert.match(source, /<ClaudianShell mode="panel" \/>/);
 });
 
 test('ai workspace css includes the Claudian single-view shell', async () => {

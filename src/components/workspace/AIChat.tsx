@@ -90,7 +90,7 @@ type AIProviderTypeOption = {
 };
 
 type AIChatProps = {
-  variant?: 'default' | 'claudian-embedded' | 'claudian-full-page';
+  variant?: 'default' | 'claudian-embedded' | (string & {});
   runtimeConfigIdOverride?: string | null;
   providerExecutionMode?: 'claude' | 'codex' | null;
 };
@@ -413,7 +413,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   providerExecutionMode = null,
 }) => {
   const isClaudianEmbedded = variant === 'claudian-embedded';
-  const isClaudianFullPage = variant === 'claudian-full-page';
   const [input, setInput] = useState('');
   const [activePanel, setActivePanel] = useState<'chat' | 'skills' | 'activity'>('chat');
   const [isLoading, setIsLoading] = useState(false);
@@ -1527,9 +1526,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       {isSettingsOpen ? <div className="chat-settings-overlay" onClick={closeSettings} /> : null}
 
       <section
-        className={`${getChatShellLayoutClassName(isClaudianEmbedded || isClaudianFullPage ? false : isCollapsed)}${isClaudianEmbedded ? ' chat-shell-embedded' : ''}${isClaudianFullPage ? ' chat-shell-full-page' : ''}`}
+        className={`${getChatShellLayoutClassName(isClaudianEmbedded ? false : isCollapsed)}${isClaudianEmbedded ? ' chat-shell-embedded' : ''}`}
       >
-        {!isClaudianEmbedded && !isClaudianFullPage ? <header className="chat-shell-header">
+        {!isClaudianEmbedded ? <header className="chat-shell-header">
           <div className="chat-shell-title">
             <strong>{isCollapsed ? 'AI' : 'AI 对话'}</strong>
             {!isCollapsed ? <span>{activeSession?.title || currentProject?.name || '新对话'}</span> : null}
@@ -1617,9 +1616,9 @@ export const AIChat: React.FC<AIChatProps> = ({
             </div>
         </header> : null}
 
-        {!isCollapsed || isClaudianEmbedded || isClaudianFullPage ? (
+        {!isCollapsed || isClaudianEmbedded ? (
           <>
-            {!isClaudianEmbedded && !isClaudianFullPage && activePanel === 'skills' ? (
+            {!isClaudianEmbedded && activePanel === 'skills' ? (
               <ClaudianSkillsPanel
                 skillsState={skillsState}
                 skillsMessage={skillsMessage}
@@ -1638,7 +1637,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                   void handleSyncSkill(skill, runtime);
                 }}
               />
-            ) : !isClaudianEmbedded && !isClaudianFullPage && activePanel === 'activity' ? (
+            ) : !isClaudianEmbedded && activePanel === 'activity' ? (
               <ClaudianActivityPanel activityEntries={activityEntries} formatTimestamp={formatTimestamp} />
             ) : (
               <ClaudianMessageList
@@ -1650,8 +1649,8 @@ export const AIChat: React.FC<AIChatProps> = ({
               />
             )}
 
-            {activePanel === 'chat' || isClaudianEmbedded || isClaudianFullPage ? (
-              isClaudianEmbedded || isClaudianFullPage ? (
+            {activePanel === 'chat' || isClaudianEmbedded ? (
+              isClaudianEmbedded ? (
                 <>
                   <ClaudianEmbeddedTopbar
                     selectedChatAgentId={selectedChatAgentId}

@@ -2,11 +2,11 @@ import React from 'react';
 import { ClaudianShell } from './claudian-shell/ClaudianShell';
 
 type ClaudianWorkspaceProps = {
-  mode?: 'panel' | 'full-page';
+  mode?: 'panel';
 };
 
-export const ClaudianWorkspace: React.FC<ClaudianWorkspaceProps> = ({ mode = 'panel' }) => (
-  <section className={`claudian-workspace claudian-workspace-${mode}`}>
-    <ClaudianShell mode={mode} />
+export const ClaudianWorkspace: React.FC<ClaudianWorkspaceProps> = () => (
+  <section className="claudian-workspace claudian-workspace-panel">
+    <ClaudianShell mode="panel" />
   </section>
 );
