@@ -8,6 +8,7 @@ type AIContextProjectState = {
   scene: AIContextScene;
   selectedKnowledgeEntryId: string | null;
   selectedPageId: string | null;
+  openedKnowledgeEntryIds: string[];
   knowledgeMode: AIKnowledgeMode;
   selectedReferenceFileIds: string[];
   selectedReferenceDirectory: string | null;
@@ -30,6 +31,7 @@ const createProjectState = (): AIContextProjectState => ({
   scene: 'knowledge',
   selectedKnowledgeEntryId: null,
   selectedPageId: null,
+  openedKnowledgeEntryIds: [],
   knowledgeMode: 'off',
   selectedReferenceFileIds: [],
   selectedReferenceDirectory: null,

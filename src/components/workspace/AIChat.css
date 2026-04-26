@@ -1304,6 +1304,7 @@ body.desktop-workbench-mode .chat-shell {
   max-width: none;
   height: 100%;
   border-radius: 0;
+  background: var(--mode-panel);
   border: 0;
   border-left: 1px solid var(--mode-border, rgba(255, 255, 255, 0.1));
   box-shadow: none;

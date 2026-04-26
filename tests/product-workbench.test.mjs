@@ -7,7 +7,9 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productWorkbenchPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
+const pageWorkspacePath = path.resolve(__dirname, '../src/components/product/PageWorkspace.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
+const chatPath = path.resolve(__dirname, '../src/components/workspace/AIChat.tsx');
 
 test('module list text fields keep local drafts and commit on blur instead of every keystroke', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
@@ -70,15 +72,35 @@ test('page workspace falls back to in-memory page actions when Tauri runtime is 
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*deletePageStructureNode\(pageId\);/s);
 });
 
+test('page workspace preserves current canvas and sketch persistence hooks', async () => {
+  const workspaceSource = await readFile(pageWorkspacePath, 'utf8');
+  const productSource = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(workspaceSource, /pm-page-workspace-shell/);
+  assert.doesNotMatch(workspaceSource, /Milkdown/);
+  assert.match(productSource, /Canvas/);
+  assert.match(productSource, /writeSketchPageFile/);
+  assert.match(productSource, /deleteSketchPageFile/);
+  assert.match(productSource, /loadSketchPageArtifactsFromProjectDir/);
+  assert.match(productSource, /<PageWorkspace/);
+});
+
 test('knowledge base has searchable filters and visible source summaries', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
   assert.match(source, /const \[knowledgeSearch, setKnowledgeSearch\] = useState\(''\)/);
-  assert.match(source, /const \[knowledgeSourceFilter, setKnowledgeSourceFilter\] = useState/);
-  assert.match(source, /const filteredKnowledgeEntries = useMemo/);
-  assert.match(source, /placeholder="搜索文档"/);
-  assert.match(source, /filteredKnowledgeEntries\.map/);
-  assert.match(source, /pm-knowledge-summary/);
+  assert.match(source, /buildKnowledgeSearchIndex/);
+  assert.match(source, /searchKnowledgeEntries/);
+  assert.match(source, /const knowledgeSearchState = useMemo/);
+  assert.match(source, /const searchedKnowledgeEntries = useMemo/);
+  assert.match(source, /const filteredKnowledgeTree = useMemo/);
+  assert.match(source, /searchKnowledgeEntries\(knowledgeSearchState, knowledgeSearch\)/);
+  assert.match(source, /className="product-input pm-nav-header-search"/);
+  assert.match(source, /className="pm-knowledge-tree"/);
+  assert.match(source, /renderKnowledgeTree\(filteredKnowledgeTree\)/);
+  assert.match(source, /没有匹配的知识条目/);
+  assert.doesNotMatch(source, /placeholder="搜索文档"/);
+  assert.doesNotMatch(source, /pm-knowledge-workspace-search/);
   assert.doesNotMatch(source, /设为当前/);
   assert.doesNotMatch(source, /知识库引用/);
   assert.doesNotMatch(source, /AI 会优先读取当前文档/);
@@ -96,9 +118,8 @@ test('chat sidebar reserves right-side space without changing vertical layout', 
 test('product knowledge reading view keeps chrome compact for content-first reading', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
-  assert.match(source, /新建/);
   assert.match(source, /上传/);
-  assert.match(source, /编辑/);
+  assert.match(source, /Markdown 自动保存已开启/);
   assert.doesNotMatch(source, /项目内的 Markdown 草稿、说明文档和 HTML 设计稿都统一沉淀在这里。/);
   assert.doesNotMatch(source, /知识库引用/);
   assert.doesNotMatch(source, /AI 会优先读取当前文档/);
@@ -110,6 +131,8 @@ test('product knowledge reading view keeps chrome compact for content-first read
   assert.doesNotMatch(source, /<span>\{selectedRequirement\.title\}<\/span>/);
   assert.doesNotMatch(source, /进入编辑/);
   assert.doesNotMatch(source, /编辑完成后点击保存。/);
+  assert.doesNotMatch(source, /handleCreateKnowledgeFile\('project'\)/);
+  assert.doesNotMatch(source, /从左侧文件树打开一个 Markdown 文件。/);
 });
 
 test('product workbench uses one left-nav search input and removes duplicate in-panel knowledge chrome', async () => {
@@ -120,9 +143,11 @@ test('product workbench uses one left-nav search input and removes duplicate in-
   assert.match(source, /placeholder=\{sidebarTab === 'requirement' \? '搜索文档' : '搜索页面'\}/);
   assert.doesNotMatch(source, /className="product-input pm-knowledge-search-input"/);
   assert.doesNotMatch(source, /className="product-input pm-page-search-input"/);
+  assert.doesNotMatch(source, /pm-knowledge-workspace-search/);
   assert.doesNotMatch(source, /selectedKnowledgeEntry\.status/);
   assert.doesNotMatch(source, /new Date\(selectedKnowledgeEntry\.updatedAt\)\.toLocaleString\(\)/);
   assert.doesNotMatch(source, /handleCreateKnowledgeFile\('project'\)/);
+  assert.doesNotMatch(source, /从左侧文件树打开一个 Markdown 文件。/);
 });
 
 test('product workbench left-nav search keeps the header compact in css', async () => {
@@ -141,7 +166,7 @@ test('product workbench keeps page and knowledge labels in readable chinese', as
   assert.match(source, /模块清单/);
   assert.match(source, /页面画布/);
   assert.match(source, /关联文件/);
-  assert.match(source, /实时预览/);
+  assert.match(source, /Ctrl\+S 保存文件名/);
   assert.doesNotMatch(source, /鏂板缓鑽夊浘|鏂板缓璁捐|鏂板缓椤圭洰鏂囦欢|妯″潡娓呭崟|椤甸潰鐢诲竷|鍏宠仈鏂囦欢|瀹炴椂棰勮|鍒犻櫎|缂栬緫|鍔犵矖|閾炬帴|鈮\?/);
 });
 
@@ -150,10 +175,16 @@ test('markdown reading surfaces use theme tokens instead of fixed dark colors', 
 
   assert.match(source, /\.requirement-file-name-input,[\s\S]*?background:\s*var\(--mode-input\)/);
   assert.match(source, /\.requirement-file-name-input,[\s\S]*?color:\s*var\(--mode-text\)/);
-  assert.match(source, /\.requirement-markdown-preview\s*{[\s\S]*?background:\s*var\(--mode-panel-alt\)/);
-  assert.match(source, /\.requirement-markdown-preview\s*{[\s\S]*?color:\s*var\(--mode-text\)/);
-  assert.match(source, /\.requirement-markdown-heading\s*{[\s\S]*?color:\s*var\(--mode-text\)/);
-  assert.doesNotMatch(source, /\.requirement-markdown-preview\s*{[\s\S]*?background:\s*linear-gradient\(180deg, #12202f 0%, #0f172a 100%\)/);
+  assert.match(source, /\.pm-knowledge-editor-surface\s*{[\s\S]*?background:\s*var\(--mode-panel-alt\)/);
+  assert.match(source, /\.pm-knowledge-editor-surface \.ProseMirror\s*{[\s\S]*?color:\s*var\(--mode-text\)/);
+  assert.doesNotMatch(source, /\.pm-knowledge-editor-surface\s*{[\s\S]*?background:\s*linear-gradient\(180deg, #12202f 0%, #0f172a 100%\)/);
+});
+
+test('ai chat supports opened document scope in knowledge mode', async () => {
+  const source = await readFile(chatPath, 'utf8');
+
+  assert.match(source, /handleApplyReferenceScope\('open-tabs'\)/);
+  assert.match(source, /referenceScopeMode === 'open-tabs'/);
 });
 
 

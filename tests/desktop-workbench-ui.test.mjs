@@ -59,13 +59,12 @@ test('product workbench renders a real divider between left nav and viewer', asy
   const source = await readFile(productPath, 'utf8');
   const css = await readFile(appCssPath, 'utf8');
 
-  assert.match(source, /from 'allotment'/);
   assert.match(source, /layoutPreferences/);
   assert.match(source, /productWorkbenchLeftNavWidth/);
-  assert.match(source, /<Allotment/);
+  assert.match(source, /WorkbenchShell/);
   assert.doesNotMatch(source, /pm-left-nav-divider/);
-  assert.match(css, /\.product-workbench-allotment\s*\{/);
-  assert.match(css, /\.product-workbench-allotment\s*{[\s\S]*?--sash-size:\s*8px;/);
+  assert.match(css, /\.pm-workbench-shell-allotment\s*\{/);
+  assert.match(css, /\.pm-workbench-shell-allotment\s*{[\s\S]*?width:\s*100%;/);
 });
 
 test('product sidebar tabs render a full-height divider between knowledge and page', async () => {
@@ -86,10 +85,11 @@ test('right app shell resizer only paints a one pixel line on hover', async () =
   assert.match(source, /desktopAiPaneWidth/);
   assert.match(source, /readLayoutSize/);
   assert.match(source, /writeLayoutSize/);
-  assert.match(css, /\.app-shell-resizer\s*{[\s\S]*?background:\s*transparent;/);
-  assert.match(css, /\.app-shell-resizer::before\s*{[\s\S]*?background:\s*transparent;/);
-  assert.match(css, /\.app-shell-resizer\.vertical::before\s*{[\s\S]*?width:\s*1px;/);
-  assert.match(css, /\.app-shell-resizer:hover::before\s*{[\s\S]*?background:\s*var\(--mode-border/);
+  assert.match(source, /<Allotment className="app-workbench-allotment"/);
+  assert.match(css, /\.app-workbench-allotment\s*\{/);
+  assert.match(css, /\.app-workbench-allotment\s*{[\s\S]*?--sash-size:\s*8px;/);
+  assert.match(css, /\.app-workbench-allotment\s*{[\s\S]*?--sash-hover-size:\s*4px;/);
+  assert.match(css, /\.app-ai-activity-pane\s*\{/);
 });
 
 test('desktop product knowledge and page panes fill the workbench height', async () => {
@@ -105,4 +105,22 @@ test('desktop workbench disables legacy chat sidebar padding on the main pane', 
   const css = await readFile(appCssPath, 'utf8');
 
   assert.match(css, /body\.desktop-workbench-mode\.ai-chat-sidebar-expanded\s+\.app-main-desktop,[\s\S]*?body\.desktop-workbench-mode\.ai-chat-sidebar-collapsed\s+\.app-main-desktop\s*{[\s\S]*?padding-right:\s*0;/);
+});
+
+test('desktop product workbench uses dedicated shell and workspace files', async () => {
+  const productSource = await readFile(productPath, 'utf8');
+
+  assert.match(productSource, /WorkbenchShell/);
+  assert.match(productSource, /KnowledgeWorkspace/);
+  assert.match(productSource, /PageWorkspace/);
+});
+
+test('knowledge and page workspaces share monochrome workbench shell classes', async () => {
+  const css = await readFile(appCssPath, 'utf8');
+
+  assert.match(css, /\.pm-knowledge-workspace\s*\{/);
+  assert.match(css, /\.pm-page-workspace-shell\s*\{/);
+  assert.match(css, /\.pm-knowledge-workspace,\s*[\s\S]*?\.pm-page-workspace-shell,\s*[\s\S]*?\.pm-workbench-ai-pane\s*\{/);
+  assert.match(css, /background:\s*var\(--mode-panel-alt\)/);
+  assert.match(css, /border:\s*1px solid var\(--mode-border\)/);
 });

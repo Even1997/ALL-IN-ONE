@@ -330,6 +330,48 @@ body {
   --focus-border: color-mix(in srgb, var(--mode-accent, #0f766e) 46%, var(--mode-border, rgba(148, 163, 184, 0.22)));
 }
 
+.pm-workbench-shell {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pm-workbench-shell-allotment {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pm-workbench-sidebar {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.pm-workbench-main {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.pm-workbench-ai-pane {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.pm-workbench-main-with-ai {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
 .product-workbench-pane {
   width: 100%;
   height: 100%;
@@ -1769,6 +1811,31 @@ body {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
+}
+
+.pm-knowledge-editor-surface {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 420px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--mode-border);
+  background: var(--mode-panel-alt);
+}
+
+.pm-knowledge-editor-surface .milkdown,
+.pm-knowledge-editor-surface .editor {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+}
+
+.pm-knowledge-editor-surface .ProseMirror {
+  min-height: 100%;
+  padding: 24px 28px;
+  outline: none;
+  color: var(--mode-text);
 }
 
 .requirement-live-preview-shell {
@@ -8298,6 +8365,16 @@ body.ai-chat-sidebar-collapsed .app-main {
   background: color-mix(in srgb, var(--mode-chip, rgba(15, 23, 42, 0.06)) 92%, transparent);
 }
 
+.pm-knowledge-open-tabs-empty {
+  align-items: center;
+  padding: 0 12px;
+}
+
+.pm-knowledge-open-tabs-placeholder {
+  font-size: 12px;
+  color: var(--mode-muted, #64748b);
+}
+
 .pm-knowledge-open-tab {
   display: inline-flex;
   align-items: center;
@@ -8375,6 +8452,66 @@ body.ai-chat-sidebar-collapsed .app-main {
   color: var(--mode-muted, #64748b);
 }
 
+.pm-knowledge-workspace,
+.pm-page-workspace-shell,
+.pm-workbench-ai-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--mode-panel-alt);
+  border: 1px solid var(--mode-border);
+  border-radius: var(--style-radius-md, 18px);
+}
+
+.pm-knowledge-workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+  background: color-mix(in srgb, var(--mode-panel, #111827) 96%, transparent);
+}
+
+.pm-knowledge-workspace-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pm-knowledge-workspace-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pm-knowledge-workspace-tabs {
+  min-height: 0;
+  background: var(--mode-panel-alt);
+  border-bottom: 1px solid var(--mode-border);
+}
+
+.pm-knowledge-workspace-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pm-page-workspace-shell {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.pm-page-workspace-frame {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ========== Desktop Workbench Shell ========== */
 
 :root {
@@ -8442,7 +8579,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  background: color-mix(in srgb, var(--mode-panel, #111827) 98%, transparent);
+  background: transparent;
 }
 
 .desktop-active .product-workbench-shell,
@@ -8489,7 +8626,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
 .desktop-active .pm-main-viewer {
   padding: 0;
-  background: var(--mode-panel, #111827);
+  background: var(--mode-surface, #0f1115);
 }
 
 .desktop-active .pm-card {
@@ -8512,12 +8649,14 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 .desktop-active .requirement-file-editor,
 .desktop-active .requirement-preview-shell,
 .desktop-active .requirement-editor-shell,
-.desktop-active .pm-html-preview-shell {
+.desktop-active .pm-html-preview-shell,
+.desktop-active .pm-page-workspace-shell,
+.desktop-active .pm-knowledge-workspace {
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.desktop-active .requirement-markdown-preview,
+.desktop-active .pm-knowledge-editor-surface,
 .desktop-active .pm-html-preview-frame {
   flex: 1 1 auto;
   min-height: 0;
