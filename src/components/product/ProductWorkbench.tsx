@@ -1309,9 +1309,11 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       scene: sidebarTab === 'requirement' ? 'knowledge' : 'page',
       selectedKnowledgeEntryId: selectedKnowledgeEntry?.id || null,
       selectedPageId: selectedPage?.id || null,
+      openedKnowledgeEntryIds: openKnowledgeTabIds,
     });
   }, [
     currentProject,
+    openKnowledgeTabIds,
     selectedKnowledgeEntry?.id,
     selectedPage?.id,
     setSceneContext,

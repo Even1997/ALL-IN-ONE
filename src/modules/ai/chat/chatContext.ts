@@ -4,7 +4,7 @@ import type { ReferenceFile } from '../../knowledge/referenceFiles.ts';
 
 export type AIChatScene = 'knowledge' | 'page';
 export type AIKnowledgeMode = 'off' | 'current' | 'selected' | 'all';
-export type AIReferenceScopeMode = 'current' | 'directory' | 'all';
+export type AIReferenceScopeMode = 'current' | 'directory' | 'open-tabs' | 'all';
 
 type ResolveKnowledgeContextSelectionOptions = {
   scene: AIChatScene;
@@ -105,11 +105,19 @@ export const getSelectedElementLabel = (elements: CanvasElement[], selectedEleme
 export const resolveReferenceScopeSelection = (options: {
   mode: AIReferenceScopeMode;
   currentFileIds: string[];
+  openTabFileIds?: string[];
   directoryPath: string | null;
   allFiles: Array<Pick<ReferenceFile, 'id' | 'path' | 'readableByAI'>>;
 }) => {
   if (options.mode === 'all') {
     return options.allFiles.filter((file) => file.readableByAI).map((file) => file.id);
+  }
+
+  if (options.mode === 'open-tabs') {
+    const openTabIds = new Set(options.openTabFileIds || []);
+    return options.allFiles
+      .filter((file) => file.readableByAI && openTabIds.has(file.id))
+      .map((file) => file.id);
   }
 
   if (options.mode === 'directory') {

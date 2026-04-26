@@ -532,6 +532,7 @@ export const AIChat: React.FC = () => {
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
   const selectedReferenceFileIds = aiContextState?.selectedReferenceFileIds || [];
   const selectedReferenceDirectory = aiContextState?.selectedReferenceDirectory || null;
+  const openedKnowledgeEntryIds = aiContextState?.openedKnowledgeEntryIds || [];
   const referenceScopeMode = aiContextState?.referenceScopeMode || 'current';
   const buildReferenceFileSnapshot = useCallback(
     (styleNodes: DesignStyleReferenceNode[] = persistedDesignStyleNodes) =>
@@ -715,13 +716,23 @@ export const AIChat: React.FC = () => {
         ? resolveReferenceScopeSelection({
             mode: 'all',
             currentFileIds: selectedReferenceFileIds,
+            openTabFileIds: openedKnowledgeEntryIds,
             directoryPath: selectedReferenceDirectory,
             allFiles: referenceFiles,
           })
+        : referenceScopeMode === 'open-tabs'
+          ? resolveReferenceScopeSelection({
+              mode: 'open-tabs',
+              currentFileIds: selectedReferenceFileIds,
+              openTabFileIds: openedKnowledgeEntryIds,
+              directoryPath: selectedReferenceDirectory,
+              allFiles: referenceFiles,
+            })
         : referenceScopeMode === 'directory'
           ? resolveReferenceScopeSelection({
               mode: 'directory',
               currentFileIds: selectedReferenceFileIds,
+              openTabFileIds: openedKnowledgeEntryIds,
               directoryPath: selectedReferenceDirectory,
               allFiles: referenceFiles,
             })
@@ -736,6 +747,7 @@ export const AIChat: React.FC = () => {
     }
   }, [
     currentProject,
+    openedKnowledgeEntryIds,
     referenceFiles,
     referenceScopeMode,
     selectedReferenceDirectory,
@@ -888,6 +900,7 @@ export const AIChat: React.FC = () => {
       const nextIds = resolveReferenceScopeSelection({
         mode,
         currentFileIds: currentReferenceFileIds,
+        openTabFileIds: openedKnowledgeEntryIds,
         directoryPath,
         allFiles: referenceFiles,
       });
@@ -900,6 +913,7 @@ export const AIChat: React.FC = () => {
       availableReferenceDirectories,
       currentProject,
       currentReferenceFileIds,
+      openedKnowledgeEntryIds,
       referenceFiles,
       selectedReferenceDirectory,
       setReferenceScopeMode,
@@ -1438,6 +1452,14 @@ export const AIChat: React.FC = () => {
                       disabled={referenceFiles.length === 0}
                     >
                       {'\u5f15\u7528\u76ee\u5f55'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`chat-reference-menu-action ${referenceScopeMode === 'open-tabs' ? 'active' : ''}`}
+                      onClick={() => handleApplyReferenceScope('open-tabs')}
+                      disabled={openedKnowledgeEntryIds.length === 0}
+                    >
+                      {'\u5df2\u6253\u5f00\u6587\u6863'}
                     </button>
                     <button
                       type="button"
