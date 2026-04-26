@@ -2498,10 +2498,10 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       {sidebarTab === 'page' && (
         <PageWorkspace
           content={
-            <>
+            <div className="pm-page-workspace-frame">
               {renderPageMain()}
               <WireframeSyncBridge selectedPage={selectedPage} />
-            </>
+            </div>
           }
         />
       )}

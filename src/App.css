@@ -8448,13 +8448,16 @@ body.ai-chat-sidebar-collapsed .app-main {
   color: var(--mode-muted, #64748b);
 }
 
-.pm-knowledge-workspace {
+.pm-knowledge-workspace,
+.pm-page-workspace-shell,
+.pm-workbench-ai-pane {
   display: flex;
-  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  background: var(--mode-panel, #111827);
+  background: var(--mode-panel-alt);
+  border: 1px solid var(--mode-border);
+  border-radius: var(--style-radius-md, 18px);
 }
 
 .pm-knowledge-workspace-toolbar {
@@ -8480,9 +8483,24 @@ body.ai-chat-sidebar-collapsed .app-main {
 
 .pm-knowledge-workspace-tabs {
   min-height: 0;
+  background: var(--mode-panel-alt);
+  border-bottom: 1px solid var(--mode-border);
 }
 
 .pm-knowledge-workspace-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pm-page-workspace-shell {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.pm-page-workspace-frame {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
@@ -8557,7 +8575,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  background: color-mix(in srgb, var(--mode-panel, #111827) 98%, transparent);
+  background: transparent;
 }
 
 .desktop-active .product-workbench-shell,
@@ -8604,7 +8622,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
 .desktop-active .pm-main-viewer {
   padding: 0;
-  background: var(--mode-panel, #111827);
+  background: var(--mode-surface, #0f1115);
 }
 
 .desktop-active .pm-card {
@@ -8627,7 +8645,9 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 .desktop-active .requirement-file-editor,
 .desktop-active .requirement-preview-shell,
 .desktop-active .requirement-editor-shell,
-.desktop-active .pm-html-preview-shell {
+.desktop-active .pm-html-preview-shell,
+.desktop-active .pm-page-workspace-shell,
+.desktop-active .pm-knowledge-workspace {
   flex: 1 1 auto;
   min-height: 0;
 }

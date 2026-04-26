@@ -114,3 +114,13 @@ test('desktop product workbench uses dedicated shell and workspace files', async
   assert.match(productSource, /KnowledgeWorkspace/);
   assert.match(productSource, /PageWorkspace/);
 });
+
+test('knowledge and page workspaces share monochrome workbench shell classes', async () => {
+  const css = await readFile(appCssPath, 'utf8');
+
+  assert.match(css, /\.pm-knowledge-workspace\s*\{/);
+  assert.match(css, /\.pm-page-workspace-shell\s*\{/);
+  assert.match(css, /\.pm-knowledge-workspace,\s*[\s\S]*?\.pm-page-workspace-shell,\s*[\s\S]*?\.pm-workbench-ai-pane\s*\{/);
+  assert.match(css, /background:\s*var\(--mode-panel-alt\)/);
+  assert.match(css, /border:\s*1px solid var\(--mode-border\)/);
+});
