@@ -12,20 +12,21 @@ const claudePagePath = path.resolve(__dirname, '../../src/components/ai/ClaudePa
 const claudianWorkspacePath = path.resolve(__dirname, '../../src/components/ai/ClaudianWorkspace.tsx');
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 
-test('app navigation exposes a dedicated ai role tab', async () => {
+test('app navigation no longer exposes a dedicated ai role tab', async () => {
   const source = await readFile(appNavigationPath, 'utf8');
 
-  assert.match(source, /'ai'/);
-  assert.match(source, /label:\s*'AI'/);
+  assert.doesNotMatch(source, /'ai'/);
+  assert.doesNotMatch(source, /label:\s*'AI'/);
 });
 
-test('app routes ai role to a dedicated Claude page without removing the desktop side pane for other roles', async () => {
+test('app keeps AI in the shared right pane instead of a dedicated Claude route', async () => {
   const source = await readFile(appPath, 'utf8');
 
-  assert.match(source, /currentRole === 'ai'\s*\?\s*<ClaudePage \/>/);
+  assert.doesNotMatch(source, /import\s+\{\s*ClaudePage\s*\}\s+from\s+'\.\/components\/ai\/ClaudePage';/);
+  assert.doesNotMatch(source, /currentRole === 'ai'/);
   assert.match(source, /const appMainContent = isProjectManagerOpen \?/);
-  assert.match(source, /const isAIPage = currentRole === 'ai'/);
-  assert.match(source, /!\s*isAIPage\s*\?\s*\(/);
+  assert.match(source, /<main className="app-main app-main-desktop">\{appDesktopContent\}<\/main>/);
+  assert.match(source, /<aside className="app-ai-activity-pane">[\s\S]*<AIWorkspace \/>[\s\S]*<\/aside>/);
   assert.match(source, /<AIWorkspace \/>/);
 });
 

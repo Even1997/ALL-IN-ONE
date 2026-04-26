@@ -2,7 +2,6 @@
 import type { CSSProperties } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AIWorkspace } from './components/ai/AIWorkspace';
-import { ClaudePage } from './components/ai/ClaudePage';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
 import { ProductWorkbench } from './components/product/ProductWorkbench';
@@ -4453,17 +4452,15 @@ ${selectedContextPrompt}` : '',
   }
 
   const roleContent =
-    currentRole === 'ai'
-      ? <ClaudePage />
-      : currentRole === 'product'
-        ? renderProductView()
-        : currentRole === 'design'
-          ? renderDesignView()
-          : currentRole === 'develop'
-            ? renderDevelopView()
-            : currentRole === 'test'
-              ? renderTestView()
-              : renderOperationsView();
+    currentRole === 'product'
+      ? renderProductView()
+      : currentRole === 'design'
+        ? renderDesignView()
+        : currentRole === 'develop'
+          ? renderDevelopView()
+          : currentRole === 'test'
+            ? renderTestView()
+            : renderOperationsView();
 
   const appMainContent = isProjectManagerOpen ? (
     <ProjectSetup
@@ -4483,7 +4480,6 @@ ${selectedContextPrompt}` : '',
       onClose={() => setIsProjectManagerOpen(false)}
     />
   ) : roleContent;
-  const isAIPage = currentRole === 'ai';
   const appDesktopContent = appMainContent;
   return (
     <div className={`app app-shell-desktop ${isDesktopWorkbenchMode ? 'desktop-active' : ''}`}>
@@ -4559,19 +4555,17 @@ ${selectedContextPrompt}` : '',
                 <main className="app-main app-main-desktop">{appDesktopContent}</main>
               </div>
             </Allotment.Pane>
-            {!isAIPage ? (
-              <Allotment.Pane
-                minSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
-                maxSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
-                preferredSize={desktopAiPaneWidth}
-              >
-                <div className="app-workbench-pane">
-                  <aside className="app-ai-activity-pane">
-                    <AIWorkspace />
-                  </aside>
-                </div>
-              </Allotment.Pane>
-            ) : null}
+            <Allotment.Pane
+              minSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
+              maxSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
+              preferredSize={desktopAiPaneWidth}
+            >
+              <div className="app-workbench-pane">
+                <aside className="app-ai-activity-pane">
+                  <AIWorkspace />
+                </aside>
+              </div>
+            </Allotment.Pane>
           </Allotment>
         ) : (
           <>
