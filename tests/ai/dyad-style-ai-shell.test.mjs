@@ -21,12 +21,15 @@ test('ai shell css defines the compact shared panel surface', async () => {
   const source = await readFile(shellCssPath, 'utf8');
   const shellRule = source.match(/\.claudian-shell\s*\{([\s\S]*?)\n\}/);
   const shellMainRule = source.match(/\.claudian-shell-main\s*\{([\s\S]*?)\n\}/);
+  const providerLayoutRule = source.match(/\.claudian-shell\s+\.provider-workspace-layout\s*\{([\s\S]*?)\n\}/);
   assert.ok(shellRule, 'expected .claudian-shell rule');
   assert.ok(shellMainRule, 'expected .claudian-shell-main rule');
+  assert.ok(providerLayoutRule, 'expected .claudian-shell .provider-workspace-layout rule');
   assert.match(source, /--claudian-bg/);
   assert.match(shellRule[1], /display:\s*flex;/);
   assert.match(shellRule[1], /flex-direction:\s*column;/);
   assert.match(shellMainRule[1], /flex:\s*1;/);
   assert.match(shellMainRule[1], /min-height:\s*0;/);
+  assert.match(providerLayoutRule[1], /min-height:\s*0;/);
   assert.doesNotMatch(source, /\.claudian-launcher-hero\b/);
 });

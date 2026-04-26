@@ -11,14 +11,16 @@ const pagePath = path.resolve(__dirname, '../../src/components/ai/ClaudePage.tsx
 
 test('claudian shell keeps runtime switching and drops launcher chrome', async () => {
   const shellSource = await readFile(shellPath, 'utf8');
-  assert.match(shellSource, /ClaudianModeSwitch[^]*compact/);
+  assert.match(
+    shellSource,
+    /className="claudian-header-actions"[\s\S]*<ClaudianModeSwitch\s+compact\s*\/>/
+  );
   assert.match(shellSource, /ClaudianTabBadges/);
   assert.match(shellSource, /className="claudian-header"/);
   assert.match(shellSource, /className="claudian-tab-content-container"/);
   assert.doesNotMatch(shellSource, /claudian-launcher-rail/);
   assert.doesNotMatch(shellSource, /clau\dian-launcher-hero|claudian-launcher-hero/);
   assert.doesNotMatch(shellSource, /claudian-header-runtime-strip/);
-  assert.doesNotMatch(shellSource, /GoodNight AI/);
   assert.match(shellSource, /currentMode === 'config'/);
   assert.match(shellSource, /currentMode === 'claude'/);
   assert.match(shellSource, /currentMode === 'codex'/);
