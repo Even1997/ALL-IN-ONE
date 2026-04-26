@@ -223,11 +223,11 @@ const removeProjectSnapshot = (projectId: string) => {
   window.localStorage.removeItem(getProjectSnapshotStorageKey(projectId));
 };
 
-const THEME_STORAGE_KEY = 'devflow-theme-mode';
+const THEME_STORAGE_KEY = 'goodnight-theme-mode';
 const DESKTOP_AI_PANE_WIDTH_BOUNDS = { min: 320, max: 640 };
-const DESIGN_BOARD_STORAGE_PREFIX = 'devflow-design-board';
-const PROJECT_INDEX_STORAGE_KEY = 'devflow-project-index';
-const PROJECT_SNAPSHOT_STORAGE_PREFIX = 'devflow-project-snapshot';
+const DESIGN_BOARD_STORAGE_PREFIX = 'goodnight-design-board';
+const PROJECT_INDEX_STORAGE_KEY = 'goodnight-project-index';
+const PROJECT_SNAPSHOT_STORAGE_PREFIX = 'goodnight-project-snapshot';
 const DESIGN_PAGE_CARD_WIDTH = 232;
 const DESIGN_PAGE_CARD_HEIGHT = 196;
 const DESIGN_FLOW_CARD_WIDTH = 220;

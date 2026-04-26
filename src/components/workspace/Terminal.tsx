@@ -19,7 +19,7 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
       id: 'welcome',
       type: 'output',
       content:
-        'DevFlow Terminal v1.0.0\n输入 "help" 查看可用命令。\n' +
+        'GoodNight Terminal v1.0.0\n输入 "help" 查看可用命令。\n' +
         (recommendedCommands.length > 0
           ? `\n推荐命令：\n${recommendedCommands.map((command) => `  ${command}`).join('\n')}\n`
           : ''),

@@ -400,7 +400,7 @@ export const useGlobalAIStore = create<GlobalAIState>()(
       getHistory: () => get().requestHistory,
     }),
     {
-      name: 'devflow-ai-store',
+      name: 'goodnight-ai-store',
       version: 2,
       storage: createJSONStorage(() => localStorage),
       onRehydrateStorage: () => (state) => {

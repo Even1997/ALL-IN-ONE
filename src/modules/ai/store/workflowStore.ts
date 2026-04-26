@@ -320,7 +320,7 @@ export const useAIWorkflowStore = create<WorkflowStoreState>()(
         }),
     }),
     {
-      name: 'devflow-ai-workflow-store',
+      name: 'goodnight-ai-workflow-store',
       version: 1,
       storage: createJSONStorage(() => localStorage),
       merge: (persistedState, currentState) => {

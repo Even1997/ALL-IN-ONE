@@ -246,7 +246,7 @@ export const useFeatureTreeStore = create<FeatureTreeState>()(
       },
     }),
     {
-      name: 'devflow-feature-tree-store',
+      name: 'goodnight-feature-tree-store',
       version: 1,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({

@@ -193,7 +193,7 @@ export const saveProjectIndexToDisk = async (projects: ProjectConfig[]) => {
   await writeJSONFile(indexPath, projects);
 };
 
-export const getProjectStateDir = (projectDir: string) => joinPath(projectDir, '.devflow');
+export const getProjectStateDir = (projectDir: string) => joinPath(projectDir, '.goodnight');
 
 export const getProjectSnapshotPath = (projectDir: string) =>
   joinPath(getProjectStateDir(projectDir), 'workspace.json');

@@ -128,7 +128,7 @@ fn get_default_projects_root_path(app_handle: &tauri::AppHandle) -> Result<PathB
         .path()
         .document_dir()
         .map_err(|e| format!("Failed to resolve documents directory: {}", e))
-        .map(|path| path.join("DevFlow").join("projects"))
+        .map(|path| path.join("GoodNight").join("projects"))
 }
 
 fn get_project_storage_settings_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -883,8 +883,8 @@ mod tests {
 
     #[test]
     fn project_storage_root_resolver_uses_override_only_when_it_differs_from_default() {
-        let default_path = PathBuf::from("C:/Users/test/Documents/DevFlow/projects");
-        let override_path = PathBuf::from("D:/DevFlow/projects");
+        let default_path = PathBuf::from("C:/Users/test/Documents/GoodNight/projects");
+        let override_path = PathBuf::from("D:/GoodNight/projects");
 
         assert_eq!(
             resolve_project_storage_root_path(default_path.clone(), Some(default_path.clone())),
@@ -904,7 +904,7 @@ mod tests {
     #[test]
     fn saved_project_storage_root_ignores_posix_path_on_windows() {
         assert_eq!(
-            normalize_saved_project_storage_root_path(Some("/Users/test/DevFlow/projects".into())).unwrap(),
+            normalize_saved_project_storage_root_path(Some("/Users/test/GoodNight/projects".into())).unwrap(),
             None
         );
     }
@@ -913,7 +913,7 @@ mod tests {
     #[test]
     fn saved_project_storage_root_ignores_windows_path_on_posix() {
         assert_eq!(
-            normalize_saved_project_storage_root_path(Some("C:/Users/test/Documents/DevFlow/projects".into()))
+            normalize_saved_project_storage_root_path(Some("C:/Users/test/Documents/GoodNight/projects".into()))
                 .unwrap(),
             None
         );

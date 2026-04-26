@@ -3142,7 +3142,7 @@ export const useProjectStore = create<ProjectState>()(
         }),
     }),
     {
-      name: 'devflow-project-store',
+      name: 'goodnight-project-store',
       version: 1,
       storage: createJSONStorage(() => localStorage),
       merge: (persistedState, currentState) => {

@@ -231,7 +231,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
         }),
     }),
     {
-      name: 'devflow-ai-chat-store',
+      name: 'goodnight-ai-chat-store',
       version: 1,
       storage: createJSONStorage(() => localStorage),
     }

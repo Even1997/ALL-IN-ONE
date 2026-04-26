@@ -82,7 +82,7 @@ const normalizeRelativePath = (value: string) => normalizeRelativeFileSystemPath
 const PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS = { min: 200, max: 420 };
 
 const getKnowledgeGroupOverridesStorageKey = (projectId: string) =>
-  `devflow:knowledge-group-overrides:${projectId}`;
+  `goodnight:knowledge-group-overrides:${projectId}`;
 
 const readKnowledgeGroupOverrides = (projectId: string | null) => {
   if (!projectId || typeof window === 'undefined') {
@@ -112,7 +112,7 @@ const writeKnowledgeGroupOverrides = (projectId: string | null, value: Record<st
 
 const shouldIgnoreKnowledgePath = (relativePath: string) => {
   const normalized = normalizeRelativePath(relativePath);
-  return normalized === '.devflow' || normalized.startsWith('.devflow/') || normalized === 'project.json';
+  return normalized === '.goodnight' || normalized.startsWith('.goodnight/') || normalized === 'project.json';
 };
 
 const listKnowledgeDiskItems = async (rootPath: string): Promise<KnowledgeDiskItem[]> => {

@@ -5,7 +5,7 @@ export type AppStyleOption = {
   label: string;
 };
 
-export const APP_STYLE_STORAGE_KEY = 'devflow-app-style';
+export const APP_STYLE_STORAGE_KEY = 'goodnight-app-style';
 
 export const APP_STYLE_OPTIONS: AppStyleOption[] = [
   { id: 'workbench', label: '蓝白工具' },

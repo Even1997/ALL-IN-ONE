@@ -32,6 +32,8 @@ export interface MarkdownModuleMatch {
 const MOBILE_APP_TYPES: AppType[] = ['mobile', 'mini_program'];
 export const MIN_MODULE_WIDTH = 80;
 export const MIN_MODULE_HEIGHT = 60;
+const FRAME_SIZE_REGEX = /^(?:(.+?)\s+)?(\d+)\s*x\s*(\d+)$/i;
+const MOBILE_FRAME_REGEX = /(mobile|mini|phone|移动|手机|小程序)/i;
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [
@@ -39,7 +41,9 @@ const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
     ...collectDesignPages(node.children),
   ]);
 
-const getPageMetadata = (node: Pick<PageStructureNode, 'name' | 'kind' | 'description'> & { metadata?: PageStructureNode['metadata'] }) => ({
+const getPageMetadata = (
+  node: Pick<PageStructureNode, 'name' | 'kind' | 'description'> & { metadata?: PageStructureNode['metadata'] }
+) => ({
   route: node.metadata?.route || `/${node.name}`,
   title: node.metadata?.title || node.name,
   goal: node.metadata?.goal || node.description || '承接当前页面的核心任务',
@@ -47,6 +51,8 @@ const getPageMetadata = (node: Pick<PageStructureNode, 'name' | 'kind' | 'descri
 });
 
 export const isMobileAppType = (appType?: AppType | null) => Boolean(appType && MOBILE_APP_TYPES.includes(appType));
+
+export const formatCanvasPreset = (preset: CanvasPreset) => `${preset.width}x${preset.height}`;
 
 export const getCanvasPreset = (appType?: AppType | null): CanvasPreset => {
   if (isMobileAppType(appType)) {
@@ -64,6 +70,42 @@ export const getCanvasPreset = (appType?: AppType | null): CanvasPreset => {
     height: 800,
     frameType: 'browser',
     label: 'Web 端线框',
+  };
+};
+
+export const resolveCanvasPresetFromFrame = (
+  frame: string | null | undefined,
+  fallbackAppType?: AppType | null
+): CanvasPreset => {
+  const fallbackPreset = getCanvasPreset(fallbackAppType);
+  const normalized = frame?.trim();
+
+  if (!normalized) {
+    return fallbackPreset;
+  }
+
+  const match = FRAME_SIZE_REGEX.exec(normalized);
+  if (!match) {
+    return fallbackPreset;
+  }
+
+  const width = Number(match[2]);
+  const height = Number(match[3]);
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return fallbackPreset;
+  }
+
+  const explicitLabel = match[1]?.trim();
+  const inferredMobile = width <= 480;
+  const label = explicitLabel || (inferredMobile ? '移动端线框' : 'Web 端线框');
+  const frameType = MOBILE_FRAME_REGEX.test(label) || width <= 480 ? 'mobile' : 'browser';
+
+  return {
+    label,
+    width,
+    height,
+    frameType,
   };
 };
 
@@ -148,12 +190,13 @@ export const buildPageWireframeMarkdown = (
   const featureNames = page.featureIds.map((id) => featureMap.get(id) || id).filter(Boolean);
   const metadata = getPageMetadata(page);
   const canvasPreset = canvasPresetOverride || getCanvasPreset(appType);
+  const frameValue = wireframe?.frame || formatCanvasPreset(canvasPreset);
   const modules = toWireframeModuleDrafts(wireframe?.elements || []);
 
   return [
     `## ${page.name}`,
     `- route: ${metadata.route}`,
-    `- frame: ${canvasPreset.label} ${canvasPreset.width}x${canvasPreset.height}`,
+    `- frame: ${frameValue}`,
     `- feature: ${featureNames.join(' / ') || metadata.goal}`,
     '- modules:',
     ...(modules.length > 0
@@ -200,6 +243,11 @@ export const parsePageWireframeMarkdown = (
       content: module.content,
     }))
     .map((module) => createWireframeModule(module, appType));
+};
+
+export const parseFrameFromWireframeMarkdown = (markdown: string) => {
+  const match = /^-\s+frame:\s*(.+)$/m.exec(markdown.replace(/\r/g, ''));
+  return match?.[1]?.trim() || null;
 };
 
 export const getMarkdownModuleMatches = (markdown: string): MarkdownModuleMatch[] => {

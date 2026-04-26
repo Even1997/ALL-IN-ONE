@@ -1,6 +1,6 @@
-# DevFlow
+# GoodNight
 
-DevFlow 是一个基于 `Vite + React + TypeScript + Tauri` 的可视化软件开发工作台，围绕需求录入、产品规划、线框原型、交付物生成和 AI 辅助工作流组织。
+GoodNight 是一个基于 `Vite + React + TypeScript + Tauri` 的可视化软件开发工作台，围绕需求录入、产品规划、线框原型、交付物生成和 AI 辅助工作流组织。
 
 ## 开发命令
 
