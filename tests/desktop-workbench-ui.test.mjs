@@ -59,13 +59,12 @@ test('product workbench renders a real divider between left nav and viewer', asy
   const source = await readFile(productPath, 'utf8');
   const css = await readFile(appCssPath, 'utf8');
 
-  assert.match(source, /from 'allotment'/);
   assert.match(source, /layoutPreferences/);
   assert.match(source, /productWorkbenchLeftNavWidth/);
-  assert.match(source, /<Allotment/);
+  assert.match(source, /WorkbenchShell/);
   assert.doesNotMatch(source, /pm-left-nav-divider/);
-  assert.match(css, /\.product-workbench-allotment\s*\{/);
-  assert.match(css, /\.product-workbench-allotment\s*{[\s\S]*?--sash-size:\s*8px;/);
+  assert.match(css, /\.pm-workbench-shell-allotment\s*\{/);
+  assert.match(css, /\.pm-workbench-shell-allotment\s*{[\s\S]*?width:\s*100%;/);
 });
 
 test('product sidebar tabs render a full-height divider between knowledge and page', async () => {

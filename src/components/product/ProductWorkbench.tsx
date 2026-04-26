@@ -1,6 +1,5 @@
 ﻿import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from 'react';
-import { Allotment } from 'allotment';
 import { invoke } from '@tauri-apps/api/core';
 import { Canvas } from '../canvas/Canvas';
 import {
@@ -52,6 +51,9 @@ import {
   normalizeRelativeFileSystemPath,
 } from '../../utils/fileSystemPaths.ts';
 import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from '../../utils/layoutPreferences';
+import { WorkbenchShell } from './WorkbenchShell';
+import { KnowledgeWorkspace } from './KnowledgeWorkspace';
+import { PageWorkspace } from './PageWorkspace';
 
 type SidebarTab = 'requirement' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
@@ -2812,9 +2814,17 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   );
   const productWorkbenchMainViewer = (
     <main className="pm-main-viewer">
-      {sidebarTab === 'requirement' && renderRequirementMain()}
-      {sidebarTab === 'page' && renderPageMain()}
-      {sidebarTab === 'page' && <WireframeSyncBridge selectedPage={selectedPage} />}
+      {sidebarTab === 'requirement' && <KnowledgeWorkspace content={renderRequirementMain()} />}
+      {sidebarTab === 'page' && (
+        <PageWorkspace
+          content={
+            <>
+              {renderPageMain()}
+              <WireframeSyncBridge selectedPage={selectedPage} />
+            </>
+          }
+        />
+      )}
     </main>
   );
 
@@ -2826,18 +2836,14 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
           {productWorkbenchMainViewer}
         </>
       ) : (
-        <Allotment className="product-workbench-allotment" onChange={handleProductWorkbenchLayoutChange}>
-          <Allotment.Pane
-            minSize={PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS.min}
-            maxSize={PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS.max}
-            preferredSize={productWorkbenchLeftNavWidth}
-          >
-            <div className="product-workbench-pane">{productWorkbenchSidebar}</div>
-          </Allotment.Pane>
-          <Allotment.Pane minSize={480}>
-            <div className="product-workbench-pane">{productWorkbenchMainViewer}</div>
-          </Allotment.Pane>
-        </Allotment>
+        <WorkbenchShell
+          leftPane={<div className="product-workbench-pane">{productWorkbenchSidebar}</div>}
+          centerPane={<div className="product-workbench-pane">{productWorkbenchMainViewer}</div>}
+          rightPane={null}
+          leftSize={productWorkbenchLeftNavWidth}
+          rightSize={0}
+          onLeftSizeChange={handleProductWorkbenchLayoutChange}
+        />
       )}
       {knowledgeContextMenu ? (
         <div

@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
+const shellPath = path.resolve(__dirname, '../src/components/product/WorkbenchShell.tsx');
+const appCssPath = path.resolve(__dirname, '../src/App.css');
 
 test('product workbench delegates shell and workspace responsibilities to focused child components', async () => {
   const source = await readFile(productPath, 'utf8');
@@ -17,4 +19,19 @@ test('product workbench delegates shell and workspace responsibilities to focuse
   assert.match(source, /<WorkbenchShell/);
   assert.match(source, /<KnowledgeWorkspace/);
   assert.match(source, /<PageWorkspace/);
+});
+
+test('workbench shell owns left center right layout and chrome classes', async () => {
+  const source = await readFile(shellPath, 'utf8');
+  const css = await readFile(appCssPath, 'utf8');
+
+  assert.match(source, /type WorkbenchShellProps =/);
+  assert.match(source, /leftPane: ReactNode/);
+  assert.match(source, /centerPane: ReactNode/);
+  assert.match(source, /rightPane: ReactNode/);
+  assert.match(source, /<Allotment/);
+  assert.match(css, /\.pm-workbench-shell\s*\{/);
+  assert.match(css, /\.pm-workbench-sidebar\s*\{/);
+  assert.match(css, /\.pm-workbench-main\s*\{/);
+  assert.match(css, /\.pm-workbench-ai-pane\s*\{/);
 });

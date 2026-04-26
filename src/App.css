@@ -330,6 +330,48 @@ body {
   --focus-border: color-mix(in srgb, var(--mode-accent, #0f766e) 46%, var(--mode-border, rgba(148, 163, 184, 0.22)));
 }
 
+.pm-workbench-shell {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pm-workbench-shell-allotment {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pm-workbench-sidebar {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.pm-workbench-main {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.pm-workbench-ai-pane {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.pm-workbench-main-with-ai {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
 .product-workbench-pane {
   width: 100%;
   height: 100%;

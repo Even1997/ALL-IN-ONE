@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productWorkbenchPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
+const pageWorkspacePath = path.resolve(__dirname, '../src/components/product/PageWorkspace.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
 
 test('module list text fields keep local drafts and commit on blur instead of every keystroke', async () => {
@@ -68,6 +69,19 @@ test('page workspace falls back to in-memory page actions when Tauri runtime is 
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addSiblingPage\(_pageId\);/s);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addChildPage\(_pageId\);/s);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*deletePageStructureNode\(pageId\);/s);
+});
+
+test('page workspace preserves current canvas and sketch persistence hooks', async () => {
+  const workspaceSource = await readFile(pageWorkspacePath, 'utf8');
+  const productSource = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(workspaceSource, /pm-page-workspace-shell/);
+  assert.doesNotMatch(workspaceSource, /Milkdown/);
+  assert.match(productSource, /Canvas/);
+  assert.match(productSource, /writeSketchPageFile/);
+  assert.match(productSource, /deleteSketchPageFile/);
+  assert.match(productSource, /loadSketchPageArtifactsFromProjectDir/);
+  assert.match(productSource, /<PageWorkspace/);
 });
 
 test('knowledge base has searchable filters and visible source summaries', async () => {
