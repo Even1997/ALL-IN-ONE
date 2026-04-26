@@ -20,8 +20,12 @@ function LoadingScreen() {
       color: '#1d1d1f',
     }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚡</div>
-        <div style={{ fontSize: '14px', color: '#666' }}>DevFlow 加载中...</div>
+        <img
+          src="/branding/goodnight-icon.svg"
+          alt="GoodNight"
+          style={{ width: '88px', height: '88px', margin: '0 auto 14px', display: 'block' }}
+        />
+        <div style={{ fontSize: '14px', color: '#666' }}>GoodNight 加载中...</div>
       </div>
     </div>
   );
@@ -52,7 +56,7 @@ function RuntimeErrorScreen({ error }: { error: RuntimeErrorDetails }) {
         }}
       >
         <div style={{ fontSize: "20px", fontWeight: 700, marginBottom: "8px" }}>
-          DevFlow 运行时错误
+          GoodNight 运行时错误
         </div>
         <div style={{ fontSize: "14px", lineHeight: 1.6, marginBottom: "16px" }}>
           页面没有正常渲染，当前捕获到的首个异常如下。
@@ -97,7 +101,7 @@ class AppErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error) {
-    console.error("[DevFlow] React render error:", error);
+    console.error("[GoodNight] React render error:", error);
   }
 
   render() {
@@ -116,7 +120,7 @@ function Root() {
   useEffect(() => {
     // Small delay to ensure zustand persist rehydrates from localStorage
     const timer = setTimeout(() => {
-      console.log('[DevFlow] hydrated, rendering App');
+      console.log('[GoodNight] hydrated, rendering App');
       setHydrated(true);
     }, 100);
     return () => clearTimeout(timer);
@@ -129,7 +133,7 @@ function Root() {
         stack: event.error instanceof Error ? event.error.stack : undefined,
         source: event.filename || "window.onerror",
       };
-      console.error("[DevFlow] Uncaught error:", nextError);
+      console.error("[GoodNight] Uncaught error:", nextError);
       setRuntimeError((current) => current || nextError);
     };
 
@@ -145,7 +149,7 @@ function Root() {
         stack: reason instanceof Error ? reason.stack : undefined,
         source: "unhandledrejection",
       };
-      console.error("[DevFlow] Unhandled rejection:", nextError);
+      console.error("[GoodNight] Unhandled rejection:", nextError);
       setRuntimeError((current) => current || nextError);
     };
 

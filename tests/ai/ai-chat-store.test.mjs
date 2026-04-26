@@ -58,3 +58,48 @@ test('ai chat store keeps active session per project', async () => {
   assert.equal(projectState.activeSessionId, second.id);
   assert.equal(projectState.sessions[0].id, second.id);
 });
+
+test('ai chat store persists project activity entries separately from chat history', async () => {
+  const { useAIChatStore } = await loadStore();
+  const store = useAIChatStore.getState();
+
+  store.ensureProjectState('project-log');
+  store.appendActivityEntry('project-log', {
+    id: 'activity_1',
+    runId: 'run_1',
+    type: 'run-summary',
+    summary: '更新了 knowledge/spec.md',
+    changedPaths: ['knowledge/spec.md'],
+    createdAt: 1,
+  });
+
+  const projectState = useAIChatStore.getState().projects['project-log'];
+  assert.equal(projectState.activityEntries.length, 1);
+  assert.equal(projectState.activityEntries[0].changedPaths[0], 'knowledge/spec.md');
+});
+
+test('latest activity entries are kept in reverse chronological order', async () => {
+  const { useAIChatStore } = await loadStore();
+  const store = useAIChatStore.getState();
+
+  store.ensureProjectState('project-order');
+  store.appendActivityEntry('project-order', {
+    id: 'a1',
+    runId: 'run_1',
+    type: 'run-summary',
+    summary: 'first',
+    changedPaths: ['a.md'],
+    createdAt: 1,
+  });
+  store.appendActivityEntry('project-order', {
+    id: 'a2',
+    runId: 'run_2',
+    type: 'run-summary',
+    summary: 'second',
+    changedPaths: ['b.md'],
+    createdAt: 2,
+  });
+
+  const entries = useAIChatStore.getState().projects['project-order'].activityEntries;
+  assert.equal(entries[0].id, 'a2');
+});

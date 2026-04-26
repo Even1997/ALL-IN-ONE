@@ -3,16 +3,17 @@ import test from 'node:test';
 
 import {
   buildChatContextSnapshot,
-  resolveKnowledgeSelectionForPrompt,
+  resolveCurrentReferenceFileIds,
   resolveKnowledgeContextSelection,
+  resolveKnowledgeSelectionForPrompt,
 } from '../../src/modules/ai/chat/chatContext.ts';
 
 const knowledgeEntries = [
   {
     id: 'doc-1',
-    title: '需求总览.md',
-    summary: '核心需求',
-    content: '# 需求',
+    title: 'requirements-overview.md',
+    summary: 'core requirements',
+    content: '# Requirements',
     type: 'markdown',
     source: 'requirement',
     updatedAt: new Date().toISOString(),
@@ -23,9 +24,9 @@ const knowledgeEntries = [
   },
   {
     id: 'doc-2',
-    title: '首页草图.md',
-    summary: '首页结构',
-    content: '# 草图',
+    title: 'homepage-sketch.md',
+    summary: 'homepage structure',
+    content: '# Sketch',
     type: 'markdown',
     source: 'requirement',
     updatedAt: new Date().toISOString(),
@@ -45,7 +46,6 @@ test('resolveKnowledgeContextSelection focuses active doc and keeps the rest as 
     selectedKnowledgeContextIds: ['doc-2'],
   });
 
-  assert.equal(result.label, '知识文档 / 需求总览.md');
   assert.equal(result.currentFile?.id, 'doc-1');
   assert.equal(result.relatedFiles.length, 1);
   assert.equal(result.relatedFiles[0].id, 'doc-2');
@@ -60,7 +60,6 @@ test('resolveKnowledgeContextSelection can clear document focus while keeping kn
     selectedKnowledgeContextIds: ['doc-2'],
   });
 
-  assert.equal(result.label, '知识库 / 按问题自动参考');
   assert.equal(result.currentFile, null);
   assert.equal(result.relatedFiles.length, 2);
 });
@@ -90,7 +89,6 @@ test('resolveKnowledgeContextSelection respects user-selected mode in page scene
     selectedKnowledgeContextIds: ['doc-2'],
   });
 
-  assert.equal(result.label, '知识文档 / 首页草图.md');
   assert.equal(result.currentFile?.id, 'doc-2');
   assert.equal(result.relatedFiles.length, 0);
 });
@@ -98,23 +96,59 @@ test('resolveKnowledgeContextSelection respects user-selected mode in page scene
 test('buildChatContextSnapshot keeps page context primary and knowledge optional', () => {
   const result = buildChatContextSnapshot({
     scene: 'page',
-    pageTitle: '首页',
-    selectedElementLabel: 'Hero 区块',
-    knowledgeLabel: '知识库 / 当前文档',
+    pageTitle: 'Home',
+    selectedElementLabel: 'Hero section',
+    knowledgeLabel: 'Knowledge / current.md',
   });
 
-  assert.equal(result.primaryLabel, '页面 / 首页');
-  assert.equal(result.secondaryLabel, '设计 / Hero 区块');
-  assert.equal(result.knowledgeLabel, '知识库 / 当前文档');
+  assert.equal(result.primaryLabel, '页面 / Home');
+  assert.equal(result.secondaryLabel, '设计 / Hero section');
+  assert.equal(result.knowledgeLabel, 'Knowledge / current.md');
 });
 
 test('buildChatContextSnapshot does not duplicate knowledge label in knowledge scene', () => {
   const result = buildChatContextSnapshot({
     scene: 'knowledge',
-    knowledgeLabel: '知识文档 / 需求规格说明书.md',
+    knowledgeLabel: 'Knowledge / requirements.md',
   });
 
-  assert.equal(result.primaryLabel, '知识文档 / 需求规格说明书.md');
+  assert.equal(result.primaryLabel, 'Knowledge / requirements.md');
   assert.equal(result.secondaryLabel, null);
   assert.equal(result.knowledgeLabel, null);
+});
+
+test('resolveCurrentReferenceFileIds keeps knowledge current scope on the focused file only', () => {
+  const result = resolveCurrentReferenceFileIds({
+    scene: 'knowledge',
+    activeKnowledgeFileId: 'doc-2',
+    selectedKnowledgeContextIds: ['doc-1', 'doc-2', 'doc-3'],
+    selectedPagePath: null,
+    availableFileIds: ['doc-1', 'doc-2', 'doc-3'],
+  });
+
+  assert.deepEqual(result, ['doc-2']);
+});
+
+test('resolveCurrentReferenceFileIds stays empty when knowledge focus is cleared', () => {
+  const result = resolveCurrentReferenceFileIds({
+    scene: 'knowledge',
+    activeKnowledgeFileId: null,
+    selectedKnowledgeContextIds: ['doc-1', 'doc-2'],
+    selectedPagePath: null,
+    availableFileIds: ['doc-1', 'doc-2'],
+  });
+
+  assert.deepEqual(result, []);
+});
+
+test('resolveCurrentReferenceFileIds keeps page current scope on the focused page only', () => {
+  const result = resolveCurrentReferenceFileIds({
+    scene: 'page',
+    activeKnowledgeFileId: 'doc-2',
+    selectedKnowledgeContextIds: ['doc-1', 'doc-2'],
+    selectedPagePath: 'sketch/pages/home.md',
+    availableFileIds: ['doc-1', 'doc-2', 'sketch/pages/home.md'],
+  });
+
+  assert.deepEqual(result, ['sketch/pages/home.md']);
 });

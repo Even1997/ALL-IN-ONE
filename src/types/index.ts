@@ -108,6 +108,7 @@ export interface WireframeDocument {
   id: string;
   pageId: string;
   pageName: string;
+  frame?: string;
   elements: CanvasElement[];
   updatedAt: string;
   status: 'draft' | 'ready';

@@ -163,7 +163,7 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="例如：DevFlow Workspace"
+              placeholder="例如：GoodNight Workspace"
               autoFocus
             />
           </label>
@@ -190,7 +190,7 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
             <div className="project-setup-header">
               <div>
                 <h2>项目存储位置</h2>
-                <p>默认使用文档目录下的 `DevFlow/projects`，也可以改成你自己的绝对路径。</p>
+                <p>默认使用文档目录下的 `GoodNight/projects`，也可以改成你自己的绝对路径。</p>
               </div>
               <div className="project-setup-status">Storage</div>
             </div>

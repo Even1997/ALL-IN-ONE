@@ -1,4 +1,4 @@
-import type { CanvasElement, PageStructureNode, WireframeDocument } from '../../types';
+import type { AppType, CanvasElement, PageStructureNode, WireframeDocument } from '../../types';
 
 const MIN_MODULE_WIDTH = 80;
 const MIN_MODULE_HEIGHT = 60;
@@ -31,6 +31,18 @@ const getRoute = (page: Partial<PageStructureNode>) =>
 
 const getGoal = (page: Partial<PageStructureNode>) =>
   page.metadata?.goal || page.description || page.name || '未命名页面';
+
+const getDefaultFrame = (appType?: AppType | null) => {
+  if (appType === 'mini_program') {
+    return '390x844';
+  }
+
+  if (appType === 'mobile') {
+    return '390x844';
+  }
+
+  return '1280x800';
+};
 
 const toModules = (elements: CanvasElement[] | undefined) =>
   (elements || []).map((element, index) => ({
@@ -70,17 +82,19 @@ const buildModulesSection = (elements: CanvasElement[] | undefined) => {
 
 export const buildSketchPageContent = (
   page: Pick<PageStructureNode, 'name'> & Partial<PageStructureNode>,
-  wireframe: WireframeDocument | null | undefined
+  wireframe: WireframeDocument | null | undefined,
+  appType?: AppType | null
 ) =>
   [
     `# ${page.name}`,
     '',
     `- route: ${getRoute(page)}`,
+    `- frame: ${wireframe?.frame || getDefaultFrame(appType)}`,
     `- goal: ${getGoal(page)}`,
     ...buildModulesSection(wireframe?.elements),
   ].join('\n');
 
-const parseField = (content: string, name: 'route' | 'goal') => {
+const parseField = (content: string, name: 'route' | 'goal' | 'frame') => {
   const match = new RegExp(`^- ${name}:\\s*(.+)$`, 'm').exec(content);
   return match?.[1]?.trim() || '';
 };
@@ -88,6 +102,7 @@ const parseField = (content: string, name: 'route' | 'goal') => {
 export const parseSketchPageFile = (relativePath: string, content: string) => {
   const name = getSketchPageNameFromPath(relativePath);
   const route = parseField(content, 'route') || `/${slugifySketchPart(name)}`;
+  const frame = parseField(content, 'frame');
   const goal = parseField(content, 'goal') || name;
   const pageId = normalizePath(relativePath);
   const moduleRegex =
@@ -139,6 +154,7 @@ export const parseSketchPageFile = (relativePath: string, content: string) => {
     id: `wireframe:${pageId}`,
     pageId,
     pageName: name,
+    frame: frame || undefined,
     elements,
     updatedAt: new Date().toISOString(),
     status: elements.length > 0 ? 'ready' : 'draft',

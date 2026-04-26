@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
 import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
@@ -16,12 +16,24 @@ import {
   buildChatContextSnapshot,
   collectDesignPages,
   getSelectedElementLabel,
+  resolveCurrentReferenceFileIds,
   resolveReferenceScopeSelection,
   resolveKnowledgeSelectionForPrompt,
 } from '../../modules/ai/chat/chatContext';
 import { buildReferencePromptContext } from '../../modules/ai/chat/referencePromptContext';
 import { PROVIDER_PRESETS, type ProviderPreset } from '../../modules/ai/providerPresets';
+import type { ActivityEntry } from '../../modules/ai/skills/activityLog';
+import {
+  discoverLocalSkills,
+  importGitHubSkill,
+  importLocalSkill,
+  syncSkillToRuntime,
+  type SkillDiscoveryEntry,
+} from '../../modules/ai/skills/skillLibrary';
 import { type AIConfigEntry, hasUsableAIConfigEntry } from '../../modules/ai/store/aiConfigState';
+import { toRuntimeAIConfig } from '../../modules/ai/store/aiConfigState';
+import { ClaudeRuntime } from '../../modules/ai/claudian/runtime/claude/ClaudeRuntime';
+import { CodexRuntime } from '../../modules/ai/claudian/runtime/codex/CodexRuntime';
 import {
   createChatSession,
   createStoredChatMessage,
@@ -39,6 +51,16 @@ import {
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import { getProjectDir, loadDesignBoardStateFromDisk, saveContextIndexToDisk } from '../../utils/projectPersistence';
+import {
+  ClaudianActivityPanel,
+  ClaudianEmbeddedComposer,
+  ClaudianEmbeddedTopbar,
+  ClaudianHistoryMenu,
+  ClaudianMessageList,
+  ClaudianReferenceMenu,
+  ClaudianSkillsPanel,
+} from '../ai/claudian/ClaudianEmbeddedPieces';
+import { ClaudianModeSwitch } from '../ai/claudian-shell/ClaudianModeSwitch';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -65,6 +87,12 @@ type AIProviderTypeOption = {
   value: AIProviderType;
   label: string;
   description: string;
+};
+
+type AIChatProps = {
+  variant?: 'default' | 'claudian-embedded' | 'claudian-full-page';
+  runtimeConfigIdOverride?: string | null;
+  providerExecutionMode?: 'claude' | 'codex' | null;
 };
 
 const formatTimestamp = (value: number) =>
@@ -101,12 +129,44 @@ const summarizeSessionTitle = (value: string) => {
     return '新对话';
   }
 
-  return normalized.length > 18 ? `${normalized.slice(0, 18)}…` : normalized;
+  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
 };
 
 const buildSessionPreview = (content: string) => {
   const normalized = content.replace(/\s+/g, ' ').trim();
-  return normalized.length > 32 ? `${normalized.slice(0, 32)}…` : normalized;
+  return normalized.length > 32 ? `${normalized.slice(0, 32)}...` : normalized;
+};
+
+const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const extractChangedPaths = (content: string) =>
+  Array.from(content.matchAll(/`([^`]+\.(?:md|json|html|tsx|ts|css))`/g)).map((match) => match[1]);
+
+const buildRunSummaryEntry = ({
+  runId,
+  content,
+  skill,
+}: {
+  runId: string;
+  content: string;
+  skill: string | null;
+}): ActivityEntry | null => {
+  const changedPaths = extractChangedPaths(content);
+  if (changedPaths.length === 0) {
+    return null;
+  }
+
+  return {
+    id: createActivityEntryId(),
+    runId,
+    type: 'run-summary',
+    summary: `更新了 ${changedPaths.join('、')}`,
+    changedPaths,
+    runtime: 'built-in',
+    skill,
+    createdAt: Date.now(),
+  };
 };
 
 const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
@@ -344,8 +404,18 @@ const buildSettingsDraft = (config: AIConfigEntry | null): AISettingsDraft => ({
   enabled: config?.enabled || false,
 });
 
-export const AIChat: React.FC = () => {
+const claudeRuntimeExecutor = new ClaudeRuntime();
+const codexRuntimeExecutor = new CodexRuntime();
+
+export const AIChat: React.FC<AIChatProps> = ({
+  variant = 'default',
+  runtimeConfigIdOverride = null,
+  providerExecutionMode = null,
+}) => {
+  const isClaudianEmbedded = variant === 'claudian-embedded';
+  const isClaudianFullPage = variant === 'claudian-full-page';
   const [input, setInput] = useState('');
+  const [activePanel, setActivePanel] = useState<'chat' | 'skills' | 'activity'>('chat');
   const [isLoading, setIsLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -360,12 +430,16 @@ export const AIChat: React.FC = () => {
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>({});
   const [selectedSettingsConfigId, setSelectedSettingsConfigId] = useState<string | null>(null);
   const [selectedChatAgentId, setSelectedChatAgentId] = useState<ChatAgentId>('built-in');
-  const [localAgentLaunchState, setLocalAgentLaunchState] = useState<'idle' | 'opening' | 'opened' | 'error'>('idle');
-  const [localAgentLaunchMessage, setLocalAgentLaunchMessage] = useState('');
   const [isKnowledgeReferenceEnabled] = useState(true);
   const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
   const [persistedDesignStyleNodes, setPersistedDesignStyleNodes] = useState<DesignStyleReferenceNode[]>([]);
   const [referencePickerValue, setReferencePickerValue] = useState('');
+  const [skills, setSkills] = useState<SkillDiscoveryEntry[]>([]);
+  const [skillsState, setSkillsState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [skillsMessage, setSkillsMessage] = useState('');
+  const [githubSkillRepo, setGithubSkillRepo] = useState('');
+  const [githubSkillPath, setGithubSkillPath] = useState('');
+  const [githubSkillRef, setGithubSkillRef] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -373,7 +447,6 @@ export const AIChat: React.FC = () => {
   const {
     aiConfigs,
     selectedConfigId,
-    isConfigured,
     addConfig,
     updateConfig,
     setConfigEnabled,
@@ -381,7 +454,6 @@ export const AIChat: React.FC = () => {
     useShallow((state) => ({
       aiConfigs: state.aiConfigs,
       selectedConfigId: state.selectedConfigId,
-      isConfigured: state.isConfigured,
       addConfig: state.addConfig,
       updateConfig: state.updateConfig,
       setConfigEnabled: state.setConfigEnabled,
@@ -434,6 +506,7 @@ export const AIChat: React.FC = () => {
     upsertSession,
     setActiveSession,
     appendMessage,
+    appendActivityEntry,
     updateMessage,
     renameSession,
   } = useAIChatStore(
@@ -442,6 +515,7 @@ export const AIChat: React.FC = () => {
       upsertSession: state.upsertSession,
       setActiveSession: state.setActiveSession,
       appendMessage: state.appendMessage,
+      appendActivityEntry: state.appendActivityEntry,
       updateMessage: state.updateMessage,
       renameSession: state.renameSession,
     }))
@@ -469,10 +543,38 @@ export const AIChat: React.FC = () => {
     [activeSessionId, sessions]
   );
   const messages = activeSession?.messages || [];
+  const activityEntries = projectChatState?.activityEntries || [];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, isLoading]);
+
+  const loadSkills = useCallback(async () => {
+    if (!currentProject) {
+      return;
+    }
+
+    setSkillsState('loading');
+    setSkillsMessage('');
+
+    try {
+      const projectRoot = await getProjectDir(currentProject.id);
+      const entries = await discoverLocalSkills({ projectRoot });
+      setSkills(entries);
+      setSkillsState('ready');
+    } catch (error) {
+      setSkillsState('error');
+      setSkillsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [currentProject]);
+
+  useEffect(() => {
+    if (activePanel !== 'skills' || !currentProject) {
+      return;
+    }
+
+    void loadSkills();
+  }, [activePanel, currentProject, loadSkills]);
 
   useEffect(() => {
     const viewportClassName = getChatViewportClassName(isCollapsed);
@@ -500,13 +602,14 @@ export const AIChat: React.FC = () => {
   }, [aiConfigs, providerSearch]);
 
   const selectedRuntimeConfig = useMemo(
-    () => aiConfigs.find((item) => item.id === selectedConfigId) || null,
-    [aiConfigs, selectedConfigId]
+    () =>
+      (runtimeConfigIdOverride ? aiConfigs.find((item) => item.id === runtimeConfigIdOverride) : null) ||
+      aiConfigs.find((item) => item.id === selectedConfigId) ||
+      null,
+    [aiConfigs, runtimeConfigIdOverride, selectedConfigId]
   );
-
-  const selectedChatAgent = useMemo(
-    () => CHAT_AGENTS.find((agent) => agent.id === selectedChatAgentId) || CHAT_AGENTS[2],
-    [selectedChatAgentId]
+  const isRuntimeConfigured = Boolean(
+    selectedRuntimeConfig && selectedRuntimeConfig.enabled && hasUsableAIConfigEntry(selectedRuntimeConfig)
   );
 
   const selectedSettingsConfig = useMemo(
@@ -562,20 +665,15 @@ export const AIChat: React.FC = () => {
     [previewElements, selectedElementId]
   );
   const currentReferenceFileIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (isKnowledgeReferenceEnabled) {
-      if (activeKnowledgeFileId) {
-        ids.add(activeKnowledgeFileId);
-      }
-      selectedKnowledgeContextIds.forEach((id) => ids.add(id));
-    }
-
-    if (selectedPage) {
-      ids.add(buildSketchReferencePath(selectedPage));
-    }
-
-    return Array.from(ids).filter((id) => referenceFiles.some((file) => file.id === id));
+    return resolveCurrentReferenceFileIds({
+      scene: aiContextState?.scene || 'knowledge',
+      activeKnowledgeFileId: isKnowledgeReferenceEnabled ? activeKnowledgeFileId : null,
+      selectedKnowledgeContextIds: isKnowledgeReferenceEnabled ? selectedKnowledgeContextIds : [],
+      selectedPagePath: selectedPage ? buildSketchReferencePath(selectedPage) : null,
+      availableFileIds: referenceFiles.map((file) => file.id),
+    });
   }, [
+    aiContextState?.scene,
     activeKnowledgeFileId,
     isKnowledgeReferenceEnabled,
     referenceFiles,
@@ -627,7 +725,7 @@ export const AIChat: React.FC = () => {
         pageTitle: selectedPage?.name || null,
         selectedElementLabel,
         knowledgeLabel: displayKnowledgeFile && isKnowledgeReferenceEnabled
-          ? `知识文档 / ${displayKnowledgeFile.title}`
+          ? `鐭ヨ瘑鏂囨。 / ${displayKnowledgeFile.title}`
           : null,
       }),
     [aiContextState?.scene, displayKnowledgeFile, isKnowledgeReferenceEnabled, selectedElementLabel, selectedPage?.name]
@@ -635,14 +733,14 @@ export const AIChat: React.FC = () => {
 
   const currentContextUsage = useMemo(() => {
     const previewPrompt = buildDirectChatPrompt({
-      userInput: input.trim() || '继续当前对话',
+      userInput: input.trim() || '缁х画褰撳墠瀵硅瘽',
       currentProjectName: currentProject?.name,
       contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
       skillIntent: null,
       knowledgeSelection: effectiveKnowledgeSelection,
       referenceContext: referencePromptContext.labels.length > 0 ? referencePromptContext : null,
       contextLabels: [
-        selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
+        selectedRuntimeConfig ? `褰撳墠 AI / ${selectedRuntimeConfig.name}` : null,
         contextSnapshot.primaryLabel,
         contextSnapshot.secondaryLabel,
         contextSnapshot.knowledgeLabel,
@@ -705,6 +803,20 @@ export const AIChat: React.FC = () => {
       setSelectedReferenceFileIds(currentProject.id, currentReferenceFileIds);
     }
   }, [aiContextState, currentProject, currentReferenceFileIds, setSelectedReferenceFileIds]);
+
+  useEffect(() => {
+    if (!currentProject || referenceScopeMode !== 'current') {
+      return;
+    }
+
+    const hasChanged =
+      currentReferenceFileIds.length !== selectedReferenceFileIds.length ||
+      currentReferenceFileIds.some((id, index) => id !== selectedReferenceFileIds[index]);
+
+    if (hasChanged) {
+      setSelectedReferenceFileIds(currentProject.id, currentReferenceFileIds);
+    }
+  }, [currentProject, currentReferenceFileIds, referenceScopeMode, selectedReferenceFileIds, setSelectedReferenceFileIds]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -1032,7 +1144,7 @@ export const AIChat: React.FC = () => {
 
   const handleCreateConfig = useCallback(() => {
     const nextId = addConfig({
-      name: `AI 配置 ${aiConfigs.length + 1}`,
+      name: `AI 閰嶇疆 ${aiConfigs.length + 1}`,
       provider: settingsDraft.provider,
       baseURL: settingsDraft.baseURL || getSuggestedBaseURL(settingsDraft.provider, selectedSettingsPreset),
       model: settingsDraft.model,
@@ -1062,31 +1174,6 @@ export const AIChat: React.FC = () => {
     setShowReferenceMenu(false);
   }, [currentProject, setActiveSession, upsertSession]);
 
-  const handleOpenLocalAgentInterface = useCallback(async () => {
-    if (!currentProject || selectedChatAgentId === 'built-in') {
-      return;
-    }
-
-    setLocalAgentLaunchState('opening');
-    setLocalAgentLaunchMessage('');
-
-    try {
-      const projectRoot = await getProjectDir(currentProject.id);
-      const result = await invoke<LocalAgentCommandResult>('open_local_agent_interface', {
-        params: {
-          agent: selectedChatAgentId,
-          projectRoot: projectRoot,
-        },
-      });
-
-      setLocalAgentLaunchState(result.success ? 'opened' : 'error');
-      setLocalAgentLaunchMessage(result.success ? result.content : result.error || 'Failed to open local agent.');
-    } catch (error) {
-      setLocalAgentLaunchState('error');
-      setLocalAgentLaunchMessage(error instanceof Error ? error.message : String(error));
-    }
-  }, [currentProject, selectedChatAgentId]);
-
   const insertSkillToken = useCallback((token: string) => {
     setShowSkillMenu(false);
     setInput((current) => {
@@ -1111,6 +1198,80 @@ export const AIChat: React.FC = () => {
     });
   }, []);
 
+  const handleImportSkill = useCallback(async (skill: SkillDiscoveryEntry) => {
+    try {
+      const importedSkill = await importLocalSkill(skill.path);
+      await loadSkills();
+      setSkillsMessage(`Imported ${importedSkill.name}.`);
+      return;
+      setSkills((current) => current.map((item) => (item.path === skill.path ? importedSkill : item)));
+      setSkillsMessage(`宸插鍏?${importedSkill.name}`);
+    } catch (error) {
+      setSkillsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [loadSkills]);
+
+  const handleImportGitHubSkill = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      const repo = githubSkillRepo.trim();
+      const path = githubSkillPath.trim();
+      const gitRef = githubSkillRef.trim();
+
+      if (!repo || !path) {
+        setSkillsMessage('GitHub Repo and Skill Path are required.');
+        return;
+      }
+
+      try {
+        const importedSkill = await importGitHubSkill({
+          repo,
+          path,
+          gitRef: gitRef || undefined,
+        });
+        await loadSkills();
+        setSkillsMessage(`Imported ${importedSkill.name} from GitHub.`);
+      } catch (error) {
+        setSkillsMessage(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [githubSkillPath, githubSkillRef, githubSkillRepo, loadSkills]
+  );
+
+  const handleSyncSkill = useCallback(
+    async (skill: SkillDiscoveryEntry, runtime: 'codex' | 'claude') => {
+      if (!currentProject) {
+        setSkillsMessage('请先打开当前项目，再执行同步。');
+        return;
+      }
+
+      try {
+        const projectRoot = await getProjectDir(currentProject.id);
+        const result = await syncSkillToRuntime({
+          skillId: skill.id,
+          runtime,
+          projectRoot,
+        });
+        setSkills((current) =>
+          current.map((item) =>
+            item.id === skill.id
+              ? {
+                  ...item,
+                  syncedToCodex: runtime === 'codex' ? result.synced : item.syncedToCodex,
+                  syncedToClaude: runtime === 'claude' ? result.synced : item.syncedToClaude,
+                }
+              : item
+          )
+        );
+        setSkillsMessage(`已同步 ${skill.name} 到 ${runtime === 'codex' ? 'Codex' : 'Claude'}`);
+      } catch (error) {
+        setSkillsMessage(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [currentProject]
+  );
+
   const handleSubmit = useCallback(
     async (event?: React.FormEvent) => {
       event?.preventDefault();
@@ -1127,7 +1288,7 @@ export const AIChat: React.FC = () => {
       }
 
       const rawContent = input.trim();
-      const requestedReindex = rawContent.includes('@整理');
+      const requestedReindex = rawContent.includes('@鏁寸悊');
       const skillIntent = resolveSkillIntent(rawContent);
       const cleanedContent = skillIntent?.cleanedInput.trim() ? skillIntent.cleanedInput.trim() : rawContent;
       const userMessage = createStoredChatMessage('user', rawContent);
@@ -1139,7 +1300,7 @@ export const AIChat: React.FC = () => {
         renameSession(currentProject.id, targetSessionId, summarizeSessionTitle(rawContent));
       }
 
-      if (selectedChatAgentId === 'built-in' && !isConfigured) {
+      if (selectedChatAgentId === 'built-in' && !isRuntimeConfigured) {
         appendMessage(
           currentProject.id,
           targetSessionId,
@@ -1148,9 +1309,14 @@ export const AIChat: React.FC = () => {
         return;
       }
 
-      const assistantMessage = createStoredChatMessage('assistant', '正在思考…');
+      const assistantMessage = createStoredChatMessage('assistant', '正在思考...');
       appendMessage(currentProject.id, targetSessionId, assistantMessage);
       setIsLoading(true);
+      const runId = createRunId();
+
+      if (selectedRuntimeConfig && !providerExecutionMode) {
+        aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
+      }
 
       let promptReferenceFiles = referenceFiles;
       try {
@@ -1160,12 +1326,12 @@ export const AIChat: React.FC = () => {
             promptReferenceFiles = rebuilt.referenceFiles;
           }
         } catch (error) {
-          if (requestedReindex && rawContent.replace(/@整理/g, '').trim().length === 0) {
+          if (requestedReindex && rawContent.replace(/@鏁寸悊/g, '').trim().length === 0) {
             throw error;
           }
         }
 
-        if (requestedReindex && rawContent.replace(/@整理/g, '').trim().length === 0) {
+        if (requestedReindex && rawContent.replace(/@鏁寸悊/g, '').trim().length === 0) {
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
             role: 'system',
@@ -1194,7 +1360,7 @@ export const AIChat: React.FC = () => {
             : knowledgeSelectionMeta,
           referenceContext: promptReferenceContext.labels.length > 0 ? promptReferenceContext : null,
           contextLabels: [
-            selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
+            selectedRuntimeConfig ? `褰撳墠 AI / ${selectedRuntimeConfig.name}` : null,
             contextSnapshot.primaryLabel,
             contextSnapshot.secondaryLabel,
             contextSnapshot.knowledgeLabel,
@@ -1206,24 +1372,84 @@ export const AIChat: React.FC = () => {
           setRawRequirementInput(cleanedContent);
         }
 
-        const chunks: string[] = [];
-        const response = await aiService.completeText({
-          systemPrompt: directChat.systemPrompt,
-          prompt: directChat.prompt,
-          onChunk: (text) => {
-            chunks.push(text);
-            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-              ...message,
-              content: chunks.join('').trim() || '正在思考…',
-            }));
-          },
-        });
+        if (selectedChatAgentId !== 'built-in') {
+          const projectRoot = await getProjectDir(currentProject.id);
+          const localAgentPrompt = [
+            directChat.systemPrompt ? `<system>\n${directChat.systemPrompt}\n</system>` : null,
+            directChat.prompt,
+          ].filter((item): item is string => Boolean(item)).join('\n\n');
+          const result = await invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
+            params: {
+              agent: selectedChatAgentId,
+              projectRoot,
+              prompt: localAgentPrompt,
+            },
+          });
 
-        const finalContent = response.trim() || chunks.join('').trim() || '已收到，但这次没有返回内容。';
+          if (!result.success) {
+            throw new Error(result.error || 'Local agent execution failed.');
+          }
+
+          const finalContent = result.content.trim() || '本地 Agent 已执行，但没有返回内容。';
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content: finalContent,
+          }));
+          const activityEntry = buildRunSummaryEntry({
+            runId,
+            content: finalContent,
+            skill: skillIntent?.skill || null,
+          });
+          if (activityEntry) {
+            appendActivityEntry(currentProject.id, activityEntry);
+          }
+          return;
+        }
+
+        const chunks: string[] = [];
+        const handleChunk = (text: string) => {
+          chunks.push(text);
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content: chunks.join('').trim() || '正在思考...',
+          }));
+        };
+        const response =
+          providerExecutionMode === 'claude' && selectedRuntimeConfig
+            ? await claudeRuntimeExecutor.executePrompt({
+                sessionId: targetSessionId,
+                config: selectedRuntimeConfig,
+                systemPrompt: directChat.systemPrompt,
+                prompt: directChat.prompt,
+                onChunk: handleChunk,
+              })
+            : providerExecutionMode === 'codex' && selectedRuntimeConfig
+              ? await codexRuntimeExecutor.executePrompt({
+                  sessionId: targetSessionId,
+                  config: selectedRuntimeConfig,
+                  systemPrompt: directChat.systemPrompt,
+                  prompt: directChat.prompt,
+                  onChunk: handleChunk,
+                })
+              : await aiService.completeText({
+                  systemPrompt: directChat.systemPrompt,
+                  prompt: directChat.prompt,
+                  onChunk: handleChunk,
+                });
+
+        const finalContent = response.trim() || chunks.join('').trim() || '已收到请求，但这次没有返回内容。';
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
           content: finalContent,
         }));
+        const activityEntry = buildRunSummaryEntry({
+          runId,
+          content: finalContent,
+          skill: skillIntent?.skill || null,
+        });
+        if (activityEntry) {
+          appendActivityEntry(currentProject.id, activityEntry);
+        }
       } catch (error) {
         const message = normalizeErrorMessage(error);
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
@@ -1232,6 +1458,16 @@ export const AIChat: React.FC = () => {
           tone: 'error',
           content: message,
         }));
+        appendActivityEntry(currentProject.id, {
+          id: createActivityEntryId(),
+          runId,
+          type: 'failed',
+          summary: message,
+          changedPaths: [],
+          runtime: selectedChatAgentId === 'built-in' ? 'built-in' : 'local',
+          skill: skillIntent?.skill || null,
+          createdAt: Date.now(),
+        });
       } finally {
         setIsLoading(false);
       }
@@ -1240,15 +1476,16 @@ export const AIChat: React.FC = () => {
       activeSession,
       activeSessionId,
       appendMessage,
+      appendActivityEntry,
       contextSnapshot.knowledgeLabel,
       contextSnapshot.primaryLabel,
       contextSnapshot.secondaryLabel,
       currentProject,
       handleRebuildContextIndex,
       input,
-      isConfigured,
       isLoading,
       knowledgeSelectionMeta,
+      providerExecutionMode,
       referenceFiles,
       selectedReferenceFileIds,
       selectedRuntimeConfig,
@@ -1268,12 +1505,31 @@ export const AIChat: React.FC = () => {
     }
   };
 
+  const historyMenu = showHistoryMenu ? (
+    <ClaudianHistoryMenu
+      sessions={sessions}
+      activeSessionId={activeSessionId}
+      onCreateSession={handleCreateSession}
+      onSelectSession={(sessionId) => {
+        if (!currentProject) {
+          return;
+        }
+
+        setActiveSession(currentProject.id, sessionId);
+        setShowHistoryMenu(false);
+      }}
+      buildSessionPreview={buildSessionPreview}
+    />
+  ) : null;
+
   return (
     <>
       {isSettingsOpen ? <div className="chat-settings-overlay" onClick={closeSettings} /> : null}
 
-      <section className={getChatShellLayoutClassName(isCollapsed)}>
-        <header className="chat-shell-header">
+      <section
+        className={`${getChatShellLayoutClassName(isClaudianEmbedded || isClaudianFullPage ? false : isCollapsed)}${isClaudianEmbedded ? ' chat-shell-embedded' : ''}${isClaudianFullPage ? ' chat-shell-full-page' : ''}`}
+      >
+        {!isClaudianEmbedded && !isClaudianFullPage ? <header className="chat-shell-header">
           <div className="chat-shell-title">
             <strong>{isCollapsed ? 'AI' : 'AI 对话'}</strong>
             {!isCollapsed ? <span>{activeSession?.title || currentProject?.name || '新对话'}</span> : null}
@@ -1281,6 +1537,20 @@ export const AIChat: React.FC = () => {
           <div className="chat-shell-header-actions">
             {!isCollapsed ? (
               <>
+                <div className="chat-shell-view-tabs" role="tablist" aria-label="AI shell view">
+                  {(['chat', 'skills', 'activity'] as const).map((panel) => (
+                    <button
+                      key={panel}
+                      type="button"
+                      role="tab"
+                      aria-selected={activePanel === panel}
+                      className={activePanel === panel ? 'active' : ''}
+                      onClick={() => setActivePanel(panel)}
+                    >
+                      {panel === 'chat' ? 'Chat' : panel === 'skills' ? 'Skills' : 'Activity'}
+                    </button>
+                  ))}
+                </div>
                 <div className="chat-shell-agent-tabs" role="tablist" aria-label="AI agent">
                   {CHAT_AGENTS.map((agent) => (
                     <button
@@ -1293,8 +1563,6 @@ export const AIChat: React.FC = () => {
                       title={agent.title}
                       onClick={() => {
                         setSelectedChatAgentId(agent.id);
-                        setLocalAgentLaunchState('idle');
-                        setLocalAgentLaunchMessage('');
                       }}
                     >
                       <AgentIcon agentId={agent.id} />
@@ -1312,39 +1580,10 @@ export const AIChat: React.FC = () => {
                       setShowSkillMenu(false);
                       setShowReferenceMenu(false);
                     }}
-                  >
-                    <HistoryIcon />
-                  </button>
-                  {showHistoryMenu ? (
-                    <div className="chat-history-menu">
-                      <button className="chat-history-new-btn" type="button" onClick={handleCreateSession}>
-                        {'\u65b0\u5efa\u5bf9\u8bdd'}
-                      </button>
-                      <div className="chat-history-menu-list">
-                        {sessions.map((session) => {
-                          const lastMessage = session.messages[session.messages.length - 1];
-                          return (
-                            <button
-                              key={session.id}
-                              type="button"
-                              className={`chat-history-item ${session.id === activeSessionId ? 'active' : ''}`}
-                              onClick={() => {
-                                if (!currentProject) {
-                                  return;
-                                }
-
-                                setActiveSession(currentProject.id, session.id);
-                                setShowHistoryMenu(false);
-                              }}
-                            >
-                              <strong>{session.title}</strong>
-                              <span>{lastMessage ? buildSessionPreview(lastMessage.content) : '\u7a7a\u4f1a\u8bdd'}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
+                    >
+                      <HistoryIcon />
+                    </button>
+                    {historyMenu}
                 </div>
                 <button
                   className="chat-shell-icon-btn"
@@ -1374,217 +1613,202 @@ export const AIChat: React.FC = () => {
               onClick={() => setIsCollapsed((current) => !current)}
             >
               <CollapseIcon collapsed={isCollapsed} />
-            </button>
-          </div>
-        </header>
-
-        {!isCollapsed ? (
-          <>
-            {selectedChatAgentId === 'built-in' ? (
-              <div className="chat-message-list">
-              {messages.map((message) => {
-                const parts = parseAIChatMessageParts(message.content);
-                return (
-                  <article key={message.id} className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}>
-                    <div className="chat-message-bubble">
-                      <div className="chat-message-content">
-                        {parts.map((part, index) => renderMessagePart(message.id, part, index))}
-                      </div>
-                      <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
-                    </div>
-                  </article>
-                );
-              })}
-
-              <div ref={messagesEndRef} />
+              </button>
             </div>
+        </header> : null}
+
+        {!isCollapsed || isClaudianEmbedded || isClaudianFullPage ? (
+          <>
+            {!isClaudianEmbedded && !isClaudianFullPage && activePanel === 'skills' ? (
+              <ClaudianSkillsPanel
+                skillsState={skillsState}
+                skillsMessage={skillsMessage}
+                githubSkillRepo={githubSkillRepo}
+                setGithubSkillRepo={setGithubSkillRepo}
+                githubSkillPath={githubSkillPath}
+                setGithubSkillPath={setGithubSkillPath}
+                githubSkillRef={githubSkillRef}
+                setGithubSkillRef={setGithubSkillRef}
+                onImportGitHubSkill={handleImportGitHubSkill}
+                skills={skills}
+                onImportSkill={(skill) => {
+                  void handleImportSkill(skill);
+                }}
+                onSyncSkill={(skill, runtime) => {
+                  void handleSyncSkill(skill, runtime);
+                }}
+              />
+            ) : !isClaudianEmbedded && !isClaudianFullPage && activePanel === 'activity' ? (
+              <ClaudianActivityPanel activityEntries={activityEntries} formatTimestamp={formatTimestamp} />
             ) : (
-              <div className="chat-local-agent-pane">
-                <div className="chat-local-agent-card">
-                  <span className="chat-local-agent-kicker">{selectedChatAgent.title}</span>
-                  <strong>{selectedChatAgent.label}</strong>
-                  <p>在当前项目目录打开本机 {selectedChatAgent.label} 界面，使用它自己的会话、工具和 skills。</p>
-                  <button
-                    type="button"
-                    className="chat-local-agent-open-btn"
-                    onClick={() => void handleOpenLocalAgentInterface()}
-                    disabled={localAgentLaunchState === 'opening' || !currentProject}
-                  >
-                    {localAgentLaunchState === 'opening' ? '打开中...' : `打开 ${selectedChatAgent.label}`}
-                  </button>
-                  {localAgentLaunchMessage ? (
-                    <span className={`chat-local-agent-status ${localAgentLaunchState}`}>
-                      {localAgentLaunchMessage}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
+              <ClaudianMessageList
+                messages={messages}
+                formatTimestamp={formatTimestamp}
+                parseMessageParts={parseAIChatMessageParts}
+                renderMessagePart={renderMessagePart}
+                messagesEndRef={messagesEndRef}
+              />
             )}
 
-            {selectedChatAgentId === 'built-in' ? (
-              <form className="chat-composer" onSubmit={handleSubmit}>
-              <div className="chat-composer-shell">
-                {showSkillMenu ? (
-                  <div className="chat-skill-menu">
-                    {AVAILABLE_CHAT_SKILLS.map((skill) => (
-                      <button key={skill.token} type="button" onClick={() => insertSkillToken(skill.token)}>
-                        <strong>{skill.token}</strong>
-                        <span>{skill.package}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+            {activePanel === 'chat' || isClaudianEmbedded || isClaudianFullPage ? (
+              isClaudianEmbedded || isClaudianFullPage ? (
+                <>
+                  <ClaudianEmbeddedTopbar
+                    selectedChatAgentId={selectedChatAgentId}
+                    setSelectedChatAgentId={setSelectedChatAgentId}
+                    renderAgentIcon={(agentId) => <AgentIcon agentId={agentId} />}
+                    onToggleHistory={() => {
+                      setShowHistoryMenu((current) => !current);
+                      setShowSkillMenu(false);
+                      setShowReferenceMenu(false);
+                    }}
+                    onCreateSession={handleCreateSession}
+                    onOpenSettings={() => setIsSettingsOpen(true)}
+                    historyMenu={historyMenu}
+                    HistoryIcon={HistoryIcon}
+                    ComposeIcon={ComposeIcon}
+                    SettingsIcon={SettingsIcon}
+                  />
 
-                {showReferenceMenu ? (
-                  <div className="chat-reference-menu">
-                    <button
-                      type="button"
-                      className={`chat-reference-menu-action ${referenceScopeMode === 'current' ? 'active' : ''}`}
-                      onClick={() => handleApplyReferenceScope('current')}
-                      disabled={referenceFiles.length === 0}
-                    >
-                      {'\u5f15\u7528\u5f53\u524d'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`chat-reference-menu-action ${referenceScopeMode === 'directory' ? 'active' : ''}`}
-                      onClick={() => handleApplyReferenceScope('directory')}
-                      disabled={referenceFiles.length === 0}
-                    >
-                      {'\u5f15\u7528\u76ee\u5f55'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`chat-reference-menu-action ${referenceScopeMode === 'open-tabs' ? 'active' : ''}`}
-                      onClick={() => handleApplyReferenceScope('open-tabs')}
-                      disabled={openedKnowledgeEntryIds.length === 0}
-                    >
-                      {'\u5df2\u6253\u5f00\u6587\u6863'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`chat-reference-menu-action ${referenceScopeMode === 'all' ? 'active' : ''}`}
-                      onClick={() => handleApplyReferenceScope('all')}
-                      disabled={referenceFiles.length === 0}
-                    >
-                      {'\u5f15\u7528\u5168\u90e8'}
-                    </button>
-                    <button
-                      type="button"
-                      className="chat-reference-menu-action"
-                      onClick={() => void handleRebuildContextIndex()}
-                      disabled={!currentProject}
-                    >
-                      {'\u6574\u7406\u7d22\u5f15'}
-                    </button>
-                    <label className="chat-reference-menu-select">
-                      <span>{'\u76ee\u5f55'}</span>
-                      <select
-                        value={selectedReferenceDirectory || ''}
-                        onChange={(event) => handleReferenceDirectoryChange(event.target.value)}
-                        disabled={availableReferenceDirectories.length === 0}
-                      >
-                        <option value="">{'\u9009\u62e9\u76ee\u5f55'}</option>
-                        {availableReferenceDirectories.map((directory) => (
-                          <option key={directory} value={directory}>
-                            {directory}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="chat-reference-menu-select">
-                      <span>{'\u6587\u4ef6'}</span>
-                      <select
-                        value={referencePickerValue}
-                        onChange={(event) => {
-                          setReferencePickerValue(event.target.value);
-                          handleAddReferenceFile(event.target.value);
-                        }}
-                        disabled={referenceFiles.length === 0}
-                      >
-                        <option value="">{'\u6dfb\u52a0\u6587\u4ef6'}</option>
-                        {referenceFiles.map((file) => (
-                          <option key={file.id} value={file.id}>
-                            {`${file.title} / ${file.path}`}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
+                  {showSkillMenu ? (
+                    <div className="chat-skill-menu">
+                      {AVAILABLE_CHAT_SKILLS.map((skill) => (
+                        <button key={skill.token} type="button" onClick={() => insertSkillToken(skill.token)}>
+                          <strong>{skill.token}</strong>
+                          <span>{skill.package}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
 
-                {selectedReferenceFiles.length > 0 ? (
-                  <div className="chat-selected-reference-chips">
-                    {selectedReferenceFiles.map((file) => (
-                      <button
-                        key={file.id}
-                        type="button"
-                        className="chat-reference-chip compact"
-                        onClick={() => handleRemoveReferenceFile(file.id)}
-                        title={file.path}
-                      >
-                        <FileIcon />
-                        <span>{file.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+                  {showReferenceMenu ? (
+                    <ClaudianReferenceMenu
+                      referenceScopeMode={referenceScopeMode}
+                      onApplyReferenceScope={handleApplyReferenceScope}
+                      onRebuildContextIndex={() => {
+                        void handleRebuildContextIndex();
+                      }}
+                      selectedReferenceDirectory={selectedReferenceDirectory}
+                      onReferenceDirectoryChange={handleReferenceDirectoryChange}
+                      availableReferenceDirectories={availableReferenceDirectories}
+                      referenceFiles={referenceFiles}
+                      referencePickerValue={referencePickerValue}
+                      setReferencePickerValue={setReferencePickerValue}
+                      onAddReferenceFile={handleAddReferenceFile}
+                      openedKnowledgeEntryIds={openedKnowledgeEntryIds}
+                      disableRebuild={!currentProject}
+                    />
+                  ) : null}
 
-                <div className="chat-composer-main">
-                  <button
-                    type="button"
-                    className="chat-composer-plus-btn"
-                    aria-label="\u4e0a\u4e0b\u6587\u4e0e\u5f15\u7528"
-                    title="\u4e0a\u4e0b\u6587\u4e0e\u5f15\u7528"
-                    onClick={() => {
+                  <ClaudianEmbeddedComposer
+                    entrySwitch={<ClaudianModeSwitch compact />}
+                    selectedReferenceFiles={selectedReferenceFiles}
+                    onRemoveReferenceFile={handleRemoveReferenceFile}
+                    input={input}
+                    setInput={setInput}
+                    textareaRef={textareaRef}
+                    onKeyDown={handleKeyDown}
+                    placeholder={getComposerPlaceholder(isRuntimeConfigured)}
+                    onToggleReferenceMenu={() => {
                       setShowReferenceMenu((current) => !current);
                       setShowSkillMenu(false);
                       setShowHistoryMenu(false);
                     }}
-                  >
-                    <PlusIcon />
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-composer-icon-btn"
-                    aria-label={'Skill \u83dc\u5355'}
-                    title={'Skill \u83dc\u5355'}
-                    onClick={() => {
+                    onToggleSkillMenu={() => {
                       setShowSkillMenu((current) => !current);
                       setShowReferenceMenu(false);
                       setShowHistoryMenu(false);
                     }}
-                  >
-                    <SparkIcon />
-                  </button>
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={getComposerPlaceholder(isConfigured)}
-                    className="chat-composer-input"
-                    rows={1}
-                  />
-                  <button
-                    type="submit"
-                    className="chat-send-btn"
-                    aria-label={isLoading ? '\u53d1\u9001\u4e2d' : '\u53d1\u9001'}
-                    title={isLoading ? '\u53d1\u9001\u4e2d' : '\u53d1\u9001'}
+                    selectedRuntimeLabel={selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}
+                    contextUsageLabel={`${currentContextUsage.usedLabel} / ${currentContextUsage.limitLabel}`}
+                    contextUsageWarning={currentContextUsage.ratio >= 0.8}
+                    isLoading={isLoading}
                     disabled={!input.trim() || isLoading}
-                  >
-                    <SendIcon />
-                  </button>
-                </div>
+                    onSubmit={() => {
+                      void handleSubmit();
+                    }}
+                    PlusIcon={PlusIcon}
+                    SparkIcon={SparkIcon}
+                    SendIcon={SendIcon}
+                    FileIcon={FileIcon}
+                  />
+                </>
+              ) : (
+                <form className="chat-composer" onSubmit={handleSubmit}>
+                  <div className="chat-composer-shell">
+                      {selectedReferenceFiles.length > 0 ? (
+                        <div className="chat-selected-reference-chips">
+                          {selectedReferenceFiles.map((file) => (
+                            <button
+                              key={file.id}
+                              type="button"
+                              className="chat-reference-chip compact"
+                              onClick={() => handleRemoveReferenceFile(file.id)}
+                              title={file.path}
+                            >
+                              <FileIcon />
+                              <span>{file.title}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
 
-                <div className="chat-composer-meta">
-                  <span>{selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}</span>
-                  <span className={currentContextUsage.ratio >= 0.8 ? 'warning' : ''}>
-                    {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
-                  </span>
-                </div>
-              </div>
-            </form>
+                      <div className="chat-composer-main">
+                        <button
+                          type="button"
+                          className="chat-composer-plus-btn"
+                          aria-label="\u4e0a\u4e0b\u6587\u4e0e\u5f15\u7528"
+                          title="\u4e0a\u4e0b\u6587\u4e0e\u5f15\u7528"
+                          onClick={() => {
+                            setShowReferenceMenu((current) => !current);
+                            setShowSkillMenu(false);
+                            setShowHistoryMenu(false);
+                          }}
+                        >
+                          <PlusIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className="chat-composer-icon-btn"
+                          aria-label={'Skill \u83dc\u5355'}
+                          title={'Skill \u83dc\u5355'}
+                          onClick={() => {
+                            setShowSkillMenu((current) => !current);
+                            setShowReferenceMenu(false);
+                            setShowHistoryMenu(false);
+                          }}
+                        >
+                          <SparkIcon />
+                        </button>
+                        <textarea
+                          ref={textareaRef}
+                          value={input}
+                          onChange={(event) => setInput(event.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder={getComposerPlaceholder(isRuntimeConfigured)}
+                          className="chat-composer-input"
+                          rows={1}
+                        />
+                        <button
+                          type="submit"
+                          className="chat-send-btn"
+                          aria-label={isLoading ? '\u53d1\u9001\u4e2d' : '\u53d1\u9001'}
+                          title={isLoading ? '\u53d1\u9001\u4e2d' : '\u53d1\u9001'}
+                          disabled={!input.trim() || isLoading}
+                        >
+                          <SendIcon />
+                        </button>
+                      </div>
+
+                      <div className="chat-composer-meta">
+                        <span>{selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}</span>
+                        <span className={currentContextUsage.ratio >= 0.8 ? 'warning' : ''}>
+                          {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
+                        </span>
+                      </div>
+                  </div>
+                </form>
+              )
             ) : null}
           </>
         ) : (
@@ -1820,7 +2044,7 @@ export const AIChat: React.FC = () => {
                       customHeaders: event.target.value,
                     }))
                   }
-                  placeholder='{"HTTP-Referer":"https://your-app.com","X-Title":"DevFlow"}'
+                  placeholder='{"HTTP-Referer":"https://your-app.com","X-Title":"GoodNight"}'
                   rows={4}
                 />
                 <small>需要额外请求头时，在这里直接填写 JSON。</small>
@@ -1869,3 +2093,4 @@ export const AIChat: React.FC = () => {
     </>
   );
 };
+

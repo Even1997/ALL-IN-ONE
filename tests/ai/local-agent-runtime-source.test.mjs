@@ -12,10 +12,10 @@ test('tauri exposes trusted local agent launch params and result shape', async (
   const source = await readFile(tauriLibPath, 'utf8');
 
   assert.match(source, /struct LocalAgentParams/);
+  assert.match(source, /struct LocalAgentPromptParams/);
   assert.match(source, /struct LocalAgentResult/);
   assert.match(source, /pub agent: String/);
   assert.match(source, /pub project_root: String/);
-  assert.doesNotMatch(source, /pub prompt: String/);
   assert.doesNotMatch(source, /Command::new\(&params\.agent\)/);
 });
 
@@ -29,12 +29,12 @@ test('native local agent interface launcher executes from project root', async (
   assert.match(source, /"powershell"/);
 });
 
-test('tauri exposes a native local agent interface launcher', async () => {
+test('tauri exposes a native local agent prompt runner', async () => {
   const source = await readFile(tauriLibPath, 'utf8');
 
-  assert.match(source, /fn open_local_agent_interface/);
-  assert.match(source, /build_local_agent_interface_command/);
-  assert.match(source, /"claude"\s*=>\s*Ok\(\("Claude",\s*"claude"\.to_string\(\)\)\)/);
-  assert.match(source, /"codex"\s*=>\s*Ok\(\("Codex",\s*format!\("codex --cd/);
-  assert.match(source, /tauri::generate_handler!\[[\s\S]*open_local_agent_interface/);
+  assert.match(source, /fn run_local_agent_prompt/);
+  assert.match(source, /build_local_agent_prompt_command/);
+  assert.match(source, /codex exec/);
+  assert.match(source, /--output-last-message/);
+  assert.match(source, /tauri::generate_handler!\[[\s\S]*run_local_agent_prompt/);
 });

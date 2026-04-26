@@ -9,7 +9,6 @@ import {
 } from '../../modules/knowledge/knowledgeEntries';
 import {
   buildKnowledgeTree,
-  findFirstKnowledgeFileNode,
   findKnowledgeTreeNode,
   type KnowledgeDiskItem,
   type KnowledgeGroupId,
@@ -28,11 +27,14 @@ import {
   createWireframeModule,
   findMarkdownModuleByOffset,
   findMarkdownModuleMatch,
+  formatCanvasPreset,
   getCanvasPreset,
   isMobileAppType,
   MIN_MODULE_HEIGHT,
   MIN_MODULE_WIDTH,
+  parseFrameFromWireframeMarkdown,
   parsePageWireframeMarkdown,
+  resolveCanvasPresetFromFrame,
   toWireframeModuleDrafts,
   WireframeModuleDraft,
 } from '../../utils/wireframe';
@@ -59,7 +61,6 @@ import { PageWorkspace } from './PageWorkspace';
 type SidebarTab = 'requirement' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
 export type WorkbenchLayoutDensity = 'comfortable' | 'compact';
-type PreviewFrameMode = 'browser' | 'mobile';
 type KnowledgeContextMenuState = {
   x: number;
   y: number;
@@ -735,6 +736,8 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
   const selectElement = usePreviewStore((state) => state.selectElement);
   const loadFromCode = usePreviewStore((state) => state.loadFromCode);
   const updatePageStructureNode = useProjectStore((state) => state.updatePageStructureNode);
+  const updateWireframeFrame = useProjectStore((state) => state.updateWireframeFrame);
+  const currentWireframeFrame = useProjectStore((state) => state.wireframes[selectedPage.id]?.frame || null);
   const moduleIds = useMemo(() => elements.map((element) => element.id), [elements]);
   const moduleDrafts = useMemo(() => toWireframeModuleDrafts(elements), [elements]);
   const selectedModule = useMemo(
@@ -750,6 +753,7 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
         id: currentWireframe?.id || `draft-${selectedPage.id}`,
         pageId: selectedPage.id,
         pageName: selectedPage.name,
+        frame: currentWireframe?.frame,
         elements: usePreviewStore.getState().elements,
         updatedAt: currentWireframe?.updatedAt || new Date().toISOString(),
         status: currentWireframe?.status || 'draft',
@@ -757,7 +761,7 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
       featureTree,
       appType
     );
-  }, [appType, featureTree, selectedPage]);
+  }, [appType, currentWireframeFrame, featureTree, selectedPage]);
 
   useEffect(() => {
     setIsMarkdownEditorOpen(false);
@@ -813,9 +817,13 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
 
   const handleApplyMarkdown = useCallback(() => {
     const parsedElements = parsePageWireframeMarkdown(pageMarkdownDraft, appType);
+    const nextFrame = parseFrameFromWireframeMarkdown(pageMarkdownDraft);
     lastSyncedMarkdownRef.current = pageMarkdownDraft;
+    if (nextFrame) {
+      updateWireframeFrame(selectedPage, nextFrame);
+    }
     loadFromCode(parsedElements);
-  }, [appType, loadFromCode, pageMarkdownDraft]);
+  }, [appType, loadFromCode, pageMarkdownDraft, selectedPage, updateWireframeFrame]);
 
   const handleToggleMarkdownEditor = useCallback(() => {
     setIsMarkdownEditorOpen((current) => {
@@ -1054,7 +1062,8 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   );
   const [knowledgeContextMenu, setKnowledgeContextMenu] = useState<KnowledgeContextMenuState>(null);
   const [pageSearch, setPageSearch] = useState('');
-  const [previewFrameMode, setPreviewFrameMode] = useState<PreviewFrameMode | null>(null);
+  const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
+  const [frameEditorDraft, setFrameEditorDraft] = useState('');
   const [isNarrowProductWorkbench, setIsNarrowProductWorkbench] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 900 : false
   );
@@ -1082,6 +1091,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     replaceRequirementDocs,
     replacePageStructure,
     replaceWireframes,
+    updateWireframeFrame,
   } = useProjectStore(useShallow((state) => ({
     currentProject: state.currentProject,
     featuresMarkdown: state.featuresMarkdown,
@@ -1101,6 +1111,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     replaceRequirementDocs: state.replaceRequirementDocs,
     replacePageStructure: state.replacePageStructure,
     replaceWireframes: state.replaceWireframes,
+    updateWireframeFrame: state.updateWireframeFrame,
   })));
 
   const tree = useFeatureTreeStore((state) => state.tree);
@@ -1115,6 +1126,12 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
   const selectedPage = designPages.find((page) => page.id === manualPageId) || designPages[0] || null;
   const selectedPageWireframe = selectedPage ? wireframes[selectedPage.id] || null : null;
+  const baseCanvasPreset = useMemo(() => getCanvasPreset(currentProject?.appType), [currentProject?.appType]);
+  const selectedPageFrame = selectedPageWireframe?.frame || formatCanvasPreset(baseCanvasPreset);
+  const canvasPreset = useMemo(
+    () => resolveCanvasPresetFromFrame(selectedPageFrame, currentProject?.appType),
+    [currentProject?.appType, selectedPageFrame]
+  );
   const knowledgeEntries = useMemo(
     () => buildKnowledgeEntries(requirementDocs, generatedFiles),
     [generatedFiles, requirementDocs]
@@ -1151,10 +1168,9 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   }, [knowledgeSearch, knowledgeTree, searchedKnowledgeEntries]);
   const filteredPageStructure = useMemo(() => filterPageTree(pageStructure, pageSearch), [pageSearch, pageStructure]);
   const filteredDesignPages = useMemo(() => collectDesignPages(filteredPageStructure), [filteredPageStructure]);
-  const firstKnowledgeFileNode = useMemo(() => findFirstKnowledgeFileNode(knowledgeTree), [knowledgeTree]);
   const selectedKnowledgeNode = useMemo(
-    () => findKnowledgeTreeNode(knowledgeTree, selectedKnowledgeNodeId || firstKnowledgeFileNode?.id || null),
-    [firstKnowledgeFileNode?.id, knowledgeTree, selectedKnowledgeNodeId]
+    () => findKnowledgeTreeNode(knowledgeTree, selectedKnowledgeNodeId || null),
+    [knowledgeTree, selectedKnowledgeNodeId]
   );
   const selectedKnowledgeEntry =
     findKnowledgeEntry(knowledgeEntries, selectedRequirementId || selectedKnowledgeNode?.entryId || null) || null;
@@ -1206,17 +1222,14 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     (hasRequirementChanges || !selectedRequirement.filePath)
   );
   const effectiveAppType = useMemo<AppType | undefined>(() => {
-    if (previewFrameMode === 'mobile') {
-      return 'mobile';
+    if (canvasPreset.frameType === 'mobile') {
+      return currentProject?.appType === 'mini_program' ? 'mini_program' : 'mobile';
     }
 
-    if (previewFrameMode === 'browser') {
-      return 'web';
-    }
-
-    return currentProject?.appType;
-  }, [currentProject?.appType, previewFrameMode]);
-  const canvasPreset = useMemo(() => getCanvasPreset(effectiveAppType), [effectiveAppType]);
+    return currentProject?.appType === 'desktop' || currentProject?.appType === 'backend' || currentProject?.appType === 'api'
+      ? 'web'
+      : currentProject?.appType || 'web';
+  }, [canvasPreset.frameType, currentProject?.appType]);
   const featureMap = useMemo(() => {
     const nodes = tree ? collectFeatureNodes(tree.children) : [];
     return new Map(nodes.map((node) => [node.id, node]));
@@ -1269,16 +1282,44 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   }, [canvasPreset.height, canvasPreset.width, setCanvasSize]);
 
   useEffect(() => {
-    if (!firstKnowledgeFileNode) {
-      setSelectedRequirementId(null);
-      setSelectedKnowledgeNodeId(null);
+    setFrameEditorDraft(selectedPageFrame);
+  }, [selectedPageFrame]);
+
+  useEffect(() => {
+    setIsFrameEditorOpen(false);
+  }, [selectedPage?.id]);
+
+  const handleApplyFrameValue = useCallback((nextFrame: string) => {
+    if (!selectedPage) {
       return;
     }
 
+    const normalizedFrame = nextFrame.trim();
+    if (!normalizedFrame) {
+      return;
+    }
+
+    updateWireframeFrame(selectedPage, nextFrame);
+    setFrameEditorDraft(normalizedFrame);
+    setIsFrameEditorOpen(false);
+  }, [selectedPage, updateWireframeFrame]);
+
+  const handleToggleFrameEditor = useCallback(() => {
+    setIsFrameEditorOpen((current) => {
+      if (current) {
+        return false;
+      }
+
+      setFrameEditorDraft(selectedPageFrame);
+      return true;
+    });
+  }, [selectedPageFrame]);
+
+  useEffect(() => {
     setSelectedKnowledgeNodeId((current) =>
-      current && findKnowledgeTreeNode(knowledgeTree, current) ? current : firstKnowledgeFileNode.id
+      current && findKnowledgeTreeNode(knowledgeTree, current) ? current : null
     );
-  }, [firstKnowledgeFileNode, knowledgeTree]);
+  }, [knowledgeTree]);
 
   useEffect(() => {
     if (selectedKnowledgeNode?.type !== 'file' || !selectedKnowledgeNode.entryId) {
@@ -1519,6 +1560,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       description: selectedPage.description,
       route: selectedPage.metadata.route,
       goal: selectedPage.metadata.goal,
+      frame: selectedPageWireframe?.frame || selectedPageFrame,
       elements: selectedPageWireframe?.elements || [],
     });
 
@@ -1529,13 +1571,13 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     lastPersistedSketchSnapshotRef.current = snapshot;
 
     const persistTimer = window.setTimeout(() => {
-      void writeSketchPageFile(currentProject.id, selectedPage, selectedPageWireframe).catch(() => undefined);
+      void writeSketchPageFile(currentProject.id, selectedPage, selectedPageWireframe, currentProject.appType).catch(() => undefined);
     }, 120);
 
     return () => {
       window.clearTimeout(persistTimer);
     };
-  }, [canUseProjectFilesystem, currentProject, selectedPage, selectedPageWireframe]);
+  }, [canUseProjectFilesystem, currentProject, selectedPage, selectedPageFrame, selectedPageWireframe]);
 
   useEffect(() => {
     if (!selectedPage) {
@@ -1817,7 +1859,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       children: [],
     };
 
-    const relativePath = await writeSketchPageFile(currentProject.id, nextPage, null);
+    const relativePath = await writeSketchPageFile(currentProject.id, nextPage, null, currentProject.appType);
     await refreshKnowledgeFilesystem();
     return relativePath;
   }, [currentProject, designPages.length, refreshKnowledgeFilesystem]);
@@ -1974,7 +2016,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       const next = current.filter((id) => id !== entryId);
 
       if (selectedKnowledgeEntry?.id === entryId) {
-        const fallbackId = next[Math.max(0, closedIndex - 1)] || next[closedIndex] || firstKnowledgeFileNode?.entryId || null;
+        const fallbackId = next[Math.max(0, closedIndex - 1)] || next[closedIndex] || null;
         setSelectedRequirementId(fallbackId);
 
         const fallbackNode = fallbackId ? findKnowledgeNodeByEntryId(knowledgeTree, fallbackId) : null;
@@ -1983,7 +2025,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
 
       return next;
     });
-  }, [firstKnowledgeFileNode?.entryId, knowledgeTree, selectedKnowledgeEntry?.id]);
+  }, [knowledgeTree, selectedKnowledgeEntry?.id]);
 
   const toggleKnowledgeNode = useCallback((nodeId: string) => {
     setExpandedKnowledgeNodeIds((current) => {
@@ -2327,14 +2369,14 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
               <button
                 className={`doc-action-btn secondary ${canvasPreset.frameType === 'browser' ? 'active' : ''}`}
                 type="button"
-                onClick={() => setPreviewFrameMode('browser')}
+                onClick={() => handleApplyFrameValue('1280x800')}
               >
                 网页端
               </button>
               <button
                 className={`doc-action-btn secondary ${canvasPreset.frameType === 'mobile' ? 'active' : ''}`}
                 type="button"
-                onClick={() => setPreviewFrameMode('mobile')}
+                onClick={() => handleApplyFrameValue('390x844')}
               >
                 手机端
               </button>
@@ -2344,6 +2386,33 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
             </div>
           </div>
           <div className="pm-canvas-shell">
+            <div className="pm-canvas-frame-editor">
+              <button className="doc-action-btn secondary" type="button" onClick={handleToggleFrameEditor}>
+                编辑 Frame
+              </button>
+              {isFrameEditorOpen ? (
+                <div className="pm-canvas-frame-editor-popover">
+                  <label className="pm-canvas-frame-editor-field">
+                    <span>Frame</span>
+                    <input
+                      className="product-input"
+                      type="text"
+                      value={frameEditorDraft}
+                      onChange={(event) => setFrameEditorDraft(event.target.value)}
+                      placeholder="例如 1440x900"
+                    />
+                  </label>
+                  <div className="pm-inline-actions pm-canvas-frame-editor-actions">
+                    <button className="doc-action-btn" type="button" onClick={() => handleApplyFrameValue(frameEditorDraft)}>
+                      应用
+                    </button>
+                    <button className="doc-action-btn secondary" type="button" onClick={() => setIsFrameEditorOpen(false)}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <Canvas
               key={selectedPage.id}
               width={canvasPreset.width}

@@ -2,6 +2,7 @@
 import type { CSSProperties } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AIWorkspace } from './components/ai/AIWorkspace';
+import { ClaudePage } from './components/ai/ClaudePage';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
 import { ProductWorkbench } from './components/product/ProductWorkbench';
@@ -17,7 +18,7 @@ import {
 import { buildDesignStyleReferencePath, buildSketchReferencePath } from './modules/knowledge/referenceFiles';
 import { useAIWorkflowStore } from './modules/ai/store/workflowStore';
 import { useProjectStore } from './store/projectStore';
-import { APP_STYLE_OPTIONS, APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appTheme';
+import { APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appTheme';
 import { VISIBLE_ROLE_TABS, type RoleView } from './appNavigation';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type { AppType, FeatureNode, GeneratedFile, PageStructureNode, ProjectConfig, WireframeDocument } from './types';
@@ -763,9 +764,9 @@ const App: React.FC = () => {
 
     return window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
   });
-  const [appStyle, setAppStyle] = useState<AppStyle>(() => {
+  const [appStyle] = useState<AppStyle>(() => {
     if (typeof window === 'undefined') {
-      return 'minimal';
+      return 'workbench';
     }
 
     return getInitialAppStyle(() => window.localStorage.getItem(APP_STYLE_STORAGE_KEY));
@@ -1688,6 +1689,7 @@ const App: React.FC = () => {
       description: selectedDesignPage.description,
       route: selectedDesignPage.metadata.route,
       goal: selectedDesignPage.metadata.goal,
+      frame: selectedWireframe?.frame,
       elements: selectedWireframe?.elements || [],
     });
 
@@ -1698,7 +1700,7 @@ const App: React.FC = () => {
     lastPersistedSketchSnapshotRef.current = snapshot;
 
     const persistTimer = window.setTimeout(() => {
-      void writeSketchPageFile(currentProject.id, selectedDesignPage, selectedWireframe).catch(() => undefined);
+      void writeSketchPageFile(currentProject.id, selectedDesignPage, selectedWireframe, currentProject.appType).catch(() => undefined);
     }, 120);
 
     return () => {
@@ -2615,7 +2617,7 @@ ${selectedContextPrompt}` : '',
       children: [],
     };
 
-    const nextPageId = await writeSketchPageFile(currentProject.id, nextPage, null);
+    const nextPageId = await writeSketchPageFile(currentProject.id, nextPage, null, currentProject.appType);
     const sketchArtifacts = await refreshSketchArtifactsFromDisk();
     const resolvedPageId = sketchArtifacts?.pageStructure.find((page) => page.id === nextPageId)?.id || nextPageId;
     const position = buildFreeCanvasPosition(designPageNodes.length, DESIGN_PAGE_CARD_WIDTH, DESIGN_PAGE_CARD_HEIGHT);
@@ -4450,6 +4452,19 @@ ${selectedContextPrompt}` : '',
     );
   }
 
+  const roleContent =
+    currentRole === 'ai'
+      ? <ClaudePage />
+      : currentRole === 'product'
+        ? renderProductView()
+        : currentRole === 'design'
+          ? renderDesignView()
+          : currentRole === 'develop'
+            ? renderDevelopView()
+            : currentRole === 'test'
+              ? renderTestView()
+              : renderOperationsView();
+
   const appMainContent = isProjectManagerOpen ? (
     <ProjectSetup
       projects={projects}
@@ -4467,21 +4482,16 @@ ${selectedContextPrompt}` : '',
       onResetProjectStoragePath={handleResetProjectStoragePath}
       onClose={() => setIsProjectManagerOpen(false)}
     />
-  ) : (
-    <>
-      {currentRole === 'product' ? renderProductView() : null}
-      {currentRole === 'design' ? renderDesignView() : null}
-      {currentRole === 'develop' ? renderDevelopView() : null}
-      {currentRole === 'test' ? renderTestView() : null}
-      {currentRole === 'operations' ? renderOperationsView() : null}
-    </>
-  );
-
+  ) : roleContent;
+  const isAIPage = currentRole === 'ai';
+  const appDesktopContent = appMainContent;
   return (
     <div className={`app app-shell-desktop ${isDesktopWorkbenchMode ? 'desktop-active' : ''}`}>
       <header className="app-header">
         <div className="header-left">
-          <div className="app-brand">DevFlow</div>
+          <div className="app-brand">
+            <img className="app-brand-logo" src="/branding/goodnight-logo-horizontal.svg" alt="GoodNight" />
+          </div>
           <div className="header-project">
             <h1 className="app-title">{currentProject.name}</h1>
             <span className="app-subtitle">
@@ -4533,17 +4543,6 @@ ${selectedContextPrompt}` : '',
             {themeMode === 'dark' ? '浅色' : '深色'}
           </button>
 
-          <label className="app-style-switcher">
-            <span>样式</span>
-            <select value={appStyle} onChange={(event) => setAppStyle(event.target.value as AppStyle)}>
-              {APP_STYLE_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
           {selectedFeature ? <span className="current-feature">当前功能：{selectedFeature.name}</span> : null}
 
           <button className="reset-project-btn" onClick={handleResetProject} type="button">
@@ -4557,20 +4556,22 @@ ${selectedContextPrompt}` : '',
           <Allotment className="app-workbench-allotment" onChange={handleDesktopWorkbenchLayoutChange}>
             <Allotment.Pane minSize={640}>
               <div className="app-workbench-pane">
-                <main className="app-main app-main-desktop">{appMainContent}</main>
+                <main className="app-main app-main-desktop">{appDesktopContent}</main>
               </div>
             </Allotment.Pane>
-            <Allotment.Pane
-              minSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
-              maxSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
-              preferredSize={desktopAiPaneWidth}
-            >
-              <div className="app-workbench-pane">
-                <aside className="app-ai-activity-pane">
-                  <AIWorkspace />
-                </aside>
-              </div>
-            </Allotment.Pane>
+            {!isAIPage ? (
+              <Allotment.Pane
+                minSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
+                maxSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
+                preferredSize={desktopAiPaneWidth}
+              >
+                <div className="app-workbench-pane">
+                  <aside className="app-ai-activity-pane">
+                    <AIWorkspace />
+                  </aside>
+                </div>
+              </Allotment.Pane>
+            ) : null}
           </Allotment>
         ) : (
           <>

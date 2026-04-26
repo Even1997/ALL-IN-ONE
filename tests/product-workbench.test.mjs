@@ -187,5 +187,29 @@ test('ai chat supports opened document scope in knowledge mode', async () => {
   assert.match(source, /referenceScopeMode === 'open-tabs'/);
 });
 
+test('knowledge workbench starts without auto-opening the first knowledge file', async () => {
+  const source = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(source, /const \[selectedKnowledgeNodeId, setSelectedKnowledgeNodeId\] = useState<string \| null>\(null\)/);
+  assert.doesNotMatch(source, /selectedKnowledgeNodeId \|\| firstKnowledgeFileNode\?\.id \|\| null/);
+  assert.doesNotMatch(source, /setSelectedKnowledgeNodeId\(\(current\) =>\s*current && findKnowledgeTreeNode\(knowledgeTree, current\) \? current : firstKnowledgeFileNode\.id/s);
+});
+
+test('ai chat current reference scope derives from the focused surface instead of accumulated knowledge selections', async () => {
+  const source = await readFile(chatPath, 'utf8');
+
+  assert.match(source, /resolveCurrentReferenceFileIds/);
+  assert.doesNotMatch(source, /selectedKnowledgeContextIds\.forEach\(\(id\) => ids\.add\(id\)\)/);
+});
+
+test('ai chat reference menu wraps actions and keeps selects within the popover width', async () => {
+  const source = await readFile(path.resolve(__dirname, '../src/components/workspace/AIChat.css'), 'utf8');
+
+  assert.match(source, /\.chat-reference-menu\s*{[\s\S]*?width:\s*min\(320px,\s*calc\(100vw - 32px\)\)/);
+  assert.match(source, /\.chat-reference-menu\s*{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(source, /\.chat-reference-menu-select\s*{[\s\S]*?min-width:\s*0/);
+  assert.match(source, /\.chat-reference-menu-select select\s*{[\s\S]*?width:\s*100%/);
+});
+
 
 

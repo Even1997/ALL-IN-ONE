@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { FeatureTree, PageStructureNode, ProjectConfig, WireframeDocument } from '../types';
+import type { AppType, FeatureTree, PageStructureNode, ProjectConfig, WireframeDocument } from '../types';
 import type { ProjectWorkspaceSnapshot } from '../store/projectStore';
 import type { ContextIndex } from '../modules/ai/chat/contextIndex';
 import {
@@ -465,7 +465,8 @@ export const loadSketchPageArtifactsFromProjectDir = async (projectId: string) =
 export const writeSketchPageFile = async (
   projectId: string,
   page: Pick<PageStructureNode, 'id' | 'name' | 'description'> & Partial<PageStructureNode>,
-  wireframe: WireframeDocument | null | undefined
+  wireframe: WireframeDocument | null | undefined,
+  appType?: AppType | null
 ) => {
   if (!isTauriRuntimeAvailable()) {
     return buildSketchPagePath(page);
@@ -473,7 +474,7 @@ export const writeSketchPageFile = async (
 
   const projectDir = await ensureProjectFilesystemStructure(projectId);
   const relativePath = sanitizeProjectRelativePath(buildSketchPagePath(page));
-  await writeTextFile(joinProjectRelativePath(projectDir, relativePath), buildSketchPageContent(page, wireframe));
+  await writeTextFile(joinProjectRelativePath(projectDir, relativePath), buildSketchPageContent(page, wireframe, appType));
   return relativePath;
 };
 

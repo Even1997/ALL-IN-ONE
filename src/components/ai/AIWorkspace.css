@@ -13,3 +13,226 @@ body.desktop-workbench-mode .floating-ai-workspace {
   height: 100%;
   pointer-events: auto;
 }
+
+.ai-workspace-shell {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: auto;
+}
+
+.ai-workspace-body {
+  min-height: 0;
+  height: 100%;
+}
+
+.claudian-workspace {
+  --claudian-bg: #f6f1e8;
+  --claudian-surface: #fbf8f2;
+  --claudian-surface-alt: #f2ece2;
+  --claudian-border: #d7cfc2;
+  --claudian-border-strong: #2f2923;
+  --claudian-text: #26211b;
+  --claudian-muted: #8b8174;
+  --claudian-accent: #cb7a46;
+  --claudian-chip: #ece5d9;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 0;
+  padding: 10px 12px 12px;
+  background: var(--claudian-bg);
+  color: var(--claudian-text);
+}
+
+.claudian-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 2px 10px;
+  border-bottom: 1px solid var(--claudian-border);
+}
+
+.claudian-context-badge {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--claudian-chip);
+  color: var(--claudian-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.claudian-logo {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--claudian-surface);
+  border: 1px solid var(--claudian-border);
+}
+
+.claudian-logo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--claudian-accent);
+}
+
+.claudian-title-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.claudian-title-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--claudian-text);
+}
+
+.claudian-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+.claudian-tab-bar-container,
+.claudian-tab-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.claudian-tab-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 4px;
+  border: 2px solid var(--claudian-border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--claudian-muted);
+  background: var(--claudian-surface);
+  cursor: pointer;
+  appearance: none;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.claudian-tab-badge:hover {
+  color: var(--claudian-text);
+  background: var(--claudian-surface-alt);
+}
+
+.claudian-tab-badge-active {
+  border-color: var(--claudian-border-strong);
+  color: var(--claudian-text);
+}
+
+.claudian-tab-badge-idle {
+  border-color: var(--claudian-border);
+}
+
+.claudian-context-pane,
+.claudian-chat-pane {
+  min-height: 0;
+  border: 1px solid var(--claudian-border);
+  background: var(--claudian-surface);
+  overflow: hidden;
+}
+
+.claudian-context-pane {
+  margin-top: 10px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.claudian-context-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: transparent;
+}
+
+.claudian-context-eyebrow {
+  color: var(--claudian-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.claudian-context-card strong {
+  color: var(--claudian-text);
+  font-size: 14px;
+}
+
+.claudian-context-card span {
+  color: var(--claudian-muted);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.claudian-context-subtitle {
+  flex: 1 1 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claudian-context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.claudian-context-meta code {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--claudian-surface-alt);
+  color: var(--claudian-text);
+}
+
+.claudian-chat-pane {
+  position: relative;
+  margin-top: 12px;
+  border-radius: 14px;
+}
+
+.claudian-chat-pane .chat-shell {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.claudian-chat-pane .chat-shell.chat-shell-embedded {
+  position: relative;
+  inset: auto;
+  height: 100%;
+  background: var(--claudian-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.claudian-chat-pane .chat-shell-header {
+  border-bottom: 1px solid var(--claudian-border);
+}

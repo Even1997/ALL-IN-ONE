@@ -32,3 +32,10 @@ test('app design workspace falls back to store page creation when Tauri runtime 
   assert.match(source, /isTauriRuntimeAvailable/);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addRootPage\(\);/s);
 });
+
+test('project store keeps knowledge focus empty instead of restoring the first doc implicitly', async () => {
+  const source = await readFile(new URL('../src/store/projectStore.ts', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(source, /activeKnowledgeFileId:\s*snapshot\.activeKnowledgeFileId\s*\|\|\s*snapshot\.requirementDocs\[0\]\?\.id\s*\|\|\s*null/);
+  assert.doesNotMatch(source, /typeof persisted\.activeKnowledgeFileId === 'string'[\s\S]*:\s*requirementDocs\[0\]\?\.id \|\| null/);
+});

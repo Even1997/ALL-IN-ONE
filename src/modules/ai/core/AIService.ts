@@ -328,7 +328,7 @@ class AIService {
   }
 
   private buildChatSystemPrompt() {
-    return `你是 DevFlow 中的 AI Coding Assistant。
+    return `你是 GoodNight 中的 AI Coding Assistant。
 你优先通过工具查看文件、搜索代码、执行命令，再给出精确建议。
 所有文件路径都以 ${this.config.projectRoot} 为根目录。
 ${this.buildToolInstructions()}

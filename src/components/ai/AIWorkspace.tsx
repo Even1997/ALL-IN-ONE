@@ -1,6 +1,6 @@
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { AIChat } from '../workspace/AIChat';
+import { ClaudianWorkspace } from './ClaudianWorkspace';
 import { useProjectStore } from '../../store/projectStore';
 import './AIWorkspace.css';
 
@@ -17,7 +17,11 @@ export const AIWorkspace: React.FC = () => {
 
   return (
     <section className="floating-ai-workspace">
-      <AIChat />
+      <div className="ai-workspace-shell">
+        <div className="ai-workspace-body">
+          <ClaudianWorkspace mode="panel" />
+        </div>
+      </div>
     </section>
   );
 };

@@ -12,6 +12,7 @@ const workspacePath = path.resolve(__dirname, '../src/components/workspace/Works
 const workspaceCssPath = path.resolve(__dirname, '../src/components/workspace/Workspace.css');
 const chatCssPath = path.resolve(__dirname, '../src/components/workspace/AIChat.css');
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
+const appThemePath = path.resolve(__dirname, '../src/appTheme.ts');
 
 test('desktop app shell exposes edge-to-edge workbench classes', async () => {
   const source = await readFile(appPath, 'utf8');
@@ -123,4 +124,28 @@ test('knowledge and page workspaces share monochrome workbench shell classes', a
   assert.match(css, /\.pm-knowledge-workspace,\s*[\s\S]*?\.pm-page-workspace-shell,\s*[\s\S]*?\.pm-workbench-ai-pane\s*\{/);
   assert.match(css, /background:\s*var\(--mode-panel-alt\)/);
   assert.match(css, /border:\s*1px solid var\(--mode-border\)/);
+});
+
+test('workbench style remains user-selectable and its shared tokens are monochrome in both themes', async () => {
+  const source = await readFile(appPath, 'utf8');
+  const css = await readFile(appCssPath, 'utf8');
+
+  assert.doesNotMatch(source, /effectiveThemeMode/);
+  assert.doesNotMatch(source, /effectiveAppStyle/);
+  assert.match(source, /document\.documentElement\.dataset\.theme = themeMode;/);
+  assert.match(source, /document\.documentElement\.dataset\.style = appStyle;/);
+  assert.match(css, /:root\[data-style='workbench'\]\[data-theme='dark'\],\s*[\s\S]*?--mode-surface:\s*#0f0f10;/);
+  assert.match(css, /:root\[data-style='workbench'\]\[data-theme='dark'\],\s*[\s\S]*?--mode-button:\s*#f5f5f4;/);
+  assert.match(css, /:root\[data-style='workbench'\]\[data-theme='light'\]\s*{[\s\S]*?--mode-surface:\s*#f7f7f5;/);
+  assert.match(css, /:root\[data-style='workbench'\]\[data-theme='light'\]\s*{[\s\S]*?--mode-button:\s*#111111;/);
+  assert.doesNotMatch(css, /:root\[data-style='workbench'\]\[data-theme='light'\]\s*{[\s\S]*?#3b82f6/);
+});
+
+test('desktop header drops legacy style switching and only keeps the monochrome workbench style', async () => {
+  const source = await readFile(appPath, 'utf8');
+  const themeSource = await readFile(appThemePath, 'utf8');
+
+  assert.doesNotMatch(source, /app-style-switcher/);
+  assert.doesNotMatch(source, /APP_STYLE_OPTIONS/);
+  assert.match(themeSource, /export type AppStyle = 'workbench';/);
 });

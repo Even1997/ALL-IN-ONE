@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import type { ActivityEntry } from '../skills/activityLog';
 
 export type StoredChatMessage = {
   id: string;
@@ -21,6 +22,7 @@ export type ChatSession = {
 type ChatProjectState = {
   activeSessionId: string | null;
   sessions: ChatSession[];
+  activityEntries: ActivityEntry[];
 };
 
 type AIChatStoreState = {
@@ -29,6 +31,7 @@ type AIChatStoreState = {
   upsertSession: (projectId: string, session: ChatSession) => void;
   setActiveSession: (projectId: string, sessionId: string) => void;
   appendMessage: (projectId: string, sessionId: string, message: StoredChatMessage) => void;
+  appendActivityEntry: (projectId: string, entry: ActivityEntry) => void;
   updateMessage: (
     projectId: string,
     sessionId: string,
@@ -46,6 +49,7 @@ const createMessageId = (role: StoredChatMessage['role']) =>
 const createProjectState = (): ChatProjectState => ({
   activeSessionId: null,
   sessions: [],
+  activityEntries: [],
 });
 
 const sortSessions = (sessions: ChatSession[]) =>
@@ -96,6 +100,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
             projects: {
               ...state.projects,
               [projectId]: {
+                ...project,
                 activeSessionId: project.activeSessionId || session.id,
                 sessions,
               },
@@ -131,8 +136,27 @@ export const useAIChatStore = create<AIChatStoreState>()(
             projects: {
               ...state.projects,
               [projectId]: {
+                ...project,
                 activeSessionId: project.activeSessionId || sessionId,
                 sessions: sortSessions(sessions),
+              },
+            },
+          };
+        }),
+
+      appendActivityEntry: (projectId, entry) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const activityEntries = [entry, ...project.activityEntries.filter((item) => item.id !== entry.id)].sort(
+            (left, right) => right.createdAt - left.createdAt
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                ...project,
+                activityEntries,
               },
             },
           };
@@ -157,6 +181,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
             projects: {
               ...state.projects,
               [projectId]: {
+                ...project,
                 activeSessionId: project.activeSessionId || sessionId,
                 sessions: sortSessions(sessions),
               },
@@ -196,6 +221,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
             projects: {
               ...state.projects,
               [projectId]: {
+                ...project,
                 activeSessionId:
                   project.activeSessionId === sessionId ? sessions[0]?.id || null : project.activeSessionId,
                 sessions,

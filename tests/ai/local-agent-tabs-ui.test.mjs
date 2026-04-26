@@ -23,22 +23,23 @@ test('chat shell header renders the three direct local agent tabs', async () => 
   assert.doesNotMatch(source, />\{agent\.label\}\s*<\/button>/);
 });
 
-test('Claude and Codex tabs open the native local agent interface', async () => {
+test('Claude and Codex tabs run through the native local agent prompt bridge', async () => {
   const source = await readFile(chatPath, 'utf8');
 
-  assert.match(source, /handleOpenLocalAgentInterface/);
-  assert.match(source, /invoke<LocalAgentCommandResult>\('open_local_agent_interface'/);
+  assert.match(source, /invoke<LocalAgentCommandResult>\('run_local_agent_prompt'/);
   assert.match(source, /agent:\s*selectedChatAgentId/);
   assert.match(source, /getProjectDir\(currentProject\.id\)/);
-  assert.match(source, /projectRoot:\s*projectRoot/);
-  assert.doesNotMatch(source, /invoke<LocalAgentCommandResult>\('run_local_agent'/);
+  assert.match(source, /projectRoot,/);
+  assert.match(source, /prompt:\s*localAgentPrompt/);
+  assert.doesNotMatch(source, /invoke<LocalAgentCommandResult>\('open_local_agent_interface'/);
 });
 
-test('chat submit keeps built-in AI on the existing AI service path', async () => {
+test('chat submit keeps built-in AI on the existing AI service path and branches local agents separately', async () => {
   const source = await readFile(chatPath, 'utf8');
 
   assert.match(source, /selectedChatAgentId === 'built-in'/);
   assert.match(source, /aiService\.completeText\(/);
+  assert.match(source, /selectedChatAgentId !== 'built-in'/);
 });
 
 test('chat composer css defines compact agent tabs', async () => {

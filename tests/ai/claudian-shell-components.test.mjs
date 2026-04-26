@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const shellPath = path.resolve(__dirname, '../../src/components/ai/claudian-shell/ClaudianShell.tsx');
+const pagePath = path.resolve(__dirname, '../../src/components/ai/ClaudePage.tsx');
+
+test('claudian shell exposes classic/config/claude/codex routes and mode switch', async () => {
+  const shellSource = await readFile(shellPath, 'utf8');
+  assert.match(shellSource, /ClaudianModeSwitch/);
+  assert.match(shellSource, /ClaudianTabBadges/);
+  assert.match(shellSource, /className="claudian-header"/);
+  assert.match(shellSource, /className="claudian-title-slot"/);
+  assert.match(shellSource, /className="claudian-header-actions"/);
+  assert.match(shellSource, /className="claudian-tab-content-container"/);
+  assert.match(shellSource, /currentMode === 'config'/);
+  assert.match(shellSource, /currentMode === 'claude'/);
+  assert.match(shellSource, /currentMode === 'codex'/);
+});
+
+test('claude page mounts the new claudian shell', async () => {
+  const pageSource = await readFile(pagePath, 'utf8');
+  assert.match(pageSource, /ClaudianShell/);
+});

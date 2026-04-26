@@ -1,3 +1,5 @@
+import { getChatAgents } from './runtimeRegistry.ts';
+
 export type ChatAgentId = 'claude' | 'codex' | 'built-in';
 
 export type ChatAgentRuntime = 'local' | 'built-in';
@@ -16,23 +18,4 @@ export type LocalAgentCommandResult = {
   exitCode: number | null;
 };
 
-export const CHAT_AGENTS: ChatAgentDefinition[] = [
-  {
-    id: 'claude',
-    label: 'Claude',
-    title: 'Claude CLI',
-    runtime: 'local',
-  },
-  {
-    id: 'codex',
-    label: 'Codex',
-    title: 'Codex CLI',
-    runtime: 'local',
-  },
-  {
-    id: 'built-in',
-    label: 'AI',
-    title: 'Built-in AI',
-    runtime: 'built-in',
-  },
-];
+export const CHAT_AGENTS: ChatAgentDefinition[] = getChatAgents();

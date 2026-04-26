@@ -95,6 +95,7 @@ interface ProjectState {
   mergeGeneratedFilesFromAI: (files: GeneratedFile[]) => void;
   generatePlanningArtifacts: (featureTree: FeatureTree | null) => FeatureTree | null;
   generateProductArtifactsFromRequirements: () => FeatureTree | null;
+  updateWireframeFrame: (page: Pick<PageStructureNode, 'id' | 'name'>, frame: string) => void;
   saveWireframeDraft: (page: Pick<PageStructureNode, 'id' | 'name'>, elements: CanvasElement[]) => void;
   upsertWireframe: (page: Pick<PageStructureNode, 'id' | 'name'>, elements: CanvasElement[]) => void;
   addRootPage: () => PageStructureNode | null;
@@ -1546,6 +1547,7 @@ const normalizeWireframes = (value: unknown): Record<string, WireframeDocument> 
           id: typeof wireframe?.id === 'string' ? wireframe.id : uuidv4(),
           pageId: typeof wireframe?.pageId === 'string' ? wireframe.pageId : key,
           pageName: typeof wireframe?.pageName === 'string' ? wireframe.pageName : '未命名页面',
+          frame: typeof wireframe?.frame === 'string' ? wireframe.frame : undefined,
           elements: normalizeCanvasElements(wireframe?.elements),
           updatedAt: typeof wireframe?.updatedAt === 'string' ? wireframe.updatedAt : new Date().toISOString(),
           status: wireframe?.status === 'ready' ? 'ready' : 'draft',
@@ -2003,7 +2005,7 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: snapshot.featuresMarkdown,
           wireframesMarkdown: snapshot.wireframesMarkdown,
           requirementDocs: snapshot.requirementDocs,
-          activeKnowledgeFileId: snapshot.activeKnowledgeFileId || snapshot.requirementDocs[0]?.id || null,
+          activeKnowledgeFileId: snapshot.activeKnowledgeFileId,
           selectedKnowledgeContextIds:
             snapshot.selectedKnowledgeContextIds.length > 0
               ? snapshot.selectedKnowledgeContextIds
@@ -2475,6 +2477,36 @@ export const useProjectStore = create<ProjectState>()(
           };
         }),
 
+      updateWireframeFrame: (page, frame) =>
+        set((state) => {
+          if (!state.currentProject) {
+            return state;
+          }
+
+          const current = state.wireframes[page.id];
+          const nextFrame = frame.trim();
+          if (current?.frame === nextFrame) {
+            return state;
+          }
+
+          const wireframe: WireframeDocument = {
+            id: current?.id || uuidv4(),
+            pageId: page.id,
+            pageName: page.name,
+            frame: nextFrame,
+            elements: current?.elements || [],
+            updatedAt: new Date().toISOString(),
+            status: (current?.elements || []).length > 0 ? 'ready' : 'draft',
+          };
+
+          return {
+            wireframes: {
+              ...state.wireframes,
+              [page.id]: wireframe,
+            },
+          };
+        }),
+
       mergeGeneratedFilesFromAI: (files) =>
         set((state) => {
           if (!state.currentProject || files.length === 0) {
@@ -2589,6 +2621,7 @@ export const useProjectStore = create<ProjectState>()(
             id: current?.id || uuidv4(),
             pageId: page.id,
             pageName: page.name,
+            frame: current?.frame,
             elements,
             updatedAt: new Date().toISOString(),
             status: elements.length > 0 ? 'ready' : 'draft',
@@ -2613,6 +2646,7 @@ export const useProjectStore = create<ProjectState>()(
             id: current?.id || uuidv4(),
             pageId: page.id,
             pageName: page.name,
+            frame: current?.frame,
             elements,
             updatedAt: new Date().toISOString(),
             status: elements.length > 0 ? 'ready' : 'draft',
@@ -3160,10 +3194,7 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: typeof persisted.featuresMarkdown === 'string' ? persisted.featuresMarkdown : '',
           wireframesMarkdown: typeof persisted.wireframesMarkdown === 'string' ? persisted.wireframesMarkdown : '',
           requirementDocs,
-          activeKnowledgeFileId:
-            typeof persisted.activeKnowledgeFileId === 'string'
-              ? persisted.activeKnowledgeFileId
-              : requirementDocs[0]?.id || null,
+          activeKnowledgeFileId: typeof persisted.activeKnowledgeFileId === 'string' ? persisted.activeKnowledgeFileId : null,
           selectedKnowledgeContextIds: Array.isArray(persisted.selectedKnowledgeContextIds)
             ? persisted.selectedKnowledgeContextIds.filter((item): item is string => typeof item === 'string')
             : [],

@@ -472,7 +472,7 @@ export const AIPanel: React.FC = () => {
                     <textarea
                       value={customHeaders}
                       onChange={(e) => setCustomHeaders(e.target.value)}
-                      placeholder='{"HTTP-Referer":"https://your-app.com","X-Title":"DevFlow"}'
+                      placeholder='{"HTTP-Referer":"https://your-app.com","X-Title":"GoodNight"}'
                       className="provider-headers-input api-key-input"
                     />
                     <div className="setting-info provider-setting-note">

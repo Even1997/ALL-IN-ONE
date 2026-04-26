@@ -337,21 +337,14 @@ export const Canvas = memo<CanvasProps>(({
   const hasManualViewportRef = useRef(false);
   const skipStoreSelectionSyncRef = useRef(false);
   const [themeVersion, setThemeVersion] = useState(0);
-  const logicalBoardHeight = useMemo(() => {
-    const maxElementBottom = elements.reduce((currentMax, element) => {
-      const elementHeight = Number.isFinite(element.height) ? Math.max(MIN_MODULE_HEIGHT, Math.round(element.height)) : MIN_MODULE_HEIGHT;
-      return Math.max(currentMax, element.y + elementHeight);
-    }, height);
-
-    return Math.max(height, maxElementBottom + 160);
-  }, [elements, height]);
+  const boardHeight = height;
   const canvasViewportHeight = useMemo(
-    () => Math.max(680, Math.ceil(logicalBoardHeight * scale + (frameType === 'mobile' ? 140 : 120))),
-    [frameType, logicalBoardHeight, scale]
+    () => Math.max(680, Math.ceil(boardHeight * scale + (frameType === 'mobile' ? 140 : 120))),
+    [boardHeight, frameType, scale]
   );
   const frameChrome = useMemo(
-    () => getFrameChrome(frameType, width, logicalBoardHeight),
-    [frameType, logicalBoardHeight, width]
+    () => getFrameChrome(frameType, width, boardHeight),
+    [boardHeight, frameType, width]
   );
   const fitScale = useMemo(() => {
     const safeWidth = Math.max(320, viewportSize.width - (frameType === 'mobile' ? 120 : 88));
@@ -415,14 +408,14 @@ export const Canvas = memo<CanvasProps>(({
   const stageMetrics = useMemo(() => {
     // Stage needs to be large enough to contain scaled content without clipping
     const scaledWidth = Math.max(viewportSize.width, width * scale);
-    const scaledHeight = Math.max(viewportSize.height, logicalBoardHeight * scale);
+    const scaledHeight = Math.max(viewportSize.height, boardHeight * scale);
     return {
       stageWidth: scaledWidth,
       stageHeight: scaledHeight,
       frameX: (scaledWidth - width) / 2,
-      frameY: (scaledHeight - logicalBoardHeight) / 2,
+      frameY: (scaledHeight - boardHeight) / 2,
     };
-  }, [logicalBoardHeight, scale, viewportSize.height, viewportSize.width, width]);
+  }, [boardHeight, scale, viewportSize.height, viewportSize.width, width]);
 
   useEffect(() => {
     if (typeof MutationObserver === 'undefined') {
@@ -712,12 +705,12 @@ export const Canvas = memo<CanvasProps>(({
     if (clampToBoard) {
       return {
         x: Math.max(0, Math.min(width, localX)),
-        y: Math.max(0, Math.min(logicalBoardHeight, localY)),
+        y: Math.max(0, Math.min(boardHeight, localY)),
       };
     }
 
     return { x: localX, y: localY };
-  }, [logicalBoardHeight, scale, stageMetrics.frameX, stageMetrics.frameY, viewportOffset.x, viewportOffset.y, width]);
+  }, [boardHeight, scale, stageMetrics.frameX, stageMetrics.frameY, viewportOffset.x, viewportOffset.y, width]);
 
   const deleteSelectedElements = useCallback(() => {
     const idsToDelete = deletePopupRef.current?.elementIds ?? [];
@@ -1039,7 +1032,7 @@ export const Canvas = memo<CanvasProps>(({
                   )}
                   <Rect
                     width={width}
-                    height={logicalBoardHeight}
+                    height={boardHeight}
                     fill={palette.boardFill}
                     stroke={palette.boardStroke}
                     strokeWidth={1}

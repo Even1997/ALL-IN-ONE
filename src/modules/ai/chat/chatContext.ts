@@ -102,6 +102,26 @@ export const buildChatContextSnapshot = (options: {
 export const getSelectedElementLabel = (elements: CanvasElement[], selectedElementId: string | null) =>
   summarizeElement(elements.find((element) => element.id === selectedElementId) || null);
 
+export const resolveCurrentReferenceFileIds = (options: {
+  scene: AIChatScene;
+  activeKnowledgeFileId: string | null;
+  selectedKnowledgeContextIds: string[];
+  selectedPagePath: string | null;
+  availableFileIds: string[];
+}) => {
+  const availableIds = new Set(options.availableFileIds);
+
+  if (options.scene === 'page') {
+    return options.selectedPagePath && availableIds.has(options.selectedPagePath) ? [options.selectedPagePath] : [];
+  }
+
+  if (options.activeKnowledgeFileId && availableIds.has(options.activeKnowledgeFileId)) {
+    return [options.activeKnowledgeFileId];
+  }
+
+  return [];
+};
+
 export const resolveReferenceScopeSelection = (options: {
   mode: AIReferenceScopeMode;
   currentFileIds: string[];
