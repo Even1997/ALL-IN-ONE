@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
 const shellPath = path.resolve(__dirname, '../src/components/product/WorkbenchShell.tsx');
+const knowledgeWorkspacePath = path.resolve(__dirname, '../src/components/product/KnowledgeWorkspace.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
 
 test('product workbench delegates shell and workspace responsibilities to focused child components', async () => {
@@ -34,4 +35,18 @@ test('workbench shell owns left center right layout and chrome classes', async (
   assert.match(css, /\.pm-workbench-sidebar\s*\{/);
   assert.match(css, /\.pm-workbench-main\s*\{/);
   assert.match(css, /\.pm-workbench-ai-pane\s*\{/);
+});
+
+test('knowledge workspace owns search chrome and content slots', async () => {
+  const source = await readFile(knowledgeWorkspacePath, 'utf8');
+
+  assert.match(source, /type KnowledgeWorkspaceProps =/);
+  assert.match(source, /tabs: ReactNode/);
+  assert.match(source, /content: ReactNode/);
+  assert.match(source, /searchValue: string/);
+  assert.match(source, /onSearchChange: \(value: string\) => void/);
+  assert.match(source, /pm-knowledge-workspace-toolbar/);
+  assert.match(source, /pm-knowledge-workspace-tabs/);
+  assert.match(source, /pm-knowledge-workspace-content/);
+  assert.match(source, /placeholder="搜索知识库"/);
 });

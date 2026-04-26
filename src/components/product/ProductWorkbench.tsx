@@ -9,13 +9,13 @@ import {
 } from '../../modules/knowledge/knowledgeEntries';
 import {
   buildKnowledgeTree,
-  filterKnowledgeTree,
   findFirstKnowledgeFileNode,
   findKnowledgeTreeNode,
   type KnowledgeDiskItem,
   type KnowledgeGroupId,
   type KnowledgeTreeNode,
 } from '../../modules/knowledge/knowledgeTree';
+import { buildKnowledgeSearchIndex, searchKnowledgeEntries } from '../../modules/knowledge/knowledgeSearch';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import { usePreviewStore } from '../../store/previewStore';
@@ -250,6 +250,30 @@ const filterPageTree = (nodes: PageStructureNode[], keyword: string): PageStruct
     }
 
     return [{ ...node, children: filteredChildren }];
+  });
+};
+
+const filterKnowledgeTreeByEntryIds = (
+  nodes: KnowledgeTreeNode[],
+  matchedEntryIds: Set<string>
+): KnowledgeTreeNode[] => {
+  if (matchedEntryIds.size === 0) {
+    return [];
+  }
+
+  return nodes.flatMap((node) => {
+    const children = filterKnowledgeTreeByEntryIds(node.children, matchedEntryIds);
+    const matchesSelf = node.type === 'file' && Boolean(node.entryId && matchedEntryIds.has(node.entryId));
+
+    if (node.type === 'group') {
+      return children.length > 0 ? [{ ...node, children }] : [];
+    }
+
+    if (!matchesSelf && children.length === 0) {
+      return [];
+    }
+
+    return [{ ...node, children }];
   });
 };
 
@@ -1352,14 +1376,36 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     () => buildKnowledgeEntries(requirementDocs, generatedFiles),
     [generatedFiles, requirementDocs]
   );
+  const knowledgeSearchState = useMemo(
+    () =>
+      buildKnowledgeSearchIndex(
+        knowledgeEntries.map((entry) => ({
+          id: entry.id,
+          title: entry.title,
+          content: entry.content,
+          summary: entry.summary,
+        }))
+      ),
+    [knowledgeEntries]
+  );
+  const searchedKnowledgeEntries = useMemo(
+    () => searchKnowledgeEntries(knowledgeSearchState, knowledgeSearch),
+    [knowledgeSearchState, knowledgeSearch]
+  );
   const knowledgeTree = useMemo(
     () => buildKnowledgeTree(knowledgeEntries, knowledgeDiskItems, projectRootDir, knowledgeGroupOverrides),
     [knowledgeDiskItems, knowledgeEntries, knowledgeGroupOverrides, projectRootDir]
   );
-  const filteredKnowledgeTree = useMemo(
-    () => filterKnowledgeTree(knowledgeTree, knowledgeSearch),
-    [knowledgeSearch, knowledgeTree]
-  );
+  const filteredKnowledgeTree = useMemo(() => {
+    if (!knowledgeSearch.trim()) {
+      return knowledgeTree;
+    }
+
+    return filterKnowledgeTreeByEntryIds(
+      knowledgeTree,
+      new Set(searchedKnowledgeEntries.map((entry) => entry.id))
+    );
+  }, [knowledgeSearch, knowledgeTree, searchedKnowledgeEntries]);
   const filteredPageStructure = useMemo(() => filterPageTree(pageStructure, pageSearch), [pageSearch, pageStructure]);
   const filteredDesignPages = useMemo(() => collectDesignPages(filteredPageStructure), [filteredPageStructure]);
   const firstKnowledgeFileNode = useMemo(() => findFirstKnowledgeFileNode(knowledgeTree), [knowledgeTree]);
@@ -2395,59 +2441,51 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     setSidebarTab('page');
   }, [selectedRequirement, setActiveKnowledgeFileId]);
 
-  const renderRequirementMain = () => (
-    <div className="pm-viewer-stack">
-      <section className="pm-card">
-        <div className="pm-card-header">
-          <div>
-            <h3>知识库</h3>
-          </div>
-          <div className="pm-inline-actions">
-            <button className="doc-action-btn secondary" type="button" onClick={() => void handleCreateKnowledgeFile('project')}>
-              新建
-            </button>
-            <button className="doc-action-btn secondary" type="button" onClick={handleUploadClick}>
-              上传
-            </button>
-          </div>
+  const knowledgeTabs = openKnowledgeTabs.length > 0 ? (
+    <div className="pm-knowledge-open-tabs">
+      {openKnowledgeTabs.map((tab) => (
+        <div
+          key={tab.id}
+          className={`pm-knowledge-open-tab ${selectedKnowledgeEntry?.id === tab.id ? 'active' : ''}`}
+        >
+          <button
+            className="pm-knowledge-open-tab-main"
+            type="button"
+            title={tab.filePath || tab.title}
+            onClick={() => {
+              const node = findKnowledgeNodeByEntryId(knowledgeTree, tab.id);
+              if (node) {
+                setSelectedKnowledgeNodeId(node.id);
+              }
+              setSelectedRequirementId(tab.id);
+            }}
+          >
+            {tab.title}
+          </button>
+          <button
+            className="pm-knowledge-open-tab-close"
+            type="button"
+            aria-label={`关闭 ${tab.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleCloseKnowledgeTab(tab.id);
+            }}
+          >
+            脳
+          </button>
         </div>
-        {openKnowledgeTabs.length > 0 ? (
-          <div className="pm-knowledge-open-tabs">
-            {openKnowledgeTabs.map((tab) => (
-              <div
-                key={tab.id}
-                className={`pm-knowledge-open-tab ${selectedKnowledgeEntry?.id === tab.id ? 'active' : ''}`}
-              >
-                <button
-                  className="pm-knowledge-open-tab-main"
-                  type="button"
-                  title={tab.filePath || tab.title}
-                  onClick={() => {
-                    const node = findKnowledgeNodeByEntryId(knowledgeTree, tab.id);
-                    if (node) {
-                      setSelectedKnowledgeNodeId(node.id);
-                    }
-                    setSelectedRequirementId(tab.id);
-                  }}
-                >
-                  {tab.title}
-                </button>
-                <button
-                  className="pm-knowledge-open-tab-close"
-                  type="button"
-                  aria-label={`关闭 ${tab.title}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleCloseKnowledgeTab(tab.id);
-                  }}
-                >
-                  脳
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {selectedKnowledgeEntry ? (
+      ))}
+    </div>
+  ) : (
+    <div className="pm-knowledge-open-tabs pm-knowledge-open-tabs-empty">
+      <span className="pm-knowledge-open-tabs-placeholder">从左侧文件树打开一个 Markdown 文件。</span>
+    </div>
+  );
+
+  const renderRequirementMain = () =>
+    selectedKnowledgeEntry ? (
+      <div className="pm-viewer-stack">
+        <section className="pm-card">
           <div className="requirement-file-editor">
             <div className="requirement-file-meta">
               <div>
@@ -2631,21 +2669,20 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
               </div>
             )}
           </div>
-        ) : (
+        </section>
+      </div>
+    ) : (
+      <div className="pm-viewer-stack">
+        <section className="pm-card pm-empty-panel">
+          <div className="pm-card-header">
+            <div>
+              <h3>知识库</h3>
+            </div>
+          </div>
           <div className="empty-state">还没有知识文件。</div>
-        )}
-      </section>
-
-      <input
-        ref={fileInputRef}
-        className="product-hidden-input"
-        type="file"
-        accept=".md,.markdown,text/markdown"
-        multiple
-        onChange={handleFileChange}
-      />
-    </div>
-  );
+        </section>
+      </div>
+    );
 
   const renderPageMain = () => {
 
@@ -2757,13 +2794,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
               </button>
             </div>
           </div>
-          <input
-            className="product-input pm-knowledge-search-input"
-            type="search"
-            value={knowledgeSearch}
-            onChange={(event) => setKnowledgeSearch(event.target.value)}
-            placeholder="搜索文档"
-          />
           <div className="pm-knowledge-tree">
             {filteredKnowledgeTree.length > 0 ? renderKnowledgeTree(filteredKnowledgeTree) : (
               <div className="pm-page-tree-empty">没有匹配的知识条目</div>
@@ -2814,7 +2844,24 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   );
   const productWorkbenchMainViewer = (
     <main className="pm-main-viewer">
-      {sidebarTab === 'requirement' && <KnowledgeWorkspace content={renderRequirementMain()} />}
+      {sidebarTab === 'requirement' && (
+        <KnowledgeWorkspace
+          tabs={knowledgeTabs}
+          content={renderRequirementMain()}
+          searchValue={knowledgeSearch}
+          onSearchChange={setKnowledgeSearch}
+          toolbarActions={
+            <>
+              <button className="doc-action-btn secondary" type="button" onClick={() => void handleCreateKnowledgeFile('project')}>
+                新建
+              </button>
+              <button className="doc-action-btn secondary" type="button" onClick={handleUploadClick}>
+                上传
+              </button>
+            </>
+          }
+        />
+      )}
       {sidebarTab === 'page' && (
         <PageWorkspace
           content={
@@ -2892,6 +2939,14 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
           ) : null}
         </div>
       ) : null}
+      <input
+        ref={fileInputRef}
+        className="product-hidden-input"
+        type="file"
+        accept=".md,.markdown,text/markdown"
+        multiple
+        onChange={handleFileChange}
+      />
     </div>
   );
 };

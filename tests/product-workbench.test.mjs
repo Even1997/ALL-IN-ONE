@@ -88,12 +88,18 @@ test('knowledge base has searchable filters and visible source summaries', async
   const source = await readFile(productWorkbenchPath, 'utf8');
 
   assert.match(source, /const \[knowledgeSearch, setKnowledgeSearch\] = useState\(''\)/);
+  assert.match(source, /buildKnowledgeSearchIndex/);
+  assert.match(source, /searchKnowledgeEntries/);
+  assert.match(source, /const knowledgeSearchState = useMemo/);
+  assert.match(source, /const searchedKnowledgeEntries = useMemo/);
   assert.match(source, /const filteredKnowledgeTree = useMemo/);
-  assert.match(source, /filterKnowledgeTree\(knowledgeTree, knowledgeSearch\)/);
-  assert.match(source, /placeholder="搜索文档"/);
+  assert.match(source, /searchKnowledgeEntries\(knowledgeSearchState, knowledgeSearch\)/);
+  assert.match(source, /searchValue=\{knowledgeSearch\}/);
+  assert.match(source, /onSearchChange=\{setKnowledgeSearch\}/);
   assert.match(source, /className="pm-knowledge-tree"/);
   assert.match(source, /renderKnowledgeTree\(filteredKnowledgeTree\)/);
   assert.match(source, /没有匹配的知识条目/);
+  assert.doesNotMatch(source, /placeholder="搜索文档"/);
   assert.doesNotMatch(source, /设为当前/);
   assert.doesNotMatch(source, /知识库引用/);
   assert.doesNotMatch(source, /AI 会优先读取当前文档/);
