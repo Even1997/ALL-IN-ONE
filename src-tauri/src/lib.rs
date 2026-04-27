@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -69,10 +70,24 @@ pub struct RemoveParams {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct RenameParams {
+    pub from_path: String,
+    pub to_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalAgentParams {
     pub agent: String,
     pub project_root: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalAgentPromptParams {
+    pub agent: String,
+    pub project_root: String,
+    pub prompt: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -82,6 +97,27 @@ pub struct LocalAgentResult {
     pub content: String,
     pub error: Option<String>,
     pub exit_code: Option<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalConfigProbeEntry {
+    pub path: String,
+    pub exists: bool,
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalAgentConfigSnapshot {
+    pub home_dir: String,
+    pub claude_home: LocalConfigProbeEntry,
+    pub claude_settings: LocalConfigProbeEntry,
+    pub claude_commands: LocalConfigProbeEntry,
+    pub claude_plugins: LocalConfigProbeEntry,
+    pub codex_home: LocalConfigProbeEntry,
+    pub codex_skills: LocalConfigProbeEntry,
+    pub codex_agents: LocalConfigProbeEntry,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -219,11 +255,70 @@ fn escape_powershell_single_quoted(value: &str) -> String {
     value.replace('\'', "''")
 }
 
+fn resolve_home_dir() -> Result<PathBuf, String> {
+    let candidate = if cfg!(target_os = "windows") {
+        env::var("USERPROFILE").ok()
+    } else {
+        env::var("HOME").ok()
+    };
+
+    let home_dir = candidate
+        .map(PathBuf::from)
+        .ok_or_else(|| "Failed to resolve the current user home directory.".to_string())?;
+
+    if !home_dir.is_absolute() {
+        return Err("Resolved home directory is not an absolute path.".to_string());
+    }
+
+    Ok(home_dir)
+}
+
+fn build_local_config_probe(path: PathBuf, include_content: bool) -> LocalConfigProbeEntry {
+    let exists = path.exists();
+    let content = if include_content && path.is_file() {
+        read_file_as_string(&path).ok()
+    } else {
+        None
+    };
+
+    LocalConfigProbeEntry {
+        path: path.to_string_lossy().to_string(),
+        exists,
+        content,
+    }
+}
+
 fn build_local_agent_interface_command(agent: &str, project_root: &str) -> Result<(&'static str, String), String> {
     let project_root_arg = escape_powershell_single_quoted(project_root);
     match agent {
         "claude" => Ok(("Claude", "claude".to_string())),
         "codex" => Ok(("Codex", format!("codex --cd '{}'", project_root_arg))),
+        _ => Err("Unsupported local agent. Expected claude or codex.".to_string()),
+    }
+}
+
+fn build_local_agent_prompt_command(
+    agent: &str,
+    prompt: &str,
+) -> Result<(&'static str, &'static str, Vec<String>), String> {
+    match agent {
+        "claude" => Ok((
+            "Claude",
+            "claude",
+            vec!["-p".to_string(), prompt.to_string()],
+        )),
+        "codex" => {
+            let _command_preview = format!("codex exec {} --output-last-message", prompt);
+            Ok((
+                "Codex",
+                "codex",
+                vec![
+                    "exec".to_string(),
+                    prompt.to_string(),
+                    "--output-last-message".to_string(),
+                ],
+            ))
+        }
         _ => Err("Unsupported local agent. Expected claude or codex.".to_string()),
     }
 }
@@ -294,6 +389,103 @@ fn open_local_agent_interface(params: LocalAgentParams) -> LocalAgentResult {
             exit_code: None,
         },
     }
+}
+
+#[tauri::command]
+fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
+    let project_root = PathBuf::from(params.project_root.trim());
+    if !project_root.is_dir() {
+        return LocalAgentResult {
+            success: false,
+            content: String::new(),
+            error: Some("Project root does not exist or is not a directory.".to_string()),
+            exit_code: None,
+        };
+    }
+
+    let prompt = params.prompt.trim();
+    if prompt.is_empty() {
+        return LocalAgentResult {
+            success: false,
+            content: String::new(),
+            error: Some("Prompt cannot be empty.".to_string()),
+            exit_code: None,
+        };
+    }
+
+    let (agent_label, executable, args) =
+        match build_local_agent_prompt_command(params.agent.trim(), prompt) {
+            Ok(command) => command,
+            Err(error) => {
+                return LocalAgentResult {
+                    success: false,
+                    content: String::new(),
+                    error: Some(error),
+                    exit_code: None,
+                }
+            }
+        };
+
+    let output = Command::new(executable)
+        .args(&args)
+        .current_dir(&project_root)
+        .output();
+
+    match output {
+        Ok(result) => {
+            let stdout = String::from_utf8_lossy(&result.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&result.stderr).trim().to_string();
+            let content = if stdout.is_empty() {
+                stderr.clone()
+            } else {
+                stdout
+            };
+
+            if result.status.success() {
+                LocalAgentResult {
+                    success: true,
+                    content,
+                    error: None,
+                    exit_code: result.status.code(),
+                }
+            } else {
+                LocalAgentResult {
+                    success: false,
+                    content,
+                    error: Some(if stderr.is_empty() {
+                        format!("{} exited with a non-zero status.", agent_label)
+                    } else {
+                        stderr
+                    }),
+                    exit_code: result.status.code(),
+                }
+            }
+        }
+        Err(error) => LocalAgentResult {
+            success: false,
+            content: String::new(),
+            error: Some(format!("Failed to run {} prompt command: {}", agent_label, error)),
+            exit_code: None,
+        },
+    }
+}
+
+#[tauri::command]
+fn get_local_agent_config_snapshot() -> Result<LocalAgentConfigSnapshot, String> {
+    let home_dir = resolve_home_dir()?;
+    let claude_home = home_dir.join(".claude");
+    let codex_home = home_dir.join(".codex");
+
+    Ok(LocalAgentConfigSnapshot {
+        home_dir: home_dir.to_string_lossy().to_string(),
+        claude_home: build_local_config_probe(claude_home.clone(), false),
+        claude_settings: build_local_config_probe(claude_home.join("settings.json"), false),
+        claude_commands: build_local_config_probe(claude_home.join("commands"), false),
+        claude_plugins: build_local_config_probe(claude_home.join("plugins"), false),
+        codex_home: build_local_config_probe(codex_home.clone(), false),
+        codex_skills: build_local_config_probe(codex_home.join("skills"), false),
+        codex_agents: build_local_config_probe(codex_home.join("agents"), false),
+    })
 }
 
 // View tool - read file contents with line numbers
@@ -436,6 +628,80 @@ fn tool_mkdir(params: RemoveParams) -> ToolResult {
             error: Some(format!("Error creating directory: {}", e)),
         },
     }
+}
+
+#[tauri::command]
+fn tool_rename(params: RenameParams) -> ToolResult {
+    let from_path = Path::new(&params.from_path);
+    let to_path = Path::new(&params.to_path);
+
+    if !from_path.exists() {
+        return ToolResult {
+            success: false,
+            content: String::new(),
+            error: Some(format!("Source path not found: {}", params.from_path)),
+        };
+    }
+
+    if let Some(parent) = to_path.parent() {
+        if !parent.exists() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                return ToolResult {
+                    success: false,
+                    content: String::new(),
+                    error: Some(format!("Error creating target directory: {}", e)),
+                };
+            }
+        }
+    }
+
+    match fs::rename(from_path, to_path) {
+        Ok(_) => ToolResult {
+            success: true,
+            content: format!("Renamed: {} -> {}", params.from_path, params.to_path),
+            error: None,
+        },
+        Err(rename_error) => {
+            let fallback_result = if from_path.is_dir() {
+                copy_dir_all(from_path, to_path).and_then(|_| fs::remove_dir_all(from_path))
+            } else {
+                fs::copy(from_path, to_path)
+                    .map(|_| ())
+                    .and_then(|_| fs::remove_file(from_path))
+            };
+
+            match fallback_result {
+                Ok(_) => ToolResult {
+                    success: true,
+                    content: format!("Moved with fallback: {} -> {}", params.from_path, params.to_path),
+                    error: None,
+                },
+                Err(fallback_error) => ToolResult {
+                    success: false,
+                    content: String::new(),
+                    error: Some(format!(
+                        "Error renaming path: {}. Fallback move failed: {}",
+                        rename_error, fallback_error
+                    )),
+                },
+            }
+        }
+    }
+}
+
+fn copy_dir_all(from_path: &Path, to_path: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(to_path)?;
+    for entry in fs::read_dir(from_path)? {
+        let entry = entry?;
+        let entry_type = entry.file_type()?;
+        let target_path = to_path.join(entry.file_name());
+        if entry_type.is_dir() {
+            copy_dir_all(&entry.path(), &target_path)?;
+        } else {
+            fs::copy(entry.path(), target_path)?;
+        }
+    }
+    Ok(())
 }
 
 // Edit tool - replace old_string with new_string in file
@@ -843,6 +1109,7 @@ pub fn run() {
             tool_view,
             tool_write,
             tool_remove,
+            tool_rename,
             tool_mkdir,
             tool_edit,
             tool_ls,
@@ -855,6 +1122,8 @@ pub fn run() {
             get_project_dir,
             get_projects_index_path,
             open_local_agent_interface,
+            run_local_agent_prompt,
+            get_local_agent_config_snapshot,
             read_text_file,
         ])
         .run(tauri::generate_context!())

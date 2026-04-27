@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { useClaudianShellStore } from '../../../modules/ai/claudian/claudianShellStore';
 import { useGlobalAIStore } from '../../../modules/ai/store/globalAIStore';
+import { hasUsableAIConfigEntry } from '../../../modules/ai/store/aiConfigState';
 import type { LocalAgentConfigSnapshot } from '../../../modules/ai/claudian/localConfig';
 import { ClaudeRuntime } from '../../../modules/ai/claudian/runtime/claude/ClaudeRuntime';
 import { CodexRuntime } from '../../../modules/ai/claudian/runtime/codex/CodexRuntime';
@@ -12,20 +14,35 @@ export const ClaudianRuntimeSummary: React.FC<{
   providerId: 'claude' | 'codex';
   localSnapshot: LocalAgentConfigSnapshot | null;
 }> = ({ providerId, localSnapshot }) => {
-  const { aiConfigs, selectedConfigId } = useGlobalAIStore(
+  const { aiConfigs } = useGlobalAIStore(
     useShallow((state) => ({
       aiConfigs: state.aiConfigs,
-      selectedConfigId: state.selectedConfigId,
+    }))
+  );
+  const { claudeConfigId, codexConfigId } = useClaudianShellStore(
+    useShallow((state) => ({
+      claudeConfigId: state.claudeConfigId,
+      codexConfigId: state.codexConfigId,
     }))
   );
 
-  const selectedConfig = aiConfigs.find((item) => item.id === selectedConfigId) || null;
+  const runtime = providerId === 'claude' ? claudeRuntime : codexRuntime;
+  const boundConfigId = providerId === 'claude' ? claudeConfigId : codexConfigId;
+  const selectedConfig = useMemo(() => {
+    const boundConfig = boundConfigId ? aiConfigs.find((item) => item.id === boundConfigId) || null : null;
+    const usableBoundConfig =
+      boundConfig &&
+      ((providerId === 'claude' && boundConfig.provider === 'anthropic') ||
+        (providerId === 'codex' && boundConfig.provider === 'openai-compatible')) &&
+      boundConfig.enabled &&
+      hasUsableAIConfigEntry(boundConfig)
+        ? boundConfig
+        : null;
+    return usableBoundConfig || runtime.resolvePreferredConfig(aiConfigs);
+  }, [aiConfigs, boundConfigId, runtime]);
   const status = useMemo(
-    () =>
-      providerId === 'claude'
-        ? claudeRuntime.getStatus({ selectedConfig, localSnapshot })
-        : codexRuntime.getStatus({ selectedConfig, localSnapshot }),
-    [localSnapshot, providerId, selectedConfig]
+    () => runtime.getStatus({ selectedConfig, localSnapshot }),
+    [localSnapshot, runtime, selectedConfig]
   );
 
   return (

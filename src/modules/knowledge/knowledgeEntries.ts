@@ -11,6 +11,7 @@ export type KnowledgeEntry = {
   updatedAt: string;
   status: 'draft' | 'ready';
   kind?: RequirementDoc['kind'];
+  docType?: RequirementDoc['docType'];
   tags: string[];
   relatedIds: string[];
   sourceRequirementId?: string;
@@ -64,6 +65,7 @@ export const buildKnowledgeEntries = (
     updatedAt: doc.updatedAt,
     status: doc.status,
     kind: inferRequirementKind(doc),
+    docType: doc.docType,
     tags: doc.tags || [],
     relatedIds: doc.relatedIds || [],
     sourceRequirementId: undefined,

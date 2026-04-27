@@ -64,7 +64,7 @@ export const ClaudianConfigPage: React.FC = () => {
     <section className="claudian-shell-page claudian-shell-config-page">
       <header className="claudian-shell-page-header claudian-shell-page-header-spread">
         <div>
-          <span className="claudian-context-badge">Claudian</span>
+          <span className="claudian-context-badge">GN Agent</span>
           <h3>配置页</h3>
         </div>
         <span className="claudian-shell-page-note">
@@ -72,7 +72,7 @@ export const ClaudianConfigPage: React.FC = () => {
         </span>
       </header>
 
-      <div className="claudian-settings-tabs" role="tablist" aria-label="Claudian settings">
+      <div className="claudian-settings-tabs" role="tablist" aria-label="GN Agent settings">
         {[
           { id: 'general', label: 'General' },
           { id: 'claude', label: 'Claude' },
@@ -131,9 +131,7 @@ export const ClaudianConfigPage: React.FC = () => {
             desc={snapshot ? renderStatus(snapshot.claudeSettings.exists) : '未加载'}
             code={snapshot?.claudeSettings.path || '~/.claude/settings.json'}
           >
-            {snapshot?.claudeSettings.content ? (
-              <pre className="claudian-shell-config-pre">{snapshot.claudeSettings.content.slice(0, 1200)}</pre>
-            ) : null}
+            {snapshot?.claudeSettings.exists ? <p>出于安全考虑，这里只显示文件位置，不展示本地设置内容。</p> : null}
           </ConfigCard>
           <ConfigCard
             title="Claude Commands"

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import type { LocalAgentConfigSnapshot } from '../../../modules/ai/claudian/localConfig';
 import { useClaudianShellStore } from '../../../modules/ai/claudian/claudianShellStore';
 import { useGlobalAIStore } from '../../../modules/ai/store/globalAIStore';
+import { hasUsableAIConfigEntry } from '../../../modules/ai/store/aiConfigState';
 import { ClaudeRuntime } from '../../../modules/ai/claudian/runtime/claude/ClaudeRuntime';
 import { CodexRuntime } from '../../../modules/ai/claudian/runtime/codex/CodexRuntime';
 import { AIChat } from '../../workspace/AIChat';
@@ -27,7 +28,26 @@ export const ClaudianChatPage: React.FC<{
     }
     return null;
   }, [aiConfigs, providerId]);
-  const runtimeConfigIdOverride = boundConfigId || preferredConfig?.id || null;
+  const boundConfig = useMemo(
+    () => (boundConfigId ? aiConfigs.find((item) => item.id === boundConfigId) || null : null),
+    [aiConfigs, boundConfigId]
+  );
+  const usableBoundConfig = useMemo(() => {
+    if (!boundConfig || !boundConfig.enabled || !hasUsableAIConfigEntry(boundConfig)) {
+      return null;
+    }
+
+    if (providerId === 'claude' && boundConfig.provider === 'anthropic') {
+      return boundConfig;
+    }
+
+    if (providerId === 'codex' && boundConfig.provider === 'openai-compatible') {
+      return boundConfig;
+    }
+
+    return null;
+  }, [boundConfig, providerId]);
+  const runtimeConfigIdOverride = usableBoundConfig?.id || preferredConfig?.id || null;
   const variant =
     providerId === 'classic' && mode === 'panel'
       ? 'claudian-embedded'

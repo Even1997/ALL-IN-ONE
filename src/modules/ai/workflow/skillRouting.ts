@@ -1,24 +1,30 @@
 import type { AIWorkflowPackage } from '../../../types';
 
 export type SkillIntent = {
-  package: AIWorkflowPackage;
-  skill: 'requirements' | 'sketch' | 'ui-design';
+  package: AIWorkflowPackage | 'knowledge-organize' | 'change-sync';
+  skill: 'knowledge-organize' | 'requirements' | 'sketch' | 'ui-design' | 'change-sync';
   cleanedInput: string;
-  token: '@需求' | '@草图' | '@UI';
+  token: '@整理' | '@需求' | '@草图' | '@UI' | '@变更同步';
 };
 
 const SKILL_PATTERNS: Array<{
-  pattern: RegExp;
-  package: AIWorkflowPackage;
+  patterns: string[];
+  package: SkillIntent['package'];
   skill: SkillIntent['skill'];
   token: SkillIntent['token'];
 }> = [
-  { pattern: /@ui设计|@ui|@设计/i, package: 'page', skill: 'ui-design', token: '@UI' },
-  { pattern: /@草图|@sketch/i, package: 'prototype', skill: 'sketch', token: '@草图' },
-  { pattern: /@需求|@requirement|@requirements/i, package: 'requirements', skill: 'requirements', token: '@需求' },
+  { patterns: ['@整理', '@organize'], package: 'knowledge-organize', skill: 'knowledge-organize', token: '@整理' },
+  { patterns: ['@需求', '@requirement', '@requirements'], package: 'requirements', skill: 'requirements', token: '@需求' },
+  { patterns: ['@草图', '@sketch'], package: 'prototype', skill: 'sketch', token: '@草图' },
+  { patterns: ['@ui设计', '@ui', '@设计'], package: 'page', skill: 'ui-design', token: '@UI' },
+  { patterns: ['@变更同步', '@sync', '@change-sync'], package: 'change-sync', skill: 'change-sync', token: '@变更同步' },
 ];
 
-const stripSkillToken = (input: string, pattern: RegExp) => input.replace(pattern, '').trim();
+const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildSkillPattern = (patterns: string[]) => new RegExp(patterns.map(escapePattern).join('|'), 'i');
+
+const stripSkillToken = (input: string, patterns: string[]) => input.replace(buildSkillPattern(patterns), '').trim();
 
 export const resolveSkillIntent = (input: string): SkillIntent | null => {
   const normalized = input.trim();
@@ -26,7 +32,7 @@ export const resolveSkillIntent = (input: string): SkillIntent | null => {
     return null;
   }
 
-  const matched = SKILL_PATTERNS.find(({ pattern }) => pattern.test(normalized));
+  const matched = SKILL_PATTERNS.find(({ patterns }) => buildSkillPattern(patterns).test(normalized));
   if (!matched) {
     return null;
   }
@@ -34,13 +40,15 @@ export const resolveSkillIntent = (input: string): SkillIntent | null => {
   return {
     package: matched.package,
     skill: matched.skill,
-    cleanedInput: stripSkillToken(normalized, matched.pattern),
+    cleanedInput: stripSkillToken(normalized, matched.patterns),
     token: matched.token,
   };
 };
 
 export const AVAILABLE_CHAT_SKILLS: Array<Pick<SkillIntent, 'skill' | 'token' | 'package'>> = [
+  { skill: 'knowledge-organize', token: '@整理', package: 'knowledge-organize' },
   { skill: 'requirements', token: '@需求', package: 'requirements' },
   { skill: 'sketch', token: '@草图', package: 'prototype' },
   { skill: 'ui-design', token: '@UI', package: 'page' },
+  { skill: 'change-sync', token: '@变更同步', package: 'change-sync' },
 ];

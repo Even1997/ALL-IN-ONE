@@ -9,6 +9,7 @@ import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
 type AgentIconRenderer = (agentId: ChatAgentId) => React.ReactNode;
 type MessagePartRenderer = (messageId: string, part: AIChatMessagePart, index: number) => React.ReactNode;
 type MessagePartsParser = (content: string) => AIChatMessagePart[];
+type AgentAvailabilityMap = Record<ChatAgentId, { ready: boolean; title: string }>;
 
 export const ClaudianHistoryMenu: React.FC<{
   sessions: ChatSession[];
@@ -43,6 +44,7 @@ export const ClaudianHistoryMenu: React.FC<{
 export const ClaudianEmbeddedTopbar: React.FC<{
   selectedChatAgentId: ChatAgentId;
   setSelectedChatAgentId: (id: ChatAgentId) => void;
+  agentAvailability: AgentAvailabilityMap;
   renderAgentIcon: AgentIconRenderer;
   onToggleHistory: () => void;
   onCreateSession: () => void;
@@ -54,6 +56,7 @@ export const ClaudianEmbeddedTopbar: React.FC<{
 }> = ({
   selectedChatAgentId,
   setSelectedChatAgentId,
+  agentAvailability,
   renderAgentIcon,
   onToggleHistory,
   onCreateSession,
@@ -73,7 +76,8 @@ export const ClaudianEmbeddedTopbar: React.FC<{
           aria-label={agent.label}
           aria-selected={agent.id === selectedChatAgentId}
           className={`chat-agent-tab ${agent.id === selectedChatAgentId ? 'active' : ''}`}
-          title={agent.title}
+          title={agentAvailability[agent.id].title}
+          disabled={agent.id !== 'built-in' && !agentAvailability[agent.id].ready}
           onClick={() => setSelectedChatAgentId(agent.id)}
         >
           {renderAgentIcon(agent.id)}
@@ -115,14 +119,26 @@ export const ClaudianEmbeddedTopbar: React.FC<{
 
 export const ClaudianMessageList: React.FC<{
   messages: StoredChatMessage[];
+  draftContents?: Record<string, string>;
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
-}> = ({ messages, formatTimestamp, parseMessageParts, renderMessagePart, messagesEndRef }) => (
+  leadingContent?: React.ReactNode;
+}> = ({
+  messages,
+  draftContents,
+  formatTimestamp,
+  parseMessageParts,
+  renderMessagePart,
+  messagesEndRef,
+  leadingContent,
+}) => (
   <div className="chat-message-list">
+    {leadingContent}
     {messages.map((message) => {
-      const parts = parseMessageParts(message.content);
+      const content = draftContents?.[message.id] ?? message.content;
+      const parts = parseMessageParts(content);
       return (
         <article
           key={message.id}
@@ -143,68 +159,51 @@ export const ClaudianMessageList: React.FC<{
 
 export const ClaudianEmbeddedComposer: React.FC<{
   entrySwitch?: React.ReactNode;
-  selectedReferenceFiles: Array<{ id: string; title: string; path: string }>;
-  onRemoveReferenceFile: (fileId: string) => void;
   input: string;
   setInput: (value: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   placeholder: string;
-  onToggleReferenceMenu: () => void;
-  onToggleSkillMenu: () => void;
+  agentStatusLabel?: string;
   selectedRuntimeLabel: string;
   contextUsageLabel: string;
   contextUsageWarning: boolean;
+  runStateLabel?: string;
+  runStateTone?: string;
   isLoading: boolean;
   disabled: boolean;
   onSubmit: () => void;
-  PlusIcon: React.ComponentType;
-  SparkIcon: React.ComponentType;
   SendIcon: React.ComponentType;
-  FileIcon: React.ComponentType;
 }> = ({
   entrySwitch,
-  selectedReferenceFiles,
-  onRemoveReferenceFile,
   input,
   setInput,
   textareaRef,
   onKeyDown,
   placeholder,
-  onToggleReferenceMenu,
-  onToggleSkillMenu,
+  agentStatusLabel,
   selectedRuntimeLabel,
   contextUsageLabel,
   contextUsageWarning,
+  runStateLabel,
+  runStateTone,
   isLoading,
   disabled,
   onSubmit,
-  PlusIcon,
-  SparkIcon,
   SendIcon,
-  FileIcon,
 }) => (
   <div className="chat-composer">
     <div className="chat-composer-shell">
       {entrySwitch ? <div className="chat-composer-claudian-entry">{entrySwitch}</div> : null}
       <div className="chat-composer-embedded-input">
-        {selectedReferenceFiles.length > 0 ? (
-          <div className="chat-selected-reference-chips chat-selected-reference-chips-embedded">
-            {selectedReferenceFiles.map((file) => (
-              <button
-                key={file.id}
-                type="button"
-                className="chat-reference-chip compact"
-                onClick={() => onRemoveReferenceFile(file.id)}
-                title={file.path}
-              >
-                <FileIcon />
-                <span>{file.title}</span>
-              </button>
-            ))}
+        {agentStatusLabel ? (
+          <div className="chat-composer-runtime-strip" aria-label="GN Agent status">
+            <span>{agentStatusLabel}</span>
+            <span>{selectedRuntimeLabel}</span>
+            <span className={contextUsageWarning ? 'warning' : ''}>{contextUsageLabel}</span>
+            {runStateLabel ? <span className={runStateTone || ''}>{runStateLabel}</span> : null}
           </div>
         ) : null}
-
         <textarea
           ref={textareaRef}
           value={input}
@@ -217,28 +216,12 @@ export const ClaudianEmbeddedComposer: React.FC<{
 
         <div className="chat-composer-embedded-toolbar">
           <div className="chat-composer-embedded-toolbar-start">
-            <button
-              type="button"
-              className="chat-composer-plus-btn"
-              aria-label="\u4e0a\u4e0b\u6587\u4e0e\u5f15\u7528"
-              title="\u4e0a\u4e0b\u6587\u4e0e\u5f15\u7528"
-              onClick={onToggleReferenceMenu}
-            >
-              <PlusIcon />
-            </button>
-            <button
-              type="button"
-              className="chat-composer-icon-btn"
-              aria-label={'Skill \u83dc\u5355'}
-              title={'Skill \u83dc\u5355'}
-              onClick={onToggleSkillMenu}
-            >
-              <SparkIcon />
-            </button>
-            <div className="chat-composer-meta chat-composer-meta-embedded">
-              <span>{selectedRuntimeLabel}</span>
-              <span className={contextUsageWarning ? 'warning' : ''}>{contextUsageLabel}</span>
-            </div>
+            {!agentStatusLabel ? (
+              <div className="chat-composer-meta chat-composer-meta-embedded">
+                <span>{selectedRuntimeLabel}</span>
+                <span className={contextUsageWarning ? 'warning' : ''}>{contextUsageLabel}</span>
+              </div>
+            ) : null}
           </div>
           <button
             type="button"
@@ -251,112 +234,14 @@ export const ClaudianEmbeddedComposer: React.FC<{
             <SendIcon />
           </button>
         </div>
+
+        <div className="chat-composer-hints">
+          <span>Enter 发送</span>
+          <span>Shift + Enter 换行</span>
+          <span>用 @skill 精准触发能力</span>
+        </div>
       </div>
     </div>
-  </div>
-);
-
-export const ClaudianReferenceMenu: React.FC<{
-  referenceScopeMode: 'current' | 'directory' | 'open-tabs' | 'all';
-  onApplyReferenceScope: (mode: 'current' | 'directory' | 'open-tabs' | 'all') => void;
-  onRebuildContextIndex: () => void;
-  selectedReferenceDirectory: string | null;
-  onReferenceDirectoryChange: (value: string) => void;
-  availableReferenceDirectories: string[];
-  referenceFiles: Array<{ id: string; title: string; path: string }>;
-  referencePickerValue: string;
-  setReferencePickerValue: (value: string) => void;
-  onAddReferenceFile: (id: string) => void;
-  openedKnowledgeEntryIds: string[];
-  disableRebuild: boolean;
-}> = ({
-  referenceScopeMode,
-  onApplyReferenceScope,
-  onRebuildContextIndex,
-  selectedReferenceDirectory,
-  onReferenceDirectoryChange,
-  availableReferenceDirectories,
-  referenceFiles,
-  referencePickerValue,
-  setReferencePickerValue,
-  onAddReferenceFile,
-  openedKnowledgeEntryIds,
-  disableRebuild,
-}) => (
-  <div className="chat-reference-menu">
-    <button
-      type="button"
-      className={`chat-reference-menu-action ${referenceScopeMode === 'current' ? 'active' : ''}`}
-      onClick={() => onApplyReferenceScope('current')}
-      disabled={referenceFiles.length === 0}
-    >
-      {'\u5f15\u7528\u5f53\u524d'}
-    </button>
-    <button
-      type="button"
-      className={`chat-reference-menu-action ${referenceScopeMode === 'directory' ? 'active' : ''}`}
-      onClick={() => onApplyReferenceScope('directory')}
-      disabled={referenceFiles.length === 0}
-    >
-      {'\u5f15\u7528\u76ee\u5f55'}
-    </button>
-    <button
-      type="button"
-      className={`chat-reference-menu-action ${referenceScopeMode === 'open-tabs' ? 'active' : ''}`}
-      onClick={() => onApplyReferenceScope('open-tabs')}
-      disabled={openedKnowledgeEntryIds.length === 0}
-    >
-      {'\u5df2\u6253\u5f00\u6587\u6863'}
-    </button>
-    <button
-      type="button"
-      className={`chat-reference-menu-action ${referenceScopeMode === 'all' ? 'active' : ''}`}
-      onClick={() => onApplyReferenceScope('all')}
-      disabled={referenceFiles.length === 0}
-    >
-      {'\u5f15\u7528\u5168\u90e8'}
-    </button>
-    <button
-      type="button"
-      className="chat-reference-menu-action"
-      onClick={onRebuildContextIndex}
-      disabled={disableRebuild}
-    >
-      {'\u6574\u7406\u7d22\u5f15'}
-    </button>
-    <label className="chat-reference-menu-select">
-      <span>{'\u76ee\u5f55'}</span>
-      <select
-        value={selectedReferenceDirectory || ''}
-        onChange={(event) => onReferenceDirectoryChange(event.target.value)}
-        disabled={availableReferenceDirectories.length === 0}
-      >
-        <option value="">{'\u9009\u62e9\u76ee\u5f55'}</option>
-        {availableReferenceDirectories.map((directory) => (
-          <option key={directory} value={directory}>
-            {directory}
-          </option>
-        ))}
-      </select>
-    </label>
-    <label className="chat-reference-menu-select">
-      <span>{'\u6587\u4ef6'}</span>
-      <select
-        value={referencePickerValue}
-        onChange={(event) => {
-          setReferencePickerValue(event.target.value);
-          onAddReferenceFile(event.target.value);
-        }}
-        disabled={referenceFiles.length === 0}
-      >
-        <option value="">{'\u6dfb\u52a0\u6587\u4ef6'}</option>
-        {referenceFiles.map((file) => (
-          <option key={file.id} value={file.id}>
-            {`${file.title} / ${file.path}`}
-          </option>
-        ))}
-      </select>
-    </label>
   </div>
 );
 

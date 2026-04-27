@@ -177,3 +177,13 @@ test('tauri file tools expose mkdir for real knowledge folders', async () => {
   assert.match(source, /fs::create_dir_all/);
   assert.match(source, /tool_mkdir,/);
 });
+
+test('tauri file tools expose rename for real knowledge file moves', async () => {
+  const source = await readFile(tauriLibPath, 'utf8');
+
+  assert.match(source, /pub struct RenameParams/);
+  assert.match(source, /fn tool_rename/);
+  assert.match(source, /fs::rename/);
+  assert.match(source, /copy_dir_all/);
+  assert.match(source, /tool_rename,/);
+});

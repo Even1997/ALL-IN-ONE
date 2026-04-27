@@ -53,6 +53,15 @@ test('knowledge filesystem refresh ignores stale async results from older runs',
   assert.match(source, /replaceWireframes\(sketchArtifacts\.wireframes,\s*tree\)/);
 });
 
+test('knowledge file rename uses tool_rename after persisting the latest content to the source file', async () => {
+  const source = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(source, /const renameRequirementFile = useCallback\(async \(fromPath: string, toPath: string\) =>/);
+  assert.match(source, /invoke<\{ success: boolean; content: string; error: string \| null \}>\('tool_rename'/);
+  assert.match(source, /await writeRequirementFile\(currentFilePath,\s*requirementDraftContent\);\s*await renameRequirementFile\(currentFilePath,\s*nextFilePath\);/s);
+  assert.doesNotMatch(source, /await removeRequirementFile\(currentFilePath\);\s*\}/s);
+});
+
 test('page workspace writes sketch page create and delete actions through real files', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 

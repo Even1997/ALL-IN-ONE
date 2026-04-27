@@ -63,6 +63,7 @@ export interface RequirementDoc {
   summary: string;
   filePath?: string;
   kind?: 'note' | 'sketch' | 'spec';
+  docType?: 'wiki-index' | 'ai-summary';
   tags?: string[];
   relatedIds?: string[];
   authorRole: '产品' | 'UI设计' | '开发' | '测试' | '运维';

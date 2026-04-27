@@ -1,4 +1,5 @@
 import { aiService } from '../../../core/AIService';
+import type { AITextStreamEvent } from '../../../core/AIService';
 import type { AIConfigEntry } from '../../../store/aiConfigState';
 import { toRuntimeAIConfig } from '../../../store/aiConfigState';
 import type { ClaudianRuntimeContext, ClaudianRuntimeStatus } from '../types';
@@ -23,8 +24,9 @@ export class CodexRuntime {
     systemPrompt?: string;
     prompt: string;
     onChunk?: (text: string) => void;
+    onEvent?: (event: AITextStreamEvent) => void;
   }) {
-    const { config, systemPrompt = '', prompt, onChunk } = options;
+    const { config, systemPrompt = '', prompt, onChunk, onEvent } = options;
     if (config.provider !== 'openai-compatible') {
       throw new Error('Codex runtime requires an OpenAI Compatible config.');
     }
@@ -36,6 +38,7 @@ export class CodexRuntime {
         systemPrompt,
         prompt,
         onChunk,
+        onEvent,
       });
     } finally {
       aiService.setConfig(previousConfig);
@@ -83,10 +86,13 @@ export class CodexRuntime {
     if (hasCodexHome) {
       return {
         providerId: this.providerId,
-        ready: true,
+        ready: false,
         source: 'local-config',
-        summary: 'Codex runtime 检测到本地 .codex 配置来源',
-        details: [localSnapshot?.codexHome.path || '.codex'],
+        summary: 'Codex runtime 检测到本地 .codex，但还缺少可执行的 OpenAI Compatible 配置',
+        details: [
+          localSnapshot?.codexHome.path || '.codex',
+          '请先绑定一个可用的 OpenAI Compatible 配置，否则会回退到内置 AI',
+        ],
       };
     }
 

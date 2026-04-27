@@ -1,6 +1,6 @@
 export type AIChatMessagePart =
   | { type: 'text'; content: string }
-  | { type: 'thinking' }
+  | { type: 'thinking'; content: string; collapsed: boolean }
   | {
       type: 'tool';
       name: string;
@@ -10,7 +10,7 @@ export type AIChatMessagePart =
       output?: string;
     };
 
-const THINKING_PLACEHOLDERS = new Set(['正在思考…', '正在思考...', 'Thinking...', 'Thinking…']);
+const THINKING_PLACEHOLDERS = new Set(['正在思考...', '正在思考…', 'Thinking...', 'Thinking…']);
 
 const TOOL_LABELS: Record<string, string> = {
   bash: '运行终端命令',
@@ -52,20 +52,22 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
   }
 
   if (THINKING_PLACEHOLDERS.has(trimmed)) {
-    return [{ type: 'thinking' }];
+    return [{ type: 'thinking', content: '', collapsed: false }];
   }
 
   const unfinishedThinkIndex = content.lastIndexOf('<think>');
   if (unfinishedThinkIndex !== -1 && content.indexOf('</think>', unfinishedThinkIndex) === -1) {
     const beforeThink = content.slice(0, unfinishedThinkIndex);
+    const thinkingContent = content.slice(unfinishedThinkIndex + '<think>'.length).trim();
     const parts: AIChatMessagePart[] = [];
     pushTextPart(parts, beforeThink);
-    parts.push({ type: 'thinking' });
+    parts.push({ type: 'thinking', content: thinkingContent, collapsed: false });
     return parts;
   }
 
   const parts: AIChatMessagePart[] = [];
-  const pattern = /<think>[\s\S]*?<\/think>|<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool_result name="[^"]+"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>/g;
+  const pattern =
+    /<think>[\s\S]*?<\/think>|<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool_result name="[^"]+"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -73,8 +75,12 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
     pushTextPart(parts, content.slice(lastIndex, match.index));
 
     if (match[0].startsWith('<think>')) {
-      lastIndex = pattern.lastIndex;
-      continue;
+      const thinkingMatch = match[0].match(/^<think>([\s\S]*?)<\/think>$/);
+      parts.push({
+        type: 'thinking',
+        content: thinkingMatch?.[1]?.trim() || '',
+        collapsed: true,
+      });
     } else if (match[1]) {
       const name = match[1];
       const paramsMatch = match[2].match(/<tool_params>([\s\S]*?)<\/tool_params>/);

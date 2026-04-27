@@ -70,6 +70,11 @@ interface ChatMessage {
   content: string;
 }
 
+export type AITextStreamEvent = {
+  kind: 'thinking' | 'text';
+  delta: string;
+};
+
 const DEFAULT_PROJECT_ROOT = '.';
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -180,9 +185,10 @@ class AIService {
     prompt: string;
     systemPrompt: string;
     onChunk?: (text: string) => void;
+    onEvent?: (event: AITextStreamEvent) => void;
     signal?: AbortSignal;
   }): Promise<string> {
-    const { prompt, systemPrompt, onChunk, signal } = options;
+    const { prompt, systemPrompt, onChunk, onEvent, signal } = options;
 
     if (!this.isConfigured()) {
       throw buildAIConfigurationError();
@@ -192,8 +198,8 @@ class AIService {
       throw new Error('AI provider is not configured');
     }
 
-    const content = await this.callProvider([{ role: 'user', content: prompt }], systemPrompt, signal);
-    if (onChunk) {
+    const content = await this.callProvider([{ role: 'user', content: prompt }], systemPrompt, signal, onEvent);
+    if (onChunk && !onEvent) {
       this.emitChunkText(content, {
         onStart: () => undefined,
         onChunk: (chunk) => onChunk(chunk.content),
@@ -439,24 +445,31 @@ ${this.buildToolInstructions()}
     );
   }
 
-  private async callProvider(messages: ChatMessage[], systemPrompt: string, signal?: AbortSignal): Promise<string> {
+  private async callProvider(
+    messages: ChatMessage[],
+    systemPrompt: string,
+    signal?: AbortSignal,
+    onEvent?: (event: AITextStreamEvent) => void
+  ): Promise<string> {
     if (this.config.provider === 'anthropic') {
-      return this.callAnthropic(messages, systemPrompt, signal);
+      return this.callAnthropic(messages, systemPrompt, signal, onEvent);
     }
 
-    return this.callOpenAICompatible(messages, systemPrompt, signal);
+    return this.callOpenAICompatible(messages, systemPrompt, signal, onEvent);
   }
 
   private async callOpenAICompatible(
     messages: ChatMessage[],
     systemPrompt: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onEvent?: (event: AITextStreamEvent) => void
   ): Promise<string> {
     const url = this.joinUrl(this.config.baseURL || DEFAULT_BASE_URL, '/chat/completions');
     const payload = {
       model: this.config.model,
       temperature: this.config.temperature,
       max_tokens: this.config.maxTokens,
+      stream: Boolean(onEvent),
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
     };
 
@@ -476,6 +489,10 @@ ${this.buildToolInstructions()}
       throw new Error(`OpenAI-compatible API error (${response.status}): ${errorText}`);
     }
 
+    if (onEvent && response.body) {
+      return this.readOpenAICompatibleStream(response.body, onEvent);
+    }
+
     const json = await response.json();
     const content = json?.choices?.[0]?.message?.content;
 
@@ -493,7 +510,8 @@ ${this.buildToolInstructions()}
   private async callAnthropic(
     messages: ChatMessage[],
     systemPrompt: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onEvent?: (event: AITextStreamEvent) => void
   ): Promise<string> {
     const baseURL = this.config.baseURL || 'https://api.anthropic.com/v1';
     const url = this.joinUrl(baseURL, '/messages');
@@ -517,6 +535,7 @@ ${this.buildToolInstructions()}
         max_tokens: this.config.maxTokens,
         temperature: this.config.temperature,
         system: systemPrompt,
+        stream: Boolean(onEvent),
         messages: anthropicMessages,
       }),
       signal,
@@ -525,6 +544,10 @@ ${this.buildToolInstructions()}
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Anthropic API error (${response.status}): ${errorText}`);
+    }
+
+    if (onEvent && response.body) {
+      return this.readAnthropicStream(response.body, onEvent);
     }
 
     const json = await response.json();
@@ -574,6 +597,178 @@ ${this.buildToolInstructions()}
     }
 
     return blocks;
+  }
+
+  private async readOpenAICompatibleStream(
+    body: ReadableStream<Uint8Array>,
+    onEvent: (event: AITextStreamEvent) => void
+  ): Promise<string> {
+    const text = await this.readEventStream(body, onEvent, (data) => {
+      if (data === '[DONE]') {
+        return [];
+      }
+
+      const json = JSON.parse(data);
+      const delta = json?.choices?.[0]?.delta;
+      if (!delta) {
+        return [];
+      }
+
+      return [
+        ...this.collectOpenAIReasoningEvents(delta),
+        ...this.buildEventList('text', this.collectOpenAITextDelta(delta)),
+      ];
+    });
+
+    return text.answer;
+  }
+
+  private collectOpenAIReasoningEvents(delta: Record<string, unknown>): AITextStreamEvent[] {
+    const reasoningCandidates = [
+      typeof delta.reasoning === 'string' ? delta.reasoning : null,
+      typeof delta.reasoning_content === 'string' ? delta.reasoning_content : null,
+      this.collectTextParts(delta.reasoning),
+      this.collectTextParts(delta.reasoning_content),
+    ];
+
+    return reasoningCandidates.flatMap((candidate) => this.buildEventList('thinking', candidate));
+  }
+
+  private collectOpenAITextDelta(delta: Record<string, unknown>) {
+    if (typeof delta.content === 'string') {
+      return delta.content;
+    }
+
+    return this.collectTextParts(delta.content);
+  }
+
+  private async readAnthropicStream(
+    body: ReadableStream<Uint8Array>,
+    onEvent: (event: AITextStreamEvent) => void
+  ): Promise<string> {
+    const text = await this.readEventStream(body, onEvent, (data) => {
+      const json = JSON.parse(data);
+      const delta = json?.delta;
+      if (!delta || typeof delta !== 'object') {
+        return [];
+      }
+
+      if (delta.type === 'thinking_delta') {
+        return this.buildEventList('thinking', typeof delta.thinking === 'string' ? delta.thinking : '');
+      }
+
+      if (delta.type === 'text_delta') {
+        return this.buildEventList('text', typeof delta.text === 'string' ? delta.text : '');
+      }
+
+      return [];
+    });
+
+    return text.answer;
+  }
+
+  private async readEventStream(
+    body: ReadableStream<Uint8Array>,
+    onEvent: (event: AITextStreamEvent) => void,
+    parseEvents: (data: string) => AITextStreamEvent[]
+  ): Promise<{ answer: string; thinking: string }> {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let answer = '';
+    let thinking = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() || '';
+
+      for (const frame of frames) {
+        const dataLines = frame
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trimStart());
+        if (dataLines.length === 0) {
+          continue;
+        }
+
+        const events = parseEvents(dataLines.join('\n'));
+        events.forEach((event) => {
+          if (event.kind === 'thinking') {
+            thinking += event.delta;
+          } else {
+            answer += event.delta;
+          }
+          this.emitIfPresent(onEvent, event.kind, event.delta);
+        });
+      }
+    }
+
+    buffer += decoder.decode();
+    const tail = buffer.trim();
+    if (tail) {
+      const dataLines = tail
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart());
+      if (dataLines.length > 0) {
+        const events = parseEvents(dataLines.join('\n'));
+        events.forEach((event) => {
+          if (event.kind === 'thinking') {
+            thinking += event.delta;
+          } else {
+            answer += event.delta;
+          }
+          this.emitIfPresent(onEvent, event.kind, event.delta);
+        });
+      }
+    }
+
+    return { answer, thinking };
+  }
+
+  private collectTextParts(value: unknown): string {
+    if (!Array.isArray(value)) {
+      return '';
+    }
+
+    return value
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item;
+        }
+        if (item && typeof item === 'object') {
+          if (typeof (item as { text?: unknown }).text === 'string') {
+            return (item as { text: string }).text;
+          }
+          if (typeof (item as { content?: unknown }).content === 'string') {
+            return (item as { content: string }).content;
+          }
+        }
+        return '';
+      })
+      .join('');
+  }
+
+  private emitIfPresent(
+    onEvent: (event: AITextStreamEvent) => void,
+    kind: AITextStreamEvent['kind'],
+    delta: string
+  ) {
+    if (!delta) {
+      return;
+    }
+
+    onEvent({ kind, delta });
+  }
+
+  private buildEventList(kind: AITextStreamEvent['kind'], delta: string | null): AITextStreamEvent[] {
+    return delta ? [{ kind, delta }] : [];
   }
 }
 

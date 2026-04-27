@@ -1450,6 +1450,19 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     }
   }, []);
 
+  const renameRequirementFile = useCallback(async (fromPath: string, toPath: string) => {
+    const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_rename', {
+      params: {
+        from_path: fromPath,
+        to_path: toPath,
+      },
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || `重命名文件失败：${fromPath} -> ${toPath}`);
+    }
+  }, []);
+
   const readRequirementFile = useCallback(async (filePath: string) => {
     const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_view', {
       params: {
@@ -1741,10 +1754,9 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       setIsSavingRequirement(true);
 
       if (canPersistRequirementToDisk && currentFilePath && nextFilePath && currentFilePath !== nextFilePath) {
-        await removeRequirementFile(currentFilePath);
-      }
-
-      if (canPersistRequirementToDisk && nextFilePath) {
+        await writeRequirementFile(currentFilePath, requirementDraftContent);
+        await renameRequirementFile(currentFilePath, nextFilePath);
+      } else if (canPersistRequirementToDisk && nextFilePath) {
         await writeRequirementFile(nextFilePath, requirementDraftContent);
       }
 
@@ -1787,6 +1799,7 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     knowledgeGroupOverrides,
     projectRootDir,
     refreshKnowledgeFilesystem,
+    renameRequirementFile,
     removeRequirementFile,
     requirementDraftContent,
     requirementDraftTitle,

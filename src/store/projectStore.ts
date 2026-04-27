@@ -84,7 +84,7 @@ interface ProjectState {
   toggleKnowledgeContextId: (id: string) => void;
   updateRequirementDoc: (
     id: string,
-    updates: Partial<Pick<RequirementDoc, 'title' | 'content' | 'summary' | 'status' | 'sourceType' | 'filePath' | 'kind' | 'tags' | 'relatedIds'>>
+    updates: Partial<Pick<RequirementDoc, 'title' | 'content' | 'summary' | 'status' | 'sourceType' | 'filePath' | 'kind' | 'docType' | 'tags' | 'relatedIds'>>
   ) => void;
   addRequirementDoc: () => RequirementDoc | null;
   deleteRequirementDoc: (id: string) => void;
@@ -1399,6 +1399,9 @@ const normalizeStringArray = (value: unknown) =>
 const normalizeRequirementKind = (value: unknown): RequirementDoc['kind'] =>
   value === 'sketch' || value === 'spec' ? value : 'note';
 
+const normalizeRequirementDocType = (value: unknown): RequirementDoc['docType'] =>
+  value === 'wiki-index' || value === 'ai-summary' ? value : undefined;
+
 const normalizeGraph = (value: unknown): ProjectGraph => {
   if (!value || typeof value !== 'object') {
     return emptyGraph;
@@ -1454,6 +1457,7 @@ const normalizeRequirementDocs = (value: unknown): RequirementDoc[] =>
                 : summarizeRequirement(typeof doc.content === 'string' ? doc.content : ''),
             filePath: typeof doc.filePath === 'string' && doc.filePath.trim().length > 0 ? doc.filePath : undefined,
             kind: normalizeRequirementKind(doc.kind),
+            docType: normalizeRequirementDocType(doc.docType),
             tags: normalizeStringArray(doc.tags),
             relatedIds: normalizeStringArray(doc.relatedIds),
             authorRole:
@@ -2138,6 +2142,7 @@ export const useProjectStore = create<ProjectState>()(
                         ? summarizeRequirement(updates.content)
                         : doc.summary,
                   kind: updates.kind ?? doc.kind ?? 'note',
+                  docType: updates.docType ?? doc.docType,
                   tags: updates.tags ?? doc.tags ?? [],
                   relatedIds: updates.relatedIds ?? doc.relatedIds ?? [],
                   updatedAt: new Date().toISOString(),

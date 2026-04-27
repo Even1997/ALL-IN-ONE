@@ -14,7 +14,7 @@ test('resolveSkillIntent detects UI tokens and returns the concise token', () =>
   });
 });
 
-test('resolveSkillIntent detects @需求 and keeps explicit requirements mode', () => {
+test('resolveSkillIntent detects requirements mode', () => {
   const result = resolveSkillIntent('@需求 帮我整理当前文档');
 
   assert.deepEqual(result, {
@@ -25,8 +25,30 @@ test('resolveSkillIntent detects @需求 and keeps explicit requirements mode', 
   });
 });
 
+test('resolveSkillIntent detects change sync mode', () => {
+  const result = resolveSkillIntent('@变更同步 检查当前原型变更');
+
+  assert.deepEqual(result, {
+    package: 'change-sync',
+    skill: 'change-sync',
+    cleanedInput: '检查当前原型变更',
+    token: '@变更同步',
+  });
+});
+
 test('resolveSkillIntent falls back when no skill token exists', () => {
   const result = resolveSkillIntent('继续生成原型');
 
   assert.equal(result, null);
+});
+
+test('resolveSkillIntent detects organize and routes it to knowledge organize', () => {
+  const result = resolveSkillIntent('@整理 帮我整理当前项目知识库');
+
+  assert.deepEqual(result, {
+    package: 'knowledge-organize',
+    skill: 'knowledge-organize',
+    cleanedInput: '帮我整理当前项目知识库',
+    token: '@整理',
+  });
 });

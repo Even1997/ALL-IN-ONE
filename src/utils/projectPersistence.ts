@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { AppType, FeatureTree, PageStructureNode, ProjectConfig, WireframeDocument } from '../types';
+import type { AppType, FeatureTree, PageStructureNode, ProjectConfig, RequirementDoc, WireframeDocument } from '../types';
 import type { ProjectWorkspaceSnapshot } from '../store/projectStore';
 import type { ContextIndex } from '../modules/ai/chat/contextIndex';
 import {
@@ -225,6 +225,28 @@ export const ensureProjectFilesystemStructure = async (projectId: string) => {
   await ensureBuiltInStylePackFiles(projectId);
 
   return projectDir;
+};
+
+export const saveKnowledgeDocsToProjectDir = async (projectId: string, docs: RequirementDoc[]) => {
+  if (!isTauriRuntimeAvailable()) {
+    return docs;
+  }
+
+  const projectDir = await ensureProjectFilesystemStructure(projectId);
+  const knowledgeDir = joinPath(projectDir, 'project');
+  await ensureDirectory(knowledgeDir);
+
+  return Promise.all(
+    docs.map(async (doc) => {
+      const filePath = joinProjectRelativePath(projectDir, `project/${doc.title}`);
+      await writeTextFile(filePath, doc.content);
+      return {
+        ...doc,
+        id: filePath,
+        filePath: filePath,
+      };
+    })
+  );
 };
 
 export const loadProjectSnapshotFromDisk = async (projectId: string) => {

@@ -67,8 +67,8 @@ test('buildDirectChatPrompt adds explicit skill focus and knowledge context', ()
     },
   });
 
-  assert.equal(result.skillLabel, 'UI设计');
-  assert.match(result.prompt, /mode: UI设计/);
+  assert.equal(result.skillLabel, 'UI 设计');
+  assert.match(result.prompt, /mode: UI 设计/);
   assert.match(result.prompt, /current_file/);
   assert.match(result.prompt, /related_files/);
   assert.match(result.prompt, /首页草图\.md/);
@@ -112,4 +112,28 @@ test('buildDirectChatPrompt includes reference index and expanded file sections'
   assert.match(result.prompt, /reference_index:/);
   assert.match(result.prompt, /expanded_files:/);
   assert.match(result.prompt, /sketch\/pages\/login\.md/);
+});
+
+test('buildDirectChatPrompt includes recent conversation history before the new request', () => {
+  const result = buildDirectChatPrompt({
+    userInput: 'Now connect that to the right pane behavior',
+    currentProjectName: 'PM Workspace',
+    contextWindowTokens: 200000,
+    skillIntent: null,
+    knowledgeSelection: {
+      currentFile: null,
+      relatedFiles: [],
+    },
+    conversationHistory: [
+      { role: 'user', content: 'We decided GN Agent should keep context visible.' },
+      { role: 'assistant', content: 'Yes, the Context lane should expose references and budget.' },
+      { role: 'system', content: 'Internal fallback notice' },
+    ],
+  });
+
+  assert.match(result.prompt, /conversation_history:/);
+  assert.match(result.prompt, /user: We decided GN Agent should keep context visible\./);
+  assert.match(result.prompt, /assistant: Yes, the Context lane should expose references and budget\./);
+  assert.doesNotMatch(result.prompt, /Internal fallback notice/);
+  assert.match(result.prompt, /user_request:\nNow connect that to the right pane behavior/);
 });

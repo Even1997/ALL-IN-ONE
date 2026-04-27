@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
 import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
 import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
-import { buildContextIndex } from '../../modules/ai/chat/contextIndex';
+import type { AITextStreamEvent } from '../../modules/ai/core/AIService';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
 import {
@@ -12,26 +12,16 @@ import {
   type LocalAgentCommandResult,
 } from '../../modules/ai/chat/chatAgents';
 import {
-  type AIReferenceScopeMode,
   buildChatContextSnapshot,
   collectDesignPages,
   getSelectedElementLabel,
-  resolveCurrentReferenceFileIds,
-  resolveReferenceScopeSelection,
   resolveKnowledgeSelectionForPrompt,
 } from '../../modules/ai/chat/chatContext';
-import { buildReferencePromptContext } from '../../modules/ai/chat/referencePromptContext';
 import { PROVIDER_PRESETS, type ProviderPreset } from '../../modules/ai/providerPresets';
 import type { ActivityEntry } from '../../modules/ai/skills/activityLog';
-import {
-  discoverLocalSkills,
-  importGitHubSkill,
-  importLocalSkill,
-  syncSkillToRuntime,
-  type SkillDiscoveryEntry,
-} from '../../modules/ai/skills/skillLibrary';
 import { type AIConfigEntry, hasUsableAIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { toRuntimeAIConfig } from '../../modules/ai/store/aiConfigState';
+import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../../modules/ai/claudian/localConfig';
 import { ClaudeRuntime } from '../../modules/ai/claudian/runtime/claude/ClaudeRuntime';
 import { CodexRuntime } from '../../modules/ai/claudian/runtime/codex/CodexRuntime';
 import {
@@ -41,24 +31,22 @@ import {
 } from '../../modules/ai/store/aiChatStore';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
-import { AVAILABLE_CHAT_SKILLS, resolveSkillIntent } from '../../modules/ai/workflow/skillRouting';
+import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
+import { runKnowledgeOrganizeLane } from '../../modules/ai/knowledge/runKnowledgeOrganizeLane';
+import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
-import {
-  buildReferenceFiles,
-  buildSketchReferencePath,
-  type DesignStyleReferenceNode,
-} from '../../modules/knowledge/referenceFiles';
+import type { RequirementDoc } from '../../types';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
-import { getProjectDir, loadDesignBoardStateFromDisk, saveContextIndexToDisk } from '../../utils/projectPersistence';
+import { useFeatureTreeStore } from '../../store/featureTreeStore';
+import { getProjectDir, saveKnowledgeDocsToProjectDir } from '../../utils/projectPersistence';
+import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
+import { chooseNextWorkflowPackage } from '../../modules/ai/workflow/chatWorkflowRouting';
 import {
   ClaudianActivityPanel,
   ClaudianEmbeddedComposer,
-  ClaudianEmbeddedTopbar,
   ClaudianHistoryMenu,
   ClaudianMessageList,
-  ClaudianReferenceMenu,
-  ClaudianSkillsPanel,
 } from '../ai/claudian/ClaudianEmbeddedPieces';
 import { ClaudianModeSwitch } from '../ai/claudian-shell/ClaudianModeSwitch';
 import {
@@ -90,10 +78,34 @@ type AIProviderTypeOption = {
 };
 
 type AIChatProps = {
-  variant?: 'default' | 'claudian-embedded';
+  variant?: 'default' | 'claudian-embedded' | 'gn-agent-embedded';
   runtimeConfigIdOverride?: string | null;
   providerExecutionMode?: 'claude' | 'codex' | null;
 };
+
+type ChatAgentAvailability = {
+  ready: boolean;
+  title: string;
+  fallbackMessage: string | null;
+};
+
+type DrawerPanelId = 'context' | 'run' | 'artifacts';
+type AgentLaneId = 'chat' | 'tasks' | 'artifacts' | 'context' | 'skills' | 'activity';
+
+type GNAgentSuggestion = {
+  label: string;
+  description: string;
+  prompt: string;
+};
+
+const GN_AGENT_LANES: Array<{ id: AgentLaneId; label: string; description: string }> = [
+  { id: 'chat', label: 'Chat', description: '自然语言协作' },
+  { id: 'tasks', label: 'Tasks', description: '任务与运行状态' },
+  { id: 'artifacts', label: 'Artifacts', description: '产物和变更' },
+  { id: 'context', label: 'Context', description: '引用与上下文' },
+  { id: 'skills', label: 'Skills', description: 'GN Agent 能力' },
+  { id: 'activity', label: 'Activity', description: '执行记录' },
+];
 
 const formatTimestamp = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
@@ -139,6 +151,33 @@ const buildSessionPreview = (content: string) => {
 
 const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const GN_AGENT_SUGGESTIONS: GNAgentSuggestion[] = [
+  {
+    label: '@整理',
+    description: '整理知识库并补齐项目索引',
+    prompt: '@整理 帮我整理当前项目知识库，并输出清晰的 wiki 索引',
+  },
+  {
+    label: '@需求',
+    description: '从目标倒推出功能清单和页面范围',
+    prompt: '@需求 我想做一个新功能，请先帮我拆成功能清单、用户流程和页面范围',
+  },
+  {
+    label: '@草图',
+    description: '根据当前需求生成线框草图方向',
+    prompt: '@草图 请基于当前需求给我一版可编辑的低保真线框方案',
+  },
+  {
+    label: '@UI',
+    description: '结合原型和风格生成设计页面',
+    prompt: '@UI 请基于当前原型和设计标准生成对应的页面设计方案',
+  },
+  {
+    label: '@变更同步',
+    description: '把原型改动同步成可复用项目事实',
+    prompt: '@变更同步 请检查当前原型和项目文档的差异，列出需要同步的变更',
+  },
+];
 
 const extractChangedPaths = (content: string) =>
   Array.from(content.matchAll(/`([^`]+\.(?:md|json|html|tsx|ts|css))`/g)).map((match) => match[1]);
@@ -167,6 +206,25 @@ const buildRunSummaryEntry = ({
     skill,
     createdAt: Date.now(),
   };
+};
+
+const mergeRequirementDocsByTitle = (currentDocs: RequirementDoc[], nextDocs: RequirementDoc[]) => {
+  const nextByTitle = new Map(nextDocs.map((doc) => [doc.title, doc]));
+  const merged = currentDocs.map((doc) => {
+    const replacement = nextByTitle.get(doc.title);
+    if (!replacement) {
+      return doc;
+    }
+
+    nextByTitle.delete(doc.title);
+    return {
+      ...doc,
+      ...replacement,
+      id: doc.id,
+    };
+  });
+
+  return [...merged, ...nextByTitle.values()];
 };
 
 const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
@@ -220,66 +278,11 @@ const getSuggestedBaseURL = (provider: AIProviderType, preset: ProviderPreset) =
 const buildProviderKey = (provider: AIProviderType, baseURL: string) =>
   `${provider}::${baseURL.trim().replace(/\/+$/, '')}`;
 
-const getDirectoryPath = (filePath: string) => {
-  const normalized = filePath.replace(/\\/g, '/');
-  const lastSlashIndex = normalized.lastIndexOf('/');
-  return lastSlashIndex >= 0 ? normalized.slice(0, lastSlashIndex) : '';
-};
-
-const normalizeDesignStyleNode = (value: unknown): DesignStyleReferenceNode | null => {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const node = value as Partial<DesignStyleReferenceNode>;
-  if (typeof node.id !== 'string' || typeof node.title !== 'string') {
-    return null;
-  }
-
-  return {
-    id: node.id,
-    title: node.title,
-    summary: typeof node.summary === 'string' ? node.summary : '',
-    keywords: Array.isArray(node.keywords)
-      ? node.keywords.filter((item): item is string => typeof item === 'string')
-      : [],
-    palette: Array.isArray(node.palette)
-      ? node.palette.filter((item): item is string => typeof item === 'string')
-      : [],
-    prompt: typeof node.prompt === 'string' ? node.prompt : '',
-    filePath: typeof (node as { styleFilePath?: unknown }).styleFilePath === 'string'
-      ? (node as { styleFilePath?: string }).styleFilePath
-      : typeof (node as { filePath?: unknown }).filePath === 'string'
-        ? (node as { filePath?: string }).filePath
-        : undefined,
-  };
-};
-
-const PlusIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M10 4V16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    <path d="M4 10H16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-  </svg>
-);
-
 const HistoryIcon = () => (
   <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
     <path d="M3.5 10A6.5 6.5 0 1 0 5.4 5.36" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     <path d="M3.5 4.75V7.75H6.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     <path d="M10 6.7V10L12.55 11.55" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-  </svg>
-);
-
-const SparkIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M10 2.8L11.9 7.2L16.3 9.1L11.9 11L10 15.4L8.1 11L3.7 9.1L8.1 7.2L10 2.8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-  </svg>
-);
-
-const FileIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M6.2 3.5H11.2L14.8 7.1V15.2C14.8 15.92 14.22 16.5 13.5 16.5H6.5C5.78 16.5 5.2 15.92 5.2 15.2V4.5C5.2 3.95 5.65 3.5 6.2 3.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-    <path d="M11 3.75V7H14.25" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
   </svg>
 );
 
@@ -312,48 +315,27 @@ const SendIcon = () => (
   </svg>
 );
 
-const AgentIcon = ({ agentId }: { agentId: ChatAgentId }) => {
-  if (agentId === 'claude') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-        <path d="M10 2.8V17.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M2.8 10H17.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M4.9 4.9L15.1 15.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M15.1 4.9L4.9 15.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  if (agentId === 'codex') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-        <path d="M7.2 5.2L3.6 10L7.2 14.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M12.8 5.2L16.4 10L12.8 14.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M11.2 4.4L8.8 15.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-      <path d="M10 2.8L11.9 7.2L16.3 9.1L11.9 11L10 15.4L8.1 11L3.7 9.1L8.1 7.2L10 2.8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M15 13.2L15.65 14.7L17.2 15.35L15.65 16L15 17.5L14.35 16L12.8 15.35L14.35 14.7L15 13.2Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-    </svg>
-  );
-};
-
 const renderMessagePart = (messageId: string, part: AIChatMessagePart, index: number) => {
   if (part.type === 'thinking') {
     return (
-      <div className="chat-thinking-pill" key={`${messageId}-thinking-${index}`}>
-        <span className="chat-thinking-pulse" aria-hidden="true" />
-        <span>Thinking</span>
-        <span className="chat-thinking-dots" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </span>
-      </div>
+      <details
+        className={`chat-thinking-block ${part.collapsed ? 'collapsed' : 'expanded'}`}
+        key={`${messageId}-thinking-${index}`}
+        open={!part.collapsed}
+      >
+        <summary>
+          <span className="chat-thinking-pulse" aria-hidden="true" />
+          <span>{part.collapsed ? '思考过程' : '正在思考'}</span>
+          {!part.collapsed ? (
+            <span className="chat-thinking-dots" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          ) : null}
+        </summary>
+        {part.content ? <pre>{part.content}</pre> : <div className="chat-thinking-empty">等待模型输出思考内容...</div>}
+      </details>
     );
   }
 
@@ -412,15 +394,15 @@ export const AIChat: React.FC<AIChatProps> = ({
   runtimeConfigIdOverride = null,
   providerExecutionMode = null,
 }) => {
-  const isClaudianEmbedded = variant === 'claudian-embedded';
+  const isGNAgentEmbedded = variant === 'gn-agent-embedded';
+  const isClaudianEmbedded = variant === 'claudian-embedded' || isGNAgentEmbedded;
   const [input, setInput] = useState('');
-  const [activePanel, setActivePanel] = useState<'chat' | 'skills' | 'activity'>('chat');
+  const [activeDrawer, setActiveDrawer] = useState<DrawerPanelId | null>(null);
+  const [activeAgentLane, setActiveAgentLane] = useState<AgentLaneId>('chat');
   const [isLoading, setIsLoading] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
-  const [showSkillMenu, setShowSkillMenu] = useState(false);
-  const [showReferenceMenu, setShowReferenceMenu] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [providerSearch, setProviderSearch] = useState('');
   const [testState, setTestState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -429,19 +411,15 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog>({});
   const [selectedSettingsConfigId, setSelectedSettingsConfigId] = useState<string | null>(null);
   const [selectedChatAgentId, setSelectedChatAgentId] = useState<ChatAgentId>('built-in');
+  const [localAgentSnapshot, setLocalAgentSnapshot] = useState<LocalAgentConfigSnapshot | null>(null);
   const [isKnowledgeReferenceEnabled] = useState(true);
   const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
-  const [persistedDesignStyleNodes, setPersistedDesignStyleNodes] = useState<DesignStyleReferenceNode[]>([]);
-  const [referencePickerValue, setReferencePickerValue] = useState('');
-  const [skills, setSkills] = useState<SkillDiscoveryEntry[]>([]);
-  const [skillsState, setSkillsState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  const [skillsMessage, setSkillsMessage] = useState('');
-  const [githubSkillRepo, setGithubSkillRepo] = useState('');
-  const [githubSkillPath, setGithubSkillPath] = useState('');
-  const [githubSkillRef, setGithubSkillRef] = useState('');
+  const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, string>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const streamingDraftBufferRef = useRef<Record<string, string>>({});
+  const streamingFlushFrameRef = useRef<number | null>(null);
 
   const {
     aiConfigs,
@@ -467,6 +445,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     generatedFiles,
     pageStructure,
     wireframes,
+    replaceRequirementDocs,
     setRawRequirementInput,
   } = useProjectStore(
     useShallow((state) => ({
@@ -477,25 +456,33 @@ export const AIChat: React.FC<AIChatProps> = ({
       generatedFiles: state.generatedFiles,
       pageStructure: state.pageStructure,
       wireframes: state.wireframes,
+      replaceRequirementDocs: state.replaceRequirementDocs,
       setRawRequirementInput: state.setRawRequirementInput,
     }))
   );
   const previewElements = usePreviewStore((state) => state.elements);
   const selectedElementId = usePreviewStore((state) => state.selectedElementId);
+  const featureTree = useFeatureTreeStore((state) => state.tree);
   const aiContextState = useAIContextStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
   );
-  const {
-    setSelectedReferenceFileIds,
-    setSelectedReferenceDirectory,
-    setReferenceScopeMode,
-  } = useAIContextStore(
-    useShallow((state) => ({
-      setSelectedReferenceFileIds: state.setSelectedReferenceFileIds,
-      setSelectedReferenceDirectory: state.setSelectedReferenceDirectory,
-      setReferenceScopeMode: state.setReferenceScopeMode,
-    }))
-  );
+
+  useEffect(() => {
+    let alive = true;
+
+    void (async () => {
+      const snapshot = await getLocalAgentConfigSnapshot();
+      if (!alive) {
+        return;
+      }
+
+      setLocalAgentSnapshot(snapshot);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const projectChatState = useAIChatStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
@@ -545,35 +532,17 @@ export const AIChat: React.FC<AIChatProps> = ({
   const activityEntries = projectChatState?.activityEntries || [];
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, isLoading]);
+    messagesEndRef.current?.scrollIntoView({ behavior: isLoading ? 'auto' : 'smooth', block: 'end' });
+  }, [messages, isLoading, streamingDraftContents]);
 
-  const loadSkills = useCallback(async () => {
-    if (!currentProject) {
-      return;
-    }
-
-    setSkillsState('loading');
-    setSkillsMessage('');
-
-    try {
-      const projectRoot = await getProjectDir(currentProject.id);
-      const entries = await discoverLocalSkills({ projectRoot });
-      setSkills(entries);
-      setSkillsState('ready');
-    } catch (error) {
-      setSkillsState('error');
-      setSkillsMessage(error instanceof Error ? error.message : String(error));
-    }
-  }, [currentProject]);
-
-  useEffect(() => {
-    if (activePanel !== 'skills' || !currentProject) {
-      return;
-    }
-
-    void loadSkills();
-  }, [activePanel, currentProject, loadSkills]);
+  useEffect(
+    () => () => {
+      if (streamingFlushFrameRef.current !== null) {
+        cancelAnimationFrame(streamingFlushFrameRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const viewportClassName = getChatViewportClassName(isCollapsed);
@@ -632,29 +601,40 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
-  const selectedReferenceFileIds = aiContextState?.selectedReferenceFileIds || [];
-  const selectedReferenceDirectory = aiContextState?.selectedReferenceDirectory || null;
-  const openedKnowledgeEntryIds = aiContextState?.openedKnowledgeEntryIds || [];
-  const referenceScopeMode = aiContextState?.referenceScopeMode || 'current';
-  const buildReferenceFileSnapshot = useCallback(
-    (styleNodes: DesignStyleReferenceNode[] = persistedDesignStyleNodes) =>
-      buildReferenceFiles({
-        requirementDocs,
-        generatedFiles,
-        designPages,
-        wireframes,
-        designStyleNodes: styleNodes,
-      }),
-    [designPages, generatedFiles, persistedDesignStyleNodes, requirementDocs, wireframes]
-  );
-  const referenceFiles = useMemo(() => buildReferenceFileSnapshot(), [buildReferenceFileSnapshot]);
-  const availableReferenceDirectories = useMemo(
-    () =>
-      Array.from(new Set(referenceFiles.map((file) => getDirectoryPath(file.path)).filter(Boolean))).sort((left, right) =>
-        left.localeCompare(right)
+  const workflowAvailability = useMemo(
+    () => ({
+      hasRequirementsSpec: requirementDocs.some(
+        (doc) => doc.sourceType === 'ai' && doc.title.includes('需求规格说明书')
       ),
-    [referenceFiles]
+      hasFeatureTree: Boolean(featureTree?.children.length),
+      hasPageStructure: designPages.length > 0,
+      hasWireframes: Object.keys(wireframes).length > 0,
+    }),
+    [designPages.length, featureTree, requirementDocs, wireframes]
   );
+  const agentAvailability: Record<ChatAgentId, ChatAgentAvailability> = useMemo(() => ({
+    claude: {
+      ready: Boolean(localAgentSnapshot?.claudeHome.exists || localAgentSnapshot?.claudeSettings.exists),
+      title:
+        localAgentSnapshot?.claudeHome.exists || localAgentSnapshot?.claudeSettings.exists
+          ? 'Claude CLI 已就绪'
+          : '未检测到本地 Claude 配置，将回退到内置 AI',
+      fallbackMessage:
+        localAgentSnapshot?.claudeHome.exists || localAgentSnapshot?.claudeSettings.exists
+          ? null
+          : '未检测到本地 Claude 配置，已回退到内置 AI。',
+    },
+    codex: {
+      ready: Boolean(localAgentSnapshot?.codexHome.exists),
+      title: localAgentSnapshot?.codexHome.exists ? 'Codex CLI 已就绪' : '未检测到本地 Codex 配置，将回退到内置 AI',
+      fallbackMessage: localAgentSnapshot?.codexHome.exists ? null : '未检测到本地 Codex 配置，已回退到内置 AI。',
+    },
+    'built-in': {
+      ready: true,
+      title: 'Built-in AI',
+      fallbackMessage: null,
+    },
+  }), [localAgentSnapshot]);
   const selectedPage = useMemo(
     () => designPages.find((page) => page.id === aiContextState?.selectedPageId) || null,
     [aiContextState?.selectedPageId, designPages]
@@ -662,37 +642,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const selectedElementLabel = useMemo(
     () => getSelectedElementLabel(previewElements, selectedElementId),
     [previewElements, selectedElementId]
-  );
-  const currentReferenceFileIds = useMemo(() => {
-    return resolveCurrentReferenceFileIds({
-      scene: aiContextState?.scene || 'knowledge',
-      activeKnowledgeFileId: isKnowledgeReferenceEnabled ? activeKnowledgeFileId : null,
-      selectedKnowledgeContextIds: isKnowledgeReferenceEnabled ? selectedKnowledgeContextIds : [],
-      selectedPagePath: selectedPage ? buildSketchReferencePath(selectedPage) : null,
-      availableFileIds: referenceFiles.map((file) => file.id),
-    });
-  }, [
-    aiContextState?.scene,
-    activeKnowledgeFileId,
-    isKnowledgeReferenceEnabled,
-    referenceFiles,
-    selectedKnowledgeContextIds,
-    selectedPage,
-  ]);
-  const selectedReferenceFiles = useMemo(
-    () =>
-      selectedReferenceFileIds
-        .map((id) => referenceFiles.find((file) => file.id === id) || null)
-        .filter((file): file is (typeof referenceFiles)[number] => Boolean(file)),
-    [referenceFiles, selectedReferenceFileIds]
-  );
-  const referencePromptContext = useMemo(
-    () =>
-      buildReferencePromptContext({
-        userInput: input.trim(),
-        selectedFiles: selectedReferenceFiles,
-      }),
-    [input, selectedReferenceFiles]
   );
   const effectiveKnowledgeMode = knowledgeEntries.length > 0 ? 'all' : 'off';
   const displayKnowledgeFile = useMemo(
@@ -711,12 +660,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       }),
     [aiContextState?.scene, effectiveKnowledgeMode, focusedKnowledgeFileId, knowledgeEntries, selectedKnowledgeContextIds]
   );
-  const effectiveKnowledgeSelection = selectedReferenceFiles.length > 0
-    ? {
-        currentFile: null,
-        relatedFiles: [],
-      }
-    : knowledgeSelectionMeta;
   const contextSnapshot = useMemo(
     () =>
       buildChatContextSnapshot({
@@ -736,14 +679,13 @@ export const AIChat: React.FC<AIChatProps> = ({
       currentProjectName: currentProject?.name,
       contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
       skillIntent: null,
-      knowledgeSelection: effectiveKnowledgeSelection,
-      referenceContext: referencePromptContext.labels.length > 0 ? referencePromptContext : null,
+      knowledgeSelection: knowledgeSelectionMeta,
+      conversationHistory: activeSession?.messages || [],
       contextLabels: [
         selectedRuntimeConfig ? `褰撳墠 AI / ${selectedRuntimeConfig.name}` : null,
         contextSnapshot.primaryLabel,
         contextSnapshot.secondaryLabel,
         contextSnapshot.knowledgeLabel,
-        ...referencePromptContext.labels,
       ].filter((item): item is string => Boolean(item)),
     });
 
@@ -757,114 +699,73 @@ export const AIChat: React.FC<AIChatProps> = ({
     contextSnapshot.secondaryLabel,
     currentProject?.name,
     input,
-    effectiveKnowledgeSelection,
-    referencePromptContext,
+    knowledgeSelectionMeta,
+    activeSession?.messages,
     selectedRuntimeConfig,
   ]);
-
-  useEffect(() => {
-    if (!currentProject) {
-      setPersistedDesignStyleNodes([]);
+  const selectedAgent = useMemo(
+    () => CHAT_AGENTS.find((agent) => agent.id === selectedChatAgentId) || CHAT_AGENTS[0],
+    [selectedChatAgentId]
+  );
+  const isFreshSession = messages.length <= 1;
+  const artifactPaths = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          activityEntries
+            .flatMap((entry) => entry.changedPaths)
+            .filter(Boolean)
+        )
+      ),
+    [activityEntries]
+  );
+  const latestActivityEntry = activityEntries[0] || null;
+  const runStateLabel = isLoading ? 'Running' : latestActivityEntry?.type === 'failed' ? 'Failed' : 'Ready';
+  const runStateTone = isLoading ? 'running' : latestActivityEntry?.type === 'failed' ? 'error' : 'success';
+  const toggleDrawer = useCallback((drawer: DrawerPanelId) => {
+    setActiveDrawer((current) => (current === drawer ? null : drawer));
+    setShowHistoryMenu(false);
+  }, []);
+  const flushStreamingDrafts = useCallback(() => {
+    streamingFlushFrameRef.current = null;
+    setStreamingDraftContents({ ...streamingDraftBufferRef.current });
+  }, []);
+  const scheduleStreamingDraftFlush = useCallback(() => {
+    if (streamingFlushFrameRef.current !== null) {
       return;
     }
 
-    let cancelled = false;
-    void loadDesignBoardStateFromDisk(currentProject.id)
-      .then((persisted) => {
-        if (cancelled) {
-          return;
-        }
-
-        const nextStyleNodes = Array.isArray(persisted?.styleNodes)
-          ? persisted.styleNodes
-              .map((node) => normalizeDesignStyleNode(node))
-              .filter((node): node is DesignStyleReferenceNode => Boolean(node))
-          : [];
-        setPersistedDesignStyleNodes(nextStyleNodes);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPersistedDesignStyleNodes([]);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentProject]);
-
-  useEffect(() => {
-    if (!currentProject || aiContextState) {
+    streamingFlushFrameRef.current = requestAnimationFrame(() => {
+      flushStreamingDrafts();
+    });
+  }, [flushStreamingDrafts]);
+  const updateStreamingDraft = useCallback(
+    (messageId: string, content: string) => {
+      streamingDraftBufferRef.current[messageId] = content;
+      scheduleStreamingDraftFlush();
+    },
+    [scheduleStreamingDraftFlush]
+  );
+  const clearStreamingDraft = useCallback((messageId: string) => {
+    if (!(messageId in streamingDraftBufferRef.current)) {
       return;
     }
 
-    if (currentReferenceFileIds.length > 0) {
-      setSelectedReferenceFileIds(currentProject.id, currentReferenceFileIds);
+    const nextDrafts = { ...streamingDraftBufferRef.current };
+    delete nextDrafts[messageId];
+    streamingDraftBufferRef.current = nextDrafts;
+    if (streamingFlushFrameRef.current !== null) {
+      cancelAnimationFrame(streamingFlushFrameRef.current);
+      streamingFlushFrameRef.current = null;
     }
-  }, [aiContextState, currentProject, currentReferenceFileIds, setSelectedReferenceFileIds]);
-
-  useEffect(() => {
-    if (!currentProject || referenceScopeMode !== 'current') {
-      return;
-    }
-
-    const hasChanged =
-      currentReferenceFileIds.length !== selectedReferenceFileIds.length ||
-      currentReferenceFileIds.some((id, index) => id !== selectedReferenceFileIds[index]);
-
-    if (hasChanged) {
-      setSelectedReferenceFileIds(currentProject.id, currentReferenceFileIds);
-    }
-  }, [currentProject, currentReferenceFileIds, referenceScopeMode, selectedReferenceFileIds, setSelectedReferenceFileIds]);
-
-  useEffect(() => {
-    if (!currentProject) {
-      return;
-    }
-
-    const nextIds =
-      referenceScopeMode === 'all'
-        ? resolveReferenceScopeSelection({
-            mode: 'all',
-            currentFileIds: selectedReferenceFileIds,
-            openTabFileIds: openedKnowledgeEntryIds,
-            directoryPath: selectedReferenceDirectory,
-            allFiles: referenceFiles,
-          })
-        : referenceScopeMode === 'open-tabs'
-          ? resolveReferenceScopeSelection({
-              mode: 'open-tabs',
-              currentFileIds: selectedReferenceFileIds,
-              openTabFileIds: openedKnowledgeEntryIds,
-              directoryPath: selectedReferenceDirectory,
-              allFiles: referenceFiles,
-            })
-        : referenceScopeMode === 'directory'
-          ? resolveReferenceScopeSelection({
-              mode: 'directory',
-              currentFileIds: selectedReferenceFileIds,
-              openTabFileIds: openedKnowledgeEntryIds,
-              directoryPath: selectedReferenceDirectory,
-              allFiles: referenceFiles,
-            })
-          : selectedReferenceFileIds.filter((id) => referenceFiles.some((file) => file.id === id));
-
-    const hasChanged =
-      nextIds.length !== selectedReferenceFileIds.length ||
-      nextIds.some((id, index) => id !== selectedReferenceFileIds[index]);
-
-    if (hasChanged) {
-      setSelectedReferenceFileIds(currentProject.id, nextIds);
-    }
-  }, [
-    currentProject,
-    openedKnowledgeEntryIds,
-    referenceFiles,
-    referenceScopeMode,
-    selectedReferenceDirectory,
-    selectedReferenceFileIds,
-    setSelectedReferenceFileIds,
-  ]);
+    setStreamingDraftContents(nextDrafts);
+  }, []);
+  const handleApplySuggestion = useCallback((prompt: string) => {
+    setInput(prompt);
+    setActiveAgentLane('chat');
+    setShowHistoryMenu(false);
+    textareaRef.current?.focus();
+  }, []);
 
   const syncModelCatalog = useCallback((nextProvider: AIProviderType, nextBaseURL: string, models: string[]) => {
     const key = buildProviderKey(nextProvider, nextBaseURL);
@@ -968,126 +869,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     }
   }, [selectedProviderListMode, selectedSettingsPreset.models, settingsDraft, syncModelCatalog]);
 
-  const refreshPersistedReferenceAssets = useCallback(async () => {
-    if (!currentProject) {
-      return persistedDesignStyleNodes;
-    }
-
-    const persisted = await loadDesignBoardStateFromDisk(currentProject.id).catch(() => null);
-    const nextStyleNodes = Array.isArray(persisted?.styleNodes)
-      ? persisted.styleNodes
-          .map((node) => normalizeDesignStyleNode(node))
-          .filter((node): node is DesignStyleReferenceNode => Boolean(node))
-      : [];
-    setPersistedDesignStyleNodes(nextStyleNodes);
-    return nextStyleNodes;
-  }, [currentProject, persistedDesignStyleNodes]);
-
-  const handleRebuildContextIndex = useCallback(async () => {
-    if (!currentProject) {
-      return null;
-    }
-
-    const latestStyleNodes = await refreshPersistedReferenceAssets();
-    const nextReferenceFiles = buildReferenceFileSnapshot(latestStyleNodes);
-    const index = buildContextIndex(nextReferenceFiles);
-    await saveContextIndexToDisk(currentProject.id, index);
-    return { index, referenceFiles: nextReferenceFiles };
-  }, [buildReferenceFileSnapshot, currentProject, refreshPersistedReferenceAssets]);
-
-  const handleApplyReferenceScope = useCallback(
-    (mode: AIReferenceScopeMode) => {
-      if (!currentProject) {
-        return;
-      }
-
-      let directoryPath = selectedReferenceDirectory;
-      if (mode === 'directory' && !directoryPath) {
-        const fallbackFile =
-          referenceFiles.find((file) => currentReferenceFileIds.includes(file.id)) || referenceFiles[0] || null;
-        directoryPath = fallbackFile ? getDirectoryPath(fallbackFile.path) : availableReferenceDirectories[0] || null;
-      }
-
-      const nextIds = resolveReferenceScopeSelection({
-        mode,
-        currentFileIds: currentReferenceFileIds,
-        openTabFileIds: openedKnowledgeEntryIds,
-        directoryPath,
-        allFiles: referenceFiles,
-      });
-
-      setReferenceScopeMode(currentProject.id, mode);
-      setSelectedReferenceDirectory(currentProject.id, directoryPath);
-      setSelectedReferenceFileIds(currentProject.id, nextIds);
-    },
-    [
-      availableReferenceDirectories,
-      currentProject,
-      currentReferenceFileIds,
-      openedKnowledgeEntryIds,
-      referenceFiles,
-      selectedReferenceDirectory,
-      setReferenceScopeMode,
-      setSelectedReferenceDirectory,
-      setSelectedReferenceFileIds,
-    ]
-  );
-
-  const handleReferenceDirectoryChange = useCallback(
-    (directoryPath: string) => {
-      if (!currentProject) {
-        return;
-      }
-
-      const nextIds = resolveReferenceScopeSelection({
-        mode: 'directory',
-        currentFileIds: currentReferenceFileIds,
-        directoryPath,
-        allFiles: referenceFiles,
-      });
-
-      setReferenceScopeMode(currentProject.id, 'directory');
-      setSelectedReferenceDirectory(currentProject.id, directoryPath || null);
-      setSelectedReferenceFileIds(currentProject.id, nextIds);
-    },
-    [
-      currentProject,
-      currentReferenceFileIds,
-      referenceFiles,
-      setReferenceScopeMode,
-      setSelectedReferenceDirectory,
-      setSelectedReferenceFileIds,
-    ]
-  );
-
-  const handleAddReferenceFile = useCallback(
-    (fileId: string) => {
-      if (!currentProject || !fileId) {
-        return;
-      }
-
-      setReferenceScopeMode(currentProject.id, 'current');
-      setSelectedReferenceFileIds(currentProject.id, [...selectedReferenceFileIds, fileId]);
-      setReferencePickerValue('');
-    },
-    [currentProject, selectedReferenceFileIds, setReferenceScopeMode, setSelectedReferenceFileIds]
-  );
-
-  const handleRemoveReferenceFile = useCallback(
-    (fileId: string) => {
-      if (!currentProject) {
-        return;
-      }
-
-      setReferenceScopeMode(currentProject.id, 'current');
-      setSelectedReferenceFileIds(
-        currentProject.id,
-        selectedReferenceFileIds.filter((id) => id !== fileId)
-      );
-    },
-    [currentProject, selectedReferenceFileIds, setReferenceScopeMode, setSelectedReferenceFileIds]
-  );
-
   const handleApplySettings = useCallback(() => {
     if (!settingsDraft.id) {
       return;
@@ -1169,107 +950,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     setActiveSession(currentProject.id, session.id);
     setInput('');
     setShowHistoryMenu(false);
-    setShowSkillMenu(false);
-    setShowReferenceMenu(false);
   }, [currentProject, setActiveSession, upsertSession]);
-
-  const insertSkillToken = useCallback((token: string) => {
-    setShowSkillMenu(false);
-    setInput((current) => {
-      if (current.includes(token)) {
-        return current;
-      }
-
-      const textarea = textareaRef.current;
-      if (!textarea) {
-        return current ? `${token} ${current}` : `${token} `;
-      }
-
-      const start = textarea.selectionStart ?? current.length;
-      const end = textarea.selectionEnd ?? current.length;
-      const next = `${current.slice(0, start)}${token} ${current.slice(end)}`;
-      requestAnimationFrame(() => {
-        textarea.focus();
-        const cursor = start + token.length + 1;
-        textarea.setSelectionRange(cursor, cursor);
-      });
-      return next;
-    });
-  }, []);
-
-  const handleImportSkill = useCallback(async (skill: SkillDiscoveryEntry) => {
-    try {
-      const importedSkill = await importLocalSkill(skill.path);
-      await loadSkills();
-      setSkillsMessage(`Imported ${importedSkill.name}.`);
-      return;
-      setSkills((current) => current.map((item) => (item.path === skill.path ? importedSkill : item)));
-      setSkillsMessage(`宸插鍏?${importedSkill.name}`);
-    } catch (error) {
-      setSkillsMessage(error instanceof Error ? error.message : String(error));
-    }
-  }, [loadSkills]);
-
-  const handleImportGitHubSkill = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-
-      const repo = githubSkillRepo.trim();
-      const path = githubSkillPath.trim();
-      const gitRef = githubSkillRef.trim();
-
-      if (!repo || !path) {
-        setSkillsMessage('GitHub Repo and Skill Path are required.');
-        return;
-      }
-
-      try {
-        const importedSkill = await importGitHubSkill({
-          repo,
-          path,
-          gitRef: gitRef || undefined,
-        });
-        await loadSkills();
-        setSkillsMessage(`Imported ${importedSkill.name} from GitHub.`);
-      } catch (error) {
-        setSkillsMessage(error instanceof Error ? error.message : String(error));
-      }
-    },
-    [githubSkillPath, githubSkillRef, githubSkillRepo, loadSkills]
-  );
-
-  const handleSyncSkill = useCallback(
-    async (skill: SkillDiscoveryEntry, runtime: 'codex' | 'claude') => {
-      if (!currentProject) {
-        setSkillsMessage('请先打开当前项目，再执行同步。');
-        return;
-      }
-
-      try {
-        const projectRoot = await getProjectDir(currentProject.id);
-        const result = await syncSkillToRuntime({
-          skillId: skill.id,
-          runtime,
-          projectRoot,
-        });
-        setSkills((current) =>
-          current.map((item) =>
-            item.id === skill.id
-              ? {
-                  ...item,
-                  syncedToCodex: runtime === 'codex' ? result.synced : item.syncedToCodex,
-                  syncedToClaude: runtime === 'claude' ? result.synced : item.syncedToClaude,
-                }
-              : item
-          )
-        );
-        setSkillsMessage(`已同步 ${skill.name} 到 ${runtime === 'codex' ? 'Codex' : 'Claude'}`);
-      } catch (error) {
-        setSkillsMessage(error instanceof Error ? error.message : String(error));
-      }
-    },
-    [currentProject]
-  );
 
   const handleSubmit = useCallback(
     async (event?: React.FormEvent) => {
@@ -1287,19 +968,37 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       const rawContent = input.trim();
-      const requestedReindex = rawContent.includes('@鏁寸悊');
-      const skillIntent = resolveSkillIntent(rawContent);
-      const cleanedContent = skillIntent?.cleanedInput.trim() ? skillIntent.cleanedInput.trim() : rawContent;
+      const skillIntent: SkillIntent | null = resolveSkillIntent(rawContent);
+      const resolvedSkill = skillIntent?.skill || null;
+      const effectiveChatAgentId =
+        selectedChatAgentId !== 'built-in' && !agentAvailability[selectedChatAgentId].ready
+          ? 'built-in'
+          : selectedChatAgentId;
+      const fallbackToBuiltInMessage =
+        selectedChatAgentId !== effectiveChatAgentId ? agentAvailability[selectedChatAgentId].fallbackMessage : null;
+      const cleanedContent = skillIntent?.cleanedInput.trim()
+        ? skillIntent.cleanedInput.trim()
+        : skillIntent?.package === 'knowledge-organize'
+          ? '请整理当前项目知识库，并输出清晰的 wiki 索引。'
+          : rawContent;
       const userMessage = createStoredChatMessage('user', rawContent);
 
       setInput('');
       appendMessage(currentProject.id, targetSessionId, userMessage);
+      if (fallbackToBuiltInMessage) {
+        setSelectedChatAgentId('built-in');
+        appendMessage(
+          currentProject.id,
+          targetSessionId,
+          createStoredChatMessage('system', fallbackToBuiltInMessage)
+        );
+      }
 
       if (!activeSession || activeSession.title === '新对话') {
         renameSession(currentProject.id, targetSessionId, summarizeSessionTitle(rawContent));
       }
 
-      if (selectedChatAgentId === 'built-in' && !isRuntimeConfigured) {
+      if (effectiveChatAgentId === 'built-in' && !isRuntimeConfigured) {
         appendMessage(
           currentProject.id,
           targetSessionId,
@@ -1317,53 +1016,19 @@ export const AIChat: React.FC<AIChatProps> = ({
         aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
       }
 
-      let promptReferenceFiles = referenceFiles;
       try {
-        try {
-          const rebuilt = await handleRebuildContextIndex();
-          if (rebuilt?.referenceFiles) {
-            promptReferenceFiles = rebuilt.referenceFiles;
-          }
-        } catch (error) {
-          if (requestedReindex && rawContent.replace(/@鏁寸悊/g, '').trim().length === 0) {
-            throw error;
-          }
-        }
-
-        if (requestedReindex && rawContent.replace(/@鏁寸悊/g, '').trim().length === 0) {
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            role: 'system',
-            content: `已整理上下文索引，共 ${buildContextIndex(promptReferenceFiles).files.length} 个可读文件。`,
-          }));
-          return;
-        }
-
-        const promptSelectedReferenceFiles = promptReferenceFiles.filter((file) =>
-          selectedReferenceFileIds.includes(file.id)
-        );
-        const promptReferenceContext = buildReferencePromptContext({
-          userInput: cleanedContent,
-          selectedFiles: promptSelectedReferenceFiles,
-        });
         const directChat = buildDirectChatPrompt({
           userInput: cleanedContent,
           currentProjectName: currentProject.name,
           contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
           skillIntent,
-          knowledgeSelection: promptSelectedReferenceFiles.length > 0
-            ? {
-                currentFile: null,
-                relatedFiles: [],
-              }
-            : knowledgeSelectionMeta,
-          referenceContext: promptReferenceContext.labels.length > 0 ? promptReferenceContext : null,
+          knowledgeSelection: knowledgeSelectionMeta,
+          conversationHistory: activeSession?.messages || [],
           contextLabels: [
             selectedRuntimeConfig ? `褰撳墠 AI / ${selectedRuntimeConfig.name}` : null,
             contextSnapshot.primaryLabel,
             contextSnapshot.secondaryLabel,
             contextSnapshot.knowledgeLabel,
-            ...promptReferenceContext.labels,
           ].filter((item): item is string => Boolean(item)),
         });
 
@@ -1371,7 +1036,152 @@ export const AIChat: React.FC<AIChatProps> = ({
           setRawRequirementInput(cleanedContent);
         }
 
-        if (selectedChatAgentId !== 'built-in') {
+        if (skillIntent?.package === 'knowledge-organize') {
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content: '正在整理知识库并生成 wiki 索引...',
+          }));
+
+          const executeKnowledgeText = async (prompt: string) => {
+            if (effectiveChatAgentId !== 'built-in') {
+              const projectRoot = await getProjectDir(currentProject.id);
+              const result = await invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
+                params: {
+                  agent: effectiveChatAgentId,
+                  projectRoot,
+                  prompt,
+                },
+              });
+
+              if (!result.success) {
+                throw new Error(result.error || 'Local agent execution failed.');
+              }
+
+              return result.content.trim();
+            }
+
+            if (providerExecutionMode === 'claude' && selectedRuntimeConfig) {
+              return claudeRuntimeExecutor.executePrompt({
+                sessionId: targetSessionId,
+                config: selectedRuntimeConfig,
+                systemPrompt: '你是产品知识库整理助手。',
+                prompt,
+              });
+            }
+
+            if (providerExecutionMode === 'codex' && selectedRuntimeConfig) {
+              return codexRuntimeExecutor.executePrompt({
+                sessionId: targetSessionId,
+                config: selectedRuntimeConfig,
+                systemPrompt: 'You are a product knowledge base organizer.',
+                prompt,
+              });
+            }
+
+            return aiService.completeText({
+              systemPrompt: '你是产品知识库整理助手。',
+              prompt,
+            });
+          };
+
+          const docs = await runKnowledgeOrganizeLane({
+            project: {
+              id: currentProject.id,
+              name: currentProject.name,
+            },
+            requirementDocs,
+            generatedFiles,
+            executeText: executeKnowledgeText,
+          });
+          const persistedDocs = await saveKnowledgeDocsToProjectDir(currentProject.id, docs);
+          const mergedDocs = mergeRequirementDocsByTitle(requirementDocs, persistedDocs);
+          replaceRequirementDocs(mergedDocs);
+
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content: `已整理知识库，并生成 ${docs.length} 份文档：${docs.map((doc) => doc.title).join('、')}`,
+          }));
+          appendActivityEntry(currentProject.id, {
+            id: createActivityEntryId(),
+            runId,
+            type: 'run-summary',
+            summary: `AI 整理了知识库并生成 ${docs.length} 份 wiki 文档`,
+            changedPaths: persistedDocs.map((doc) => doc.filePath || doc.title),
+            runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
+            skill: resolvedSkill,
+            createdAt: Date.now(),
+          });
+          return;
+        }
+
+        if (skillIntent?.package === 'change-sync') {
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content:
+              '变更同步能力入口已就绪。当前版本会先收集原型、知识库和产物上下文；下一步将接入真实同步 lane，生成可确认的变更提案。',
+          }));
+
+          appendActivityEntry(currentProject.id, {
+            id: createActivityEntryId(),
+            runId,
+            type: 'run-summary',
+            summary: 'GN Agent 打开了变更同步入口',
+            changedPaths: [],
+            runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
+            skill: resolvedSkill,
+            createdAt: Date.now(),
+          });
+          return;
+        }
+
+        if (skillIntent) {
+          if (selectedRuntimeConfig) {
+            aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
+          }
+
+          const fallbackWorkflowPackage = chooseNextWorkflowPackage(workflowAvailability);
+          const requestedWorkflowPackage = skillIntent?.package;
+          const targetWorkflowPackage =
+            requestedWorkflowPackage === 'requirements' || requestedWorkflowPackage === fallbackWorkflowPackage
+              ? requestedWorkflowPackage
+              : fallbackWorkflowPackage;
+
+          await runAIWorkflowPackage(targetWorkflowPackage);
+
+          const latestWorkflowRun =
+            useAIWorkflowStore.getState().projects[currentProject.id]?.runs[0] || null;
+          const currentStageSummary = latestWorkflowRun?.currentStage
+            ? latestWorkflowRun.stageSummaries[latestWorkflowRun.currentStage]
+            : '';
+          const finalContent = [
+            `已在当前对话中执行 ${targetWorkflowPackage} 能力链。`,
+            latestWorkflowRun?.status === 'awaiting_confirmation'
+              ? '当前结果已生成，正在等待你确认后再继续下一段。'
+              : null,
+            currentStageSummary || null,
+          ]
+            .filter((item): item is string => Boolean(item))
+            .join('\n');
+
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content: finalContent || '已在当前对话中开始执行对应能力链。',
+          }));
+
+          appendActivityEntry(currentProject.id, {
+            id: createActivityEntryId(),
+            runId,
+            type: 'run-summary',
+            summary: `AI 执行了 ${targetWorkflowPackage} 能力链`,
+            changedPaths: [],
+            runtime: 'built-in',
+            skill: resolvedSkill,
+            createdAt: Date.now(),
+          });
+          return;
+        }
+
+        if (effectiveChatAgentId !== 'built-in') {
           const projectRoot = await getProjectDir(currentProject.id);
           const localAgentPrompt = [
             directChat.systemPrompt ? `<system>\n${directChat.systemPrompt}\n</system>` : null,
@@ -1379,7 +1189,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           ].filter((item): item is string => Boolean(item)).join('\n\n');
           const result = await invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
             params: {
-              agent: selectedChatAgentId,
+              agent: effectiveChatAgentId,
               projectRoot,
               prompt: localAgentPrompt,
             },
@@ -1397,7 +1207,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           const activityEntry = buildRunSummaryEntry({
             runId,
             content: finalContent,
-            skill: skillIntent?.skill || null,
+            skill: resolvedSkill,
           });
           if (activityEntry) {
             appendActivityEntry(currentProject.id, activityEntry);
@@ -1405,13 +1215,29 @@ export const AIChat: React.FC<AIChatProps> = ({
           return;
         }
 
-        const chunks: string[] = [];
-        const handleChunk = (text: string) => {
-          chunks.push(text);
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            content: chunks.join('').trim() || '正在思考...',
-          }));
+        let thinkingContent = '';
+        let answerContent = '';
+        const buildStreamingMessage = (completeThinking: boolean) => {
+          const sections: string[] = [];
+          if (thinkingContent.trim()) {
+            sections.push(
+              completeThinking
+                ? `<think>${thinkingContent}</think>`
+                : `<think>${thinkingContent}`
+            );
+          }
+          if (answerContent.trim()) {
+            sections.push(answerContent);
+          }
+          return sections.join('\n\n').trim() || '正在思考...';
+        };
+        const handleEvent = (event: AITextStreamEvent) => {
+          if (event.kind === 'thinking') {
+            thinkingContent += event.delta;
+          } else {
+            answerContent += event.delta;
+          }
+          updateStreamingDraft(assistantMessage.id, buildStreamingMessage(false));
         };
         const response =
           providerExecutionMode === 'claude' && selectedRuntimeConfig
@@ -1420,7 +1246,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                 config: selectedRuntimeConfig,
                 systemPrompt: directChat.systemPrompt,
                 prompt: directChat.prompt,
-                onChunk: handleChunk,
+                onEvent: handleEvent,
               })
             : providerExecutionMode === 'codex' && selectedRuntimeConfig
               ? await codexRuntimeExecutor.executePrompt({
@@ -1428,29 +1254,35 @@ export const AIChat: React.FC<AIChatProps> = ({
                   config: selectedRuntimeConfig,
                   systemPrompt: directChat.systemPrompt,
                   prompt: directChat.prompt,
-                  onChunk: handleChunk,
+                  onEvent: handleEvent,
                 })
               : await aiService.completeText({
                   systemPrompt: directChat.systemPrompt,
                   prompt: directChat.prompt,
-                  onChunk: handleChunk,
+                  onEvent: handleEvent,
                 });
 
-        const finalContent = response.trim() || chunks.join('').trim() || '已收到请求，但这次没有返回内容。';
+        const streamedContent = buildStreamingMessage(true);
+        const finalContent =
+          streamedContent !== '正在思考...'
+            ? streamedContent
+            : response.trim() || '已收到请求，但这次没有返回内容。';
+        clearStreamingDraft(assistantMessage.id);
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
-          content: finalContent,
+          content: finalContent.trim() || response.trim() || '已收到请求，但这次没有返回内容。',
         }));
         const activityEntry = buildRunSummaryEntry({
           runId,
           content: finalContent,
-          skill: skillIntent?.skill || null,
+          skill: resolvedSkill,
         });
         if (activityEntry) {
           appendActivityEntry(currentProject.id, activityEntry);
         }
       } catch (error) {
         const message = normalizeErrorMessage(error);
+        clearStreamingDraft(assistantMessage.id);
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
           ...currentMessage,
           role: 'system',
@@ -1463,8 +1295,8 @@ export const AIChat: React.FC<AIChatProps> = ({
           type: 'failed',
           summary: message,
           changedPaths: [],
-          runtime: selectedChatAgentId === 'built-in' ? 'built-in' : 'local',
-          skill: skillIntent?.skill || null,
+          runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
+          skill: resolvedSkill,
           createdAt: Date.now(),
         });
       } finally {
@@ -1480,20 +1312,25 @@ export const AIChat: React.FC<AIChatProps> = ({
       contextSnapshot.primaryLabel,
       contextSnapshot.secondaryLabel,
       currentProject,
-      handleRebuildContextIndex,
+      generatedFiles,
       input,
       isLoading,
       knowledgeSelectionMeta,
       providerExecutionMode,
-      referenceFiles,
-      selectedReferenceFileIds,
+      replaceRequirementDocs,
+      requirementDocs,
       selectedRuntimeConfig,
       selectedChatAgentId,
+      agentAvailability,
       renameSession,
       setActiveSession,
+      setSelectedChatAgentId,
       setRawRequirementInput,
+      clearStreamingDraft,
+      updateStreamingDraft,
       updateMessage,
       upsertSession,
+      workflowAvailability,
     ]
   );
 
@@ -1520,6 +1357,286 @@ export const AIChat: React.FC<AIChatProps> = ({
       buildSessionPreview={buildSessionPreview}
     />
   ) : null;
+  const launchpad = isFreshSession ? (
+    <section className="chat-launchpad" aria-label="GN Agent quick actions">
+      <div className="chat-launchpad-hero">
+        <span className="chat-shell-kicker">AI Workspace</span>
+        <h2>让 GN Agent 直接开始推进项目</h2>
+        <p>
+          它现在更像一个真正的 AI 产品：先聊天，再按需展开 Context、Run 和 Artifacts。
+          你可以直接描述目标，或者从下面的 PM 超能力开始。
+        </p>
+      </div>
+
+      <div className="chat-launchpad-status">
+        <span className="chat-shell-status-pill">{selectedAgent.label}</span>
+        <span className="chat-shell-status-pill">{selectedRuntimeConfig?.name || '未启用 AI 配置'}</span>
+        <span className="chat-shell-status-pill">按需搜索项目内容</span>
+      </div>
+
+      <div className="chat-launchpad-grid">
+        {GN_AGENT_SUGGESTIONS.map((suggestion) => (
+          <button
+            key={suggestion.label}
+            type="button"
+            className="chat-launchpad-card"
+            onClick={() => handleApplySuggestion(suggestion.prompt)}
+          >
+            <strong>{suggestion.label}</strong>
+            <span>{suggestion.description}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  ) : null;
+  const headerDrawerContent = activeDrawer === 'context' ? (
+    <div className="chat-shell-drawer-panel">
+      <div className="chat-shell-drawer-header">
+        <div>
+          <strong>Context Drawer</strong>
+          <span>AI 当前会读到的上下文和预算。</span>
+        </div>
+        <button className="chat-shell-drawer-close" type="button" onClick={() => setActiveDrawer(null)}>
+          关闭
+        </button>
+      </div>
+
+      <div className="chat-shell-drawer-summary-grid">
+        <div className="chat-shell-drawer-summary-card">
+          <span>Agent</span>
+          <strong>{selectedAgent.label}</strong>
+        </div>
+        <div className="chat-shell-drawer-summary-card">
+          <span>Model</span>
+          <strong>{selectedRuntimeConfig?.model || '未启用 AI'}</strong>
+        </div>
+        <div className="chat-shell-drawer-summary-card">
+          <span>Context</span>
+          <strong>{currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}</strong>
+        </div>
+      </div>
+
+      <div className="chat-shell-context-stack">
+        <div className="chat-shell-drawer-copy">
+          <strong>当前摘要</strong>
+          <div className="chat-context-strip">
+            {contextSnapshot.primaryLabel ? <span className="chat-context-chip subtle">{contextSnapshot.primaryLabel}</span> : null}
+            {contextSnapshot.secondaryLabel ? <span className="chat-context-chip subtle">{contextSnapshot.secondaryLabel}</span> : null}
+            {contextSnapshot.knowledgeLabel ? <span className="chat-context-chip subtle">{contextSnapshot.knowledgeLabel}</span> : null}
+            {!contextSnapshot.primaryLabel && !contextSnapshot.secondaryLabel && !contextSnapshot.knowledgeLabel ? (
+              <span className="chat-context-chip subtle">当前没有额外上下文摘要</span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : activeDrawer === 'run' ? (
+    <div className="chat-shell-drawer-panel">
+      <div className="chat-shell-drawer-header">
+        <div>
+          <strong>Run Drawer</strong>
+          <span>AI 做了什么、当前跑到哪一步。</span>
+        </div>
+        <button className="chat-shell-drawer-close" type="button" onClick={() => setActiveDrawer(null)}>
+          关闭
+        </button>
+      </div>
+
+      <div className="chat-shell-drawer-summary-grid">
+        <div className={`chat-shell-drawer-summary-card ${runStateTone}`}>
+          <span>Run State</span>
+          <strong>{runStateLabel}</strong>
+        </div>
+        <div className="chat-shell-drawer-summary-card">
+          <span>Latest Event</span>
+          <strong>{latestActivityEntry?.summary || '暂无执行记录'}</strong>
+        </div>
+      </div>
+
+      <ClaudianActivityPanel activityEntries={activityEntries} formatTimestamp={formatTimestamp} />
+    </div>
+  ) : activeDrawer === 'artifacts' ? (
+    <div className="chat-shell-drawer-panel">
+      <div className="chat-shell-drawer-header">
+        <div>
+          <strong>Artifacts Drawer</strong>
+          <span>本轮对项目留下了什么产物。</span>
+        </div>
+        <button className="chat-shell-drawer-close" type="button" onClick={() => setActiveDrawer(null)}>
+          关闭
+        </button>
+      </div>
+
+      <div className="chat-shell-drawer-summary-grid">
+        <div className="chat-shell-drawer-summary-card">
+          <span>Changed Files</span>
+          <strong>{artifactPaths.length}</strong>
+        </div>
+        <div className="chat-shell-drawer-summary-card">
+          <span>Latest Summary</span>
+          <strong>{latestActivityEntry?.summary || '暂无产物摘要'}</strong>
+        </div>
+      </div>
+
+      <div className="chat-shell-artifact-list">
+        {artifactPaths.length > 0 ? (
+          artifactPaths.map((artifactPath) => (
+            <article key={artifactPath} className="chat-shell-artifact-card">
+              <strong>{artifactPath.split('/').pop() || artifactPath}</strong>
+              <span>{artifactPath}</span>
+            </article>
+          ))
+        ) : (
+          <div className="chat-panel-note">还没有检测到可归档的文件变更。</div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  const agentLaneContent =
+    activeAgentLane === 'chat' ? (
+      <ClaudianMessageList
+        messages={messages}
+        draftContents={streamingDraftContents}
+        formatTimestamp={formatTimestamp}
+        parseMessageParts={parseAIChatMessageParts}
+        renderMessagePart={renderMessagePart}
+        messagesEndRef={messagesEndRef}
+        leadingContent={launchpad}
+      />
+    ) : activeAgentLane === 'tasks' ? (
+      <section className="chat-agent-panel chat-agent-task-panel" aria-label="GN Agent tasks">
+        <div className="chat-agent-panel-header">
+          <strong>Tasks</strong>
+          <span>GN Agent 当前任务、能力链和运行状态。</span>
+        </div>
+        <div className="chat-agent-task-list">
+          <article className={`chat-agent-task-card ${runStateTone}`}>
+            <div>
+              <strong>{isLoading ? '正在执行当前请求' : '等待你的下一条指令'}</strong>
+              <span>{latestActivityEntry?.summary || '还没有新的执行记录。'}</span>
+            </div>
+            <span>{runStateLabel}</span>
+          </article>
+          <article className="chat-agent-task-card">
+            <div>
+              <strong>下一段能力链</strong>
+              <span>
+                {!workflowAvailability.hasRequirementsSpec || !workflowAvailability.hasFeatureTree
+                  ? '需求分析'
+                  : !workflowAvailability.hasPageStructure || !workflowAvailability.hasWireframes
+                    ? '原型草图'
+                    : 'UI 设计'}
+              </span>
+            </div>
+            <span>Ready</span>
+          </article>
+        </div>
+      </section>
+    ) : activeAgentLane === 'artifacts' ? (
+      <section className="chat-agent-panel chat-agent-artifact-panel" aria-label="GN Agent artifacts">
+        <div className="chat-agent-panel-header">
+          <strong>Artifacts</strong>
+          <span>Agent 生成、更新或引用过的项目产物。</span>
+        </div>
+        <div className="chat-agent-artifact-list">
+          {artifactPaths.length > 0 ? (
+            artifactPaths.map((artifactPath) => (
+              <article key={artifactPath} className="chat-agent-artifact-card">
+                <strong>{artifactPath.split('/').pop() || artifactPath}</strong>
+                <span>{artifactPath}</span>
+              </article>
+            ))
+          ) : (
+            <div className="chat-panel-note">还没有可展示的产物。执行 @整理、@需求、@草图 或 @UI 后会出现在这里。</div>
+          )}
+        </div>
+      </section>
+    ) : activeAgentLane === 'context' ? (
+      <section className="chat-agent-panel chat-agent-context-panel" aria-label="GN Agent context">
+        <div className="chat-agent-panel-header">
+          <strong>Context</strong>
+          <span>GN Agent 当前会读到的项目和上下文预算。</span>
+        </div>
+        <div className="chat-shell-drawer-summary-grid">
+          <div className="chat-shell-drawer-summary-card">
+            <span>Project</span>
+            <strong>{currentProject?.name || '未打开项目'}</strong>
+          </div>
+          <div className="chat-shell-drawer-summary-card">
+            <span>Budget</span>
+            <strong>{currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}</strong>
+          </div>
+        </div>
+        <div className="chat-context-strip">
+          {contextSnapshot.primaryLabel ? <span className="chat-context-chip subtle">{contextSnapshot.primaryLabel}</span> : null}
+          {contextSnapshot.secondaryLabel ? <span className="chat-context-chip subtle">{contextSnapshot.secondaryLabel}</span> : null}
+          {contextSnapshot.knowledgeLabel ? <span className="chat-context-chip subtle">{contextSnapshot.knowledgeLabel}</span> : null}
+          {!contextSnapshot.primaryLabel && !contextSnapshot.secondaryLabel && !contextSnapshot.knowledgeLabel ? (
+            <span className="chat-context-chip subtle">当前没有额外上下文摘要</span>
+          ) : null}
+        </div>
+      </section>
+    ) : activeAgentLane === 'skills' ? (
+      <section className="chat-agent-panel chat-agent-skills-panel" aria-label="GN Agent skills">
+        <div className="chat-agent-panel-header">
+          <strong>Skills</strong>
+          <span>选择一个能力，GN Agent 会把对应指令放入输入区。</span>
+        </div>
+        <div className="chat-agent-capability-grid">
+          {GN_AGENT_SUGGESTIONS.map((suggestion) => (
+            <button
+              key={suggestion.label}
+              type="button"
+              className="chat-agent-capability-card"
+              onClick={() => handleApplySuggestion(suggestion.prompt)}
+            >
+              <strong>{suggestion.label}</strong>
+              <span>{suggestion.description}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    ) : (
+      <section className="chat-agent-panel chat-agent-activity-panel" aria-label="GN Agent activity">
+        <div className="chat-agent-panel-header">
+          <strong>Activity</strong>
+          <span>记录 GN Agent 的真实执行、产物和失败节点。</span>
+        </div>
+        <div className="chat-activity-list">
+          {activityEntries.length > 0 ? (
+            activityEntries.map((entry) => (
+              <article key={entry.id} className="chat-activity-entry">
+                <div className="chat-activity-entry-head">
+                  <strong>{entry.summary}</strong>
+                  <span>{formatTimestamp(entry.createdAt)}</span>
+                </div>
+                <div className="chat-activity-entry-meta">
+                  <span>{entry.type}</span>
+                  {entry.skill ? <span>{entry.skill}</span> : null}
+                  <span>{entry.runtime}</span>
+                </div>
+                {entry.changedPaths.length > 0 ? (
+                  <div className="chat-activity-entry-paths">
+                    {entry.changedPaths.map((changedPath) => (
+                      <code key={changedPath}>{changedPath}</code>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            ))
+          ) : (
+            <div className="chat-panel-note">还没有执行记录。Agent 产生变更或运行能力链后会写入这里。</div>
+          )}
+        </div>
+      </section>
+    );
+
+  useEffect(() => {
+    if (selectedChatAgentId !== 'built-in' && !agentAvailability[selectedChatAgentId].ready) {
+      setSelectedChatAgentId('built-in');
+    }
+  }, [agentAvailability, selectedChatAgentId]);
 
   return (
     <>
@@ -1528,257 +1645,161 @@ export const AIChat: React.FC<AIChatProps> = ({
       <section
         className={`${getChatShellLayoutClassName(isClaudianEmbedded ? false : isCollapsed)}${isClaudianEmbedded ? ' chat-shell-embedded' : ''}`}
       >
-        {!isClaudianEmbedded ? <header className="chat-shell-header">
-          <div className="chat-shell-title">
-            <strong>{isCollapsed ? 'AI' : 'AI 对话'}</strong>
-            {!isCollapsed ? <span>{activeSession?.title || currentProject?.name || '新对话'}</span> : null}
-          </div>
-          <div className="chat-shell-header-actions">
-            {!isCollapsed ? (
-              <>
-                <div className="chat-shell-view-tabs" role="tablist" aria-label="AI shell view">
-                  {(['chat', 'skills', 'activity'] as const).map((panel) => (
-                    <button
-                      key={panel}
-                      type="button"
-                      role="tab"
-                      aria-selected={activePanel === panel}
-                      className={activePanel === panel ? 'active' : ''}
-                      onClick={() => setActivePanel(panel)}
-                    >
-                      {panel === 'chat' ? 'Chat' : panel === 'skills' ? 'Skills' : 'Activity'}
-                    </button>
-                  ))}
-                </div>
-                <div className="chat-shell-agent-tabs" role="tablist" aria-label="AI agent">
-                  {CHAT_AGENTS.map((agent) => (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      role="tab"
-                      aria-label={agent.label}
-                      aria-selected={agent.id === selectedChatAgentId}
-                      className={`chat-agent-tab ${agent.id === selectedChatAgentId ? 'active' : ''}`}
-                      title={agent.title}
-                      onClick={() => {
-                        setSelectedChatAgentId(agent.id);
-                      }}
-                    >
-                      <AgentIcon agentId={agent.id} />
-                    </button>
-                  ))}
-                </div>
-                <div className="chat-header-menu">
+        <header className={`chat-shell-header chat-shell-gn-header${isClaudianEmbedded ? ' embedded' : ''}`}>
+          <div className="chat-shell-header-main">
+            <div className="chat-shell-title">
+              <span className="chat-shell-kicker">GN Agent</span>
+              <strong>{isCollapsed && !isClaudianEmbedded ? 'GN' : activeSession?.title || '新对话'}</strong>
+              {!isCollapsed || isClaudianEmbedded ? <span>{currentProject?.name || '未打开项目'}</span> : null}
+            </div>
+
+            {(!isCollapsed || isClaudianEmbedded) && !isGNAgentEmbedded ? (
+              <div className="chat-shell-status-strip">
+                <span className="chat-shell-status-pill">{selectedAgent.label}</span>
+                <span className="chat-shell-status-pill">{selectedRuntimeConfig?.model || '未启用模型'}</span>
+                <span className={`chat-shell-status-pill ${currentContextUsage.ratio >= 0.8 ? 'warning' : ''}`}>
+                  {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
+                </span>
+                <span className={`chat-shell-status-pill ${runStateTone}`}>{runStateLabel}</span>
+              </div>
+            ) : null}
+
+            <div className="chat-shell-header-actions">
+              {!isCollapsed || isClaudianEmbedded ? (
+                <>
                   <button
-                    className="chat-shell-icon-btn"
+                    className={`chat-shell-drawer-toggle ${activeDrawer === 'context' ? 'active' : ''}`}
                     type="button"
-                    aria-label="\u5386\u53f2\u4f1a\u8bdd"
-                    title="\u5386\u53f2\u4f1a\u8bdd"
-                    onClick={() => {
-                      setShowHistoryMenu((current) => !current);
-                      setShowSkillMenu(false);
-                      setShowReferenceMenu(false);
-                    }}
+                    aria-pressed={activeDrawer === 'context'}
+                    aria-expanded={activeDrawer === 'context'}
+                    onClick={() => toggleDrawer('context')}
+                  >
+                    <span>Context</span>
+                    <strong>{currentContextUsage.usedLabel}</strong>
+                  </button>
+                  <button
+                    className={`chat-shell-drawer-toggle ${activeDrawer === 'run' ? 'active' : ''}`}
+                    type="button"
+                    aria-pressed={activeDrawer === 'run'}
+                    aria-expanded={activeDrawer === 'run'}
+                    onClick={() => toggleDrawer('run')}
+                  >
+                    <span>Run</span>
+                    <strong>{activityEntries.length}</strong>
+                  </button>
+                  <button
+                    className={`chat-shell-drawer-toggle ${activeDrawer === 'artifacts' ? 'active' : ''}`}
+                    type="button"
+                    aria-pressed={activeDrawer === 'artifacts'}
+                    aria-expanded={activeDrawer === 'artifacts'}
+                    onClick={() => toggleDrawer('artifacts')}
+                  >
+                    <span>Artifacts</span>
+                    <strong>{artifactPaths.length}</strong>
+                  </button>
+                  <div className="chat-header-menu">
+                    <button
+                      className="chat-shell-icon-btn"
+                      type="button"
+                      aria-label="\u5386\u53f2\u4f1a\u8bdd"
+                      title="\u5386\u53f2\u4f1a\u8bdd"
+                      onClick={() => {
+                        setShowHistoryMenu((current) => !current);
+                      }}
                     >
                       <HistoryIcon />
                     </button>
                     {historyMenu}
-                </div>
+                  </div>
+                  <button
+                    className="chat-shell-icon-btn"
+                    type="button"
+                    aria-label="\u65b0\u5bf9\u8bdd"
+                    title="\u65b0\u5bf9\u8bdd"
+                    onClick={handleCreateSession}
+                  >
+                    <ComposeIcon />
+                  </button>
+                  <button
+                    className="chat-shell-icon-btn"
+                    type="button"
+                    aria-label="\u8bbe\u7f6e"
+                    title="\u8bbe\u7f6e"
+                    onClick={() => setIsSettingsOpen(true)}
+                  >
+                    <SettingsIcon />
+                  </button>
+                </>
+              ) : null}
+
+              {!isClaudianEmbedded ? (
                 <button
                   className="chat-shell-icon-btn"
                   type="button"
-                  aria-label="\u65b0\u5bf9\u8bdd"
-                  title="\u65b0\u5bf9\u8bdd"
-                  onClick={handleCreateSession}
+                  aria-label={isCollapsed ? '\u5c55\u5f00\u804a\u5929\u680f' : '\u6536\u8d77\u804a\u5929\u680f'}
+                  title={isCollapsed ? '\u5c55\u5f00\u804a\u5929\u680f' : '\u6536\u8d77\u804a\u5929\u680f'}
+                  onClick={() => setIsCollapsed((current) => !current)}
                 >
-                  <ComposeIcon />
+                  <CollapseIcon collapsed={isCollapsed} />
                 </button>
-                <button
-                  className="chat-shell-icon-btn"
-                  type="button"
-                  aria-label="\u8bbe\u7f6e"
-                  title="\u8bbe\u7f6e"
-                  onClick={() => setIsSettingsOpen(true)}
-                >
-                  <SettingsIcon />
-                </button>
-              </>
-            ) : null}
-            <button
-              className="chat-shell-icon-btn"
-              type="button"
-              aria-label={isCollapsed ? '\u5c55\u5f00\u804a\u5929\u680f' : '\u6536\u8d77\u804a\u5929\u680f'}
-              title={isCollapsed ? '\u5c55\u5f00\u804a\u5929\u680f' : '\u6536\u8d77\u804a\u5929\u680f'}
-              onClick={() => setIsCollapsed((current) => !current)}
-            >
-              <CollapseIcon collapsed={isCollapsed} />
-              </button>
+              ) : null}
             </div>
-        </header> : null}
+          </div>
+
+          {!isCollapsed || isClaudianEmbedded ? (
+            <nav className="chat-agent-lane-tabs" aria-label="GN Agent capabilities">
+              {GN_AGENT_LANES.map((lane) => (
+                <button
+                  key={lane.id}
+                  type="button"
+                  className={lane.id === activeAgentLane ? 'active' : ''}
+                  aria-pressed={lane.id === activeAgentLane}
+                  title={lane.description}
+                  onClick={() => {
+                    setActiveAgentLane(lane.id);
+                    setActiveDrawer(null);
+                  }}
+                >
+                  {lane.label}
+                </button>
+              ))}
+            </nav>
+          ) : null}
+
+          {headerDrawerContent}
+        </header>
 
         {!isCollapsed || isClaudianEmbedded ? (
           <>
-            {!isClaudianEmbedded && activePanel === 'skills' ? (
-              <ClaudianSkillsPanel
-                skillsState={skillsState}
-                skillsMessage={skillsMessage}
-                githubSkillRepo={githubSkillRepo}
-                setGithubSkillRepo={setGithubSkillRepo}
-                githubSkillPath={githubSkillPath}
-                setGithubSkillPath={setGithubSkillPath}
-                githubSkillRef={githubSkillRef}
-                setGithubSkillRef={setGithubSkillRef}
-                onImportGitHubSkill={handleImportGitHubSkill}
-                skills={skills}
-                onImportSkill={(skill) => {
-                  void handleImportSkill(skill);
-                }}
-                onSyncSkill={(skill, runtime) => {
-                  void handleSyncSkill(skill, runtime);
-                }}
-              />
-            ) : !isClaudianEmbedded && activePanel === 'activity' ? (
-              <ClaudianActivityPanel activityEntries={activityEntries} formatTimestamp={formatTimestamp} />
-            ) : (
-              <ClaudianMessageList
-                messages={messages}
-                formatTimestamp={formatTimestamp}
-                parseMessageParts={parseAIChatMessageParts}
-                renderMessagePart={renderMessagePart}
-                messagesEndRef={messagesEndRef}
-              />
-            )}
+            {agentLaneContent}
 
-            {activePanel === 'chat' || isClaudianEmbedded ? (
-              isClaudianEmbedded ? (
+            {isClaudianEmbedded ? (
                 <>
-                  <ClaudianEmbeddedTopbar
-                    selectedChatAgentId={selectedChatAgentId}
-                    setSelectedChatAgentId={setSelectedChatAgentId}
-                    renderAgentIcon={(agentId) => <AgentIcon agentId={agentId} />}
-                    onToggleHistory={() => {
-                      setShowHistoryMenu((current) => !current);
-                      setShowSkillMenu(false);
-                      setShowReferenceMenu(false);
-                    }}
-                    onCreateSession={handleCreateSession}
-                    onOpenSettings={() => setIsSettingsOpen(true)}
-                    historyMenu={historyMenu}
-                    HistoryIcon={HistoryIcon}
-                    ComposeIcon={ComposeIcon}
-                    SettingsIcon={SettingsIcon}
-                  />
-
-                  {showSkillMenu ? (
-                    <div className="chat-skill-menu">
-                      {AVAILABLE_CHAT_SKILLS.map((skill) => (
-                        <button key={skill.token} type="button" onClick={() => insertSkillToken(skill.token)}>
-                          <strong>{skill.token}</strong>
-                          <span>{skill.package}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {showReferenceMenu ? (
-                    <ClaudianReferenceMenu
-                      referenceScopeMode={referenceScopeMode}
-                      onApplyReferenceScope={handleApplyReferenceScope}
-                      onRebuildContextIndex={() => {
-                        void handleRebuildContextIndex();
-                      }}
-                      selectedReferenceDirectory={selectedReferenceDirectory}
-                      onReferenceDirectoryChange={handleReferenceDirectoryChange}
-                      availableReferenceDirectories={availableReferenceDirectories}
-                      referenceFiles={referenceFiles}
-                      referencePickerValue={referencePickerValue}
-                      setReferencePickerValue={setReferencePickerValue}
-                      onAddReferenceFile={handleAddReferenceFile}
-                      openedKnowledgeEntryIds={openedKnowledgeEntryIds}
-                      disableRebuild={!currentProject}
-                    />
-                  ) : null}
-
                   <ClaudianEmbeddedComposer
-                    entrySwitch={<ClaudianModeSwitch compact />}
-                    selectedReferenceFiles={selectedReferenceFiles}
-                    onRemoveReferenceFile={handleRemoveReferenceFile}
+                    entrySwitch={isGNAgentEmbedded ? null : <ClaudianModeSwitch compact />}
                     input={input}
                     setInput={setInput}
                     textareaRef={textareaRef}
                     onKeyDown={handleKeyDown}
                     placeholder={getComposerPlaceholder(isRuntimeConfigured)}
-                    onToggleReferenceMenu={() => {
-                      setShowReferenceMenu((current) => !current);
-                      setShowSkillMenu(false);
-                      setShowHistoryMenu(false);
-                    }}
-                    onToggleSkillMenu={() => {
-                      setShowSkillMenu((current) => !current);
-                      setShowReferenceMenu(false);
-                      setShowHistoryMenu(false);
-                    }}
+                    agentStatusLabel={isGNAgentEmbedded ? selectedAgent.label : undefined}
                     selectedRuntimeLabel={selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}
                     contextUsageLabel={`${currentContextUsage.usedLabel} / ${currentContextUsage.limitLabel}`}
                     contextUsageWarning={currentContextUsage.ratio >= 0.8}
+                    runStateLabel={isGNAgentEmbedded ? runStateLabel : undefined}
+                    runStateTone={isGNAgentEmbedded ? runStateTone : undefined}
                     isLoading={isLoading}
                     disabled={!input.trim() || isLoading}
                     onSubmit={() => {
                       void handleSubmit();
                     }}
-                    PlusIcon={PlusIcon}
-                    SparkIcon={SparkIcon}
                     SendIcon={SendIcon}
-                    FileIcon={FileIcon}
                   />
                 </>
               ) : (
                 <form className="chat-composer" onSubmit={handleSubmit}>
                   <div className="chat-composer-shell">
-                      {selectedReferenceFiles.length > 0 ? (
-                        <div className="chat-selected-reference-chips">
-                          {selectedReferenceFiles.map((file) => (
-                            <button
-                              key={file.id}
-                              type="button"
-                              className="chat-reference-chip compact"
-                              onClick={() => handleRemoveReferenceFile(file.id)}
-                              title={file.path}
-                            >
-                              <FileIcon />
-                              <span>{file.title}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-
                       <div className="chat-composer-main">
-                        <button
-                          type="button"
-                          className="chat-composer-plus-btn"
-                          aria-label="\u4e0a\u4e0b\u6587\u4e0e\u5f15\u7528"
-                          title="\u4e0a\u4e0b\u6587\u4e0e\u5f15\u7528"
-                          onClick={() => {
-                            setShowReferenceMenu((current) => !current);
-                            setShowSkillMenu(false);
-                            setShowHistoryMenu(false);
-                          }}
-                        >
-                          <PlusIcon />
-                        </button>
-                        <button
-                          type="button"
-                          className="chat-composer-icon-btn"
-                          aria-label={'Skill \u83dc\u5355'}
-                          title={'Skill \u83dc\u5355'}
-                          onClick={() => {
-                            setShowSkillMenu((current) => !current);
-                            setShowReferenceMenu(false);
-                            setShowHistoryMenu(false);
-                          }}
-                        >
-                          <SparkIcon />
-                        </button>
                         <textarea
                           ref={textareaRef}
                           value={input}
@@ -1805,14 +1826,18 @@ export const AIChat: React.FC<AIChatProps> = ({
                           {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
                         </span>
                       </div>
+                      <div className="chat-composer-hints">
+                        <span>Enter 发送</span>
+                        <span>Shift + Enter 换行</span>
+                        <span>用 @skill 精准触发能力</span>
+                      </div>
                   </div>
                 </form>
-              )
-            ) : null}
+              )}
           </>
         ) : (
           <div className="chat-collapsed-state">
-            <span>聊天栏已收起</span>
+            <span>GN Agent 已收起</span>
           </div>
         )}
       </section>

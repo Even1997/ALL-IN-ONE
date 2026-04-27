@@ -50,19 +50,19 @@ export const ClaudianShell: React.FC<{ mode?: 'panel' | 'full-page' }> = ({ mode
   }, []);
 
   const pageTitle = useMemo(() => {
-    if (currentMode === 'config') {
-      return 'Claudian Settings';
+  if (currentMode === 'config') {
+      return 'GN Agent Settings';
     }
 
     if (currentMode === 'claude') {
-      return 'Claude Workspace';
+      return 'Local Runtime';
     }
 
     if (currentMode === 'codex') {
-      return 'Codex Workspace';
+      return 'Codex Runtime';
     }
 
-    return 'Classic AI Chat';
+    return 'GN Agent Chat';
   }, [currentMode]);
 
   const providerThemeLabel = getProviderThemeLabel(currentMode);
@@ -71,7 +71,7 @@ export const ClaudianShell: React.FC<{ mode?: 'panel' | 'full-page' }> = ({ mode
     <section className={`claudian-shell claudian-shell-${mode}`} data-mode={currentMode}>
       <header className="claudian-header">
         <div className="claudian-title-slot">
-          <span className="claudian-context-badge">Claudian</span>
+          <span className="claudian-context-badge">GN Agent</span>
           <h4 className="claudian-title-text">{pageTitle}</h4>
           <span className={`claudian-provider-badge claudian-provider-badge-${currentMode}`}>{providerThemeLabel}</span>
         </div>

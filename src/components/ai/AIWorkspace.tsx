@@ -1,6 +1,6 @@
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { ClaudianWorkspace } from './ClaudianWorkspace';
+import { GNAgentWorkspace } from './GNAgentWorkspace';
 import { useProjectStore } from '../../store/projectStore';
 import './AIWorkspace.css';
 
@@ -19,7 +19,7 @@ export const AIWorkspace: React.FC = () => {
     <section className="floating-ai-workspace">
       <div className="ai-workspace-shell">
         <div className="ai-workspace-body">
-          <ClaudianWorkspace mode="panel" />
+          <GNAgentWorkspace />
         </div>
       </div>
     </section>

@@ -224,6 +224,7 @@ const removeProjectSnapshot = (projectId: string) => {
 
 const THEME_STORAGE_KEY = 'goodnight-theme-mode';
 const DESKTOP_AI_PANE_WIDTH_BOUNDS = { min: 320, max: 640 };
+const DESKTOP_WORKBENCH_MIN_WIDTH = 1100;
 const DESIGN_BOARD_STORAGE_PREFIX = 'goodnight-design-board';
 const PROJECT_INDEX_STORAGE_KEY = 'goodnight-project-index';
 const PROJECT_SNAPSHOT_STORAGE_PREFIX = 'goodnight-project-snapshot';
@@ -746,6 +747,9 @@ const App: React.FC = () => {
       DESKTOP_AI_PANE_WIDTH_BOUNDS
     )
   );
+  const [canUseDesktopWorkbenchLayout, setCanUseDesktopWorkbenchLayout] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= DESKTOP_WORKBENCH_MIN_WIDTH : true
+  );
   const [projects, setProjects] = useState<ProjectConfig[]>(() => readProjectIndex());
   const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
   const [stylePresets, setStylePresets] = useState<Omit<DesignStyleNode, 'id' | 'x' | 'y' | 'width' | 'height'>[]>(
@@ -1024,7 +1028,22 @@ const App: React.FC = () => {
     [designSelectionIds, designStyleNodes]
   );
   const canUseProjectFilesystem = isTauriRuntimeAvailable();
-  const isDesktopWorkbenchMode = Boolean(currentProject && currentRole !== 'design' && !isProjectManagerOpen);
+  const isDesktopWorkbenchMode = Boolean(
+    currentProject && currentRole !== 'design' && !isProjectManagerOpen && canUseDesktopWorkbenchLayout
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setCanUseDesktopWorkbenchLayout(window.innerWidth >= DESKTOP_WORKBENCH_MIN_WIDTH);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const handleDesktopWorkbenchLayoutChange = useCallback((sizes: number[]) => {
     const nextAiPaneWidth = sizes[1];

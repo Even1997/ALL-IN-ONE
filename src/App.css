@@ -8625,6 +8625,59 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   background: transparent;
 }
 
+@media (max-width: 1099px) {
+  .app-shell-desktop {
+    width: 100%;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .app-shell-desktop .app-header {
+    height: auto;
+    min-height: var(--desktop-topbar-height);
+  }
+
+  .app-workbench-row {
+    display: block;
+    height: auto;
+    min-height: calc(100dvh - var(--desktop-topbar-height));
+    overflow: visible;
+  }
+
+  .app-main-desktop {
+    width: 100%;
+    max-width: 100vw;
+    height: auto;
+    min-height: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  body.ai-chat-sidebar-expanded .app-main.app-main-desktop,
+  body.ai-chat-sidebar-collapsed .app-main.app-main-desktop {
+    padding-right: 0;
+  }
+
+  .app-main-desktop > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .product-workbench-shell {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .pm-left-nav,
+  .pm-main-viewer {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 .desktop-active .product-workbench-shell,
 .desktop-active .develop-view,
 .desktop-active .test-view,
