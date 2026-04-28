@@ -2279,7 +2279,7 @@ export const useProjectStore = create<ProjectState>()(
           return {
             requirementDocs,
             activeKnowledgeFileId:
-              state.activeKnowledgeFileId === id ? requirementDocs[0]?.id || null : state.activeKnowledgeFileId,
+              state.activeKnowledgeFileId === id ? null : state.activeKnowledgeFileId,
             selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.filter((item) => item !== id),
             generatedFiles,
             graph: buildProjectGraph(
@@ -2395,7 +2395,7 @@ export const useProjectStore = create<ProjectState>()(
             activeKnowledgeFileId:
               requirementDocs.some((doc) => doc.id === state.activeKnowledgeFileId)
                 ? state.activeKnowledgeFileId
-                : requirementDocs[0]?.id || null,
+                : null,
             selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.filter((id) =>
               requirementDocs.some((doc) => doc.id === id)
             ),
