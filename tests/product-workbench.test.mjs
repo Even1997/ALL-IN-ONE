@@ -53,6 +53,15 @@ test('knowledge filesystem refresh ignores stale async results from older runs',
   assert.match(source, /replaceWireframes\(sketchArtifacts\.wireframes,\s*tree\)/);
 });
 
+test('knowledge note hydration does not re-arm autosave for metadata-only refreshes', async () => {
+  const source = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(source, /const hydratedKnowledgeNoteSignatureRef = useRef\(''\)/);
+  assert.match(source, /const nextHydratedSignature = `\$\{selectedServerNote\.id\}:\$\{selectedServerNote\.title\}:\$\{selectedServerNote\.bodyMarkdown\}`;/);
+  assert.match(source, /if \(hydratedKnowledgeNoteSignatureRef\.current === nextHydratedSignature\) \{\s*return;\s*\}/s);
+  assert.match(source, /lastKnowledgeAutosaveSignatureRef\.current = `\$\{selectedServerNote\.id\}:\$\{selectedServerNote\.bodyMarkdown\}`;/);
+});
+
 test('knowledge file rename uses tool_rename after persisting the latest content to the source file', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 

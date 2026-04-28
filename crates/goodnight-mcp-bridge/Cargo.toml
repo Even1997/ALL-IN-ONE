@@ -2,7 +2,7 @@
 name = "goodnight-mcp-bridge"
 version = "0.1.0"
 edition = "2021"
-description = "Stdio-to-HTTP bridge for GoodNight MCP server"
+description = "Stdio-to-HTTP bridge for Atomic MCP server"
 
 [[bin]]
 name = "goodnight-mcp-bridge"

@@ -1090,6 +1090,7 @@ export const ProductWorkbench = ({
   const [frameEditorDraft, setFrameEditorDraft] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const knowledgeRefreshRequestIdRef = useRef(0);
+  const hydratedKnowledgeNoteSignatureRef = useRef('');
   const lastKnowledgeAutosaveSignatureRef = useRef('');
   const lastPersistedSketchSnapshotRef = useRef('');
 
@@ -1512,14 +1513,21 @@ export const ProductWorkbench = ({
     if (!selectedServerNote) {
       setRequirementDraftTitle('');
       setRequirementDraftContent('');
+      hydratedKnowledgeNoteSignatureRef.current = '';
       lastKnowledgeAutosaveSignatureRef.current = '';
       return;
     }
 
+    const nextHydratedSignature = `${selectedServerNote.id}:${selectedServerNote.title}:${selectedServerNote.bodyMarkdown}`;
+    if (hydratedKnowledgeNoteSignatureRef.current === nextHydratedSignature) {
+      return;
+    }
+
+    hydratedKnowledgeNoteSignatureRef.current = nextHydratedSignature;
     setRequirementDraftTitle(selectedServerNote.title);
     setRequirementDraftContent(selectedServerNote.bodyMarkdown);
     setRequirementSaveMessage(null);
-    lastKnowledgeAutosaveSignatureRef.current = '';
+    lastKnowledgeAutosaveSignatureRef.current = `${selectedServerNote.id}:${selectedServerNote.bodyMarkdown}`;
   }, [selectedServerNote]);
 
   useEffect(() => {

@@ -11,6 +11,7 @@ const appCssPath = path.resolve(__dirname, '../src/App.css');
 const workspacePath = path.resolve(__dirname, '../src/components/workspace/Workspace.tsx');
 const workspaceCssPath = path.resolve(__dirname, '../src/components/workspace/Workspace.css');
 const chatCssPath = path.resolve(__dirname, '../src/components/workspace/AIChat.css');
+const aiChatPath = path.resolve(__dirname, '../src/components/workspace/AIChat.tsx');
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
 const appThemePath = path.resolve(__dirname, '../src/appTheme.ts');
 
@@ -45,6 +46,22 @@ test('ai chat supports docked desktop pane styling', async () => {
   assert.match(css, /body\.desktop-workbench-mode \.chat-shell/);
   assert.match(css, /position:\s*relative;/);
   assert.match(css, /width:\s*100%;/);
+});
+
+test('collapsed desktop ai pane disappears entirely instead of rendering a compact rail', async () => {
+  const appSource = await readFile(appPath, 'utf8');
+  const aiChatSource = await readFile(aiChatPath, 'utf8');
+  const css = await readFile(chatCssPath, 'utf8');
+  const appCss = await readFile(appCssPath, 'utf8');
+
+  assert.match(appSource, /isDesktopAiPaneMounted/);
+  assert.match(appSource, /isDesktopAiPaneVisible/);
+  assert.doesNotMatch(aiChatSource, /chat-collapsed-rail/);
+  assert.doesNotMatch(aiChatSource, /chat-collapsed-lane-btn/);
+  assert.doesNotMatch(css, /\.chat-collapsed-rail\s*\{/);
+  assert.doesNotMatch(css, /\.chat-collapsed-lane-btn\s*\{/);
+  assert.match(appCss, /\.app-workbench-ai-shell\.is-hidden\s*\{/);
+  assert.match(appCss, /transition:\s*width 0\.28s ease, min-width 0\.28s ease, opacity 0\.24s ease, transform 0\.28s ease, margin-left 0\.28s ease;/);
 });
 
 test('product knowledge view renders opened-file tab strip', async () => {

@@ -5,6 +5,7 @@ import { FileExplorer } from './FileExplorer';
 import { Terminal } from './Terminal';
 import type { DevTask, GeneratedFile } from '../../types';
 import { isAbsoluteFilePath, joinFileSystemPath } from '../../utils/fileSystemPaths.ts';
+import { WorkbenchIcon } from '../ui/WorkbenchIcon';
 import {
   LAYOUT_PREFERENCE_KEYS,
   readLayoutSize,
@@ -41,21 +42,21 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     readLayoutSize(
       LAYOUT_PREFERENCE_KEYS.workspaceSidebarWidth,
-      276,
+      252,
       WORKSPACE_SIDEBAR_WIDTH_BOUNDS
     )
   );
   const [activityWidth, setActivityWidth] = useState(() =>
     readLayoutSize(
       LAYOUT_PREFERENCE_KEYS.workspaceActivityWidth,
-      56,
+      52,
       WORKSPACE_ACTIVITY_WIDTH_BOUNDS
     )
   );
   const [terminalHeight, setTerminalHeight] = useState(() =>
     readLayoutSize(
       LAYOUT_PREFERENCE_KEYS.workspaceTerminalHeight,
-      240,
+      220,
       WORKSPACE_TERMINAL_HEIGHT_BOUNDS
     )
   );
@@ -206,19 +207,27 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                           className={`toggle-btn ${currentView === 'files' ? 'active' : ''}`}
                           onClick={() => setCurrentView('files')}
                           type="button"
+                          aria-label="文件视图"
                         >
-                          閺傚洣娆?                        </button>
+                          <WorkbenchIcon name="files" />
+                          <span>文件</span>
+                        </button>
                         <button
                           className={`toggle-btn ${currentView === 'terminal' ? 'active' : ''}`}
                           onClick={() => setCurrentView('terminal')}
                           type="button"
+                          aria-label="终端视图"
                         >
-                          缂佸牏顏?                        </button>
+                          <WorkbenchIcon name="terminal" />
+                          <span>终端</span>
+                        </button>
                       </div>
 
                       {selectedFile ? (
                         <div className="current-file">
-                          <span className="file-icon-small">FILE</span>
+                          <span className="file-icon-small">
+                            <WorkbenchIcon name="document" />
+                          </span>
                           <span className="file-path">{selectedFile}</span>
                         </div>
                       ) : null}
@@ -295,24 +304,24 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         >
           <div className="workspace-pane">
             <div className="workspace-activity">
-              <button className="activity-btn active" title="Explorer" type="button">
-                E
+              <button className="activity-btn active" title="资源管理器" type="button" aria-label="资源管理器">
+                <WorkbenchIcon name="folder" />
               </button>
-              <button className="activity-btn" title="Search" type="button">
-                S
+              <button className="activity-btn" title="搜索" type="button" aria-label="搜索">
+                <WorkbenchIcon name="search" />
               </button>
-              <button className="activity-btn" title="Git" type="button">
-                G
+              <button className="activity-btn" title="Git" type="button" aria-label="Git">
+                <WorkbenchIcon name="gitBranch" />
               </button>
-              <button className="activity-btn" title="Debug" type="button">
-                D
+              <button className="activity-btn" title="调试" type="button" aria-label="调试">
+                <WorkbenchIcon name="bug" />
               </button>
-              <button className="activity-btn" title="Extensions" type="button">
-                X
+              <button className="activity-btn" title="扩展" type="button" aria-label="扩展">
+                <WorkbenchIcon name="puzzle" />
               </button>
               <div className="activity-spacer" />
-              <button className="activity-btn" title="Settings" type="button">
-                ...
+              <button className="activity-btn" title="设置" type="button" aria-label="设置">
+                <WorkbenchIcon name="settings" />
               </button>
             </div>
           </div>

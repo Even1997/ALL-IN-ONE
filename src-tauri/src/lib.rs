@@ -6,11 +6,204 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_shell::ShellExt;
+
+const KNOWLEDGE_SIDECAR_PORT: u16 = 44380;
+const KNOWLEDGE_HEALTH_POLL_INTERVAL_MS: u64 = 100;
+const KNOWLEDGE_HEALTH_TIMEOUT_MS: u64 = 10_000;
+const KNOWLEDGE_PID_FILE_NAME: &str = "goodnight-knowledge-sidecar.pid";
+const KNOWLEDGE_TOKEN_FILE_NAME: &str = "goodnight_local_server_token";
 
 fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
     let bytes = fs::read(file_path)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalKnowledgeServerConfig {
+    pub base_url: String,
+    pub auth_token: String,
+}
+
+struct KnowledgeSidecarChild(tauri_plugin_shell::process::CommandChild);
+
+struct KnowledgeSidecarState {
+    child: Mutex<Option<KnowledgeSidecarChild>>,
+    data_dir: PathBuf,
+}
+
+fn kill_stale_knowledge_sidecar(app_data_dir: &Path) {
+    let pid_file = app_data_dir.join(KNOWLEDGE_PID_FILE_NAME);
+    if let Ok(contents) = fs::read_to_string(&pid_file) {
+        if let Ok(pid) = contents.trim().parse::<u32>() {
+            #[cfg(unix)]
+            {
+                let _ = Command::new("kill").arg(pid.to_string()).output();
+            }
+            #[cfg(windows)]
+            {
+                let _ = Command::new("taskkill")
+                    .args(["/PID", &pid.to_string(), "/F"])
+                    .output();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        let _ = fs::remove_file(pid_file);
+    }
+}
+
+fn write_knowledge_pid_file(app_data_dir: &Path, pid: u32) {
+    let _ = fs::write(app_data_dir.join(KNOWLEDGE_PID_FILE_NAME), pid.to_string());
+}
+
+fn remove_knowledge_pid_file(app_data_dir: &Path) {
+    let _ = fs::remove_file(app_data_dir.join(KNOWLEDGE_PID_FILE_NAME));
+}
+
+fn ensure_local_knowledge_token(app_data_dir: &Path) -> Result<String, String> {
+    let token_file = app_data_dir.join(KNOWLEDGE_TOKEN_FILE_NAME);
+
+    if let Ok(token) = fs::read_to_string(&token_file) {
+        let normalized = token.trim().to_string();
+        if !normalized.is_empty() {
+            return Ok(normalized);
+        }
+    }
+
+    let manager = goodnight_core::DatabaseManager::new(app_data_dir)
+        .map_err(|error| format!("Failed to open knowledge database manager: {}", error))?;
+    let registry = manager
+        .registry()
+        .ok_or_else(|| "No registry database available".to_string())?;
+    let (_, raw_token) = registry
+        .create_api_token("desktop")
+        .map_err(|error| format!("Failed to create knowledge API token: {}", error))?;
+
+    fs::write(&token_file, &raw_token)
+        .map_err(|error| format!("Failed to persist knowledge API token: {}", error))?;
+
+    Ok(raw_token)
+}
+
+fn get_sidecar_binary_name() -> &'static str {
+    "goodnight-server"
+}
+
+fn wait_for_knowledge_sidecar(base_url: &str) {
+    let health_url = format!("{}/health", base_url);
+    let start = std::time::Instant::now();
+
+    loop {
+        if start.elapsed().as_millis() as u64 > KNOWLEDGE_HEALTH_TIMEOUT_MS {
+            tracing::warn!(
+                timeout_ms = KNOWLEDGE_HEALTH_TIMEOUT_MS,
+                "GoodNight knowledge sidecar health check timed out"
+            );
+            break;
+        }
+
+        match reqwest::blocking::Client::new()
+            .get(&health_url)
+            .timeout(std::time::Duration::from_millis(500))
+            .send()
+        {
+            Ok(response) if response.status().is_success() => {
+                tracing::info!(
+                    url = %base_url,
+                    elapsed_ms = start.elapsed().as_millis(),
+                    "GoodNight knowledge sidecar is ready"
+                );
+                break;
+            }
+            _ => {
+                std::thread::sleep(std::time::Duration::from_millis(
+                    KNOWLEDGE_HEALTH_POLL_INTERVAL_MS,
+                ));
+            }
+        }
+    }
+}
+
+fn bootstrap_knowledge_sidecar(
+    app: &tauri::App,
+    app_data_dir: &Path,
+    config: &LocalKnowledgeServerConfig,
+) -> Result<KnowledgeSidecarState, String> {
+    kill_stale_knowledge_sidecar(app_data_dir);
+
+    let health_url = format!("{}/health", config.base_url);
+    let already_running = reqwest::blocking::Client::new()
+        .get(&health_url)
+        .timeout(std::time::Duration::from_millis(500))
+        .send()
+        .is_ok_and(|response| response.status().is_success());
+
+    if already_running {
+        tracing::info!(url = %config.base_url, "Reusing existing GoodNight knowledge sidecar");
+        return Ok(KnowledgeSidecarState {
+            child: Mutex::new(None),
+            data_dir: app_data_dir.to_path_buf(),
+        });
+    }
+
+    let shell = app.shell();
+    let sidecar = shell
+        .sidecar(get_sidecar_binary_name())
+        .map_err(|error| format!("Failed to create knowledge sidecar command: {}", error))?
+        .args([
+            "--data-dir",
+            app_data_dir
+                .to_str()
+                .ok_or_else(|| "Knowledge data directory is not valid UTF-8".to_string())?,
+            "serve",
+            "--port",
+            &KNOWLEDGE_SIDECAR_PORT.to_string(),
+        ]);
+
+    let (mut rx, child) = sidecar
+        .spawn()
+        .map_err(|error| format!("Failed to spawn knowledge sidecar: {}", error))?;
+
+    write_knowledge_pid_file(app_data_dir, child.pid());
+
+    tauri::async_runtime::spawn(async move {
+        use tauri_plugin_shell::process::CommandEvent;
+
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    tracing::info!(
+                        output = %String::from_utf8_lossy(&line),
+                        "goodnight knowledge sidecar stdout"
+                    );
+                }
+                CommandEvent::Stderr(line) => {
+                    tracing::warn!(
+                        output = %String::from_utf8_lossy(&line),
+                        "goodnight knowledge sidecar stderr"
+                    );
+                }
+                CommandEvent::Error(error) => {
+                    tracing::warn!(error = %error, "goodnight knowledge sidecar error");
+                }
+                CommandEvent::Terminated(payload) => {
+                    tracing::info!(?payload, "goodnight knowledge sidecar terminated");
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    wait_for_knowledge_sidecar(&config.base_url);
+
+    Ok(KnowledgeSidecarState {
+        child: Mutex::new(Some(KnowledgeSidecarChild(child))),
+        data_dir: app_data_dir.to_path_buf(),
+    })
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1095,16 +1288,145 @@ fn get_projects_index_path(app_handle: tauri::AppHandle) -> Result<String, Strin
         .or_else(|_| Ok(file_path.to_string_lossy().to_string()))
 }
 
+fn build_unique_destination_path(target_dir: &Path, file_name: &std::ffi::OsStr) -> PathBuf {
+    let candidate = PathBuf::from(file_name);
+    let stem = candidate
+        .file_stem()
+        .map(|value| value.to_string_lossy().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "asset".to_string());
+    let extension = candidate.extension().map(|value| value.to_string_lossy().to_string());
+
+    let mut next_path = target_dir.join(file_name);
+    if !next_path.exists() {
+        return next_path;
+    }
+
+    for index in 1..10_000 {
+        let suffix = format!("{stem}-{index}");
+        next_path = match &extension {
+            Some(extension) if !extension.is_empty() => target_dir.join(format!("{suffix}.{extension}")),
+            _ => target_dir.join(&suffix),
+        };
+
+        if !next_path.exists() {
+            return next_path;
+        }
+    }
+
+    target_dir.join(file_name)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportKnowledgeAssetsParams {
+    project_root: String,
+    target_directory: String,
+    source_paths: Vec<String>,
+}
+
+#[tauri::command]
+fn import_knowledge_assets(params: ImportKnowledgeAssetsParams) -> Result<Vec<String>, String> {
+    let project_root = fs::canonicalize(params.project_root.trim())
+        .map_err(|error| format!("Failed to resolve project root: {}", error))?;
+    let requested_target_dir = PathBuf::from(params.target_directory.trim());
+
+    fs::create_dir_all(&requested_target_dir)
+        .map_err(|error| format!("Failed to create target directory: {}", error))?;
+
+    let target_directory = fs::canonicalize(&requested_target_dir)
+        .map_err(|error| format!("Failed to resolve target directory: {}", error))?;
+
+    if !target_directory.starts_with(&project_root) {
+        return Err("Target directory must stay inside the current project.".to_string());
+    }
+
+    let mut imported_paths = Vec::new();
+    for source_path in params.source_paths {
+        let source = PathBuf::from(source_path.trim());
+        if !source.is_file() {
+            return Err(format!("Source file does not exist: {}", source.display()));
+        }
+
+        let file_name = source
+            .file_name()
+            .ok_or_else(|| format!("Invalid source file name: {}", source.display()))?;
+        let destination = build_unique_destination_path(&target_directory, file_name);
+        fs::copy(&source, &destination).map_err(|error| {
+            format!(
+                "Failed to copy {} to {}: {}",
+                source.display(),
+                destination.display(),
+                error
+            )
+        })?;
+        imported_paths.push(destination.to_string_lossy().to_string());
+    }
+
+    Ok(imported_paths)
+}
+
 #[tauri::command]
 fn read_text_file(file_path: String) -> Result<String, String> {
     read_file_as_string(Path::new(&file_path))
         .map_err(|e| format!("Error reading file: {}", e))
 }
 
+#[tauri::command]
+fn open_path_in_shell(app_handle: tauri::AppHandle, path: String) -> Result<(), String> {
+    let target_path = PathBuf::from(path.trim());
+    if !target_path.exists() {
+        return Err(format!("Path does not exist: {}", target_path.display()));
+    }
+
+    #[allow(deprecated)]
+    app_handle
+        .shell()
+        .open(target_path.to_string_lossy().to_string(), None)
+        .map_err(|error| format!("Failed to open path: {}", error))
+}
+
+#[tauri::command]
+fn get_local_knowledge_server_config(
+    config: tauri::State<'_, LocalKnowledgeServerConfig>,
+) -> LocalKnowledgeServerConfig {
+    config.inner().clone()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "goodnight_lib=info,goodnight_core=info,warn".parse().unwrap()),
+        )
+        .init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
+
+            fs::create_dir_all(&app_data_dir)
+                .map_err(|error| format!("Failed to create app data directory: {}", error))?;
+
+            let auth_token = ensure_local_knowledge_token(&app_data_dir)?;
+            let config = LocalKnowledgeServerConfig {
+                base_url: format!("http://127.0.0.1:{}", KNOWLEDGE_SIDECAR_PORT),
+                auth_token,
+            };
+
+            let sidecar_state = bootstrap_knowledge_sidecar(app, &app_data_dir, &config)?;
+
+            app.manage(config);
+            app.manage(sidecar_state);
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             tool_view,
             tool_write,
@@ -1124,10 +1446,25 @@ pub fn run() {
             open_local_agent_interface,
             run_local_agent_prompt,
             get_local_agent_config_snapshot,
+            import_knowledge_assets,
             read_text_file,
+            open_path_in_shell,
+            get_local_knowledge_server_config,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app.try_state::<KnowledgeSidecarState>() {
+                    if let Ok(mut child) = state.child.lock() {
+                        if let Some(KnowledgeSidecarChild(handle)) = child.take() {
+                            let _ = handle.kill();
+                        }
+                    }
+                    remove_knowledge_pid_file(&state.data_dir);
+                }
+            }
+        });
 }
 
 #[cfg(test)]

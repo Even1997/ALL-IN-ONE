@@ -5,6 +5,7 @@ import { AIWorkspace } from './components/ai/AIWorkspace';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
 import { ProductWorkbench } from './components/product/ProductWorkbench';
+import { WorkbenchIcon, type WorkbenchIconName } from './components/ui/WorkbenchIcon';
 import { usePreviewStore } from './store/previewStore';
 import { useFeatureTreeStore } from './store/featureTreeStore';
 import { aiService } from './modules/ai/core/AIService';
@@ -18,10 +19,9 @@ import { buildDesignStyleReferencePath, buildSketchReferencePath } from './modul
 import { useAIWorkflowStore } from './modules/ai/store/workflowStore';
 import { useProjectStore } from './store/projectStore';
 import { APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appTheme';
-import { VISIBLE_ROLE_TABS, type RoleView } from './appNavigation';
+import type { RoleView } from './appNavigation';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type { AppType, FeatureNode, GeneratedFile, PageStructureNode, ProjectConfig, WireframeDocument } from './types';
-import { Allotment } from 'allotment';
 import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
 import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
 import {
@@ -101,6 +101,18 @@ type DesignFlowEdge = {
   id: string;
   from: string;
   to: string;
+};
+type AppMenuId = 'file' | 'edit' | 'view' | 'window' | 'help';
+type AppMenuItem = {
+  label: string;
+  meta?: string;
+  active?: boolean;
+  action: () => void;
+};
+type AppMenuSection = {
+  id: AppMenuId;
+  label: string;
+  items: AppMenuItem[];
 };
 type DesignNodeLayerMap = Record<string, number>;
 type DesignConnectionDraft = {
@@ -223,8 +235,10 @@ const removeProjectSnapshot = (projectId: string) => {
 };
 
 const THEME_STORAGE_KEY = 'goodnight-theme-mode';
-const DESKTOP_AI_PANE_WIDTH_BOUNDS = { min: 320, max: 640 };
-const DESKTOP_WORKBENCH_MIN_WIDTH = 1100;
+const DESKTOP_AI_PANE_WIDTH_BOUNDS = { min: 420, max: 680 };
+const DEFAULT_DESKTOP_AI_PANE_WIDTH = 450;
+const LEGACY_DESKTOP_AI_PANE_WIDTH = 500;
+const DESKTOP_AI_PANE_TRANSITION_MS = 240;
 const DESIGN_BOARD_STORAGE_PREFIX = 'goodnight-design-board';
 const PROJECT_INDEX_STORAGE_KEY = 'goodnight-project-index';
 const PROJECT_SNAPSHOT_STORAGE_PREFIX = 'goodnight-project-snapshot';
@@ -485,6 +499,30 @@ const buildEdgePath = (start: { x: number; y: number }, end: { x: number; y: num
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+const ROLE_TAB_ICONS: Record<RoleView, WorkbenchIconName> = {
+  product: 'product',
+  knowledge: 'knowledge',
+  page: 'page',
+  design: 'design',
+  develop: 'files',
+  test: 'bug',
+  operations: 'settings',
+};
+
+const DESKTOP_WORKBENCH_ROLES: Array<{
+  id: RoleView;
+  label: string;
+  summary: string;
+}> = [
+  { id: 'knowledge', label: '知识库', summary: '笔记与资料' },
+  { id: 'page', label: '页面', summary: '结构与草图' },
+  { id: 'design', label: '设计', summary: '页面与画布' },
+  { id: 'develop', label: '开发', summary: '文件与任务' },
+  { id: 'test', label: '测试', summary: '计划与缺陷' },
+  { id: 'operations', label: '发布', summary: '部署与流程' },
+];
+const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'page', 'design'];
+
 
 const getSketchPreviewMetrics = (
   elements: Array<{ x: number; y: number; width: number; height: number }>,
@@ -739,17 +777,28 @@ const SketchLibraryTreeItem: React.FC<SketchLibraryTreeItemProps> = ({
 };
 
 const App: React.FC = () => {
-  const [currentRole, setCurrentRole] = useState<RoleView>('product');
-  const [desktopAiPaneWidth, setDesktopAiPaneWidth] = useState(() =>
-    readLayoutSize(
+  const [currentRole, setCurrentRole] = useState<RoleView>('knowledge');
+  const [activeAppMenu, setActiveAppMenu] = useState<AppMenuId | null>(null);
+  const [desktopAiPaneWidth] = useState(() => {
+    const nextWidth = readLayoutSize(
       LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
-      420,
+      DEFAULT_DESKTOP_AI_PANE_WIDTH,
       DESKTOP_AI_PANE_WIDTH_BOUNDS
-    )
-  );
-  const [canUseDesktopWorkbenchLayout, setCanUseDesktopWorkbenchLayout] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= DESKTOP_WORKBENCH_MIN_WIDTH : true
-  );
+    );
+
+    if (nextWidth === LEGACY_DESKTOP_AI_PANE_WIDTH) {
+      return writeLayoutSize(
+        LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
+        DEFAULT_DESKTOP_AI_PANE_WIDTH,
+        DESKTOP_AI_PANE_WIDTH_BOUNDS
+      );
+    }
+
+    return nextWidth;
+  });
+  const [isDesktopAiCollapsed, setIsDesktopAiCollapsed] = useState(false);
+  const [isDesktopAiPaneMounted, setIsDesktopAiPaneMounted] = useState(true);
+  const [isDesktopAiPaneVisible, setIsDesktopAiPaneVisible] = useState(true);
   const [projects, setProjects] = useState<ProjectConfig[]>(() => readProjectIndex());
   const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
   const [stylePresets, setStylePresets] = useState<Omit<DesignStyleNode, 'id' | 'x' | 'y' | 'width' | 'height'>[]>(
@@ -804,6 +853,9 @@ const App: React.FC = () => {
   const [expandedSketchLibraryNodeIds, setExpandedSketchLibraryNodeIds] = useState<Set<string>>(() => new Set());
   const designBoardScrollRef = useRef<HTMLDivElement | null>(null);
   const designContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const desktopAiTransitionTimerRef = useRef<number | null>(null);
+  const desktopAiEnterFrameRef = useRef<number | null>(null);
+  const desktopAiEnterCommitFrameRef = useRef<number | null>(null);
   const designMarqueeRef = useRef<DesignMarqueeSelection | null>(null);
   const designDragRef = useRef<{
     nodeId: string;
@@ -831,6 +883,7 @@ const App: React.FC = () => {
   const lastSelectedStyleNodeIdRef = useRef<string | null>(null);
   const lastSyncedStyleMarkdownRef = useRef('');
   const lastSavedStyleFileSnapshotsRef = useRef<Record<string, string>>({});
+  const appMenuBarRef = useRef<HTMLDivElement | null>(null);
   const [designBoardViewport, setDesignBoardViewport] = useState({ width: 0, height: 0 });
   const isConnectorMode = false;
   const pendingConnectionStartId = connectionDraft?.fromId ?? null;
@@ -1028,37 +1081,11 @@ const App: React.FC = () => {
     [designSelectionIds, designStyleNodes]
   );
   const canUseProjectFilesystem = isTauriRuntimeAvailable();
-  const isDesktopWorkbenchMode = Boolean(
-    currentProject && currentRole !== 'design' && !isProjectManagerOpen && canUseDesktopWorkbenchLayout
+  const activeDesktopRole = useMemo(
+    () => DESKTOP_WORKBENCH_ROLES.find((role) => role.id === currentRole) || DESKTOP_WORKBENCH_ROLES[0],
+    [currentRole]
   );
-
-  useEffect(() => {
-    const handleResize = () => {
-      setCanUseDesktopWorkbenchLayout(window.innerWidth >= DESKTOP_WORKBENCH_MIN_WIDTH);
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  const handleDesktopWorkbenchLayoutChange = useCallback((sizes: number[]) => {
-    const nextAiPaneWidth = sizes[1];
-    if (!Number.isFinite(nextAiPaneWidth)) {
-      return;
-    }
-
-    setDesktopAiPaneWidth(
-      writeLayoutSize(
-        LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
-        nextAiPaneWidth,
-        DESKTOP_AI_PANE_WIDTH_BOUNDS
-      )
-    );
-  }, []);
+  const isDesktopWorkbenchMode = Boolean(currentProject);
 
   useEffect(() => {
     document.body.classList.toggle('desktop-workbench-mode', isDesktopWorkbenchMode);
@@ -1068,6 +1095,94 @@ const App: React.FC = () => {
     };
   }, [isDesktopWorkbenchMode]);
 
+  useEffect(
+    () => () => {
+      if (desktopAiTransitionTimerRef.current !== null) {
+        window.clearTimeout(desktopAiTransitionTimerRef.current);
+      }
+      if (desktopAiEnterFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopAiEnterFrameRef.current);
+      }
+      if (desktopAiEnterCommitFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopAiEnterCommitFrameRef.current);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (currentRole === 'design') {
+      if (desktopAiTransitionTimerRef.current !== null) {
+        window.clearTimeout(desktopAiTransitionTimerRef.current);
+        desktopAiTransitionTimerRef.current = null;
+      }
+      if (desktopAiEnterFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopAiEnterFrameRef.current);
+        desktopAiEnterFrameRef.current = null;
+      }
+      if (desktopAiEnterCommitFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopAiEnterCommitFrameRef.current);
+        desktopAiEnterCommitFrameRef.current = null;
+      }
+      setIsDesktopAiPaneMounted(false);
+      setIsDesktopAiPaneVisible(false);
+      return;
+    }
+
+    if (!isDesktopAiCollapsed) {
+      if (desktopAiTransitionTimerRef.current !== null) {
+        window.clearTimeout(desktopAiTransitionTimerRef.current);
+        desktopAiTransitionTimerRef.current = null;
+      }
+      if (desktopAiEnterFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopAiEnterFrameRef.current);
+        desktopAiEnterFrameRef.current = null;
+      }
+      if (desktopAiEnterCommitFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopAiEnterCommitFrameRef.current);
+        desktopAiEnterCommitFrameRef.current = null;
+      }
+
+      setIsDesktopAiPaneVisible(false);
+      setIsDesktopAiPaneMounted(true);
+      desktopAiEnterFrameRef.current = window.requestAnimationFrame(() => {
+        desktopAiEnterCommitFrameRef.current = window.requestAnimationFrame(() => {
+          setIsDesktopAiPaneVisible(true);
+          desktopAiEnterCommitFrameRef.current = null;
+        });
+        desktopAiEnterFrameRef.current = null;
+      });
+
+      return () => {
+        if (desktopAiEnterFrameRef.current !== null) {
+          window.cancelAnimationFrame(desktopAiEnterFrameRef.current);
+          desktopAiEnterFrameRef.current = null;
+        }
+        if (desktopAiEnterCommitFrameRef.current !== null) {
+          window.cancelAnimationFrame(desktopAiEnterCommitFrameRef.current);
+          desktopAiEnterCommitFrameRef.current = null;
+        }
+      };
+    }
+
+    if (desktopAiEnterFrameRef.current !== null) {
+      window.cancelAnimationFrame(desktopAiEnterFrameRef.current);
+      desktopAiEnterFrameRef.current = null;
+    }
+    if (desktopAiEnterCommitFrameRef.current !== null) {
+      window.cancelAnimationFrame(desktopAiEnterCommitFrameRef.current);
+      desktopAiEnterCommitFrameRef.current = null;
+    }
+    setIsDesktopAiPaneVisible(false);
+    if (desktopAiTransitionTimerRef.current !== null) {
+      window.clearTimeout(desktopAiTransitionTimerRef.current);
+    }
+    desktopAiTransitionTimerRef.current = window.setTimeout(() => {
+      setIsDesktopAiPaneMounted(false);
+      desktopAiTransitionTimerRef.current = null;
+    }, DESKTOP_AI_PANE_TRANSITION_MS);
+  }, [currentRole, isDesktopAiCollapsed]);
+
   useEffect(() => {
     writeLayoutSize(
       LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
@@ -1075,6 +1190,38 @@ const App: React.FC = () => {
       DESKTOP_AI_PANE_WIDTH_BOUNDS
     );
   }, [desktopAiPaneWidth]);
+
+  const toggleThemeMode = useCallback((): void => {
+    setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'));
+  }, []);
+
+  useEffect(() => {
+    if (!activeAppMenu) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (appMenuBarRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setActiveAppMenu(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveAppMenu(null);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeAppMenu]);
 
   const refreshSketchArtifactsFromDisk = useCallback(async () => {
     if (!canUseProjectFilesystem || !currentProject) {
@@ -1985,7 +2132,7 @@ const App: React.FC = () => {
     setTree(starterFeatureTree);
     clearCanvas();
     setSelectedFeature(starterFeatureTree.children[0] || null);
-    setCurrentRole('product');
+    setCurrentRole('knowledge');
     setIsProjectManagerOpen(false);
     void ensureProjectFilesystemStructure(project.id).catch(() => undefined);
   };
@@ -2020,7 +2167,7 @@ const App: React.FC = () => {
     }
 
     clearCanvas();
-    setCurrentRole('product');
+    setCurrentRole('knowledge');
     setIsProjectManagerOpen(false);
   }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, replaceWorkflowProjectState, setTree, switchProject]);
 
@@ -2073,7 +2220,7 @@ const App: React.FC = () => {
     clearTree();
     clearCanvas();
     setSelectedFeature(null);
-    setCurrentRole('product');
+    setCurrentRole('knowledge');
     setIsProjectManagerOpen(true);
   };
 
@@ -3360,11 +3507,127 @@ ${selectedContextPrompt}` : '',
     };
   }, [designCanvasContextMenu]);
 
-  const renderProductView = () => (
+  const appMenuSections = useMemo<AppMenuSection[]>(
+    () => [
+      {
+        id: 'file' as const,
+        label: '文件',
+        items: [
+          { label: '新建项目', meta: 'Ctrl+N', action: handleResetProject },
+          { label: '项目列表', meta: 'Ctrl+O', action: () => setIsProjectManagerOpen(true) },
+          { label: '打开知识库', action: () => setCurrentRole('knowledge') },
+          { label: '打开页面', action: () => setCurrentRole('page') },
+        ],
+      },
+      {
+        id: 'edit' as const,
+        label: '编辑',
+        items: [
+          { label: '设计工作台', action: () => setCurrentRole('design') },
+          { label: '开发工作台', action: () => setCurrentRole('develop') },
+          { label: '测试工作台', action: () => setCurrentRole('test') },
+          { label: '发布工作台', action: () => setCurrentRole('operations') },
+        ],
+      },
+      {
+        id: 'view' as const,
+        label: '查看',
+        items: [
+          { label: '知识库', active: currentRole === 'knowledge', action: () => setCurrentRole('knowledge') },
+          { label: '页面', active: currentRole === 'page', action: () => setCurrentRole('page') },
+          { label: '设计', active: currentRole === 'design', action: () => setCurrentRole('design') },
+          {
+            label: themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式',
+            action: toggleThemeMode,
+          },
+        ],
+      },
+      {
+        id: 'window' as const,
+        label: '窗口',
+        items: [
+          { label: '项目切换', action: () => setIsProjectManagerOpen(true) },
+          { label: '回到知识库', action: () => setCurrentRole('knowledge') },
+          { label: '回到页面', action: () => setCurrentRole('page') },
+          { label: '当前功能', meta: selectedFeature?.name || currentProject?.name || '当前项目', action: () => undefined },
+        ],
+      },
+      {
+        id: 'help' as const,
+        label: '帮助',
+        items: [
+          {
+            label: '当前布局说明',
+            action: () =>
+              window.alert('当前界面参考桌面应用菜单栏布局：左侧切换工作区，顶部菜单负责项目级操作，内容区按默认窗口尺寸排布。'),
+          },
+          {
+            label: '知识库说明',
+            action: () => window.alert('知识库用于整理 Markdown 笔记、项目资料和关联上下文。'),
+          },
+          {
+            label: '页面说明',
+            action: () => window.alert('页面用于维护页面结构、页面草图和画布模块。'),
+          },
+        ],
+      },
+    ],
+    [currentProject?.name, currentRole, handleResetProject, selectedFeature?.name, themeMode, toggleThemeMode]
+  );
+
+  const renderAppMenuBar = (tone: 'desktop' | 'standard') => (
+    <div
+      ref={appMenuBarRef}
+      className={`app-menu-bar ${tone === 'desktop' ? 'desktop' : 'standard'}`}
+      onMouseLeave={() => setActiveAppMenu(null)}
+    >
+      {appMenuSections.map((section) => (
+        <div
+          key={section.id}
+          className={`app-menu-group ${activeAppMenu === section.id ? 'open' : ''}`}
+          onMouseEnter={() => {
+            if (activeAppMenu) {
+              setActiveAppMenu(section.id);
+            }
+          }}
+        >
+          <button
+            className="app-menu-trigger"
+            type="button"
+            onClick={() => setActiveAppMenu((current) => (current === section.id ? null : section.id))}
+          >
+            {section.label}
+          </button>
+          {activeAppMenu === section.id ? (
+            <div className="app-menu-panel">
+              {section.items.map((item) => (
+                <button
+                  key={`${section.id}-${item.label}`}
+                  className={`app-menu-item ${item.active ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => {
+                    setActiveAppMenu(null);
+                    item.action();
+                  }}
+                >
+                  <span>{item.label}</span>
+                  {item.meta ? <em>{item.meta}</em> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderProductView = (entryTab: 'knowledge' | 'page') => (
     <ProductWorkbench
       onFeatureSelect={(node) => setSelectedFeature(node)}
       layoutFocus="balanced"
       layoutDensity="comfortable"
+      entryTab={entryTab}
+      onEntryTabChange={(tab) => setCurrentRole(tab)}
     />
   );
 
@@ -4471,8 +4734,10 @@ ${selectedContextPrompt}` : '',
   }
 
   const roleContent =
-    currentRole === 'product'
-      ? renderProductView()
+    currentRole === 'product' || currentRole === 'knowledge'
+      ? renderProductView('knowledge')
+      : currentRole === 'page'
+        ? renderProductView('page')
       : currentRole === 'design'
         ? renderDesignView()
         : currentRole === 'develop'
@@ -4500,6 +4765,121 @@ ${selectedContextPrompt}` : '',
     />
   ) : roleContent;
   const appDesktopContent = appMainContent;
+  if (isDesktopWorkbenchMode) {
+    return (
+      <div className="app app-shell-desktop desktop-active desktop-shell-codex">
+        <div className="desktop-shell-frame">
+          <aside className="desktop-primary-rail">
+            <button
+              className="desktop-brand-chip"
+              type="button"
+              onClick={() => setCurrentRole('knowledge')}
+              aria-label="返回知识库"
+              title="返回知识库"
+            >
+              <span>GN</span>
+            </button>
+
+            <nav className="desktop-primary-nav" aria-label="工作流切换">
+              {DESKTOP_PRIMARY_ROLES.flatMap((roleId) => {
+                const role = DESKTOP_WORKBENCH_ROLES.find((item) => item.id === roleId);
+                return role ? [
+                <button
+                  key={role.id}
+                  className={`desktop-rail-icon-btn ${currentRole === role.id ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setCurrentRole(role.id)}
+                  aria-label={role.label}
+                  title={role.label}
+                >
+                  <WorkbenchIcon name={ROLE_TAB_ICONS[role.id]} />
+                </button>
+                ] : [];
+              })}
+            </nav>
+
+            <div className="desktop-primary-foot">
+              <button
+                className="desktop-rail-icon-btn"
+                type="button"
+                onClick={toggleThemeMode}
+                aria-label={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+                title={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+              >
+                <WorkbenchIcon name={themeMode === 'dark' ? 'sun' : 'moon'} />
+              </button>
+              <button
+                className="desktop-rail-icon-btn"
+                type="button"
+                onClick={() => setIsProjectManagerOpen(true)}
+                aria-label="项目列表"
+                title="项目列表"
+              >
+                <WorkbenchIcon name="folder" />
+              </button>
+            </div>
+          </aside>
+
+          <section className="desktop-workbench-column">
+            <header className="desktop-workbench-topbar desktop-workbench-menubar">
+              <div className="desktop-workbench-leading">
+                {renderAppMenuBar('desktop')}
+                <div className="desktop-workbench-title compact">
+                  <h1>{currentProject.name}</h1>
+                  <p>{activeDesktopRole.summary} · 统一工作台布局</p>
+                </div>
+              </div>
+
+              <div className="desktop-workbench-tools">
+                {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
+                <label className="desktop-project-switcher">
+                  <span>项目</span>
+                  <select value={currentProject.id} onChange={(event) => handleOpenProject(event.target.value)}>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="desktop-topbar-btn" type="button" onClick={() => setIsProjectManagerOpen(true)}>
+                  项目
+                </button>
+                {currentRole !== 'design' ? (
+                  <button
+                    className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => setIsDesktopAiCollapsed((current) => !current)}
+                    aria-label={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
+                    title={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
+                  >
+                    <WorkbenchIcon name={isDesktopAiCollapsed ? 'panelRightOpen' : 'panelRightClose'} />
+                  </button>
+                ) : null}
+              </div>
+            </header>
+
+            <div className="desktop-workbench-panels">
+              <div className="app-workbench-pane app-workbench-main-shell">
+                <main className="app-main app-main-desktop">{appDesktopContent}</main>
+              </div>
+              {currentRole !== 'design' && isDesktopAiPaneMounted ? (
+                <div
+                  className={`app-workbench-pane app-workbench-ai-shell desktop-ai-shell ${isDesktopAiPaneVisible ? '' : 'is-hidden'}`}
+                  style={{ width: desktopAiPaneWidth, minWidth: desktopAiPaneWidth }}
+                >
+                  <aside className="app-ai-activity-pane">
+                    <AIWorkspace collapsed={isDesktopAiCollapsed} onCollapsedChange={setIsDesktopAiCollapsed} />
+                  </aside>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`app app-shell-desktop ${isDesktopWorkbenchMode ? 'desktop-active' : ''}`}>
       <header className="app-header">
@@ -4513,20 +4893,8 @@ ${selectedContextPrompt}` : '',
               {currentProject.description || `${currentProject.appType} · ${currentProject.frontendFramework} · ${currentProject.backendFramework}`}
             </span>
           </div>
+          {renderAppMenuBar('standard')}
         </div>
-
-        <nav className="role-tabs">
-          {VISIBLE_ROLE_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={`role-tab ${currentRole === tab.id ? 'active' : ''}`}
-              onClick={() => setCurrentRole(tab.id)}
-              type="button"
-            >
-              <span className="role-name">{tab.label}</span>
-            </button>
-          ))}
-        </nav>
 
         <div className="header-right">
           <label className="project-switcher">
@@ -4545,17 +4913,20 @@ ${selectedContextPrompt}` : '',
           </button>
 
           <label className="header-search">
-            <span className="header-search-icon">⌕</span>
+            <span className="header-search-icon">
+              <WorkbenchIcon name="search" />
+            </span>
             <input placeholder="搜索项目..." type="text" />
           </label>
 
           <button
             className="theme-mode-btn"
             type="button"
-            onClick={() => setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'))}
+            onClick={toggleThemeMode}
             aria-label={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+            title={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
           >
-            {themeMode === 'dark' ? '浅色' : '深色'}
+            <WorkbenchIcon name={themeMode === 'dark' ? 'sun' : 'moon'} />
           </button>
 
           {selectedFeature ? <span className="current-feature">当前功能：{selectedFeature.name}</span> : null}
@@ -4568,24 +4939,19 @@ ${selectedContextPrompt}` : '',
 
       <div className="app-workbench-row">
         {isDesktopWorkbenchMode ? (
-          <Allotment className="app-workbench-allotment" onChange={handleDesktopWorkbenchLayoutChange}>
-            <Allotment.Pane minSize={640}>
-              <div className="app-workbench-pane">
-                <main className="app-main app-main-desktop">{appDesktopContent}</main>
-              </div>
-            </Allotment.Pane>
-            <Allotment.Pane
-              minSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
-              maxSize={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
-              preferredSize={desktopAiPaneWidth}
+          <div className="app-workbench-desktop-layout">
+            <div className="app-workbench-pane app-workbench-main-shell">
+              <main className="app-main app-main-desktop">{appDesktopContent}</main>
+            </div>
+            <div
+              className="app-workbench-pane app-workbench-ai-shell"
+              style={{ width: desktopAiPaneWidth, minWidth: desktopAiPaneWidth }}
             >
-              <div className="app-workbench-pane">
-                <aside className="app-ai-activity-pane">
-                  <AIWorkspace />
-                </aside>
-              </div>
-            </Allotment.Pane>
-          </Allotment>
+              <aside className="app-ai-activity-pane">
+                <AIWorkspace />
+              </aside>
+            </div>
+          </div>
         ) : (
           <>
             <main className="app-main app-main-desktop">{appMainContent}</main>

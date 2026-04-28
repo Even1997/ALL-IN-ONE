@@ -81,6 +81,8 @@ type AIChatProps = {
   variant?: 'default' | 'claudian-embedded' | 'gn-agent-embedded';
   runtimeConfigIdOverride?: string | null;
   providerExecutionMode?: 'claude' | 'codex' | null;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 };
 
 type ChatAgentAvailability = {
@@ -393,14 +395,17 @@ export const AIChat: React.FC<AIChatProps> = ({
   variant = 'default',
   runtimeConfigIdOverride = null,
   providerExecutionMode = null,
+  collapsed,
+  onCollapsedChange,
 }) => {
   const isGNAgentEmbedded = variant === 'gn-agent-embedded';
   const isClaudianEmbedded = variant === 'claudian-embedded' || isGNAgentEmbedded;
+  const lockExpandedForEmbedded = variant === 'claudian-embedded';
   const [input, setInput] = useState('');
   const [activeDrawer, setActiveDrawer] = useState<DrawerPanelId | null>(null);
   const [activeAgentLane, setActiveAgentLane] = useState<AgentLaneId>('chat');
   const [isLoading, setIsLoading] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -415,11 +420,21 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [isKnowledgeReferenceEnabled] = useState(true);
   const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
   const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, string>>({});
+  const isControlledCollapse = typeof collapsed === 'boolean';
+  const isCollapsed = isControlledCollapse ? Boolean(collapsed) : internalIsCollapsed;
+  const showExpandedShell = !isCollapsed || lockExpandedForEmbedded;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamingDraftBufferRef = useRef<Record<string, string>>({});
   const streamingFlushFrameRef = useRef<number | null>(null);
+
+  const setCollapsedState = (nextValue: boolean) => {
+    if (!isControlledCollapse) {
+      setInternalIsCollapsed(nextValue);
+    }
+    onCollapsedChange?.(nextValue);
+  };
 
   const {
     aiConfigs,
@@ -1631,7 +1646,6 @@ export const AIChat: React.FC<AIChatProps> = ({
         </div>
       </section>
     );
-
   useEffect(() => {
     if (selectedChatAgentId !== 'built-in' && !agentAvailability[selectedChatAgentId].ready) {
       setSelectedChatAgentId('built-in');
@@ -1643,17 +1657,17 @@ export const AIChat: React.FC<AIChatProps> = ({
       {isSettingsOpen ? <div className="chat-settings-overlay" onClick={closeSettings} /> : null}
 
       <section
-        className={`${getChatShellLayoutClassName(isClaudianEmbedded ? false : isCollapsed)}${isClaudianEmbedded ? ' chat-shell-embedded' : ''}`}
+        className={`${getChatShellLayoutClassName(lockExpandedForEmbedded ? false : isCollapsed)}${isClaudianEmbedded ? ' chat-shell-embedded' : ''}`}
       >
         <header className={`chat-shell-header chat-shell-gn-header${isClaudianEmbedded ? ' embedded' : ''}`}>
           <div className="chat-shell-header-main">
             <div className="chat-shell-title">
               <span className="chat-shell-kicker">GN Agent</span>
-              <strong>{isCollapsed && !isClaudianEmbedded ? 'GN' : activeSession?.title || '新对话'}</strong>
-              {!isCollapsed || isClaudianEmbedded ? <span>{currentProject?.name || '未打开项目'}</span> : null}
+              <strong>{isCollapsed && !lockExpandedForEmbedded ? 'GN' : activeSession?.title || '新对话'}</strong>
+              {showExpandedShell ? <span>{currentProject?.name || '未打开项目'}</span> : null}
             </div>
 
-            {(!isCollapsed || isClaudianEmbedded) && !isGNAgentEmbedded ? (
+            {showExpandedShell && !isGNAgentEmbedded ? (
               <div className="chat-shell-status-strip">
                 <span className="chat-shell-status-pill">{selectedAgent.label}</span>
                 <span className="chat-shell-status-pill">{selectedRuntimeConfig?.model || '未启用模型'}</span>
@@ -1665,7 +1679,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             ) : null}
 
             <div className="chat-shell-header-actions">
-              {!isCollapsed || isClaudianEmbedded ? (
+              {showExpandedShell ? (
                 <>
                   <button
                     className={`chat-shell-drawer-toggle ${activeDrawer === 'context' ? 'active' : ''}`}
@@ -1738,7 +1752,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                   type="button"
                   aria-label={isCollapsed ? '\u5c55\u5f00\u804a\u5929\u680f' : '\u6536\u8d77\u804a\u5929\u680f'}
                   title={isCollapsed ? '\u5c55\u5f00\u804a\u5929\u680f' : '\u6536\u8d77\u804a\u5929\u680f'}
-                  onClick={() => setIsCollapsed((current) => !current)}
+                  onClick={() => setCollapsedState(!isCollapsed)}
                 >
                   <CollapseIcon collapsed={isCollapsed} />
                 </button>
@@ -1746,7 +1760,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             </div>
           </div>
 
-          {!isCollapsed || isClaudianEmbedded ? (
+          {showExpandedShell ? (
             <nav className="chat-agent-lane-tabs" aria-label="GN Agent capabilities">
               {GN_AGENT_LANES.map((lane) => (
                 <button
@@ -1769,8 +1783,8 @@ export const AIChat: React.FC<AIChatProps> = ({
           {headerDrawerContent}
         </header>
 
-        {!isCollapsed || isClaudianEmbedded ? (
-          <>
+          {showExpandedShell ? (
+            <>
             {agentLaneContent}
 
             {isClaudianEmbedded ? (

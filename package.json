@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:server": "node scripts/build-goodnight-server.js",
     "preview": "vite preview",
     "tauri": "tauri",
     "package:win": "powershell -ExecutionPolicy Bypass -File ./scripts/package-win.ps1"
