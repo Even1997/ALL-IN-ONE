@@ -10,5 +10,6 @@ test('knowledge adapter projects KnowledgeNote into RequirementDoc without makin
   assert.match(source, /bodyMarkdown/);
   assert.match(source, /summary:/);
   assert.match(source, /sourceUrl/);
+  assert.match(source, /docType:\s*note\.docType/);
   assert.doesNotMatch(source, /updateRequirementDoc/);
 });

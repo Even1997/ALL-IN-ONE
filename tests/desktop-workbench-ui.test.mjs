@@ -125,6 +125,15 @@ test('desktop workbench disables legacy chat sidebar padding on the main pane', 
   assert.match(css, /body\.desktop-workbench-mode\.ai-chat-sidebar-expanded\s+\.app-main-desktop,[\s\S]*?body\.desktop-workbench-mode\.ai-chat-sidebar-collapsed\s+\.app-main-desktop\s*{[\s\S]*?padding-right:\s*0;/);
 });
 
+test('desktop knowledge workspace keeps the current-note side visible with a minimum readable width', async () => {
+  const css = await readFile(appCssPath, 'utf8');
+
+  assert.match(css, /\.desktop-workbench-panels\s*{[\s\S]*?overflow-x:\s*auto;/);
+  assert.match(css, /\.desktop-workbench-panels\s*{[\s\S]*?overflow-y:\s*hidden;/);
+  assert.match(css, /\.desktop-active\s+\.gn-note-workspace\s*{[\s\S]*?min-width:\s*960px;/);
+  assert.doesNotMatch(css, /@container\s*\(max-width:\s*1180px\)\s*{[\s\S]*?\.gn-note-side\s*{[\s\S]*?display:\s*none;/);
+});
+
 test('desktop product workbench uses dedicated shell and workspace files', async () => {
   const productSource = await readFile(productPath, 'utf8');
 

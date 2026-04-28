@@ -72,6 +72,22 @@ export interface RequirementDoc {
   status: 'draft' | 'ready';
 }
 
+export type DocumentChangeAction = 'created' | 'updated' | 'deleted';
+export type DocumentChangeTrigger = 'editor' | 'import' | 'sync';
+
+export interface DocumentChangeEvent {
+  id: string;
+  projectId: string;
+  documentId: string;
+  documentTitle: string;
+  action: DocumentChangeAction;
+  trigger: DocumentChangeTrigger;
+  sourceType?: RequirementDoc['sourceType'];
+  filePath?: string;
+  summary: string;
+  timestamp: string;
+}
+
 export interface PRDSection {
   id: string;
   title: string;

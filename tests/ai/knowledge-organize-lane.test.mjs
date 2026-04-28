@@ -50,7 +50,8 @@ test('knowledge organize persists generated wiki docs into the project knowledge
 
   assert.match(chatSource, /saveKnowledgeDocsToProjectDir/);
   assert.match(chatSource, /const persistedDocs = await saveKnowledgeDocsToProjectDir\(currentProject\.id,\s*docs\);/);
-  assert.match(chatSource, /const mergedDocs = mergeRequirementDocsByTitle\(requirementDocs,\s*persistedDocs\);/);
+  assert.match(chatSource, /const syncedNotes = await syncKnowledgeNotes\(/);
+  assert.match(chatSource, /const mergedDocs = projectKnowledgeNotesToRequirementDocs\(syncedNotes\);/);
 
   assert.match(persistenceSource, /export const saveKnowledgeDocsToProjectDir = async/);
   assert.match(persistenceSource, /joinProjectRelativePath\(projectDir,\s*`project\/\$\{doc\.title\}`\)/);

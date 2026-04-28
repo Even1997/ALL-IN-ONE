@@ -12,6 +12,7 @@ import type {
   LocalKnowledgeServerConfig,
   ProjectKnowledgeSource,
 } from '../model/knowledge';
+import { inferKnowledgeDocType } from '../model/knowledgeDocType';
 
 let localKnowledgeServerConfigPromise: Promise<LocalKnowledgeServerConfig> | null = null;
 const projectDatabaseIdPromises = new Map<string, Promise<string>>();
@@ -76,12 +77,14 @@ const mapAtomSummaryToKnowledgeNote = (atom: GoodnightAtomsResponse['atoms'][num
   const tags = atom.tags.map((tag) => tag.name);
   const bodyMarkdown = atom.snippet;
   const sourceUrl = atom.source_url ?? null;
+  const title = resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl);
 
   return {
     id: atom.id,
-    title: resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl),
+    title,
     bodyMarkdown,
     updatedAt: atom.updated_at,
+    docType: inferKnowledgeDocType(title),
     tags,
     kind: resolveKnowledgeNoteKind(sourceUrl, tags),
     sourceUrl,
@@ -95,12 +98,14 @@ const mapAtomWithTagsToKnowledgeNote = (
   const tags = atom.tags.map((tag) => tag.name);
   const bodyMarkdown = atom.content;
   const sourceUrl = atom.source_url ?? null;
+  const title = resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl, fallbackTitle);
 
   return {
     id: atom.id,
-    title: resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl, fallbackTitle),
+    title,
     bodyMarkdown,
     updatedAt: atom.updated_at,
+    docType: inferKnowledgeDocType(title),
     tags,
     kind: resolveKnowledgeNoteKind(sourceUrl, tags),
     sourceUrl,
@@ -111,12 +116,14 @@ const mapSearchResultToKnowledgeNote = (result: GoodnightSearchResult): Knowledg
   const tags = result.tags.map((tag) => tag.name);
   const bodyMarkdown = result.matching_chunk_content || result.snippet;
   const sourceUrl = result.source_url ?? null;
+  const title = resolveKnowledgeNoteTitle(result.title, bodyMarkdown, sourceUrl);
 
   return {
     id: result.id,
-    title: resolveKnowledgeNoteTitle(result.title, bodyMarkdown, sourceUrl),
+    title,
     bodyMarkdown,
     updatedAt: result.updated_at,
+    docType: inferKnowledgeDocType(title),
     tags,
     kind: resolveKnowledgeNoteKind(sourceUrl, tags),
     sourceUrl,
@@ -128,12 +135,14 @@ const mapSimilarResultToKnowledgeNote = (result: GoodnightSimilarAtomResult): Kn
   const tags = result.tags.map((tag) => tag.name);
   const bodyMarkdown = result.matching_chunk_content || result.snippet;
   const sourceUrl = result.source_url ?? null;
+  const title = resolveKnowledgeNoteTitle(result.title, bodyMarkdown, sourceUrl);
 
   return {
     id: result.id,
-    title: resolveKnowledgeNoteTitle(result.title, bodyMarkdown, sourceUrl),
+    title,
     bodyMarkdown,
     updatedAt: result.updated_at,
+    docType: inferKnowledgeDocType(title),
     tags,
     kind: resolveKnowledgeNoteKind(sourceUrl, tags),
     sourceUrl,
@@ -146,12 +155,14 @@ const mapNeighborhoodGraph = (graph: GoodnightNeighborhoodGraph): KnowledgeNeigh
     const tags = atom.tags.map((tag) => tag.name);
     const bodyMarkdown = atom.snippet;
     const sourceUrl = atom.source_url ?? null;
+    const title = resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl);
 
     return {
       id: atom.id,
-      title: resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl),
+      title,
       bodyMarkdown,
       updatedAt: atom.updated_at,
+      docType: inferKnowledgeDocType(title),
       tags,
       kind: resolveKnowledgeNoteKind(sourceUrl, tags),
       sourceUrl,

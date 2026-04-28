@@ -502,6 +502,7 @@ const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const ROLE_TAB_ICONS: Record<RoleView, WorkbenchIconName> = {
   product: 'product',
   knowledge: 'knowledge',
+  wiki: 'gitBranch',
   page: 'page',
   design: 'design',
   develop: 'files',
@@ -515,13 +516,14 @@ const DESKTOP_WORKBENCH_ROLES: Array<{
   summary: string;
 }> = [
   { id: 'knowledge', label: '知识库', summary: '笔记与资料' },
+  { id: 'wiki', label: 'Wiki 图谱', summary: '关系与连接' },
   { id: 'page', label: '页面', summary: '结构与草图' },
   { id: 'design', label: '设计', summary: '页面与画布' },
   { id: 'develop', label: '开发', summary: '文件与任务' },
   { id: 'test', label: '测试', summary: '计划与缺陷' },
   { id: 'operations', label: '发布', summary: '部署与流程' },
 ];
-const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'page', 'design'];
+const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'wiki', 'page', 'design'];
 
 
 const getSketchPreviewMetrics = (
@@ -904,6 +906,7 @@ const App: React.FC = () => {
     featuresMarkdown,
     wireframesMarkdown,
     requirementDocs,
+    documentEvents,
     activeKnowledgeFileId,
     selectedKnowledgeContextIds,
     prd,
@@ -1532,6 +1535,7 @@ const App: React.FC = () => {
         featuresMarkdown,
         wireframesMarkdown,
         requirementDocs,
+        documentEvents,
         activeKnowledgeFileId,
         selectedKnowledgeContextIds,
         prd,
@@ -1592,6 +1596,7 @@ const App: React.FC = () => {
       prd,
       rawRequirementInput,
       requirementDocs,
+      documentEvents,
       activeKnowledgeFileId,
       selectedKnowledgeContextIds,
       testPlan,
@@ -3516,6 +3521,7 @@ ${selectedContextPrompt}` : '',
           { label: '新建项目', meta: 'Ctrl+N', action: handleResetProject },
           { label: '项目列表', meta: 'Ctrl+O', action: () => setIsProjectManagerOpen(true) },
           { label: '打开知识库', action: () => setCurrentRole('knowledge') },
+          { label: '打开 Wiki 图谱', action: () => setCurrentRole('wiki') },
           { label: '打开页面', action: () => setCurrentRole('page') },
         ],
       },
@@ -3534,6 +3540,7 @@ ${selectedContextPrompt}` : '',
         label: '查看',
         items: [
           { label: '知识库', active: currentRole === 'knowledge', action: () => setCurrentRole('knowledge') },
+          { label: 'Wiki 图谱', active: currentRole === 'wiki', action: () => setCurrentRole('wiki') },
           { label: '页面', active: currentRole === 'page', action: () => setCurrentRole('page') },
           { label: '设计', active: currentRole === 'design', action: () => setCurrentRole('design') },
           {
@@ -3548,6 +3555,7 @@ ${selectedContextPrompt}` : '',
         items: [
           { label: '项目切换', action: () => setIsProjectManagerOpen(true) },
           { label: '回到知识库', action: () => setCurrentRole('knowledge') },
+          { label: '打开 Wiki 图谱', action: () => setCurrentRole('wiki') },
           { label: '回到页面', action: () => setCurrentRole('page') },
           { label: '当前功能', meta: selectedFeature?.name || currentProject?.name || '当前项目', action: () => undefined },
         ],
@@ -3621,7 +3629,7 @@ ${selectedContextPrompt}` : '',
     </div>
   );
 
-  const renderProductView = (entryTab: 'knowledge' | 'page') => (
+  const renderProductView = (entryTab: 'knowledge' | 'wiki' | 'page') => (
     <ProductWorkbench
       onFeatureSelect={(node) => setSelectedFeature(node)}
       layoutFocus="balanced"
@@ -4736,6 +4744,8 @@ ${selectedContextPrompt}` : '',
   const roleContent =
     currentRole === 'product' || currentRole === 'knowledge'
       ? renderProductView('knowledge')
+      : currentRole === 'wiki'
+        ? renderProductView('wiki')
       : currentRole === 'page'
         ? renderProductView('page')
       : currentRole === 'design'

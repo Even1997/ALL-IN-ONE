@@ -27,6 +27,7 @@ export const projectKnowledgeNoteToRequirementDoc = (
   summary: summarizeKnowledgeBody(note.bodyMarkdown),
   filePath: note.sourceUrl || undefined,
   kind: mapKnowledgeKindToRequirementKind(note.kind),
+  docType: note.docType,
   tags: note.tags,
   relatedIds: [],
   authorRole: '产品',

@@ -7,6 +7,7 @@ import {
   type KnowledgeDiskItem,
   type KnowledgeGroupId,
 } from '../../modules/knowledge/knowledgeTree';
+import { AI_CHAT_COMMAND_EVENT } from '../../modules/ai/chat/chatCommands';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import { usePreviewStore } from '../../store/previewStore';
@@ -17,6 +18,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
 import type { KnowledgeAttachment, KnowledgeNote } from '../../features/knowledge/model/knowledge';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
+import { buildGlobalKnowledgeGraph } from '../../features/knowledge/model/globalKnowledgeGraph';
+import { inferKnowledgeDocType } from '../../features/knowledge/model/knowledgeDocType';
 import { WorkbenchIcon } from '../ui/WorkbenchIcon';
 import {
   buildPageWireframeMarkdown,
@@ -49,9 +52,10 @@ import {
   normalizeRelativeFileSystemPath,
 } from '../../utils/fileSystemPaths.ts';
 import { PageWorkspace } from './PageWorkspace';
-import { KnowledgeNoteWorkspace } from '../../features/knowledge/workspace/KnowledgeNoteWorkspace';
+import { KnowledgeGraphWorkspace } from '../../features/knowledge/workspace/KnowledgeGraphWorkspace';
+import { KnowledgeNoteWorkspace, type KnowledgeNoteFilter } from '../../features/knowledge/workspace/KnowledgeNoteWorkspace';
 
-type SidebarTab = 'knowledge' | 'page';
+type SidebarTab = 'knowledge' | 'wiki' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
 export type WorkbenchLayoutDensity = 'comfortable' | 'compact';
 
@@ -174,14 +178,16 @@ const buildKnowledgeDocsFromDisk = async (
       const overrideGroup = groupOverrides[item.relativePath];
       const isSketchPath = overrideGroup === 'sketch' || item.relativePath.startsWith('sketch/');
       const resolvedGroup = overrideGroup || (item.relativePath.startsWith('design/') ? 'design' : isSketchPath ? 'sketch' : null);
+      const title = item.relativePath.split('/').pop() || item.relativePath;
 
       return {
         id: item.path,
-        title: item.relativePath.split('/').pop() || item.relativePath,
+        title,
         content,
         summary: content.replace(/\s+/g, ' ').trim().slice(0, 96),
         filePath: item.path,
         kind: isSketchPath ? 'sketch' as const : 'note' as const,
+        docType: inferKnowledgeDocType(title),
         tags: resolvedGroup ? [resolvedGroup] : [],
         relatedIds: [],
         authorRole: '产品' as const,
@@ -254,6 +260,18 @@ const filterKnowledgeNotes = (notes: KnowledgeNote[], keyword: string) => {
       .filter(Boolean)
       .some((value) => value.toLowerCase().includes(normalizedKeyword))
   );
+};
+
+const filterKnowledgeNotesByType = (notes: KnowledgeNote[], filter: KnowledgeNoteFilter) => {
+  if (filter === 'all') {
+    return notes;
+  }
+
+  if (filter === 'wiki-index' || filter === 'ai-summary') {
+    return notes.filter((note) => note.docType === filter);
+  }
+
+  return notes.filter((note) => (note.kind || 'note') === filter);
 };
 
 const parseAttachmentReferenceTokens = (content: string) => {
@@ -1083,6 +1101,7 @@ export const ProductWorkbench = ({
   const [manualPageId, setManualPageId] = useState<string | null>(null);
   const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
+  const [knowledgeFilter, setKnowledgeFilter] = useState<KnowledgeNoteFilter>('all');
   const [knowledgeDiskItems, setKnowledgeDiskItems] = useState<KnowledgeDiskItem[]>([]);
   const [knowledgeGroupOverrides, setKnowledgeGroupOverrides] = useState<Record<string, KnowledgeGroupId>>({});
   const [pageSearch, setPageSearch] = useState('');
@@ -1091,13 +1110,11 @@ export const ProductWorkbench = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const knowledgeRefreshRequestIdRef = useRef(0);
   const hydratedKnowledgeNoteSignatureRef = useRef('');
-  const lastKnowledgeAutosaveSignatureRef = useRef('');
   const lastPersistedSketchSnapshotRef = useRef('');
 
   const {
     currentProject,
     featuresMarkdown,
-    requirementDocs,
     activeKnowledgeFileId,
     pageStructure,
     wireframes,
@@ -1107,6 +1124,7 @@ export const ProductWorkbench = ({
     addSiblingPage,
     addChildPage,
     deletePageStructureNode,
+    documentEvents,
     replaceRequirementDocs,
     replacePageStructure,
     replaceWireframes,
@@ -1114,7 +1132,7 @@ export const ProductWorkbench = ({
   } = useProjectStore(useShallow((state) => ({
     currentProject: state.currentProject,
     featuresMarkdown: state.featuresMarkdown,
-    requirementDocs: state.requirementDocs,
+    documentEvents: state.documentEvents,
     activeKnowledgeFileId: state.activeKnowledgeFileId,
     pageStructure: state.pageStructure,
     wireframes: state.wireframes,
@@ -1172,39 +1190,24 @@ export const ProductWorkbench = ({
   );
   const filteredServerNotes = useMemo(() => {
     const normalizedSearch = knowledgeSearch.trim();
-    if (!normalizedSearch) {
-      return serverNotes;
-    }
+    const searchedNotes = !normalizedSearch
+      ? serverNotes
+      : serverSearchQuery === normalizedSearch
+        ? serverSearchResults
+        : filterKnowledgeNotes(serverNotes, normalizedSearch);
 
-    if (serverSearchQuery === normalizedSearch) {
-      return serverSearchResults;
-    }
-
-    return filterKnowledgeNotes(serverNotes, normalizedSearch);
-  }, [knowledgeSearch, serverNotes, serverSearchQuery, serverSearchResults]);
+    return filterKnowledgeNotesByType(searchedNotes, knowledgeFilter);
+  }, [knowledgeFilter, knowledgeSearch, serverNotes, serverSearchQuery, serverSearchResults]);
   const knowledgeAttachments = useMemo(
     () => buildKnowledgeAttachmentsFromDisk(knowledgeDiskItems),
     [knowledgeDiskItems]
   );
   const filteredPageStructure = useMemo(() => filterPageTree(pageStructure, pageSearch), [pageSearch, pageStructure]);
   const filteredDesignPages = useMemo(() => collectDesignPages(filteredPageStructure), [filteredPageStructure]);
+  const globalKnowledgeGraph = useMemo(() => buildGlobalKnowledgeGraph(serverNotes), [serverNotes]);
   const selectedServerNote = useMemo(
     () => serverNotes.find((note) => note.id === selectedKnowledgeNoteId) || null,
     [serverNotes, selectedKnowledgeNoteId]
-  );
-  const selectedRequirement =
-    selectedServerNote
-      ? requirementDocs.find(
-          (doc) =>
-            doc.id === selectedServerNote.id ||
-            (Boolean(selectedServerNote.sourceUrl) && doc.filePath === selectedServerNote.sourceUrl)
-        ) || null
-      : null;
-  const selectedProjectedRequirement = useMemo(
-    () =>
-      selectedRequirement ||
-      (selectedServerNote ? projectKnowledgeNotesToRequirementDocs([selectedServerNote])[0] : null),
-    [selectedRequirement, selectedServerNote]
   );
   const serverSimilarKnowledgeNotes = useMemo(() => {
     if (!selectedServerNote || serverSimilarSourceNoteId !== selectedServerNote.id) {
@@ -1514,7 +1517,6 @@ export const ProductWorkbench = ({
       setRequirementDraftTitle('');
       setRequirementDraftContent('');
       hydratedKnowledgeNoteSignatureRef.current = '';
-      lastKnowledgeAutosaveSignatureRef.current = '';
       return;
     }
 
@@ -1527,7 +1529,6 @@ export const ProductWorkbench = ({
     setRequirementDraftTitle(selectedServerNote.title);
     setRequirementDraftContent(selectedServerNote.bodyMarkdown);
     setRequirementSaveMessage(null);
-    lastKnowledgeAutosaveSignatureRef.current = `${selectedServerNote.id}:${selectedServerNote.bodyMarkdown}`;
   }, [selectedServerNote]);
 
   useEffect(() => {
@@ -1689,6 +1690,19 @@ export const ProductWorkbench = ({
     replaceWireframes(sketchArtifacts.wireframes, tree);
   }, [canUseProjectFilesystem, currentProject, knowledgeGroupOverrides, projectRootDir, readRequirementFile, replacePageStructure, replaceRequirementDocs, replaceWireframes, syncServerNotes, tree]);
 
+  const handleOrganizeKnowledge = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent(AI_CHAT_COMMAND_EVENT, {
+      detail: {
+        prompt: '@整理 请整理当前项目知识库，并输出清晰的 wiki 索引。',
+        autoSubmit: true,
+      },
+    }));
+  }, []);
+
   useEffect(() => {
     if (!currentProject || !projectRootDir) {
       setKnowledgeDiskItems([]);
@@ -1832,53 +1846,6 @@ export const ProductWorkbench = ({
       window.alert(error instanceof Error ? error.message : String(error));
     }
   }, []);
-
-  const handleSaveKnowledgeContent = useCallback(async (
-    note: KnowledgeNote,
-    nextContent: string
-  ) => {
-    try {
-      setIsSavingRequirement(true);
-
-      const nextTitle = requirementDraftTitle.trim() || note.title;
-      const nextFilePath = note.sourceUrl || '';
-
-      if (canPersistRequirementToDisk && nextFilePath) {
-        await writeRequirementFile(nextFilePath, nextContent);
-      }
-
-      if (!currentProject) {
-        setRequirementSaveMessage('已保存到知识库。');
-        return;
-      }
-
-      await updateServerNote(currentProject.id, note.id, {
-        title: nextTitle,
-        content: nextContent,
-        filePath: nextFilePath,
-        updatedAt: new Date().toISOString(),
-        tags: note.tags,
-      });
-
-      if (canPersistRequirementToDisk && nextFilePath) {
-        await refreshKnowledgeFilesystem();
-        setRequirementSaveMessage(`已自动保存到 ${nextFilePath}`);
-      } else {
-        setRequirementSaveMessage('已保存到知识库。');
-      }
-    } catch (error) {
-      setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsSavingRequirement(false);
-    }
-  }, [
-    canPersistRequirementToDisk,
-    currentProject,
-    refreshKnowledgeFilesystem,
-    updateServerNote,
-    requirementDraftTitle,
-    writeRequirementFile,
-  ]);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -2043,26 +2010,6 @@ export const ProductWorkbench = ({
     updateServerNote,
     writeRequirementFile,
   ]);
-
-  useEffect(() => {
-    if (!selectedProjectedRequirement || requirementDraftContent === selectedProjectedRequirement.content || !selectedServerNote) {
-      return;
-    }
-
-    const autosaveSignature = `${selectedProjectedRequirement.id}:${requirementDraftContent}`;
-    if (lastKnowledgeAutosaveSignatureRef.current === autosaveSignature) {
-      return;
-    }
-
-    const saveTimer = window.setTimeout(() => {
-      lastKnowledgeAutosaveSignatureRef.current = autosaveSignature;
-      void handleSaveKnowledgeContent(selectedServerNote, requirementDraftContent);
-    }, 320);
-
-    return () => {
-      window.clearTimeout(saveTimer);
-    };
-  }, [handleSaveKnowledgeContent, requirementDraftContent, selectedProjectedRequirement, selectedServerNote]);
 
   useEffect(() => {
     if (!selectedServerNote) {
@@ -2265,9 +2212,11 @@ export const ProductWorkbench = ({
 
   const renderRequirementMain = () => (
     <KnowledgeNoteWorkspace
+      documentEvents={documentEvents}
       notes={serverNotes}
       filteredNotes={filteredServerNotes}
       selectedNote={selectedServerNote}
+      activeFilter={knowledgeFilter}
       editorValue={selectedServerNote ? requirementDraftContent : ''}
       editable={Boolean(selectedServerNote)}
       isSaving={isSavingRequirement}
@@ -2279,6 +2228,7 @@ export const ProductWorkbench = ({
       isSyncing={isKnowledgeSyncing}
       error={knowledgeSidecarError}
       similarNotes={serverSimilarKnowledgeNotes}
+      neighborhoodGraph={neighborhoodGraph}
       neighborhoodNotes={neighborhoodKnowledgeNotes}
       graphNodeCount={neighborhoodGraph?.nodes.length || 0}
       graphEdgeCount={neighborhoodGraph?.edges.length || 0}
@@ -2295,13 +2245,26 @@ export const ProductWorkbench = ({
       onImportAssets={() => {
         void handleImportKnowledgeAssets();
       }}
+      onOrganizeKnowledge={handleOrganizeKnowledge}
       onCreateNote={() => {
         void handleCreateKnowledgeNote();
       }}
+      onOpenGlobalWikiGraph={() => setSidebarTab('wiki')}
       onUseForDesign={handleUseKnowledgeForDesign}
+      onFilterChange={setKnowledgeFilter}
       onOpenAttachment={(attachmentPath) => {
         void handleOpenKnowledgeAttachment(attachmentPath);
       }}
+    />
+  );
+
+  const renderKnowledgeGraphMain = () => (
+    <KnowledgeGraphWorkspace
+      graph={globalKnowledgeGraph}
+      selectedNote={selectedServerNote}
+      onSelectNote={openKnowledgeNote}
+      onBack={() => setSidebarTab('knowledge')}
+      mode="global"
     />
   );
 
@@ -2459,6 +2422,7 @@ export const ProductWorkbench = ({
   return (
     <div className="product-workbench-shell" style={layoutStyle}>
       {sidebarTab === 'knowledge' && renderRequirementMain()}
+      {sidebarTab === 'wiki' && renderKnowledgeGraphMain()}
       {sidebarTab === 'page' && renderPageLibraryMain()}
       <input
         ref={fileInputRef}

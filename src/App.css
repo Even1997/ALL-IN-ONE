@@ -9206,6 +9206,47 @@ body.ai-chat-sidebar-collapsed .app-main {
   word-break: break-word;
 }
 
+.gn-note-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gn-note-activity-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--mode-border, rgba(148, 163, 184, 0.18)) 88%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--mode-panel, #ffffff) 88%, transparent);
+}
+
+.gn-note-activity-item strong {
+  font-size: 12px;
+  color: var(--mode-text, #0f172a);
+}
+
+.gn-note-activity-item > span {
+  color: var(--mode-muted, #64748b);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.gn-note-activity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.gn-note-activity-meta em,
+.gn-note-activity-meta span {
+  font-size: 10px;
+  font-style: normal;
+  color: var(--mode-soft-text, #475569);
+}
+
 .gn-note-relation-list {
   display: flex;
   flex-direction: column;
@@ -9286,6 +9327,199 @@ body.ai-chat-sidebar-collapsed .app-main {
   color: var(--mode-muted, #64748b);
   font-size: 10px;
   font-weight: 700;
+}
+
+.gn-note-graph-preview {
+  min-height: 220px;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--mode-accent, #0f766e) 10%, transparent), transparent 62%),
+    color-mix(in srgb, var(--mode-panel, #ffffff) 92%, transparent);
+  overflow: hidden;
+}
+
+.gn-graph-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.gn-graph-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--mode-accent, #0f766e) 16%, transparent), transparent 42%),
+    var(--mode-panel-alt, #f8fafc);
+}
+
+.gn-graph-header h2 {
+  margin: 0;
+  color: var(--mode-text, #0f172a);
+  font-size: 26px;
+  letter-spacing: -0.03em;
+}
+
+.gn-graph-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gn-graph-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gn-graph-meta span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+  background: var(--mode-panel-alt, #f8fafc);
+  color: var(--mode-soft-text, #475569);
+  font-size: 12px;
+}
+
+.gn-graph-stage,
+.gn-graph-inspector {
+  min-width: 0;
+  min-height: 0;
+}
+
+.gn-graph-stage {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  border-radius: 24px;
+  border: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--mode-accent, #0f766e) 10%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--mode-panel, #ffffff) 94%, var(--mode-accent, #0f766e) 6%), var(--mode-panel-alt, #f8fafc));
+  overflow: hidden;
+}
+
+.gn-graph-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  display: block;
+}
+
+.gn-graph-canvas.is-compact {
+  min-height: 200px;
+}
+
+.gn-graph-canvas.is-compact .gn-graph-node text {
+  font-size: 11px;
+}
+
+.gn-graph-canvas.is-compact .gn-graph-node-label {
+  font-size: 10px;
+}
+
+.gn-graph-edge {
+  stroke: color-mix(in srgb, var(--mode-accent, #0f766e) 52%, var(--mode-border, rgba(148, 163, 184, 0.28)));
+}
+
+.gn-graph-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.gn-graph-node circle {
+  fill: color-mix(in srgb, var(--mode-panel, #ffffff) 78%, var(--mode-accent, #0f766e) 22%);
+  stroke: color-mix(in srgb, var(--mode-accent, #0f766e) 26%, var(--mode-border, rgba(148, 163, 184, 0.28)));
+  stroke-width: 2px;
+  transition: fill 0.18s ease, stroke 0.18s ease;
+}
+
+.gn-graph-node text {
+  fill: var(--mode-text, #0f172a);
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.gn-graph-node-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gn-graph-node:hover circle,
+.gn-graph-node:focus-visible circle {
+  fill: color-mix(in srgb, var(--mode-accent, #0f766e) 28%, var(--mode-panel, #ffffff));
+  stroke: color-mix(in srgb, var(--mode-accent, #0f766e) 62%, var(--mode-border, rgba(148, 163, 184, 0.28)));
+}
+
+.gn-graph-node.is-center circle {
+  fill: color-mix(in srgb, var(--mode-accent, #0f766e) 42%, var(--mode-panel, #ffffff));
+  stroke: color-mix(in srgb, var(--mode-accent, #0f766e) 78%, #ffffff);
+  stroke-width: 3px;
+}
+
+.gn-graph-node.is-wiki circle {
+  fill: color-mix(in srgb, #f59e0b 18%, var(--mode-panel, #ffffff));
+}
+
+.gn-graph-node.is-ai circle {
+  fill: color-mix(in srgb, #38bdf8 16%, var(--mode-panel, #ffffff));
+}
+
+.gn-graph-node.is-sketch circle {
+  fill: color-mix(in srgb, #fb7185 14%, var(--mode-panel, #ffffff));
+}
+
+.gn-graph-node.is-design circle {
+  fill: color-mix(in srgb, #a78bfa 15%, var(--mode-panel, #ffffff));
+}
+
+.gn-graph-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gn-graph-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gn-graph-selected strong {
+  color: var(--mode-text, #0f172a);
+}
+
+.gn-graph-selected span {
+  color: var(--mode-soft-text, #475569);
+  line-height: 1.6;
+}
+
+.gn-graph-empty {
+  display: grid;
+  place-content: center;
+  width: 100%;
+  min-height: 520px;
+  padding: 24px;
+  text-align: center;
+  color: var(--mode-soft-text, #475569);
+}
+
+.gn-graph-empty h3 {
+  margin: 0;
+  color: var(--mode-text, #0f172a);
 }
 
 .gn-stage-launcher {
@@ -10153,6 +10387,8 @@ body.ai-chat-sidebar-collapsed .app-main {
   gap: 12px;
   min-width: 0;
   min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .desktop-ai-shell {
@@ -10345,6 +10581,10 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 .desktop-active .ops-header {
   border-radius: 0;
   box-shadow: none;
+}
+
+.desktop-active .gn-note-workspace {
+  min-width: 960px;
 }
 
 .desktop-active .pm-left-nav {

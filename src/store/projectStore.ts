@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import {
+  DocumentChangeAction,
+  DocumentChangeEvent,
+  DocumentChangeTrigger,
   FeatureNode,
   FeatureTree,
   GraphEdge,
@@ -38,6 +41,7 @@ export interface ProjectWorkspaceSnapshot {
   featuresMarkdown: string;
   wireframesMarkdown: string;
   requirementDocs: RequirementDoc[];
+  documentEvents: DocumentChangeEvent[];
   activeKnowledgeFileId: string | null;
   selectedKnowledgeContextIds: string[];
   prd: ProductPRD | null;
@@ -61,6 +65,7 @@ interface ProjectState {
   featuresMarkdown: string;
   wireframesMarkdown: string;
   requirementDocs: RequirementDoc[];
+  documentEvents: DocumentChangeEvent[];
   activeKnowledgeFileId: string | null;
   selectedKnowledgeContextIds: string[];
   prd: ProductPRD | null;
@@ -192,6 +197,111 @@ const normalizeRequirementTitle = (value: string) => {
   }
 
   return /\.(md|markdown)$/i.test(normalized) ? normalized : `${normalized}.md`;
+};
+
+const MAX_DOCUMENT_CHANGE_EVENTS = 200;
+
+const areStringArraysEqual = (left: string[] = [], right: string[] = []) =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
+const hasRequirementDocChanged = (previous: RequirementDoc, next: RequirementDoc) =>
+  previous.title !== next.title ||
+  previous.content !== next.content ||
+  previous.summary !== next.summary ||
+  previous.status !== next.status ||
+  previous.sourceType !== next.sourceType ||
+  previous.filePath !== next.filePath ||
+  previous.kind !== next.kind ||
+  previous.docType !== next.docType ||
+  !areStringArraysEqual(previous.tags || [], next.tags || []) ||
+  !areStringArraysEqual(previous.relatedIds || [], next.relatedIds || []);
+
+const buildDocumentChangeSummary = (
+  documentTitle: string,
+  action: DocumentChangeAction,
+  trigger: DocumentChangeTrigger
+) => {
+  const quotedTitle = `《${documentTitle}》`;
+
+  if (trigger === 'import') {
+    return `导入文档${quotedTitle}`;
+  }
+
+  if (trigger === 'sync') {
+    if (action === 'created') {
+      return `同步新增文档${quotedTitle}`;
+    }
+
+    if (action === 'updated') {
+      return `同步更新文档${quotedTitle}`;
+    }
+
+    return `同步删除文档${quotedTitle}`;
+  }
+
+  if (action === 'created') {
+    return `新建文档${quotedTitle}`;
+  }
+
+  if (action === 'updated') {
+    return `更新文档${quotedTitle}`;
+  }
+
+  return `删除文档${quotedTitle}`;
+};
+
+const buildDocumentChangeEvent = (
+  projectId: string,
+  document: RequirementDoc,
+  action: DocumentChangeAction,
+  trigger: DocumentChangeTrigger
+): DocumentChangeEvent => ({
+  id: uuidv4(),
+  projectId,
+  documentId: document.id,
+  documentTitle: document.title,
+  action,
+  trigger,
+  sourceType: document.sourceType,
+  filePath: document.filePath,
+  summary: buildDocumentChangeSummary(document.title, action, trigger),
+  timestamp: new Date().toISOString(),
+});
+
+const appendDocumentEvents = (
+  currentEvents: DocumentChangeEvent[],
+  nextEvents: DocumentChangeEvent[]
+) => (nextEvents.length > 0 ? [...nextEvents, ...currentEvents].slice(0, MAX_DOCUMENT_CHANGE_EVENTS) : currentEvents);
+
+const collectRequirementDocEvents = (
+  previousDocs: RequirementDoc[],
+  nextDocs: RequirementDoc[],
+  projectId: string,
+  trigger: DocumentChangeTrigger
+) => {
+  const previousById = new Map(previousDocs.map((doc) => [doc.id, doc]));
+  const nextById = new Map(nextDocs.map((doc) => [doc.id, doc]));
+  const events: DocumentChangeEvent[] = [];
+
+  nextDocs.forEach((doc) => {
+    const previousDoc = previousById.get(doc.id);
+    if (!previousDoc) {
+      events.push(buildDocumentChangeEvent(projectId, doc, 'created', trigger));
+      return;
+    }
+
+    if (hasRequirementDocChanged(previousDoc, doc)) {
+      events.push(buildDocumentChangeEvent(projectId, doc, 'updated', trigger));
+    }
+  });
+
+  previousDocs.forEach((doc) => {
+    if (!nextById.has(doc.id)) {
+      events.push(buildDocumentChangeEvent(projectId, doc, 'deleted', trigger));
+    }
+  });
+
+  return events;
 };
 
 const collectRequirementLines = (rawRequirementInput: string, docs: RequirementDoc[]) =>
@@ -1473,6 +1583,46 @@ const normalizeRequirementDocs = (value: unknown): RequirementDoc[] =>
         })
     : [];
 
+const normalizeDocumentChangeEvents = (value: unknown): DocumentChangeEvent[] =>
+  Array.isArray(value)
+    ? value
+        .filter((item): item is Partial<DocumentChangeEvent> => Boolean(item) && typeof item === 'object')
+        .map((event) => {
+          const action: DocumentChangeAction =
+            event.action === 'created' || event.action === 'updated' || event.action === 'deleted'
+              ? event.action
+              : 'updated';
+          const trigger: DocumentChangeTrigger =
+            event.trigger === 'editor' || event.trigger === 'import' || event.trigger === 'sync'
+              ? event.trigger
+              : 'sync';
+
+          return {
+            id: typeof event.id === 'string' ? event.id : uuidv4(),
+            projectId: typeof event.projectId === 'string' ? event.projectId : '',
+            documentId: typeof event.documentId === 'string' ? event.documentId : '',
+            documentTitle:
+              typeof event.documentTitle === 'string' && event.documentTitle.trim().length > 0
+                ? event.documentTitle
+                : '未命名需求.md',
+            action,
+            trigger,
+            sourceType: event.sourceType === 'upload' || event.sourceType === 'ai' ? event.sourceType : 'manual',
+            filePath:
+              typeof event.filePath === 'string' && event.filePath.trim().length > 0
+                ? event.filePath
+                : undefined,
+            summary:
+              typeof event.summary === 'string' && event.summary.trim().length > 0
+                ? event.summary
+                : buildDocumentChangeSummary('未命名需求.md', action, trigger),
+            timestamp: typeof event.timestamp === 'string' ? event.timestamp : new Date().toISOString(),
+          } satisfies DocumentChangeEvent;
+        })
+        .filter((event) => event.projectId.length > 0 && event.documentId.length > 0)
+        .slice(0, MAX_DOCUMENT_CHANGE_EVENTS)
+    : [];
+
 const normalizePrd = (value: unknown): ProductPRD | null => {
   if (!value || typeof value !== 'object') {
     return null;
@@ -1906,6 +2056,7 @@ export const useProjectStore = create<ProjectState>()(
       featuresMarkdown: '',
       wireframesMarkdown: '',
       requirementDocs: [],
+      documentEvents: [],
       activeKnowledgeFileId: null,
       selectedKnowledgeContextIds: [],
       prd: null,
@@ -2009,6 +2160,7 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: snapshot.featuresMarkdown,
           wireframesMarkdown: snapshot.wireframesMarkdown,
           requirementDocs: snapshot.requirementDocs,
+          documentEvents: snapshot.documentEvents,
           activeKnowledgeFileId: snapshot.activeKnowledgeFileId,
           selectedKnowledgeContextIds:
             snapshot.selectedKnowledgeContextIds.length > 0
@@ -2129,26 +2281,34 @@ export const useProjectStore = create<ProjectState>()(
             return state;
           }
 
-          const requirementDocs = state.requirementDocs.map((doc) =>
-            doc.id === id
-              ? {
-                  ...doc,
-                  ...updates,
-                  title: typeof updates.title === 'string' ? normalizeRequirementTitle(updates.title) : doc.title,
-                  summary:
-                    typeof updates.summary === 'string'
-                      ? updates.summary
-                      : typeof updates.content === 'string'
-                        ? summarizeRequirement(updates.content)
-                        : doc.summary,
-                  kind: updates.kind ?? doc.kind ?? 'note',
-                  docType: updates.docType ?? doc.docType,
-                  tags: updates.tags ?? doc.tags ?? [],
-                  relatedIds: updates.relatedIds ?? doc.relatedIds ?? [],
-                  updatedAt: new Date().toISOString(),
-                }
-              : doc
-          );
+          const updatedDocument = state.requirementDocs.find((doc) => doc.id === id);
+          if (!updatedDocument) {
+            return state;
+          }
+
+          const nextDocument: RequirementDoc = {
+            ...updatedDocument,
+            ...updates,
+            title: typeof updates.title === 'string' ? normalizeRequirementTitle(updates.title) : updatedDocument.title,
+            summary:
+              typeof updates.summary === 'string'
+                ? updates.summary
+                : typeof updates.content === 'string'
+                  ? summarizeRequirement(updates.content)
+                  : updatedDocument.summary,
+            kind: updates.kind ?? updatedDocument.kind ?? 'note',
+            docType: updates.docType ?? updatedDocument.docType,
+            tags: updates.tags ?? updatedDocument.tags ?? [],
+            relatedIds: updates.relatedIds ?? updatedDocument.relatedIds ?? [],
+            updatedAt: new Date().toISOString(),
+          };
+
+          const requirementDocs = state.requirementDocs.map((doc) => (doc.id === id ? nextDocument : doc));
+          const documentEvents = hasRequirementDocChanged(updatedDocument, nextDocument)
+            ? appendDocumentEvents(state.documentEvents, [
+                buildDocumentChangeEvent(state.currentProject.id, nextDocument, 'updated', 'editor'),
+              ])
+            : state.documentEvents;
 
           const planningArtifacts = buildPlanningFiles(
             state.currentProject,
@@ -2167,6 +2327,7 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             requirementDocs,
+            documentEvents,
             generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
@@ -2210,6 +2371,9 @@ export const useProjectStore = create<ProjectState>()(
 
           const requirementDocs: RequirementDoc[] = [...state.requirementDocs, nextDoc];
           createdDoc = nextDoc;
+          const documentEvents = appendDocumentEvents(state.documentEvents, [
+            buildDocumentChangeEvent(state.currentProject.id, nextDoc, 'created', 'editor'),
+          ]);
 
           const planningArtifacts = buildPlanningFiles(
             state.currentProject,
@@ -2228,6 +2392,7 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             requirementDocs,
+            documentEvents,
             activeKnowledgeFileId:
               state.activeKnowledgeFileId || state.selectedKnowledgeContextIds[0] || nextDoc.id,
             selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.includes(nextDoc.id)
@@ -2260,7 +2425,15 @@ export const useProjectStore = create<ProjectState>()(
             return state;
           }
 
+          const deletedDocument = state.requirementDocs.find((doc) => doc.id === id);
+          if (!deletedDocument) {
+            return state;
+          }
+
           const requirementDocs = state.requirementDocs.filter((doc) => doc.id !== id);
+          const documentEvents = appendDocumentEvents(state.documentEvents, [
+            buildDocumentChangeEvent(state.currentProject.id, deletedDocument, 'deleted', 'editor'),
+          ]);
           const planningArtifacts = buildPlanningFiles(
             state.currentProject,
             state.rawRequirementInput,
@@ -2278,6 +2451,7 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             requirementDocs,
+            documentEvents,
             activeKnowledgeFileId:
               state.activeKnowledgeFileId === id ? null : state.activeKnowledgeFileId,
             selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.filter((item) => item !== id),
@@ -2306,23 +2480,24 @@ export const useProjectStore = create<ProjectState>()(
           }
 
           const content = input.content.trim();
-          const requirementDocs = [
-            ...state.requirementDocs,
-            {
-              id: uuidv4(),
-              title: normalizeRequirementTitle(input.title),
-              content,
-              summary: summarizeRequirement(content),
-              filePath: input.filePath,
-              kind: 'note' as const,
-              tags: [],
-              relatedIds: [],
-              authorRole: '产品' as const,
-              sourceType: input.sourceType || 'upload',
-              updatedAt: new Date().toISOString(),
-              status: 'ready' as const,
-            },
-          ];
+          const nextDocument: RequirementDoc = {
+            id: uuidv4(),
+            title: normalizeRequirementTitle(input.title),
+            content,
+            summary: summarizeRequirement(content),
+            filePath: input.filePath,
+            kind: 'note' as const,
+            tags: [],
+            relatedIds: [],
+            authorRole: '产品' as const,
+            sourceType: input.sourceType || 'upload',
+            updatedAt: new Date().toISOString(),
+            status: 'ready' as const,
+          };
+          const requirementDocs = [...state.requirementDocs, nextDocument];
+          const documentEvents = appendDocumentEvents(state.documentEvents, [
+            buildDocumentChangeEvent(state.currentProject.id, nextDocument, 'created', 'import'),
+          ]);
 
           const planningArtifacts = buildPlanningFiles(
             state.currentProject,
@@ -2341,6 +2516,7 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             requirementDocs,
+            documentEvents,
             generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
@@ -2374,6 +2550,10 @@ export const useProjectStore = create<ProjectState>()(
             relatedIds: doc.relatedIds || [],
             updatedAt: doc.updatedAt || new Date().toISOString(),
           }));
+          const documentEvents = appendDocumentEvents(
+            state.documentEvents,
+            collectRequirementDocEvents(state.requirementDocs, requirementDocs, state.currentProject.id, 'sync')
+          );
 
           const planningArtifacts = buildPlanningFiles(
             state.currentProject,
@@ -2392,6 +2572,7 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             requirementDocs,
+            documentEvents,
             activeKnowledgeFileId:
               requirementDocs.some((doc) => doc.id === state.activeKnowledgeFileId)
                 ? state.activeKnowledgeFileId
@@ -3133,6 +3314,7 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: '',
           wireframesMarkdown: '',
           requirementDocs: [],
+          documentEvents: [],
           activeKnowledgeFileId: null,
           selectedKnowledgeContextIds: [],
           prd: null,
@@ -3199,6 +3381,7 @@ export const useProjectStore = create<ProjectState>()(
           featuresMarkdown: typeof persisted.featuresMarkdown === 'string' ? persisted.featuresMarkdown : '',
           wireframesMarkdown: typeof persisted.wireframesMarkdown === 'string' ? persisted.wireframesMarkdown : '',
           requirementDocs,
+          documentEvents: normalizeDocumentChangeEvents(persisted.documentEvents),
           activeKnowledgeFileId: typeof persisted.activeKnowledgeFileId === 'string' ? persisted.activeKnowledgeFileId : null,
           selectedKnowledgeContextIds: Array.isArray(persisted.selectedKnowledgeContextIds)
             ? persisted.selectedKnowledgeContextIds.filter((item): item is string => typeof item === 'string')

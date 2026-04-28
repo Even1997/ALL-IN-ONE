@@ -3,6 +3,7 @@ export type KnowledgeNote = {
   title: string;
   bodyMarkdown: string;
   updatedAt: string;
+  docType?: 'wiki-index' | 'ai-summary';
   tags: string[];
   kind?: 'note' | 'sketch' | 'design';
   sourceUrl?: string | null;

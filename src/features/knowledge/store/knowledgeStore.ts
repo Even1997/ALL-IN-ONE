@@ -29,7 +29,7 @@ type KnowledgeStoreState = {
   searchNotes: (projectId: string, query: string) => Promise<void>;
   loadSimilarNotes: (projectId: string, noteId: string | null) => Promise<void>;
   loadNeighborhoodGraph: (projectId: string, noteId: string | null) => Promise<void>;
-  syncProjectNotes: (projectId: string, sources: ProjectKnowledgeSource[]) => Promise<void>;
+  syncProjectNotes: (projectId: string, sources: ProjectKnowledgeSource[]) => Promise<KnowledgeNote[]>;
   updateProjectNote: (projectId: string, noteId: string, source: ProjectKnowledgeSource) => Promise<void>;
 };
 
@@ -138,6 +138,7 @@ export const useKnowledgeStore = create<KnowledgeStoreState>((set) => ({
     try {
       const notes = await syncProjectKnowledgeNotes(projectId, sources);
       set({ notes, isSyncing: false, error: null });
+      return notes;
     } catch (error) {
       set({
         isSyncing: false,

@@ -1,4 +1,4 @@
-export type RoleView = 'product' | 'knowledge' | 'page' | 'design' | 'develop' | 'test' | 'operations';
+export type RoleView = 'product' | 'knowledge' | 'wiki' | 'page' | 'design' | 'develop' | 'test' | 'operations';
 
 export type RoleTab = {
   id: RoleView;
@@ -7,6 +7,7 @@ export type RoleTab = {
 
 export const VISIBLE_ROLE_TABS: RoleTab[] = [
   { id: 'knowledge', label: '知识库' },
+  { id: 'wiki', label: 'Wiki 图谱' },
   { id: 'page', label: '页面' },
   { id: 'design', label: '设计' },
   { id: 'develop', label: '开发' },

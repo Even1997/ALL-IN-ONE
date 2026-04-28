@@ -32,9 +32,13 @@ import {
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
+import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
+import { runChangeSyncLane } from '../../modules/ai/knowledge/runChangeSyncLane';
 import { runKnowledgeOrganizeLane } from '../../modules/ai/knowledge/runKnowledgeOrganizeLane';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
+import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
+import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
 import type { RequirementDoc } from '../../types';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
@@ -210,24 +214,14 @@ const buildRunSummaryEntry = ({
   };
 };
 
-const mergeRequirementDocsByTitle = (currentDocs: RequirementDoc[], nextDocs: RequirementDoc[]) => {
-  const nextByTitle = new Map(nextDocs.map((doc) => [doc.title, doc]));
-  const merged = currentDocs.map((doc) => {
-    const replacement = nextByTitle.get(doc.title);
-    if (!replacement) {
-      return doc;
-    }
-
-    nextByTitle.delete(doc.title);
-    return {
-      ...doc,
-      ...replacement,
-      id: doc.id,
-    };
-  });
-
-  return [...merged, ...nextByTitle.values()];
-};
+const toKnowledgeSources = (docs: RequirementDoc[]) =>
+  docs.map((doc) => ({
+    title: doc.title,
+    content: doc.content,
+    filePath: doc.filePath || '',
+    updatedAt: doc.updatedAt,
+    tags: doc.tags || [],
+  }));
 
 const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
   id: 'custom',
@@ -478,6 +472,8 @@ export const AIChat: React.FC<AIChatProps> = ({
   const previewElements = usePreviewStore((state) => state.elements);
   const selectedElementId = usePreviewStore((state) => state.selectedElementId);
   const featureTree = useFeatureTreeStore((state) => state.tree);
+  const serverNotes = useKnowledgeStore((state) => state.notes);
+  const syncKnowledgeNotes = useKnowledgeStore((state) => state.syncProjectNotes);
   const aiContextState = useAIContextStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
   );
@@ -610,9 +606,13 @@ export const AIChat: React.FC<AIChatProps> = ({
     [settingsDraft.provider]
   );
 
+  const knowledgeSourceDocs = useMemo(
+    () => serverNotes.length > 0 ? projectKnowledgeNotesToRequirementDocs(serverNotes) : requirementDocs,
+    [serverNotes, requirementDocs]
+  );
   const knowledgeEntries = useMemo(
-    () => buildKnowledgeEntries(requirementDocs, generatedFiles),
-    [generatedFiles, requirementDocs]
+    () => buildKnowledgeEntries(knowledgeSourceDocs, generatedFiles),
+    [generatedFiles, knowledgeSourceDocs]
   );
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
@@ -967,10 +967,9 @@ export const AIChat: React.FC<AIChatProps> = ({
     setShowHistoryMenu(false);
   }, [currentProject, setActiveSession, upsertSession]);
 
-  const handleSubmit = useCallback(
-    async (event?: React.FormEvent) => {
-      event?.preventDefault();
-      if (!input.trim() || isLoading || !currentProject) {
+  const submitPrompt = useCallback(
+    async (promptValue: string) => {
+      if (!promptValue.trim() || isLoading || !currentProject) {
         return;
       }
 
@@ -982,7 +981,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         targetSessionId = session.id;
       }
 
-      const rawContent = input.trim();
+      const rawContent = promptValue.trim();
       const skillIntent: SkillIntent | null = resolveSkillIntent(rawContent);
       const resolvedSkill = skillIntent?.skill || null;
       const effectiveChatAgentId =
@@ -995,10 +994,11 @@ export const AIChat: React.FC<AIChatProps> = ({
         ? skillIntent.cleanedInput.trim()
         : skillIntent?.package === 'knowledge-organize'
           ? '请整理当前项目知识库，并输出清晰的 wiki 索引。'
-          : rawContent;
+          : skillIntent?.package === 'change-sync'
+            ? '请检查当前原型、知识文档和已有产物的差异，生成可确认的变更同步提案。'
+            : rawContent;
       const userMessage = createStoredChatMessage('user', rawContent);
 
-      setInput('');
       appendMessage(currentProject.id, targetSessionId, userMessage);
       if (fallbackToBuiltInMessage) {
         setSelectedChatAgentId('built-in');
@@ -1047,6 +1047,48 @@ export const AIChat: React.FC<AIChatProps> = ({
           ].filter((item): item is string => Boolean(item)),
         });
 
+        const executeLaneText = async (prompt: string) => {
+          if (effectiveChatAgentId !== 'built-in') {
+            const projectRoot = await getProjectDir(currentProject.id);
+            const result = await invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
+              params: {
+                agent: effectiveChatAgentId,
+                projectRoot,
+                prompt,
+              },
+            });
+
+            if (!result.success) {
+              throw new Error(result.error || 'Local agent execution failed.');
+            }
+
+            return result.content.trim();
+          }
+
+          if (providerExecutionMode === 'claude' && selectedRuntimeConfig) {
+            return claudeRuntimeExecutor.executePrompt({
+              sessionId: targetSessionId,
+              config: selectedRuntimeConfig,
+              systemPrompt: '你是产品知识库整理助手。',
+              prompt,
+            });
+          }
+
+          if (providerExecutionMode === 'codex' && selectedRuntimeConfig) {
+            return codexRuntimeExecutor.executePrompt({
+              sessionId: targetSessionId,
+              config: selectedRuntimeConfig,
+              systemPrompt: 'You are a product knowledge base organizer.',
+              prompt,
+            });
+          }
+
+          return aiService.completeText({
+            systemPrompt: '你是产品知识库整理助手。',
+            prompt,
+          });
+        };
+
         if (skillIntent?.skill === 'requirements') {
           setRawRequirementInput(cleanedContent);
         }
@@ -1057,59 +1099,18 @@ export const AIChat: React.FC<AIChatProps> = ({
             content: '正在整理知识库并生成 wiki 索引...',
           }));
 
-          const executeKnowledgeText = async (prompt: string) => {
-            if (effectiveChatAgentId !== 'built-in') {
-              const projectRoot = await getProjectDir(currentProject.id);
-              const result = await invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
-                params: {
-                  agent: effectiveChatAgentId,
-                  projectRoot,
-                  prompt,
-                },
-              });
-
-              if (!result.success) {
-                throw new Error(result.error || 'Local agent execution failed.');
-              }
-
-              return result.content.trim();
-            }
-
-            if (providerExecutionMode === 'claude' && selectedRuntimeConfig) {
-              return claudeRuntimeExecutor.executePrompt({
-                sessionId: targetSessionId,
-                config: selectedRuntimeConfig,
-                systemPrompt: '你是产品知识库整理助手。',
-                prompt,
-              });
-            }
-
-            if (providerExecutionMode === 'codex' && selectedRuntimeConfig) {
-              return codexRuntimeExecutor.executePrompt({
-                sessionId: targetSessionId,
-                config: selectedRuntimeConfig,
-                systemPrompt: 'You are a product knowledge base organizer.',
-                prompt,
-              });
-            }
-
-            return aiService.completeText({
-              systemPrompt: '你是产品知识库整理助手。',
-              prompt,
-            });
-          };
-
           const docs = await runKnowledgeOrganizeLane({
             project: {
               id: currentProject.id,
               name: currentProject.name,
             },
-            requirementDocs,
+            requirementDocs: knowledgeSourceDocs,
             generatedFiles,
-            executeText: executeKnowledgeText,
+            executeText: executeLaneText,
           });
           const persistedDocs = await saveKnowledgeDocsToProjectDir(currentProject.id, docs);
-          const mergedDocs = mergeRequirementDocsByTitle(requirementDocs, persistedDocs);
+          const syncedNotes = await syncKnowledgeNotes(currentProject.id, toKnowledgeSources(persistedDocs));
+          const mergedDocs = projectKnowledgeNotesToRequirementDocs(syncedNotes);
           replaceRequirementDocs(mergedDocs);
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
@@ -1132,16 +1133,34 @@ export const AIChat: React.FC<AIChatProps> = ({
         if (skillIntent?.package === 'change-sync') {
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content:
-              '变更同步能力入口已就绪。当前版本会先收集原型、知识库和产物上下文；下一步将接入真实同步 lane，生成可确认的变更提案。',
+            content: '正在检查差异并生成变更同步提案...',
+          }));
+
+          const docs = await runChangeSyncLane({
+            project: {
+              id: currentProject.id,
+              name: currentProject.name,
+            },
+            requirementDocs: knowledgeSourceDocs,
+            generatedFiles,
+            executeText: executeLaneText,
+          });
+          const persistedDocs = await saveKnowledgeDocsToProjectDir(currentProject.id, docs);
+          const syncedNotes = await syncKnowledgeNotes(currentProject.id, toKnowledgeSources(persistedDocs));
+          const mergedDocs = projectKnowledgeNotesToRequirementDocs(syncedNotes);
+          replaceRequirementDocs(mergedDocs);
+
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content: `已生成 ${docs.length} 份变更同步文档：${docs.map((doc) => doc.title).join('、')}`,
           }));
 
           appendActivityEntry(currentProject.id, {
             id: createActivityEntryId(),
             runId,
             type: 'run-summary',
-            summary: 'GN Agent 打开了变更同步入口',
-            changedPaths: [],
+            summary: `AI 生成了 ${docs.length} 份变更同步提案文档`,
+            changedPaths: persistedDocs.map((doc) => doc.filePath || doc.title),
             runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
             skill: resolvedSkill,
             createdAt: Date.now(),
@@ -1155,7 +1174,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           }
 
           const fallbackWorkflowPackage = chooseNextWorkflowPackage(workflowAvailability);
-          const requestedWorkflowPackage = skillIntent?.package;
+          const requestedWorkflowPackage = skillIntent.package;
           const targetWorkflowPackage =
             requestedWorkflowPackage === 'requirements' || requestedWorkflowPackage === fallbackWorkflowPackage
               ? requestedWorkflowPackage
@@ -1321,33 +1340,70 @@ export const AIChat: React.FC<AIChatProps> = ({
     [
       activeSession,
       activeSessionId,
-      appendMessage,
+      agentAvailability,
       appendActivityEntry,
+      appendMessage,
+      clearStreamingDraft,
       contextSnapshot.knowledgeLabel,
       contextSnapshot.primaryLabel,
       contextSnapshot.secondaryLabel,
       currentProject,
       generatedFiles,
-      input,
       isLoading,
+      isRuntimeConfigured,
       knowledgeSelectionMeta,
+      knowledgeSourceDocs,
       providerExecutionMode,
-      replaceRequirementDocs,
-      requirementDocs,
-      selectedRuntimeConfig,
-      selectedChatAgentId,
-      agentAvailability,
       renameSession,
+      replaceRequirementDocs,
+      selectedChatAgentId,
+      selectedRuntimeConfig,
       setActiveSession,
-      setSelectedChatAgentId,
       setRawRequirementInput,
-      clearStreamingDraft,
-      updateStreamingDraft,
+      setSelectedChatAgentId,
+      syncKnowledgeNotes,
       updateMessage,
+      updateStreamingDraft,
       upsertSession,
       workflowAvailability,
     ]
   );
+
+  const handleSubmit = useCallback(
+    async (event?: React.FormEvent) => {
+      event?.preventDefault();
+      if (!input.trim()) {
+        return;
+      }
+
+      const nextInput = input;
+      setInput('');
+      await submitPrompt(nextInput);
+    },
+    [input, submitPrompt]
+  );
+
+  useEffect(() => {
+    const handleExternalCommand = (event: Event) => {
+      const detail = (event as CustomEvent<AIChatCommandDetail>).detail;
+      if (!detail?.prompt) {
+        return;
+      }
+
+      if (detail.autoSubmit) {
+        setInput('');
+        void submitPrompt(detail.prompt);
+        return;
+      }
+
+      setInput(detail.prompt);
+    };
+
+    window.addEventListener(AI_CHAT_COMMAND_EVENT, handleExternalCommand as EventListener);
+    return () => {
+      window.removeEventListener(AI_CHAT_COMMAND_EVENT, handleExternalCommand as EventListener);
+    };
+  }, [submitPrompt]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {

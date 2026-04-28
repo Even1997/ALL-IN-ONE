@@ -1,16 +1,25 @@
 import { useMemo } from 'react';
 import { AtomicMarkdownEditor } from '../../../components/product/AtomicMarkdownEditor';
-import type { KnowledgeAttachment, KnowledgeNote } from '../model/knowledge';
+import type { DocumentChangeEvent } from '../../../types';
+import type {
+  KnowledgeAttachment,
+  KnowledgeNeighborhoodGraph,
+  KnowledgeNote,
+} from '../model/knowledge';
+import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas';
 
 type AttachmentCategoryCount = {
   category: KnowledgeAttachment['category'];
   count: number;
 };
 
+export type KnowledgeNoteFilter = 'all' | 'wiki-index' | 'ai-summary' | 'note' | 'sketch' | 'design';
+
 type KnowledgeNoteWorkspaceProps = {
   notes: KnowledgeNote[];
   filteredNotes: KnowledgeNote[];
   selectedNote: KnowledgeNote | null;
+  activeFilter: KnowledgeNoteFilter;
   editorValue: string;
   editable: boolean;
   isSaving: boolean;
@@ -21,7 +30,9 @@ type KnowledgeNoteWorkspaceProps = {
   isSearching: boolean;
   isSyncing: boolean;
   error: string | null;
+  documentEvents: DocumentChangeEvent[];
   similarNotes: KnowledgeNote[];
+  neighborhoodGraph: KnowledgeNeighborhoodGraph | null;
   neighborhoodNotes: KnowledgeNote[];
   graphNodeCount: number;
   graphEdgeCount: number;
@@ -36,9 +47,17 @@ type KnowledgeNoteWorkspaceProps = {
   onDelete: () => void;
   onUpload: () => void;
   onImportAssets: () => void;
+  onOrganizeKnowledge: () => void;
   onCreateNote: () => void;
+  onOpenGlobalWikiGraph: () => void;
   onUseForDesign: () => void;
+  onFilterChange: (filter: KnowledgeNoteFilter) => void;
   onOpenAttachment: (attachmentPath: string) => void;
+};
+
+const DOC_TYPE_META: Record<NonNullable<KnowledgeNote['docType']>, { badge: string; label: string }> = {
+  'wiki-index': { badge: 'WIKI', label: 'Wiki 索引' },
+  'ai-summary': { badge: 'AI', label: 'AI 摘要' },
 };
 
 const NOTE_KIND_META: Record<NonNullable<KnowledgeNote['kind']>, { badge: string; label: string }> = {
@@ -49,11 +68,26 @@ const NOTE_KIND_META: Record<NonNullable<KnowledgeNote['kind']>, { badge: string
 
 const ATTACHMENT_CATEGORY_LABELS: Record<KnowledgeAttachment['category'], string> = {
   pdf: 'PDF 文档',
-  word: 'Word 文件',
+  word: 'Word 文档',
   sheet: '表格资料',
-  slide: '演示文稿',
+  slide: '演示资料',
   text: '文本资料',
   other: '其他附件',
+};
+
+const FILTER_OPTIONS: Array<{ id: KnowledgeNoteFilter; label: string }> = [
+  { id: 'all', label: '全部' },
+  { id: 'wiki-index', label: 'Wiki' },
+  { id: 'ai-summary', label: 'AI 摘要' },
+  { id: 'note', label: '笔记' },
+  { id: 'sketch', label: '草图' },
+  { id: 'design', label: '设计' },
+];
+
+const DOCUMENT_EVENT_TRIGGER_LABELS: Record<DocumentChangeEvent['trigger'], string> = {
+  editor: '编辑',
+  import: '导入',
+  sync: '同步',
 };
 
 const NoteAddIcon = () => (
@@ -189,19 +223,26 @@ const summarizeBody = (value: string) => {
   return normalized.length > 88 ? `${normalized.slice(0, 88)}...` : normalized;
 };
 
-const getNoteMeta = (note: KnowledgeNote) => NOTE_KIND_META[note.kind || 'note'];
+const getNoteMeta = (note: KnowledgeNote) => {
+  if (note.docType) {
+    return DOC_TYPE_META[note.docType];
+  }
+
+  return NOTE_KIND_META[note.kind || 'note'];
+};
 
 const renderNoteList = (
   title: string,
   notes: KnowledgeNote[],
   onSelectNote: (noteId: string) => void,
-  emptyText: string
+  emptyText: string,
+  description: string
 ) => (
   <section className="gn-note-side-card">
     <div className="gn-note-side-card-header">
       <div>
         <h4>{title}</h4>
-        <p>{emptyText}</p>
+        <p>{description}</p>
       </div>
       <span className="gn-note-side-count">{notes.length}</span>
     </div>
@@ -224,13 +265,14 @@ const renderAttachmentList = (
   title: string,
   attachments: KnowledgeAttachment[],
   onOpenAttachment: (attachmentPath: string) => void,
-  emptyText: string
+  emptyText: string,
+  description: string
 ) => (
   <section className="gn-note-side-card">
     <div className="gn-note-side-card-header">
       <div>
         <h4>{title}</h4>
-        <p>{emptyText}</p>
+        <p>{description}</p>
       </div>
       <span className="gn-note-side-count">{attachments.length}</span>
     </div>
@@ -254,6 +296,7 @@ export const KnowledgeNoteWorkspace = ({
   notes,
   filteredNotes,
   selectedNote,
+  activeFilter,
   editorValue,
   editable,
   isSaving,
@@ -264,7 +307,9 @@ export const KnowledgeNoteWorkspace = ({
   isSearching,
   isSyncing,
   error,
+  documentEvents,
   similarNotes,
+  neighborhoodGraph,
   neighborhoodNotes,
   graphNodeCount,
   graphEdgeCount,
@@ -279,12 +324,16 @@ export const KnowledgeNoteWorkspace = ({
   onDelete,
   onUpload,
   onImportAssets,
+  onOrganizeKnowledge,
   onCreateNote,
+  onOpenGlobalWikiGraph,
   onUseForDesign,
+  onFilterChange,
   onOpenAttachment,
 }: KnowledgeNoteWorkspaceProps) => {
   const searchActive = searchValue.trim().length > 0;
-  const visibleNotes = searchActive ? filteredNotes : notes;
+  const visibleNotes = filteredNotes;
+  const visibleDocumentEvents = documentEvents.slice(0, 8);
   const selectedNoteMeta = selectedNote ? getNoteMeta(selectedNote) : null;
   const visibleAttachmentCount = attachments.length + nearbyAttachments.length + libraryAttachments.length;
   const selectedNoteTags = useMemo(
@@ -306,7 +355,7 @@ export const KnowledgeNoteWorkspace = ({
         <div className="gn-note-rail-hero">
           <span className="gn-note-eyebrow">Knowledge</span>
           <h3>项目知识库</h3>
-          <p>这里现在直接以 KnowledgeNote 为主模型，项目笔记、草图和设计沉淀都在同一个工作区里维护。</p>
+          <p>笔记、Wiki、草图说明和设计沉淀都会在这里统一维护，AI 也会优先基于这里的内容工作。</p>
         </div>
 
         <div className="gn-note-search-row">
@@ -319,7 +368,23 @@ export const KnowledgeNoteWorkspace = ({
           />
         </div>
 
+        <div className="pm-knowledge-filter-tabs">
+          {FILTER_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              className={activeFilter === option.id ? 'active' : ''}
+              type="button"
+              onClick={() => onFilterChange(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         <div className="gn-note-rail-actions">
+          <button className="doc-action-btn" type="button" onClick={onOrganizeKnowledge}>
+            生成 Wiki
+          </button>
           <button
             className="doc-action-btn gn-note-icon-btn"
             type="button"
@@ -432,7 +497,9 @@ export const KnowledgeNoteWorkspace = ({
             </div>
 
             <footer className="gn-note-editor-footer">
-              <span>{saveMessage || (editable ? 'Markdown 自动保存已开启，也可以手动保存。' : '当前是只读兼容投影。')}</span>
+              <span>
+                {saveMessage || (editable ? 'Markdown 请手动保存，也可以使用 Ctrl/Cmd+S。' : '当前是只读兼容投影。')}
+              </span>
               <span>更新于 {formatUpdatedAt(selectedNote.updatedAt)}</span>
             </footer>
           </>
@@ -440,12 +507,15 @@ export const KnowledgeNoteWorkspace = ({
           <div className="gn-note-empty-main">
             <span className="gn-note-eyebrow">No Note Selected</span>
             <h2>选择或新建一条知识笔记</h2>
-            <p>笔记正文、关联上下文和附件资料会在这里集中展示，后续也会直接从这里进入设计流。</p>
+            <p>这里会集中展示正文、上下文关系和附件资料。你也可以先让 AI 帮你生成一轮 Wiki 再继续整理。</p>
             <div className="gn-note-empty-actions">
-              {editorToolbar}
-              <button className="doc-action-btn" type="button" onClick={onCreateNote}>
+              <button className="doc-action-btn" type="button" onClick={onOrganizeKnowledge}>
+                生成 Wiki
+              </button>
+              <button className="doc-action-btn secondary" type="button" onClick={onCreateNote}>
                 新建第一条笔记
               </button>
+              {editorToolbar}
             </div>
           </div>
         )}
@@ -484,13 +554,46 @@ export const KnowledgeNoteWorkspace = ({
           )}
         </section>
 
-        {renderNoteList('相似笔记', similarNotes, onSelectNote, '选中笔记后，会在这里显示语义上接近的笔记。')}
+        <section className="gn-note-side-card">
+          <div className="gn-note-side-card-header">
+            <div>
+              <h4>最近文档变更</h4>
+              <p>记录新增、修改、删除和同步导入的最近动作。</p>
+            </div>
+            <span className="gn-note-side-count">{documentEvents.length}</span>
+          </div>
+          {visibleDocumentEvents.length > 0 ? (
+            <div className="gn-note-activity-list">
+              {visibleDocumentEvents.map((event) => (
+                <div key={event.id} className="gn-note-activity-item">
+                  <strong>{event.documentTitle}</strong>
+                  <span>{event.summary}</span>
+                  <div className="gn-note-activity-meta">
+                    <em>{DOCUMENT_EVENT_TRIGGER_LABELS[event.trigger] || event.trigger}</em>
+                    <span>{event.trigger}</span>
+                    <span>{formatUpdatedAt(event.timestamp)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="gn-note-empty">还没有记录到文档变更。</div>
+          )}
+        </section>
+
+        {renderNoteList(
+          '类似笔记',
+          similarNotes,
+          onSelectNote,
+          '选中笔记后，这里会展示语义上更接近的内容。',
+          '快速查看和当前笔记最接近的知识条目。'
+        )}
 
         <section className="gn-note-side-card">
           <div className="gn-note-side-card-header">
             <div>
-              <h4>关系网络</h4>
-              <p>按当前笔记展开近邻关系，帮助快速回看相关上下文。</p>
+              <h4>Wiki 图谱</h4>
+              <p>这里展示当前笔记的局部图谱，点击节点可以继续跳转到相邻上下文。</p>
             </div>
             <span className="gn-note-side-count">{graphNodeCount}</span>
           </div>
@@ -498,6 +601,22 @@ export const KnowledgeNoteWorkspace = ({
             <span>{graphNodeCount} 个节点</span>
             <span>{graphEdgeCount} 条边</span>
           </div>
+          {neighborhoodGraph ? (
+            <div className="gn-note-graph-preview">
+              <KnowledgeGraphCanvas
+                graph={neighborhoodGraph}
+                mode="focused"
+                compact
+                selectedNoteId={selectedNote?.id || null}
+                onSelectNode={onSelectNote}
+              />
+            </div>
+          ) : (
+            <div className="gn-note-empty">当前笔记附近还没有更多可展示的关系节点。</div>
+          )}
+          <button className="doc-action-btn secondary" type="button" onClick={onOpenGlobalWikiGraph}>
+            打开 Wiki 图谱
+          </button>
           {neighborhoodNotes.length > 0 ? (
             <div className="gn-note-relation-list">
               {neighborhoodNotes.map((note) => (
@@ -507,16 +626,14 @@ export const KnowledgeNoteWorkspace = ({
                 </button>
               ))}
             </div>
-          ) : (
-            <div className="gn-note-empty">暂时还没有可展示的近邻关系。</div>
-          )}
+          ) : null}
         </section>
 
         <section className="gn-note-side-card">
           <div className="gn-note-side-card-header">
             <div>
               <h4>附件资料</h4>
-              <p>把直接引用、邻近资料和资料库入口都放在这一列，减少来回找文件。</p>
+              <p>把直接引用、附近资料和资料库入口都放在这里，减少来回找文件。</p>
             </div>
             <span className="gn-note-side-count">{visibleAttachmentCount}</span>
           </div>
@@ -524,19 +641,37 @@ export const KnowledgeNoteWorkspace = ({
             <div className="gn-note-category-grid">
               {attachmentCategoryCounts.map((item) => (
                 <div key={item.category} className="gn-note-category-chip">
-                  <strong>{ATTACHMENT_CATEGORY_LABELS[item.category]}</strong>
-                  <span>{item.count}</span>
+                  <strong>{item.count}</strong>
+                  <span>{ATTACHMENT_CATEGORY_LABELS[item.category]}</span>
                 </div>
               ))}
             </div>
           ) : (
             <div className="gn-note-empty">当前项目里还没有已识别的资料附件。</div>
           )}
-        </section>
 
-        {renderAttachmentList('直接引用', attachments, onOpenAttachment, '正文里引用到的资料会优先显示在这里。')}
-        {renderAttachmentList('邻近资料', nearbyAttachments, onOpenAttachment, '和当前笔记目录或命名接近的资料会显示在这里。')}
-        {renderAttachmentList('资料库', libraryAttachments, onOpenAttachment, '剩余资料会以资料库方式兜底展示。')}
+          {renderAttachmentList(
+            '直接关联',
+            attachments,
+            onOpenAttachment,
+            '当前笔记还没有直接关联的资料。',
+            '正文里直接引用到的附件会优先出现在这里。'
+          )}
+          {renderAttachmentList(
+            '附近资料',
+            nearbyAttachments,
+            onOpenAttachment,
+            '附近目录里还没有更多可用资料。',
+            '同目录或相邻目录的资料会作为就近参考展示。'
+          )}
+          {renderAttachmentList(
+            '资料库',
+            libraryAttachments,
+            onOpenAttachment,
+            '资料库里还没有更多推荐附件。',
+            '面向整个项目知识库的可复用附件入口。'
+          )}
+        </section>
       </aside>
     </section>
   );
