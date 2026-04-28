@@ -6,6 +6,7 @@ import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
 import { ProductWorkbench } from './components/product/ProductWorkbench';
 import { WorkbenchIcon, type WorkbenchIconName } from './components/ui/WorkbenchIcon';
+import { MacButton, MacIconButton, MacInput, MacPanel, MacSelectField } from './components/ui';
 import { usePreviewStore } from './store/previewStore';
 import { useFeatureTreeStore } from './store/featureTreeStore';
 import { aiService } from './modules/ai/core/AIService';
@@ -4777,61 +4778,59 @@ ${selectedContextPrompt}` : '',
   const appDesktopContent = appMainContent;
   if (isDesktopWorkbenchMode) {
     return (
-      <div className="app app-shell-desktop desktop-active desktop-shell-codex">
+      <div className="app app-shell-desktop desktop-active desktop-shell-codex" data-role={currentRole}>
         <div className="desktop-shell-frame">
-          <aside className="desktop-primary-rail">
-            <button
+          <MacPanel as="aside" className="desktop-primary-rail mac-sidebar-panel">
+            <MacButton
               className="desktop-brand-chip"
-              type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setCurrentRole('knowledge')}
               aria-label="返回知识库"
               title="返回知识库"
             >
               <span>GN</span>
-            </button>
+            </MacButton>
 
             <nav className="desktop-primary-nav" aria-label="工作流切换">
               {DESKTOP_PRIMARY_ROLES.flatMap((roleId) => {
                 const role = DESKTOP_WORKBENCH_ROLES.find((item) => item.id === roleId);
                 return role ? [
-                <button
+                <MacIconButton
                   key={role.id}
                   className={`desktop-rail-icon-btn ${currentRole === role.id ? 'active' : ''}`}
-                  type="button"
                   onClick={() => setCurrentRole(role.id)}
                   aria-label={role.label}
                   title={role.label}
                 >
                   <WorkbenchIcon name={ROLE_TAB_ICONS[role.id]} />
-                </button>
+                </MacIconButton>
                 ] : [];
               })}
             </nav>
 
             <div className="desktop-primary-foot">
-              <button
+              <MacIconButton
                 className="desktop-rail-icon-btn"
-                type="button"
                 onClick={toggleThemeMode}
                 aria-label={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
                 title={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
               >
                 <WorkbenchIcon name={themeMode === 'dark' ? 'sun' : 'moon'} />
-              </button>
-              <button
+              </MacIconButton>
+              <MacIconButton
                 className="desktop-rail-icon-btn"
-                type="button"
                 onClick={() => setIsProjectManagerOpen(true)}
                 aria-label="项目列表"
                 title="项目列表"
               >
                 <WorkbenchIcon name="folder" />
-              </button>
+              </MacIconButton>
             </div>
-          </aside>
+          </MacPanel>
 
           <section className="desktop-workbench-column">
-            <header className="desktop-workbench-topbar desktop-workbench-menubar">
+            <MacPanel as="header" className="desktop-workbench-topbar mac-toolbar mac-panel desktop-workbench-menubar">
               <div className="desktop-workbench-leading">
                 {renderAppMenuBar('desktop')}
                 <div className="desktop-workbench-title compact">
@@ -4842,32 +4841,33 @@ ${selectedContextPrompt}` : '',
 
               <div className="desktop-workbench-tools">
                 {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
-                <label className="desktop-project-switcher">
-                  <span>项目</span>
-                  <select value={currentProject.id} onChange={(event) => handleOpenProject(event.target.value)}>
+                <MacSelectField
+                  className="desktop-project-switcher"
+                  label="项目"
+                  value={currentProject.id}
+                  onChange={(event) => handleOpenProject(event.target.value)}
+                >
                     {projects.map((project) => (
                       <option key={project.id} value={project.id}>
                         {project.name}
                       </option>
                     ))}
-                  </select>
-                </label>
-                <button className="desktop-topbar-btn" type="button" onClick={() => setIsProjectManagerOpen(true)}>
+                </MacSelectField>
+                <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
                   项目
-                </button>
+                </MacButton>
                 {currentRole !== 'design' ? (
-                  <button
+                  <MacIconButton
                     className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
-                    type="button"
                     onClick={() => setIsDesktopAiCollapsed((current) => !current)}
                     aria-label={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
                     title={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
                   >
                     <WorkbenchIcon name={isDesktopAiCollapsed ? 'panelRightOpen' : 'panelRightClose'} />
-                  </button>
+                  </MacIconButton>
                 ) : null}
               </div>
-            </header>
+            </MacPanel>
 
             <div className="desktop-workbench-panels">
               <div className="app-workbench-pane app-workbench-main-shell">
@@ -4891,7 +4891,7 @@ ${selectedContextPrompt}` : '',
   }
 
   return (
-    <div className={`app app-shell-desktop ${isDesktopWorkbenchMode ? 'desktop-active' : ''}`}>
+    <div className={`app app-shell-desktop ${isDesktopWorkbenchMode ? 'desktop-active' : ''}`} data-role={currentRole}>
       <header className="app-header">
         <div className="header-left">
           <div className="app-brand">
@@ -4906,44 +4906,45 @@ ${selectedContextPrompt}` : '',
           {renderAppMenuBar('standard')}
         </div>
 
-        <div className="header-right">
-          <label className="project-switcher">
-            <span>项目</span>
-            <select value={currentProject.id} onChange={(event) => handleOpenProject(event.target.value)}>
+          <div className="header-right">
+          <MacSelectField
+            className="project-switcher"
+            label="项目"
+            value={currentProject.id}
+            onChange={(event) => handleOpenProject(event.target.value)}
+          >
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
                 </option>
               ))}
-            </select>
-          </label>
+          </MacSelectField>
 
-          <button className="reset-project-btn" onClick={() => setIsProjectManagerOpen(true)} type="button">
+          <MacButton className="reset-project-btn" onClick={() => setIsProjectManagerOpen(true)}>
             查看项目列表
-          </button>
+          </MacButton>
 
-          <label className="header-search">
+          <label className="header-search mac-field">
             <span className="header-search-icon">
               <WorkbenchIcon name="search" />
             </span>
-            <input placeholder="搜索项目..." type="text" />
+            <MacInput placeholder="搜索项目..." type="text" />
           </label>
 
-          <button
+          <MacIconButton
             className="theme-mode-btn"
-            type="button"
             onClick={toggleThemeMode}
             aria-label={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
             title={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
           >
             <WorkbenchIcon name={themeMode === 'dark' ? 'sun' : 'moon'} />
-          </button>
+          </MacIconButton>
 
           {selectedFeature ? <span className="current-feature">当前功能：{selectedFeature.name}</span> : null}
 
-          <button className="reset-project-btn" onClick={handleResetProject} type="button">
+          <MacButton className="reset-project-btn" variant="primary" onClick={handleResetProject}>
             新建项目
-          </button>
+          </MacButton>
         </div>
       </header>
 

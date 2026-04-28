@@ -10897,3 +10897,570 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
     margin-left: 0;
   }
 }
+
+/* macOS workbench UI foundation */
+:root,
+:root[data-theme='light'] {
+  --macos-window-bg: #eef1f5;
+  --macos-window-glow: radial-gradient(circle at top left, rgba(255, 255, 255, 0.88), transparent 42%);
+  --macos-chrome-bg: rgba(255, 255, 255, 0.78);
+  --macos-chrome-border: rgba(15, 23, 42, 0.08);
+  --macos-panel-bg: rgba(255, 255, 255, 0.88);
+  --macos-panel-bg-strong: rgba(255, 255, 255, 0.96);
+  --macos-panel-border: rgba(15, 23, 42, 0.08);
+  --macos-input-bg: rgba(255, 255, 255, 0.96);
+  --macos-text-primary: #111827;
+  --macos-text-secondary: #4b5563;
+  --macos-text-tertiary: #6b7280;
+  --macos-shadow-panel: 0 14px 30px rgba(15, 23, 42, 0.08);
+  --macos-shadow-floating: 0 24px 48px rgba(15, 23, 42, 0.12);
+  --macos-focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  --role-knowledge-accent: #2563eb;
+  --role-wiki-accent: #0f766e;
+  --role-page-accent: #4f46e5;
+  --role-design-accent: #c026d3;
+  --role-develop-accent: #059669;
+  --role-test-accent: #ea580c;
+  --role-operations-accent: #dc2626;
+}
+
+:root[data-theme='dark'] {
+  --macos-window-bg: #111317;
+  --macos-window-glow: radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 32%);
+  --macos-chrome-bg: rgba(28, 31, 38, 0.82);
+  --macos-chrome-border: rgba(255, 255, 255, 0.08);
+  --macos-panel-bg: rgba(22, 24, 30, 0.9);
+  --macos-panel-bg-strong: rgba(28, 31, 38, 0.96);
+  --macos-panel-border: rgba(255, 255, 255, 0.08);
+  --macos-input-bg: rgba(255, 255, 255, 0.06);
+  --macos-text-primary: #f3f4f6;
+  --macos-text-secondary: rgba(243, 244, 246, 0.78);
+  --macos-text-tertiary: rgba(243, 244, 246, 0.56);
+  --macos-shadow-panel: 0 18px 36px rgba(0, 0, 0, 0.28);
+  --macos-shadow-floating: 0 24px 56px rgba(0, 0, 0, 0.4);
+  --macos-focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.24);
+}
+
+.app[data-role='knowledge'] {
+  --workbench-role-accent: var(--role-knowledge-accent);
+}
+
+.app[data-role='wiki'] {
+  --workbench-role-accent: var(--role-wiki-accent);
+}
+
+.app[data-role='page'] {
+  --workbench-role-accent: var(--role-page-accent);
+}
+
+.app[data-role='design'] {
+  --workbench-role-accent: var(--role-design-accent);
+}
+
+.app[data-role='develop'] {
+  --workbench-role-accent: var(--role-develop-accent);
+}
+
+.app[data-role='test'] {
+  --workbench-role-accent: var(--role-test-accent);
+}
+
+.app[data-role='operations'] {
+  --workbench-role-accent: var(--role-operations-accent);
+}
+
+.mac-panel {
+  backdrop-filter: blur(22px);
+  background: var(--macos-panel-bg);
+  border: 1px solid var(--macos-panel-border);
+  box-shadow: var(--macos-shadow-panel);
+  color: var(--macos-text-primary);
+}
+
+.mac-toolbar {
+  min-height: 56px;
+  padding: 10px 14px;
+}
+
+.mac-button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  min-height: 32px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--macos-text-primary);
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.mac-button:hover {
+  transform: translateY(-1px);
+}
+
+.mac-button:focus-visible,
+.mac-input:focus-visible,
+.mac-select:focus-visible,
+.mac-textarea:focus-visible,
+.project-manager-open:focus-visible,
+.app-menu-trigger:focus-visible,
+.app-menu-item:focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-ring);
+}
+
+.mac-button-primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 86%, white), var(--workbench-role-accent, var(--role-knowledge-accent)));
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.mac-button-secondary {
+  background: color-mix(in srgb, var(--macos-panel-bg-strong) 88%, transparent);
+  border-color: var(--macos-panel-border);
+}
+
+.mac-button-ghost {
+  background: transparent;
+  color: var(--macos-text-secondary);
+}
+
+.mac-button-danger {
+  background: color-mix(in srgb, #dc2626 16%, var(--macos-panel-bg-strong));
+  border-color: color-mix(in srgb, #dc2626 30%, var(--macos-panel-border));
+  color: #ef4444;
+}
+
+.mac-button-sm {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.mac-button-icon {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+}
+
+.mac-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mac-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--macos-text-tertiary);
+  text-transform: uppercase;
+}
+
+.mac-field-control {
+  min-width: 0;
+}
+
+.mac-field-hint {
+  font-size: 11px;
+  color: var(--macos-text-tertiary);
+}
+
+.mac-input,
+.mac-select-shell {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--macos-panel-border);
+  background: var(--macos-input-bg);
+  color: var(--macos-text-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.mac-input {
+  padding: 0 12px;
+  font: inherit;
+}
+
+.mac-textarea {
+  min-height: 132px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.mac-select-shell {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+}
+
+.mac-select {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.mac-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(10px);
+}
+
+.mac-dialog-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: min(520px, calc(100vw - 32px));
+  transform: translate(-50%, -50%);
+  border-radius: 16px;
+  border: 1px solid var(--macos-panel-border);
+  background: var(--macos-panel-bg-strong);
+  box-shadow: var(--macos-shadow-floating);
+  color: var(--macos-text-primary);
+}
+
+.mac-dialog-header,
+.mac-dialog-body,
+.mac-dialog-footer {
+  padding: 16px 18px;
+}
+
+.mac-dialog-header {
+  border-bottom: 1px solid var(--macos-panel-border);
+}
+
+.mac-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--macos-panel-border);
+}
+
+.desktop-shell-codex {
+  background:
+    var(--macos-window-glow),
+    linear-gradient(180deg, color-mix(in srgb, var(--macos-window-bg) 92%, white) 0%, var(--macos-window-bg) 100%);
+}
+
+.desktop-shell-frame {
+  gap: 10px;
+  padding: 10px;
+}
+
+.desktop-primary-rail.mac-sidebar-panel {
+  justify-content: space-between;
+  padding: 8px 6px 10px;
+  border-radius: 14px;
+  background: var(--macos-chrome-bg);
+  border: 1px solid var(--macos-chrome-border);
+  box-shadow: var(--macos-shadow-panel);
+}
+
+.desktop-brand-chip,
+.desktop-rail-icon-btn {
+  border-radius: 11px;
+}
+
+.desktop-brand-chip.mac-button {
+  min-width: 34px;
+  width: 34px;
+  padding: 0;
+  color: var(--macos-text-primary);
+}
+
+.desktop-brand-chip.mac-button,
+.desktop-rail-icon-btn.mac-button {
+  background: transparent;
+}
+
+.desktop-rail-icon-btn.mac-button {
+  color: var(--macos-text-secondary);
+}
+
+.desktop-rail-icon-btn.mac-button:hover,
+.desktop-rail-icon-btn.mac-button.active,
+.desktop-brand-chip.mac-button:hover {
+  background: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 11%, var(--macos-panel-bg-strong));
+  border-color: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 18%, var(--macos-panel-border));
+  color: var(--macos-text-primary);
+}
+
+.desktop-rail-icon-btn.mac-button.active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 22%, transparent);
+}
+
+.desktop-workbench-topbar.mac-toolbar.mac-panel {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--macos-chrome-bg);
+  border: 1px solid var(--macos-chrome-border);
+  box-shadow: var(--macos-shadow-panel);
+}
+
+.desktop-workbench-title.compact h1,
+.app-title {
+  color: var(--macos-text-primary);
+}
+
+.desktop-workbench-title.compact p,
+.app-subtitle,
+.current-feature {
+  color: var(--macos-text-secondary);
+}
+
+.desktop-feature-pill,
+.desktop-project-switcher.mac-field,
+.project-switcher.mac-field {
+  display: inline-flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--macos-panel-bg-strong) 84%, transparent);
+  border: 1px solid var(--macos-panel-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.desktop-project-switcher.mac-field .mac-field-label,
+.project-switcher.mac-field .mac-field-label {
+  margin: 0;
+}
+
+.desktop-project-switcher.mac-field .mac-field-control,
+.project-switcher.mac-field .mac-field-control {
+  flex: 1 1 auto;
+}
+
+.desktop-project-switcher .mac-select-shell,
+.project-switcher .mac-select-shell {
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.desktop-project-switcher .mac-select,
+.project-switcher .mac-select {
+  min-width: 120px;
+}
+
+.desktop-topbar-btn.mac-button {
+  min-height: 32px;
+  border-radius: 10px;
+}
+
+.desktop-topbar-btn.mac-button.active,
+.desktop-topbar-btn.mac-button:hover {
+  border-color: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 24%, var(--macos-panel-border));
+}
+
+.app-workbench-pane {
+  border-radius: 14px;
+  border: 1px solid var(--macos-panel-border);
+  background: var(--macos-panel-bg);
+  box-shadow: var(--macos-shadow-panel);
+}
+
+.app-menu-panel {
+  border-radius: 14px;
+  border: 1px solid var(--macos-panel-border);
+  background: var(--macos-panel-bg-strong);
+  box-shadow: var(--macos-shadow-floating);
+  backdrop-filter: blur(20px);
+}
+
+.app-menu-trigger,
+.app-menu-item,
+.reset-project-btn,
+.theme-mode-btn,
+.doc-action-btn,
+.test-btn,
+.ops-btn {
+  font: inherit;
+}
+
+.reset-project-btn,
+.theme-mode-btn,
+.doc-action-btn,
+.test-btn,
+.ops-btn {
+  border-radius: 10px;
+}
+
+.project-setup-card.mac-panel {
+  background: var(--macos-panel-bg);
+  border: 1px solid var(--macos-panel-border);
+  box-shadow: var(--macos-shadow-panel);
+}
+
+.setup-field.mac-field .mac-input,
+.setup-field.mac-field .mac-textarea {
+  background: var(--macos-input-bg);
+}
+
+.project-manager-delete.mac-button {
+  min-height: 28px;
+}
+
+.app-shell-desktop .app-header {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--macos-chrome-bg);
+  border: 1px solid var(--macos-chrome-border);
+  box-shadow: var(--macos-shadow-panel);
+  backdrop-filter: blur(22px);
+}
+
+.header-right {
+  gap: 10px;
+}
+
+.reset-project-btn.mac-button,
+.theme-mode-btn.mac-button {
+  min-height: 34px;
+}
+
+.theme-mode-btn.mac-button {
+  color: var(--macos-text-secondary);
+}
+
+.theme-mode-btn.mac-button:hover {
+  color: var(--macos-text-primary);
+}
+
+.header-search.mac-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 0;
+  min-width: 220px;
+  max-width: 280px;
+  padding: 0 12px 0 36px;
+  border-radius: 11px;
+  border: 1px solid var(--macos-panel-border);
+  background: color-mix(in srgb, var(--macos-panel-bg-strong) 84%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.header-search.mac-field .mac-input {
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.header-search-icon {
+  color: var(--macos-text-tertiary);
+}
+
+.current-feature {
+  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 18%, var(--macos-panel-border));
+  background: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 10%, var(--macos-panel-bg-strong));
+  color: var(--workbench-role-accent, var(--role-knowledge-accent));
+}
+
+.app-workbench-row,
+.app-workbench-desktop-layout {
+  gap: 10px;
+}
+
+.product-workbench-shell,
+.workspace-shell,
+.test-view,
+.operations-view {
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 8%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--macos-window-bg) 82%, transparent) 0%, color-mix(in srgb, var(--macos-window-bg) 96%, transparent) 100%);
+}
+
+.product-workbench-shell {
+  padding: 10px;
+  gap: 10px;
+}
+
+.pm-left-nav,
+.pm-card,
+.design-system-panel,
+.test-cases,
+.deploy-history,
+.target-card,
+.stat-card,
+.project-setup-card,
+.delivery-card,
+.history-item {
+  border-radius: 14px;
+  background: var(--macos-panel-bg) !important;
+  border: 1px solid var(--macos-panel-border) !important;
+  box-shadow: var(--macos-shadow-panel) !important;
+  backdrop-filter: blur(22px);
+}
+
+.pm-workbench-shell,
+.pm-workbench-main-with-ai,
+.pm-workbench-main,
+.pm-workbench-sidebar,
+.pm-workbench-ai-pane,
+.product-workbench-pane {
+  min-height: 0;
+}
+
+.pm-card-header h3,
+.project-setup-header h2,
+.project-setup-hero h1 {
+  color: var(--macos-text-primary);
+}
+
+.pm-card-header span,
+.project-setup-header p,
+.project-setup-hero p,
+.setup-helper-text,
+.project-manager-stat span,
+.project-manager-open span {
+  color: var(--macos-text-secondary);
+}
+
+.project-manager-open {
+  border-radius: 12px;
+}
+
+.project-manager-item.active {
+  border-color: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 20%, var(--macos-panel-border));
+  background: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 7%, var(--macos-panel-bg));
+}
+
+.workspace-shell .delivery-card,
+.target-card,
+.stat-card,
+.history-item,
+.delivery-summary-bar,
+.test-header,
+.ops-header {
+  border-radius: 14px;
+  background: var(--macos-panel-bg);
+  border: 1px solid var(--macos-panel-border);
+  box-shadow: var(--macos-shadow-panel);
+}
+
+.delivery-summary-bar {
+  color: var(--macos-text-primary);
+}

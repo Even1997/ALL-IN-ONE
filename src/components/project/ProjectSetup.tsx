@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { MacButton, MacField, MacInput, MacPanel } from '../ui';
 import type { ProjectConfig } from '../../types';
 import type { CreateProjectInput } from '../../store/projectStore';
 import type { ProjectStorageSettings } from '../../utils/projectPersistence';
@@ -78,7 +79,7 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
 
   return (
     <div className="project-setup-shell project-manager-shell">
-      <aside className="project-setup-card project-manager-panel project-manager-sidebar">
+      <MacPanel as="aside" className="project-setup-card project-manager-panel project-manager-sidebar">
         <div className="project-manager-sidebar-top">
           <div className="project-setup-header">
             <div>
@@ -113,14 +114,15 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
                 </button>
                 <div className="project-manager-item-actions">
                   {activeProjectId === project.id ? <span className="project-manager-current-tag">当前</span> : null}
-                  <button
+                  <MacButton
                     className="project-manager-delete"
-                    type="button"
+                    variant="danger"
+                    size="sm"
                     onClick={() => onDeleteProject(project.id)}
                     aria-label={`删除项目 ${project.name}`}
                   >
                     删除
-                  </button>
+                  </MacButton>
                 </div>
               </div>
             ))
@@ -128,7 +130,7 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
             <div className="empty-state">创建后就可以在这里切换多个项目。</div>
           )}
         </div>
-      </aside>
+      </MacPanel>
 
       <div className="project-manager-main">
         <div className="project-setup-hero project-manager-hero">
@@ -142,14 +144,14 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
           </div>
           {onClose ? (
             <div className="project-manager-hero-actions">
-              <button className="project-manager-back-btn" type="button" onClick={onClose}>
+              <MacButton className="project-manager-back-btn" variant="secondary" onClick={onClose}>
                 返回当前项目
-              </button>
+              </MacButton>
             </div>
           ) : null}
         </div>
 
-        <form className="project-setup-card project-manager-panel project-manager-form" onSubmit={handleSubmit}>
+        <MacPanel as="form" className="project-setup-card project-manager-panel project-manager-form" onSubmit={handleSubmit}>
           <div className="project-setup-header">
             <div>
               <h2>新建项目</h2>
@@ -158,35 +160,38 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
             <div className="project-setup-status">Create</div>
           </div>
 
-          <label className="setup-field">
-            <span>项目名称</span>
-            <input
+          <MacField label="项目名称" className="setup-field">
+            <MacInput
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="例如：GoodNight Workspace"
               autoFocus
             />
-          </label>
+          </MacField>
 
-          <label className="setup-field">
-            <span>项目简介</span>
+          <MacField label="项目简介" className="setup-field">
             <textarea
+              className="mac-input mac-textarea"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="简单描述一下这个项目要做什么。"
               rows={7}
             />
-          </label>
+          </MacField>
 
           <div className="setup-actions">
-            <button type="submit" className="primary-action" disabled={!name.trim()}>
+            <MacButton type="submit" className="primary-action" variant="primary" disabled={!name.trim()}>
               创建项目
-            </button>
+            </MacButton>
           </div>
-        </form>
+        </MacPanel>
 
         {projectStorageSettings ? (
-          <section className="project-setup-card project-manager-panel project-manager-form" aria-label="项目存储位置">
+          <MacPanel
+            as="section"
+            className="project-setup-card project-manager-panel project-manager-form"
+            aria-label="项目存储位置"
+          >
             <div className="project-setup-header">
               <div>
                 <h2>项目存储位置</h2>
@@ -195,15 +200,14 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
               <div className="project-setup-status">Storage</div>
             </div>
 
-            <label className="setup-field">
-              <span>项目根目录</span>
-              <input
+            <MacField label="项目根目录" className="setup-field">
+              <MacInput
                 value={projectStorageDraft}
                 onChange={(event) => setProjectStorageDraft(event.target.value)}
                 placeholder={projectStorageSettings.defaultPath}
                 disabled={isProjectStorageBusy}
               />
-            </label>
+            </MacField>
 
             <div className="project-manager-sidebar-meta">
               <div className="project-manager-stat">
@@ -217,34 +221,34 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
             </div>
 
             <div className="setup-actions">
-              <button
-                type="button"
+              <MacButton
                 className="secondary-action"
+                variant="secondary"
                 disabled={isProjectStorageBusy || !onPickProjectStoragePath}
                 onClick={() => void onPickProjectStoragePath?.()}
               >
                 选择文件夹
-              </button>
-              <button
-                type="button"
+              </MacButton>
+              <MacButton
                 className="primary-action"
+                variant="primary"
                 disabled={!canSaveProjectStoragePath}
                 onClick={() => void onSaveProjectStoragePath?.(projectStorageDraft)}
               >
                 保存路径
-              </button>
-              <button
-                type="button"
+              </MacButton>
+              <MacButton
                 className="secondary-action"
+                variant="secondary"
                 disabled={isProjectStorageBusy || projectStorageSettings.isDefault}
                 onClick={() => void onResetProjectStoragePath?.()}
               >
                 恢复默认
-              </button>
+              </MacButton>
             </div>
 
             {projectStorageMessage ? <p className="setup-helper-text">{projectStorageMessage}</p> : null}
-          </section>
+          </MacPanel>
         ) : null}
       </div>
     </div>
