@@ -1,20 +1,12 @@
 ﻿import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from 'react';
+import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { Canvas } from '../canvas/Canvas';
 import {
-  buildKnowledgeEntries,
-  findKnowledgeEntry,
-  type KnowledgeEntry,
-} from '../../modules/knowledge/knowledgeEntries';
-import {
-  buildKnowledgeTree,
-  findKnowledgeTreeNode,
   type KnowledgeDiskItem,
   type KnowledgeGroupId,
-  type KnowledgeTreeNode,
 } from '../../modules/knowledge/knowledgeTree';
-import { buildKnowledgeSearchIndex, searchKnowledgeEntries } from '../../modules/knowledge/knowledgeSearch';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import { usePreviewStore } from '../../store/previewStore';
@@ -22,6 +14,10 @@ import { useProjectStore } from '../../store/projectStore';
 import { AppType, CanvasElement, FeatureNode, FeatureTree, PageStructureNode } from '../../types';
 import { featureTreeToMarkdown } from '../../utils/featureTreeToMarkdown';
 import { useShallow } from 'zustand/react/shallow';
+import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
+import type { KnowledgeAttachment, KnowledgeNote } from '../../features/knowledge/model/knowledge';
+import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
+import { WorkbenchIcon } from '../ui/WorkbenchIcon';
 import {
   buildPageWireframeMarkdown,
   createWireframeModule,
@@ -52,20 +48,12 @@ import {
   joinFileSystemPath,
   normalizeRelativeFileSystemPath,
 } from '../../utils/fileSystemPaths.ts';
-import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from '../../utils/layoutPreferences';
-import { WorkbenchShell } from './WorkbenchShell';
-import { KnowledgeWorkspace } from './KnowledgeWorkspace';
-import { MilkdownEditor } from './MilkdownEditor';
 import { PageWorkspace } from './PageWorkspace';
+import { KnowledgeNoteWorkspace } from '../../features/knowledge/workspace/KnowledgeNoteWorkspace';
 
-type SidebarTab = 'requirement' | 'page';
+type SidebarTab = 'knowledge' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
 export type WorkbenchLayoutDensity = 'comfortable' | 'compact';
-type KnowledgeContextMenuState = {
-  x: number;
-  y: number;
-  node: KnowledgeTreeNode;
-} | null;
 
 const normalizeRequirementFilename = (value: string) => {
   const normalized = value.trim().replace(/[\\/:*?"<>|]/g, '-');
@@ -79,7 +67,19 @@ const normalizeRequirementFilename = (value: string) => {
 const joinDiskPath = (basePath: string, fileName: string) => joinFileSystemPath(basePath, fileName);
 
 const normalizeRelativePath = (value: string) => normalizeRelativeFileSystemPath(value);
-const PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS = { min: 200, max: 420 };
+const KNOWLEDGE_ATTACHMENT_EXTENSION_MAP = {
+  pdf: 'pdf',
+  doc: 'word',
+  docx: 'word',
+  xls: 'sheet',
+  xlsx: 'sheet',
+  csv: 'sheet',
+  ppt: 'slide',
+  pptx: 'slide',
+  txt: 'text',
+  rtf: 'text',
+} as const;
+const KNOWLEDGE_ATTACHMENT_EXTENSIONS = Object.keys(KNOWLEDGE_ATTACHMENT_EXTENSION_MAP);
 
 const getKnowledgeGroupOverridesStorageKey = (projectId: string) =>
   `goodnight:knowledge-group-overrides:${projectId}`;
@@ -193,33 +193,6 @@ const buildKnowledgeDocsFromDisk = async (
   );
 };
 
-const getDefaultKnowledgeFileName = (group: KnowledgeGroupId) => {
-  if (group === 'sketch') {
-    return '新建草图.md';
-  }
-
-  if (group === 'design') {
-    return '新建设计.md';
-  }
-
-  return '新建项目文件.md';
-};
-
-const findKnowledgeNodeByEntryId = (nodes: KnowledgeTreeNode[], entryId: string): KnowledgeTreeNode | null => {
-  for (const node of nodes) {
-    if (node.entryId === entryId) {
-      return node;
-    }
-
-    const childMatch = findKnowledgeNodeByEntryId(node.children, entryId);
-    if (childMatch) {
-      return childMatch;
-    }
-  }
-
-  return null;
-};
-
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [
     ...(node.kind === 'page' ? [node] : []),
@@ -249,29 +222,85 @@ const filterPageTree = (nodes: PageStructureNode[], keyword: string): PageStruct
   });
 };
 
-const filterKnowledgeTreeByEntryIds = (
-  nodes: KnowledgeTreeNode[],
-  matchedEntryIds: Set<string>
-): KnowledgeTreeNode[] => {
-  if (matchedEntryIds.size === 0) {
-    return [];
+const getFileExtension = (value: string) => {
+  const matched = value.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return matched ? matched[1] : '';
+};
+
+const getBaseNameWithoutExtension = (value: string) =>
+  value
+    .replace(/\\/g, '/')
+    .split('/')
+    .pop()
+    ?.replace(/\.[^.]+$/, '')
+    .toLowerCase() || '';
+
+const getRelativeDirectory = (value: string) => {
+  const normalized = normalizeRelativePath(value);
+  return normalized.includes('/') ? normalized.replace(/\/[^/]+$/, '') : '';
+};
+
+const normalizeAttachmentLookupValue = (value: string) =>
+  normalizeRelativePath(value).replace(/^\.\//, '').toLowerCase();
+
+const filterKnowledgeNotes = (notes: KnowledgeNote[], keyword: string) => {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  if (!normalizedKeyword) {
+    return notes;
   }
 
-  return nodes.flatMap((node) => {
-    const children = filterKnowledgeTreeByEntryIds(node.children, matchedEntryIds);
-    const matchesSelf = node.type === 'file' && Boolean(node.entryId && matchedEntryIds.has(node.entryId));
+  return notes.filter((note) =>
+    [note.title, note.bodyMarkdown, note.sourceUrl || '', ...(note.tags || [])]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(normalizedKeyword))
+  );
+};
 
-    if (node.type === 'group') {
-      return children.length > 0 ? [{ ...node, children }] : [];
+const parseAttachmentReferenceTokens = (content: string) => {
+  const tokens = new Set<string>();
+  const patterns = [
+    /\[\[([^\]]+\.(pdf|doc|docx|xls|xlsx|csv|ppt|pptx|txt|rtf))\]\]/gi,
+    /\[[^\]]*]\(([^)]+\.(pdf|doc|docx|xls|xlsx|csv|ppt|pptx|txt|rtf))[^)]*\)/gi,
+    /\b([^\s[\]()]+?\.(pdf|doc|docx|xls|xlsx|csv|ppt|pptx|txt|rtf))\b/gi,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of content.matchAll(pattern)) {
+      const token = match[1]?.trim();
+      if (!token) {
+        continue;
+      }
+
+      tokens.add(normalizeAttachmentLookupValue(token));
+      tokens.add(normalizeAttachmentLookupValue(token.replace(/^\/+/, '')));
+      tokens.add(normalizeAttachmentLookupValue(token.split('/').pop() || token));
+      tokens.add(normalizeAttachmentLookupValue(token.split('\\').pop() || token));
     }
+  }
 
-    if (!matchesSelf && children.length === 0) {
+  return tokens;
+};
+
+const buildKnowledgeAttachmentsFromDisk = (diskItems: KnowledgeDiskItem[]): KnowledgeAttachment[] =>
+  diskItems.flatMap((item) => {
+    if (item.type !== 'file') {
       return [];
     }
 
-    return [{ ...node, children }];
+    const extension = getFileExtension(item.relativePath);
+    if (!extension || !KNOWLEDGE_ATTACHMENT_EXTENSIONS.includes(extension)) {
+      return [];
+    }
+
+    return [{
+      id: item.path,
+      title: item.relativePath.split('/').pop() || item.relativePath,
+      path: item.path,
+      relativePath: item.relativePath,
+      extension,
+      category: KNOWLEDGE_ATTACHMENT_EXTENSION_MAP[extension as keyof typeof KNOWLEDGE_ATTACHMENT_EXTENSION_MAP],
+    }];
   });
-};
 
 const createCanvasId = () =>
   globalThis.crypto?.randomUUID?.() ?? `canvas-${Math.random().toString(36).slice(2, 10)}`;
@@ -335,7 +364,7 @@ const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onS
           <button
             className={`pm-page-tree-caret ${hasChildren ? 'visible' : 'placeholder'} ${isExpanded ? 'expanded' : ''}`}
             type="button"
-            aria-label={hasChildren ? `${isExpanded ? '??' : '??'} ${node.name}` : `${node.name} ????`}
+            aria-label={hasChildren ? `${isExpanded ? '收起' : '展开'} ${node.name}` : `${node.name} 没有子页面`}
             onClick={(event) => {
               event.stopPropagation();
               if (hasChildren) {
@@ -343,7 +372,7 @@ const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onS
               }
             }}
           >
-            {hasChildren ? '>' : ''}
+            {hasChildren ? <WorkbenchIcon name="chevronRight" /> : null}
           </button>
           <button
             className={`pm-page-tree-node ${isSelected ? 'active' : ''}`}
@@ -352,30 +381,30 @@ const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onS
           >
             <strong>{node.name}</strong>
           </button>
-          <div className="pm-page-tree-actions" aria-label={`${node.name} ????`}>
+          <div className="pm-page-tree-actions" aria-label={`${node.name} 操作`}>
             <button
               className="pm-page-tree-action"
               type="button"
-              title={`? ${node.name} ?????`}
-              aria-label={`? ${node.name} ?????`}
+              title={`给 ${node.name} 添加子页面`}
+              aria-label={`给 ${node.name} 添加子页面`}
               onClick={(event) => {
                 event.stopPropagation();
                 onAddPage(node.id);
               }}
             >
-              +
+              <WorkbenchIcon name="plus" />
             </button>
             <button
               className="pm-page-tree-action danger"
               type="button"
-              title={`?? ${node.name}`}
-              aria-label={`?? ${node.name}`}
+              title={`删除 ${node.name}`}
+              aria-label={`删除 ${node.name}`}
               onClick={(event) => {
                 event.stopPropagation();
                 onDeletePage(node.id);
               }}
             >
-              x
+              <WorkbenchIcon name="trash" />
             </button>
           </div>
         </div>
@@ -1031,21 +1060,20 @@ interface ProductWorkbenchProps {
   onFeatureSelect?: (node: FeatureNode) => void;
   layoutFocus: WorkbenchLayoutFocus;
   layoutDensity: WorkbenchLayoutDensity;
+  entryTab?: SidebarTab;
+  onEntryTabChange?: (tab: SidebarTab) => void;
 }
 
-export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }: ProductWorkbenchProps) => {
-  const defaultProductWorkbenchLeftNavWidth =
-    layoutFocus === 'canvas' ? 212 : layoutFocus === 'sidebar' ? 252 : 228;
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('requirement');
-  const [productWorkbenchLeftNavWidth, setProductWorkbenchLeftNavWidth] = useState(() =>
-    readLayoutSize(
-      LAYOUT_PREFERENCE_KEYS.productWorkbenchLeftNavWidth,
-      defaultProductWorkbenchLeftNavWidth,
-      PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS
-    )
-  );
-  const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null);
-  const [selectedKnowledgeNodeId, setSelectedKnowledgeNodeId] = useState<string | null>(null);
+export const ProductWorkbench = ({
+  onFeatureSelect,
+  layoutFocus,
+  layoutDensity,
+  entryTab,
+  onEntryTabChange,
+}: ProductWorkbenchProps) => {
+  const [internalSidebarTab, setInternalSidebarTab] = useState<SidebarTab>('knowledge');
+  const sidebarTab = entryTab || internalSidebarTab;
+  const [selectedKnowledgeNoteId, setSelectedKnowledgeNoteId] = useState<string | null>(null);
   const [openKnowledgeTabIds, setOpenKnowledgeTabIds] = useState<string[]>([]);
   const [requirementDraftTitle, setRequirementDraftTitle] = useState('');
   const [requirementDraftContent, setRequirementDraftContent] = useState('');
@@ -1057,16 +1085,9 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
   const [knowledgeDiskItems, setKnowledgeDiskItems] = useState<KnowledgeDiskItem[]>([]);
   const [knowledgeGroupOverrides, setKnowledgeGroupOverrides] = useState<Record<string, KnowledgeGroupId>>({});
-  const [expandedKnowledgeNodeIds, setExpandedKnowledgeNodeIds] = useState<Set<string>>(
-    () => new Set(['project', 'sketch', 'design'])
-  );
-  const [knowledgeContextMenu, setKnowledgeContextMenu] = useState<KnowledgeContextMenuState>(null);
   const [pageSearch, setPageSearch] = useState('');
   const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
   const [frameEditorDraft, setFrameEditorDraft] = useState('');
-  const [isNarrowProductWorkbench, setIsNarrowProductWorkbench] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth <= 900 : false
-  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const knowledgeRefreshRequestIdRef = useRef(0);
   const lastKnowledgeAutosaveSignatureRef = useRef('');
@@ -1077,13 +1098,10 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     featuresMarkdown,
     requirementDocs,
     activeKnowledgeFileId,
-    generatedFiles,
     pageStructure,
     wireframes,
     setFeaturesMarkdown,
     setActiveKnowledgeFileId,
-    updateRequirementDoc,
-    deleteRequirementDoc,
     addRootPage,
     addSiblingPage,
     addChildPage,
@@ -1097,13 +1115,10 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     featuresMarkdown: state.featuresMarkdown,
     requirementDocs: state.requirementDocs,
     activeKnowledgeFileId: state.activeKnowledgeFileId,
-    generatedFiles: state.generatedFiles,
     pageStructure: state.pageStructure,
     wireframes: state.wireframes,
     setFeaturesMarkdown: state.setFeaturesMarkdown,
     setActiveKnowledgeFileId: state.setActiveKnowledgeFileId,
-    updateRequirementDoc: state.updateRequirementDoc,
-    deleteRequirementDoc: state.deleteRequirementDoc,
     addRootPage: state.addRootPage,
     addSiblingPage: state.addSiblingPage,
     addChildPage: state.addChildPage,
@@ -1121,6 +1136,24 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const clearCanvas = usePreviewStore((state) => state.clearCanvas);
   const loadFromCode = usePreviewStore((state) => state.loadFromCode);
   const selectElement = usePreviewStore((state) => state.selectElement);
+  const serverNotes = useKnowledgeStore((state) => state.notes);
+  const serverSearchResults = useKnowledgeStore((state) => state.searchResults);
+  const serverSearchQuery = useKnowledgeStore((state) => state.searchQuery);
+  const serverSimilarNotes = useKnowledgeStore((state) => state.similarNotes);
+  const serverSimilarSourceNoteId = useKnowledgeStore((state) => state.similarSourceNoteId);
+  const neighborhoodGraph = useKnowledgeStore((state) => state.neighborhoodGraph);
+  const neighborhoodSourceNoteId = useKnowledgeStore((state) => state.neighborhoodSourceNoteId);
+  const isKnowledgeSearching = useKnowledgeStore((state) => state.isSearching);
+  const isKnowledgeSyncing = useKnowledgeStore((state) => state.isSyncing);
+  const knowledgeSidecarError = useKnowledgeStore((state) => state.error);
+  const loadSimilarServerNotes = useKnowledgeStore((state) => state.loadSimilarNotes);
+  const loadNeighborhoodGraph = useKnowledgeStore((state) => state.loadNeighborhoodGraph);
+  const searchServerNotes = useKnowledgeStore((state) => state.searchNotes);
+  const loadServerNotes = useKnowledgeStore((state) => state.loadNotes);
+  const createServerNote = useKnowledgeStore((state) => state.createProjectNote);
+  const deleteServerNote = useKnowledgeStore((state) => state.deleteProjectNote);
+  const syncServerNotes = useKnowledgeStore((state) => state.syncProjectNotes);
+  const updateServerNote = useKnowledgeStore((state) => state.updateProjectNote);
   const canUseProjectFilesystem = isTauriRuntimeAvailable();
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
@@ -1132,94 +1165,174 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     () => resolveCanvasPresetFromFrame(selectedPageFrame, currentProject?.appType),
     [currentProject?.appType, selectedPageFrame]
   );
-  const knowledgeEntries = useMemo(
-    () => buildKnowledgeEntries(requirementDocs, generatedFiles),
-    [generatedFiles, requirementDocs]
+  const projectedRequirementDocs = useMemo(
+    () => projectKnowledgeNotesToRequirementDocs(serverNotes),
+    [serverNotes]
   );
-  const knowledgeSearchState = useMemo(
-    () =>
-      buildKnowledgeSearchIndex(
-        knowledgeEntries.map((entry) => ({
-          id: entry.id,
-          title: entry.title,
-          content: entry.content,
-          summary: entry.summary,
-        }))
-      ),
-    [knowledgeEntries]
-  );
-  const searchedKnowledgeEntries = useMemo(
-    () => searchKnowledgeEntries(knowledgeSearchState, knowledgeSearch),
-    [knowledgeSearchState, knowledgeSearch]
-  );
-  const knowledgeTree = useMemo(
-    () => buildKnowledgeTree(knowledgeEntries, knowledgeDiskItems, projectRootDir, knowledgeGroupOverrides),
-    [knowledgeDiskItems, knowledgeEntries, knowledgeGroupOverrides, projectRootDir]
-  );
-  const filteredKnowledgeTree = useMemo(() => {
-    if (!knowledgeSearch.trim()) {
-      return knowledgeTree;
+  const filteredServerNotes = useMemo(() => {
+    const normalizedSearch = knowledgeSearch.trim();
+    if (!normalizedSearch) {
+      return serverNotes;
     }
 
-    return filterKnowledgeTreeByEntryIds(
-      knowledgeTree,
-      new Set(searchedKnowledgeEntries.map((entry) => entry.id))
-    );
-  }, [knowledgeSearch, knowledgeTree, searchedKnowledgeEntries]);
+    if (serverSearchQuery === normalizedSearch) {
+      return serverSearchResults;
+    }
+
+    return filterKnowledgeNotes(serverNotes, normalizedSearch);
+  }, [knowledgeSearch, serverNotes, serverSearchQuery, serverSearchResults]);
+  const knowledgeAttachments = useMemo(
+    () => buildKnowledgeAttachmentsFromDisk(knowledgeDiskItems),
+    [knowledgeDiskItems]
+  );
   const filteredPageStructure = useMemo(() => filterPageTree(pageStructure, pageSearch), [pageSearch, pageStructure]);
   const filteredDesignPages = useMemo(() => collectDesignPages(filteredPageStructure), [filteredPageStructure]);
-  const selectedKnowledgeNode = useMemo(
-    () => findKnowledgeTreeNode(knowledgeTree, selectedKnowledgeNodeId || null),
-    [knowledgeTree, selectedKnowledgeNodeId]
-  );
-  const selectedKnowledgeEntry =
-    findKnowledgeEntry(knowledgeEntries, selectedRequirementId || selectedKnowledgeNode?.entryId || null) || null;
-  const openKnowledgeTabs = useMemo(
-    () => openKnowledgeTabIds
-      .map((id) => findKnowledgeEntry(knowledgeEntries, id))
-      .filter((entry): entry is KnowledgeEntry => Boolean(entry)),
-    [knowledgeEntries, openKnowledgeTabIds]
+  const selectedServerNote = useMemo(
+    () => serverNotes.find((note) => note.id === selectedKnowledgeNoteId) || null,
+    [serverNotes, selectedKnowledgeNoteId]
   );
   const selectedRequirement =
-    selectedKnowledgeEntry?.source === 'requirement'
-      ? requirementDocs.find((doc) => doc.id === selectedKnowledgeEntry.id) || null
+    selectedServerNote
+      ? requirementDocs.find(
+          (doc) =>
+            doc.id === selectedServerNote.id ||
+            (Boolean(selectedServerNote.sourceUrl) && doc.filePath === selectedServerNote.sourceUrl)
+        ) || null
       : null;
-  const derivedKnowledgeEntries = useMemo(
+  const selectedProjectedRequirement = useMemo(
     () =>
-      selectedRequirement
-        ? knowledgeEntries.filter((entry) => entry.sourceRequirementId === selectedRequirement.id)
-        : [],
-    [knowledgeEntries, selectedRequirement]
+      selectedRequirement ||
+      (selectedServerNote ? projectKnowledgeNotesToRequirementDocs([selectedServerNote])[0] : null),
+    [selectedRequirement, selectedServerNote]
   );
-  const selectedKnowledgeRelatedEntries = useMemo(() => {
-    if (!selectedKnowledgeEntry) {
+  const serverSimilarKnowledgeNotes = useMemo(() => {
+    if (!selectedServerNote || serverSimilarSourceNoteId !== selectedServerNote.id) {
       return [];
     }
 
-    const relatedIds = new Set(selectedKnowledgeEntry.relatedIds);
-    if (selectedKnowledgeEntry.sourceRequirementId) {
-      relatedIds.add(selectedKnowledgeEntry.sourceRequirementId);
+    return serverSimilarNotes.filter((note) => note.id !== selectedServerNote.id);
+  }, [selectedServerNote, serverSimilarNotes, serverSimilarSourceNoteId]);
+  const neighborhoodKnowledgeNotes = useMemo(() => {
+    if (!selectedServerNote || neighborhoodSourceNoteId !== selectedServerNote.id || !neighborhoodGraph) {
+      return [];
     }
 
-    return knowledgeEntries.filter(
-      (entry) => entry.id !== selectedKnowledgeEntry.id && relatedIds.has(entry.id)
+    return neighborhoodGraph.nodes.filter((node) => node.id !== selectedServerNote.id);
+  }, [neighborhoodGraph, neighborhoodSourceNoteId, selectedServerNote]);
+  const currentKnowledgeEditorValue = selectedServerNote ? requirementDraftContent : '';
+  const selectedKnowledgeAttachmentContext = useMemo(() => {
+    const attachmentCategoryCounts = (
+      Object.keys(KNOWLEDGE_ATTACHMENT_EXTENSION_MAP) as Array<keyof typeof KNOWLEDGE_ATTACHMENT_EXTENSION_MAP>
+    ).reduce((counts, extension) => {
+      const category = KNOWLEDGE_ATTACHMENT_EXTENSION_MAP[extension];
+      if (!counts.some((item) => item.category === category)) {
+        counts.push({
+          category,
+          count: knowledgeAttachments.filter((attachment) => attachment.category === category).length,
+        });
+      }
+      return counts;
+    }, [] as Array<{ category: KnowledgeAttachment['category']; count: number }>)
+      .filter((item) => item.count > 0)
+      .sort((left, right) => right.count - left.count);
+
+    if (!selectedServerNote?.sourceUrl) {
+      return {
+        direct: [] as KnowledgeAttachment[],
+        nearby: [] as KnowledgeAttachment[],
+        library: knowledgeAttachments.slice(0, 8),
+        counts: attachmentCategoryCounts,
+      };
+    }
+
+    const entryRelativePath = normalizeRelativePath(
+      (projectRootDir && getRelativePathFromRoot(selectedServerNote.sourceUrl, projectRootDir)) ||
+      selectedServerNote.sourceUrl
     );
-  }, [knowledgeEntries, selectedKnowledgeEntry]);
-  const sourceKnowledgeEntry = useMemo(
-    () =>
-      selectedKnowledgeEntry?.sourceRequirementId
-        ? findKnowledgeEntry(knowledgeEntries, selectedKnowledgeEntry.sourceRequirementId)
-        : null,
-    [knowledgeEntries, selectedKnowledgeEntry]
-  );
-  const hasRequirementChanges = selectedRequirement
-    ? requirementDraftTitle !== selectedRequirement.title || requirementDraftContent !== selectedRequirement.content
+    if (!entryRelativePath) {
+      return {
+        direct: [] as KnowledgeAttachment[],
+        nearby: [] as KnowledgeAttachment[],
+        library: knowledgeAttachments.slice(0, 8),
+        counts: attachmentCategoryCounts,
+      };
+    }
+
+    const entryDirectory = getRelativeDirectory(entryRelativePath);
+    const entryBaseName = getBaseNameWithoutExtension(entryRelativePath);
+    const entryTopLevel = entryRelativePath.split('/')[0] || '';
+    const attachmentReferenceTokens = parseAttachmentReferenceTokens(
+      currentKnowledgeEditorValue || selectedServerNote.bodyMarkdown || ''
+    );
+
+    const scoredAttachments = knowledgeAttachments.map((attachment) => {
+      const attachmentRelativePath = normalizeAttachmentLookupValue(attachment.relativePath);
+      const attachmentTitle = normalizeAttachmentLookupValue(attachment.title);
+      const attachmentDirectory = getRelativeDirectory(attachment.relativePath);
+      const attachmentBaseName = getBaseNameWithoutExtension(attachment.relativePath);
+      const attachmentTopLevel = attachment.relativePath.split('/')[0] || '';
+
+      let score = 0;
+      if (attachmentReferenceTokens.has(attachmentRelativePath)) {
+        score += 8;
+      }
+      if (attachmentReferenceTokens.has(attachmentTitle)) {
+        score += 6;
+      }
+      if (attachmentDirectory === entryDirectory) {
+        score += 3;
+      }
+      if (
+        attachmentBaseName === entryBaseName ||
+        attachmentBaseName.startsWith(entryBaseName) ||
+        entryBaseName.startsWith(attachmentBaseName)
+      ) {
+        score += 2;
+      }
+      if (attachmentTopLevel === entryTopLevel) {
+        score += 1;
+      }
+
+      return { attachment, score };
+    });
+
+    const sortedAttachments = scoredAttachments
+      .filter((item) => item.score > 0)
+      .sort((left, right) => {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+
+        return left.attachment.relativePath.localeCompare(right.attachment.relativePath, 'zh-CN');
+      });
+
+    const direct = sortedAttachments.filter((item) => item.score >= 5).map((item) => item.attachment).slice(0, 6);
+    const directIds = new Set(direct.map((item) => item.id));
+    const nearby = sortedAttachments
+      .filter((item) => item.score >= 2 && !directIds.has(item.attachment.id))
+      .map((item) => item.attachment)
+      .slice(0, 6);
+    const consumedIds = new Set([...directIds, ...nearby.map((item) => item.id)]);
+    const library = knowledgeAttachments
+      .filter((attachment) => !consumedIds.has(attachment.id))
+      .sort((left, right) => left.relativePath.localeCompare(right.relativePath, 'zh-CN'))
+      .slice(0, 8);
+
+    return {
+      direct,
+      nearby,
+      library,
+      counts: attachmentCategoryCounts,
+    };
+  }, [currentKnowledgeEditorValue, knowledgeAttachments, projectRootDir, selectedServerNote]);
+  const hasRequirementChanges = selectedServerNote
+    ? requirementDraftTitle !== selectedServerNote.title || requirementDraftContent !== selectedServerNote.bodyMarkdown
     : false;
   const canPersistRequirementToDisk = Boolean(projectRootDir);
   const canSaveRequirement = Boolean(
-    selectedRequirement &&
+    selectedServerNote &&
     !isSavingRequirement &&
-    (hasRequirementChanges || !selectedRequirement.filePath)
+    (hasRequirementChanges || !selectedServerNote.sourceUrl)
   );
   const effectiveAppType = useMemo<AppType | undefined>(() => {
     if (canvasPreset.frameType === 'mobile') {
@@ -1239,32 +1352,31 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   const layoutStyle = useMemo<CSSProperties>(() => {
     const pageColumns =
       layoutFocus === 'canvas'
-        ? 'minmax(0, 1.84fr) minmax(292px, 0.46fr)'
+        ? 'minmax(0, 1.92fr) minmax(268px, 0.42fr)'
         : layoutFocus === 'sidebar'
-          ? 'minmax(0, 1.28fr) minmax(340px, 0.72fr)'
-          : 'minmax(0, 1.68fr) minmax(312px, 0.54fr)';
+          ? 'minmax(0, 1.34fr) minmax(292px, 0.62fr)'
+          : 'minmax(0, 1.72fr) minmax(280px, 0.48fr)';
 
     return {
       ['--pm-page-columns' as string]: pageColumns,
       ['--pm-shell-gap' as string]: layoutDensity === 'compact' ? '8px' : '12px',
       ['--pm-card-gap' as string]: layoutDensity === 'compact' ? '8px' : '12px',
       ['--pm-card-padding' as string]: layoutDensity === 'compact' ? '12px' : '16px',
-      ['--pm-canvas-height' as string]: layoutDensity === 'compact' ? 'clamp(620px, 78vh, 920px)' : 'clamp(700px, 84vh, 1020px)',
+      ['--pm-canvas-height' as string]: layoutDensity === 'compact' ? 'clamp(540px, 70vh, 780px)' : 'clamp(600px, 76vh, 860px)',
     };
   }, [layoutDensity, layoutFocus]);
 
-  useEffect(() => {
-    const handleResize = () => {
-      setIsNarrowProductWorkbench(window.innerWidth <= 900);
-    };
+  const setSidebarTab = useCallback(
+    (nextTab: SidebarTab) => {
+      if (entryTab) {
+        onEntryTabChange?.(nextTab);
+        return;
+      }
 
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+      setInternalSidebarTab(nextTab);
+    },
+    [entryTab, onEntryTabChange]
+  );
 
   useEffect(() => {
     if (!tree) {
@@ -1316,30 +1428,65 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
   }, [selectedPageFrame]);
 
   useEffect(() => {
-    setSelectedKnowledgeNodeId((current) =>
-      current && findKnowledgeTreeNode(knowledgeTree, current) ? current : null
+    setSelectedKnowledgeNoteId((current) =>
+      current && serverNotes.some((note) => note.id === current) ? current : null
     );
-  }, [knowledgeTree]);
+  }, [serverNotes]);
 
   useEffect(() => {
-    if (selectedKnowledgeNode?.type !== 'file' || !selectedKnowledgeNode.entryId) {
-      return;
-    }
-
-    if (selectedRequirementId !== selectedKnowledgeNode.entryId) {
-      setSelectedRequirementId(selectedKnowledgeNode.entryId);
-    }
-  }, [selectedKnowledgeNode, selectedRequirementId]);
-
-  useEffect(() => {
-    if (!selectedKnowledgeEntry) {
+    if (!selectedServerNote) {
       return;
     }
 
     setOpenKnowledgeTabIds((current) =>
-      current.includes(selectedKnowledgeEntry.id) ? current : [...current, selectedKnowledgeEntry.id]
+      current.includes(selectedServerNote.id) ? current : [...current, selectedServerNote.id]
     );
-  }, [selectedKnowledgeEntry]);
+  }, [selectedServerNote]);
+
+  useEffect(() => {
+    if (!currentProject || !canUseProjectFilesystem) {
+      return;
+    }
+
+    void loadServerNotes(currentProject.id);
+  }, [canUseProjectFilesystem, currentProject, loadServerNotes]);
+
+  useEffect(() => {
+    if (!currentProject || !canUseProjectFilesystem) {
+      return;
+    }
+
+    void loadSimilarServerNotes(currentProject.id, selectedServerNote?.id || null);
+    void loadNeighborhoodGraph(currentProject.id, selectedServerNote?.id || null);
+  }, [canUseProjectFilesystem, currentProject, loadNeighborhoodGraph, loadSimilarServerNotes, selectedServerNote?.id]);
+
+  useEffect(() => {
+    if (!currentProject || !canUseProjectFilesystem) {
+      return;
+    }
+
+    const normalizedSearch = knowledgeSearch.trim();
+    if (!normalizedSearch) {
+      void searchServerNotes(currentProject.id, '');
+      return;
+    }
+
+    const searchTimer = window.setTimeout(() => {
+      void searchServerNotes(currentProject.id, normalizedSearch);
+    }, 180);
+
+    return () => {
+      window.clearTimeout(searchTimer);
+    };
+  }, [canUseProjectFilesystem, currentProject, knowledgeSearch, searchServerNotes]);
+
+  useEffect(() => {
+    if (serverNotes.length === 0) {
+      return;
+    }
+
+    replaceRequirementDocs(projectedRequirementDocs);
+  }, [projectedRequirementDocs, replaceRequirementDocs, serverNotes.length]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -1347,39 +1494,39 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     }
 
     setSceneContext(currentProject.id, {
-      scene: sidebarTab === 'requirement' ? 'knowledge' : 'page',
-      selectedKnowledgeEntryId: selectedKnowledgeEntry?.id || null,
+      scene: sidebarTab === 'knowledge' ? 'knowledge' : 'page',
+      selectedKnowledgeEntryId: selectedServerNote?.id || null,
       selectedPageId: selectedPage?.id || null,
       openedKnowledgeEntryIds: openKnowledgeTabIds,
     });
   }, [
     currentProject,
     openKnowledgeTabIds,
-    selectedKnowledgeEntry?.id,
     selectedPage?.id,
+    selectedServerNote?.id,
     setSceneContext,
     sidebarTab,
   ]);
 
   useEffect(() => {
-    if (!selectedRequirement) {
+    if (!selectedServerNote) {
       setRequirementDraftTitle('');
       setRequirementDraftContent('');
       lastKnowledgeAutosaveSignatureRef.current = '';
       return;
     }
 
-    setRequirementDraftTitle(selectedRequirement.title);
-    setRequirementDraftContent(selectedRequirement.content);
+    setRequirementDraftTitle(selectedServerNote.title);
+    setRequirementDraftContent(selectedServerNote.bodyMarkdown);
     setRequirementSaveMessage(null);
     lastKnowledgeAutosaveSignatureRef.current = '';
-  }, [selectedRequirement]);
+  }, [selectedServerNote]);
 
   useEffect(() => {
-    if (selectedKnowledgeEntry?.source === 'requirement' && activeKnowledgeFileId !== selectedKnowledgeEntry.id) {
-      setActiveKnowledgeFileId(selectedKnowledgeEntry.id);
+    if (selectedServerNote && activeKnowledgeFileId !== selectedServerNote.id) {
+      setActiveKnowledgeFileId(selectedServerNote.id);
     }
-  }, [activeKnowledgeFileId, selectedKnowledgeEntry, setActiveKnowledgeFileId]);
+  }, [activeKnowledgeFileId, selectedServerNote, setActiveKnowledgeFileId]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -1484,18 +1631,6 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       .join('\n');
   }, []);
 
-  const createKnowledgeFolder = useCallback(async (directoryPath: string) => {
-    const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_mkdir', {
-      params: {
-        file_path: directoryPath,
-      },
-    });
-
-    if (!result.success) {
-      throw new Error(result.error || `创建文件夹失败：${directoryPath}`);
-    }
-  }, []);
-
   const refreshKnowledgeFilesystem = useCallback(async (overrides = knowledgeGroupOverrides) => {
     const requestId = ++knowledgeRefreshRequestIdRef.current;
 
@@ -1517,10 +1652,34 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     if (requestId !== knowledgeRefreshRequestIdRef.current) {
       return;
     }
+
+    try {
+      await syncServerNotes(
+        currentProject.id,
+        docs.flatMap((doc) =>
+          doc.filePath ? [{
+            title: doc.title,
+            content: doc.content,
+            filePath: doc.filePath,
+            updatedAt: doc.updatedAt,
+            tags: doc.tags || [],
+          }] : []
+        )
+      );
+    } catch (error) {
+      if (requestId === knowledgeRefreshRequestIdRef.current) {
+        setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    if (requestId !== knowledgeRefreshRequestIdRef.current) {
+      return;
+    }
+
     replaceRequirementDocs(docs);
     replacePageStructure(sketchArtifacts.pageStructure, tree);
     replaceWireframes(sketchArtifacts.wireframes, tree);
-  }, [canUseProjectFilesystem, currentProject, knowledgeGroupOverrides, projectRootDir, readRequirementFile, replacePageStructure, replaceRequirementDocs, replaceWireframes, tree]);
+  }, [canUseProjectFilesystem, currentProject, knowledgeGroupOverrides, projectRootDir, readRequirementFile, replacePageStructure, replaceRequirementDocs, replaceWireframes, syncServerNotes, tree]);
 
   useEffect(() => {
     if (!currentProject || !projectRootDir) {
@@ -1609,23 +1768,96 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     fileInputRef.current?.click();
   };
 
+  const handleImportKnowledgeAssets = useCallback(async () => {
+    if (!projectRootDir) {
+      window.alert('当前项目目录还没有准备好，暂时无法导入资料。');
+      return;
+    }
+
+    const selection = await openDialog({
+      multiple: true,
+      filters: [
+        {
+          name: 'Knowledge Assets',
+          extensions: KNOWLEDGE_ATTACHMENT_EXTENSIONS,
+        },
+      ],
+    });
+
+    if (!selection) {
+      return;
+    }
+
+    const sourcePaths = Array.isArray(selection) ? selection : [selection];
+    if (sourcePaths.length === 0) {
+      return;
+    }
+
+    const selectedRelativeDirectory = selectedServerNote?.sourceUrl
+      ? normalizeRelativePath(getRelativePathFromRoot(selectedServerNote.sourceUrl, projectRootDir) || '')
+      : 'project';
+    const targetDirectory =
+      selectedRelativeDirectory
+        ? joinFileSystemPath(
+            projectRootDir,
+            ...getRelativeDirectory(selectedRelativeDirectory).split('/').filter(Boolean)
+          )
+        : joinDiskPath(projectRootDir, 'project');
+
+    try {
+      await invoke<string[]>('import_knowledge_assets', {
+        projectRoot: projectRootDir,
+        targetDirectory,
+        sourcePaths,
+      });
+      await refreshKnowledgeFilesystem();
+      setRequirementSaveMessage(`已导入 ${sourcePaths.length} 个资料文件。`);
+    } catch (error) {
+      setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [projectRootDir, refreshKnowledgeFilesystem, selectedServerNote?.sourceUrl]);
+
+  const handleOpenKnowledgeAttachment = useCallback(async (attachmentPath: string) => {
+    try {
+      await invoke('open_path_in_shell', { path: attachmentPath });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
   const handleSaveKnowledgeContent = useCallback(async (
-    entry: Pick<KnowledgeEntry, 'id' | 'filePath'>,
+    note: KnowledgeNote,
     nextContent: string
   ) => {
     try {
       setIsSavingRequirement(true);
 
-      if (!canPersistRequirementToDisk || !entry.filePath) {
-        updateRequirementDoc(entry.id, { content: nextContent });
-        setRequirementSaveMessage('已保存到当前项目状态。桌面版运行时会同步到磁盘。');
+      const nextTitle = requirementDraftTitle.trim() || note.title;
+      const nextFilePath = note.sourceUrl || '';
+
+      if (canPersistRequirementToDisk && nextFilePath) {
+        await writeRequirementFile(nextFilePath, nextContent);
+      }
+
+      if (!currentProject) {
+        setRequirementSaveMessage('已保存到知识库。');
         return;
       }
 
-      await writeRequirementFile(entry.filePath, nextContent);
-      updateRequirementDoc(entry.id, { content: nextContent });
-      await refreshKnowledgeFilesystem();
-      setRequirementSaveMessage(`已自动保存到 ${entry.filePath}`);
+      await updateServerNote(currentProject.id, note.id, {
+        title: nextTitle,
+        content: nextContent,
+        filePath: nextFilePath,
+        updatedAt: new Date().toISOString(),
+        tags: note.tags,
+      });
+
+      if (canPersistRequirementToDisk && nextFilePath) {
+        await refreshKnowledgeFilesystem();
+        setRequirementSaveMessage(`已自动保存到 ${nextFilePath}`);
+      } else {
+        setRequirementSaveMessage('已保存到知识库。');
+      }
     } catch (error) {
       setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1633,8 +1865,10 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     }
   }, [
     canPersistRequirementToDisk,
+    currentProject,
     refreshKnowledgeFilesystem,
-    updateRequirementDoc,
+    updateServerNote,
+    requirementDraftTitle,
     writeRequirementFile,
   ]);
 
@@ -1670,81 +1904,73 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     event.target.value = '';
   };
 
-  const handleDeleteRequirement = useCallback(async () => {
-    if (!selectedRequirement) {
+  const handleDeleteKnowledgeNote = useCallback(async () => {
+    if (!currentProject || !selectedServerNote) {
       return;
     }
 
-    if (!window.confirm(`确定删除文件“${selectedRequirement.title}”吗？`)) {
+    if (!window.confirm(`确定删除文件“${selectedServerNote.title}”吗？`)) {
       return;
     }
 
-    if (canPersistRequirementToDisk && selectedRequirement.filePath) {
+    if (canPersistRequirementToDisk && selectedServerNote.sourceUrl) {
       try {
-        await removeRequirementFile(selectedRequirement.filePath);
+        await removeRequirementFile(selectedServerNote.sourceUrl);
       } catch (error) {
         window.alert(error instanceof Error ? error.message : String(error));
         return;
       }
     }
 
-    deleteRequirementDoc(selectedRequirement.id);
-    await refreshKnowledgeFilesystem();
-    setRequirementSaveMessage(canPersistRequirementToDisk ? '文件已从项目目录中删除。' : '文件已从当前项目状态中删除。');
-  }, [canPersistRequirementToDisk, deleteRequirementDoc, refreshKnowledgeFilesystem, removeRequirementFile, selectedRequirement]);
+    await deleteServerNote(currentProject.id, selectedServerNote.id);
+    setSelectedKnowledgeNoteId(null);
+    setOpenKnowledgeTabIds((current) => current.filter((id) => id !== selectedServerNote.id));
+    if (canPersistRequirementToDisk && selectedServerNote.sourceUrl) {
+      await refreshKnowledgeFilesystem();
+      setRequirementSaveMessage('文件已从项目目录和知识库中删除。');
+    } else {
+      setRequirementSaveMessage('笔记已从知识库中删除。');
+    }
+  }, [canPersistRequirementToDisk, currentProject, deleteServerNote, refreshKnowledgeFilesystem, removeRequirementFile, selectedServerNote]);
 
-  const handleCreateKnowledgeFile = useCallback(async (
-    group: KnowledgeGroupId,
-    parentFolderPath: string | null = null
-  ) => {
-    if (!projectRootDir) {
+  const handleCreateKnowledgeNote = useCallback(async () => {
+    if (!currentProject) {
       return;
     }
-
-    const suggestedName = window.prompt('输入新文件名', getDefaultKnowledgeFileName(group));
-    const normalizedTitle = normalizeRequirementFilename(suggestedName || '');
-    if (!normalizedTitle) {
-      return;
-    }
-
-    const targetDirectory = parentFolderPath || projectRootDir;
-    const nextFilePath = joinDiskPath(targetDirectory, normalizedTitle);
-    const relativePath = normalizeRelativePath(getRelativePathFromRoot(nextFilePath, projectRootDir) || normalizedTitle);
 
     try {
-      await writeRequirementFile(nextFilePath, '');
-      const nextOverrides = {
-        ...knowledgeGroupOverrides,
-        [relativePath]: group,
-      };
-      setKnowledgeGroupOverrides(nextOverrides);
-      writeKnowledgeGroupOverrides(currentProject?.id || null, nextOverrides);
-      await refreshKnowledgeFilesystem(nextOverrides);
-      setSelectedKnowledgeNodeId(`file:${group}:${relativePath}`);
-      setSelectedRequirementId(nextFilePath);
-      setRequirementDraftTitle(normalizedTitle);
+      const fallbackTitle = '未命名笔记.md';
+      const note = await createServerNote(currentProject.id, {
+        title: fallbackTitle,
+        content: '',
+        filePath: '',
+        updatedAt: new Date().toISOString(),
+        tags: [],
+      });
+      setSelectedKnowledgeNoteId(note.id);
+      setRequirementDraftTitle(note.title || fallbackTitle);
       setRequirementDraftContent('');
-      setRequirementSaveMessage(`已创建 ${normalizedTitle}`);
+      setRequirementSaveMessage(`已创建 ${note.title || fallbackTitle}`);
     } catch (error) {
       setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
     }
-  }, [currentProject?.id, knowledgeGroupOverrides, projectRootDir, refreshKnowledgeFilesystem, writeRequirementFile]);
+  }, [createServerNote, currentProject]);
 
-  const handleSaveRequirement = useCallback(async () => {
-    if (!selectedRequirement) {
+  const handleSaveKnowledgeNote = useCallback(async () => {
+    if (!selectedServerNote || !currentProject) {
       return;
     }
 
     const nextTitle = normalizeRequirementFilename(requirementDraftTitle);
-    const currentFilePath = selectedRequirement.filePath;
-    const currentDirectory = (currentFilePath ? getDirectoryPath(currentFilePath) : '') || projectRootDir;
+    const currentFilePath = selectedServerNote.sourceUrl || '';
+    const currentDirectory = (currentFilePath ? getDirectoryPath(currentFilePath) : '') || projectRootDir || '';
     const nextFilePath =
       canPersistRequirementToDisk && currentDirectory
         ? joinDiskPath(currentDirectory, nextTitle)
-        : selectedRequirement.filePath;
+        : currentFilePath;
     const currentRelativePath = normalizeRelativePath(
       (currentFilePath && projectRootDir && getRelativePathFromRoot(currentFilePath, projectRootDir)) ||
-        selectedRequirement.title
+        selectedServerNote.title
     );
     const nextRelativePath = normalizeRelativePath(
       (nextFilePath && projectRootDir && getRelativePathFromRoot(nextFilePath, projectRootDir)) || nextTitle
@@ -1772,21 +1998,24 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       setKnowledgeGroupOverrides(nextOverrides);
       writeKnowledgeGroupOverrides(currentProject?.id || null, nextOverrides);
 
-      updateRequirementDoc(selectedRequirement.id, {
+      await updateServerNote(currentProject.id, selectedServerNote.id, {
         title: nextTitle,
         content: requirementDraftContent,
-        filePath: nextFilePath,
+        filePath: nextFilePath || '',
+        updatedAt: new Date().toISOString(),
+        tags: selectedServerNote.tags,
       });
-      await refreshKnowledgeFilesystem(nextOverrides);
-      setSelectedRequirementId(nextFilePath || selectedRequirement.id);
-      if (selectedKnowledgeNode?.group && nextRelativePath) {
-        setSelectedKnowledgeNodeId(`file:${selectedKnowledgeNode.group}:${nextRelativePath}`);
+
+      if (canPersistRequirementToDisk && nextFilePath) {
+        await refreshKnowledgeFilesystem(nextOverrides);
       }
+
+      setSelectedKnowledgeNoteId(selectedServerNote.id);
       setRequirementDraftTitle(nextTitle);
       setRequirementSaveMessage(
         canPersistRequirementToDisk && nextFilePath
           ? `已保存到 ${nextFilePath}`
-          : '已保存到当前项目状态。桌面版运行时会同步到磁盘。'
+          : '已保存到知识库。'
       );
     } catch (error) {
       setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
@@ -1800,37 +2029,35 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     projectRootDir,
     refreshKnowledgeFilesystem,
     renameRequirementFile,
-    removeRequirementFile,
     requirementDraftContent,
     requirementDraftTitle,
-    selectedKnowledgeNode?.group,
-    selectedRequirement,
-    updateRequirementDoc,
+    selectedServerNote,
+    updateServerNote,
     writeRequirementFile,
   ]);
 
   useEffect(() => {
-    if (!selectedRequirement || requirementDraftContent === selectedRequirement.content) {
+    if (!selectedProjectedRequirement || requirementDraftContent === selectedProjectedRequirement.content || !selectedServerNote) {
       return;
     }
 
-    const autosaveSignature = `${selectedRequirement.id}:${requirementDraftContent}`;
+    const autosaveSignature = `${selectedProjectedRequirement.id}:${requirementDraftContent}`;
     if (lastKnowledgeAutosaveSignatureRef.current === autosaveSignature) {
       return;
     }
 
     const saveTimer = window.setTimeout(() => {
       lastKnowledgeAutosaveSignatureRef.current = autosaveSignature;
-      void handleSaveKnowledgeContent(selectedRequirement, requirementDraftContent);
+      void handleSaveKnowledgeContent(selectedServerNote, requirementDraftContent);
     }, 320);
 
     return () => {
       window.clearTimeout(saveTimer);
     };
-  }, [handleSaveKnowledgeContent, requirementDraftContent, selectedRequirement]);
+  }, [handleSaveKnowledgeContent, requirementDraftContent, selectedProjectedRequirement, selectedServerNote]);
 
   useEffect(() => {
-    if (!selectedRequirement) {
+    if (!selectedServerNote) {
       return;
     }
 
@@ -1838,14 +2065,14 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         if (canSaveRequirement) {
-          void handleSaveRequirement();
+          void handleSaveKnowledgeNote();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canSaveRequirement, handleSaveRequirement, selectedRequirement]);
+  }, [canSaveRequirement, handleSaveKnowledgeNote, selectedServerNote]);
 
   const handleCreateSketchPage = useCallback(async () => {
     if (!currentProject) {
@@ -2014,350 +2241,119 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     loadFromCode([]);
   }, [loadFromCode, selectedPage]);
 
-  const openKnowledgeEntry = useCallback((entryId: string) => {
-    const node = findKnowledgeNodeByEntryId(knowledgeTree, entryId);
-    if (node) {
-      setSelectedKnowledgeNodeId(node.id);
-    }
-    setSelectedRequirementId(entryId);
-    setSidebarTab('requirement');
-  }, [knowledgeTree]);
-
-  const handleCloseKnowledgeTab = useCallback((entryId: string) => {
-    setOpenKnowledgeTabIds((current) => {
-      const closedIndex = current.indexOf(entryId);
-      const next = current.filter((id) => id !== entryId);
-
-      if (selectedKnowledgeEntry?.id === entryId) {
-        const fallbackId = next[Math.max(0, closedIndex - 1)] || next[closedIndex] || null;
-        setSelectedRequirementId(fallbackId);
-
-        const fallbackNode = fallbackId ? findKnowledgeNodeByEntryId(knowledgeTree, fallbackId) : null;
-        setSelectedKnowledgeNodeId(fallbackNode?.id || null);
-      }
-
-      return next;
-    });
-  }, [knowledgeTree, selectedKnowledgeEntry?.id]);
-
-  const toggleKnowledgeNode = useCallback((nodeId: string) => {
-    setExpandedKnowledgeNodeIds((current) => {
-      const next = new Set(current);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleSelectKnowledgeNode = useCallback((node: KnowledgeTreeNode) => {
-    setSelectedKnowledgeNodeId(node.id);
-    setKnowledgeContextMenu(null);
-
-    if (node.type === 'file') {
-      if (node.entryId) {
-        setSelectedRequirementId(node.entryId);
-      }
-      return;
-    }
-
-    toggleKnowledgeNode(node.id);
-  }, [toggleKnowledgeNode]);
-
-  const handleCreateKnowledgeFolder = useCallback(async (node: KnowledgeTreeNode) => {
-    if (!projectRootDir) {
-      return;
-    }
-
-    const folderName = window.prompt('输入文件夹名', '新建文件夹');
-    if (!folderName) {
-      return;
-    }
-
-    const basePath =
-      node.type === 'folder' && node.path
-        ? node.path
-        : node.type === 'file' && node.path
-          ? node.path.replace(/[\\/][^\\/]+$/, '')
-          : projectRootDir;
-    const nextFolderPath = joinDiskPath(basePath, folderName);
-    const relativePath = normalizeRelativePath(getRelativePathFromRoot(nextFolderPath, projectRootDir) || folderName);
-
-    try {
-      await createKnowledgeFolder(nextFolderPath);
-      const nextOverrides = {
-        ...knowledgeGroupOverrides,
-        [relativePath]: node.group,
-      };
-      setKnowledgeGroupOverrides(nextOverrides);
-      writeKnowledgeGroupOverrides(currentProject?.id || null, nextOverrides);
-      setExpandedKnowledgeNodeIds((current) => new Set(current).add(node.id));
-      await refreshKnowledgeFilesystem(nextOverrides);
-      setRequirementSaveMessage(`已创建文件夹 ${folderName}`);
-    } catch (error) {
-      setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
-    }
-  }, [createKnowledgeFolder, currentProject?.id, knowledgeGroupOverrides, projectRootDir, refreshKnowledgeFilesystem]);
-
-  const handleDeleteKnowledgeNode = useCallback(async (node: KnowledgeTreeNode) => {
-    if (node.protected || !node.path) {
-      return;
-    }
-
-    const label = node.type === 'folder'
-      ? `文件夹“${node.label}”及其所有内容`
-      : `文件“${node.label}”`;
-
-    if (!window.confirm(`确定删除${label}吗？`)) {
-      return;
-    }
-
-    try {
-      await removeRequirementFile(node.path);
-      const nextOverrides = { ...knowledgeGroupOverrides };
-      const relativePath = node.relativePath || '';
-      Object.keys(nextOverrides).forEach((key) => {
-        if (key === relativePath || key.startsWith(`${relativePath}/`)) {
-          delete nextOverrides[key];
-        }
-      });
-      setKnowledgeGroupOverrides(nextOverrides);
-      writeKnowledgeGroupOverrides(currentProject?.id || null, nextOverrides);
-      if (
-        node.type === 'file' && node.entryId ||
-        (selectedKnowledgeNode?.relativePath &&
-          relativePath &&
-          selectedKnowledgeNode.relativePath.startsWith(relativePath))
-      ) {
-        setSelectedKnowledgeNodeId(null);
-        setSelectedRequirementId(null);
-      }
-      await refreshKnowledgeFilesystem(nextOverrides);
-      setRequirementSaveMessage(`已删除${label}`);
-    } catch (error) {
-      setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
-    }
-  }, [currentProject?.id, knowledgeGroupOverrides, refreshKnowledgeFilesystem, removeRequirementFile, selectedKnowledgeNode?.relativePath]);
-
-  const renderKnowledgeTree = (nodes: KnowledgeTreeNode[], depth = 0): ReactNode =>
-    nodes.map((node) => {
-      const isExpanded = expandedKnowledgeNodeIds.has(node.id);
-      const isSelected = selectedKnowledgeNode?.id === node.id;
-      const hasChildren = node.children.length > 0;
-
-      return (
-        <div key={node.id} className="pm-knowledge-tree-node">
-          <button
-            className={`pm-knowledge-tree-row ${isSelected ? 'active' : ''} ${node.type} ${node.protected ? 'protected' : ''}`}
-            style={{ paddingLeft: `${depth * 16 + 10}px` }}
-            onClick={() => handleSelectKnowledgeNode(node)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setKnowledgeContextMenu({ x: event.clientX, y: event.clientY, node });
-            }}
-            type="button"
-          >
-            <span
-              className={`pm-knowledge-tree-caret ${hasChildren ? 'visible' : 'placeholder'} ${isExpanded ? 'expanded' : ''}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (hasChildren || node.type === 'group') {
-                  toggleKnowledgeNode(node.id);
-                }
-              }}
-            >
-              {hasChildren || node.type === 'group' ? '>' : ''}
-            </span>
-            <span className="pm-knowledge-tree-label">{node.label}</span>
-          </button>
-          {isExpanded && node.children.length > 0 ? renderKnowledgeTree(node.children, depth + 1) : null}
-        </div>
-      );
-    });
+  const openKnowledgeNote = useCallback((noteId: string) => {
+    setSelectedKnowledgeNoteId(noteId);
+    setSidebarTab('knowledge');
+  }, [setSidebarTab]);
 
   const handleUseKnowledgeForDesign = useCallback(() => {
-    if (!selectedRequirement) {
+    if (!selectedServerNote) {
       return;
     }
 
-    setActiveKnowledgeFileId(selectedRequirement.id);
+    setActiveKnowledgeFileId(selectedServerNote.id);
     setSidebarTab('page');
-  }, [selectedRequirement, setActiveKnowledgeFileId]);
+  }, [selectedServerNote, setActiveKnowledgeFileId]);
 
-  const knowledgeTabs = openKnowledgeTabs.length > 0 ? (
-    <div className="pm-knowledge-open-tabs">
-      {openKnowledgeTabs.map((tab) => (
-        <div
-          key={tab.id}
-          className={`pm-knowledge-open-tab ${selectedKnowledgeEntry?.id === tab.id ? 'active' : ''}`}
-        >
-          <button
-            className="pm-knowledge-open-tab-main"
-            type="button"
-            title={tab.filePath || tab.title}
-            onClick={() => {
-              const node = findKnowledgeNodeByEntryId(knowledgeTree, tab.id);
-              if (node) {
-                setSelectedKnowledgeNodeId(node.id);
-              }
-              setSelectedRequirementId(tab.id);
-            }}
-          >
-            {tab.title}
-          </button>
-          <button
-            className="pm-knowledge-open-tab-close"
-            type="button"
-            aria-label={`关闭 ${tab.title}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleCloseKnowledgeTab(tab.id);
-            }}
-          >
-            脳
-          </button>
-        </div>
-      ))}
-    </div>
-  ) : null;
+  const renderRequirementMain = () => (
+    <KnowledgeNoteWorkspace
+      notes={serverNotes}
+      filteredNotes={filteredServerNotes}
+      selectedNote={selectedServerNote}
+      editorValue={selectedServerNote ? requirementDraftContent : ''}
+      editable={Boolean(selectedServerNote)}
+      isSaving={isSavingRequirement}
+      saveMessage={requirementSaveMessage || ''}
+      canSave={canSaveRequirement}
+      canUseForDesign={selectedServerNote?.kind === 'sketch'}
+      searchValue={knowledgeSearch}
+      isSearching={isKnowledgeSearching}
+      isSyncing={isKnowledgeSyncing}
+      error={knowledgeSidecarError}
+      similarNotes={serverSimilarKnowledgeNotes}
+      neighborhoodNotes={neighborhoodKnowledgeNotes}
+      graphNodeCount={neighborhoodGraph?.nodes.length || 0}
+      graphEdgeCount={neighborhoodGraph?.edges.length || 0}
+      attachments={selectedKnowledgeAttachmentContext.direct}
+      nearbyAttachments={selectedKnowledgeAttachmentContext.nearby}
+      libraryAttachments={selectedKnowledgeAttachmentContext.library}
+      attachmentCategoryCounts={selectedKnowledgeAttachmentContext.counts}
+      onSearchChange={setKnowledgeSearch}
+      onSelectNote={openKnowledgeNote}
+      onEditorChange={selectedServerNote ? setRequirementDraftContent : () => undefined}
+      onSave={handleSaveKnowledgeNote}
+      onDelete={handleDeleteKnowledgeNote}
+      onUpload={handleUploadClick}
+      onImportAssets={() => {
+        void handleImportKnowledgeAssets();
+      }}
+      onCreateNote={() => {
+        void handleCreateKnowledgeNote();
+      }}
+      onUseForDesign={handleUseKnowledgeForDesign}
+      onOpenAttachment={(attachmentPath) => {
+        void handleOpenKnowledgeAttachment(attachmentPath);
+      }}
+    />
+  );
 
-  const renderRequirementMain = () =>
-    selectedKnowledgeEntry ? (
-      <div className="pm-viewer-stack">
-        <section className="pm-card">
-          <div className="requirement-file-editor">
-            <div className="requirement-file-meta">
+  const renderPageLibraryMain = () => (
+    <PageWorkspace
+      content={
+        <div className="pm-page-hub-grid">
+          <section className="pm-card pm-page-structure-panel">
+            <div className="pm-card-header">
               <div>
-                <strong>{selectedKnowledgeEntry.title}</strong>
+                <h3>页面结构</h3>
               </div>
-              <div className="requirement-file-toolbar">
-                {selectedRequirement ? (
-                  <span className="requirement-preview-shortcut">Ctrl+S 保存文件名</span>
-                ) : (
-                  <>
-                    {sourceKnowledgeEntry ? (
-                      <button
-                        className="doc-action-btn secondary"
-                        type="button"
-                        onClick={() => openKnowledgeEntry(sourceKnowledgeEntry.id)}
-                      >
-                        查看来源
-                      </button>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {selectedKnowledgeRelatedEntries.length > 0 || derivedKnowledgeEntries.length > 0 || sourceKnowledgeEntry ? (
-              <div className="pm-knowledge-context-card">
-                {sourceKnowledgeEntry ? (
-                  <div className="pm-knowledge-meta-item">
-                    <strong>来源草稿</strong>
-                    <button className="pm-knowledge-link" type="button" onClick={() => openKnowledgeEntry(sourceKnowledgeEntry.id)}>
-                      {sourceKnowledgeEntry.title}
-                    </button>
-                  </div>
-                ) : null}
-                {selectedKnowledgeRelatedEntries.length > 0 ? (
-                  <div className="pm-knowledge-meta-item">
-                    <strong>关联文件</strong>
-                    <div className="pm-knowledge-link-list">
-                      {selectedKnowledgeRelatedEntries.map((entry) => (
-                        <button key={entry.id} className="pm-knowledge-link" type="button" onClick={() => openKnowledgeEntry(entry.id)}>
-                          {entry.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {derivedKnowledgeEntries.length > 0 ? (
-                  <div className="pm-knowledge-meta-item">
-                    <strong>派生设计</strong>
-                    <div className="pm-knowledge-link-list">
-                      {derivedKnowledgeEntries.map((entry) => (
-                        <button key={entry.id} className="pm-knowledge-link" type="button" onClick={() => openKnowledgeEntry(entry.id)}>
-                          {entry.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {selectedKnowledgeEntry.type === 'html' ? (
-              <div className="pm-html-preview-shell">
-                <iframe
-                  className="pm-html-preview-frame"
-                  title={selectedKnowledgeEntry.title}
-                  srcDoc={selectedKnowledgeEntry.content}
-                  sandbox="allow-scripts"
+              <div className="pm-inline-actions">
+                <input
+                  className="product-input"
+                  type="search"
+                  value={pageSearch}
+                  onChange={(event) => setPageSearch(event.target.value)}
+                  placeholder="搜索页面"
                 />
-                {selectedKnowledgeEntry.summary ? <div className="pm-html-preview-caption">{selectedKnowledgeEntry.summary}</div> : null}
+                <button className="doc-action-btn" type="button" onClick={handleAddPageFromSidebar}>
+                  + 页面
+                </button>
               </div>
-            ) : (
-              <div className="requirement-editor-shell">
-                {selectedRequirement ? (
-                  <div className="requirement-editor-toolbar">
-                    <input
-                      className="product-input requirement-file-name-input"
-                      value={requirementDraftTitle}
-                      onChange={(event) => setRequirementDraftTitle(event.target.value)}
-                      placeholder="文件名，例如 product-requirements.md"
+            </div>
+            {designPages.length > 0 ? (
+              filteredDesignPages.length > 0 ? (
+                <div className="pm-page-tree">
+                  {filteredPageStructure.map((node) => (
+                    <PageTreeNode
+                      key={node.id}
+                      node={node}
+                      depth={0}
+                      selectedPageId={selectedPage?.id || null}
+                      onSelect={setManualPageId}
+                      onAddPage={handleAddChildPageById}
+                      onDeletePage={handleDeletePageById}
                     />
-                    <div className="pm-inline-actions">
-                      {selectedRequirement.kind === 'sketch' ? (
-                        <button className="doc-action-btn secondary" type="button" onClick={handleUseKnowledgeForDesign}>
-                          用于设计
-                        </button>
-                      ) : null}
-                      <button className="doc-action-btn secondary" type="button" onClick={handleDeleteRequirement}>
-                        删除
-                      </button>
-                      <button className="doc-action-btn" type="button" onClick={handleSaveRequirement} disabled={!canSaveRequirement}>
-                        {isSavingRequirement ? '保存中...' : '保存'}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-                <div className="pm-knowledge-editor-surface">
-                  <MilkdownEditor
-                    key={selectedKnowledgeEntry.id}
-                    value={selectedRequirement ? requirementDraftContent : selectedKnowledgeEntry.content}
-                    onChange={selectedRequirement ? setRequirementDraftContent : () => undefined}
-                    editable={Boolean(selectedRequirement)}
-                  />
+                  ))}
                 </div>
-                <div className="requirement-editor-actions">
-                  {requirementSaveMessage ? <span className="requirement-save-message">{requirementSaveMessage}</span> : null}
-                  <span className="requirement-preview-shortcut">
-                    {selectedRequirement ? 'Markdown 自动保存已开启' : '只读 Markdown'}
-                  </span>
-                </div>
-              </div>
+              ) : (
+                <div className="pm-page-tree-empty">没有匹配的页面</div>
+              )
+            ) : (
+              <div className="pm-page-tree-empty">还没有页面，请先创建</div>
             )}
-          </div>
-        </section>
-      </div>
-    ) : (
-      <div className="pm-viewer-stack">
-        <section className="pm-card pm-empty-panel">
-          <div className="pm-card-header">
-            <div>
-              <h3>知识库</h3>
+          </section>
+
+          <div className="pm-page-hub-canvas">
+            <div className="pm-page-workspace-frame">
+              {renderDesignMain()}
+              <WireframeSyncBridge selectedPage={selectedPage} />
             </div>
           </div>
-          <div className="empty-state">还没有知识文件。</div>
-        </section>
-      </div>
-    );
+        </div>
+      }
+    />
+  );
 
-  const renderPageMain = () => {
-
-
+  const renderDesignMain = () => {
     if (!selectedPage) {
       return (
         <section className="pm-card pm-empty-panel">
@@ -2452,187 +2448,10 @@ export const ProductWorkbench = ({ onFeatureSelect, layoutFocus, layoutDensity }
     );
   };
 
-  const handleProductWorkbenchLayoutChange = useCallback((sizes: number[]) => {
-    const nextLeftNavWidth = sizes[0];
-    if (!Number.isFinite(nextLeftNavWidth)) {
-      return;
-    }
-
-    const persistedWidth = writeLayoutSize(
-      LAYOUT_PREFERENCE_KEYS.productWorkbenchLeftNavWidth,
-      nextLeftNavWidth,
-      PRODUCT_WORKBENCH_LEFT_NAV_WIDTH_BOUNDS
-    );
-    setProductWorkbenchLeftNavWidth(persistedWidth);
-  }, []);
-
-  const productWorkbenchSidebar = (
-    <aside className="pm-left-nav">
-      <div className="pm-nav-header">
-        <input
-          className="product-input pm-nav-header-search"
-          type="search"
-          value={sidebarTab === 'requirement' ? knowledgeSearch : pageSearch}
-          onChange={(event) => {
-            if (sidebarTab === 'requirement') {
-              setKnowledgeSearch(event.target.value);
-              return;
-            }
-
-            setPageSearch(event.target.value);
-          }}
-          placeholder={sidebarTab === 'requirement' ? '搜索文档' : '搜索页面'}
-        />
-      </div>
-
-      <div className="pm-sidebar-tabs">
-        <button className={sidebarTab === 'requirement' ? 'active' : ''} onClick={() => setSidebarTab('requirement')} type="button">
-          知识库
-        </button>
-        <span className="pm-sidebar-tab-divider" aria-hidden="true" />
-        <button className={sidebarTab === 'page' ? 'active' : ''} onClick={() => setSidebarTab('page')} type="button">
-          页面
-        </button>
-      </div>
-
-      {sidebarTab === 'requirement' && (
-        <section className="pm-nav-section">
-          <div className="pm-nav-section-header">
-            <div className="pm-nav-title">{knowledgeEntries.length} 条</div>
-          </div>
-          <div className="pm-knowledge-tree">
-            {filteredKnowledgeTree.length > 0 ? renderKnowledgeTree(filteredKnowledgeTree) : (
-              <div className="pm-page-tree-empty">没有匹配的知识条目</div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {sidebarTab === 'page' && (
-        <section className="pm-nav-section">
-          <div className="pm-nav-section-header">
-            <div className="pm-nav-title">{filteredDesignPages.length || designPages.length} 个页面</div>
-            <button className="pm-nav-mini-action" type="button" onClick={handleAddPageFromSidebar}>
-              + 页面
-            </button>
-          </div>
-          {designPages.length > 0 ? (
-            filteredDesignPages.length > 0 ? (
-              <div className="pm-page-tree">
-                {filteredPageStructure.map((node) => (
-                  <PageTreeNode
-                    key={node.id}
-                    node={node}
-                    depth={0}
-                    selectedPageId={selectedPage?.id || null}
-                    onSelect={setManualPageId}
-                    onAddPage={handleAddChildPageById}
-                    onDeletePage={handleDeletePageById}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="pm-page-tree-empty">没有匹配的页面</div>
-            )
-          ) : (
-            <div className="pm-page-tree-empty">还没有页面，请先创建</div>
-          )}
-        </section>
-      )}
-    </aside>
-  );
-  const productWorkbenchMainViewer = (
-    <main className="pm-main-viewer">
-      {sidebarTab === 'requirement' && (
-        <KnowledgeWorkspace
-          tabs={knowledgeTabs}
-          content={renderRequirementMain()}
-          toolbarActions={
-            <>
-              <button className="doc-action-btn secondary" type="button" onClick={handleUploadClick}>
-                上传
-              </button>
-            </>
-          }
-        />
-      )}
-      {sidebarTab === 'page' && (
-        <PageWorkspace
-          content={
-            <div className="pm-page-workspace-frame">
-              {renderPageMain()}
-              <WireframeSyncBridge selectedPage={selectedPage} />
-            </div>
-          }
-        />
-      )}
-    </main>
-  );
-
   return (
-    <div className="product-workbench-shell" style={layoutStyle} onClick={() => setKnowledgeContextMenu(null)}>
-      {isNarrowProductWorkbench ? (
-        <>
-          {productWorkbenchSidebar}
-          {productWorkbenchMainViewer}
-        </>
-      ) : (
-        <WorkbenchShell
-          leftPane={<div className="product-workbench-pane">{productWorkbenchSidebar}</div>}
-          centerPane={<div className="product-workbench-pane">{productWorkbenchMainViewer}</div>}
-          rightPane={null}
-          leftSize={productWorkbenchLeftNavWidth}
-          rightSize={0}
-          onLeftSizeChange={handleProductWorkbenchLayoutChange}
-        />
-      )}
-      {knowledgeContextMenu ? (
-        <div
-          className="pm-knowledge-context-menu"
-          style={{ left: `${knowledgeContextMenu.x}px`, top: `${knowledgeContextMenu.y}px` }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <button
-            className="pm-knowledge-context-action"
-            type="button"
-            onClick={() => {
-              void handleCreateKnowledgeFile(
-                knowledgeContextMenu.node.group,
-                knowledgeContextMenu.node.type === 'folder'
-                  ? knowledgeContextMenu.node.path
-                  : knowledgeContextMenu.node.type === 'file' && knowledgeContextMenu.node.path
-                    ? knowledgeContextMenu.node.path.replace(/[\\/][^\\/]+$/, '')
-                    : null
-              );
-              setKnowledgeContextMenu(null);
-            }}
-          >
-            新建文件
-          </button>
-          <button
-            className="pm-knowledge-context-action"
-            type="button"
-            onClick={() => {
-              void handleCreateKnowledgeFolder(knowledgeContextMenu.node);
-              setKnowledgeContextMenu(null);
-            }}
-          >
-            新建文件夹
-          </button>
-          {!knowledgeContextMenu.node.protected ? (
-            <button
-              className="pm-knowledge-context-action danger"
-              type="button"
-              onClick={() => {
-                void handleDeleteKnowledgeNode(knowledgeContextMenu.node);
-                setKnowledgeContextMenu(null);
-              }}
-            >
-              删除
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+    <div className="product-workbench-shell" style={layoutStyle}>
+      {sidebarTab === 'knowledge' && renderRequirementMain()}
+      {sidebarTab === 'page' && renderPageLibraryMain()}
       <input
         ref={fileInputRef}
         className="product-hidden-input"
