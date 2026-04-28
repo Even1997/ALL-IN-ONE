@@ -38,6 +38,21 @@ test('knowledge note workspace exposes organize action, current-note graph, and 
   assert.match(source, /Wiki/);
 });
 
+test('knowledge note tree stays navigation-only without content previews', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  const listStart = source.indexOf('<div className="gn-note-list">');
+  const listEnd = source.indexOf('</aside>', listStart);
+  const listSource = source.slice(listStart, listEnd);
+
+  assert.match(source, /NOTE_TREE_SECTIONS/);
+  assert.match(listSource, /gn-note-tree-section/);
+  assert.match(listSource, /gn-note-tree-match/);
+  assert.doesNotMatch(listSource, /summarizeBody\(note\.bodyMarkdown\)/);
+  assert.doesNotMatch(listSource, /note\.matchSnippet \|\| summarizeBody/);
+  assert.doesNotMatch(listSource, /gn-note-list-meta/);
+});
+
 test('knowledge note workspace exposes a read-only document activity panel', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 

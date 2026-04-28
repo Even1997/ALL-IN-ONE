@@ -1,5 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AIWorkspace } from './components/ai/AIWorkspace';
 import { Workspace } from './components/workspace';
@@ -7,6 +8,7 @@ import { ProjectSetup } from './components/project/ProjectSetup';
 import { ProductWorkbench } from './components/product/ProductWorkbench';
 import { WorkbenchIcon, type WorkbenchIconName } from './components/ui/WorkbenchIcon';
 import { MacButton, MacIconButton, MacInput, MacPanel, MacSelectField } from './components/ui';
+import { UiFeedbackMode } from './components/ui/UiFeedbackMode';
 import { usePreviewStore } from './store/previewStore';
 import { useFeatureTreeStore } from './store/featureTreeStore';
 import { aiService } from './modules/ai/core/AIService';
@@ -23,7 +25,7 @@ import { APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appT
 import type { RoleView } from './appNavigation';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type { AppType, FeatureNode, GeneratedFile, PageStructureNode, ProjectConfig, WireframeDocument } from './types';
-import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
+import { clampLayoutSize, LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
 import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
 import {
   getProjectDir,
@@ -103,18 +105,6 @@ type DesignFlowEdge = {
   from: string;
   to: string;
 };
-type AppMenuId = 'file' | 'edit' | 'view' | 'window' | 'help';
-type AppMenuItem = {
-  label: string;
-  meta?: string;
-  active?: boolean;
-  action: () => void;
-};
-type AppMenuSection = {
-  id: AppMenuId;
-  label: string;
-  items: AppMenuItem[];
-};
 type DesignNodeLayerMap = Record<string, number>;
 type DesignConnectionDraft = {
   fromId: string;
@@ -170,6 +160,9 @@ type SketchLibraryTreeNode = {
 type PersistedProjectSnapshot = {
   workspace: ProjectWorkspaceSnapshot;
   featureTree: ReturnType<typeof useFeatureTreeStore.getState>['tree'];
+};
+type NativeMenuEventPayload = {
+  id: string;
 };
 
 const readProjectIndex = (): ProjectConfig[] => {
@@ -236,9 +229,9 @@ const removeProjectSnapshot = (projectId: string) => {
 };
 
 const THEME_STORAGE_KEY = 'goodnight-theme-mode';
-const DESKTOP_AI_PANE_WIDTH_BOUNDS = { min: 420, max: 680 };
-const DEFAULT_DESKTOP_AI_PANE_WIDTH = 450;
-const LEGACY_DESKTOP_AI_PANE_WIDTH = 500;
+const DESKTOP_AI_PANE_WIDTH_BOUNDS = { min: 280, max: 560 };
+const DEFAULT_DESKTOP_AI_PANE_WIDTH = 360;
+const LEGACY_DESKTOP_AI_PANE_WIDTH = 450;
 const DESKTOP_AI_PANE_TRANSITION_MS = 240;
 const DESIGN_BOARD_STORAGE_PREFIX = 'goodnight-design-board';
 const PROJECT_INDEX_STORAGE_KEY = 'goodnight-project-index';
@@ -781,8 +774,7 @@ const SketchLibraryTreeItem: React.FC<SketchLibraryTreeItemProps> = ({
 
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<RoleView>('knowledge');
-  const [activeAppMenu, setActiveAppMenu] = useState<AppMenuId | null>(null);
-  const [desktopAiPaneWidth] = useState(() => {
+  const [desktopAiPaneWidth, setDesktopAiPaneWidth] = useState(() => {
     const nextWidth = readLayoutSize(
       LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
       DEFAULT_DESKTOP_AI_PANE_WIDTH,
@@ -802,6 +794,7 @@ const App: React.FC = () => {
   const [isDesktopAiCollapsed, setIsDesktopAiCollapsed] = useState(false);
   const [isDesktopAiPaneMounted, setIsDesktopAiPaneMounted] = useState(true);
   const [isDesktopAiPaneVisible, setIsDesktopAiPaneVisible] = useState(true);
+  const [isDesktopAiPaneResizing, setIsDesktopAiPaneResizing] = useState(false);
   const [projects, setProjects] = useState<ProjectConfig[]>(() => readProjectIndex());
   const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
   const [stylePresets, setStylePresets] = useState<Omit<DesignStyleNode, 'id' | 'x' | 'y' | 'width' | 'height'>[]>(
@@ -886,7 +879,6 @@ const App: React.FC = () => {
   const lastSelectedStyleNodeIdRef = useRef<string | null>(null);
   const lastSyncedStyleMarkdownRef = useRef('');
   const lastSavedStyleFileSnapshotsRef = useRef<Record<string, string>>({});
-  const appMenuBarRef = useRef<HTMLDivElement | null>(null);
   const [designBoardViewport, setDesignBoardViewport] = useState({ width: 0, height: 0 });
   const isConnectorMode = false;
   const pendingConnectionStartId = connectionDraft?.fromId ?? null;
@@ -1195,37 +1187,56 @@ const App: React.FC = () => {
     );
   }, [desktopAiPaneWidth]);
 
-  const toggleThemeMode = useCallback((): void => {
-    setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'));
-  }, []);
-
-  useEffect(() => {
-    if (!activeAppMenu) {
+  const handleDesktopAiResizePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (currentRole === 'design' || !isDesktopAiPaneVisible) {
       return;
     }
 
-    const handlePointerDown = (event: PointerEvent) => {
-      if (appMenuBarRef.current?.contains(event.target as Node)) {
-        return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = desktopAiPaneWidth;
+    setIsDesktopAiPaneResizing(true);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextWidth = clampLayoutSize(startWidth + startX - moveEvent.clientX, DESKTOP_AI_PANE_WIDTH_BOUNDS);
+      setDesktopAiPaneWidth(nextWidth);
+    };
+
+    const handlePointerUp = () => {
+      setIsDesktopAiPaneResizing(false);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  }, [currentRole, desktopAiPaneWidth, isDesktopAiPaneVisible]);
+
+  const handleDesktopAiResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
+      return;
+    }
+
+    event.preventDefault();
+    setDesktopAiPaneWidth((current) => {
+      if (event.key === 'Home') {
+        return DESKTOP_AI_PANE_WIDTH_BOUNDS.min;
       }
 
-      setActiveAppMenu(null);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setActiveAppMenu(null);
+      if (event.key === 'End') {
+        return DESKTOP_AI_PANE_WIDTH_BOUNDS.max;
       }
-    };
 
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
+      const delta = event.key === 'ArrowLeft' ? 16 : -16;
+      return clampLayoutSize(current + delta, DESKTOP_AI_PANE_WIDTH_BOUNDS);
+    });
+  }, []);
 
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeAppMenu]);
+  const toggleThemeMode = useCallback((): void => {
+    setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'));
+  }, []);
 
   const refreshSketchArtifactsFromDisk = useCallback(async () => {
     if (!canUseProjectFilesystem || !currentProject) {
@@ -2217,7 +2228,7 @@ const App: React.FC = () => {
     }
   }, [clearCanvas, clearProject, clearTree, clearWorkflowProjectState, currentProject?.id, deleteProject, handleOpenProject, projects]);
 
-  const handleResetProject = () => {
+  const handleResetProject = useCallback(() => {
     if (currentProject && typeof window !== 'undefined') {
       window.localStorage.removeItem(getDesignBoardStorageKey(currentProject.id));
     }
@@ -2228,7 +2239,82 @@ const App: React.FC = () => {
     setSelectedFeature(null);
     setCurrentRole('knowledge');
     setIsProjectManagerOpen(true);
-  };
+  }, [clearCanvas, clearProject, clearTree, currentProject]);
+
+  const handleNativeMenuEvent = useCallback((menuId: string) => {
+    switch (menuId) {
+      case 'file.new_project':
+        handleResetProject();
+        break;
+      case 'file.project_manager':
+        setIsProjectManagerOpen(true);
+        break;
+      case 'view.knowledge':
+        setCurrentRole('knowledge');
+        break;
+      case 'view.wiki':
+        setCurrentRole('wiki');
+        break;
+      case 'view.page':
+        setCurrentRole('page');
+        break;
+      case 'view.design':
+        setCurrentRole('design');
+        break;
+      case 'view.develop':
+        setCurrentRole('develop');
+        break;
+      case 'view.test':
+        setCurrentRole('test');
+        break;
+      case 'view.operations':
+        setCurrentRole('operations');
+        break;
+      case 'view.toggle_theme':
+        toggleThemeMode();
+        break;
+      case 'help.layout_overview':
+        window.alert('当前界面参考桌面应用菜单栏布局：左侧切换工作区，顶部菜单负责项目级操作，内容区按默认窗口尺寸排布。');
+        break;
+      case 'help.knowledge_overview':
+        window.alert('知识库用于整理 Markdown 笔记、项目资料和关联上下文。');
+        break;
+      case 'help.page_overview':
+        window.alert('页面用于维护页面结构、页面草图和画布模块。');
+        break;
+      default:
+        break;
+    }
+  }, [handleResetProject, toggleThemeMode]);
+
+  useEffect(() => {
+    if (!isTauriRuntimeAvailable()) {
+      return;
+    }
+
+    let isDisposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<NativeMenuEventPayload>('native-menu-event', (event) => {
+      handleNativeMenuEvent(event.payload.id);
+    })
+      .then((dispose) => {
+        if (isDisposed) {
+          dispose();
+          return;
+        }
+
+        unlisten = dispose;
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isDisposed = true;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [handleNativeMenuEvent]);
 
   const handleGenerateDelivery = () => {
     generateDeliveryArtifacts(featureTree);
@@ -3513,123 +3599,6 @@ ${selectedContextPrompt}` : '',
     };
   }, [designCanvasContextMenu]);
 
-  const appMenuSections = useMemo<AppMenuSection[]>(
-    () => [
-      {
-        id: 'file' as const,
-        label: '文件',
-        items: [
-          { label: '新建项目', meta: 'Ctrl+N', action: handleResetProject },
-          { label: '项目列表', meta: 'Ctrl+O', action: () => setIsProjectManagerOpen(true) },
-          { label: '打开知识库', action: () => setCurrentRole('knowledge') },
-          { label: '打开 Wiki 图谱', action: () => setCurrentRole('wiki') },
-          { label: '打开页面', action: () => setCurrentRole('page') },
-        ],
-      },
-      {
-        id: 'edit' as const,
-        label: '编辑',
-        items: [
-          { label: '设计工作台', action: () => setCurrentRole('design') },
-          { label: '开发工作台', action: () => setCurrentRole('develop') },
-          { label: '测试工作台', action: () => setCurrentRole('test') },
-          { label: '发布工作台', action: () => setCurrentRole('operations') },
-        ],
-      },
-      {
-        id: 'view' as const,
-        label: '查看',
-        items: [
-          { label: '知识库', active: currentRole === 'knowledge', action: () => setCurrentRole('knowledge') },
-          { label: 'Wiki 图谱', active: currentRole === 'wiki', action: () => setCurrentRole('wiki') },
-          { label: '页面', active: currentRole === 'page', action: () => setCurrentRole('page') },
-          { label: '设计', active: currentRole === 'design', action: () => setCurrentRole('design') },
-          {
-            label: themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式',
-            action: toggleThemeMode,
-          },
-        ],
-      },
-      {
-        id: 'window' as const,
-        label: '窗口',
-        items: [
-          { label: '项目切换', action: () => setIsProjectManagerOpen(true) },
-          { label: '回到知识库', action: () => setCurrentRole('knowledge') },
-          { label: '打开 Wiki 图谱', action: () => setCurrentRole('wiki') },
-          { label: '回到页面', action: () => setCurrentRole('page') },
-          { label: '当前功能', meta: selectedFeature?.name || currentProject?.name || '当前项目', action: () => undefined },
-        ],
-      },
-      {
-        id: 'help' as const,
-        label: '帮助',
-        items: [
-          {
-            label: '当前布局说明',
-            action: () =>
-              window.alert('当前界面参考桌面应用菜单栏布局：左侧切换工作区，顶部菜单负责项目级操作，内容区按默认窗口尺寸排布。'),
-          },
-          {
-            label: '知识库说明',
-            action: () => window.alert('知识库用于整理 Markdown 笔记、项目资料和关联上下文。'),
-          },
-          {
-            label: '页面说明',
-            action: () => window.alert('页面用于维护页面结构、页面草图和画布模块。'),
-          },
-        ],
-      },
-    ],
-    [currentProject?.name, currentRole, handleResetProject, selectedFeature?.name, themeMode, toggleThemeMode]
-  );
-
-  const renderAppMenuBar = (tone: 'desktop' | 'standard') => (
-    <div
-      ref={appMenuBarRef}
-      className={`app-menu-bar ${tone === 'desktop' ? 'desktop' : 'standard'}`}
-      onMouseLeave={() => setActiveAppMenu(null)}
-    >
-      {appMenuSections.map((section) => (
-        <div
-          key={section.id}
-          className={`app-menu-group ${activeAppMenu === section.id ? 'open' : ''}`}
-          onMouseEnter={() => {
-            if (activeAppMenu) {
-              setActiveAppMenu(section.id);
-            }
-          }}
-        >
-          <button
-            className="app-menu-trigger"
-            type="button"
-            onClick={() => setActiveAppMenu((current) => (current === section.id ? null : section.id))}
-          >
-            {section.label}
-          </button>
-          {activeAppMenu === section.id ? (
-            <div className="app-menu-panel">
-              {section.items.map((item) => (
-                <button
-                  key={`${section.id}-${item.label}`}
-                  className={`app-menu-item ${item.active ? 'active' : ''}`}
-                  type="button"
-                  onClick={() => {
-                    setActiveAppMenu(null);
-                    item.action();
-                  }}
-                >
-                  <span>{item.label}</span>
-                  {item.meta ? <em>{item.meta}</em> : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-
   const renderProductView = (entryTab: 'knowledge' | 'wiki' | 'page') => (
     <ProductWorkbench
       onFeatureSelect={(node) => setSelectedFeature(node)}
@@ -4725,20 +4694,23 @@ ${selectedContextPrompt}` : '',
 
   if (!currentProject) {
     return (
-      <ProjectSetup
-        projects={projects}
-        activeProjectId={currentProjectId}
-        projectStorageSettings={projectStorageSettings}
-        projectStorageDraftOverride={projectStorageDraftOverride}
-        projectStorageState={projectStorageState}
-        projectStorageMessage={projectStorageMessage}
-        onCreateProject={handleCreateProject}
-        onOpenProject={handleOpenProject}
-        onDeleteProject={handleDeleteProject}
-        onSaveProjectStoragePath={handleSaveProjectStoragePath}
-        onPickProjectStoragePath={handlePickProjectStoragePath}
-        onResetProjectStoragePath={handleResetProjectStoragePath}
-      />
+      <>
+        <ProjectSetup
+          projects={projects}
+          activeProjectId={currentProjectId}
+          projectStorageSettings={projectStorageSettings}
+          projectStorageDraftOverride={projectStorageDraftOverride}
+          projectStorageState={projectStorageState}
+          projectStorageMessage={projectStorageMessage}
+          onCreateProject={handleCreateProject}
+          onOpenProject={handleOpenProject}
+          onDeleteProject={handleDeleteProject}
+          onSaveProjectStoragePath={handleSaveProjectStoragePath}
+          onPickProjectStoragePath={handlePickProjectStoragePath}
+          onResetProjectStoragePath={handleResetProjectStoragePath}
+        />
+        <UiFeedbackMode />
+      </>
     );
   }
 
@@ -4832,7 +4804,6 @@ ${selectedContextPrompt}` : '',
           <section className="desktop-workbench-column">
             <MacPanel as="header" className="desktop-workbench-topbar mac-toolbar mac-panel desktop-workbench-menubar">
               <div className="desktop-workbench-leading">
-                {renderAppMenuBar('desktop')}
                 <div className="desktop-workbench-title compact">
                   <h1>{currentProject.name}</h1>
                   <p>{activeDesktopRole.summary} · 统一工作台布局</p>
@@ -4869,23 +4840,45 @@ ${selectedContextPrompt}` : '',
               </div>
             </MacPanel>
 
-            <div className="desktop-workbench-panels">
+            <div className={`desktop-workbench-panels ${isDesktopAiPaneResizing ? 'is-resizing-ai' : ''}`}>
               <div className="app-workbench-pane app-workbench-main-shell">
                 <main className="app-main app-main-desktop">{appDesktopContent}</main>
               </div>
               {currentRole !== 'design' && isDesktopAiPaneMounted ? (
-                <div
-                  className={`app-workbench-pane app-workbench-ai-shell desktop-ai-shell ${isDesktopAiPaneVisible ? '' : 'is-hidden'}`}
-                  style={{ width: desktopAiPaneWidth, minWidth: desktopAiPaneWidth }}
-                >
-                  <aside className="app-ai-activity-pane">
-                    <AIWorkspace collapsed={isDesktopAiCollapsed} onCollapsedChange={setIsDesktopAiCollapsed} />
-                  </aside>
-                </div>
+                <>
+                  {isDesktopAiPaneVisible ? (
+                    <div
+                      className="desktop-ai-resize-handle"
+                      role="separator"
+                      aria-label="调整 AI 栏宽度"
+                      aria-orientation="vertical"
+                      aria-valuemin={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
+                      aria-valuemax={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
+                      aria-valuenow={desktopAiPaneWidth}
+                      tabIndex={0}
+                      onPointerDown={handleDesktopAiResizePointerDown}
+                      onKeyDown={handleDesktopAiResizeKeyDown}
+                    />
+                  ) : null}
+                  <div
+                    className={`app-workbench-pane app-workbench-ai-shell desktop-ai-shell ${isDesktopAiPaneVisible ? '' : 'is-hidden'}`}
+                    style={{
+                      flex: `0 0 ${desktopAiPaneWidth}px`,
+                      width: desktopAiPaneWidth,
+                      minWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.min,
+                      maxWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.max,
+                    }}
+                  >
+                    <aside className="app-ai-activity-pane">
+                      <AIWorkspace collapsed={isDesktopAiCollapsed} onCollapsedChange={setIsDesktopAiCollapsed} />
+                    </aside>
+                  </div>
+                </>
               ) : null}
             </div>
           </section>
         </div>
+        <UiFeedbackMode />
       </div>
     );
   }
@@ -4903,10 +4896,9 @@ ${selectedContextPrompt}` : '',
               {currentProject.description || `${currentProject.appType} · ${currentProject.frontendFramework} · ${currentProject.backendFramework}`}
             </span>
           </div>
-          {renderAppMenuBar('standard')}
         </div>
 
-          <div className="header-right">
+        <div className="header-right">
           <MacSelectField
             className="project-switcher"
             label="项目"
@@ -4950,13 +4942,30 @@ ${selectedContextPrompt}` : '',
 
       <div className="app-workbench-row">
         {isDesktopWorkbenchMode ? (
-          <div className="app-workbench-desktop-layout">
+          <div className={`app-workbench-desktop-layout ${isDesktopAiPaneResizing ? 'is-resizing-ai' : ''}`}>
             <div className="app-workbench-pane app-workbench-main-shell">
               <main className="app-main app-main-desktop">{appDesktopContent}</main>
             </div>
             <div
+              className="desktop-ai-resize-handle"
+              role="separator"
+              aria-label="调整 AI 栏宽度"
+              aria-orientation="vertical"
+              aria-valuemin={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
+              aria-valuemax={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
+              aria-valuenow={desktopAiPaneWidth}
+              tabIndex={0}
+              onPointerDown={handleDesktopAiResizePointerDown}
+              onKeyDown={handleDesktopAiResizeKeyDown}
+            />
+            <div
               className="app-workbench-pane app-workbench-ai-shell"
-              style={{ width: desktopAiPaneWidth, minWidth: desktopAiPaneWidth }}
+              style={{
+                flex: `0 0 ${desktopAiPaneWidth}px`,
+                width: desktopAiPaneWidth,
+                minWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.min,
+                maxWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.max,
+              }}
             >
               <aside className="app-ai-activity-pane">
                 <AIWorkspace />
@@ -4970,6 +4979,7 @@ ${selectedContextPrompt}` : '',
           </>
         )}
       </div>
+      <UiFeedbackMode />
     </div>
   );
 };

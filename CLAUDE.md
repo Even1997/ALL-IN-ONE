@@ -63,3 +63,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+## Design System
+
+Always read `DESIGN.md` before making visual or UI decisions. The project should keep its current-density macOS workbench style unless the user explicitly asks for a new direction.
+
+Use `DESIGN.md` for font sizes, spacing, radius, shadows, colors, navigation states, and component behavior. In UI work, flag code that drifts from those rules instead of inventing new one-off styling.

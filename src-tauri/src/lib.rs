@@ -7,7 +7,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::menu::{AboutMetadataBuilder, Menu, MenuBuilder, SubmenuBuilder};
+use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 
 const KNOWLEDGE_SIDECAR_PORT: u16 = 44380;
@@ -15,6 +16,7 @@ const KNOWLEDGE_HEALTH_POLL_INTERVAL_MS: u64 = 100;
 const KNOWLEDGE_HEALTH_TIMEOUT_MS: u64 = 10_000;
 const KNOWLEDGE_PID_FILE_NAME: &str = "goodnight-knowledge-sidecar.pid";
 const KNOWLEDGE_TOKEN_FILE_NAME: &str = "goodnight_local_server_token";
+const NATIVE_MENU_EVENT_NAME: &str = "native-menu-event";
 
 fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
     let bytes = fs::read(file_path)?;
@@ -26,6 +28,12 @@ fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
 pub struct LocalKnowledgeServerConfig {
     pub base_url: String,
     pub auth_token: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeMenuEventPayload {
+    id: String,
 }
 
 struct KnowledgeSidecarChild(tauri_plugin_shell::process::CommandChild);
@@ -327,7 +335,9 @@ struct ProjectStorageSettings {
     is_default: bool,
 }
 
-fn normalize_project_storage_root_path(root_path: Option<String>) -> Result<Option<PathBuf>, String> {
+fn normalize_project_storage_root_path(
+    root_path: Option<String>,
+) -> Result<Option<PathBuf>, String> {
     let Some(root_path) = root_path else {
         return Ok(None);
     };
@@ -345,7 +355,9 @@ fn normalize_project_storage_root_path(root_path: Option<String>) -> Result<Opti
     Ok(Some(normalized))
 }
 
-fn normalize_saved_project_storage_root_path(root_path: Option<String>) -> Result<Option<PathBuf>, String> {
+fn normalize_saved_project_storage_root_path(
+    root_path: Option<String>,
+) -> Result<Option<PathBuf>, String> {
     match normalize_project_storage_root_path(root_path) {
         Ok(path) => Ok(path),
         Err(_) => Ok(None),
@@ -418,11 +430,14 @@ fn resolve_project_storage_root_path(
     }
 }
 
-fn build_project_storage_settings(app_handle: &tauri::AppHandle) -> Result<ProjectStorageSettings, String> {
+fn build_project_storage_settings(
+    app_handle: &tauri::AppHandle,
+) -> Result<ProjectStorageSettings, String> {
     let default_path = get_default_projects_root_path(app_handle)?;
     let payload = read_project_storage_settings_payload(app_handle)?;
     let override_path = normalize_saved_project_storage_root_path(payload.root_path)?;
-    let (projects_root, is_default) = resolve_project_storage_root_path(default_path.clone(), override_path);
+    let (projects_root, is_default) =
+        resolve_project_storage_root_path(default_path.clone(), override_path);
 
     fs::create_dir_all(&projects_root)
         .map_err(|e| format!("Failed to create projects directory: {}", e))?;
@@ -481,7 +496,10 @@ fn build_local_config_probe(path: PathBuf, include_content: bool) -> LocalConfig
     }
 }
 
-fn build_local_agent_interface_command(agent: &str, project_root: &str) -> Result<(&'static str, String), String> {
+fn build_local_agent_interface_command(
+    agent: &str,
+    project_root: &str,
+) -> Result<(&'static str, String), String> {
     let project_root_arg = escape_powershell_single_quoted(project_root);
     match agent {
         "claude" => Ok(("Claude", "claude".to_string())),
@@ -657,7 +675,10 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
         Err(error) => LocalAgentResult {
             success: false,
             content: String::new(),
-            error: Some(format!("Failed to run {} prompt command: {}", agent_label, error)),
+            error: Some(format!(
+                "Failed to run {} prompt command: {}",
+                agent_label, error
+            )),
             exit_code: None,
         },
     }
@@ -698,7 +719,10 @@ fn tool_view(params: ViewParams) -> ToolResult {
         return ToolResult {
             success: false,
             content: String::new(),
-            error: Some(format!("Path is a directory, not a file: {}", params.file_path)),
+            error: Some(format!(
+                "Path is a directory, not a file: {}",
+                params.file_path
+            )),
         };
     }
 
@@ -730,7 +754,10 @@ fn tool_view(params: ViewParams) -> ToolResult {
     result.push_str("</file>\n");
 
     if end < total_lines {
-        result.push_str(&format!("\n(File has {} more lines. Use 'offset' to read more.)\n", total_lines - end));
+        result.push_str(&format!(
+            "\n(File has {} more lines. Use 'offset' to read more.)\n",
+            total_lines - end
+        ));
     }
 
     ToolResult {
@@ -866,7 +893,10 @@ fn tool_rename(params: RenameParams) -> ToolResult {
             match fallback_result {
                 Ok(_) => ToolResult {
                     success: true,
-                    content: format!("Moved with fallback: {} -> {}", params.from_path, params.to_path),
+                    content: format!(
+                        "Moved with fallback: {} -> {}",
+                        params.from_path, params.to_path
+                    ),
                     error: None,
                 },
                 Err(fallback_error) => ToolResult {
@@ -1064,7 +1094,10 @@ fn tool_glob(params: GlobParams) -> ToolResult {
     if matches.is_empty() {
         ToolResult {
             success: true,
-            content: format!("No files matching pattern '{}' found in {}", params.pattern, path),
+            content: format!(
+                "No files matching pattern '{}' found in {}",
+                params.pattern, path
+            ),
             error: None,
         }
     } else {
@@ -1096,7 +1129,13 @@ fn tool_grep(params: GrepParams) -> ToolResult {
     let include = params.include.as_deref();
     let mut matches: Vec<String> = Vec::new();
 
-    fn search_in_dir(dir: &Path, pattern: &str, include: Option<&str>, matches: &mut Vec<String>, depth: usize) {
+    fn search_in_dir(
+        dir: &Path,
+        pattern: &str,
+        include: Option<&str>,
+        matches: &mut Vec<String>,
+        depth: usize,
+    ) {
         if depth > 10 {
             return;
         }
@@ -1141,7 +1180,12 @@ fn tool_grep(params: GrepParams) -> ToolResult {
                         for (line_num, line) in reader.lines().enumerate() {
                             if let Ok(line) = line {
                                 if line.contains(pattern) {
-                                    matches.push(format!("{}:{}:{}", path.display(), line_num + 1, line));
+                                    matches.push(format!(
+                                        "{}:{}:{}",
+                                        path.display(),
+                                        line_num + 1,
+                                        line
+                                    ));
                                 }
                             }
                         }
@@ -1185,10 +1229,7 @@ fn tool_bash(params: BashParams) -> ToolResult {
         }
     }
 
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .output();
+    let output = Command::new("sh").arg("-c").arg(command).output();
 
     match output {
         Ok(out) => {
@@ -1218,12 +1259,17 @@ fn tool_bash(params: BashParams) -> ToolResult {
 }
 
 #[tauri::command]
-fn get_project_storage_settings(app_handle: tauri::AppHandle) -> Result<ProjectStorageSettings, String> {
+fn get_project_storage_settings(
+    app_handle: tauri::AppHandle,
+) -> Result<ProjectStorageSettings, String> {
     build_project_storage_settings(&app_handle)
 }
 
 #[tauri::command]
-fn set_project_storage_root(app_handle: tauri::AppHandle, root_path: Option<String>) -> Result<ProjectStorageSettings, String> {
+fn set_project_storage_root(
+    app_handle: tauri::AppHandle,
+    root_path: Option<String>,
+) -> Result<ProjectStorageSettings, String> {
     let default_path = get_default_projects_root_path(&app_handle)?;
     let normalized_root = normalize_project_storage_root_path(root_path)?;
     let stored_root = normalized_root
@@ -1246,7 +1292,10 @@ fn set_project_storage_root(app_handle: tauri::AppHandle, root_path: Option<Stri
 }
 
 #[tauri::command]
-fn get_requirements_dir(app_handle: tauri::AppHandle, project_id: String) -> Result<String, String> {
+fn get_requirements_dir(
+    app_handle: tauri::AppHandle,
+    project_id: String,
+) -> Result<String, String> {
     let dir_path: PathBuf = get_projects_root_path(&app_handle)?
         .join(project_id)
         .join("requirements");
@@ -1295,7 +1344,9 @@ fn build_unique_destination_path(target_dir: &Path, file_name: &std::ffi::OsStr)
         .map(|value| value.to_string_lossy().to_string())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "asset".to_string());
-    let extension = candidate.extension().map(|value| value.to_string_lossy().to_string());
+    let extension = candidate
+        .extension()
+        .map(|value| value.to_string_lossy().to_string());
 
     let mut next_path = target_dir.join(file_name);
     if !next_path.exists() {
@@ -1305,7 +1356,9 @@ fn build_unique_destination_path(target_dir: &Path, file_name: &std::ffi::OsStr)
     for index in 1..10_000 {
         let suffix = format!("{stem}-{index}");
         next_path = match &extension {
-            Some(extension) if !extension.is_empty() => target_dir.join(format!("{suffix}.{extension}")),
+            Some(extension) if !extension.is_empty() => {
+                target_dir.join(format!("{suffix}.{extension}"))
+            }
             _ => target_dir.join(&suffix),
         };
 
@@ -1368,8 +1421,7 @@ fn import_knowledge_assets(params: ImportKnowledgeAssetsParams) -> Result<Vec<St
 
 #[tauri::command]
 fn read_text_file(file_path: String) -> Result<String, String> {
-    read_file_as_string(Path::new(&file_path))
-        .map_err(|e| format!("Error reading file: {}", e))
+    read_file_as_string(Path::new(&file_path)).map_err(|e| format!("Error reading file: {}", e))
 }
 
 #[tauri::command]
@@ -1393,16 +1445,109 @@ fn get_local_knowledge_server_config(
     config.inner().clone()
 }
 
+fn build_native_app_menu<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+) -> tauri::Result<Menu<R>> {
+    let about_metadata = AboutMetadataBuilder::new()
+        .name(Some("GoodNight".to_string()))
+        .version(Some(env!("CARGO_PKG_VERSION").to_string()))
+        .comments(Some(
+            "\u{53ef}\u{89c6}\u{5316}\u{8f6f}\u{4ef6}\u{5f00}\u{53d1}\u{5e73}\u{53f0}".to_string(),
+        ))
+        .build();
+
+    let file_menu = SubmenuBuilder::new(app_handle, "\u{6587}\u{4ef6}")
+        .text("file.new_project", "\u{65b0}\u{5efa}\u{9879}\u{76ee}")
+        .text("file.project_manager", "\u{9879}\u{76ee}\u{5217}\u{8868}")
+        .separator()
+        .quit()
+        .build()?;
+
+    let edit_menu = SubmenuBuilder::new(app_handle, "\u{7f16}\u{8f91}")
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
+
+    let view_menu = SubmenuBuilder::new(app_handle, "\u{67e5}\u{770b}")
+        .text("view.knowledge", "\u{77e5}\u{8bc6}\u{5e93}")
+        .text("view.wiki", "Wiki \u{56fe}\u{8c31}")
+        .text("view.page", "\u{9875}\u{9762}")
+        .text("view.design", "\u{8bbe}\u{8ba1}")
+        .text("view.develop", "\u{5f00}\u{53d1}")
+        .text("view.test", "\u{6d4b}\u{8bd5}")
+        .text("view.operations", "\u{53d1}\u{5e03}")
+        .separator()
+        .text("view.toggle_theme", "\u{5207}\u{6362}\u{4e3b}\u{9898}")
+        .build()?;
+
+    let window_menu = SubmenuBuilder::new(app_handle, "\u{7a97}\u{53e3}")
+        .minimize()
+        .maximize()
+        .separator()
+        .close_window()
+        .build()?;
+
+    let help_menu = SubmenuBuilder::new(app_handle, "\u{5e2e}\u{52a9}")
+        .about_with_text("\u{5173}\u{4e8e} GoodNight", Some(about_metadata))
+        .separator()
+        .text(
+            "help.layout_overview",
+            "\u{5f53}\u{524d}\u{5e03}\u{5c40}\u{8bf4}\u{660e}",
+        )
+        .text(
+            "help.knowledge_overview",
+            "\u{77e5}\u{8bc6}\u{5e93}\u{8bf4}\u{660e}",
+        )
+        .text("help.page_overview", "\u{9875}\u{9762}\u{8bf4}\u{660e}")
+        .build()?;
+
+    MenuBuilder::new(app_handle)
+        .item(&file_menu)
+        .item(&edit_menu)
+        .item(&view_menu)
+        .item(&window_menu)
+        .item(&help_menu)
+        .build()
+}
+
+fn emit_native_menu_event<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>, id: &str) {
+    let _ = app_handle.emit(
+        NATIVE_MENU_EVENT_NAME,
+        NativeMenuEventPayload { id: id.to_string() },
+    );
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "goodnight_lib=info,goodnight_core=info,warn".parse().unwrap()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                "goodnight_lib=info,goodnight_core=info,warn"
+                    .parse()
+                    .unwrap()
+            }),
         )
         .init();
 
     tauri::Builder::default()
+        .on_menu_event(|app_handle, event| match event.id().as_ref() {
+            "file.new_project"
+            | "file.project_manager"
+            | "view.knowledge"
+            | "view.wiki"
+            | "view.page"
+            | "view.design"
+            | "view.develop"
+            | "view.test"
+            | "view.operations"
+            | "view.toggle_theme"
+            | "help.layout_overview"
+            | "help.knowledge_overview"
+            | "help.page_overview" => emit_native_menu_event(app_handle, event.id().as_ref()),
+            _ => {}
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
@@ -1421,6 +1566,11 @@ pub fn run() {
             };
 
             let sidecar_state = bootstrap_knowledge_sidecar(app, &app_data_dir, &config)?;
+            let native_menu = build_native_app_menu(&app.handle())
+                .map_err(|error| format!("Failed to build native app menu: {}", error))?;
+
+            app.set_menu(native_menu)
+                .map_err(|error| format!("Failed to install native app menu: {}", error))?;
 
             app.manage(config);
             app.manage(sidecar_state);
@@ -1477,13 +1627,17 @@ mod tests {
 
     #[test]
     fn project_storage_root_normalizer_treats_blank_as_default() {
-        assert_eq!(normalize_project_storage_root_path(Some("   ".into())).unwrap(), None);
+        assert_eq!(
+            normalize_project_storage_root_path(Some("   ".into())).unwrap(),
+            None
+        );
         assert_eq!(normalize_project_storage_root_path(None).unwrap(), None);
     }
 
     #[test]
     fn project_storage_root_normalizer_rejects_relative_paths() {
-        let error = normalize_project_storage_root_path(Some("projects/custom".into())).unwrap_err();
+        let error =
+            normalize_project_storage_root_path(Some("projects/custom".into())).unwrap_err();
         assert!(error.contains("absolute path"));
     }
 
@@ -1510,7 +1664,10 @@ mod tests {
     #[test]
     fn saved_project_storage_root_ignores_posix_path_on_windows() {
         assert_eq!(
-            normalize_saved_project_storage_root_path(Some("/Users/test/GoodNight/projects".into())).unwrap(),
+            normalize_saved_project_storage_root_path(Some(
+                "/Users/test/GoodNight/projects".into()
+            ))
+            .unwrap(),
             None
         );
     }
@@ -1519,8 +1676,10 @@ mod tests {
     #[test]
     fn saved_project_storage_root_ignores_windows_path_on_posix() {
         assert_eq!(
-            normalize_saved_project_storage_root_path(Some("C:/Users/test/Documents/GoodNight/projects".into()))
-                .unwrap(),
+            normalize_saved_project_storage_root_path(Some(
+                "C:/Users/test/Documents/GoodNight/projects".into()
+            ))
+            .unwrap(),
             None
         );
     }

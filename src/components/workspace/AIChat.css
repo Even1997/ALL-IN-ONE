@@ -2536,6 +2536,16 @@ body.desktop-workbench-mode .chat-settings-drawer {
   background: var(--claudian-accent, #5aa7d6);
 }
 
+body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-embedded .chat-agent-lane-tabs {
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-x: visible;
+}
+
+body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-embedded .chat-agent-lane-tabs button {
+  font-size: 11px;
+}
+
 .gn-agent-workspace .chat-shell-embedded .chat-message-list,
 .gn-agent-workspace .chat-shell-embedded .chat-agent-panel {
   padding: 16px 18px 10px;

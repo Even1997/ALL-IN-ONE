@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { AtomicMarkdownEditor } from '../../../components/product/AtomicMarkdownEditor';
 import type { DocumentChangeEvent } from '../../../types';
 import type {
@@ -84,11 +85,34 @@ const FILTER_OPTIONS: Array<{ id: KnowledgeNoteFilter; label: string }> = [
   { id: 'design', label: '设计' },
 ];
 
+const NOTE_TREE_SECTIONS: Array<{
+  id: KnowledgeNoteFilter;
+  label: string;
+  matches: (note: KnowledgeNote) => boolean;
+}> = [
+  { id: 'wiki-index', label: 'Wiki 索引', matches: (note) => note.docType === 'wiki-index' },
+  { id: 'ai-summary', label: 'AI 摘要', matches: (note) => note.docType === 'ai-summary' },
+  { id: 'note', label: '项目笔记', matches: (note) => !note.docType && (note.kind || 'note') === 'note' },
+  { id: 'sketch', label: '草图说明', matches: (note) => !note.docType && note.kind === 'sketch' },
+  { id: 'design', label: '设计沉淀', matches: (note) => !note.docType && note.kind === 'design' },
+];
+
 const DOCUMENT_EVENT_TRIGGER_LABELS: Record<DocumentChangeEvent['trigger'], string> = {
   editor: '编辑',
   import: '导入',
   sync: '同步',
 };
+
+const NOTE_RAIL_WIDTH_BOUNDS = { min: 220, max: 420 };
+const NOTE_RAIL_DEFAULT_WIDTH = 280;
+const NOTE_SIDE_WIDTH_BOUNDS = { min: 260, max: 560 };
+const NOTE_SIDE_DEFAULT_WIDTH = 320;
+
+const clampNoteRailWidth = (value: number) =>
+  Math.min(NOTE_RAIL_WIDTH_BOUNDS.max, Math.max(NOTE_RAIL_WIDTH_BOUNDS.min, value));
+
+const clampNoteSideWidth = (value: number) =>
+  Math.min(NOTE_SIDE_WIDTH_BOUNDS.max, Math.max(NOTE_SIDE_WIDTH_BOUNDS.min, value));
 
 const NoteAddIcon = () => (
   <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -98,6 +122,33 @@ const NoteAddIcon = () => (
       stroke="currentColor"
       strokeWidth="1.8"
       strokeLinecap="round"
+    />
+  </svg>
+);
+
+const WikiGenerateIcon = () => (
+  <svg viewBox="0 0 20 20" aria-hidden="true">
+    <path
+      d="M4.75 5.75a2 2 0 0 1 2-2h6.5a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-6.5a2 2 0 0 1-2-2v-8.5Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M7.25 7.25h5.5M7.25 10h5.5M7.25 12.75h3.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <path
+      d="M13.25 3.75v12.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      opacity="0.45"
     />
   </svg>
 );
@@ -331,11 +382,24 @@ export const KnowledgeNoteWorkspace = ({
   onFilterChange,
   onOpenAttachment,
 }: KnowledgeNoteWorkspaceProps) => {
+  const [isSideExpanded, setIsSideExpanded] = useState(false);
+  const [railWidth, setRailWidth] = useState(NOTE_RAIL_DEFAULT_WIDTH);
+  const [sideWidth, setSideWidth] = useState(NOTE_SIDE_DEFAULT_WIDTH);
+  const [isRailResizing, setIsRailResizing] = useState(false);
+  const [isSideResizing, setIsSideResizing] = useState(false);
   const searchActive = searchValue.trim().length > 0;
   const visibleNotes = filteredNotes;
   const visibleDocumentEvents = documentEvents.slice(0, 8);
   const selectedNoteMeta = selectedNote ? getNoteMeta(selectedNote) : null;
   const visibleAttachmentCount = attachments.length + nearbyAttachments.length + libraryAttachments.length;
+  const visibleNoteSections = useMemo(
+    () =>
+      NOTE_TREE_SECTIONS.map((section) => ({
+        ...section,
+        notes: visibleNotes.filter(section.matches),
+      })).filter((section) => section.notes.length > 0),
+    [visibleNotes]
+  );
   const selectedNoteTags = useMemo(
     () => selectedNote?.tags.filter((tag) => tag.trim().length > 0) || [],
     [selectedNote]
@@ -349,14 +413,106 @@ export const KnowledgeNoteWorkspace = ({
     </div>
   ) : null;
 
+  const handleSideResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!isSideExpanded) {
+      setIsSideExpanded(true);
+    }
+
+    const startX = event.clientX;
+    const startWidth = sideWidth;
+    setIsSideResizing(true);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setSideWidth(clampNoteSideWidth(startWidth + startX - moveEvent.clientX));
+    };
+
+    const handlePointerUp = () => {
+      setIsSideResizing(false);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  }, [isSideExpanded, sideWidth]);
+
+  const handleRailResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = railWidth;
+    setIsRailResizing(true);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setRailWidth(clampNoteRailWidth(startWidth + moveEvent.clientX - startX));
+    };
+
+    const handlePointerUp = () => {
+      setIsRailResizing(false);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  }, [railWidth]);
+
+  const handleSideResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
+      return;
+    }
+
+    event.preventDefault();
+    if (!isSideExpanded) {
+      setIsSideExpanded(true);
+    }
+
+    setSideWidth((current) => {
+      if (event.key === 'Home') {
+        return NOTE_SIDE_WIDTH_BOUNDS.min;
+      }
+
+      if (event.key === 'End') {
+        return NOTE_SIDE_WIDTH_BOUNDS.max;
+      }
+
+      return clampNoteSideWidth(current + (event.key === 'ArrowLeft' ? 16 : -16));
+    });
+  }, [isSideExpanded]);
+
+  const handleRailResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
+      return;
+    }
+
+    event.preventDefault();
+    setRailWidth((current) => {
+      if (event.key === 'Home') {
+        return NOTE_RAIL_WIDTH_BOUNDS.min;
+      }
+
+      if (event.key === 'End') {
+        return NOTE_RAIL_WIDTH_BOUNDS.max;
+      }
+
+      return clampNoteRailWidth(current + (event.key === 'ArrowRight' ? 16 : -16));
+    });
+  }, []);
+
   return (
-    <section className="gn-note-workspace">
+    <section
+      className={`gn-note-workspace ${isSideExpanded ? 'side-expanded' : 'side-collapsed'} ${isRailResizing ? 'is-resizing-note-rail' : ''} ${isSideResizing ? 'is-resizing-note-side' : ''}`}
+      style={{
+        '--gn-note-rail-width': `${railWidth}px`,
+        '--gn-note-side-width': `${sideWidth}px`,
+      } as CSSProperties}
+    >
       <aside className="gn-note-rail">
-        <div className="gn-note-rail-hero">
-          <span className="gn-note-eyebrow">Knowledge</span>
-          <h3>项目知识库</h3>
-          <p>笔记、Wiki、草图说明和设计沉淀都会在这里统一维护，AI 也会优先基于这里的内容工作。</p>
-        </div>
 
         <div className="gn-note-search-row">
           <input
@@ -382,8 +538,14 @@ export const KnowledgeNoteWorkspace = ({
         </div>
 
         <div className="gn-note-rail-actions">
-          <button className="doc-action-btn" type="button" onClick={onOrganizeKnowledge}>
-            生成 Wiki
+          <button
+            className="doc-action-btn gn-note-icon-btn gn-note-wiki-btn"
+            type="button"
+            onClick={onOrganizeKnowledge}
+            title="生成 Wiki"
+            aria-label="生成 Wiki"
+          >
+            <WikiGenerateIcon />
           </button>
           <button
             className="doc-action-btn gn-note-icon-btn"
@@ -425,55 +587,76 @@ export const KnowledgeNoteWorkspace = ({
 
         <div className="gn-note-list">
           {visibleNotes.length > 0 ? (
-            visibleNotes.map((note) => {
-              const noteMeta = getNoteMeta(note);
-              return (
-                <div key={note.id} className="gn-note-tree-group">
-                  <button
-                    className={`gn-note-tree-item file ${selectedNote?.id === note.id ? 'active' : ''}`}
-                    type="button"
-                    title={note.sourceUrl || note.title}
-                    onClick={() => onSelectNote(note.id)}
-                  >
-                    <span className="gn-note-tree-icon" aria-hidden="true">
-                      <NoteKindIcon kind={note.kind} />
-                    </span>
-                    <span className="gn-note-tree-label">{note.title}</span>
-                    <span className="gn-note-tree-badge">{noteMeta.badge}</span>
-                  </button>
-                  <div className="gn-note-list-meta">
-                    {note.matchSnippet || summarizeBody(note.bodyMarkdown)}
-                  </div>
+            visibleNoteSections.map((section) => (
+              <section key={section.id} className="gn-note-tree-section" aria-label={section.label}>
+                <div className="gn-note-tree-section-header">
+                  <span className="gn-note-tree-section-title">{section.label}</span>
+                  <span className="gn-note-tree-section-count">{section.notes.length}</span>
                 </div>
-              );
-            })
+                {section.notes.map((note) => {
+                  const noteMeta = getNoteMeta(note);
+                  return (
+                    <button
+                      key={note.id}
+                      className={`gn-note-tree-item file ${selectedNote?.id === note.id ? 'active' : ''}`}
+                      type="button"
+                      title={note.sourceUrl || note.title}
+                      onClick={() => onSelectNote(note.id)}
+                    >
+                      <span className="gn-note-tree-icon" aria-hidden="true">
+                        <NoteKindIcon kind={note.kind} />
+                      </span>
+                      <span className="gn-note-tree-label">{note.title}</span>
+                      {searchActive && note.matchSnippet ? <span className="gn-note-tree-match">命中</span> : null}
+                      <span className="gn-note-tree-badge">{noteMeta.badge}</span>
+                    </button>
+                  );
+                })}
+              </section>
+            ))
           ) : (
             <div className="gn-note-empty">{searchActive ? '没有匹配的笔记。' : '还没有知识笔记。'}</div>
           )}
         </div>
       </aside>
 
+      <div
+        className="gn-note-rail-resize-handle"
+        role="separator"
+        aria-label="调整目录树宽度"
+        aria-orientation="vertical"
+        aria-valuemin={NOTE_RAIL_WIDTH_BOUNDS.min}
+        aria-valuemax={NOTE_RAIL_WIDTH_BOUNDS.max}
+        aria-valuenow={railWidth}
+        tabIndex={0}
+        onPointerDown={handleRailResizePointerDown}
+        onKeyDown={handleRailResizeKeyDown}
+      />
+
       <main className="gn-note-editor-column">
         {selectedNote ? (
           <>
-            <header className="gn-note-editor-header">
-              <div className="gn-note-editor-heading">
-                <span className="gn-note-eyebrow">{editable ? 'Editable Markdown' : 'Readonly Projection'}</span>
-                <h2>{selectedNote.title}</h2>
-                <p>{selectedNote.sourceUrl || '这条笔记还没有绑定源文件路径。'}</p>
-                <div className="gn-note-header-toolbar">
-                  <span className="gn-note-toolbar-btn active" role="status">
-                    {selectedNoteMeta?.label}
-                  </span>
-                  {selectedNoteTags.map((tag) => (
-                    <span key={tag} className="gn-note-toolbar-btn" role="status">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-                {editorToolbar}
+            <div className="gn-note-editor-surface">
+              <h2 className="gn-note-editor-title" title={selectedNote.title}>
+                {selectedNote.title}
+              </h2>
+              <div className="gn-note-editor-body">
+                <AtomicMarkdownEditor
+                  key={selectedNote.id}
+                  value={editorValue}
+                  onChange={onEditorChange}
+                  editable={editable}
+                />
               </div>
-              <div className="gn-note-editor-actions">
+            </div>
+
+            <footer className="gn-note-editor-footer">
+              <span>
+                {saveMessage || (editable ? 'Markdown 请手动保存，也可以使用 Ctrl/Cmd+S。' : '当前是只读兼容投影。')}
+              </span>
+              <div className="gn-note-editor-footer-actions">
+                <span>更新于 {formatUpdatedAt(selectedNote.updatedAt)}</span>
+                {editorToolbar}
                 {editable ? (
                   <>
                     <button className="doc-action-btn secondary" type="button" onClick={onDelete}>
@@ -485,35 +668,17 @@ export const KnowledgeNoteWorkspace = ({
                   </>
                 ) : null}
               </div>
-            </header>
-
-            <div className="gn-note-editor-surface">
-              <AtomicMarkdownEditor
-                key={selectedNote.id}
-                value={editorValue}
-                onChange={onEditorChange}
-                editable={editable}
-              />
-            </div>
-
-            <footer className="gn-note-editor-footer">
-              <span>
-                {saveMessage || (editable ? 'Markdown 请手动保存，也可以使用 Ctrl/Cmd+S。' : '当前是只读兼容投影。')}
-              </span>
-              <span>更新于 {formatUpdatedAt(selectedNote.updatedAt)}</span>
             </footer>
           </>
         ) : (
           <div className="gn-note-empty-main">
-            <span className="gn-note-eyebrow">No Note Selected</span>
             <h2>选择或新建一条知识笔记</h2>
-            <p>这里会集中展示正文、上下文关系和附件资料。你也可以先让 AI 帮你生成一轮 Wiki 再继续整理。</p>
             <div className="gn-note-empty-actions">
               <button className="doc-action-btn" type="button" onClick={onOrganizeKnowledge}>
                 生成 Wiki
               </button>
               <button className="doc-action-btn secondary" type="button" onClick={onCreateNote}>
-                新建第一条笔记
+                新建笔记
               </button>
               {editorToolbar}
             </div>
@@ -521,7 +686,28 @@ export const KnowledgeNoteWorkspace = ({
         )}
       </main>
 
-      <aside className="gn-note-side">
+      <div
+        className="gn-note-side-resize-handle"
+        role="separator"
+        aria-label="调整详情栏宽度"
+        aria-orientation="vertical"
+        aria-valuemin={NOTE_SIDE_WIDTH_BOUNDS.min}
+        aria-valuemax={NOTE_SIDE_WIDTH_BOUNDS.max}
+        aria-valuenow={isSideExpanded ? sideWidth : 46}
+        tabIndex={0}
+        onPointerDown={handleSideResizePointerDown}
+        onKeyDown={handleSideResizeKeyDown}
+      />
+
+      <aside className={`gn-note-side ${isSideExpanded ? 'expanded' : 'collapsed'}`}>
+        <button
+          className="gn-note-side-toggle"
+          type="button"
+          onClick={() => setIsSideExpanded((current) => !current)}
+          aria-expanded={isSideExpanded}
+        >
+          {isSideExpanded ? '收起' : '详情'}
+        </button>
         <section className="gn-note-side-card">
           <div className="gn-note-side-card-header">
             <div>

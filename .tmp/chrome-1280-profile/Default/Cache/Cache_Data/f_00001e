@@ -1,0 +1,1406 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=e88bbbb7"; const Fragment = __vite__cjsImport0_react_jsxDevRuntime["Fragment"]; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+var _s = $RefreshSig$();
+import __vite__cjsImport3_react from "/node_modules/.vite/deps/react.js?v=e88bbbb7"; const useMemo = __vite__cjsImport3_react["useMemo"]; const useState = __vite__cjsImport3_react["useState"];
+import { AtomicMarkdownEditor } from "/src/components/product/AtomicMarkdownEditor.tsx";
+import { KnowledgeGraphCanvas } from "/src/features/knowledge/workspace/KnowledgeGraphCanvas.tsx";
+const DOC_TYPE_META = {
+  "wiki-index": { badge: "WIKI", label: "Wiki 索引" },
+  "ai-summary": { badge: "AI", label: "AI 摘要" }
+};
+const NOTE_KIND_META = {
+  note: { badge: "NOTE", label: "项目笔记" },
+  sketch: { badge: "SKETCH", label: "草图说明" },
+  design: { badge: "DESIGN", label: "设计沉淀" }
+};
+const ATTACHMENT_CATEGORY_LABELS = {
+  pdf: "PDF 文档",
+  word: "Word 文档",
+  sheet: "表格资料",
+  slide: "演示资料",
+  text: "文本资料",
+  other: "其他附件"
+};
+const FILTER_OPTIONS = [
+  { id: "all", label: "全部" },
+  { id: "wiki-index", label: "Wiki" },
+  { id: "ai-summary", label: "AI 摘要" },
+  { id: "note", label: "笔记" },
+  { id: "sketch", label: "草图" },
+  { id: "design", label: "设计" }
+];
+const NOTE_TREE_SECTIONS = [
+  { id: "wiki-index", label: "Wiki 索引", matches: (note) => note.docType === "wiki-index" },
+  { id: "ai-summary", label: "AI 摘要", matches: (note) => note.docType === "ai-summary" },
+  { id: "note", label: "项目笔记", matches: (note) => !note.docType && (note.kind || "note") === "note" },
+  { id: "sketch", label: "草图说明", matches: (note) => !note.docType && note.kind === "sketch" },
+  { id: "design", label: "设计沉淀", matches: (note) => !note.docType && note.kind === "design" }
+];
+const DOCUMENT_EVENT_TRIGGER_LABELS = {
+  editor: "编辑",
+  import: "导入",
+  sync: "同步"
+};
+const NoteAddIcon = () => /* @__PURE__ */ jsxDEV("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", children: /* @__PURE__ */ jsxDEV(
+  "path",
+  {
+    d: "M10 4.25v11.5M4.25 10h11.5",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round"
+  },
+  void 0,
+  false,
+  {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 126,
+    columnNumber: 5
+  },
+  this
+) }, void 0, false, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+  lineNumber: 125,
+  columnNumber: 1
+}, this);
+_c = NoteAddIcon;
+const WikiGenerateIcon = () => /* @__PURE__ */ jsxDEV("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", children: [
+  /* @__PURE__ */ jsxDEV(
+    "path",
+    {
+      d: "M4.75 5.75a2 2 0 0 1 2-2h6.5a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-6.5a2 2 0 0 1-2-2v-8.5Z",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.5",
+      strokeLinejoin: "round"
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 138,
+      columnNumber: 5
+    },
+    this
+  ),
+  /* @__PURE__ */ jsxDEV(
+    "path",
+    {
+      d: "M7.25 7.25h5.5M7.25 10h5.5M7.25 12.75h3.2",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.5",
+      strokeLinecap: "round"
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 145,
+      columnNumber: 5
+    },
+    this
+  ),
+  /* @__PURE__ */ jsxDEV(
+    "path",
+    {
+      d: "M13.25 3.75v12.5",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.5",
+      strokeLinecap: "round",
+      opacity: "0.45"
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 152,
+      columnNumber: 5
+    },
+    this
+  )
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+  lineNumber: 137,
+  columnNumber: 1
+}, this);
+_c2 = WikiGenerateIcon;
+const MarkdownImportIcon = () => /* @__PURE__ */ jsxDEV("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", children: [
+  /* @__PURE__ */ jsxDEV(
+    "path",
+    {
+      d: "M6.5 3.75h4.4l2.85 2.85v7.4a2 2 0 0 1-2 2h-5.25a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.5",
+      strokeLinejoin: "round"
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 165,
+      columnNumber: 5
+    },
+    this
+  ),
+  /* @__PURE__ */ jsxDEV(
+    "path",
+    {
+      d: "M10.9 3.75V6.6h2.85M10 8.1v4.8M8.2 11.1 10 12.9l1.8-1.8",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.5",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 172,
+      columnNumber: 5
+    },
+    this
+  )
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+  lineNumber: 164,
+  columnNumber: 1
+}, this);
+_c3 = MarkdownImportIcon;
+const AssetImportIcon = () => /* @__PURE__ */ jsxDEV("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", children: [
+  /* @__PURE__ */ jsxDEV(
+    "path",
+    {
+      d: "M3.75 6.25a2 2 0 0 1 2-2h2.7l1.3 1.6h4.5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2v-7.6Z",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.5",
+      strokeLinejoin: "round"
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 185,
+      columnNumber: 5
+    },
+    this
+  ),
+  /* @__PURE__ */ jsxDEV(
+    "path",
+    {
+      d: "M10 7.9v4.5M8.2 10.6 10 12.4l1.8-1.8",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.5",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 192,
+      columnNumber: 5
+    },
+    this
+  )
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+  lineNumber: 184,
+  columnNumber: 1
+}, this);
+_c4 = AssetImportIcon;
+const NoteKindIcon = ({ kind }) => {
+  if (kind === "design") {
+    return /* @__PURE__ */ jsxDEV("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", children: /* @__PURE__ */ jsxDEV(
+      "path",
+      {
+        d: "M5.5 14.5 14.5 5.5M7 5.5h7.5v7.5",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "1.6",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 207,
+        columnNumber: 9
+      },
+      this
+    ) }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 206,
+      columnNumber: 7
+    }, this);
+  }
+  if (kind === "sketch") {
+    return /* @__PURE__ */ jsxDEV("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsxDEV(
+        "path",
+        {
+          d: "m5.5 13.8 6.9-6.9 2.1 2.1-6.9 6.9H5.5v-2.1Z",
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: "1.5",
+          strokeLinejoin: "round"
+        },
+        void 0,
+        false,
+        {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 222,
+          columnNumber: 9
+        },
+        this
+      ),
+      /* @__PURE__ */ jsxDEV(
+        "path",
+        {
+          d: "m11.7 7.6 1.7-1.7a1.3 1.3 0 0 1 1.9 0l.8.8a1.3 1.3 0 0 1 0 1.9l-1.7 1.7",
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: "1.5",
+          strokeLinecap: "round",
+          strokeLinejoin: "round"
+        },
+        void 0,
+        false,
+        {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 229,
+          columnNumber: 9
+        },
+        this
+      )
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 221,
+      columnNumber: 7
+    }, this);
+  }
+  return /* @__PURE__ */ jsxDEV("svg", { viewBox: "0 0 20 20", "aria-hidden": "true", children: [
+    /* @__PURE__ */ jsxDEV(
+      "path",
+      {
+        d: "M5.5 4.75h9a1.75 1.75 0 0 1 1.75 1.75v7a1.75 1.75 0 0 1-1.75 1.75h-9A1.75 1.75 0 0 1 3.75 13.5v-7A1.75 1.75 0 0 1 5.5 4.75Z",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "1.5",
+        strokeLinejoin: "round"
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 243,
+        columnNumber: 7
+      },
+      this
+    ),
+    /* @__PURE__ */ jsxDEV(
+      "path",
+      {
+        d: "M6.5 8.25h7M6.5 11.75h4.5",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "1.5",
+        strokeLinecap: "round"
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 250,
+        columnNumber: 7
+      },
+      this
+    )
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 242,
+    columnNumber: 5
+  }, this);
+};
+_c5 = NoteKindIcon;
+const formatUpdatedAt = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+};
+const summarizeBody = (value) => {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "还没有正文内容。";
+  }
+  return normalized.length > 88 ? `${normalized.slice(0, 88)}...` : normalized;
+};
+const getNoteMeta = (note) => {
+  if (note.docType) {
+    return DOC_TYPE_META[note.docType];
+  }
+  return NOTE_KIND_META[note.kind || "note"];
+};
+const renderNoteList = (title, notes, onSelectNote, emptyText, description) => /* @__PURE__ */ jsxDEV("section", { className: "gn-note-side-card", children: [
+  /* @__PURE__ */ jsxDEV("div", { className: "gn-note-side-card-header", children: [
+    /* @__PURE__ */ jsxDEV("div", { children: [
+      /* @__PURE__ */ jsxDEV("h4", { children: title }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 302,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("p", { children: description }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 303,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 301,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("span", { className: "gn-note-side-count", children: notes.length }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 305,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 300,
+    columnNumber: 5
+  }, this),
+  notes.length > 0 ? /* @__PURE__ */ jsxDEV("div", { className: "gn-note-relation-list", children: notes.map(
+    (note) => /* @__PURE__ */ jsxDEV("button", { type: "button", onClick: () => onSelectNote(note.id), children: [
+      /* @__PURE__ */ jsxDEV("strong", { children: note.title }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 311,
+        columnNumber: 13
+      }, this),
+      /* @__PURE__ */ jsxDEV("span", { children: note.matchSnippet || summarizeBody(note.bodyMarkdown) }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 312,
+        columnNumber: 13
+      }, this)
+    ] }, note.id, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 310,
+      columnNumber: 5
+    }, this)
+  ) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 308,
+    columnNumber: 3
+  }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty", children: emptyText }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 317,
+    columnNumber: 3
+  }, this)
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+  lineNumber: 299,
+  columnNumber: 1
+}, this);
+const renderAttachmentList = (title, attachments, onOpenAttachment, emptyText, description) => /* @__PURE__ */ jsxDEV("section", { className: "gn-note-side-card", children: [
+  /* @__PURE__ */ jsxDEV("div", { className: "gn-note-side-card-header", children: [
+    /* @__PURE__ */ jsxDEV("div", { children: [
+      /* @__PURE__ */ jsxDEV("h4", { children: title }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 332,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("p", { children: description }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 333,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 331,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("span", { className: "gn-note-side-count", children: attachments.length }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 335,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 330,
+    columnNumber: 5
+  }, this),
+  attachments.length > 0 ? /* @__PURE__ */ jsxDEV("div", { className: "gn-note-attachment-list", children: attachments.map(
+    (attachment) => /* @__PURE__ */ jsxDEV("button", { type: "button", onClick: () => onOpenAttachment(attachment.path), children: [
+      /* @__PURE__ */ jsxDEV("strong", { children: attachment.title }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 341,
+        columnNumber: 13
+      }, this),
+      /* @__PURE__ */ jsxDEV("span", { children: attachment.relativePath }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 342,
+        columnNumber: 13
+      }, this),
+      /* @__PURE__ */ jsxDEV("em", { children: ATTACHMENT_CATEGORY_LABELS[attachment.category] }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 343,
+        columnNumber: 13
+      }, this)
+    ] }, attachment.id, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 340,
+      columnNumber: 5
+    }, this)
+  ) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 338,
+    columnNumber: 3
+  }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty", children: emptyText }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 348,
+    columnNumber: 3
+  }, this)
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+  lineNumber: 329,
+  columnNumber: 1
+}, this);
+export const KnowledgeNoteWorkspace = ({
+  notes,
+  filteredNotes,
+  selectedNote,
+  activeFilter,
+  editorValue,
+  editable,
+  isSaving,
+  saveMessage,
+  canSave,
+  canUseForDesign,
+  searchValue,
+  isSearching,
+  isSyncing,
+  error,
+  documentEvents,
+  similarNotes,
+  neighborhoodGraph,
+  neighborhoodNotes,
+  graphNodeCount,
+  graphEdgeCount,
+  attachments,
+  nearbyAttachments,
+  libraryAttachments,
+  attachmentCategoryCounts,
+  onSearchChange,
+  onSelectNote,
+  onEditorChange,
+  onSave,
+  onDelete,
+  onUpload,
+  onImportAssets,
+  onOrganizeKnowledge,
+  onCreateNote,
+  onOpenGlobalWikiGraph,
+  onUseForDesign,
+  onFilterChange,
+  onOpenAttachment
+}) => {
+  _s();
+  const [isSideExpanded, setIsSideExpanded] = useState(false);
+  const searchActive = searchValue.trim().length > 0;
+  const visibleNotes = filteredNotes;
+  const visibleDocumentEvents = documentEvents.slice(0, 8);
+  const selectedNoteMeta = selectedNote ? getNoteMeta(selectedNote) : null;
+  const visibleAttachmentCount = attachments.length + nearbyAttachments.length + libraryAttachments.length;
+  const visibleNoteSections = useMemo(
+    () => NOTE_TREE_SECTIONS.map((section) => ({
+      ...section,
+      notes: visibleNotes.filter(section.matches)
+    })).filter((section) => section.notes.length > 0),
+    [visibleNotes]
+  );
+  const selectedNoteTags = useMemo(
+    () => selectedNote?.tags.filter((tag) => tag.trim().length > 0) || [],
+    [selectedNote]
+  );
+  const editorToolbar = canUseForDesign ? /* @__PURE__ */ jsxDEV("div", { className: "gn-note-header-toolbar", children: /* @__PURE__ */ jsxDEV("button", { className: "gn-note-toolbar-btn accent", type: "button", onClick: onUseForDesign, children: "AI" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 413,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 412,
+    columnNumber: 3
+  }, this) : null;
+  return /* @__PURE__ */ jsxDEV("section", { className: `gn-note-workspace ${isSideExpanded ? "side-expanded" : "side-collapsed"}`, children: [
+    /* @__PURE__ */ jsxDEV("aside", { className: "gn-note-rail", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-note-search-row", children: /* @__PURE__ */ jsxDEV(
+        "input",
+        {
+          className: "product-input",
+          type: "search",
+          value: searchValue,
+          onChange: (event) => onSearchChange(event.target.value),
+          placeholder: "搜索标题、正文、标签"
+        },
+        void 0,
+        false,
+        {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 424,
+          columnNumber: 11
+        },
+        this
+      ) }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 423,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "pm-knowledge-filter-tabs", children: FILTER_OPTIONS.map(
+        (option) => /* @__PURE__ */ jsxDEV(
+          "button",
+          {
+            className: activeFilter === option.id ? "active" : "",
+            type: "button",
+            onClick: () => onFilterChange(option.id),
+            children: option.label
+          },
+          option.id,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 435,
+            columnNumber: 11
+          },
+          this
+        )
+      ) }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 433,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-note-rail-actions", children: [
+        /* @__PURE__ */ jsxDEV(
+          "button",
+          {
+            className: "doc-action-btn gn-note-icon-btn gn-note-wiki-btn",
+            type: "button",
+            onClick: onOrganizeKnowledge,
+            title: "生成 Wiki",
+            "aria-label": "生成 Wiki",
+            children: /* @__PURE__ */ jsxDEV(WikiGenerateIcon, {}, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 454,
+              columnNumber: 13
+            }, this)
+          },
+          void 0,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 447,
+            columnNumber: 11
+          },
+          this
+        ),
+        /* @__PURE__ */ jsxDEV(
+          "button",
+          {
+            className: "doc-action-btn gn-note-icon-btn",
+            type: "button",
+            onClick: onCreateNote,
+            title: "新建笔记",
+            "aria-label": "新建笔记",
+            children: /* @__PURE__ */ jsxDEV(NoteAddIcon, {}, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 463,
+              columnNumber: 13
+            }, this)
+          },
+          void 0,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 456,
+            columnNumber: 11
+          },
+          this
+        ),
+        /* @__PURE__ */ jsxDEV(
+          "button",
+          {
+            className: "doc-action-btn secondary gn-note-icon-btn",
+            type: "button",
+            onClick: onUpload,
+            title: "导入 Markdown",
+            "aria-label": "导入 Markdown",
+            children: /* @__PURE__ */ jsxDEV(MarkdownImportIcon, {}, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 472,
+              columnNumber: 13
+            }, this)
+          },
+          void 0,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 465,
+            columnNumber: 11
+          },
+          this
+        ),
+        /* @__PURE__ */ jsxDEV(
+          "button",
+          {
+            className: "doc-action-btn secondary gn-note-icon-btn",
+            type: "button",
+            onClick: onImportAssets,
+            title: "导入资料",
+            "aria-label": "导入资料",
+            children: /* @__PURE__ */ jsxDEV(AssetImportIcon, {}, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 481,
+              columnNumber: 13
+            }, this)
+          },
+          void 0,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 474,
+            columnNumber: 11
+          },
+          this
+        )
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 446,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-note-stats", children: [
+        /* @__PURE__ */ jsxDEV("span", { children: [
+          notes.length,
+          " 条知识笔记"
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 486,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { children: [
+          visibleNotes.length,
+          " 条当前可见"
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 487,
+          columnNumber: 11
+        }, this),
+        isSearching ? /* @__PURE__ */ jsxDEV("span", { children: "搜索中" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 488,
+          columnNumber: 26
+        }, this) : null,
+        isSyncing ? /* @__PURE__ */ jsxDEV("span", { children: "同步中" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 489,
+          columnNumber: 24
+        }, this) : null
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 485,
+        columnNumber: 9
+      }, this),
+      error ? /* @__PURE__ */ jsxDEV("div", { className: "gn-note-error", children: error }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 492,
+        columnNumber: 18
+      }, this) : null,
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-note-list", children: visibleNotes.length > 0 ? visibleNoteSections.map(
+        (section) => /* @__PURE__ */ jsxDEV("section", { className: "gn-note-tree-section", "aria-label": section.label, children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-note-tree-section-header", children: [
+            /* @__PURE__ */ jsxDEV("span", { className: "gn-note-tree-section-title", children: section.label }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 499,
+              columnNumber: 19
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { className: "gn-note-tree-section-count", children: section.notes.length }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 500,
+              columnNumber: 19
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 498,
+            columnNumber: 17
+          }, this),
+          section.notes.map((note) => {
+            const noteMeta = getNoteMeta(note);
+            return /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: `gn-note-tree-item file ${selectedNote?.id === note.id ? "active" : ""}`,
+                type: "button",
+                title: note.sourceUrl || note.title,
+                onClick: () => onSelectNote(note.id),
+                children: [
+                  /* @__PURE__ */ jsxDEV("span", { className: "gn-note-tree-icon", "aria-hidden": "true", children: /* @__PURE__ */ jsxDEV(NoteKindIcon, { kind: note.kind }, void 0, false, {
+                    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                    lineNumber: 513,
+                    columnNumber: 25
+                  }, this) }, void 0, false, {
+                    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                    lineNumber: 512,
+                    columnNumber: 23
+                  }, this),
+                  /* @__PURE__ */ jsxDEV("span", { className: "gn-note-tree-label", children: note.title }, void 0, false, {
+                    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                    lineNumber: 515,
+                    columnNumber: 23
+                  }, this),
+                  searchActive && note.matchSnippet ? /* @__PURE__ */ jsxDEV("span", { className: "gn-note-tree-match", children: "命中" }, void 0, false, {
+                    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                    lineNumber: 516,
+                    columnNumber: 60
+                  }, this) : null,
+                  /* @__PURE__ */ jsxDEV("span", { className: "gn-note-tree-badge", children: noteMeta.badge }, void 0, false, {
+                    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                    lineNumber: 517,
+                    columnNumber: 23
+                  }, this)
+                ]
+              },
+              note.id,
+              true,
+              {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                lineNumber: 505,
+                columnNumber: 17
+              },
+              this
+            );
+          })
+        ] }, section.id, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 497,
+          columnNumber: 11
+        }, this)
+      ) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty", children: searchActive ? "没有匹配的笔记。" : "还没有知识笔记。" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 524,
+        columnNumber: 11
+      }, this) }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 494,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 421,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("main", { className: "gn-note-editor-column", children: selectedNote ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
+      /* @__PURE__ */ jsxDEV("header", { className: "gn-note-editor-header", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-note-editor-heading", children: [
+          /* @__PURE__ */ jsxDEV("span", { className: "gn-note-eyebrow", children: editable ? "Editable Markdown" : "Readonly Projection" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 534,
+            columnNumber: 17
+          }, this),
+          /* @__PURE__ */ jsxDEV("h2", { children: selectedNote.title }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 535,
+            columnNumber: 17
+          }, this),
+          /* @__PURE__ */ jsxDEV("p", { children: selectedNote.sourceUrl || "这条笔记还没有绑定源文件路径。" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 536,
+            columnNumber: 17
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-note-header-toolbar", children: [
+            /* @__PURE__ */ jsxDEV("span", { className: "gn-note-toolbar-btn active", role: "status", children: selectedNoteMeta?.label }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 538,
+              columnNumber: 19
+            }, this),
+            selectedNoteTags.map(
+              (tag) => /* @__PURE__ */ jsxDEV("span", { className: "gn-note-toolbar-btn", role: "status", children: [
+                "#",
+                tag
+              ] }, tag, true, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                lineNumber: 542,
+                columnNumber: 17
+              }, this)
+            )
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 537,
+            columnNumber: 17
+          }, this),
+          editorToolbar
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 533,
+          columnNumber: 15
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-note-editor-actions", children: editable ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
+          /* @__PURE__ */ jsxDEV("button", { className: "doc-action-btn secondary", type: "button", onClick: onDelete, children: "删除" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 552,
+            columnNumber: 21
+          }, this),
+          /* @__PURE__ */ jsxDEV("button", { className: "doc-action-btn", type: "button", onClick: onSave, disabled: !canSave, children: isSaving ? "保存中..." : "保存" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 555,
+            columnNumber: 21
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 551,
+          columnNumber: 15
+        }, this) : null }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 549,
+          columnNumber: 15
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 532,
+        columnNumber: 13
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-note-editor-surface", children: /* @__PURE__ */ jsxDEV(
+        AtomicMarkdownEditor,
+        {
+          value: editorValue,
+          onChange: onEditorChange,
+          editable
+        },
+        selectedNote.id,
+        false,
+        {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 564,
+          columnNumber: 15
+        },
+        this
+      ) }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 563,
+        columnNumber: 13
+      }, this),
+      /* @__PURE__ */ jsxDEV("footer", { className: "gn-note-editor-footer", children: [
+        /* @__PURE__ */ jsxDEV("span", { children: saveMessage || (editable ? "Markdown 请手动保存，也可以使用 Ctrl/Cmd+S。" : "当前是只读兼容投影。") }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 573,
+          columnNumber: 15
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { children: [
+          "更新于 ",
+          formatUpdatedAt(selectedNote.updatedAt)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 576,
+          columnNumber: 15
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 572,
+        columnNumber: 13
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 531,
+      columnNumber: 9
+    }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty-main", children: [
+      /* @__PURE__ */ jsxDEV("h2", { children: "选择或新建一条知识笔记" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 581,
+        columnNumber: 13
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty-actions", children: [
+        /* @__PURE__ */ jsxDEV("button", { className: "doc-action-btn", type: "button", onClick: onOrganizeKnowledge, children: "生成 Wiki" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 583,
+          columnNumber: 15
+        }, this),
+        /* @__PURE__ */ jsxDEV("button", { className: "doc-action-btn secondary", type: "button", onClick: onCreateNote, children: "新建笔记" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 586,
+          columnNumber: 15
+        }, this),
+        editorToolbar
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 582,
+        columnNumber: 13
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 580,
+      columnNumber: 9
+    }, this) }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 529,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("aside", { className: `gn-note-side ${isSideExpanded ? "expanded" : "collapsed"}`, children: [
+      /* @__PURE__ */ jsxDEV(
+        "button",
+        {
+          className: "gn-note-side-toggle",
+          type: "button",
+          onClick: () => setIsSideExpanded((current) => !current),
+          "aria-expanded": isSideExpanded,
+          children: isSideExpanded ? "收起" : "详情"
+        },
+        void 0,
+        false,
+        {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 596,
+          columnNumber: 9
+        },
+        this
+      ),
+      /* @__PURE__ */ jsxDEV("section", { className: "gn-note-side-card", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-note-side-card-header", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("h4", { children: "当前笔记" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 607,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("p", { children: "这里展示当前选中笔记的基础元信息。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 608,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 606,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { className: "gn-note-side-count", children: selectedNote ? 1 : 0 }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 610,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 605,
+          columnNumber: 11
+        }, this),
+        selectedNote ? /* @__PURE__ */ jsxDEV("dl", { className: "gn-note-meta-list", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("dt", { children: "类型" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 615,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("dd", { children: selectedNoteMeta?.label }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 616,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 614,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("dt", { children: "标签" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 619,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("dd", { children: selectedNoteTags.length > 0 ? selectedNoteTags.join(" / ") : "暂无标签" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 620,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 618,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("dt", { children: "来源" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 623,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("dd", { children: selectedNote.sourceUrl || "未绑定源文件" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 624,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 622,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("dt", { children: "摘要" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 627,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("dd", { children: selectedNote.matchSnippet || summarizeBody(selectedNote.bodyMarkdown) }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 628,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 626,
+            columnNumber: 15
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 613,
+          columnNumber: 11
+        }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty", children: "先从左侧选择一条笔记。" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 632,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 604,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("section", { className: "gn-note-side-card", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-note-side-card-header", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("h4", { children: "最近文档变更" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 639,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("p", { children: "记录新增、修改、删除和同步导入的最近动作。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 640,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 638,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { className: "gn-note-side-count", children: documentEvents.length }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 642,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 637,
+          columnNumber: 11
+        }, this),
+        visibleDocumentEvents.length > 0 ? /* @__PURE__ */ jsxDEV("div", { className: "gn-note-activity-list", children: visibleDocumentEvents.map(
+          (event) => /* @__PURE__ */ jsxDEV("div", { className: "gn-note-activity-item", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: event.documentTitle }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 648,
+              columnNumber: 19
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: event.summary }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 649,
+              columnNumber: 19
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { className: "gn-note-activity-meta", children: [
+              /* @__PURE__ */ jsxDEV("em", { children: DOCUMENT_EVENT_TRIGGER_LABELS[event.trigger] || event.trigger }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                lineNumber: 651,
+                columnNumber: 21
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { children: event.trigger }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                lineNumber: 652,
+                columnNumber: 21
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { children: formatUpdatedAt(event.timestamp) }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+                lineNumber: 653,
+                columnNumber: 21
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 650,
+              columnNumber: 19
+            }, this)
+          ] }, event.id, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 647,
+            columnNumber: 13
+          }, this)
+        ) }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 645,
+          columnNumber: 11
+        }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty", children: "还没有记录到文档变更。" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 659,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 636,
+        columnNumber: 9
+      }, this),
+      renderNoteList(
+        "类似笔记",
+        similarNotes,
+        onSelectNote,
+        "选中笔记后，这里会展示语义上更接近的内容。",
+        "快速查看和当前笔记最接近的知识条目。"
+      ),
+      /* @__PURE__ */ jsxDEV("section", { className: "gn-note-side-card", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-note-side-card-header", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("h4", { children: "Wiki 图谱" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 674,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("p", { children: "这里展示当前笔记的局部图谱，点击节点可以继续跳转到相邻上下文。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 675,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 673,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { className: "gn-note-side-count", children: graphNodeCount }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 677,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 672,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-note-graph-numbers", children: [
+          /* @__PURE__ */ jsxDEV("span", { children: [
+            graphNodeCount,
+            " 个节点"
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 680,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: [
+            graphEdgeCount,
+            " 条边"
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 681,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 679,
+          columnNumber: 11
+        }, this),
+        neighborhoodGraph ? /* @__PURE__ */ jsxDEV("div", { className: "gn-note-graph-preview", children: /* @__PURE__ */ jsxDEV(
+          KnowledgeGraphCanvas,
+          {
+            graph: neighborhoodGraph,
+            mode: "focused",
+            compact: true,
+            selectedNoteId: selectedNote?.id || null,
+            onSelectNode: onSelectNote
+          },
+          void 0,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 685,
+            columnNumber: 15
+          },
+          this
+        ) }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 684,
+          columnNumber: 11
+        }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty", children: "当前笔记附近还没有更多可展示的关系节点。" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 694,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("button", { className: "doc-action-btn secondary", type: "button", onClick: onOpenGlobalWikiGraph, children: "打开 Wiki 图谱" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 696,
+          columnNumber: 11
+        }, this),
+        neighborhoodNotes.length > 0 ? /* @__PURE__ */ jsxDEV("div", { className: "gn-note-relation-list", children: neighborhoodNotes.map(
+          (note) => /* @__PURE__ */ jsxDEV("button", { type: "button", onClick: () => onSelectNote(note.id), children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: note.title }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 703,
+              columnNumber: 19
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: note.matchSnippet || summarizeBody(note.bodyMarkdown) }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 704,
+              columnNumber: 19
+            }, this)
+          ] }, note.id, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 702,
+            columnNumber: 13
+          }, this)
+        ) }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 700,
+          columnNumber: 11
+        }, this) : null
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 671,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("section", { className: "gn-note-side-card", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-note-side-card-header", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("h4", { children: "附件资料" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 714,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("p", { children: "把直接引用、附近资料和资料库入口都放在这里，减少来回找文件。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 715,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 713,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { className: "gn-note-side-count", children: visibleAttachmentCount }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 717,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 712,
+          columnNumber: 11
+        }, this),
+        attachmentCategoryCounts.length > 0 ? /* @__PURE__ */ jsxDEV("div", { className: "gn-note-category-grid", children: attachmentCategoryCounts.map(
+          (item) => /* @__PURE__ */ jsxDEV("div", { className: "gn-note-category-chip", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: item.count }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 723,
+              columnNumber: 19
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: ATTACHMENT_CATEGORY_LABELS[item.category] }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+              lineNumber: 724,
+              columnNumber: 19
+            }, this)
+          ] }, item.category, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+            lineNumber: 722,
+            columnNumber: 13
+          }, this)
+        ) }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 720,
+          columnNumber: 11
+        }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty", children: "当前项目里还没有已识别的资料附件。" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+          lineNumber: 729,
+          columnNumber: 11
+        }, this),
+        renderAttachmentList(
+          "直接关联",
+          attachments,
+          onOpenAttachment,
+          "当前笔记还没有直接关联的资料。",
+          "正文里直接引用到的附件会优先出现在这里。"
+        ),
+        renderAttachmentList(
+          "附近资料",
+          nearbyAttachments,
+          onOpenAttachment,
+          "附近目录里还没有更多可用资料。",
+          "同目录或相邻目录的资料会作为就近参考展示。"
+        ),
+        renderAttachmentList(
+          "资料库",
+          libraryAttachments,
+          onOpenAttachment,
+          "资料库里还没有更多推荐附件。",
+          "面向整个项目知识库的可复用附件入口。"
+        )
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+        lineNumber: 711,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+      lineNumber: 595,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx",
+    lineNumber: 420,
+    columnNumber: 5
+  }, this);
+};
+_s(KnowledgeNoteWorkspace, "gh9ZvRdZ7Sc+WeIE7G7qi/g70W0=");
+_c6 = KnowledgeNoteWorkspace;
+var _c, _c2, _c3, _c4, _c5, _c6;
+$RefreshReg$(_c, "NoteAddIcon");
+$RefreshReg$(_c2, "WikiGenerateIcon");
+$RefreshReg$(_c3, "MarkdownImportIcon");
+$RefreshReg$(_c4, "AssetImportIcon");
+$RefreshReg$(_c5, "NoteKindIcon");
+$RefreshReg$(_c6, "KnowledgeNoteWorkspace");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBMEdJLFNBeWFjLFVBemFkOzs7Ozs7Ozs7Ozs7Ozs7OztBQTFHSixTQUFTQSxTQUFTQyxnQkFBZ0I7QUFDbEMsU0FBU0MsNEJBQTRCO0FBT3JDLFNBQVNDLDRCQUE0QjtBQWlEckMsTUFBTUMsZ0JBQWlHO0FBQUEsRUFDckcsY0FBYyxFQUFFQyxPQUFPLFFBQVFDLE9BQU8sVUFBVTtBQUFBLEVBQ2hELGNBQWMsRUFBRUQsT0FBTyxNQUFNQyxPQUFPLFFBQVE7QUFDOUM7QUFFQSxNQUFNQyxpQkFBK0Y7QUFBQSxFQUNuR0MsTUFBTSxFQUFFSCxPQUFPLFFBQVFDLE9BQU8sT0FBTztBQUFBLEVBQ3JDRyxRQUFRLEVBQUVKLE9BQU8sVUFBVUMsT0FBTyxPQUFPO0FBQUEsRUFDekNJLFFBQVEsRUFBRUwsT0FBTyxVQUFVQyxPQUFPLE9BQU87QUFDM0M7QUFFQSxNQUFNSyw2QkFBOEU7QUFBQSxFQUNsRkMsS0FBSztBQUFBLEVBQ0xDLE1BQU07QUFBQSxFQUNOQyxPQUFPO0FBQUEsRUFDUEMsT0FBTztBQUFBLEVBQ1BDLE1BQU07QUFBQSxFQUNOQyxPQUFPO0FBQ1Q7QUFFQSxNQUFNQyxpQkFBb0U7QUFBQSxFQUN4RSxFQUFFQyxJQUFJLE9BQU9iLE9BQU8sS0FBSztBQUFBLEVBQ3pCLEVBQUVhLElBQUksY0FBY2IsT0FBTyxPQUFPO0FBQUEsRUFDbEMsRUFBRWEsSUFBSSxjQUFjYixPQUFPLFFBQVE7QUFBQSxFQUNuQyxFQUFFYSxJQUFJLFFBQVFiLE9BQU8sS0FBSztBQUFBLEVBQzFCLEVBQUVhLElBQUksVUFBVWIsT0FBTyxLQUFLO0FBQUEsRUFDNUIsRUFBRWEsSUFBSSxVQUFVYixPQUFPLEtBQUs7QUFBQztBQUcvQixNQUFNYyxxQkFJRDtBQUFBLEVBQ0gsRUFBRUQsSUFBSSxjQUFjYixPQUFPLFdBQVdlLFNBQVNBLENBQUNiLFNBQVNBLEtBQUtjLFlBQVksYUFBYTtBQUFBLEVBQ3ZGLEVBQUVILElBQUksY0FBY2IsT0FBTyxTQUFTZSxTQUFTQSxDQUFDYixTQUFTQSxLQUFLYyxZQUFZLGFBQWE7QUFBQSxFQUNyRixFQUFFSCxJQUFJLFFBQVFiLE9BQU8sUUFBUWUsU0FBU0EsQ0FBQ2IsU0FBUyxDQUFDQSxLQUFLYyxZQUFZZCxLQUFLZSxRQUFRLFlBQVksT0FBTztBQUFBLEVBQ2xHLEVBQUVKLElBQUksVUFBVWIsT0FBTyxRQUFRZSxTQUFTQSxDQUFDYixTQUFTLENBQUNBLEtBQUtjLFdBQVdkLEtBQUtlLFNBQVMsU0FBUztBQUFBLEVBQzFGLEVBQUVKLElBQUksVUFBVWIsT0FBTyxRQUFRZSxTQUFTQSxDQUFDYixTQUFTLENBQUNBLEtBQUtjLFdBQVdkLEtBQUtlLFNBQVMsU0FBUztBQUFDO0FBRzdGLE1BQU1DLGdDQUFnRjtBQUFBLEVBQ3BGQyxRQUFRO0FBQUEsRUFDUkMsUUFBUTtBQUFBLEVBQ1JDLE1BQU07QUFDUjtBQUVBLE1BQU1DLGNBQWNBLE1BQ2xCLHVCQUFDLFNBQUksU0FBUSxhQUFZLGVBQVksUUFDbkM7QUFBQSxFQUFDO0FBQUE7QUFBQSxJQUNDLEdBQUU7QUFBQSxJQUNGLE1BQUs7QUFBQSxJQUNMLFFBQU87QUFBQSxJQUNQLGFBQVk7QUFBQSxJQUNaLGVBQWM7QUFBQTtBQUFBLEVBTGhCO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFLdUIsS0FOekI7QUFBQTtBQUFBO0FBQUE7QUFBQSxPQVFBO0FBQ0FDLEtBVklEO0FBWU4sTUFBTUUsbUJBQW1CQSxNQUN2Qix1QkFBQyxTQUFJLFNBQVEsYUFBWSxlQUFZLFFBQ25DO0FBQUE7QUFBQSxJQUFDO0FBQUE7QUFBQSxNQUNDLEdBQUU7QUFBQSxNQUNGLE1BQUs7QUFBQSxNQUNMLFFBQU87QUFBQSxNQUNQLGFBQVk7QUFBQSxNQUNaLGdCQUFlO0FBQUE7QUFBQSxJQUxqQjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsRUFLd0I7QUFBQSxFQUV4QjtBQUFBLElBQUM7QUFBQTtBQUFBLE1BQ0MsR0FBRTtBQUFBLE1BQ0YsTUFBSztBQUFBLE1BQ0wsUUFBTztBQUFBLE1BQ1AsYUFBWTtBQUFBLE1BQ1osZUFBYztBQUFBO0FBQUEsSUFMaEI7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLEVBS3VCO0FBQUEsRUFFdkI7QUFBQSxJQUFDO0FBQUE7QUFBQSxNQUNDLEdBQUU7QUFBQSxNQUNGLE1BQUs7QUFBQSxNQUNMLFFBQU87QUFBQSxNQUNQLGFBQVk7QUFBQSxNQUNaLGVBQWM7QUFBQSxNQUNkLFNBQVE7QUFBQTtBQUFBLElBTlY7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLEVBTWdCO0FBQUEsS0FyQmxCO0FBQUE7QUFBQTtBQUFBO0FBQUEsT0F1QkE7QUFDQUMsTUF6QklEO0FBMkJOLE1BQU1FLHFCQUFxQkEsTUFDekIsdUJBQUMsU0FBSSxTQUFRLGFBQVksZUFBWSxRQUNuQztBQUFBO0FBQUEsSUFBQztBQUFBO0FBQUEsTUFDQyxHQUFFO0FBQUEsTUFDRixNQUFLO0FBQUEsTUFDTCxRQUFPO0FBQUEsTUFDUCxhQUFZO0FBQUEsTUFDWixnQkFBZTtBQUFBO0FBQUEsSUFMakI7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLEVBS3dCO0FBQUEsRUFFeEI7QUFBQSxJQUFDO0FBQUE7QUFBQSxNQUNDLEdBQUU7QUFBQSxNQUNGLE1BQUs7QUFBQSxNQUNMLFFBQU87QUFBQSxNQUNQLGFBQVk7QUFBQSxNQUNaLGVBQWM7QUFBQSxNQUNkLGdCQUFlO0FBQUE7QUFBQSxJQU5qQjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsRUFNd0I7QUFBQSxLQWQxQjtBQUFBO0FBQUE7QUFBQTtBQUFBLE9BZ0JBO0FBQ0FDLE1BbEJJRDtBQW9CTixNQUFNRSxrQkFBa0JBLE1BQ3RCLHVCQUFDLFNBQUksU0FBUSxhQUFZLGVBQVksUUFDbkM7QUFBQTtBQUFBLElBQUM7QUFBQTtBQUFBLE1BQ0MsR0FBRTtBQUFBLE1BQ0YsTUFBSztBQUFBLE1BQ0wsUUFBTztBQUFBLE1BQ1AsYUFBWTtBQUFBLE1BQ1osZ0JBQWU7QUFBQTtBQUFBLElBTGpCO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxFQUt3QjtBQUFBLEVBRXhCO0FBQUEsSUFBQztBQUFBO0FBQUEsTUFDQyxHQUFFO0FBQUEsTUFDRixNQUFLO0FBQUEsTUFDTCxRQUFPO0FBQUEsTUFDUCxhQUFZO0FBQUEsTUFDWixlQUFjO0FBQUEsTUFDZCxnQkFBZTtBQUFBO0FBQUEsSUFOakI7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLEVBTXdCO0FBQUEsS0FkMUI7QUFBQTtBQUFBO0FBQUE7QUFBQSxPQWdCQTtBQUNBQyxNQWxCSUQ7QUFvQk4sTUFBTUUsZUFBZUEsQ0FBQyxFQUFFYixLQUF1QyxNQUFNO0FBQ25FLE1BQUlBLFNBQVMsVUFBVTtBQUNyQixXQUNFLHVCQUFDLFNBQUksU0FBUSxhQUFZLGVBQVksUUFDbkM7QUFBQSxNQUFDO0FBQUE7QUFBQSxRQUNDLEdBQUU7QUFBQSxRQUNGLE1BQUs7QUFBQSxRQUNMLFFBQU87QUFBQSxRQUNQLGFBQVk7QUFBQSxRQUNaLGVBQWM7QUFBQSxRQUNkLGdCQUFlO0FBQUE7QUFBQSxNQU5qQjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsSUFNd0IsS0FQMUI7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQVNBO0FBQUEsRUFFSjtBQUVBLE1BQUlBLFNBQVMsVUFBVTtBQUNyQixXQUNFLHVCQUFDLFNBQUksU0FBUSxhQUFZLGVBQVksUUFDbkM7QUFBQTtBQUFBLFFBQUM7QUFBQTtBQUFBLFVBQ0MsR0FBRTtBQUFBLFVBQ0YsTUFBSztBQUFBLFVBQ0wsUUFBTztBQUFBLFVBQ1AsYUFBWTtBQUFBLFVBQ1osZ0JBQWU7QUFBQTtBQUFBLFFBTGpCO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxNQUt3QjtBQUFBLE1BRXhCO0FBQUEsUUFBQztBQUFBO0FBQUEsVUFDQyxHQUFFO0FBQUEsVUFDRixNQUFLO0FBQUEsVUFDTCxRQUFPO0FBQUEsVUFDUCxhQUFZO0FBQUEsVUFDWixlQUFjO0FBQUEsVUFDZCxnQkFBZTtBQUFBO0FBQUEsUUFOakI7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLE1BTXdCO0FBQUEsU0FkMUI7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQWdCQTtBQUFBLEVBRUo7QUFFQSxTQUNFLHVCQUFDLFNBQUksU0FBUSxhQUFZLGVBQVksUUFDbkM7QUFBQTtBQUFBLE1BQUM7QUFBQTtBQUFBLFFBQ0MsR0FBRTtBQUFBLFFBQ0YsTUFBSztBQUFBLFFBQ0wsUUFBTztBQUFBLFFBQ1AsYUFBWTtBQUFBLFFBQ1osZ0JBQWU7QUFBQTtBQUFBLE1BTGpCO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxJQUt3QjtBQUFBLElBRXhCO0FBQUEsTUFBQztBQUFBO0FBQUEsUUFDQyxHQUFFO0FBQUEsUUFDRixNQUFLO0FBQUEsUUFDTCxRQUFPO0FBQUEsUUFDUCxhQUFZO0FBQUEsUUFDWixlQUFjO0FBQUE7QUFBQSxNQUxoQjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsSUFLdUI7QUFBQSxPQWJ6QjtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBZUE7QUFFSjtBQUFFYyxNQXhESUQ7QUEwRE4sTUFBTUUsa0JBQWtCQSxDQUFDQyxVQUFrQjtBQUN6QyxRQUFNQyxPQUFPLElBQUlDLEtBQUtGLEtBQUs7QUFDM0IsTUFBSUcsT0FBT0MsTUFBTUgsS0FBS0ksUUFBUSxDQUFDLEdBQUc7QUFDaEMsV0FBT0w7QUFBQUEsRUFDVDtBQUVBLFNBQU9DLEtBQUtLLG1CQUFtQixTQUFTO0FBQUEsSUFDdENDLE9BQU87QUFBQSxJQUNQQyxLQUFLO0FBQUEsSUFDTEMsTUFBTTtBQUFBLElBQ05DLFFBQVE7QUFBQSxFQUNWLENBQUM7QUFDSDtBQUVBLE1BQU1DLGdCQUFnQkEsQ0FBQ1gsVUFBa0I7QUFDdkMsUUFBTVksYUFBYVosTUFBTWEsUUFBUSxRQUFRLEdBQUcsRUFBRUMsS0FBSztBQUNuRCxNQUFJLENBQUNGLFlBQVk7QUFDZixXQUFPO0FBQUEsRUFDVDtBQUVBLFNBQU9BLFdBQVdHLFNBQVMsS0FBSyxHQUFHSCxXQUFXSSxNQUFNLEdBQUcsRUFBRSxDQUFDLFFBQVFKO0FBQ3BFO0FBRUEsTUFBTUssY0FBY0EsQ0FBQ2hELFNBQXdCO0FBQzNDLE1BQUlBLEtBQUtjLFNBQVM7QUFDaEIsV0FBT2xCLGNBQWNJLEtBQUtjLE9BQU87QUFBQSxFQUNuQztBQUVBLFNBQU9mLGVBQWVDLEtBQUtlLFFBQVEsTUFBTTtBQUMzQztBQUVBLE1BQU1rQyxpQkFBaUJBLENBQ3JCQyxPQUNBQyxPQUNBQyxjQUNBQyxXQUNBQyxnQkFFQSx1QkFBQyxhQUFRLFdBQVUscUJBQ2pCO0FBQUEseUJBQUMsU0FBSSxXQUFVLDRCQUNiO0FBQUEsMkJBQUMsU0FDQztBQUFBLDZCQUFDLFFBQUlKLG1CQUFMO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFBVztBQUFBLE1BQ1gsdUJBQUMsT0FBR0kseUJBQUo7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUFnQjtBQUFBLFNBRmxCO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FHQTtBQUFBLElBQ0EsdUJBQUMsVUFBSyxXQUFVLHNCQUFzQkgsZ0JBQU1MLFVBQTVDO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FBbUQ7QUFBQSxPQUxyRDtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBTUE7QUFBQSxFQUNDSyxNQUFNTCxTQUFTLElBQ2QsdUJBQUMsU0FBSSxXQUFVLHlCQUNaSyxnQkFBTUk7QUFBQUEsSUFBSSxDQUFDdkQsU0FDVix1QkFBQyxZQUFxQixNQUFLLFVBQVMsU0FBUyxNQUFNb0QsYUFBYXBELEtBQUtXLEVBQUUsR0FDckU7QUFBQSw2QkFBQyxZQUFRWCxlQUFLa0QsU0FBZDtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBQW9CO0FBQUEsTUFDcEIsdUJBQUMsVUFBTWxELGVBQUt3RCxnQkFBZ0JkLGNBQWMxQyxLQUFLeUQsWUFBWSxLQUEzRDtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBQTZEO0FBQUEsU0FGbER6RCxLQUFLVyxJQUFsQjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBR0E7QUFBQSxFQUNELEtBTkg7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQU9BLElBRUEsdUJBQUMsU0FBSSxXQUFVLGlCQUFpQjBDLHVCQUFoQztBQUFBO0FBQUE7QUFBQTtBQUFBLFNBQTBDO0FBQUEsS0FsQjlDO0FBQUE7QUFBQTtBQUFBO0FBQUEsT0FvQkE7QUFHRixNQUFNSyx1QkFBdUJBLENBQzNCUixPQUNBUyxhQUNBQyxrQkFDQVAsV0FDQUMsZ0JBRUEsdUJBQUMsYUFBUSxXQUFVLHFCQUNqQjtBQUFBLHlCQUFDLFNBQUksV0FBVSw0QkFDYjtBQUFBLDJCQUFDLFNBQ0M7QUFBQSw2QkFBQyxRQUFJSixtQkFBTDtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBQVc7QUFBQSxNQUNYLHVCQUFDLE9BQUdJLHlCQUFKO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFBZ0I7QUFBQSxTQUZsQjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBR0E7QUFBQSxJQUNBLHVCQUFDLFVBQUssV0FBVSxzQkFBc0JLLHNCQUFZYixVQUFsRDtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBQXlEO0FBQUEsT0FMM0Q7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQU1BO0FBQUEsRUFDQ2EsWUFBWWIsU0FBUyxJQUNwQix1QkFBQyxTQUFJLFdBQVUsMkJBQ1phLHNCQUFZSjtBQUFBQSxJQUFJLENBQUNNLGVBQ2hCLHVCQUFDLFlBQTJCLE1BQUssVUFBUyxTQUFTLE1BQU1ELGlCQUFpQkMsV0FBV0MsSUFBSSxHQUN2RjtBQUFBLDZCQUFDLFlBQVFELHFCQUFXWCxTQUFwQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBQTBCO0FBQUEsTUFDMUIsdUJBQUMsVUFBTVcscUJBQVdFLGdCQUFsQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBQStCO0FBQUEsTUFDL0IsdUJBQUMsUUFBSTVELHFDQUEyQjBELFdBQVdHLFFBQVEsS0FBbkQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUFxRDtBQUFBLFNBSDFDSCxXQUFXbEQsSUFBeEI7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQUlBO0FBQUEsRUFDRCxLQVBIO0FBQUE7QUFBQTtBQUFBO0FBQUEsU0FRQSxJQUVBLHVCQUFDLFNBQUksV0FBVSxpQkFBaUIwQyx1QkFBaEM7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQUEwQztBQUFBLEtBbkI5QztBQUFBO0FBQUE7QUFBQTtBQUFBLE9BcUJBO0FBR0ssYUFBTVkseUJBQXlCQSxDQUFDO0FBQUEsRUFDckNkO0FBQUFBLEVBQ0FlO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0F6QjtBQUFBQSxFQUNBMEI7QUFBQUEsRUFDQUM7QUFBQUEsRUFDQUM7QUFBQUEsRUFDQUM7QUFBQUEsRUFDQXBDO0FBQUFBLEVBQ0FxQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBdEM7QUFDMkIsTUFBTTtBQUFBdUMsS0FBQTtBQUNqQyxRQUFNLENBQUNDLGdCQUFnQkMsaUJBQWlCLElBQUk1RyxTQUFTLEtBQUs7QUFDMUQsUUFBTTZHLGVBQWUzQixZQUFZOUIsS0FBSyxFQUFFQyxTQUFTO0FBQ2pELFFBQU15RCxlQUFlckM7QUFDckIsUUFBTXNDLHdCQUF3QnpCLGVBQWVoQyxNQUFNLEdBQUcsQ0FBQztBQUN2RCxRQUFNMEQsbUJBQW1CdEMsZUFBZW5CLFlBQVltQixZQUFZLElBQUk7QUFDcEUsUUFBTXVDLHlCQUF5Qi9DLFlBQVliLFNBQVN1QyxrQkFBa0J2QyxTQUFTd0MsbUJBQW1CeEM7QUFDbEcsUUFBTTZELHNCQUFzQm5IO0FBQUFBLElBQzFCLE1BQ0VvQixtQkFBbUIyQyxJQUFJLENBQUNxRCxhQUFhO0FBQUEsTUFDbkMsR0FBR0E7QUFBQUEsTUFDSHpELE9BQU9vRCxhQUFhTSxPQUFPRCxRQUFRL0YsT0FBTztBQUFBLElBQzVDLEVBQUUsRUFBRWdHLE9BQU8sQ0FBQ0QsWUFBWUEsUUFBUXpELE1BQU1MLFNBQVMsQ0FBQztBQUFBLElBQ2xELENBQUN5RCxZQUFZO0FBQUEsRUFDZjtBQUNBLFFBQU1PLG1CQUFtQnRIO0FBQUFBLElBQ3ZCLE1BQU0yRSxjQUFjNEMsS0FBS0YsT0FBTyxDQUFDRyxRQUFRQSxJQUFJbkUsS0FBSyxFQUFFQyxTQUFTLENBQUMsS0FBSztBQUFBLElBQ25FLENBQUNxQixZQUFZO0FBQUEsRUFDZjtBQUVBLFFBQU04QyxnQkFBZ0J2QyxrQkFDcEIsdUJBQUMsU0FBSSxXQUFVLDBCQUNiLGlDQUFDLFlBQU8sV0FBVSw4QkFBNkIsTUFBSyxVQUFTLFNBQVN1QixnQkFBZ0Isa0JBQXRGO0FBQUE7QUFBQTtBQUFBO0FBQUEsU0FFQSxLQUhGO0FBQUE7QUFBQTtBQUFBO0FBQUEsU0FJQSxJQUNFO0FBRUosU0FDRSx1QkFBQyxhQUFRLFdBQVcscUJBQXFCRyxpQkFBaUIsa0JBQWtCLGdCQUFnQixJQUMxRjtBQUFBLDJCQUFDLFdBQU0sV0FBVSxnQkFFZjtBQUFBLDZCQUFDLFNBQUksV0FBVSxzQkFDYjtBQUFBLFFBQUM7QUFBQTtBQUFBLFVBQ0MsV0FBVTtBQUFBLFVBQ1YsTUFBSztBQUFBLFVBQ0wsT0FBT3pCO0FBQUFBLFVBQ1AsVUFBVSxDQUFDdUMsVUFBVTFCLGVBQWUwQixNQUFNQyxPQUFPcEYsS0FBSztBQUFBLFVBQ3RELGFBQVk7QUFBQTtBQUFBLFFBTGQ7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLE1BSzBCLEtBTjVCO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFRQTtBQUFBLE1BRUEsdUJBQUMsU0FBSSxXQUFVLDRCQUNackIseUJBQWU2QztBQUFBQSxRQUFJLENBQUM2RCxXQUNuQjtBQUFBLFVBQUM7QUFBQTtBQUFBLFlBRUMsV0FBV2hELGlCQUFpQmdELE9BQU96RyxLQUFLLFdBQVc7QUFBQSxZQUNuRCxNQUFLO0FBQUEsWUFDTCxTQUFTLE1BQU11RixlQUFla0IsT0FBT3pHLEVBQUU7QUFBQSxZQUV0Q3lHLGlCQUFPdEg7QUFBQUE7QUFBQUEsVUFMSHNILE9BQU96RztBQUFBQSxVQURkO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsUUFPQTtBQUFBLE1BQ0QsS0FWSDtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBV0E7QUFBQSxNQUVBLHVCQUFDLFNBQUksV0FBVSx3QkFDYjtBQUFBO0FBQUEsVUFBQztBQUFBO0FBQUEsWUFDQyxXQUFVO0FBQUEsWUFDVixNQUFLO0FBQUEsWUFDTCxTQUFTbUY7QUFBQUEsWUFDVCxPQUFNO0FBQUEsWUFDTixjQUFXO0FBQUEsWUFFWCxpQ0FBQyxzQkFBRDtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUFpQjtBQUFBO0FBQUEsVUFQbkI7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLFFBUUE7QUFBQSxRQUNBO0FBQUEsVUFBQztBQUFBO0FBQUEsWUFDQyxXQUFVO0FBQUEsWUFDVixNQUFLO0FBQUEsWUFDTCxTQUFTQztBQUFBQSxZQUNULE9BQU07QUFBQSxZQUNOLGNBQVc7QUFBQSxZQUVYLGlDQUFDLGlCQUFEO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQVk7QUFBQTtBQUFBLFVBUGQ7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLFFBUUE7QUFBQSxRQUNBO0FBQUEsVUFBQztBQUFBO0FBQUEsWUFDQyxXQUFVO0FBQUEsWUFDVixNQUFLO0FBQUEsWUFDTCxTQUFTSDtBQUFBQSxZQUNULE9BQU07QUFBQSxZQUNOLGNBQVc7QUFBQSxZQUVYLGlDQUFDLHdCQUFEO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQW1CO0FBQUE7QUFBQSxVQVByQjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsUUFRQTtBQUFBLFFBQ0E7QUFBQSxVQUFDO0FBQUE7QUFBQSxZQUNDLFdBQVU7QUFBQSxZQUNWLE1BQUs7QUFBQSxZQUNMLFNBQVNDO0FBQUFBLFlBQ1QsT0FBTTtBQUFBLFlBQ04sY0FBVztBQUFBLFlBRVgsaUNBQUMscUJBQUQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBZ0I7QUFBQTtBQUFBLFVBUGxCO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxRQVFBO0FBQUEsV0FwQ0Y7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQXFDQTtBQUFBLE1BRUEsdUJBQUMsU0FBSSxXQUFVLGlCQUNiO0FBQUEsK0JBQUMsVUFBTTFDO0FBQUFBLGdCQUFNTDtBQUFBQSxVQUFPO0FBQUEsYUFBcEI7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQUEwQjtBQUFBLFFBQzFCLHVCQUFDLFVBQU15RDtBQUFBQSx1QkFBYXpEO0FBQUFBLFVBQU87QUFBQSxhQUEzQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQWlDO0FBQUEsUUFDaEM4QixjQUFjLHVCQUFDLFVBQUssbUJBQU47QUFBQTtBQUFBO0FBQUE7QUFBQSxlQUFTLElBQVU7QUFBQSxRQUNqQ0MsWUFBWSx1QkFBQyxVQUFLLG1CQUFOO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBUyxJQUFVO0FBQUEsV0FKbEM7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUtBO0FBQUEsTUFFQ0MsUUFBUSx1QkFBQyxTQUFJLFdBQVUsaUJBQWlCQSxtQkFBaEM7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUFzQyxJQUFTO0FBQUEsTUFFeEQsdUJBQUMsU0FBSSxXQUFVLGdCQUNaeUIsdUJBQWF6RCxTQUFTLElBQ3JCNkQsb0JBQW9CcEQ7QUFBQUEsUUFBSSxDQUFDcUQsWUFDdkIsdUJBQUMsYUFBeUIsV0FBVSx3QkFBdUIsY0FBWUEsUUFBUTlHLE9BQzdFO0FBQUEsaUNBQUMsU0FBSSxXQUFVLCtCQUNiO0FBQUEsbUNBQUMsVUFBSyxXQUFVLDhCQUE4QjhHLGtCQUFROUcsU0FBdEQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBNEQ7QUFBQSxZQUM1RCx1QkFBQyxVQUFLLFdBQVUsOEJBQThCOEcsa0JBQVF6RCxNQUFNTCxVQUE1RDtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUFtRTtBQUFBLGVBRnJFO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBR0E7QUFBQSxVQUNDOEQsUUFBUXpELE1BQU1JLElBQUksQ0FBQ3ZELFNBQVM7QUFDM0Isa0JBQU1xSCxXQUFXckUsWUFBWWhELElBQUk7QUFDakMsbUJBQ0U7QUFBQSxjQUFDO0FBQUE7QUFBQSxnQkFFQyxXQUFXLDBCQUEwQm1FLGNBQWN4RCxPQUFPWCxLQUFLVyxLQUFLLFdBQVcsRUFBRTtBQUFBLGdCQUNqRixNQUFLO0FBQUEsZ0JBQ0wsT0FBT1gsS0FBS3NILGFBQWF0SCxLQUFLa0Q7QUFBQUEsZ0JBQzlCLFNBQVMsTUFBTUUsYUFBYXBELEtBQUtXLEVBQUU7QUFBQSxnQkFFbkM7QUFBQSx5Q0FBQyxVQUFLLFdBQVUscUJBQW9CLGVBQVksUUFDOUMsaUNBQUMsZ0JBQWEsTUFBTVgsS0FBS2UsUUFBekI7QUFBQTtBQUFBO0FBQUE7QUFBQSx5QkFBOEIsS0FEaEM7QUFBQTtBQUFBO0FBQUE7QUFBQSx5QkFFQTtBQUFBLGtCQUNBLHVCQUFDLFVBQUssV0FBVSxzQkFBc0JmLGVBQUtrRCxTQUEzQztBQUFBO0FBQUE7QUFBQTtBQUFBLHlCQUFpRDtBQUFBLGtCQUNoRG9ELGdCQUFnQnRHLEtBQUt3RCxlQUFlLHVCQUFDLFVBQUssV0FBVSxzQkFBcUIsa0JBQXJDO0FBQUE7QUFBQTtBQUFBO0FBQUEseUJBQXVDLElBQVU7QUFBQSxrQkFDdEYsdUJBQUMsVUFBSyxXQUFVLHNCQUFzQjZELG1CQUFTeEgsU0FBL0M7QUFBQTtBQUFBO0FBQUE7QUFBQSx5QkFBcUQ7QUFBQTtBQUFBO0FBQUEsY0FYaERHLEtBQUtXO0FBQUFBLGNBRFo7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxZQWFBO0FBQUEsVUFFSixDQUFDO0FBQUEsYUF2QldpRyxRQUFRakcsSUFBdEI7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQXdCQTtBQUFBLE1BQ0QsSUFFRCx1QkFBQyxTQUFJLFdBQVUsaUJBQWlCMkYseUJBQWUsYUFBYSxjQUE1RDtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBQXVFLEtBOUIzRTtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBZ0NBO0FBQUEsU0F6R0Y7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQTBHQTtBQUFBLElBRUEsdUJBQUMsVUFBSyxXQUFVLHlCQUNibkMseUJBQ0MsbUNBQ0U7QUFBQSw2QkFBQyxZQUFPLFdBQVUseUJBQ2hCO0FBQUEsK0JBQUMsU0FBSSxXQUFVLDBCQUNiO0FBQUEsaUNBQUMsVUFBSyxXQUFVLG1CQUFtQkcscUJBQVcsc0JBQXNCLHlCQUFwRTtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUEwRjtBQUFBLFVBQzFGLHVCQUFDLFFBQUlILHVCQUFhakIsU0FBbEI7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFBd0I7QUFBQSxVQUN4Qix1QkFBQyxPQUFHaUIsdUJBQWFtRCxhQUFhLHFCQUE5QjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUFnRDtBQUFBLFVBQ2hELHVCQUFDLFNBQUksV0FBVSwwQkFDYjtBQUFBLG1DQUFDLFVBQUssV0FBVSw4QkFBNkIsTUFBSyxVQUMvQ2IsNEJBQWtCM0csU0FEckI7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFFQTtBQUFBLFlBQ0NnSCxpQkFBaUJ2RDtBQUFBQSxjQUFJLENBQUN5RCxRQUNyQix1QkFBQyxVQUFlLFdBQVUsdUJBQXNCLE1BQUssVUFBUztBQUFBO0FBQUEsZ0JBQzFEQTtBQUFBQSxtQkFET0EsS0FBWDtBQUFBO0FBQUE7QUFBQTtBQUFBLHFCQUVBO0FBQUEsWUFDRDtBQUFBLGVBUkg7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFTQTtBQUFBLFVBQ0NDO0FBQUFBLGFBZEg7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQWVBO0FBQUEsUUFDQSx1QkFBQyxTQUFJLFdBQVUsMEJBQ1ozQyxxQkFDQyxtQ0FDRTtBQUFBLGlDQUFDLFlBQU8sV0FBVSw0QkFBMkIsTUFBSyxVQUFTLFNBQVNxQixVQUFVLGtCQUE5RTtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUVBO0FBQUEsVUFDQSx1QkFBQyxZQUFPLFdBQVUsa0JBQWlCLE1BQUssVUFBUyxTQUFTRCxRQUFRLFVBQVUsQ0FBQ2pCLFNBQzFFRixxQkFBVyxXQUFXLFFBRHpCO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBRUE7QUFBQSxhQU5GO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFPQSxJQUNFLFFBVk47QUFBQTtBQUFBO0FBQUE7QUFBQSxlQVdBO0FBQUEsV0E1QkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQTZCQTtBQUFBLE1BRUEsdUJBQUMsU0FBSSxXQUFVLDBCQUNiO0FBQUEsUUFBQztBQUFBO0FBQUEsVUFFQyxPQUFPRjtBQUFBQSxVQUNQLFVBQVVvQjtBQUFBQSxVQUNWO0FBQUE7QUFBQSxRQUhLdEIsYUFBYXhEO0FBQUFBLFFBRHBCO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsTUFJcUIsS0FMdkI7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQU9BO0FBQUEsTUFFQSx1QkFBQyxZQUFPLFdBQVUseUJBQ2hCO0FBQUEsK0JBQUMsVUFDRTZELDBCQUFnQkYsV0FBVyxxQ0FBcUMsaUJBRG5FO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFFQTtBQUFBLFFBQ0EsdUJBQUMsVUFBSztBQUFBO0FBQUEsVUFBS3hDLGdCQUFnQnFDLGFBQWFvRCxTQUFTO0FBQUEsYUFBakQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQUFtRDtBQUFBLFdBSnJEO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFLQTtBQUFBLFNBOUNGO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0ErQ0EsSUFFQSx1QkFBQyxTQUFJLFdBQVUsc0JBQ2I7QUFBQSw2QkFBQyxRQUFHLDJCQUFKO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFBZTtBQUFBLE1BQ2YsdUJBQUMsU0FBSSxXQUFVLHlCQUNiO0FBQUEsK0JBQUMsWUFBTyxXQUFVLGtCQUFpQixNQUFLLFVBQVMsU0FBU3pCLHFCQUFxQix1QkFBL0U7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQUVBO0FBQUEsUUFDQSx1QkFBQyxZQUFPLFdBQVUsNEJBQTJCLE1BQUssVUFBUyxTQUFTQyxjQUFjLG9CQUFsRjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBRUE7QUFBQSxRQUNDa0I7QUFBQUEsV0FQSDtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBUUE7QUFBQSxTQVZGO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FXQSxLQTlESjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBZ0VBO0FBQUEsSUFFQSx1QkFBQyxXQUFNLFdBQVcsZ0JBQWdCYixpQkFBaUIsYUFBYSxXQUFXLElBQ3pFO0FBQUE7QUFBQSxRQUFDO0FBQUE7QUFBQSxVQUNDLFdBQVU7QUFBQSxVQUNWLE1BQUs7QUFBQSxVQUNMLFNBQVMsTUFBTUMsa0JBQWtCLENBQUNtQixZQUFZLENBQUNBLE9BQU87QUFBQSxVQUN0RCxpQkFBZXBCO0FBQUFBLFVBRWRBLDJCQUFpQixPQUFPO0FBQUE7QUFBQSxRQU4zQjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsTUFPQTtBQUFBLE1BQ0EsdUJBQUMsYUFBUSxXQUFVLHFCQUNqQjtBQUFBLCtCQUFDLFNBQUksV0FBVSw0QkFDYjtBQUFBLGlDQUFDLFNBQ0M7QUFBQSxtQ0FBQyxRQUFHLG9CQUFKO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQVE7QUFBQSxZQUNSLHVCQUFDLE9BQUUsaUNBQUg7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBb0I7QUFBQSxlQUZ0QjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUdBO0FBQUEsVUFDQSx1QkFBQyxVQUFLLFdBQVUsc0JBQXNCakMseUJBQWUsSUFBSSxLQUF6RDtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUEyRDtBQUFBLGFBTDdEO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFNQTtBQUFBLFFBQ0NBLGVBQ0MsdUJBQUMsUUFBRyxXQUFVLHFCQUNaO0FBQUEsaUNBQUMsU0FDQztBQUFBLG1DQUFDLFFBQUcsa0JBQUo7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBTTtBQUFBLFlBQ04sdUJBQUMsUUFBSXNDLDRCQUFrQjNHLFNBQXZCO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQTZCO0FBQUEsZUFGL0I7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFHQTtBQUFBLFVBQ0EsdUJBQUMsU0FDQztBQUFBLG1DQUFDLFFBQUcsa0JBQUo7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBTTtBQUFBLFlBQ04sdUJBQUMsUUFBSWdILDJCQUFpQmhFLFNBQVMsSUFBSWdFLGlCQUFpQlcsS0FBSyxLQUFLLElBQUksVUFBbEU7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBeUU7QUFBQSxlQUYzRTtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUdBO0FBQUEsVUFDQSx1QkFBQyxTQUNDO0FBQUEsbUNBQUMsUUFBRyxrQkFBSjtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUFNO0FBQUEsWUFDTix1QkFBQyxRQUFJdEQsdUJBQWFtRCxhQUFhLFlBQS9CO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQXdDO0FBQUEsZUFGMUM7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFHQTtBQUFBLFVBQ0EsdUJBQUMsU0FDQztBQUFBLG1DQUFDLFFBQUcsa0JBQUo7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBTTtBQUFBLFlBQ04sdUJBQUMsUUFBSW5ELHVCQUFhWCxnQkFBZ0JkLGNBQWN5QixhQUFhVixZQUFZLEtBQXpFO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQTJFO0FBQUEsZUFGN0U7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFHQTtBQUFBLGFBaEJGO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFpQkEsSUFFQSx1QkFBQyxTQUFJLFdBQVUsaUJBQWdCLDJCQUEvQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQTBDO0FBQUEsV0E1QjlDO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUE4QkE7QUFBQSxNQUVBLHVCQUFDLGFBQVEsV0FBVSxxQkFDakI7QUFBQSwrQkFBQyxTQUFJLFdBQVUsNEJBQ2I7QUFBQSxpQ0FBQyxTQUNDO0FBQUEsbUNBQUMsUUFBRyxzQkFBSjtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUFVO0FBQUEsWUFDVix1QkFBQyxPQUFFLHFDQUFIO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQXdCO0FBQUEsZUFGMUI7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFHQTtBQUFBLFVBQ0EsdUJBQUMsVUFBSyxXQUFVLHNCQUFzQnNCLHlCQUFlakMsVUFBckQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFBNEQ7QUFBQSxhQUw5RDtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBTUE7QUFBQSxRQUNDMEQsc0JBQXNCMUQsU0FBUyxJQUM5Qix1QkFBQyxTQUFJLFdBQVUseUJBQ1owRCxnQ0FBc0JqRDtBQUFBQSxVQUFJLENBQUMyRCxVQUMxQix1QkFBQyxTQUFtQixXQUFVLHlCQUM1QjtBQUFBLG1DQUFDLFlBQVFBLGdCQUFNUSxpQkFBZjtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUE2QjtBQUFBLFlBQzdCLHVCQUFDLFVBQU1SLGdCQUFNUyxXQUFiO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQXFCO0FBQUEsWUFDckIsdUJBQUMsU0FBSSxXQUFVLHlCQUNiO0FBQUEscUNBQUMsUUFBSTNHLHdDQUE4QmtHLE1BQU1VLE9BQU8sS0FBS1YsTUFBTVUsV0FBM0Q7QUFBQTtBQUFBO0FBQUE7QUFBQSxxQkFBbUU7QUFBQSxjQUNuRSx1QkFBQyxVQUFNVixnQkFBTVUsV0FBYjtBQUFBO0FBQUE7QUFBQTtBQUFBLHFCQUFxQjtBQUFBLGNBQ3JCLHVCQUFDLFVBQU05RiwwQkFBZ0JvRixNQUFNVyxTQUFTLEtBQXRDO0FBQUE7QUFBQTtBQUFBO0FBQUEscUJBQXdDO0FBQUEsaUJBSDFDO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBSUE7QUFBQSxlQVBRWCxNQUFNdkcsSUFBaEI7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFRQTtBQUFBLFFBQ0QsS0FYSDtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBWUEsSUFFQSx1QkFBQyxTQUFJLFdBQVUsaUJBQWdCLDJCQUEvQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQTBDO0FBQUEsV0F2QjlDO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUF5QkE7QUFBQSxNQUVDc0M7QUFBQUEsUUFDQztBQUFBLFFBQ0ErQjtBQUFBQSxRQUNBNUI7QUFBQUEsUUFDQTtBQUFBLFFBQ0E7QUFBQSxNQUNGO0FBQUEsTUFFQSx1QkFBQyxhQUFRLFdBQVUscUJBQ2pCO0FBQUEsK0JBQUMsU0FBSSxXQUFVLDRCQUNiO0FBQUEsaUNBQUMsU0FDQztBQUFBLG1DQUFDLFFBQUcsdUJBQUo7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBVztBQUFBLFlBQ1gsdUJBQUMsT0FBRSwrQ0FBSDtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUFrQztBQUFBLGVBRnBDO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBR0E7QUFBQSxVQUNBLHVCQUFDLFVBQUssV0FBVSxzQkFBc0IrQiw0QkFBdEM7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFBcUQ7QUFBQSxhQUx2RDtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBTUE7QUFBQSxRQUNBLHVCQUFDLFNBQUksV0FBVSx5QkFDYjtBQUFBLGlDQUFDLFVBQU1BO0FBQUFBO0FBQUFBLFlBQWU7QUFBQSxlQUF0QjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUEwQjtBQUFBLFVBQzFCLHVCQUFDLFVBQU1DO0FBQUFBO0FBQUFBLFlBQWU7QUFBQSxlQUF0QjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUF5QjtBQUFBLGFBRjNCO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFHQTtBQUFBLFFBQ0NILG9CQUNDLHVCQUFDLFNBQUksV0FBVSx5QkFDYjtBQUFBLFVBQUM7QUFBQTtBQUFBLFlBQ0MsT0FBT0E7QUFBQUEsWUFDUCxNQUFLO0FBQUEsWUFDTDtBQUFBLFlBQ0EsZ0JBQWdCZCxjQUFjeEQsTUFBTTtBQUFBLFlBQ3BDLGNBQWN5QztBQUFBQTtBQUFBQSxVQUxoQjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsUUFLNkIsS0FOL0I7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQVFBLElBRUEsdUJBQUMsU0FBSSxXQUFVLGlCQUFnQixvQ0FBL0I7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQUFtRDtBQUFBLFFBRXJELHVCQUFDLFlBQU8sV0FBVSw0QkFBMkIsTUFBSyxVQUFTLFNBQVM0Qyx1QkFBdUIsMEJBQTNGO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFFQTtBQUFBLFFBQ0NkLGtCQUFrQnBDLFNBQVMsSUFDMUIsdUJBQUMsU0FBSSxXQUFVLHlCQUNab0MsNEJBQWtCM0I7QUFBQUEsVUFBSSxDQUFDdkQsU0FDdEIsdUJBQUMsWUFBcUIsTUFBSyxVQUFTLFNBQVMsTUFBTW9ELGFBQWFwRCxLQUFLVyxFQUFFLEdBQ3JFO0FBQUEsbUNBQUMsWUFBUVgsZUFBS2tELFNBQWQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBb0I7QUFBQSxZQUNwQix1QkFBQyxVQUFNbEQsZUFBS3dELGdCQUFnQmQsY0FBYzFDLEtBQUt5RCxZQUFZLEtBQTNEO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQTZEO0FBQUEsZUFGbER6RCxLQUFLVyxJQUFsQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUdBO0FBQUEsUUFDRCxLQU5IO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFPQSxJQUNFO0FBQUEsV0FyQ047QUFBQTtBQUFBO0FBQUE7QUFBQSxhQXNDQTtBQUFBLE1BRUEsdUJBQUMsYUFBUSxXQUFVLHFCQUNqQjtBQUFBLCtCQUFDLFNBQUksV0FBVSw0QkFDYjtBQUFBLGlDQUFDLFNBQ0M7QUFBQSxtQ0FBQyxRQUFHLG9CQUFKO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQVE7QUFBQSxZQUNSLHVCQUFDLE9BQUUsOENBQUg7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBaUM7QUFBQSxlQUZuQztBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUdBO0FBQUEsVUFDQSx1QkFBQyxVQUFLLFdBQVUsc0JBQXNCK0Ysb0NBQXRDO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBQTZEO0FBQUEsYUFML0Q7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQU1BO0FBQUEsUUFDQ25CLHlCQUF5QnpDLFNBQVMsSUFDakMsdUJBQUMsU0FBSSxXQUFVLHlCQUNaeUMsbUNBQXlCaEM7QUFBQUEsVUFBSSxDQUFDdUUsU0FDN0IsdUJBQUMsU0FBd0IsV0FBVSx5QkFDakM7QUFBQSxtQ0FBQyxZQUFRQSxlQUFLQyxTQUFkO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQW9CO0FBQUEsWUFDcEIsdUJBQUMsVUFBTTVILHFDQUEyQjJILEtBQUs5RCxRQUFRLEtBQS9DO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQWlEO0FBQUEsZUFGekM4RCxLQUFLOUQsVUFBZjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUdBO0FBQUEsUUFDRCxLQU5IO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFPQSxJQUVBLHVCQUFDLFNBQUksV0FBVSxpQkFBZ0IsaUNBQS9CO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBZ0Q7QUFBQSxRQUdqRE47QUFBQUEsVUFDQztBQUFBLFVBQ0FDO0FBQUFBLFVBQ0FDO0FBQUFBLFVBQ0E7QUFBQSxVQUNBO0FBQUEsUUFDRjtBQUFBLFFBQ0NGO0FBQUFBLFVBQ0M7QUFBQSxVQUNBMkI7QUFBQUEsVUFDQXpCO0FBQUFBLFVBQ0E7QUFBQSxVQUNBO0FBQUEsUUFDRjtBQUFBLFFBQ0NGO0FBQUFBLFVBQ0M7QUFBQSxVQUNBNEI7QUFBQUEsVUFDQTFCO0FBQUFBLFVBQ0E7QUFBQSxVQUNBO0FBQUEsUUFDRjtBQUFBLFdBekNGO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUEwQ0E7QUFBQSxTQTlKRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBK0pBO0FBQUEsT0E5VUY7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQStVQTtBQUVKO0FBQUV1QyxHQXBaV2xDLHdCQUFzQjtBQUFBLE1BQXRCQTtBQUFzQixJQUFBNUMsSUFBQUUsS0FBQUUsS0FBQUUsS0FBQUUsS0FBQW1HO0FBQUEsYUFBQTNHLElBQUE7QUFBQSxhQUFBRSxLQUFBO0FBQUEsYUFBQUUsS0FBQTtBQUFBLGFBQUFFLEtBQUE7QUFBQSxhQUFBRSxLQUFBO0FBQUEsYUFBQW1HLEtBQUEiLCJuYW1lcyI6WyJ1c2VNZW1vIiwidXNlU3RhdGUiLCJBdG9taWNNYXJrZG93bkVkaXRvciIsIktub3dsZWRnZUdyYXBoQ2FudmFzIiwiRE9DX1RZUEVfTUVUQSIsImJhZGdlIiwibGFiZWwiLCJOT1RFX0tJTkRfTUVUQSIsIm5vdGUiLCJza2V0Y2giLCJkZXNpZ24iLCJBVFRBQ0hNRU5UX0NBVEVHT1JZX0xBQkVMUyIsInBkZiIsIndvcmQiLCJzaGVldCIsInNsaWRlIiwidGV4dCIsIm90aGVyIiwiRklMVEVSX09QVElPTlMiLCJpZCIsIk5PVEVfVFJFRV9TRUNUSU9OUyIsIm1hdGNoZXMiLCJkb2NUeXBlIiwia2luZCIsIkRPQ1VNRU5UX0VWRU5UX1RSSUdHRVJfTEFCRUxTIiwiZWRpdG9yIiwiaW1wb3J0Iiwic3luYyIsIk5vdGVBZGRJY29uIiwiX2MiLCJXaWtpR2VuZXJhdGVJY29uIiwiX2MyIiwiTWFya2Rvd25JbXBvcnRJY29uIiwiX2MzIiwiQXNzZXRJbXBvcnRJY29uIiwiX2M0IiwiTm90ZUtpbmRJY29uIiwiX2M1IiwiZm9ybWF0VXBkYXRlZEF0IiwidmFsdWUiLCJkYXRlIiwiRGF0ZSIsIk51bWJlciIsImlzTmFOIiwiZ2V0VGltZSIsInRvTG9jYWxlRGF0ZVN0cmluZyIsIm1vbnRoIiwiZGF5IiwiaG91ciIsIm1pbnV0ZSIsInN1bW1hcml6ZUJvZHkiLCJub3JtYWxpemVkIiwicmVwbGFjZSIsInRyaW0iLCJsZW5ndGgiLCJzbGljZSIsImdldE5vdGVNZXRhIiwicmVuZGVyTm90ZUxpc3QiLCJ0aXRsZSIsIm5vdGVzIiwib25TZWxlY3ROb3RlIiwiZW1wdHlUZXh0IiwiZGVzY3JpcHRpb24iLCJtYXAiLCJtYXRjaFNuaXBwZXQiLCJib2R5TWFya2Rvd24iLCJyZW5kZXJBdHRhY2htZW50TGlzdCIsImF0dGFjaG1lbnRzIiwib25PcGVuQXR0YWNobWVudCIsImF0dGFjaG1lbnQiLCJwYXRoIiwicmVsYXRpdmVQYXRoIiwiY2F0ZWdvcnkiLCJLbm93bGVkZ2VOb3RlV29ya3NwYWNlIiwiZmlsdGVyZWROb3RlcyIsInNlbGVjdGVkTm90ZSIsImFjdGl2ZUZpbHRlciIsImVkaXRvclZhbHVlIiwiZWRpdGFibGUiLCJpc1NhdmluZyIsInNhdmVNZXNzYWdlIiwiY2FuU2F2ZSIsImNhblVzZUZvckRlc2lnbiIsInNlYXJjaFZhbHVlIiwiaXNTZWFyY2hpbmciLCJpc1N5bmNpbmciLCJlcnJvciIsImRvY3VtZW50RXZlbnRzIiwic2ltaWxhck5vdGVzIiwibmVpZ2hib3Job29kR3JhcGgiLCJuZWlnaGJvcmhvb2ROb3RlcyIsImdyYXBoTm9kZUNvdW50IiwiZ3JhcGhFZGdlQ291bnQiLCJuZWFyYnlBdHRhY2htZW50cyIsImxpYnJhcnlBdHRhY2htZW50cyIsImF0dGFjaG1lbnRDYXRlZ29yeUNvdW50cyIsIm9uU2VhcmNoQ2hhbmdlIiwib25FZGl0b3JDaGFuZ2UiLCJvblNhdmUiLCJvbkRlbGV0ZSIsIm9uVXBsb2FkIiwib25JbXBvcnRBc3NldHMiLCJvbk9yZ2FuaXplS25vd2xlZGdlIiwib25DcmVhdGVOb3RlIiwib25PcGVuR2xvYmFsV2lraUdyYXBoIiwib25Vc2VGb3JEZXNpZ24iLCJvbkZpbHRlckNoYW5nZSIsIl9zIiwiaXNTaWRlRXhwYW5kZWQiLCJzZXRJc1NpZGVFeHBhbmRlZCIsInNlYXJjaEFjdGl2ZSIsInZpc2libGVOb3RlcyIsInZpc2libGVEb2N1bWVudEV2ZW50cyIsInNlbGVjdGVkTm90ZU1ldGEiLCJ2aXNpYmxlQXR0YWNobWVudENvdW50IiwidmlzaWJsZU5vdGVTZWN0aW9ucyIsInNlY3Rpb24iLCJmaWx0ZXIiLCJzZWxlY3RlZE5vdGVUYWdzIiwidGFncyIsInRhZyIsImVkaXRvclRvb2xiYXIiLCJldmVudCIsInRhcmdldCIsIm9wdGlvbiIsIm5vdGVNZXRhIiwic291cmNlVXJsIiwidXBkYXRlZEF0IiwiY3VycmVudCIsImpvaW4iLCJkb2N1bWVudFRpdGxlIiwic3VtbWFyeSIsInRyaWdnZXIiLCJ0aW1lc3RhbXAiLCJpdGVtIiwiY291bnQiLCJfYzYiXSwiaWdub3JlTGlzdCI6W10sInNvdXJjZXMiOlsiS25vd2xlZGdlTm90ZVdvcmtzcGFjZS50c3giXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgdXNlTWVtbywgdXNlU3RhdGUgfSBmcm9tICdyZWFjdCc7XG5pbXBvcnQgeyBBdG9taWNNYXJrZG93bkVkaXRvciB9IGZyb20gJy4uLy4uLy4uL2NvbXBvbmVudHMvcHJvZHVjdC9BdG9taWNNYXJrZG93bkVkaXRvcic7XHJcbmltcG9ydCB0eXBlIHsgRG9jdW1lbnRDaGFuZ2VFdmVudCB9IGZyb20gJy4uLy4uLy4uL3R5cGVzJztcclxuaW1wb3J0IHR5cGUge1xyXG4gIEtub3dsZWRnZUF0dGFjaG1lbnQsXHJcbiAgS25vd2xlZGdlTmVpZ2hib3Job29kR3JhcGgsXHJcbiAgS25vd2xlZGdlTm90ZSxcclxufSBmcm9tICcuLi9tb2RlbC9rbm93bGVkZ2UnO1xyXG5pbXBvcnQgeyBLbm93bGVkZ2VHcmFwaENhbnZhcyB9IGZyb20gJy4vS25vd2xlZGdlR3JhcGhDYW52YXMnO1xyXG5cclxudHlwZSBBdHRhY2htZW50Q2F0ZWdvcnlDb3VudCA9IHtcclxuICBjYXRlZ29yeTogS25vd2xlZGdlQXR0YWNobWVudFsnY2F0ZWdvcnknXTtcclxuICBjb3VudDogbnVtYmVyO1xyXG59O1xyXG5cclxuZXhwb3J0IHR5cGUgS25vd2xlZGdlTm90ZUZpbHRlciA9ICdhbGwnIHwgJ3dpa2ktaW5kZXgnIHwgJ2FpLXN1bW1hcnknIHwgJ25vdGUnIHwgJ3NrZXRjaCcgfCAnZGVzaWduJztcclxuXHJcbnR5cGUgS25vd2xlZGdlTm90ZVdvcmtzcGFjZVByb3BzID0ge1xyXG4gIG5vdGVzOiBLbm93bGVkZ2VOb3RlW107XHJcbiAgZmlsdGVyZWROb3RlczogS25vd2xlZGdlTm90ZVtdO1xyXG4gIHNlbGVjdGVkTm90ZTogS25vd2xlZGdlTm90ZSB8IG51bGw7XHJcbiAgYWN0aXZlRmlsdGVyOiBLbm93bGVkZ2VOb3RlRmlsdGVyO1xyXG4gIGVkaXRvclZhbHVlOiBzdHJpbmc7XHJcbiAgZWRpdGFibGU6IGJvb2xlYW47XHJcbiAgaXNTYXZpbmc6IGJvb2xlYW47XHJcbiAgc2F2ZU1lc3NhZ2U6IHN0cmluZztcclxuICBjYW5TYXZlOiBib29sZWFuO1xyXG4gIGNhblVzZUZvckRlc2lnbjogYm9vbGVhbjtcclxuICBzZWFyY2hWYWx1ZTogc3RyaW5nO1xyXG4gIGlzU2VhcmNoaW5nOiBib29sZWFuO1xyXG4gIGlzU3luY2luZzogYm9vbGVhbjtcclxuICBlcnJvcjogc3RyaW5nIHwgbnVsbDtcclxuICBkb2N1bWVudEV2ZW50czogRG9jdW1lbnRDaGFuZ2VFdmVudFtdO1xyXG4gIHNpbWlsYXJOb3RlczogS25vd2xlZGdlTm90ZVtdO1xyXG4gIG5laWdoYm9yaG9vZEdyYXBoOiBLbm93bGVkZ2VOZWlnaGJvcmhvb2RHcmFwaCB8IG51bGw7XHJcbiAgbmVpZ2hib3Job29kTm90ZXM6IEtub3dsZWRnZU5vdGVbXTtcclxuICBncmFwaE5vZGVDb3VudDogbnVtYmVyO1xyXG4gIGdyYXBoRWRnZUNvdW50OiBudW1iZXI7XHJcbiAgYXR0YWNobWVudHM6IEtub3dsZWRnZUF0dGFjaG1lbnRbXTtcclxuICBuZWFyYnlBdHRhY2htZW50czogS25vd2xlZGdlQXR0YWNobWVudFtdO1xyXG4gIGxpYnJhcnlBdHRhY2htZW50czogS25vd2xlZGdlQXR0YWNobWVudFtdO1xyXG4gIGF0dGFjaG1lbnRDYXRlZ29yeUNvdW50czogQXR0YWNobWVudENhdGVnb3J5Q291bnRbXTtcclxuICBvblNlYXJjaENoYW5nZTogKHZhbHVlOiBzdHJpbmcpID0+IHZvaWQ7XHJcbiAgb25TZWxlY3ROb3RlOiAobm90ZUlkOiBzdHJpbmcpID0+IHZvaWQ7XHJcbiAgb25FZGl0b3JDaGFuZ2U6ICh2YWx1ZTogc3RyaW5nKSA9PiB2b2lkO1xyXG4gIG9uU2F2ZTogKCkgPT4gdm9pZDtcclxuICBvbkRlbGV0ZTogKCkgPT4gdm9pZDtcclxuICBvblVwbG9hZDogKCkgPT4gdm9pZDtcclxuICBvbkltcG9ydEFzc2V0czogKCkgPT4gdm9pZDtcclxuICBvbk9yZ2FuaXplS25vd2xlZGdlOiAoKSA9PiB2b2lkO1xyXG4gIG9uQ3JlYXRlTm90ZTogKCkgPT4gdm9pZDtcclxuICBvbk9wZW5HbG9iYWxXaWtpR3JhcGg6ICgpID0+IHZvaWQ7XHJcbiAgb25Vc2VGb3JEZXNpZ246ICgpID0+IHZvaWQ7XHJcbiAgb25GaWx0ZXJDaGFuZ2U6IChmaWx0ZXI6IEtub3dsZWRnZU5vdGVGaWx0ZXIpID0+IHZvaWQ7XHJcbiAgb25PcGVuQXR0YWNobWVudDogKGF0dGFjaG1lbnRQYXRoOiBzdHJpbmcpID0+IHZvaWQ7XHJcbn07XHJcblxyXG5jb25zdCBET0NfVFlQRV9NRVRBOiBSZWNvcmQ8Tm9uTnVsbGFibGU8S25vd2xlZGdlTm90ZVsnZG9jVHlwZSddPiwgeyBiYWRnZTogc3RyaW5nOyBsYWJlbDogc3RyaW5nIH0+ID0ge1xyXG4gICd3aWtpLWluZGV4JzogeyBiYWRnZTogJ1dJS0knLCBsYWJlbDogJ1dpa2kg57Si5byVJyB9LFxyXG4gICdhaS1zdW1tYXJ5JzogeyBiYWRnZTogJ0FJJywgbGFiZWw6ICdBSSDmkZjopoEnIH0sXHJcbn07XHJcblxyXG5jb25zdCBOT1RFX0tJTkRfTUVUQTogUmVjb3JkPE5vbk51bGxhYmxlPEtub3dsZWRnZU5vdGVbJ2tpbmQnXT4sIHsgYmFkZ2U6IHN0cmluZzsgbGFiZWw6IHN0cmluZyB9PiA9IHtcclxuICBub3RlOiB7IGJhZGdlOiAnTk9URScsIGxhYmVsOiAn6aG555uu56yU6K6wJyB9LFxyXG4gIHNrZXRjaDogeyBiYWRnZTogJ1NLRVRDSCcsIGxhYmVsOiAn6I2J5Zu+6K+05piOJyB9LFxyXG4gIGRlc2lnbjogeyBiYWRnZTogJ0RFU0lHTicsIGxhYmVsOiAn6K6+6K6h5rKJ5reAJyB9LFxyXG59O1xyXG5cclxuY29uc3QgQVRUQUNITUVOVF9DQVRFR09SWV9MQUJFTFM6IFJlY29yZDxLbm93bGVkZ2VBdHRhY2htZW50WydjYXRlZ29yeSddLCBzdHJpbmc+ID0ge1xyXG4gIHBkZjogJ1BERiDmlofmoaMnLFxyXG4gIHdvcmQ6ICdXb3JkIOaWh+ahoycsXHJcbiAgc2hlZXQ6ICfooajmoLzotYTmlpknLFxyXG4gIHNsaWRlOiAn5ryU56S66LWE5paZJyxcclxuICB0ZXh0OiAn5paH5pys6LWE5paZJyxcclxuICBvdGhlcjogJ+WFtuS7lumZhOS7ticsXHJcbn07XHJcblxyXG5jb25zdCBGSUxURVJfT1BUSU9OUzogQXJyYXk8eyBpZDogS25vd2xlZGdlTm90ZUZpbHRlcjsgbGFiZWw6IHN0cmluZyB9PiA9IFtcbiAgeyBpZDogJ2FsbCcsIGxhYmVsOiAn5YWo6YOoJyB9LFxuICB7IGlkOiAnd2lraS1pbmRleCcsIGxhYmVsOiAnV2lraScgfSxcbiAgeyBpZDogJ2FpLXN1bW1hcnknLCBsYWJlbDogJ0FJIOaRmOimgScgfSxcbiAgeyBpZDogJ25vdGUnLCBsYWJlbDogJ+eslOiusCcgfSxcbiAgeyBpZDogJ3NrZXRjaCcsIGxhYmVsOiAn6I2J5Zu+JyB9LFxuICB7IGlkOiAnZGVzaWduJywgbGFiZWw6ICforr7orqEnIH0sXG5dO1xuXG5jb25zdCBOT1RFX1RSRUVfU0VDVElPTlM6IEFycmF5PHtcbiAgaWQ6IEtub3dsZWRnZU5vdGVGaWx0ZXI7XG4gIGxhYmVsOiBzdHJpbmc7XG4gIG1hdGNoZXM6IChub3RlOiBLbm93bGVkZ2VOb3RlKSA9PiBib29sZWFuO1xufT4gPSBbXG4gIHsgaWQ6ICd3aWtpLWluZGV4JywgbGFiZWw6ICdXaWtpIOe0ouW8lScsIG1hdGNoZXM6IChub3RlKSA9PiBub3RlLmRvY1R5cGUgPT09ICd3aWtpLWluZGV4JyB9LFxuICB7IGlkOiAnYWktc3VtbWFyeScsIGxhYmVsOiAnQUkg5pGY6KaBJywgbWF0Y2hlczogKG5vdGUpID0+IG5vdGUuZG9jVHlwZSA9PT0gJ2FpLXN1bW1hcnknIH0sXG4gIHsgaWQ6ICdub3RlJywgbGFiZWw6ICfpobnnm67nrJTorrAnLCBtYXRjaGVzOiAobm90ZSkgPT4gIW5vdGUuZG9jVHlwZSAmJiAobm90ZS5raW5kIHx8ICdub3RlJykgPT09ICdub3RlJyB9LFxuICB7IGlkOiAnc2tldGNoJywgbGFiZWw6ICfojYnlm77or7TmmI4nLCBtYXRjaGVzOiAobm90ZSkgPT4gIW5vdGUuZG9jVHlwZSAmJiBub3RlLmtpbmQgPT09ICdza2V0Y2gnIH0sXG4gIHsgaWQ6ICdkZXNpZ24nLCBsYWJlbDogJ+iuvuiuoeayiea3gCcsIG1hdGNoZXM6IChub3RlKSA9PiAhbm90ZS5kb2NUeXBlICYmIG5vdGUua2luZCA9PT0gJ2Rlc2lnbicgfSxcbl07XG5cbmNvbnN0IERPQ1VNRU5UX0VWRU5UX1RSSUdHRVJfTEFCRUxTOiBSZWNvcmQ8RG9jdW1lbnRDaGFuZ2VFdmVudFsndHJpZ2dlciddLCBzdHJpbmc+ID0ge1xuICBlZGl0b3I6ICfnvJbovpEnLFxuICBpbXBvcnQ6ICflr7zlhaUnLFxuICBzeW5jOiAn5ZCM5q2lJyxcbn07XG5cclxuY29uc3QgTm90ZUFkZEljb24gPSAoKSA9PiAoXG4gIDxzdmcgdmlld0JveD1cIjAgMCAyMCAyMFwiIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPlxuICAgIDxwYXRoXHJcbiAgICAgIGQ9XCJNMTAgNC4yNXYxMS41TTQuMjUgMTBoMTEuNVwiXHJcbiAgICAgIGZpbGw9XCJub25lXCJcclxuICAgICAgc3Ryb2tlPVwiY3VycmVudENvbG9yXCJcclxuICAgICAgc3Ryb2tlV2lkdGg9XCIxLjhcIlxyXG4gICAgICBzdHJva2VMaW5lY2FwPVwicm91bmRcIlxyXG4gICAgLz5cclxuICA8L3N2Zz5cbik7XG5cbmNvbnN0IFdpa2lHZW5lcmF0ZUljb24gPSAoKSA9PiAoXG4gIDxzdmcgdmlld0JveD1cIjAgMCAyMCAyMFwiIGFyaWEtaGlkZGVuPVwidHJ1ZVwiPlxuICAgIDxwYXRoXG4gICAgICBkPVwiTTQuNzUgNS43NWEyIDIgMCAwIDEgMi0yaDYuNWEyIDIgMCAwIDEgMiAydjguNWEyIDIgMCAwIDEtMiAyaC02LjVhMiAyIDAgMCAxLTItMnYtOC41WlwiXG4gICAgICBmaWxsPVwibm9uZVwiXG4gICAgICBzdHJva2U9XCJjdXJyZW50Q29sb3JcIlxuICAgICAgc3Ryb2tlV2lkdGg9XCIxLjVcIlxuICAgICAgc3Ryb2tlTGluZWpvaW49XCJyb3VuZFwiXG4gICAgLz5cbiAgICA8cGF0aFxuICAgICAgZD1cIk03LjI1IDcuMjVoNS41TTcuMjUgMTBoNS41TTcuMjUgMTIuNzVoMy4yXCJcbiAgICAgIGZpbGw9XCJub25lXCJcbiAgICAgIHN0cm9rZT1cImN1cnJlbnRDb2xvclwiXG4gICAgICBzdHJva2VXaWR0aD1cIjEuNVwiXG4gICAgICBzdHJva2VMaW5lY2FwPVwicm91bmRcIlxuICAgIC8+XG4gICAgPHBhdGhcbiAgICAgIGQ9XCJNMTMuMjUgMy43NXYxMi41XCJcbiAgICAgIGZpbGw9XCJub25lXCJcbiAgICAgIHN0cm9rZT1cImN1cnJlbnRDb2xvclwiXG4gICAgICBzdHJva2VXaWR0aD1cIjEuNVwiXG4gICAgICBzdHJva2VMaW5lY2FwPVwicm91bmRcIlxuICAgICAgb3BhY2l0eT1cIjAuNDVcIlxuICAgIC8+XG4gIDwvc3ZnPlxuKTtcblxuY29uc3QgTWFya2Rvd25JbXBvcnRJY29uID0gKCkgPT4gKFxuICA8c3ZnIHZpZXdCb3g9XCIwIDAgMjAgMjBcIiBhcmlhLWhpZGRlbj1cInRydWVcIj5cbiAgICA8cGF0aFxyXG4gICAgICBkPVwiTTYuNSAzLjc1aDQuNGwyLjg1IDIuODV2Ny40YTIgMiAwIDAgMS0yIDJoLTUuMjVhMiAyIDAgMCAxLTItMnYtOGEyIDIgMCAwIDEgMi0yWlwiXHJcbiAgICAgIGZpbGw9XCJub25lXCJcclxuICAgICAgc3Ryb2tlPVwiY3VycmVudENvbG9yXCJcclxuICAgICAgc3Ryb2tlV2lkdGg9XCIxLjVcIlxyXG4gICAgICBzdHJva2VMaW5lam9pbj1cInJvdW5kXCJcclxuICAgIC8+XHJcbiAgICA8cGF0aFxyXG4gICAgICBkPVwiTTEwLjkgMy43NVY2LjZoMi44NU0xMCA4LjF2NC44TTguMiAxMS4xIDEwIDEyLjlsMS44LTEuOFwiXHJcbiAgICAgIGZpbGw9XCJub25lXCJcclxuICAgICAgc3Ryb2tlPVwiY3VycmVudENvbG9yXCJcclxuICAgICAgc3Ryb2tlV2lkdGg9XCIxLjVcIlxyXG4gICAgICBzdHJva2VMaW5lY2FwPVwicm91bmRcIlxyXG4gICAgICBzdHJva2VMaW5lam9pbj1cInJvdW5kXCJcclxuICAgIC8+XHJcbiAgPC9zdmc+XHJcbik7XHJcblxyXG5jb25zdCBBc3NldEltcG9ydEljb24gPSAoKSA9PiAoXHJcbiAgPHN2ZyB2aWV3Qm94PVwiMCAwIDIwIDIwXCIgYXJpYS1oaWRkZW49XCJ0cnVlXCI+XHJcbiAgICA8cGF0aFxyXG4gICAgICBkPVwiTTMuNzUgNi4yNWEyIDIgMCAwIDEgMi0yaDIuN2wxLjMgMS42aDQuNWEyIDIgMCAwIDEgMiAydjZhMiAyIDAgMCAxLTIgMmgtOC41YTIgMiAwIDAgMS0yLTJ2LTcuNlpcIlxyXG4gICAgICBmaWxsPVwibm9uZVwiXHJcbiAgICAgIHN0cm9rZT1cImN1cnJlbnRDb2xvclwiXHJcbiAgICAgIHN0cm9rZVdpZHRoPVwiMS41XCJcclxuICAgICAgc3Ryb2tlTGluZWpvaW49XCJyb3VuZFwiXHJcbiAgICAvPlxyXG4gICAgPHBhdGhcclxuICAgICAgZD1cIk0xMCA3Ljl2NC41TTguMiAxMC42IDEwIDEyLjRsMS44LTEuOFwiXHJcbiAgICAgIGZpbGw9XCJub25lXCJcclxuICAgICAgc3Ryb2tlPVwiY3VycmVudENvbG9yXCJcclxuICAgICAgc3Ryb2tlV2lkdGg9XCIxLjVcIlxyXG4gICAgICBzdHJva2VMaW5lY2FwPVwicm91bmRcIlxyXG4gICAgICBzdHJva2VMaW5lam9pbj1cInJvdW5kXCJcclxuICAgIC8+XHJcbiAgPC9zdmc+XHJcbik7XHJcblxyXG5jb25zdCBOb3RlS2luZEljb24gPSAoeyBraW5kIH06IHsga2luZD86IEtub3dsZWRnZU5vdGVbJ2tpbmQnXSB9KSA9PiB7XHJcbiAgaWYgKGtpbmQgPT09ICdkZXNpZ24nKSB7XHJcbiAgICByZXR1cm4gKFxyXG4gICAgICA8c3ZnIHZpZXdCb3g9XCIwIDAgMjAgMjBcIiBhcmlhLWhpZGRlbj1cInRydWVcIj5cclxuICAgICAgICA8cGF0aFxyXG4gICAgICAgICAgZD1cIk01LjUgMTQuNSAxNC41IDUuNU03IDUuNWg3LjV2Ny41XCJcclxuICAgICAgICAgIGZpbGw9XCJub25lXCJcclxuICAgICAgICAgIHN0cm9rZT1cImN1cnJlbnRDb2xvclwiXHJcbiAgICAgICAgICBzdHJva2VXaWR0aD1cIjEuNlwiXHJcbiAgICAgICAgICBzdHJva2VMaW5lY2FwPVwicm91bmRcIlxyXG4gICAgICAgICAgc3Ryb2tlTGluZWpvaW49XCJyb3VuZFwiXHJcbiAgICAgICAgLz5cclxuICAgICAgPC9zdmc+XHJcbiAgICApO1xyXG4gIH1cclxuXHJcbiAgaWYgKGtpbmQgPT09ICdza2V0Y2gnKSB7XHJcbiAgICByZXR1cm4gKFxyXG4gICAgICA8c3ZnIHZpZXdCb3g9XCIwIDAgMjAgMjBcIiBhcmlhLWhpZGRlbj1cInRydWVcIj5cclxuICAgICAgICA8cGF0aFxyXG4gICAgICAgICAgZD1cIm01LjUgMTMuOCA2LjktNi45IDIuMSAyLjEtNi45IDYuOUg1LjV2LTIuMVpcIlxyXG4gICAgICAgICAgZmlsbD1cIm5vbmVcIlxyXG4gICAgICAgICAgc3Ryb2tlPVwiY3VycmVudENvbG9yXCJcclxuICAgICAgICAgIHN0cm9rZVdpZHRoPVwiMS41XCJcclxuICAgICAgICAgIHN0cm9rZUxpbmVqb2luPVwicm91bmRcIlxyXG4gICAgICAgIC8+XHJcbiAgICAgICAgPHBhdGhcclxuICAgICAgICAgIGQ9XCJtMTEuNyA3LjYgMS43LTEuN2ExLjMgMS4zIDAgMCAxIDEuOSAwbC44LjhhMS4zIDEuMyAwIDAgMSAwIDEuOWwtMS43IDEuN1wiXHJcbiAgICAgICAgICBmaWxsPVwibm9uZVwiXHJcbiAgICAgICAgICBzdHJva2U9XCJjdXJyZW50Q29sb3JcIlxyXG4gICAgICAgICAgc3Ryb2tlV2lkdGg9XCIxLjVcIlxyXG4gICAgICAgICAgc3Ryb2tlTGluZWNhcD1cInJvdW5kXCJcclxuICAgICAgICAgIHN0cm9rZUxpbmVqb2luPVwicm91bmRcIlxyXG4gICAgICAgIC8+XHJcbiAgICAgIDwvc3ZnPlxyXG4gICAgKTtcclxuICB9XHJcblxyXG4gIHJldHVybiAoXHJcbiAgICA8c3ZnIHZpZXdCb3g9XCIwIDAgMjAgMjBcIiBhcmlhLWhpZGRlbj1cInRydWVcIj5cclxuICAgICAgPHBhdGhcclxuICAgICAgICBkPVwiTTUuNSA0Ljc1aDlhMS43NSAxLjc1IDAgMCAxIDEuNzUgMS43NXY3YTEuNzUgMS43NSAwIDAgMS0xLjc1IDEuNzVoLTlBMS43NSAxLjc1IDAgMCAxIDMuNzUgMTMuNXYtN0ExLjc1IDEuNzUgMCAwIDEgNS41IDQuNzVaXCJcclxuICAgICAgICBmaWxsPVwibm9uZVwiXHJcbiAgICAgICAgc3Ryb2tlPVwiY3VycmVudENvbG9yXCJcclxuICAgICAgICBzdHJva2VXaWR0aD1cIjEuNVwiXHJcbiAgICAgICAgc3Ryb2tlTGluZWpvaW49XCJyb3VuZFwiXHJcbiAgICAgIC8+XHJcbiAgICAgIDxwYXRoXHJcbiAgICAgICAgZD1cIk02LjUgOC4yNWg3TTYuNSAxMS43NWg0LjVcIlxyXG4gICAgICAgIGZpbGw9XCJub25lXCJcclxuICAgICAgICBzdHJva2U9XCJjdXJyZW50Q29sb3JcIlxyXG4gICAgICAgIHN0cm9rZVdpZHRoPVwiMS41XCJcclxuICAgICAgICBzdHJva2VMaW5lY2FwPVwicm91bmRcIlxyXG4gICAgICAvPlxyXG4gICAgPC9zdmc+XHJcbiAgKTtcclxufTtcclxuXHJcbmNvbnN0IGZvcm1hdFVwZGF0ZWRBdCA9ICh2YWx1ZTogc3RyaW5nKSA9PiB7XHJcbiAgY29uc3QgZGF0ZSA9IG5ldyBEYXRlKHZhbHVlKTtcclxuICBpZiAoTnVtYmVyLmlzTmFOKGRhdGUuZ2V0VGltZSgpKSkge1xyXG4gICAgcmV0dXJuIHZhbHVlO1xyXG4gIH1cclxuXHJcbiAgcmV0dXJuIGRhdGUudG9Mb2NhbGVEYXRlU3RyaW5nKCd6aC1DTicsIHtcclxuICAgIG1vbnRoOiAnMi1kaWdpdCcsXHJcbiAgICBkYXk6ICcyLWRpZ2l0JyxcclxuICAgIGhvdXI6ICcyLWRpZ2l0JyxcclxuICAgIG1pbnV0ZTogJzItZGlnaXQnLFxyXG4gIH0pO1xyXG59O1xyXG5cclxuY29uc3Qgc3VtbWFyaXplQm9keSA9ICh2YWx1ZTogc3RyaW5nKSA9PiB7XHJcbiAgY29uc3Qgbm9ybWFsaXplZCA9IHZhbHVlLnJlcGxhY2UoL1xccysvZywgJyAnKS50cmltKCk7XHJcbiAgaWYgKCFub3JtYWxpemVkKSB7XHJcbiAgICByZXR1cm4gJ+i/mOayoeacieato+aWh+WGheWuueOAgic7XHJcbiAgfVxyXG5cclxuICByZXR1cm4gbm9ybWFsaXplZC5sZW5ndGggPiA4OCA/IGAke25vcm1hbGl6ZWQuc2xpY2UoMCwgODgpfS4uLmAgOiBub3JtYWxpemVkO1xyXG59O1xyXG5cclxuY29uc3QgZ2V0Tm90ZU1ldGEgPSAobm90ZTogS25vd2xlZGdlTm90ZSkgPT4ge1xyXG4gIGlmIChub3RlLmRvY1R5cGUpIHtcclxuICAgIHJldHVybiBET0NfVFlQRV9NRVRBW25vdGUuZG9jVHlwZV07XHJcbiAgfVxyXG5cclxuICByZXR1cm4gTk9URV9LSU5EX01FVEFbbm90ZS5raW5kIHx8ICdub3RlJ107XHJcbn07XHJcblxyXG5jb25zdCByZW5kZXJOb3RlTGlzdCA9IChcclxuICB0aXRsZTogc3RyaW5nLFxyXG4gIG5vdGVzOiBLbm93bGVkZ2VOb3RlW10sXHJcbiAgb25TZWxlY3ROb3RlOiAobm90ZUlkOiBzdHJpbmcpID0+IHZvaWQsXHJcbiAgZW1wdHlUZXh0OiBzdHJpbmcsXHJcbiAgZGVzY3JpcHRpb246IHN0cmluZ1xyXG4pID0+IChcclxuICA8c2VjdGlvbiBjbGFzc05hbWU9XCJnbi1ub3RlLXNpZGUtY2FyZFwiPlxyXG4gICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLXNpZGUtY2FyZC1oZWFkZXJcIj5cclxuICAgICAgPGRpdj5cclxuICAgICAgICA8aDQ+e3RpdGxlfTwvaDQ+XHJcbiAgICAgICAgPHA+e2Rlc2NyaXB0aW9ufTwvcD5cclxuICAgICAgPC9kaXY+XHJcbiAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jb3VudFwiPntub3Rlcy5sZW5ndGh9PC9zcGFuPlxyXG4gICAgPC9kaXY+XHJcbiAgICB7bm90ZXMubGVuZ3RoID4gMCA/IChcclxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLXJlbGF0aW9uLWxpc3RcIj5cclxuICAgICAgICB7bm90ZXMubWFwKChub3RlKSA9PiAoXHJcbiAgICAgICAgICA8YnV0dG9uIGtleT17bm90ZS5pZH0gdHlwZT1cImJ1dHRvblwiIG9uQ2xpY2s9eygpID0+IG9uU2VsZWN0Tm90ZShub3RlLmlkKX0+XHJcbiAgICAgICAgICAgIDxzdHJvbmc+e25vdGUudGl0bGV9PC9zdHJvbmc+XHJcbiAgICAgICAgICAgIDxzcGFuPntub3RlLm1hdGNoU25pcHBldCB8fCBzdW1tYXJpemVCb2R5KG5vdGUuYm9keU1hcmtkb3duKX08L3NwYW4+XHJcbiAgICAgICAgICA8L2J1dHRvbj5cclxuICAgICAgICApKX1cclxuICAgICAgPC9kaXY+XHJcbiAgICApIDogKFxyXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtZW1wdHlcIj57ZW1wdHlUZXh0fTwvZGl2PlxyXG4gICAgKX1cclxuICA8L3NlY3Rpb24+XHJcbik7XHJcblxyXG5jb25zdCByZW5kZXJBdHRhY2htZW50TGlzdCA9IChcclxuICB0aXRsZTogc3RyaW5nLFxyXG4gIGF0dGFjaG1lbnRzOiBLbm93bGVkZ2VBdHRhY2htZW50W10sXHJcbiAgb25PcGVuQXR0YWNobWVudDogKGF0dGFjaG1lbnRQYXRoOiBzdHJpbmcpID0+IHZvaWQsXHJcbiAgZW1wdHlUZXh0OiBzdHJpbmcsXHJcbiAgZGVzY3JpcHRpb246IHN0cmluZ1xyXG4pID0+IChcclxuICA8c2VjdGlvbiBjbGFzc05hbWU9XCJnbi1ub3RlLXNpZGUtY2FyZFwiPlxyXG4gICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLXNpZGUtY2FyZC1oZWFkZXJcIj5cclxuICAgICAgPGRpdj5cclxuICAgICAgICA8aDQ+e3RpdGxlfTwvaDQ+XHJcbiAgICAgICAgPHA+e2Rlc2NyaXB0aW9ufTwvcD5cclxuICAgICAgPC9kaXY+XHJcbiAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jb3VudFwiPnthdHRhY2htZW50cy5sZW5ndGh9PC9zcGFuPlxyXG4gICAgPC9kaXY+XHJcbiAgICB7YXR0YWNobWVudHMubGVuZ3RoID4gMCA/IChcclxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLWF0dGFjaG1lbnQtbGlzdFwiPlxyXG4gICAgICAgIHthdHRhY2htZW50cy5tYXAoKGF0dGFjaG1lbnQpID0+IChcclxuICAgICAgICAgIDxidXR0b24ga2V5PXthdHRhY2htZW50LmlkfSB0eXBlPVwiYnV0dG9uXCIgb25DbGljaz17KCkgPT4gb25PcGVuQXR0YWNobWVudChhdHRhY2htZW50LnBhdGgpfT5cclxuICAgICAgICAgICAgPHN0cm9uZz57YXR0YWNobWVudC50aXRsZX08L3N0cm9uZz5cclxuICAgICAgICAgICAgPHNwYW4+e2F0dGFjaG1lbnQucmVsYXRpdmVQYXRofTwvc3Bhbj5cclxuICAgICAgICAgICAgPGVtPntBVFRBQ0hNRU5UX0NBVEVHT1JZX0xBQkVMU1thdHRhY2htZW50LmNhdGVnb3J5XX08L2VtPlxyXG4gICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgKSl9XHJcbiAgICAgIDwvZGl2PlxyXG4gICAgKSA6IChcclxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLWVtcHR5XCI+e2VtcHR5VGV4dH08L2Rpdj5cclxuICAgICl9XHJcbiAgPC9zZWN0aW9uPlxyXG4pO1xyXG5cclxuZXhwb3J0IGNvbnN0IEtub3dsZWRnZU5vdGVXb3Jrc3BhY2UgPSAoe1xyXG4gIG5vdGVzLFxyXG4gIGZpbHRlcmVkTm90ZXMsXHJcbiAgc2VsZWN0ZWROb3RlLFxyXG4gIGFjdGl2ZUZpbHRlcixcclxuICBlZGl0b3JWYWx1ZSxcclxuICBlZGl0YWJsZSxcclxuICBpc1NhdmluZyxcclxuICBzYXZlTWVzc2FnZSxcclxuICBjYW5TYXZlLFxyXG4gIGNhblVzZUZvckRlc2lnbixcclxuICBzZWFyY2hWYWx1ZSxcclxuICBpc1NlYXJjaGluZyxcclxuICBpc1N5bmNpbmcsXHJcbiAgZXJyb3IsXHJcbiAgZG9jdW1lbnRFdmVudHMsXHJcbiAgc2ltaWxhck5vdGVzLFxyXG4gIG5laWdoYm9yaG9vZEdyYXBoLFxyXG4gIG5laWdoYm9yaG9vZE5vdGVzLFxyXG4gIGdyYXBoTm9kZUNvdW50LFxyXG4gIGdyYXBoRWRnZUNvdW50LFxyXG4gIGF0dGFjaG1lbnRzLFxyXG4gIG5lYXJieUF0dGFjaG1lbnRzLFxyXG4gIGxpYnJhcnlBdHRhY2htZW50cyxcclxuICBhdHRhY2htZW50Q2F0ZWdvcnlDb3VudHMsXHJcbiAgb25TZWFyY2hDaGFuZ2UsXHJcbiAgb25TZWxlY3ROb3RlLFxyXG4gIG9uRWRpdG9yQ2hhbmdlLFxyXG4gIG9uU2F2ZSxcclxuICBvbkRlbGV0ZSxcclxuICBvblVwbG9hZCxcclxuICBvbkltcG9ydEFzc2V0cyxcclxuICBvbk9yZ2FuaXplS25vd2xlZGdlLFxyXG4gIG9uQ3JlYXRlTm90ZSxcclxuICBvbk9wZW5HbG9iYWxXaWtpR3JhcGgsXHJcbiAgb25Vc2VGb3JEZXNpZ24sXHJcbiAgb25GaWx0ZXJDaGFuZ2UsXHJcbiAgb25PcGVuQXR0YWNobWVudCxcclxufTogS25vd2xlZGdlTm90ZVdvcmtzcGFjZVByb3BzKSA9PiB7XG4gIGNvbnN0IFtpc1NpZGVFeHBhbmRlZCwgc2V0SXNTaWRlRXhwYW5kZWRdID0gdXNlU3RhdGUoZmFsc2UpO1xuICBjb25zdCBzZWFyY2hBY3RpdmUgPSBzZWFyY2hWYWx1ZS50cmltKCkubGVuZ3RoID4gMDtcbiAgY29uc3QgdmlzaWJsZU5vdGVzID0gZmlsdGVyZWROb3RlcztcbiAgY29uc3QgdmlzaWJsZURvY3VtZW50RXZlbnRzID0gZG9jdW1lbnRFdmVudHMuc2xpY2UoMCwgOCk7XG4gIGNvbnN0IHNlbGVjdGVkTm90ZU1ldGEgPSBzZWxlY3RlZE5vdGUgPyBnZXROb3RlTWV0YShzZWxlY3RlZE5vdGUpIDogbnVsbDtcbiAgY29uc3QgdmlzaWJsZUF0dGFjaG1lbnRDb3VudCA9IGF0dGFjaG1lbnRzLmxlbmd0aCArIG5lYXJieUF0dGFjaG1lbnRzLmxlbmd0aCArIGxpYnJhcnlBdHRhY2htZW50cy5sZW5ndGg7XG4gIGNvbnN0IHZpc2libGVOb3RlU2VjdGlvbnMgPSB1c2VNZW1vKFxuICAgICgpID0+XG4gICAgICBOT1RFX1RSRUVfU0VDVElPTlMubWFwKChzZWN0aW9uKSA9PiAoe1xuICAgICAgICAuLi5zZWN0aW9uLFxuICAgICAgICBub3RlczogdmlzaWJsZU5vdGVzLmZpbHRlcihzZWN0aW9uLm1hdGNoZXMpLFxuICAgICAgfSkpLmZpbHRlcigoc2VjdGlvbikgPT4gc2VjdGlvbi5ub3Rlcy5sZW5ndGggPiAwKSxcbiAgICBbdmlzaWJsZU5vdGVzXVxuICApO1xuICBjb25zdCBzZWxlY3RlZE5vdGVUYWdzID0gdXNlTWVtbyhcbiAgICAoKSA9PiBzZWxlY3RlZE5vdGU/LnRhZ3MuZmlsdGVyKCh0YWcpID0+IHRhZy50cmltKCkubGVuZ3RoID4gMCkgfHwgW10sXG4gICAgW3NlbGVjdGVkTm90ZV1cbiAgKTtcblxyXG4gIGNvbnN0IGVkaXRvclRvb2xiYXIgPSBjYW5Vc2VGb3JEZXNpZ24gPyAoXHJcbiAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtaGVhZGVyLXRvb2xiYXJcIj5cclxuICAgICAgPGJ1dHRvbiBjbGFzc05hbWU9XCJnbi1ub3RlLXRvb2xiYXItYnRuIGFjY2VudFwiIHR5cGU9XCJidXR0b25cIiBvbkNsaWNrPXtvblVzZUZvckRlc2lnbn0+XHJcbiAgICAgICAgQUlcclxuICAgICAgPC9idXR0b24+XHJcbiAgICA8L2Rpdj5cclxuICApIDogbnVsbDtcclxuXHJcbiAgcmV0dXJuIChcclxuICAgIDxzZWN0aW9uIGNsYXNzTmFtZT17YGduLW5vdGUtd29ya3NwYWNlICR7aXNTaWRlRXhwYW5kZWQgPyAnc2lkZS1leHBhbmRlZCcgOiAnc2lkZS1jb2xsYXBzZWQnfWB9PlxuICAgICAgPGFzaWRlIGNsYXNzTmFtZT1cImduLW5vdGUtcmFpbFwiPlxyXG5cclxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtc2VhcmNoLXJvd1wiPlxyXG4gICAgICAgICAgPGlucHV0XHJcbiAgICAgICAgICAgIGNsYXNzTmFtZT1cInByb2R1Y3QtaW5wdXRcIlxyXG4gICAgICAgICAgICB0eXBlPVwic2VhcmNoXCJcclxuICAgICAgICAgICAgdmFsdWU9e3NlYXJjaFZhbHVlfVxyXG4gICAgICAgICAgICBvbkNoYW5nZT17KGV2ZW50KSA9PiBvblNlYXJjaENoYW5nZShldmVudC50YXJnZXQudmFsdWUpfVxyXG4gICAgICAgICAgICBwbGFjZWhvbGRlcj1cIuaQnOe0ouagh+mimOOAgeato+aWh+OAgeagh+etvlwiXHJcbiAgICAgICAgICAvPlxyXG4gICAgICAgIDwvZGl2PlxyXG5cclxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInBtLWtub3dsZWRnZS1maWx0ZXItdGFic1wiPlxyXG4gICAgICAgICAge0ZJTFRFUl9PUFRJT05TLm1hcCgob3B0aW9uKSA9PiAoXHJcbiAgICAgICAgICAgIDxidXR0b25cclxuICAgICAgICAgICAgICBrZXk9e29wdGlvbi5pZH1cclxuICAgICAgICAgICAgICBjbGFzc05hbWU9e2FjdGl2ZUZpbHRlciA9PT0gb3B0aW9uLmlkID8gJ2FjdGl2ZScgOiAnJ31cclxuICAgICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiBvbkZpbHRlckNoYW5nZShvcHRpb24uaWQpfVxyXG4gICAgICAgICAgICA+XHJcbiAgICAgICAgICAgICAge29wdGlvbi5sYWJlbH1cclxuICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICApKX1cclxuICAgICAgICA8L2Rpdj5cclxuXHJcbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLXJhaWwtYWN0aW9uc1wiPlxyXG4gICAgICAgICAgPGJ1dHRvblxuICAgICAgICAgICAgY2xhc3NOYW1lPVwiZG9jLWFjdGlvbi1idG4gZ24tbm90ZS1pY29uLWJ0biBnbi1ub3RlLXdpa2ktYnRuXCJcbiAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxuICAgICAgICAgICAgb25DbGljaz17b25Pcmdhbml6ZUtub3dsZWRnZX1cbiAgICAgICAgICAgIHRpdGxlPVwi55Sf5oiQIFdpa2lcIlxuICAgICAgICAgICAgYXJpYS1sYWJlbD1cIueUn+aIkCBXaWtpXCJcbiAgICAgICAgICA+XG4gICAgICAgICAgICA8V2lraUdlbmVyYXRlSWNvbiAvPlxuICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgIDxidXR0b25cclxuICAgICAgICAgICAgY2xhc3NOYW1lPVwiZG9jLWFjdGlvbi1idG4gZ24tbm90ZS1pY29uLWJ0blwiXHJcbiAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgICBvbkNsaWNrPXtvbkNyZWF0ZU5vdGV9XHJcbiAgICAgICAgICAgIHRpdGxlPVwi5paw5bu656yU6K6wXCJcclxuICAgICAgICAgICAgYXJpYS1sYWJlbD1cIuaWsOW7uueslOiusFwiXHJcbiAgICAgICAgICA+XHJcbiAgICAgICAgICAgIDxOb3RlQWRkSWNvbiAvPlxyXG4gICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgIGNsYXNzTmFtZT1cImRvYy1hY3Rpb24tYnRuIHNlY29uZGFyeSBnbi1ub3RlLWljb24tYnRuXCJcclxuICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXHJcbiAgICAgICAgICAgIG9uQ2xpY2s9e29uVXBsb2FkfVxyXG4gICAgICAgICAgICB0aXRsZT1cIuWvvOWFpSBNYXJrZG93blwiXHJcbiAgICAgICAgICAgIGFyaWEtbGFiZWw9XCLlr7zlhaUgTWFya2Rvd25cIlxyXG4gICAgICAgICAgPlxyXG4gICAgICAgICAgICA8TWFya2Rvd25JbXBvcnRJY29uIC8+XHJcbiAgICAgICAgICA8L2J1dHRvbj5cclxuICAgICAgICAgIDxidXR0b25cclxuICAgICAgICAgICAgY2xhc3NOYW1lPVwiZG9jLWFjdGlvbi1idG4gc2Vjb25kYXJ5IGduLW5vdGUtaWNvbi1idG5cIlxyXG4gICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgb25DbGljaz17b25JbXBvcnRBc3NldHN9XHJcbiAgICAgICAgICAgIHRpdGxlPVwi5a+85YWl6LWE5paZXCJcclxuICAgICAgICAgICAgYXJpYS1sYWJlbD1cIuWvvOWFpei1hOaWmVwiXHJcbiAgICAgICAgICA+XHJcbiAgICAgICAgICAgIDxBc3NldEltcG9ydEljb24gLz5cclxuICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgIDwvZGl2PlxyXG5cclxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtc3RhdHNcIj5cclxuICAgICAgICAgIDxzcGFuPntub3Rlcy5sZW5ndGh9IOadoeefpeivhueslOiusDwvc3Bhbj5cclxuICAgICAgICAgIDxzcGFuPnt2aXNpYmxlTm90ZXMubGVuZ3RofSDmnaHlvZPliY3lj6/op4E8L3NwYW4+XHJcbiAgICAgICAgICB7aXNTZWFyY2hpbmcgPyA8c3Bhbj7mkJzntKLkuK08L3NwYW4+IDogbnVsbH1cclxuICAgICAgICAgIHtpc1N5bmNpbmcgPyA8c3Bhbj7lkIzmraXkuK08L3NwYW4+IDogbnVsbH1cclxuICAgICAgICA8L2Rpdj5cclxuXHJcbiAgICAgICAge2Vycm9yID8gPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLWVycm9yXCI+e2Vycm9yfTwvZGl2PiA6IG51bGx9XHJcblxyXG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1saXN0XCI+XG4gICAgICAgICAge3Zpc2libGVOb3Rlcy5sZW5ndGggPiAwID8gKFxuICAgICAgICAgICAgdmlzaWJsZU5vdGVTZWN0aW9ucy5tYXAoKHNlY3Rpb24pID0+IChcbiAgICAgICAgICAgICAgPHNlY3Rpb24ga2V5PXtzZWN0aW9uLmlkfSBjbGFzc05hbWU9XCJnbi1ub3RlLXRyZWUtc2VjdGlvblwiIGFyaWEtbGFiZWw9e3NlY3Rpb24ubGFiZWx9PlxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS10cmVlLXNlY3Rpb24taGVhZGVyXCI+XG4gICAgICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJnbi1ub3RlLXRyZWUtc2VjdGlvbi10aXRsZVwiPntzZWN0aW9uLmxhYmVsfTwvc3Bhbj5cbiAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtdHJlZS1zZWN0aW9uLWNvdW50XCI+e3NlY3Rpb24ubm90ZXMubGVuZ3RofTwvc3Bhbj5cbiAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgICB7c2VjdGlvbi5ub3Rlcy5tYXAoKG5vdGUpID0+IHtcbiAgICAgICAgICAgICAgICAgIGNvbnN0IG5vdGVNZXRhID0gZ2V0Tm90ZU1ldGEobm90ZSk7XG4gICAgICAgICAgICAgICAgICByZXR1cm4gKFxuICAgICAgICAgICAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICAgICAgICAgICAga2V5PXtub3RlLmlkfVxuICAgICAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT17YGduLW5vdGUtdHJlZS1pdGVtIGZpbGUgJHtzZWxlY3RlZE5vdGU/LmlkID09PSBub3RlLmlkID8gJ2FjdGl2ZScgOiAnJ31gfVxuICAgICAgICAgICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxuICAgICAgICAgICAgICAgICAgICAgIHRpdGxlPXtub3RlLnNvdXJjZVVybCB8fCBub3RlLnRpdGxlfVxuICAgICAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IG9uU2VsZWN0Tm90ZShub3RlLmlkKX1cbiAgICAgICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtdHJlZS1pY29uXCIgYXJpYS1oaWRkZW49XCJ0cnVlXCI+XG4gICAgICAgICAgICAgICAgICAgICAgICA8Tm90ZUtpbmRJY29uIGtpbmQ9e25vdGUua2luZH0gLz5cbiAgICAgICAgICAgICAgICAgICAgICA8L3NwYW4+XG4gICAgICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwiZ24tbm90ZS10cmVlLWxhYmVsXCI+e25vdGUudGl0bGV9PC9zcGFuPlxuICAgICAgICAgICAgICAgICAgICAgIHtzZWFyY2hBY3RpdmUgJiYgbm90ZS5tYXRjaFNuaXBwZXQgPyA8c3BhbiBjbGFzc05hbWU9XCJnbi1ub3RlLXRyZWUtbWF0Y2hcIj7lkb3kuK08L3NwYW4+IDogbnVsbH1cbiAgICAgICAgICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJnbi1ub3RlLXRyZWUtYmFkZ2VcIj57bm90ZU1ldGEuYmFkZ2V9PC9zcGFuPlxuICAgICAgICAgICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICAgICAgICAgICk7XG4gICAgICAgICAgICAgICAgfSl9XG4gICAgICAgICAgICAgIDwvc2VjdGlvbj5cbiAgICAgICAgICAgICkpXG4gICAgICAgICAgKSA6IChcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1lbXB0eVwiPntzZWFyY2hBY3RpdmUgPyAn5rKh5pyJ5Yy56YWN55qE56yU6K6w44CCJyA6ICfov5jmsqHmnInnn6Xor4bnrJTorrDjgIInfTwvZGl2PlxuICAgICAgICAgICl9XG4gICAgICAgIDwvZGl2PlxuICAgICAgPC9hc2lkZT5cclxuXHJcbiAgICAgIDxtYWluIGNsYXNzTmFtZT1cImduLW5vdGUtZWRpdG9yLWNvbHVtblwiPlxyXG4gICAgICAgIHtzZWxlY3RlZE5vdGUgPyAoXHJcbiAgICAgICAgICA8PlxyXG4gICAgICAgICAgICA8aGVhZGVyIGNsYXNzTmFtZT1cImduLW5vdGUtZWRpdG9yLWhlYWRlclwiPlxyXG4gICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1lZGl0b3ItaGVhZGluZ1wiPlxyXG4gICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwiZ24tbm90ZS1leWVicm93XCI+e2VkaXRhYmxlID8gJ0VkaXRhYmxlIE1hcmtkb3duJyA6ICdSZWFkb25seSBQcm9qZWN0aW9uJ308L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8aDI+e3NlbGVjdGVkTm90ZS50aXRsZX08L2gyPlxyXG4gICAgICAgICAgICAgICAgPHA+e3NlbGVjdGVkTm90ZS5zb3VyY2VVcmwgfHwgJ+i/meadoeeslOiusOi/mOayoeaciee7keWumua6kOaWh+S7tui3r+W+hOOAgid9PC9wPlxyXG4gICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLWhlYWRlci10b29sYmFyXCI+XHJcbiAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtdG9vbGJhci1idG4gYWN0aXZlXCIgcm9sZT1cInN0YXR1c1wiPlxyXG4gICAgICAgICAgICAgICAgICAgIHtzZWxlY3RlZE5vdGVNZXRhPy5sYWJlbH1cclxuICAgICAgICAgICAgICAgICAgPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICB7c2VsZWN0ZWROb3RlVGFncy5tYXAoKHRhZykgPT4gKFxyXG4gICAgICAgICAgICAgICAgICAgIDxzcGFuIGtleT17dGFnfSBjbGFzc05hbWU9XCJnbi1ub3RlLXRvb2xiYXItYnRuXCIgcm9sZT1cInN0YXR1c1wiPlxyXG4gICAgICAgICAgICAgICAgICAgICAgI3t0YWd9XHJcbiAgICAgICAgICAgICAgICAgICAgPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICApKX1cclxuICAgICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgICAge2VkaXRvclRvb2xiYXJ9XHJcbiAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLWVkaXRvci1hY3Rpb25zXCI+XHJcbiAgICAgICAgICAgICAgICB7ZWRpdGFibGUgPyAoXHJcbiAgICAgICAgICAgICAgICAgIDw+XHJcbiAgICAgICAgICAgICAgICAgICAgPGJ1dHRvbiBjbGFzc05hbWU9XCJkb2MtYWN0aW9uLWJ0biBzZWNvbmRhcnlcIiB0eXBlPVwiYnV0dG9uXCIgb25DbGljaz17b25EZWxldGV9PlxyXG4gICAgICAgICAgICAgICAgICAgICAg5Yig6ZmkXHJcbiAgICAgICAgICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICAgICAgICAgICAgPGJ1dHRvbiBjbGFzc05hbWU9XCJkb2MtYWN0aW9uLWJ0blwiIHR5cGU9XCJidXR0b25cIiBvbkNsaWNrPXtvblNhdmV9IGRpc2FibGVkPXshY2FuU2F2ZX0+XHJcbiAgICAgICAgICAgICAgICAgICAgICB7aXNTYXZpbmcgPyAn5L+d5a2Y5LitLi4uJyA6ICfkv53lrZgnfVxyXG4gICAgICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgICAgICA8Lz5cclxuICAgICAgICAgICAgICAgICkgOiBudWxsfVxyXG4gICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICA8L2hlYWRlcj5cclxuXHJcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1lZGl0b3Itc3VyZmFjZVwiPlxyXG4gICAgICAgICAgICAgIDxBdG9taWNNYXJrZG93bkVkaXRvclxyXG4gICAgICAgICAgICAgICAga2V5PXtzZWxlY3RlZE5vdGUuaWR9XHJcbiAgICAgICAgICAgICAgICB2YWx1ZT17ZWRpdG9yVmFsdWV9XHJcbiAgICAgICAgICAgICAgICBvbkNoYW5nZT17b25FZGl0b3JDaGFuZ2V9XHJcbiAgICAgICAgICAgICAgICBlZGl0YWJsZT17ZWRpdGFibGV9XHJcbiAgICAgICAgICAgICAgLz5cclxuICAgICAgICAgICAgPC9kaXY+XHJcblxyXG4gICAgICAgICAgICA8Zm9vdGVyIGNsYXNzTmFtZT1cImduLW5vdGUtZWRpdG9yLWZvb3RlclwiPlxyXG4gICAgICAgICAgICAgIDxzcGFuPlxyXG4gICAgICAgICAgICAgICAge3NhdmVNZXNzYWdlIHx8IChlZGl0YWJsZSA/ICdNYXJrZG93biDor7fmiYvliqjkv53lrZjvvIzkuZ/lj6/ku6Xkvb/nlKggQ3RybC9DbWQrU+OAgicgOiAn5b2T5YmN5piv5Y+q6K+75YW85a655oqV5b2x44CCJyl9XHJcbiAgICAgICAgICAgICAgPC9zcGFuPlxyXG4gICAgICAgICAgICAgIDxzcGFuPuabtOaWsOS6jiB7Zm9ybWF0VXBkYXRlZEF0KHNlbGVjdGVkTm90ZS51cGRhdGVkQXQpfTwvc3Bhbj5cclxuICAgICAgICAgICAgPC9mb290ZXI+XHJcbiAgICAgICAgICA8Lz5cclxuICAgICAgICApIDogKFxyXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLWVtcHR5LW1haW5cIj5cclxuICAgICAgICAgICAgPGgyPumAieaLqeaIluaWsOW7uuS4gOadoeefpeivhueslOiusDwvaDI+XG4gICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtZW1wdHktYWN0aW9uc1wiPlxyXG4gICAgICAgICAgICAgIDxidXR0b24gY2xhc3NOYW1lPVwiZG9jLWFjdGlvbi1idG5cIiB0eXBlPVwiYnV0dG9uXCIgb25DbGljaz17b25Pcmdhbml6ZUtub3dsZWRnZX0+XHJcbiAgICAgICAgICAgICAgICDnlJ/miJAgV2lraVxyXG4gICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgIDxidXR0b24gY2xhc3NOYW1lPVwiZG9jLWFjdGlvbi1idG4gc2Vjb25kYXJ5XCIgdHlwZT1cImJ1dHRvblwiIG9uQ2xpY2s9e29uQ3JlYXRlTm90ZX0+XHJcbiAgICAgICAgICAgICAgICDmlrDlu7rnrJTorrBcbiAgICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICAgICAge2VkaXRvclRvb2xiYXJ9XHJcbiAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgKX1cclxuICAgICAgPC9tYWluPlxyXG5cclxuICAgICAgPGFzaWRlIGNsYXNzTmFtZT17YGduLW5vdGUtc2lkZSAke2lzU2lkZUV4cGFuZGVkID8gJ2V4cGFuZGVkJyA6ICdjb2xsYXBzZWQnfWB9PlxuICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgY2xhc3NOYW1lPVwiZ24tbm90ZS1zaWRlLXRvZ2dsZVwiXG4gICAgICAgICAgdHlwZT1cImJ1dHRvblwiXG4gICAgICAgICAgb25DbGljaz17KCkgPT4gc2V0SXNTaWRlRXhwYW5kZWQoKGN1cnJlbnQpID0+ICFjdXJyZW50KX1cbiAgICAgICAgICBhcmlhLWV4cGFuZGVkPXtpc1NpZGVFeHBhbmRlZH1cbiAgICAgICAgPlxuICAgICAgICAgIHtpc1NpZGVFeHBhbmRlZCA/ICfmlLbotbcnIDogJ+ivpuaDhSd9XG4gICAgICAgIDwvYnV0dG9uPlxuICAgICAgICA8c2VjdGlvbiBjbGFzc05hbWU9XCJnbi1ub3RlLXNpZGUtY2FyZFwiPlxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1zaWRlLWNhcmQtaGVhZGVyXCI+XHJcbiAgICAgICAgICAgIDxkaXY+XHJcbiAgICAgICAgICAgICAgPGg0PuW9k+WJjeeslOiusDwvaDQ+XHJcbiAgICAgICAgICAgICAgPHA+6L+Z6YeM5bGV56S65b2T5YmN6YCJ5Lit56yU6K6w55qE5Z+656GA5YWD5L+h5oGv44CCPC9wPlxyXG4gICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwiZ24tbm90ZS1zaWRlLWNvdW50XCI+e3NlbGVjdGVkTm90ZSA/IDEgOiAwfTwvc3Bhbj5cclxuICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAge3NlbGVjdGVkTm90ZSA/IChcclxuICAgICAgICAgICAgPGRsIGNsYXNzTmFtZT1cImduLW5vdGUtbWV0YS1saXN0XCI+XHJcbiAgICAgICAgICAgICAgPGRpdj5cclxuICAgICAgICAgICAgICAgIDxkdD7nsbvlnos8L2R0PlxyXG4gICAgICAgICAgICAgICAgPGRkPntzZWxlY3RlZE5vdGVNZXRhPy5sYWJlbH08L2RkPlxyXG4gICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgIDxkaXY+XHJcbiAgICAgICAgICAgICAgICA8ZHQ+5qCH562+PC9kdD5cclxuICAgICAgICAgICAgICAgIDxkZD57c2VsZWN0ZWROb3RlVGFncy5sZW5ndGggPiAwID8gc2VsZWN0ZWROb3RlVGFncy5qb2luKCcgLyAnKSA6ICfmmoLml6DmoIfnrb4nfTwvZGQ+XHJcbiAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgPGRpdj5cclxuICAgICAgICAgICAgICAgIDxkdD7mnaXmupA8L2R0PlxyXG4gICAgICAgICAgICAgICAgPGRkPntzZWxlY3RlZE5vdGUuc291cmNlVXJsIHx8ICfmnKrnu5HlrprmupDmlofku7YnfTwvZGQ+XHJcbiAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgPGRpdj5cclxuICAgICAgICAgICAgICAgIDxkdD7mkZjopoE8L2R0PlxyXG4gICAgICAgICAgICAgICAgPGRkPntzZWxlY3RlZE5vdGUubWF0Y2hTbmlwcGV0IHx8IHN1bW1hcml6ZUJvZHkoc2VsZWN0ZWROb3RlLmJvZHlNYXJrZG93bil9PC9kZD5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgPC9kbD5cclxuICAgICAgICAgICkgOiAoXHJcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1lbXB0eVwiPuWFiOS7juW3puS+p+mAieaLqeS4gOadoeeslOiusOOAgjwvZGl2PlxyXG4gICAgICAgICAgKX1cclxuICAgICAgICA8L3NlY3Rpb24+XHJcblxyXG4gICAgICAgIDxzZWN0aW9uIGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jYXJkXCI+XHJcbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jYXJkLWhlYWRlclwiPlxyXG4gICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgIDxoND7mnIDov5HmlofmoaPlj5jmm7Q8L2g0PlxyXG4gICAgICAgICAgICAgIDxwPuiusOW9leaWsOWinuOAgeS/ruaUueOAgeWIoOmZpOWSjOWQjOatpeWvvOWFpeeahOacgOi/keWKqOS9nOOAgjwvcD5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jb3VudFwiPntkb2N1bWVudEV2ZW50cy5sZW5ndGh9PC9zcGFuPlxyXG4gICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICB7dmlzaWJsZURvY3VtZW50RXZlbnRzLmxlbmd0aCA+IDAgPyAoXHJcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1hY3Rpdml0eS1saXN0XCI+XHJcbiAgICAgICAgICAgICAge3Zpc2libGVEb2N1bWVudEV2ZW50cy5tYXAoKGV2ZW50KSA9PiAoXHJcbiAgICAgICAgICAgICAgICA8ZGl2IGtleT17ZXZlbnQuaWR9IGNsYXNzTmFtZT1cImduLW5vdGUtYWN0aXZpdHktaXRlbVwiPlxyXG4gICAgICAgICAgICAgICAgICA8c3Ryb25nPntldmVudC5kb2N1bWVudFRpdGxlfTwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgICAgICA8c3Bhbj57ZXZlbnQuc3VtbWFyeX08L3NwYW4+XHJcbiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1hY3Rpdml0eS1tZXRhXCI+XHJcbiAgICAgICAgICAgICAgICAgICAgPGVtPntET0NVTUVOVF9FVkVOVF9UUklHR0VSX0xBQkVMU1tldmVudC50cmlnZ2VyXSB8fCBldmVudC50cmlnZ2VyfTwvZW0+XHJcbiAgICAgICAgICAgICAgICAgICAgPHNwYW4+e2V2ZW50LnRyaWdnZXJ9PC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICAgIDxzcGFuPntmb3JtYXRVcGRhdGVkQXQoZXZlbnQudGltZXN0YW1wKX08L3NwYW4+XHJcbiAgICAgICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgKSl9XHJcbiAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgKSA6IChcclxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLWVtcHR5XCI+6L+Y5rKh5pyJ6K6w5b2V5Yiw5paH5qGj5Y+Y5pu044CCPC9kaXY+XHJcbiAgICAgICAgICApfVxyXG4gICAgICAgIDwvc2VjdGlvbj5cclxuXHJcbiAgICAgICAge3JlbmRlck5vdGVMaXN0KFxyXG4gICAgICAgICAgJ+exu+S8vOeslOiusCcsXHJcbiAgICAgICAgICBzaW1pbGFyTm90ZXMsXHJcbiAgICAgICAgICBvblNlbGVjdE5vdGUsXHJcbiAgICAgICAgICAn6YCJ5Lit56yU6K6w5ZCO77yM6L+Z6YeM5Lya5bGV56S66K+t5LmJ5LiK5pu05o6l6L+R55qE5YaF5a6544CCJyxcclxuICAgICAgICAgICflv6vpgJ/mn6XnnIvlkozlvZPliY3nrJTorrDmnIDmjqXov5HnmoTnn6Xor4bmnaHnm67jgIInXHJcbiAgICAgICAgKX1cclxuXHJcbiAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwiZ24tbm90ZS1zaWRlLWNhcmRcIj5cclxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1zaWRlLWNhcmQtaGVhZGVyXCI+XHJcbiAgICAgICAgICAgIDxkaXY+XHJcbiAgICAgICAgICAgICAgPGg0Pldpa2kg5Zu+6LCxPC9oND5cclxuICAgICAgICAgICAgICA8cD7ov5nph4zlsZXnpLrlvZPliY3nrJTorrDnmoTlsYDpg6jlm77osLHvvIzngrnlh7voioLngrnlj6/ku6Xnu6fnu63ot7PovazliLDnm7jpgrvkuIrkuIvmlofjgII8L3A+XHJcbiAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJnbi1ub3RlLXNpZGUtY291bnRcIj57Z3JhcGhOb2RlQ291bnR9PC9zcGFuPlxyXG4gICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtZ3JhcGgtbnVtYmVyc1wiPlxyXG4gICAgICAgICAgICA8c3Bhbj57Z3JhcGhOb2RlQ291bnR9IOS4quiKgueCuTwvc3Bhbj5cclxuICAgICAgICAgICAgPHNwYW4+e2dyYXBoRWRnZUNvdW50fSDmnaHovrk8L3NwYW4+XHJcbiAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgIHtuZWlnaGJvcmhvb2RHcmFwaCA/IChcclxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLWdyYXBoLXByZXZpZXdcIj5cclxuICAgICAgICAgICAgICA8S25vd2xlZGdlR3JhcGhDYW52YXNcclxuICAgICAgICAgICAgICAgIGdyYXBoPXtuZWlnaGJvcmhvb2RHcmFwaH1cclxuICAgICAgICAgICAgICAgIG1vZGU9XCJmb2N1c2VkXCJcclxuICAgICAgICAgICAgICAgIGNvbXBhY3RcclxuICAgICAgICAgICAgICAgIHNlbGVjdGVkTm90ZUlkPXtzZWxlY3RlZE5vdGU/LmlkIHx8IG51bGx9XHJcbiAgICAgICAgICAgICAgICBvblNlbGVjdE5vZGU9e29uU2VsZWN0Tm90ZX1cclxuICAgICAgICAgICAgICAvPlxyXG4gICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICkgOiAoXHJcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1lbXB0eVwiPuW9k+WJjeeslOiusOmZhOi/kei/mOayoeacieabtOWkmuWPr+WxleekuueahOWFs+ezu+iKgueCueOAgjwvZGl2PlxyXG4gICAgICAgICAgKX1cclxuICAgICAgICAgIDxidXR0b24gY2xhc3NOYW1lPVwiZG9jLWFjdGlvbi1idG4gc2Vjb25kYXJ5XCIgdHlwZT1cImJ1dHRvblwiIG9uQ2xpY2s9e29uT3Blbkdsb2JhbFdpa2lHcmFwaH0+XHJcbiAgICAgICAgICAgIOaJk+W8gCBXaWtpIOWbvuiwsVxyXG4gICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICB7bmVpZ2hib3Job29kTm90ZXMubGVuZ3RoID4gMCA/IChcclxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ub3RlLXJlbGF0aW9uLWxpc3RcIj5cclxuICAgICAgICAgICAgICB7bmVpZ2hib3Job29kTm90ZXMubWFwKChub3RlKSA9PiAoXHJcbiAgICAgICAgICAgICAgICA8YnV0dG9uIGtleT17bm90ZS5pZH0gdHlwZT1cImJ1dHRvblwiIG9uQ2xpY2s9eygpID0+IG9uU2VsZWN0Tm90ZShub3RlLmlkKX0+XHJcbiAgICAgICAgICAgICAgICAgIDxzdHJvbmc+e25vdGUudGl0bGV9PC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgICAgIDxzcGFuPntub3RlLm1hdGNoU25pcHBldCB8fCBzdW1tYXJpemVCb2R5KG5vdGUuYm9keU1hcmtkb3duKX08L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8L2J1dHRvbj5cclxuICAgICAgICAgICAgICApKX1cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICApIDogbnVsbH1cclxuICAgICAgICA8L3NlY3Rpb24+XHJcblxyXG4gICAgICAgIDxzZWN0aW9uIGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jYXJkXCI+XHJcbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jYXJkLWhlYWRlclwiPlxyXG4gICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgIDxoND7pmYTku7botYTmlpk8L2g0PlxyXG4gICAgICAgICAgICAgIDxwPuaKiuebtOaOpeW8leeUqOOAgemZhOi/kei1hOaWmeWSjOi1hOaWmeW6k+WFpeWPo+mDveaUvuWcqOi/memHjO+8jOWHj+WwkeadpeWbnuaJvuaWh+S7tuOAgjwvcD5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jb3VudFwiPnt2aXNpYmxlQXR0YWNobWVudENvdW50fTwvc3Bhbj5cclxuICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAge2F0dGFjaG1lbnRDYXRlZ29yeUNvdW50cy5sZW5ndGggPiAwID8gKFxyXG4gICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtY2F0ZWdvcnktZ3JpZFwiPlxyXG4gICAgICAgICAgICAgIHthdHRhY2htZW50Q2F0ZWdvcnlDb3VudHMubWFwKChpdGVtKSA9PiAoXHJcbiAgICAgICAgICAgICAgICA8ZGl2IGtleT17aXRlbS5jYXRlZ29yeX0gY2xhc3NOYW1lPVwiZ24tbm90ZS1jYXRlZ29yeS1jaGlwXCI+XHJcbiAgICAgICAgICAgICAgICAgIDxzdHJvbmc+e2l0ZW0uY291bnR9PC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgICAgIDxzcGFuPntBVFRBQ0hNRU5UX0NBVEVHT1JZX0xBQkVMU1tpdGVtLmNhdGVnb3J5XX08L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICApKX1cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICApIDogKFxyXG4gICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtZW1wdHlcIj7lvZPliY3pobnnm67ph4zov5jmsqHmnInlt7Lor4bliKvnmoTotYTmlpnpmYTku7bjgII8L2Rpdj5cclxuICAgICAgICAgICl9XHJcblxyXG4gICAgICAgICAge3JlbmRlckF0dGFjaG1lbnRMaXN0KFxyXG4gICAgICAgICAgICAn55u05o6l5YWz6IGUJyxcclxuICAgICAgICAgICAgYXR0YWNobWVudHMsXHJcbiAgICAgICAgICAgIG9uT3BlbkF0dGFjaG1lbnQsXHJcbiAgICAgICAgICAgICflvZPliY3nrJTorrDov5jmsqHmnInnm7TmjqXlhbPogZTnmoTotYTmlpnjgIInLFxyXG4gICAgICAgICAgICAn5q2j5paH6YeM55u05o6l5byV55So5Yiw55qE6ZmE5Lu25Lya5LyY5YWI5Ye6546w5Zyo6L+Z6YeM44CCJ1xyXG4gICAgICAgICAgKX1cclxuICAgICAgICAgIHtyZW5kZXJBdHRhY2htZW50TGlzdChcclxuICAgICAgICAgICAgJ+mZhOi/kei1hOaWmScsXHJcbiAgICAgICAgICAgIG5lYXJieUF0dGFjaG1lbnRzLFxyXG4gICAgICAgICAgICBvbk9wZW5BdHRhY2htZW50LFxyXG4gICAgICAgICAgICAn6ZmE6L+R55uu5b2V6YeM6L+Y5rKh5pyJ5pu05aSa5Y+v55So6LWE5paZ44CCJyxcclxuICAgICAgICAgICAgJ+WQjOebruW9leaIluebuOmCu+ebruW9leeahOi1hOaWmeS8muS9nOS4uuWwsei/keWPguiAg+WxleekuuOAgidcclxuICAgICAgICAgICl9XHJcbiAgICAgICAgICB7cmVuZGVyQXR0YWNobWVudExpc3QoXHJcbiAgICAgICAgICAgICfotYTmlpnlupMnLFxyXG4gICAgICAgICAgICBsaWJyYXJ5QXR0YWNobWVudHMsXHJcbiAgICAgICAgICAgIG9uT3BlbkF0dGFjaG1lbnQsXHJcbiAgICAgICAgICAgICfotYTmlpnlupPph4zov5jmsqHmnInmm7TlpJrmjqjojZDpmYTku7bjgIInLFxyXG4gICAgICAgICAgICAn6Z2i5ZCR5pW05Liq6aG555uu55+l6K+G5bqT55qE5Y+v5aSN55So6ZmE5Lu25YWl5Y+j44CCJ1xyXG4gICAgICAgICAgKX1cclxuICAgICAgICA8L3NlY3Rpb24+XHJcbiAgICAgIDwvYXNpZGU+XHJcbiAgICA8L3NlY3Rpb24+XHJcbiAgKTtcclxufTtcclxuIl0sImZpbGUiOiJDOi9Vc2Vycy9FdmVuL0RvY3VtZW50cy9BTEwtSU4tT05FL3NyYy9mZWF0dXJlcy9rbm93bGVkZ2Uvd29ya3NwYWNlL0tub3dsZWRnZU5vdGVXb3Jrc3BhY2UudHN4In0=

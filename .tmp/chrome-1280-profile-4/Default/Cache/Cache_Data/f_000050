@@ -1,0 +1,215 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=e88bbbb7"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+import { KnowledgeGraphCanvas } from "/src/features/knowledge/workspace/KnowledgeGraphCanvas.tsx";
+const summarizeNote = (note) => {
+  if (!note) {
+    return "";
+  }
+  const normalized = (note.matchSnippet || note.bodyMarkdown).replace(/\s+/g, " ").trim();
+  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+};
+export const KnowledgeGraphWorkspace = ({
+  graph,
+  selectedNote,
+  onSelectNote,
+  onBack,
+  mode = "focused"
+}) => {
+  const isGlobal = mode === "global";
+  const selectedSummary = summarizeNote(selectedNote);
+  return /* @__PURE__ */ jsxDEV("section", { className: "gn-graph-shell", children: [
+    /* @__PURE__ */ jsxDEV("header", { className: "gn-graph-header", children: [
+      /* @__PURE__ */ jsxDEV("div", { children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "gn-note-eyebrow", children: isGlobal ? "Global Wiki Graph" : "Focused Wiki Graph" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+          lineNumber: 54,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("h2", { children: isGlobal ? "Wiki 图谱" : "当前知识图谱" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+          lineNumber: 55,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("p", { children: isGlobal ? "这里展示整个项目的知识网络，不会强制锁定某个中心点。点击任意节点会直接打开对应知识笔记。" : "这里展示当前笔记的近邻关系，帮助你从一个知识点快速跳到相关上下文。" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+          lineNumber: 56,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 53,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-graph-header-actions", children: /* @__PURE__ */ jsxDEV("button", { className: "doc-action-btn secondary", type: "button", onClick: onBack, children: "返回知识库" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 63,
+        columnNumber: 11
+      }, this) }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 62,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+      lineNumber: 52,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "gn-graph-meta", children: [
+      /* @__PURE__ */ jsxDEV("span", { children: [
+        graph?.nodes.length || 0,
+        " 个节点"
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 70,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("span", { children: [
+        graph?.edges.length || 0,
+        " 条边"
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 71,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("span", { children: selectedNote ? `当前笔记: ${selectedNote.title}` : isGlobal ? "全局浏览模式" : "未选择中心笔记" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 72,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+      lineNumber: 69,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "gn-graph-stage", children: graph ? /* @__PURE__ */ jsxDEV(
+      KnowledgeGraphCanvas,
+      {
+        graph,
+        mode,
+        selectedNoteId: selectedNote?.id || null,
+        onSelectNode: onSelectNote
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 77,
+        columnNumber: 9
+      },
+      this
+    ) : /* @__PURE__ */ jsxDEV("div", { className: "gn-graph-empty", children: [
+      /* @__PURE__ */ jsxDEV("h3", { children: isGlobal ? "项目里还没有可展示的 Wiki 图谱" : "当前笔记暂时还没有关系图" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 85,
+        columnNumber: 13
+      }, this),
+      /* @__PURE__ */ jsxDEV("p", { children: isGlobal ? "先整理知识库或创建一些知识笔记，系统就能在这里聚合出全局关系网络。" : "打开一条知识笔记后，系统会加载它附近的知识关系。" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 86,
+        columnNumber: 13
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+      lineNumber: 84,
+      columnNumber: 9
+    }, this) }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+      lineNumber: 75,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("aside", { className: "gn-graph-inspector", children: /* @__PURE__ */ jsxDEV("section", { className: "gn-note-side-card", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-note-side-card-header", children: [
+        /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("h4", { children: selectedNote ? "当前节点" : "图谱说明" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+            lineNumber: 99,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("p", { children: selectedNote ? "这里显示当前选中知识笔记的摘要，方便你在图谱和正文之间切换。" : isGlobal ? "全局图谱会优先连接 Wiki 索引、AI 摘要和普通知识笔记之间的关联。" : "选择一条知识笔记后，这里会显示当前图谱中心点的摘要。" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+            lineNumber: 100,
+            columnNumber: 15
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+          lineNumber: 98,
+          columnNumber: 13
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: "gn-note-side-count", children: selectedNote ? 1 : graph?.nodes.length || 0 }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+          lineNumber: 108,
+          columnNumber: 13
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 97,
+        columnNumber: 11
+      }, this),
+      selectedNote ? /* @__PURE__ */ jsxDEV("div", { className: "gn-graph-selected", children: [
+        /* @__PURE__ */ jsxDEV("strong", { children: selectedNote.title }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+          lineNumber: 112,
+          columnNumber: 15
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { children: selectedSummary || "这条笔记暂时还没有可显示的正文摘要。" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+          lineNumber: 113,
+          columnNumber: 15
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 111,
+        columnNumber: 11
+      }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-note-empty", children: "当前还没有选中具体的知识节点。" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+        lineNumber: 116,
+        columnNumber: 11
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+      lineNumber: 96,
+      columnNumber: 9
+    }, this) }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+      lineNumber: 95,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx",
+    lineNumber: 51,
+    columnNumber: 5
+  }, this);
+};
+_c = KnowledgeGraphWorkspace;
+var _c;
+$RefreshReg$(_c, "KnowledgeGraphWorkspace");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Users/Even/Documents/ALL-IN-ONE/src/features/knowledge/workspace/KnowledgeGraphWorkspace.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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QUFTLFVBQTdCO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBQW9DO0FBQUEsVUFDcEMsdUJBQUMsT0FDRUEseUJBQ0csbUNBQ0FJLFdBQ0UseUNBQ0EsZ0NBTFI7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFNQTtBQUFBLGFBUkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQVNBO0FBQUEsUUFDQSx1QkFBQyxVQUFLLFdBQVUsc0JBQXNCSix5QkFBZSxJQUFJRCxPQUFPTyxNQUFNVixVQUFVLEtBQWhGO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBa0Y7QUFBQSxXQVhwRjtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBWUE7QUFBQSxNQUNDSSxlQUNDLHVCQUFDLFNBQUksV0FBVSxxQkFDYjtBQUFBLCtCQUFDLFlBQVFBLHVCQUFhUSxTQUF0QjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQTRCO0FBQUEsUUFDNUIsdUJBQUMsVUFBTUgsNkJBQW1CLHdCQUExQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQStDO0FBQUEsV0FGakQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUdBLElBRUEsdUJBQUMsU0FBSSxXQUFVLGlCQUFnQiwrQkFBL0I7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUE4QztBQUFBLFNBcEJsRDtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBc0JBLEtBdkJGO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0F3QkE7QUFBQSxPQXBFRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBcUVBO0FBRUo7QUFBRUssS0FsRldaO0FBQXVCLElBQUFZO0FBQUEsYUFBQUEsSUFBQSIsIm5hbWVzIjpbIktub3dsZWRnZUdyYXBoQ2FudmFzIiwic3VtbWFyaXplTm90ZSIsIm5vdGUiLCJub3JtYWxpemVkIiwibWF0Y2hTbmlwcGV0IiwiYm9keU1hcmtkb3duIiwicmVwbGFjZSIsInRyaW0iLCJsZW5ndGgiLCJzbGljZSIsIktub3dsZWRnZUdyYXBoV29ya3NwYWNlIiwiZ3JhcGgiLCJzZWxlY3RlZE5vdGUiLCJvblNlbGVjdE5vdGUiLCJvbkJhY2siLCJtb2RlIiwiaXNHbG9iYWwiLCJzZWxlY3RlZFN1bW1hcnkiLCJub2RlcyIsImVkZ2VzIiwidGl0bGUiLCJpZCIsIl9jIl0sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbIktub3dsZWRnZUdyYXBoV29ya3NwYWNlLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgdHlwZSB7IEtub3dsZWRnZU5laWdoYm9yaG9vZEdyYXBoLCBLbm93bGVkZ2VOb3RlIH0gZnJvbSAnLi4vbW9kZWwva25vd2xlZGdlJztcbmltcG9ydCB7IEtub3dsZWRnZUdyYXBoQ2FudmFzIH0gZnJvbSAnLi9Lbm93bGVkZ2VHcmFwaENhbnZhcyc7XG5cbnR5cGUgS25vd2xlZGdlR3JhcGhXb3Jrc3BhY2VQcm9wcyA9IHtcbiAgZ3JhcGg6IEtub3dsZWRnZU5laWdoYm9yaG9vZEdyYXBoIHwgbnVsbDtcbiAgc2VsZWN0ZWROb3RlOiBLbm93bGVkZ2VOb3RlIHwgbnVsbDtcbiAgb25TZWxlY3ROb3RlOiAobm90ZUlkOiBzdHJpbmcpID0+IHZvaWQ7XG4gIG9uQmFjazogKCkgPT4gdm9pZDtcbiAgbW9kZT86ICdmb2N1c2VkJyB8ICdnbG9iYWwnO1xufTtcblxuY29uc3Qgc3VtbWFyaXplTm90ZSA9IChub3RlOiBLbm93bGVkZ2VOb3RlIHwgbnVsbCkgPT4ge1xuICBpZiAoIW5vdGUpIHtcbiAgICByZXR1cm4gJyc7XG4gIH1cblxuICBjb25zdCBub3JtYWxpemVkID0gKG5vdGUubWF0Y2hTbmlwcGV0IHx8IG5vdGUuYm9keU1hcmtkb3duKS5yZXBsYWNlKC9cXHMrL2csICcgJykudHJpbSgpO1xuICByZXR1cm4gbm9ybWFsaXplZC5sZW5ndGggPiA5NiA/IGAke25vcm1hbGl6ZWQuc2xpY2UoMCwgOTYpfS4uLmAgOiBub3JtYWxpemVkO1xufTtcblxuZXhwb3J0IGNvbnN0IEtub3dsZWRnZUdyYXBoV29ya3NwYWNlID0gKHtcbiAgZ3JhcGgsXG4gIHNlbGVjdGVkTm90ZSxcbiAgb25TZWxlY3ROb3RlLFxuICBvbkJhY2ssXG4gIG1vZGUgPSAnZm9jdXNlZCcsXG59OiBLbm93bGVkZ2VHcmFwaFdvcmtzcGFjZVByb3BzKSA9PiB7XG4gIGNvbnN0IGlzR2xvYmFsID0gbW9kZSA9PT0gJ2dsb2JhbCc7XG4gIGNvbnN0IHNlbGVjdGVkU3VtbWFyeSA9IHN1bW1hcml6ZU5vdGUoc2VsZWN0ZWROb3RlKTtcblxuICByZXR1cm4gKFxuICAgIDxzZWN0aW9uIGNsYXNzTmFtZT1cImduLWdyYXBoLXNoZWxsXCI+XG4gICAgICA8aGVhZGVyIGNsYXNzTmFtZT1cImduLWdyYXBoLWhlYWRlclwiPlxuICAgICAgICA8ZGl2PlxuICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtZXllYnJvd1wiPntpc0dsb2JhbCA/ICdHbG9iYWwgV2lraSBHcmFwaCcgOiAnRm9jdXNlZCBXaWtpIEdyYXBoJ308L3NwYW4+XG4gICAgICAgICAgPGgyPntpc0dsb2JhbCA/ICdXaWtpIOWbvuiwsScgOiAn5b2T5YmN55+l6K+G5Zu+6LCxJ308L2gyPlxuICAgICAgICAgIDxwPlxuICAgICAgICAgICAge2lzR2xvYmFsXG4gICAgICAgICAgICAgID8gJ+i/memHjOWxleekuuaVtOS4qumhueebrueahOefpeivhue9kee7nO+8jOS4jeS8muW8uuWItumUgeWumuafkOS4quS4reW/g+eCueOAgueCueWHu+S7u+aEj+iKgueCueS8muebtOaOpeaJk+W8gOWvueW6lOefpeivhueslOiusOOAgidcbiAgICAgICAgICAgICAgOiAn6L+Z6YeM5bGV56S65b2T5YmN56yU6K6w55qE6L+R6YK75YWz57O777yM5biu5Yqp5L2g5LuO5LiA5Liq55+l6K+G54K55b+r6YCf6Lez5Yiw55u45YWz5LiK5LiL5paH44CCJ31cbiAgICAgICAgICA8L3A+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWdyYXBoLWhlYWRlci1hY3Rpb25zXCI+XG4gICAgICAgICAgPGJ1dHRvbiBjbGFzc05hbWU9XCJkb2MtYWN0aW9uLWJ0biBzZWNvbmRhcnlcIiB0eXBlPVwiYnV0dG9uXCIgb25DbGljaz17b25CYWNrfT5cbiAgICAgICAgICAgIOi/lOWbnuefpeivhuW6k1xuICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvaGVhZGVyPlxuXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWdyYXBoLW1ldGFcIj5cbiAgICAgICAgPHNwYW4+e2dyYXBoPy5ub2Rlcy5sZW5ndGggfHwgMH0g5Liq6IqC54K5PC9zcGFuPlxuICAgICAgICA8c3Bhbj57Z3JhcGg/LmVkZ2VzLmxlbmd0aCB8fCAwfSDmnaHovrk8L3NwYW4+XG4gICAgICAgIDxzcGFuPntzZWxlY3RlZE5vdGUgPyBg5b2T5YmN56yU6K6wOiAke3NlbGVjdGVkTm90ZS50aXRsZX1gIDogaXNHbG9iYWwgPyAn5YWo5bGA5rWP6KeI5qih5byPJyA6ICfmnKrpgInmi6nkuK3lv4PnrJTorrAnfTwvc3Bhbj5cbiAgICAgIDwvZGl2PlxuXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWdyYXBoLXN0YWdlXCI+XG4gICAgICAgIHtncmFwaCA/IChcbiAgICAgICAgICA8S25vd2xlZGdlR3JhcGhDYW52YXNcbiAgICAgICAgICAgIGdyYXBoPXtncmFwaH1cbiAgICAgICAgICAgIG1vZGU9e21vZGV9XG4gICAgICAgICAgICBzZWxlY3RlZE5vdGVJZD17c2VsZWN0ZWROb3RlPy5pZCB8fCBudWxsfVxuICAgICAgICAgICAgb25TZWxlY3ROb2RlPXtvblNlbGVjdE5vdGV9XG4gICAgICAgICAgLz5cbiAgICAgICAgKSA6IChcbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWdyYXBoLWVtcHR5XCI+XG4gICAgICAgICAgICA8aDM+e2lzR2xvYmFsID8gJ+mhueebrumHjOi/mOayoeacieWPr+WxleekuueahCBXaWtpIOWbvuiwsScgOiAn5b2T5YmN56yU6K6w5pqC5pe26L+Y5rKh5pyJ5YWz57O75Zu+J308L2gzPlxuICAgICAgICAgICAgPHA+XG4gICAgICAgICAgICAgIHtpc0dsb2JhbFxuICAgICAgICAgICAgICAgID8gJ+WFiOaVtOeQhuefpeivhuW6k+aIluWIm+W7uuS4gOS6m+efpeivhueslOiusO+8jOezu+e7n+WwseiDveWcqOi/memHjOiBmuWQiOWHuuWFqOWxgOWFs+ezu+e9kee7nOOAgidcbiAgICAgICAgICAgICAgICA6ICfmiZPlvIDkuIDmnaHnn6Xor4bnrJTorrDlkI7vvIzns7vnu5/kvJrliqDovb3lroPpmYTov5HnmoTnn6Xor4blhbPns7vjgIInfVxuICAgICAgICAgICAgPC9wPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICApfVxuICAgICAgPC9kaXY+XG5cbiAgICAgIDxhc2lkZSBjbGFzc05hbWU9XCJnbi1ncmFwaC1pbnNwZWN0b3JcIj5cbiAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwiZ24tbm90ZS1zaWRlLWNhcmRcIj5cbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jYXJkLWhlYWRlclwiPlxuICAgICAgICAgICAgPGRpdj5cbiAgICAgICAgICAgICAgPGg0PntzZWxlY3RlZE5vdGUgPyAn5b2T5YmN6IqC54K5JyA6ICflm77osLHor7TmmI4nfTwvaDQ+XG4gICAgICAgICAgICAgIDxwPlxuICAgICAgICAgICAgICAgIHtzZWxlY3RlZE5vdGVcbiAgICAgICAgICAgICAgICAgID8gJ+i/memHjOaYvuekuuW9k+WJjemAieS4reefpeivhueslOiusOeahOaRmOimge+8jOaWueS+v+S9oOWcqOWbvuiwseWSjOato+aWh+S5i+mXtOWIh+aNouOAgidcbiAgICAgICAgICAgICAgICAgIDogaXNHbG9iYWxcbiAgICAgICAgICAgICAgICAgICAgPyAn5YWo5bGA5Zu+6LCx5Lya5LyY5YWI6L+e5o6lIFdpa2kg57Si5byV44CBQUkg5pGY6KaB5ZKM5pmu6YCa55+l6K+G56yU6K6w5LmL6Ze055qE5YWz6IGU44CCJ1xuICAgICAgICAgICAgICAgICAgICA6ICfpgInmi6nkuIDmnaHnn6Xor4bnrJTorrDlkI7vvIzov5nph4zkvJrmmL7npLrlvZPliY3lm77osLHkuK3lv4PngrnnmoTmkZjopoHjgIInfVxuICAgICAgICAgICAgICA8L3A+XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLW5vdGUtc2lkZS1jb3VudFwiPntzZWxlY3RlZE5vdGUgPyAxIDogZ3JhcGg/Lm5vZGVzLmxlbmd0aCB8fCAwfTwvc3Bhbj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICB7c2VsZWN0ZWROb3RlID8gKFxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1ncmFwaC1zZWxlY3RlZFwiPlxuICAgICAgICAgICAgICA8c3Ryb25nPntzZWxlY3RlZE5vdGUudGl0bGV9PC9zdHJvbmc+XG4gICAgICAgICAgICAgIDxzcGFuPntzZWxlY3RlZFN1bW1hcnkgfHwgJ+i/meadoeeslOiusOaaguaXtui/mOayoeacieWPr+aYvuekuueahOato+aWh+aRmOimgeOAgid9PC9zcGFuPlxuICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgKSA6IChcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tbm90ZS1lbXB0eVwiPuW9k+WJjei/mOayoeaciemAieS4reWFt+S9k+eahOefpeivhuiKgueCueOAgjwvZGl2PlxuICAgICAgICAgICl9XG4gICAgICAgIDwvc2VjdGlvbj5cbiAgICAgIDwvYXNpZGU+XG4gICAgPC9zZWN0aW9uPlxuICApO1xufTtcbiJdLCJmaWxlIjoiQzovVXNlcnMvRXZlbi9Eb2N1bWVudHMvQUxMLUlOLU9ORS9zcmMvZmVhdHVyZXMva25vd2xlZGdlL3dvcmtzcGFjZS9Lbm93bGVkZ2VHcmFwaFdvcmtzcGFjZS50c3gifQ==

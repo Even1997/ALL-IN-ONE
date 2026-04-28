@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodNight 主工作台 UI 方向</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, "SF Pro Text", "Microsoft YaHei", Arial, sans-serif;
+        background: #eef1f4;
+        color: #181b20;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(120deg, rgba(91, 124, 116, 0.16), transparent 34%),
+          linear-gradient(240deg, rgba(176, 84, 71, 0.12), transparent 32%),
+          #eef1f4;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .board {
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .board-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 18px;
+      }
+
+      .board-title h1 {
+        margin: 0 0 6px;
+        font-size: 24px;
+        line-height: 1.2;
+      }
+
+      .board-title p {
+        margin: 0;
+        color: #5b6472;
+        font-size: 13px;
+      }
+
+      .pick-status {
+        min-width: 260px;
+        padding: 12px 14px;
+        border: 1px solid rgba(24, 27, 32, 0.1);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.76);
+        color: #414955;
+        font-size: 13px;
+      }
+
+      .variant-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .variant {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        border: 1px solid rgba(24, 27, 32, 0.12);
+        border-radius: 10px;
+        background: #fbfcfd;
+        box-shadow: 0 18px 50px rgba(34, 42, 53, 0.12);
+        overflow: hidden;
+      }
+
+      .variant[data-selected="true"] {
+        outline: 3px solid #2b8a78;
+        outline-offset: 3px;
+      }
+
+      .variant-meta {
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        border-bottom: 1px solid rgba(24, 27, 32, 0.1);
+      }
+
+      .variant-kicker {
+        color: #667085;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .variant-meta h2 {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.25;
+      }
+
+      .variant-meta p {
+        margin: 0;
+        min-height: 54px;
+        color: #5b6472;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .variant-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .variant-actions button {
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid rgba(24, 27, 32, 0.14);
+        border-radius: 7px;
+        background: #ffffff;
+        color: #1c2430;
+        cursor: pointer;
+      }
+
+      .variant-actions button:hover {
+        border-color: #2b8a78;
+        color: #126b5d;
+      }
+
+      .mockup {
+        aspect-ratio: 16 / 10;
+        min-height: 360px;
+        padding: 10px;
+      }
+
+      .tiny {
+        font-size: 10px;
+        color: currentColor;
+        opacity: 0.64;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .card {
+        border-radius: 8px;
+        padding: 10px;
+        min-width: 0;
+      }
+
+      .card strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+
+      .bars {
+        display: grid;
+        gap: 5px;
+      }
+
+      .bar {
+        height: 7px;
+        border-radius: 99px;
+        background: currentColor;
+        opacity: 0.16;
+      }
+
+      .bar.short {
+        width: 58%;
+      }
+
+      .bar.mid {
+        width: 76%;
+      }
+
+      .dots {
+        display: flex;
+        gap: 5px;
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 99px;
+        background: currentColor;
+        opacity: 0.34;
+      }
+
+      .v-a {
+        display: grid;
+        grid-template-columns: 46px minmax(0, 1fr) 238px;
+        grid-template-rows: 42px minmax(0, 1fr);
+        gap: 8px;
+        height: 100%;
+        border-radius: 9px;
+        background: #171b1f;
+        color: #edf3ee;
+      }
+
+      .v-a .rail {
+        grid-row: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 6px;
+        border-radius: 8px;
+        background: #0e1114;
+      }
+
+      .v-a .rail-icons,
+      .v-a .rail-foot {
+        display: grid;
+        gap: 8px;
+      }
+
+      .v-a .rail-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.07);
+      }
+
+      .v-a .rail-icon.active {
+        background: #58c9a5;
+      }
+
+      .v-a .topbar {
+        grid-column: 2 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px;
+        border-radius: 8px;
+        background: #20262b;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .v-a .command {
+        width: 210px;
+        height: 24px;
+        border-radius: 6px;
+        background: #11161a;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .v-a .main {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .v-a .side,
+      .v-a .center,
+      .v-a .ai {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: #20262b;
+      }
+
+      .v-a .side {
+        border-radius: 8px;
+        padding: 10px;
+      }
+
+      .v-a .center {
+        border-radius: 8px;
+        padding: 10px;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .v-a .ai {
+        border-radius: 8px;
+        padding: 10px;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 10px;
+      }
+
+      .v-a .task {
+        background: #151a1e;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+      }
+
+      .v-a .pill {
+        background: rgba(88, 201, 165, 0.12);
+        color: #8ff0cc;
+      }
+
+      .v-b {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        grid-template-rows: 54px 36px minmax(0, 1fr);
+        gap: 8px;
+        height: 100%;
+        border-radius: 9px;
+        background: #f7f3ed;
+        color: #25201b;
+      }
+
+      .v-b .titlebar {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 14px;
+        border-radius: 8px;
+        background: #fffaf2;
+        border: 1px solid #ded4c6;
+      }
+
+      .v-b .tabs {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px;
+        border-radius: 8px;
+        background: #e8dfd2;
+      }
+
+      .v-b .tab {
+        min-width: 72px;
+        height: 26px;
+        border-radius: 6px;
+        background: transparent;
+      }
+
+      .v-b .tab.active {
+        background: #fffaf2;
+        box-shadow: 0 4px 12px rgba(66, 51, 37, 0.12);
+      }
+
+      .v-b .workspace {
+        display: grid;
+        grid-template-columns: 210px minmax(0, 1fr);
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .v-b .outline,
+      .v-b .document,
+      .v-b .ai {
+        border: 1px solid #ded4c6;
+        background: #fffaf2;
+      }
+
+      .v-b .outline,
+      .v-b .document,
+      .v-b .ai {
+        border-radius: 8px;
+        padding: 10px;
+      }
+
+      .v-b .document {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 10px;
+      }
+
+      .v-b .paper {
+        border-radius: 7px;
+        background: #ffffff;
+        border: 1px solid #e5ded4;
+        padding: 12px;
+      }
+
+      .v-b .ai {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 10px;
+      }
+
+      .v-b .pill {
+        background: #d9e7df;
+        color: #25624f;
+      }
+
+      .v-c {
+        display: grid;
+        grid-template-columns: 168px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) 52px;
+        gap: 8px;
+        height: 100%;
+        border-radius: 9px;
+        background: #eef6f4;
+        color: #172826;
+      }
+
+      .v-c .flow {
+        grid-row: 1 / -1;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 8px;
+        padding: 10px;
+        border-radius: 8px;
+        background: #ffffff;
+        border: 1px solid #cfe0dc;
+      }
+
+      .v-c .stage {
+        min-height: 34px;
+        border-radius: 7px;
+        background: #f3f8f6;
+        border: 1px solid #d8e8e4;
+      }
+
+      .v-c .stage.active {
+        background: #d9f2ea;
+        border-color: #7dcab6;
+      }
+
+      .v-c .canvas {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 248px;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .v-c .board-main,
+      .v-c .assistant,
+      .v-c .command-dock {
+        border-radius: 8px;
+        background: #ffffff;
+        border: 1px solid #cfe0dc;
+      }
+
+      .v-c .board-main {
+        padding: 10px;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .v-c .kanban {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .v-c .lane {
+        border-radius: 7px;
+        padding: 8px;
+        background: #f3f8f6;
+        border: 1px solid #d8e8e4;
+      }
+
+      .v-c .assistant {
+        padding: 10px;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .v-c .command-dock {
+        grid-column: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+      }
+
+      .v-c .pill {
+        background: #ffe2bc;
+        color: #8a5413;
+      }
+
+      .notes {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .note {
+        border: 1px solid rgba(24, 27, 32, 0.1);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.76);
+        padding: 12px;
+        font-size: 12px;
+        line-height: 1.55;
+        color: #4d5663;
+      }
+
+      .note strong {
+        display: block;
+        margin-bottom: 5px;
+        color: #20242b;
+      }
+
+      @media (max-width: 1180px) {
+        .variant-grid,
+        .notes {
+          grid-template-columns: 1fr;
+        }
+
+        .variant-meta p {
+          min-height: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <header class="board-header">
+        <div class="board-title">
+          <h1>GoodNight 主工作台布局方向</h1>
+          <p>选择的是骨架：导航怎么放、AI 面板怎么参与、内容密度怎么控制。视觉细节会在下一轮实时页面里继续微调。</p>
+        </div>
+        <div class="pick-status" id="pickStatus">还没选择。点击任意方案的“选择这个方向”，然后告诉 Codex 选了 A/B/C。</div>
+      </header>
+
+      <section class="variant-grid" aria-label="设计方向">
+        <article class="variant" data-variant="A">
+          <div class="variant-meta">
+            <span class="variant-kicker">A / Command Deck</span>
+            <h2>紧凑命令舱</h2>
+            <p>保留当前左侧图标轨道和右侧 AI，但让顶部成为命令栏，中间区域更像 IDE。适合重度使用、经常切换模块和任务的人。</p>
+            <div class="variant-actions">
+              <button type="button" data-pick="A">选择这个方向</button>
+              <button type="button" data-note="A">喜欢密度，但想更亮</button>
+            </div>
+          </div>
+          <div class="mockup">
+            <div class="v-a">
+              <aside class="rail">
+                <div class="rail-icons">
+                  <div class="rail-icon active"></div>
+                  <div class="rail-icon"></div>
+                  <div class="rail-icon"></div>
+                  <div class="rail-icon"></div>
+                </div>
+                <div class="rail-foot">
+                  <div class="rail-icon"></div>
+                  <div class="rail-icon"></div>
+                </div>
+              </aside>
+              <header class="topbar">
+                <div class="row">
+                  <strong>GoodNight Workspace</strong>
+                  <span class="pill">Knowledge</span>
+                </div>
+                <div class="command"></div>
+                <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+              </header>
+              <section class="main">
+                <aside class="side stack">
+                  <strong>Project Map</strong>
+                  <div class="card task"><strong>需求树</strong><div class="bars"><span class="bar"></span><span class="bar short"></span></div></div>
+                  <div class="card task"><strong>Wiki</strong><div class="bars"><span class="bar mid"></span><span class="bar"></span></div></div>
+                  <div class="card task"><strong>页面</strong><div class="bars"><span class="bar"></span><span class="bar short"></span></div></div>
+                </aside>
+                <main class="center">
+                  <div class="row" style="justify-content: space-between">
+                    <strong>当前任务 · 设计规格</strong>
+                    <span class="tiny">autosaved</span>
+                  </div>
+                  <div class="stack">
+                    <div class="card task"><strong>Feature brief</strong><div class="bars"><span class="bar"></span><span class="bar"></span><span class="bar mid"></span></div></div>
+                    <div class="card task"><strong>Wireframe notes</strong><div class="bars"><span class="bar mid"></span><span class="bar short"></span></div></div>
+                    <div class="card task"><strong>Implementation lanes</strong><div class="bars"><span class="bar"></span><span class="bar mid"></span></div></div>
+                  </div>
+                </main>
+              </section>
+              <aside class="ai">
+                <div class="row" style="justify-content: space-between"><strong>GN Agent</strong><span class="pill">active</span></div>
+                <div class="stack">
+                  <div class="card task"><strong>正在整理上下文</strong><div class="bars"><span class="bar"></span><span class="bar short"></span></div></div>
+                  <div class="card task"><strong>建议下一步</strong><div class="bars"><span class="bar mid"></span><span class="bar"></span></div></div>
+                </div>
+                <div class="card task"><span class="tiny">Ask or run command...</span></div>
+              </aside>
+            </div>
+          </div>
+        </article>
+
+        <article class="variant" data-variant="B">
+          <div class="variant-meta">
+            <span class="variant-kicker">B / Document Studio</span>
+            <h2>文档工作室</h2>
+            <p>把主工作区变成“编辑器 + 大纲 + AI 辅助”的阅读写作体验，顶部用清晰标签切流程。适合需求、Wiki、页面规划占比高的产品。</p>
+            <div class="variant-actions">
+              <button type="button" data-pick="B">选择这个方向</button>
+              <button type="button" data-note="B">喜欢温和，但要更专业</button>
+            </div>
+          </div>
+          <div class="mockup">
+            <div class="v-b">
+              <header class="titlebar">
+                <div class="stack" style="gap: 2px">
+                  <strong>GoodNight Workspace</strong>
+                  <span class="tiny">产品知识与交付文档</span>
+                </div>
+                <div class="row"><span class="pill">同步中</span><span class="pill">项目</span></div>
+              </header>
+              <nav class="tabs">
+                <div class="tab active"></div>
+                <div class="tab"></div>
+                <div class="tab"></div>
+                <div class="tab"></div>
+                <div class="tab"></div>
+              </nav>
+              <section class="workspace">
+                <aside class="outline stack">
+                  <strong>Outline</strong>
+                  <div class="bars"><span class="bar"></span><span class="bar short"></span><span class="bar mid"></span></div>
+                  <div class="card" style="background: #f0e8dd"><strong>当前章节</strong><div class="bars"><span class="bar"></span><span class="bar short"></span></div></div>
+                  <div class="bars"><span class="bar mid"></span><span class="bar"></span><span class="bar short"></span></div>
+                </aside>
+                <main class="document">
+                  <div class="row" style="justify-content: space-between">
+                    <strong>知识库 / 用户旅程</strong>
+                    <span class="tiny">edited 2 min ago</span>
+                  </div>
+                  <div class="paper stack">
+                    <strong>核心流程</strong>
+                    <div class="bars"><span class="bar"></span><span class="bar"></span><span class="bar mid"></span><span class="bar short"></span></div>
+                    <div class="card" style="background: #f6efe5"><strong>引用和任务</strong><div class="bars"><span class="bar mid"></span><span class="bar short"></span></div></div>
+                    <div class="bars"><span class="bar"></span><span class="bar mid"></span></div>
+                  </div>
+                </main>
+              </section>
+              <aside class="ai">
+                <div class="row" style="justify-content: space-between"><strong>AI Editor</strong><span class="pill">review</span></div>
+                <div class="stack">
+                  <div class="card" style="background: #f6efe5"><strong>补全缺口</strong><div class="bars"><span class="bar"></span><span class="bar short"></span></div></div>
+                  <div class="card" style="background: #f6efe5"><strong>引用建议</strong><div class="bars"><span class="bar mid"></span><span class="bar"></span></div></div>
+                </div>
+                <div class="card" style="background: #ffffff"><span class="tiny">Rewrite, summarize, generate...</span></div>
+              </aside>
+            </div>
+          </div>
+        </article>
+
+        <article class="variant" data-variant="C">
+          <div class="variant-meta">
+            <span class="variant-kicker">C / Flow Board</span>
+            <h2>流程看板</h2>
+            <p>把产品从“页面集合”改成端到端流程：左边是阶段，主区是任务和状态，底部是命令入口。适合强调从需求到发布的完整闭环。</p>
+            <div class="variant-actions">
+              <button type="button" data-pick="C">选择这个方向</button>
+              <button type="button" data-note="C">喜欢流程感，但要少一点看板</button>
+            </div>
+          </div>
+          <div class="mockup">
+            <div class="v-c">
+              <aside class="flow">
+                <div class="stack">
+                  <strong>Flow</strong>
+                  <span class="tiny">从想法到发布</span>
+                </div>
+                <div class="stack">
+                  <div class="stage active"></div>
+                  <div class="stage"></div>
+                  <div class="stage"></div>
+                  <div class="stage"></div>
+                  <div class="stage"></div>
+                </div>
+              </aside>
+              <section class="canvas">
+                <main class="board-main">
+                  <div class="row" style="justify-content: space-between">
+                    <strong>当前阶段 · 设计确认</strong>
+                    <span class="pill">3 blockers</span>
+                  </div>
+                  <div class="kanban">
+                    <div class="lane stack"><strong>输入</strong><div class="card" style="background: #fff"><div class="bars"><span class="bar"></span><span class="bar short"></span></div></div><div class="card" style="background: #fff"><div class="bars"><span class="bar mid"></span></div></div></div>
+                    <div class="lane stack"><strong>决策</strong><div class="card" style="background: #fff"><div class="bars"><span class="bar"></span><span class="bar mid"></span></div></div><div class="card" style="background: #fff"><div class="bars"><span class="bar short"></span></div></div></div>
+                    <div class="lane stack"><strong>输出</strong><div class="card" style="background: #fff"><div class="bars"><span class="bar mid"></span><span class="bar"></span></div></div><div class="card" style="background: #fff"><div class="bars"><span class="bar"></span></div></div></div>
+                  </div>
+                </main>
+                <aside class="assistant">
+                  <div class="row" style="justify-content: space-between"><strong>Assistant</strong><span class="pill">guide</span></div>
+                  <div class="stack">
+                    <div class="card" style="background: #f3f8f6"><strong>下一步</strong><div class="bars"><span class="bar"></span><span class="bar short"></span></div></div>
+                    <div class="card" style="background: #f3f8f6"><strong>风险</strong><div class="bars"><span class="bar mid"></span><span class="bar"></span></div></div>
+                  </div>
+                </aside>
+              </section>
+              <footer class="command-dock">
+                <div class="row"><strong>Command</strong><span class="tiny">create, ask, run, ship</span></div>
+                <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+              </footer>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="notes" aria-label="取舍说明">
+        <div class="note">
+          <strong>A 的取舍</strong>
+          最贴近现在的代码骨架，实施成本最低。风险是会偏工程工具，需要靠间距、字体和浅色模式降低压迫感。
+        </div>
+        <div class="note">
+          <strong>B 的取舍</strong>
+          最适合知识库、Wiki、页面文档这条主线，阅读体验会明显提升。风险是开发/测试/发布这些流程可能显得不够“操作台”。
+        </div>
+        <div class="note">
+          <strong>C 的取舍</strong>
+          产品叙事最强，能让 GoodNight 像一个完整交付系统。风险是现有模块需要重新组织，改动会比 A/B 大。
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const status = document.querySelector("#pickStatus");
+      const variants = Array.from(document.querySelectorAll(".variant"));
+
+      function pick(value, note) {
+        variants.forEach((variant) => {
+          variant.dataset.selected = String(variant.dataset.variant === value);
+        });
+        const message = note
+          ? `已记录：${value}，偏好是“${note}”。告诉 Codex：我选 ${value}，${note}。`
+          : `已选择：${value}。告诉 Codex：我选 ${value}。`;
+        status.textContent = message;
+        localStorage.setItem("goodnight-ui-direction", message);
+      }
+
+      document.addEventListener("click", (event) => {
+        const target = event.target.closest("button");
+        if (!target) return;
+        if (target.dataset.pick) pick(target.dataset.pick, "");
+        if (target.dataset.note) pick(target.dataset.note, target.textContent.trim());
+      });
+
+      const restored = localStorage.getItem("goodnight-ui-direction");
+      if (restored) status.textContent = restored;
+    </script>
+  </body>
+</html>

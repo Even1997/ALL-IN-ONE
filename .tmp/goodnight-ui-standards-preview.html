@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodNight UI 规范草案</title>
+    <style>
+      :root {
+        --window-bg: #f5f5f7;
+        --window-glow: radial-gradient(circle at top left, rgba(0, 122, 255, 0.1), transparent 30%);
+        --chrome-bg: rgba(255, 255, 255, 0.72);
+        --chrome-border: rgba(0, 0, 0, 0.08);
+        --panel-bg: rgba(255, 255, 255, 0.82);
+        --panel-strong: rgba(255, 255, 255, 0.94);
+        --input-bg: rgba(255, 255, 255, 0.74);
+        --text-primary: #1d1d1f;
+        --text-secondary: rgba(29, 29, 31, 0.68);
+        --text-tertiary: rgba(29, 29, 31, 0.46);
+        --accent: #007aff;
+        --success: #10a37f;
+        --warning: #b76e00;
+        --danger: #dc2626;
+        --shadow-panel: 0 18px 36px rgba(31, 35, 42, 0.12);
+        --shadow-floating: 0 24px 56px rgba(31, 35, 42, 0.18);
+        --focus-ring: 0 0 0 3px rgba(0, 122, 255, 0.18);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Microsoft YaHei", Arial, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--text-primary);
+        background: var(--window-bg);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      :root[data-theme="dark"] {
+        --window-bg: #111317;
+        --window-glow: radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 32%);
+        --chrome-bg: rgba(28, 31, 38, 0.82);
+        --chrome-border: rgba(255, 255, 255, 0.08);
+        --panel-bg: rgba(22, 24, 30, 0.9);
+        --panel-strong: rgba(28, 31, 38, 0.96);
+        --input-bg: rgba(255, 255, 255, 0.06);
+        --text-primary: #f3f4f6;
+        --text-secondary: rgba(243, 244, 246, 0.78);
+        --text-tertiary: rgba(243, 244, 246, 0.56);
+        --accent: #60a5fa;
+        --success: #34d399;
+        --warning: #fbbf24;
+        --danger: #f87171;
+        --shadow-panel: 0 18px 36px rgba(0, 0, 0, 0.28);
+        --shadow-floating: 0 24px 56px rgba(0, 0, 0, 0.4);
+        --focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.24);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--window-glow), linear-gradient(180deg, color-mix(in srgb, var(--window-bg) 92%, white), var(--window-bg));
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+
+      .page {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 12px;
+        min-height: 100vh;
+        padding: 12px;
+      }
+
+      .panel {
+        border: 1px solid var(--chrome-border);
+        border-radius: 14px;
+        background: var(--panel-bg);
+        box-shadow: var(--shadow-panel);
+        backdrop-filter: blur(22px);
+        color: var(--text-primary);
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 14px;
+      }
+
+      .content {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 56px;
+        padding: 10px 14px;
+        background: var(--chrome-bg);
+      }
+
+      .title h1 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.25;
+      }
+
+      .title p,
+      .muted {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+
+      .kicker {
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+        gap: 12px;
+        min-height: 0;
+      }
+
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+        padding: 14px;
+      }
+
+      .section h2 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .card {
+        border: 1px solid var(--chrome-border);
+        border-radius: 12px;
+        background: var(--panel-strong);
+        padding: 12px;
+      }
+
+      .card h3 {
+        margin: 0 0 6px;
+        font-size: 13px;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+
+      .token-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .token-row {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--chrome-border);
+      }
+
+      .token-row:last-child {
+        border-bottom: 0;
+      }
+
+      .code {
+        font-family: "SF Mono", Menlo, Consolas, monospace;
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .button {
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--panel-strong) 88%, transparent);
+        color: var(--text-primary);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+      }
+
+      .button:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, var(--accent) 22%, var(--chrome-border));
+      }
+
+      .button:focus-visible,
+      .input:focus-visible,
+      .textarea:focus-visible {
+        outline: 0;
+        box-shadow: var(--focus-ring);
+      }
+
+      .button.primary {
+        background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent));
+        color: white;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+      }
+
+      .button.ghost {
+        background: transparent;
+        color: var(--text-secondary);
+      }
+
+      .button.icon {
+        display: inline-grid;
+        place-items: center;
+        width: 32px;
+        min-width: 32px;
+        padding: 0;
+      }
+
+      .input,
+      .textarea {
+        width: 100%;
+        border: 1px solid var(--chrome-border);
+        border-radius: 10px;
+        background: var(--input-bg);
+        color: var(--text-primary);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+
+      .input {
+        min-height: 36px;
+        padding: 0 12px;
+      }
+
+      .textarea {
+        min-height: 96px;
+        padding: 10px 12px;
+        resize: vertical;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 9px;
+        border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--chrome-border));
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 9%, transparent);
+        color: color-mix(in srgb, var(--accent) 78%, var(--text-primary));
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .nav-state-demo {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        gap: 10px;
+        align-items: stretch;
+      }
+
+      .rail-demo {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 54px;
+        min-height: 176px;
+        padding: 8px 6px 10px;
+        border: 1px solid var(--chrome-border);
+        border-radius: 14px;
+        background: var(--chrome-bg);
+        box-shadow: var(--shadow-panel);
+      }
+
+      .rail-stack {
+        display: grid;
+        gap: 6px;
+      }
+
+      .rail-item {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border: 1px solid transparent;
+        border-radius: 11px;
+        color: var(--text-secondary);
+      }
+
+      .rail-item.active,
+      .rail-item:hover {
+        border-color: color-mix(in srgb, var(--accent) 18%, var(--chrome-border));
+        background: color-mix(in srgb, var(--accent) 11%, var(--panel-strong));
+        color: var(--text-primary);
+      }
+
+      .rail-item.active {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+      }
+
+      .nav-state-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .nav-state-row {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        min-height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--chrome-border);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+      }
+
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .swatch {
+        min-height: 72px;
+        border-radius: 10px;
+        padding: 8px;
+        border: 1px solid var(--chrome-border);
+        display: flex;
+        flex-direction: column;
+        justify-content: end;
+        color: #fff;
+        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .do-list {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+
+      .do-list li {
+        margin: 5px 0;
+      }
+
+      .feedback {
+        border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--chrome-border));
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--accent) 7%, var(--panel-strong));
+        padding: 12px;
+      }
+
+      .choice {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .choice button {
+        min-height: 46px;
+      }
+
+      @media (max-width: 1120px) {
+        .page,
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <aside class="sidebar panel">
+        <div class="title">
+          <span class="kicker">GoodNight UI Standard</span>
+          <h1>沿用当前风格，补齐规范</h1>
+          <p>这不是新视觉方向，而是把现在的 macOS 工作台质感变成可执行规则。</p>
+        </div>
+
+        <div class="feedback">
+          <strong>推荐基线</strong>
+          <p class="muted">保留当前外观：轻玻璃、紧凑密度、角色色点缀、14px 面板圆角。主要修“不统一”：字号、间距、卡片嵌套、按钮状态。</p>
+        </div>
+
+        <div class="choice">
+          <button class="button primary" data-choice="current">当前密度</button>
+          <button class="button" data-choice="airier">更松一点</button>
+          <button class="button" data-choice="stricter">更规整</button>
+        </div>
+
+        <div class="card">
+          <h3>你点选后告诉我</h3>
+          <p id="choiceText">还没选择。可以点一个规范倾向，也可以直接说“就按推荐基线”。</p>
+        </div>
+
+        <button class="button ghost" id="themeToggle" type="button">切换亮/暗预览</button>
+      </aside>
+
+      <section class="content">
+        <header class="topbar panel">
+          <div class="title">
+            <h1>UI 规范草案</h1>
+            <p>目标：让后续每个页面都像同一个产品，而不是不同模块各调一套。</p>
+          </div>
+          <div class="row">
+            <span class="pill">macOS workbench</span>
+            <span class="pill">compact</span>
+            <span class="pill">role accent</span>
+          </div>
+        </header>
+
+        <div class="grid">
+          <section class="section panel">
+            <div class="title">
+              <span class="kicker">01 / Tokens</span>
+              <h2>基础尺度</h2>
+            </div>
+
+            <div class="card-grid">
+              <div class="card">
+                <h3>字体</h3>
+                <div class="token-list">
+                  <div class="token-row"><span class="code">11px</span><span>标签、eyebrow、弱元信息，必须大写时加 0.04em 字距。</span></div>
+                  <div class="token-row"><span class="code">12px</span><span>说明文字、列表副标题、状态描述。</span></div>
+                  <div class="token-row"><span class="code">13px</span><span>默认 UI 字号。按钮、表单、正文控件统一基准。</span></div>
+                  <div class="token-row"><span class="code">16-18px</span><span>面板标题和工作台标题。不要在工具界面里用 hero 字号。</span></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>间距</h3>
+                <div class="token-list">
+                  <div class="token-row"><span class="code">4px</span><span>内部微间距、图标和文字之间。</span></div>
+                  <div class="token-row"><span class="code">8px</span><span>按钮组、紧凑列表、同类控件之间。</span></div>
+                  <div class="token-row"><span class="code">10-12px</span><span>工作台 gutter、卡片间距、模块之间。</span></div>
+                  <div class="token-row"><span class="code">14-16px</span><span>面板内边距、表单区块、弹窗主体。</span></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>圆角</h3>
+                <div class="token-list">
+                  <div class="token-row"><span class="code">6px</span><span>小型 toggle、菜单项、代码/状态小块。</span></div>
+                  <div class="token-row"><span class="code">10px</span><span>按钮、输入框、顶部工具按钮。</span></div>
+                  <div class="token-row"><span class="code">12px</span><span>卡片、列表节点、局部容器。</span></div>
+                  <div class="token-row"><span class="code">14px</span><span>主面板、顶部栏、侧边栏。全局工作台默认值。</span></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>阴影和层级</h3>
+                <div class="token-list">
+                  <div class="token-row"><span class="code">panel</span><span>0 18px 36px，给主面板和顶部栏。</span></div>
+                  <div class="token-row"><span class="code">floating</span><span>0 24px 56px，给菜单、弹窗、悬浮 AI。</span></div>
+                  <div class="token-row"><span class="code">focus</span><span>3px 半透明角色色，不使用 outline 默认蓝框。</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="title">
+              <span class="kicker">02 / Components</span>
+              <h2>组件样式基线</h2>
+            </div>
+
+            <div class="card-grid">
+              <div class="card">
+                <h3>按钮</h3>
+                <div class="row">
+                  <button class="button primary">Primary</button>
+                  <button class="button">Secondary</button>
+                  <button class="button ghost">Ghost</button>
+                  <button class="button icon">⌘</button>
+                </div>
+                <p style="margin-top: 10px">主按钮只用于当前流程的主要动作。普通工具命令优先 secondary 或 icon。</p>
+              </div>
+
+              <div class="card">
+                <h3>输入</h3>
+                <div class="row" style="align-items: stretch">
+                  <input class="input" placeholder="搜索项目或命令" />
+                </div>
+                <textarea class="textarea" style="margin-top: 8px" placeholder="说明、需求、AI prompt..."></textarea>
+              </div>
+
+              <div class="card">
+                <h3>导航状态</h3>
+                <div class="nav-state-demo">
+                  <div class="rail-demo">
+                    <div class="rail-stack">
+                      <span class="rail-item active">知</span>
+                      <span class="rail-item">W</span>
+                      <span class="rail-item">页</span>
+                      <span class="rail-item">设</span>
+                    </div>
+                    <div class="rail-stack">
+                      <span class="rail-item">月</span>
+                      <span class="rail-item">夹</span>
+                    </div>
+                  </div>
+                  <div class="nav-state-list">
+                    <div class="nav-state-row"><span class="code">default</span><span>透明底，只有图标色；不抢主内容注意力。</span></div>
+                    <div class="nav-state-row"><span class="code">hover</span><span>上移 1px，角色色 8-11% tint，边框轻微显现。</span></div>
+                    <div class="nav-state-row"><span class="code">active</span><span>同 hover，但加 1px 角色色外环；不使用整块实色。</span></div>
+                  </div>
+                </div>
+                <p style="margin-top: 10px">规范对象是左侧垂直 icon rail。顶部标签、详情页 tabs 另算，不套这条规则。</p>
+              </div>
+
+              <div class="card">
+                <h3>状态标签</h3>
+                <div class="row">
+                  <span class="pill">Knowledge</span>
+                  <span class="pill" style="--accent: var(--success)">Ready</span>
+                  <span class="pill" style="--accent: var(--warning)">Draft</span>
+                  <span class="pill" style="--accent: var(--danger)">Error</span>
+                </div>
+                <p style="margin-top: 10px">标签用于状态和上下文，不用来堆装饰。</p>
+              </div>
+            </div>
+          </section>
+
+          <aside class="section panel">
+            <div class="title">
+              <span class="kicker">03 / Palette</span>
+              <h2>颜色规则</h2>
+            </div>
+
+            <div class="swatches">
+              <div class="swatch" style="background: #f5f5f7"><span class="code" style="color:#1d1d1f">Window</span></div>
+              <div class="swatch" style="background: #ffffff"><span class="code" style="color:#1d1d1f">Panel</span></div>
+              <div class="swatch" style="background: #007aff"><span class="code">Accent</span></div>
+              <div class="swatch" style="background: #111317"><span class="code">Dark</span></div>
+            </div>
+
+            <div class="card">
+              <h3>角色色只做点缀</h3>
+              <p>Knowledge 蓝、Wiki 青、Page 靛、Design 紫、Develop 绿、Test 橙、Operations 红。它们用于选中、focus、状态提示，不铺满大背景。</p>
+            </div>
+
+            <div class="title">
+              <span class="kicker">04 / Rules</span>
+              <h2>执行规则</h2>
+            </div>
+
+            <div class="card">
+              <h3>应该统一</h3>
+              <ul class="do-list">
+                <li>所有工具表面优先使用 13px 基准字号。</li>
+                <li>主面板和工具栏统一 14px 圆角。</li>
+                <li>按钮最小高度 32px，输入框最小高度 36px。</li>
+                <li>同级面板间距使用 10-12px，不随手写 17/19/23px。</li>
+                <li>hover 只做轻微上移、边框、背景变化。</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>应该避免</h3>
+              <ul class="do-list">
+                <li>不要再新增 18px 以上的大圆角工具卡片，除非是首屏/弹窗。</li>
+                <li>不要卡片套卡片套卡片，重复容器要降成分隔线或列表。</li>
+                <li>不要每个模块发明自己的按钮高度、阴影、标签样式。</li>
+                <li>不要用大面积渐变来表达层级，层级交给面板、边框、留白。</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>B 阶段：实时点改</h3>
+              <p>确认这套规范后，我会在当前页面加临时反馈模式：你点元素，输入“太挤/太重/换位置”，我读取元素选择器和评论后按规范改源码。</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const root = document.documentElement;
+      const text = document.querySelector("#choiceText");
+
+      document.querySelector("#themeToggle").addEventListener("click", () => {
+        root.dataset.theme = root.dataset.theme === "dark" ? "" : "dark";
+      });
+
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-choice]");
+        if (!button) return;
+        const messages = {
+          current: "选择：当前密度。保留现在紧凑感，主要做统一和清理。",
+          airier: "选择：更松一点。保留当前风格，但面板内边距和模块间距加一档。",
+          stricter: "选择：更规整。保留当前风格，但减少玻璃/阴影变化，做更强网格。"
+        };
+        text.textContent = messages[button.dataset.choice];
+        localStorage.setItem("goodnight-ui-standards-choice", text.textContent);
+      });
+
+      const restored = localStorage.getItem("goodnight-ui-standards-choice");
+      if (restored) text.textContent = restored;
+    </script>
+  </body>
+</html>
