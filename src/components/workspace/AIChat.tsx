@@ -53,7 +53,7 @@ import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
-import { getProjectDir, isTauriRuntimeAvailable } from '../../utils/projectPersistence';
+import { getProjectDir, getProjectKnowledgeRootDir, isTauriRuntimeAvailable } from '../../utils/projectPersistence';
 import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
 import { chooseNextWorkflowPackage } from '../../modules/ai/workflow/chatWorkflowRouting';
 import {
@@ -469,6 +469,10 @@ export const AIChat: React.FC<AIChatProps> = ({
       replaceRequirementDocs: state.replaceRequirementDocs,
       setRawRequirementInput: state.setRawRequirementInput,
     }))
+  );
+  const projectKnowledgeRootDir = useMemo(
+    () => (currentProject?.vaultPath ? getProjectKnowledgeRootDir(currentProject) : ''),
+    [currentProject]
   );
   const previewElements = usePreviewStore((state) => state.elements);
   const selectedElementId = usePreviewStore((state) => state.selectedElementId);
@@ -1236,11 +1240,12 @@ export const AIChat: React.FC<AIChatProps> = ({
 
       try {
         const systemIndexRefreshResult =
-          isTauriRuntimeAvailable() && currentProject && currentProject.vaultPath
+          isTauriRuntimeAvailable() && currentProject && projectKnowledgeRootDir
             ? await ensureProjectSystemIndex({
                 projectId: currentProject.id,
                 projectName: currentProject.name,
-                vaultPath: currentProject.vaultPath,
+                vaultPath: projectKnowledgeRootDir,
+                knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
                 requirementDocs: knowledgeSourceDocs,
                 generatedFiles,
               })
@@ -1323,7 +1328,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             content: '正在刷新系统索引...',
           }));
 
-          if (!currentProject.vaultPath) {
+          if (!projectKnowledgeRootDir) {
             throw new Error('当前项目还没有绑定本地知识库文件夹。');
           }
 
@@ -1332,7 +1337,8 @@ export const AIChat: React.FC<AIChatProps> = ({
             (await ensureProjectSystemIndex({
               projectId: currentProject.id,
               projectName: currentProject.name,
-              vaultPath: currentProject.vaultPath,
+              vaultPath: projectKnowledgeRootDir,
+              knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
               requirementDocs: knowledgeSourceDocs,
               generatedFiles,
             }));

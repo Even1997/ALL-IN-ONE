@@ -172,6 +172,10 @@ const buildLanePrompt = ({
     'Based on the current knowledge docs and generated artifacts, produce 5 structured system index drafts.',
     'These drafts are system-maintained internal context, not editable user notes.',
     'For project-overview, feature-inventory, and page-inventory, the markdown must include an H1 title, a "## 索引" section with bullets, and at least one additional "##" section.',
+    'Use Obsidian-compatible citations and links.',
+    'Internal knowledge references must use [[Note Title]] or [[Note Title#Section]].',
+    'External sources must use footnotes like [^1] with definitions such as [^1]: [Title](https://example.com).',
+    'Do not add a "## 引用来源" section.',
     'Return JSON only, without any extra explanation.',
     'JSON schema:',
     JSON.stringify(

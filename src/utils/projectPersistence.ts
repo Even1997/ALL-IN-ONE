@@ -195,6 +195,9 @@ export const saveProjectIndexToDisk = async (projects: ProjectConfig[]) => {
 
 const KNOWLEDGE_SKILL_IDS = ['llmwiki', 'rag', 'm-flow'] as const;
 
+export const getProjectKnowledgeRootDir = (project: Pick<ProjectConfig, 'id' | 'name' | 'vaultPath'>) =>
+  joinPath(project.vaultPath, sanitizeProjectPathSegment(project.name || project.id));
+
 export const getVaultStateDir = (vaultPath: string) => joinPath(vaultPath, '.goodnight');
 export const getVaultBaseIndexDir = (vaultPath: string) => joinPath(getVaultStateDir(vaultPath), 'base-index');
 export const getVaultSkillStateDir = (vaultPath: string, skill: (typeof KNOWLEDGE_SKILL_IDS)[number]) =>
@@ -215,6 +218,12 @@ export const ensureVaultKnowledgeDirectoryStructure = async (vaultPath: string) 
       ensureDirectory(getVaultSkillOutputsDir(vaultPath, skill)),
     ])
   );
+};
+
+export const ensureProjectKnowledgeDirectory = async (project: Pick<ProjectConfig, 'id' | 'name' | 'vaultPath'>) => {
+  const projectKnowledgeRootDir = getProjectKnowledgeRootDir(project);
+  await ensureVaultKnowledgeDirectoryStructure(projectKnowledgeRootDir);
+  return projectKnowledgeRootDir;
 };
 
 export const getProjectStateDir = (projectDir: string) => getVaultStateDir(projectDir);

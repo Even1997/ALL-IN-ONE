@@ -1,5 +1,5 @@
 import type { KnowledgeProposal, KnowledgeProposalOperation } from '../../../features/knowledge/model/knowledgeProposal';
-import { upsertKnowledgeReferenceSection } from '../../../features/knowledge/workspace/knowledgeNoteMarkdown.ts';
+import { upsertKnowledgeRelatedNotesSection } from '../../../features/knowledge/workspace/knowledgeNoteMarkdown.ts';
 
 type KnowledgeProposalExecutor = {
   createNote: (input: { title: string; content: string; tags: string[] }) => Promise<void>;
@@ -41,7 +41,7 @@ const buildOperationTags = (operation: KnowledgeProposalOperation) => {
 
 const buildOperationContent = (operation: KnowledgeProposalOperation) =>
   operation.type === 'create_wiki' || operation.type === 'update_wiki'
-    ? upsertKnowledgeReferenceSection(operation.draftContent, operation.referenceTitles || [])
+    ? upsertKnowledgeRelatedNotesSection(operation.draftContent, operation.referenceTitles || [])
     : operation.draftContent;
 
 export const executeKnowledgeProposal = async (

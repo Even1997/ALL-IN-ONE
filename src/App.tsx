@@ -29,8 +29,8 @@ import { clampLayoutSize, LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSiz
 import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
 import {
   getProjectDir,
+  ensureProjectKnowledgeDirectory,
   ensureProjectFilesystemStructure,
-  ensureVaultKnowledgeDirectoryStructure,
   getProjectStorageSettings,
   isTauriRuntimeAvailable,
   loadDesignBoardStateFromDisk,
@@ -511,14 +511,13 @@ const DESKTOP_WORKBENCH_ROLES: Array<{
   summary: string;
 }> = [
   { id: 'knowledge', label: '知识库', summary: '笔记与资料' },
-  { id: 'wiki', label: '系统索引', summary: '文件与知识索引' },
   { id: 'page', label: '页面', summary: '结构与草图' },
   { id: 'design', label: '设计', summary: '页面与画布' },
   { id: 'develop', label: '开发', summary: '文件与任务' },
   { id: 'test', label: '测试', summary: '计划与缺陷' },
   { id: 'operations', label: '发布', summary: '部署与流程' },
 ];
-const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'wiki', 'page', 'design'];
+const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'page', 'design'];
 
 
 const getSketchPreviewMetrics = (
@@ -2183,7 +2182,7 @@ const App: React.FC = () => {
     setProjectVaultDraftOverride(null);
     void ensureProjectFilesystemStructure(project.id).catch(() => undefined);
     if (project.vaultPath) {
-      void ensureVaultKnowledgeDirectoryStructure(project.vaultPath).catch(() => undefined);
+      void ensureProjectKnowledgeDirectory(project).catch(() => undefined);
     }
   };
 
@@ -2221,7 +2220,7 @@ const App: React.FC = () => {
     setIsProjectManagerOpen(false);
     void ensureProjectFilesystemStructure(targetProject.id).catch(() => undefined);
     if (targetProject.vaultPath) {
-      void ensureVaultKnowledgeDirectoryStructure(targetProject.vaultPath).catch(() => undefined);
+      void ensureProjectKnowledgeDirectory(targetProject).catch(() => undefined);
     }
   }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, replaceWorkflowProjectState, setTree, switchProject]);
 
@@ -2290,7 +2289,7 @@ const App: React.FC = () => {
         setCurrentRole('knowledge');
         break;
       case 'view.wiki':
-        setCurrentRole('wiki');
+        setCurrentRole('knowledge');
         break;
       case 'view.page':
         setCurrentRole('page');
@@ -3636,7 +3635,7 @@ ${selectedContextPrompt}` : '',
     };
   }, [designCanvasContextMenu]);
 
-  const renderProductView = (entryTab: 'knowledge' | 'wiki' | 'page') => (
+  const renderProductView = (entryTab: 'knowledge' | 'page') => (
     <ProductWorkbench
       onFeatureSelect={(node) => setSelectedFeature(node)}
       layoutFocus="balanced"
@@ -4757,7 +4756,7 @@ ${selectedContextPrompt}` : '',
     currentRole === 'product' || currentRole === 'knowledge'
       ? renderProductView('knowledge')
       : currentRole === 'wiki'
-        ? renderProductView('wiki')
+        ? renderProductView('knowledge')
       : currentRole === 'page'
         ? renderProductView('page')
       : currentRole === 'design'

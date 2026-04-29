@@ -9,6 +9,7 @@ import { runKnowledgeOrganizeLane } from '../../src/modules/ai/knowledge/runKnow
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const knowledgeOrganizeLanePath = path.resolve(__dirname, '../../src/modules/ai/knowledge/runKnowledgeOrganizeLane.ts');
 
 const buildLanePayload = () =>
   JSON.stringify({
@@ -99,4 +100,13 @@ test('knowledge organize chat flow now surfaces proposal-first review instead of
   assert.match(chatSource, /正在刷新系统索引/);
   assert.match(chatSource, /系统索引已刷新/);
   assert.match(chatSource, /系统索引已是最新状态/);
+});
+
+test('knowledge organize lane prompt requires Obsidian-style internal links and external footnotes', async () => {
+  const source = await readFile(knowledgeOrganizeLanePath, 'utf8');
+
+  assert.match(source, /\[\[Note Title\]\]/);
+  assert.match(source, /\[\^1\]/);
+  assert.match(source, /\[Title\]\(https:\/\/example\.com\)/);
+  assert.match(source, /Do not add a "## 引用来源" section\./);
 });

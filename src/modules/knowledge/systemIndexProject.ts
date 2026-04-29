@@ -1,4 +1,4 @@
-import type { GeneratedFile, RequirementDoc } from '../../types';
+import type { GeneratedFile, KnowledgeRetrievalMethod, RequirementDoc } from '../../types';
 import { getRelativePathFromRoot, normalizeRelativeFileSystemPath } from '../../utils/fileSystemPaths.ts';
 import {
   ensureProjectDirectory,
@@ -111,14 +111,25 @@ const parseDirectoryEntry = (entry: string) => {
   };
 };
 
-const shouldIgnoreRelativePath = (relativePath: string) => {
+const isLlmwikiOutputPath = (normalizedPath: string) =>
+  normalizedPath === '_goodnight/outputs/llmwiki' ||
+  normalizedPath.startsWith('_goodnight/outputs/llmwiki/');
+
+const shouldIgnoreRelativePath = (
+  relativePath: string,
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod
+) => {
   const normalized = normalizeRelativeFileSystemPath(relativePath);
   if (!normalized) {
     return true;
   }
 
-  if (normalized.startsWith('.goodnight/base-index')) {
+  if (normalized === '.goodnight' || normalized.startsWith('.goodnight/')) {
     return true;
+  }
+
+  if (normalized === '_goodnight' || normalized.startsWith('_goodnight/')) {
+    return knowledgeRetrievalMethod !== 'llmwiki' || !isLlmwikiOutputPath(normalized);
   }
 
   const topLevel = normalized.split('/')[0] || normalized;
@@ -128,6 +139,7 @@ const shouldIgnoreRelativePath = (relativePath: string) => {
 const collectProjectFileSources = async (
   projectDir: string,
   absolutePath: string,
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod,
   relativeBase = ''
 ): Promise<SystemIndexInputSource[]> => {
   const entries = await listProjectDirectory(absolutePath);
@@ -140,13 +152,18 @@ const collectProjectFileSources = async (
     }
 
     const nextRelativePath = normalizeRelativeFileSystemPath(relativeBase ? `${relativeBase}/${entry.name}` : entry.name);
-    if (shouldIgnoreRelativePath(nextRelativePath)) {
+    if (shouldIgnoreRelativePath(nextRelativePath, knowledgeRetrievalMethod)) {
       continue;
     }
 
     const nextAbsolutePath = `${absolutePath}${absolutePath.endsWith('\\') || absolutePath.endsWith('/') ? '' : '\\'}${entry.name}`;
     if (entry.isDirectory) {
-      const nestedSources = await collectProjectFileSources(projectDir, nextAbsolutePath, nextRelativePath);
+      const nestedSources = await collectProjectFileSources(
+        projectDir,
+        nextAbsolutePath,
+        knowledgeRetrievalMethod,
+        nextRelativePath
+      );
       sources.push(...nestedSources);
       continue;
     }
@@ -162,12 +179,12 @@ const collectProjectFileSources = async (
     }
 
     sources.push({
-      id: `project-file:${nextRelativePath}`,
+      id: `${isLlmwikiOutputPath(nextRelativePath) ? 'generated' : 'project-file'}:${nextRelativePath}`,
       path: nextRelativePath,
       title: nextRelativePath.split('/').pop() || nextRelativePath,
       content,
       updatedAt: new Date().toISOString(),
-      kind: 'project-file',
+      kind: isLlmwikiOutputPath(nextRelativePath) ? 'generated-file' : 'project-file',
       tags: [extension],
       summary: summarizeText(content),
     });
@@ -240,6 +257,7 @@ export const refreshProjectSystemIndex = async (options: {
   projectId: string;
   projectName: string;
   vaultPath: string;
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   requirementDocs: RequirementDoc[];
   generatedFiles: GeneratedFile[];
 }) => {
@@ -248,7 +266,11 @@ export const refreshProjectSystemIndex = async (options: {
   const systemIndexDir = getVaultBaseIndexDir(options.vaultPath);
   await ensureProjectDirectory(systemIndexDir);
 
-  const projectSources = await collectProjectFileSources(options.vaultPath, options.vaultPath);
+  const projectSources = await collectProjectFileSources(
+    options.vaultPath,
+    options.vaultPath,
+    options.knowledgeRetrievalMethod
+  );
   const mergedSources = dedupeSources([
     ...options.requirementDocs.map((doc) => mapRequirementDocToIndexSource(projectDir, doc)),
     ...options.generatedFiles.map(mapGeneratedFileToIndexSource),
@@ -287,6 +309,7 @@ export const ensureProjectSystemIndex = async (options: {
   projectId: string;
   projectName: string;
   vaultPath: string;
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   requirementDocs: RequirementDoc[];
   generatedFiles: GeneratedFile[];
 }) => refreshProjectSystemIndex(options);

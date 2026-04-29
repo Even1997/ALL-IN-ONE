@@ -254,9 +254,11 @@ test('wiki proposal operations append reference titles into the markdown payload
     }
   );
 
-  assert.match(createCalls[0].content, /^## 引用来源$/m);
-  assert.match(createCalls[0].content, /- 开放问题/);
-  assert.match(createCalls[0].content, /- 术语表/);
-  assert.match(updateCalls[0].content, /^## 引用来源$/m);
-  assert.match(updateCalls[0].content, /- 页面清单/);
+  assert.doesNotMatch(createCalls[0].content, /^## 引用来源$/m);
+  assert.match(createCalls[0].content, /^## Related notes$/m);
+  assert.match(createCalls[0].content, /- \[\[开放问题\]\]/);
+  assert.match(createCalls[0].content, /- \[\[术语表\]\]/);
+  assert.doesNotMatch(updateCalls[0].content, /^## 引用来源$/m);
+  assert.match(updateCalls[0].content, /^## Related notes$/m);
+  assert.match(updateCalls[0].content, /- \[\[页面清单\]\]/);
 });

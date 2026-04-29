@@ -24,6 +24,8 @@ test('project config defines vault path and retrieval method with m-flow default
 test('project persistence exposes vault helpers and hidden knowledge directory structure', async () => {
   const source = await readFile(new URL('../src/utils/projectPersistence.ts', import.meta.url), 'utf8');
 
+  assert.match(source, /export const getProjectKnowledgeRootDir =/);
+  assert.match(source, /sanitizeProjectPathSegment\(project\.name \|\| project\.id\)/);
   assert.match(source, /export const getVaultStateDir =/);
   assert.match(source, /export const getVaultOutputsDir =/);
   assert.match(source, /export const ensureVaultKnowledgeDirectoryStructure = async/);
@@ -49,11 +51,11 @@ test('project setup collects a local vault path and retrieval method', async () 
 test('app wires vault picking and ensures the vault knowledge directory structure on create', async () => {
   const source = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /ensureVaultKnowledgeDirectoryStructure/);
+  assert.match(source, /ensureProjectKnowledgeDirectory/);
   assert.match(source, /const handlePickProjectVaultPath = useCallback/);
   assert.match(source, /directory: true/);
   assert.match(source, /onPickProjectVaultPath=\{handlePickProjectVaultPath\}/);
-  assert.match(source, /void ensureVaultKnowledgeDirectoryStructure\(project\.vaultPath\)/);
+  assert.match(source, /void ensureProjectKnowledgeDirectory\(project\)/);
 });
 
 test('knowledge note workspace renders retrieval method controls above the tree', async () => {
@@ -65,19 +67,39 @@ test('knowledge note workspace renders retrieval method controls above the tree'
   assert.match(source, /m-flow/);
 });
 
-test('product workbench uses the project vault path as knowledge root and passes retrieval controls through', async () => {
+test('product workbench uses the current project knowledge directory as knowledge root and passes retrieval controls through', async () => {
   const source = await readFile(new URL('../src/components/product/ProductWorkbench.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /currentProject\.vaultPath/);
-  assert.match(source, /setProjectRootDir\(currentProject\.vaultPath\)/);
+  assert.match(source, /getProjectKnowledgeRootDir/);
+  assert.match(source, /const projectKnowledgeRootDir = useMemo/);
+  assert.match(source, /setProjectRootDir\(projectKnowledgeRootDir\)/);
   assert.match(source, /knowledgeRetrievalMethod=\{currentProject\.knowledgeRetrievalMethod\}/);
   assert.match(source, /onKnowledgeRetrievalMethodChange=/);
 });
 
-test('system index refresh accepts the vault path and keeps index artifacts in the vault state dir', async () => {
+test('system index refresh accepts the project knowledge directory and keeps index artifacts in the project state dir', async () => {
   const source = await readFile(new URL('../src/modules/knowledge/systemIndexProject.ts', import.meta.url), 'utf8');
 
   assert.match(source, /vaultPath: string/);
+  assert.match(source, /knowledgeRetrievalMethod:/);
   assert.match(source, /getVaultBaseIndexDir/);
-  assert.match(source, /collectProjectFileSources\(options\.vaultPath,\s*options\.vaultPath\)/);
+  assert.match(
+    source,
+    /collectProjectFileSources\(\s*options\.vaultPath,\s*options\.vaultPath,\s*options\.knowledgeRetrievalMethod\s*\)/
+  );
+  assert.match(source, /normalized === '\.goodnight' \|\| normalized\.startsWith\('\.goodnight\/'\)/);
+  assert.match(source, /normalized === '_goodnight' \|\| normalized\.startsWith\('_goodnight\/'\)/);
+  assert.match(source, /options\.knowledgeRetrievalMethod/);
+});
+
+test('product workbench and ai chat pass the active retrieval method into system indexing', async () => {
+  const workbenchSource = await readFile(new URL('../src/components/product/ProductWorkbench.tsx', import.meta.url), 'utf8');
+  const chatSource = await readFile(new URL('../src/components/workspace/AIChat.tsx', import.meta.url), 'utf8');
+
+  assert.match(workbenchSource, /const projectKnowledgeRootDir = useMemo/);
+  assert.match(chatSource, /const projectKnowledgeRootDir = useMemo/);
+  assert.match(workbenchSource, /knowledgeRetrievalMethod: currentProject\.knowledgeRetrievalMethod/);
+  assert.match(chatSource, /knowledgeRetrievalMethod: currentProject\.knowledgeRetrievalMethod/);
+  assert.match(workbenchSource, /vaultPath: projectRootDir/);
+  assert.match(chatSource, /vaultPath: projectKnowledgeRootDir/);
 });

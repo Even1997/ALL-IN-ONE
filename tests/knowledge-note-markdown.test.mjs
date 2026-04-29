@@ -83,3 +83,29 @@ test('upsertKnowledgeReferenceSection replaces an existing reference section ins
   assert.equal((markdown.match(/## \u5f15\u7528\u6765\u6e90/g) || []).length, 1);
   assert.deepEqual(parseKnowledgeReferenceTitles(markdown), ['\u65b0\u6587\u6863']);
 });
+
+test('upsertKnowledgeRelatedNotesSection appends Obsidian wiki links instead of a legacy source-title list', async () => {
+  const { upsertKnowledgeRelatedNotesSection, parseKnowledgeReferenceTitles } = await loadModule();
+
+  const markdown = upsertKnowledgeRelatedNotesSection(
+    '# Project overview\n\nBody',
+    ['Open questions', 'Terminology', 'Open questions']
+  );
+
+  assert.doesNotMatch(markdown, /^## \u5f15\u7528\u6765\u6e90$/m);
+  assert.match(markdown, /^## Related notes$/m);
+  assert.match(markdown, /- \[\[Open questions\]\]/);
+  assert.match(markdown, /- \[\[Terminology\]\]/);
+  assert.deepEqual(parseKnowledgeReferenceTitles(markdown), ['Open questions', 'Terminology']);
+});
+
+test('parseKnowledgeReferenceTitles also discovers inline Obsidian wiki links with headings and aliases', async () => {
+  const { parseKnowledgeReferenceTitles } = await loadModule();
+
+  assert.deepEqual(
+    parseKnowledgeReferenceTitles(
+      '# Project overview\n\nSee [[Login flow#Errors|error handling]] and [[Terminology]].'
+    ),
+    ['Login flow', 'Terminology']
+  );
+});

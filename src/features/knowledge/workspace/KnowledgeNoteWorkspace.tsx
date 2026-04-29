@@ -1,27 +1,23 @@
-import { useCallback, useMemo, useState } from 'react';
-import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMarkdownEditor';
-import type { DocumentChangeEvent, KnowledgeRetrievalMethod } from '../../../types';
-import type {
-  KnowledgeAttachment,
-  KnowledgeNeighborhoodGraph,
-  KnowledgeNote,
-} from '../model/knowledge';
-import { formatKnowledgeTagLabels } from '../model/knowledgeTagMeta';
-import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas';
-
-type AttachmentCategoryCount = {
-  category: KnowledgeAttachment['category'];
-  count: number;
-};
+import type { KnowledgeRetrievalMethod } from '../../../types';
+import { getRelativePathFromRoot, normalizeRelativeFileSystemPath } from '../../../utils/fileSystemPaths';
+import type { KnowledgeDiskItem } from '../../../modules/knowledge/knowledgeTree';
+import type { KnowledgeNote } from '../model/knowledge';
+import { serializeKnowledgeNoteMarkdown } from './knowledgeNoteMarkdown';
+import { KnowledgeMarkdownViewer, type KnowledgeInternalLinkTarget } from './KnowledgeMarkdownViewer';
 
 export type KnowledgeNoteFilter = 'all' | 'wiki-index' | 'ai-summary' | 'note' | 'sketch' | 'design';
+type KnowledgeViewMode = 'read' | 'code';
 
 type KnowledgeNoteWorkspaceProps = {
   notes: KnowledgeNote[];
   filteredNotes: KnowledgeNote[];
+  diskItems: KnowledgeDiskItem[];
   selectedNote: KnowledgeNote | null;
   activeFilter: KnowledgeNoteFilter;
+  projectRootPath?: string | null;
   titleValue: string;
   mirrorSourcePath?: string | null;
   editorValue: string;
@@ -29,35 +25,25 @@ type KnowledgeNoteWorkspaceProps = {
   isSaving: boolean;
   saveMessage: string;
   canSave: boolean;
-  canUseForDesign: boolean;
   knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   searchValue: string;
   isSearching: boolean;
   isSyncing: boolean;
   error: string | null;
-  documentEvents: DocumentChangeEvent[];
-  similarNotes: KnowledgeNote[];
-  neighborhoodGraph: KnowledgeNeighborhoodGraph | null;
-  neighborhoodNotes: KnowledgeNote[];
-  graphNodeCount: number;
-  graphEdgeCount: number;
-  attachments: KnowledgeAttachment[];
-  nearbyAttachments: KnowledgeAttachment[];
-  libraryAttachments: KnowledgeAttachment[];
-  attachmentCategoryCounts: AttachmentCategoryCount[];
   onSearchChange: (value: string) => void;
   onSelectNote: (noteId: string) => void;
   onTitleChange: (value: string) => void;
   onEditorChange: (value: string) => void;
   onSave: () => void;
   onDelete: () => void;
-  onUpload: () => void;
-  onImportAssets: () => void;
   onOrganizeKnowledge: () => void;
   onCreateNote: () => void;
+  onCreateNoteAtPath: (relativeDirectory: string | null) => void;
+  onCreateFolderAtPath: (relativeDirectory: string | null) => void;
+  onRenameTreePath: (relativePath: string, isFolder: boolean) => void;
+  onDeleteTreePaths: (relativePaths: string[] | string, isFolder: boolean | null) => void;
+  onRefreshFilesystem: () => void;
   onKnowledgeRetrievalMethodChange: (method: KnowledgeRetrievalMethod) => void;
-  onOpenGlobalWikiGraph: () => void;
-  onUseForDesign: () => void;
   onFilterChange: (filter: KnowledgeNoteFilter) => void;
   onOpenAttachment: (attachmentPath: string) => void;
 };
@@ -82,15 +68,6 @@ const NOTE_KIND_META: Record<NonNullable<KnowledgeNote['kind']>, { badge: string
   design: { badge: 'DESIGN', label: '设计沉淀' },
 };
 
-const ATTACHMENT_CATEGORY_LABELS: Record<KnowledgeAttachment['category'], string> = {
-  pdf: 'PDF 文档',
-  word: 'Word 文档',
-  sheet: '表格资料',
-  slide: '演示资料',
-  text: '文本资料',
-  other: '其他附件',
-};
-
 const FILTER_OPTIONS: Array<{ id: KnowledgeNoteFilter; label: string }> = [
   { id: 'all', label: '全部' },
   { id: 'wiki-index', label: '索引' },
@@ -100,34 +77,49 @@ const FILTER_OPTIONS: Array<{ id: KnowledgeNoteFilter; label: string }> = [
   { id: 'design', label: '设计' },
 ];
 
-const NOTE_TREE_SECTIONS: Array<{
-  id: KnowledgeNoteFilter;
-  label: string;
-  matches: (note: KnowledgeNote) => boolean;
-}> = [
-  { id: 'wiki-index', label: '系统索引', matches: (note) => note.docType === 'wiki-index' },
-  { id: 'ai-summary', label: 'AI 摘要', matches: (note) => note.docType === 'ai-summary' },
-  { id: 'note', label: '项目笔记', matches: (note) => !note.docType && (note.kind || 'note') === 'note' },
-  { id: 'sketch', label: '草图说明', matches: (note) => !note.docType && note.kind === 'sketch' },
-  { id: 'design', label: '设计沉淀', matches: (note) => !note.docType && note.kind === 'design' },
-];
-
-const DOCUMENT_EVENT_TRIGGER_LABELS: Record<DocumentChangeEvent['trigger'], string> = {
-  editor: '编辑',
-  import: '导入',
-  sync: '同步',
+type KnowledgeTreeFileNode = {
+  id: string;
+  name: string;
+  path: string;
+  absolutePath: string;
+  note: KnowledgeNote | null;
+  extension: string;
 };
+
+type KnowledgeTreeFolderNode = {
+  id: string;
+  name: string;
+  path: string;
+  absolutePath: string | null;
+  folders: KnowledgeTreeFolderNode[];
+  files: KnowledgeTreeFileNode[];
+  fileCount: number;
+};
+
+type MutableKnowledgeTreeFolderNode = {
+  id: string;
+  name: string;
+  path: string;
+  absolutePath: string | null;
+  folders: Map<string, MutableKnowledgeTreeFolderNode>;
+  files: KnowledgeTreeFileNode[];
+};
+
+type KnowledgeContextMenuState =
+  | {
+      x: number;
+      y: number;
+      targetPath: string | null;
+      isFolder: boolean | null;
+      selectedPaths: string[];
+    }
+  | null;
 
 const NOTE_RAIL_WIDTH_BOUNDS = { min: 220, max: 420 };
 const NOTE_RAIL_DEFAULT_WIDTH = 280;
-const NOTE_SIDE_WIDTH_BOUNDS = { min: 260, max: 560 };
-const NOTE_SIDE_DEFAULT_WIDTH = 320;
 
 const clampNoteRailWidth = (value: number) =>
   Math.min(NOTE_RAIL_WIDTH_BOUNDS.max, Math.max(NOTE_RAIL_WIDTH_BOUNDS.min, value));
-
-const clampNoteSideWidth = (value: number) =>
-  Math.min(NOTE_SIDE_WIDTH_BOUNDS.max, Math.max(NOTE_SIDE_WIDTH_BOUNDS.min, value));
 
 const NoteAddIcon = () => (
   <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -164,46 +156,6 @@ const WikiGenerateIcon = () => (
       strokeWidth="1.5"
       strokeLinecap="round"
       opacity="0.45"
-    />
-  </svg>
-);
-
-const MarkdownImportIcon = () => (
-  <svg viewBox="0 0 20 20" aria-hidden="true">
-    <path
-      d="M6.5 3.75h4.4l2.85 2.85v7.4a2 2 0 0 1-2 2h-5.25a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M10.9 3.75V6.6h2.85M10 8.1v4.8M8.2 11.1 10 12.9l1.8-1.8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const AssetImportIcon = () => (
-  <svg viewBox="0 0 20 20" aria-hidden="true">
-    <path
-      d="M3.75 6.25a2 2 0 0 1 2-2h2.7l1.3 1.6h4.5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2v-7.6Z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M10 7.9v4.5M8.2 10.6 10 12.4l1.8-1.8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
     />
   </svg>
 );
@@ -266,6 +218,31 @@ const NoteKindIcon = ({ kind }: { kind?: KnowledgeNote['kind'] }) => {
   );
 };
 
+const TreeCaretIcon = () => (
+  <svg viewBox="0 0 12 12" aria-hidden="true">
+    <path
+      d="m4 2.5 4 3.5-4 3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const FolderIcon = () => (
+  <svg viewBox="0 0 20 20" aria-hidden="true">
+    <path
+      d="M3.75 6.25a2 2 0 0 1 2-2h2.9l1.35 1.6h4.25a2 2 0 0 1 2 2v5.95a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2V6.25Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const formatUpdatedAt = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -280,15 +257,6 @@ const formatUpdatedAt = (value: string) => {
   });
 };
 
-const summarizeBody = (value: string) => {
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return '还没有正文内容。';
-  }
-
-  return normalized.length > 88 ? `${normalized.slice(0, 88)}...` : normalized;
-};
-
 const getNoteMeta = (note: KnowledgeNote) => {
   if (note.docType) {
     return DOC_TYPE_META[note.docType];
@@ -297,72 +265,168 @@ const getNoteMeta = (note: KnowledgeNote) => {
   return NOTE_KIND_META[note.kind || 'note'];
 };
 
-const renderNoteList = (
-  title: string,
-  notes: KnowledgeNote[],
-  onSelectNote: (noteId: string) => void,
-  emptyText: string,
-  description: string
-) => (
-  <section className="gn-note-side-card">
-    <div className="gn-note-side-card-header">
-      <div>
-        <h4>{title}</h4>
-        <p>{description}</p>
-      </div>
-      <span className="gn-note-side-count">{notes.length}</span>
-    </div>
-    {notes.length > 0 ? (
-      <div className="gn-note-relation-list">
-        {notes.map((note) => (
-          <button key={note.id} type="button" onClick={() => onSelectNote(note.id)}>
-            <strong>{note.title}</strong>
-            <span>{note.matchSnippet || summarizeBody(note.bodyMarkdown)}</span>
-          </button>
-        ))}
-      </div>
-    ) : (
-      <div className="gn-note-empty">{emptyText}</div>
-    )}
-  </section>
-);
+const compareTreeNames = (left: string, right: string) =>
+  left.localeCompare(right, 'zh-CN', {
+    numeric: true,
+    sensitivity: 'base',
+  });
 
-const renderAttachmentList = (
-  title: string,
-  attachments: KnowledgeAttachment[],
-  onOpenAttachment: (attachmentPath: string) => void,
-  emptyText: string,
-  description: string
-) => (
-  <section className="gn-note-side-card">
-    <div className="gn-note-side-card-header">
-      <div>
-        <h4>{title}</h4>
-        <p>{description}</p>
-      </div>
-      <span className="gn-note-side-count">{attachments.length}</span>
-    </div>
-    {attachments.length > 0 ? (
-      <div className="gn-note-attachment-list">
-        {attachments.map((attachment) => (
-          <button key={attachment.id} type="button" onClick={() => onOpenAttachment(attachment.path)}>
-            <strong>{attachment.title}</strong>
-            <span>{attachment.relativePath}</span>
-            <em>{ATTACHMENT_CATEGORY_LABELS[attachment.category]}</em>
-          </button>
-        ))}
-      </div>
-    ) : (
-      <div className="gn-note-empty">{emptyText}</div>
-    )}
-  </section>
-);
+const isHiddenKnowledgeTreePath = (value: string) => value.split('/').includes('.goodnight');
+
+const resolveNoteTreeFilePath = (note: KnowledgeNote, projectRootPath?: string | null) => {
+  const normalizedSourcePath = normalizeRelativeFileSystemPath(note.sourceUrl || '');
+  if (normalizedSourcePath) {
+    if (projectRootPath) {
+      const relativePath = getRelativePathFromRoot(note.sourceUrl || '', projectRootPath);
+      if (relativePath !== null) {
+        return normalizeRelativeFileSystemPath(relativePath);
+      }
+    }
+
+    return normalizedSourcePath;
+  }
+
+  return normalizeRelativeFileSystemPath(note.title.trim() || note.id);
+};
+
+const getTreeFileExtension = (value: string) => {
+  const matched = value.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return matched ? matched[1] : '';
+};
+
+const countFolderFiles = (folder: KnowledgeTreeFolderNode): number =>
+  folder.files.length + folder.folders.reduce((sum, child) => sum + countFolderFiles(child), 0);
+
+const buildKnowledgeTree = (
+  diskItems: KnowledgeDiskItem[],
+  notes: KnowledgeNote[],
+  filteredNotes: KnowledgeNote[],
+  searchValue: string,
+  activeFilter: KnowledgeNoteFilter,
+  projectRootPath?: string | null
+): KnowledgeTreeFolderNode => {
+  const root: MutableKnowledgeTreeFolderNode = {
+    id: 'root',
+    name: '',
+    path: '',
+    absolutePath: projectRootPath || null,
+    folders: new Map<string, MutableKnowledgeTreeFolderNode>(),
+    files: [],
+  };
+
+  const noteByRelativePath = new Map<string, KnowledgeNote>();
+  const visibleNoteIds = new Set(filteredNotes.map((note) => note.id));
+  const normalizedSearchValue = searchValue.trim().toLowerCase();
+
+  for (const note of notes) {
+    const relativePath = resolveNoteTreeFilePath(note, projectRootPath);
+    if (!relativePath) {
+      continue;
+    }
+
+    noteByRelativePath.set(relativePath, note);
+  }
+
+  for (const item of diskItems) {
+    const relativePath = normalizeRelativeFileSystemPath(item.relativePath);
+    if (!relativePath || isHiddenKnowledgeTreePath(relativePath)) {
+      continue;
+    }
+
+    let current = root;
+    let currentPath = '';
+    const segments = relativePath.split('/').filter(Boolean);
+    const folderSegments = item.type === 'folder' ? segments : segments.slice(0, -1);
+
+    for (const segment of folderSegments) {
+      currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+      const existingFolder = current.folders.get(segment);
+      if (existingFolder) {
+        current = existingFolder;
+        continue;
+      }
+
+      const nextFolder: MutableKnowledgeTreeFolderNode = {
+        id: currentPath,
+        name: segment,
+        path: currentPath,
+        absolutePath: item.path,
+        folders: new Map<string, MutableKnowledgeTreeFolderNode>(),
+        files: [],
+      };
+      current.folders.set(segment, nextFolder);
+      current = nextFolder;
+    }
+
+    if (item.type === 'folder') {
+      continue;
+    }
+
+    const linkedNote = noteByRelativePath.get(relativePath) || null;
+    const matchesGenericSearch =
+      !normalizedSearchValue || relativePath.toLowerCase().includes(normalizedSearchValue);
+
+    if (linkedNote) {
+      if (!visibleNoteIds.has(linkedNote.id)) {
+        continue;
+      }
+    } else if (activeFilter !== 'all' || !matchesGenericSearch) {
+      continue;
+    }
+
+    const fileName = segments[segments.length - 1] || relativePath;
+    current.files.push({
+      id: linkedNote?.id || `file:${relativePath}`,
+      name: fileName,
+      path: relativePath,
+      absolutePath: item.path,
+      note: linkedNote,
+      extension: getTreeFileExtension(relativePath),
+    });
+  }
+
+  const finalizeFolder = (folder: MutableKnowledgeTreeFolderNode): KnowledgeTreeFolderNode => {
+    const folders = [...folder.folders.values()]
+      .map((child) => finalizeFolder(child))
+      .sort((left, right) => compareTreeNames(left.name, right.name));
+    const files = [...folder.files].sort((left, right) => compareTreeNames(left.name, right.name));
+
+    const finalizedFolder: KnowledgeTreeFolderNode = {
+      id: folder.id,
+      name: folder.name,
+      path: folder.path,
+      absolutePath: folder.absolutePath,
+      folders,
+      files,
+      fileCount: 0,
+    };
+    finalizedFolder.fileCount = countFolderFiles(finalizedFolder);
+    return finalizedFolder;
+  };
+
+  return finalizeFolder(root);
+};
+
+const collectAncestorFolderPaths = (filePath: string) => {
+  const segments = filePath.split('/').filter(Boolean);
+  const ancestors = new Set<string>();
+  let currentPath = '';
+
+  for (const segment of segments.slice(0, -1)) {
+    currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+    ancestors.add(currentPath);
+  }
+
+  return ancestors;
+};
 
 export const KnowledgeNoteWorkspace = ({
   notes,
   filteredNotes,
+  diskItems,
   selectedNote,
   activeFilter,
+  projectRootPath = null,
   titleValue,
   mirrorSourcePath = null,
   editorValue,
@@ -370,94 +434,189 @@ export const KnowledgeNoteWorkspace = ({
   isSaving,
   saveMessage,
   canSave,
-  canUseForDesign,
   knowledgeRetrievalMethod,
   searchValue,
   isSearching,
   isSyncing,
   error,
-  documentEvents,
-  similarNotes,
-  neighborhoodGraph,
-  neighborhoodNotes,
-  graphNodeCount,
-  graphEdgeCount,
-  attachments,
-  nearbyAttachments,
-  libraryAttachments,
-  attachmentCategoryCounts,
   onSearchChange,
   onSelectNote,
   onTitleChange,
   onEditorChange,
   onSave,
   onDelete,
-  onUpload,
-  onImportAssets,
   onOrganizeKnowledge,
   onCreateNote,
+  onCreateNoteAtPath,
+  onCreateFolderAtPath,
+  onRenameTreePath,
+  onDeleteTreePaths,
+  onRefreshFilesystem,
   onKnowledgeRetrievalMethodChange,
-  onOpenGlobalWikiGraph,
-  onUseForDesign,
   onFilterChange,
   onOpenAttachment,
 }: KnowledgeNoteWorkspaceProps) => {
-  const [isSideExpanded, setIsSideExpanded] = useState(false);
   const [railWidth, setRailWidth] = useState(NOTE_RAIL_DEFAULT_WIDTH);
-  const [sideWidth, setSideWidth] = useState(NOTE_SIDE_DEFAULT_WIDTH);
   const [isRailResizing, setIsRailResizing] = useState(false);
-  const [isSideResizing, setIsSideResizing] = useState(false);
+  const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<Set<string>>(() => new Set());
+  const [selectedTreePaths, setSelectedTreePaths] = useState<string[]>([]);
+  const [anchorTreePath, setAnchorTreePath] = useState<string | null>(null);
+  const [contextMenuState, setContextMenuState] = useState<KnowledgeContextMenuState>(null);
+  const [viewMode, setViewMode] = useState<KnowledgeViewMode>('read');
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const searchActive = searchValue.trim().length > 0;
   const visibleNotes = filteredNotes;
-  const visibleDocumentEvents = documentEvents.slice(0, 8);
-  const selectedNoteMeta = selectedNote ? getNoteMeta(selectedNote) : null;
-  const visibleAttachmentCount = attachments.length + nearbyAttachments.length + libraryAttachments.length;
-  const visibleNoteSections = useMemo(
-    () =>
-      NOTE_TREE_SECTIONS.map((section) => ({
-        ...section,
-        notes: visibleNotes.filter(section.matches),
-      })).filter((section) => section.notes.length > 0),
-    [visibleNotes]
+  const visibleKnowledgeTree = useMemo(
+    () => buildKnowledgeTree(diskItems, notes, filteredNotes, searchValue, activeFilter, projectRootPath),
+    [activeFilter, diskItems, filteredNotes, notes, projectRootPath, searchValue]
   );
-  const selectedNoteTagLabels = useMemo(
-    () => formatKnowledgeTagLabels(selectedNote?.tags || []),
-    [selectedNote]
+  const hasVisibleTreeNodes = visibleKnowledgeTree.folders.length > 0 || visibleKnowledgeTree.files.length > 0;
+  const selectedTreeFilePath = useMemo(
+    () => (selectedNote ? resolveNoteTreeFilePath(selectedNote, projectRootPath) : ''),
+    [projectRootPath, selectedNote]
   );
+  const selectedAncestorFolderPaths = useMemo(
+    () => collectAncestorFolderPaths(selectedTreeFilePath),
+    [selectedTreeFilePath]
+  );
+  const readingMarkdown = useMemo(
+    () => (selectedNote ? serializeKnowledgeNoteMarkdown(titleValue, editorValue) : ''),
+    [editorValue, selectedNote, titleValue]
+  );
+  const noteIdByLookupKey = useMemo(() => {
+    const entries = new Map<string, string>();
 
-  const editorToolbar = canUseForDesign ? (
-    <div className="gn-note-header-toolbar">
-      <button className="gn-note-toolbar-btn accent" type="button" onClick={onUseForDesign}>
-        AI
-      </button>
-    </div>
-  ) : null;
+    for (const note of notes) {
+      const normalizedTitle = note.title.trim().toLowerCase();
+      if (normalizedTitle) {
+        entries.set(normalizedTitle, note.id);
+      }
 
-  const handleSideResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    if (!isSideExpanded) {
-      setIsSideExpanded(true);
+      const normalizedPathTitle = note.sourceUrl
+        ?.replace(/\\/g, '/')
+        .split('/')
+        .pop()
+        ?.replace(/\.(md|markdown)$/i, '')
+        .trim()
+        .toLowerCase();
+      if (normalizedPathTitle) {
+        entries.set(normalizedPathTitle, note.id);
+      }
     }
 
-    const startX = event.clientX;
-    const startWidth = sideWidth;
-    setIsSideResizing(true);
+    return entries;
+  }, [notes]);
 
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      setSideWidth(clampNoteSideWidth(startWidth + startX - moveEvent.clientX));
+  const toggleFolderExpanded = useCallback((folderPath: string) => {
+    setCollapsedFolderPaths((current) => {
+      const next = new Set(current);
+      if (next.has(folderPath)) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+      return next;
+    });
+  }, []);
+
+  const flattenVisibleTreePaths = useCallback((folder: KnowledgeTreeFolderNode): string[] => {
+    const paths: string[] = [];
+
+    for (const childFolder of folder.folders) {
+      paths.push(childFolder.path);
+      const isExpanded =
+        selectedAncestorFolderPaths.has(childFolder.path) || !collapsedFolderPaths.has(childFolder.path);
+      if (isExpanded) {
+        paths.push(...flattenVisibleTreePaths(childFolder));
+      }
+    }
+
+    for (const file of folder.files) {
+      paths.push(file.path);
+    }
+
+    return paths;
+  }, [collapsedFolderPaths, selectedAncestorFolderPaths]);
+
+  const visibleTreePaths = useMemo(
+    () => flattenVisibleTreePaths(visibleKnowledgeTree),
+    [flattenVisibleTreePaths, visibleKnowledgeTree]
+  );
+
+  const handleTreeSelection = useCallback(
+    (relativePath: string, isMultiSelect: boolean, isRangeSelect: boolean) => {
+      if (isRangeSelect && anchorTreePath) {
+        const startIndex = visibleTreePaths.indexOf(anchorTreePath);
+        const endIndex = visibleTreePaths.indexOf(relativePath);
+        if (startIndex >= 0 && endIndex >= 0) {
+          const [from, to] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+          setSelectedTreePaths(visibleTreePaths.slice(from, to + 1));
+          return;
+        }
+      }
+
+      if (isMultiSelect) {
+        setSelectedTreePaths((current) =>
+          current.includes(relativePath)
+            ? current.filter((path) => path !== relativePath)
+            : [...current, relativePath]
+        );
+        setAnchorTreePath(relativePath);
+        return;
+      }
+
+      setSelectedTreePaths([relativePath]);
+      setAnchorTreePath(relativePath);
+    },
+    [anchorTreePath, visibleTreePaths]
+  );
+
+  const closeKnowledgeContextMenu = useCallback(() => {
+    setContextMenuState(null);
+  }, []);
+
+  const handleOpenInternalMarkdownLink = useCallback(
+    (target: KnowledgeInternalLinkTarget) => {
+      const normalizedTitle = target.noteTitle?.trim().toLowerCase();
+      if (!normalizedTitle) {
+        return;
+      }
+
+      const nextNoteId = noteIdByLookupKey.get(normalizedTitle);
+      if (nextNoteId && nextNoteId !== selectedNote?.id) {
+        onSelectNote(nextNoteId);
+      }
+    },
+    [noteIdByLookupKey, onSelectNote, selectedNote?.id]
+  );
+
+  useEffect(() => {
+    setSelectedTreePaths((current) => current.filter((path) => visibleTreePaths.includes(path)));
+    setAnchorTreePath((current) => (current && visibleTreePaths.includes(current) ? current : null));
+  }, [visibleTreePaths]);
+
+  useEffect(() => {
+    setViewMode('read');
+  }, [selectedNote?.id]);
+
+  useEffect(() => {
+    if (!contextMenuState) {
+      return;
+    }
+
+    const closeMenu = (event: Event) => {
+      if (event.target instanceof Node && contextMenuRef.current?.contains(event.target)) {
+        return;
+      }
+      setContextMenuState(null);
     };
-
-    const handlePointerUp = () => {
-      setIsSideResizing(false);
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
+    window.addEventListener('pointerdown', closeMenu);
+    window.addEventListener('resize', closeMenu);
+    return () => {
+      window.removeEventListener('pointerdown', closeMenu);
+      window.removeEventListener('resize', closeMenu);
     };
-
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
-  }, [isSideExpanded, sideWidth]);
+  }, [contextMenuState]);
 
   const handleRailResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -482,29 +641,6 @@ export const KnowledgeNoteWorkspace = ({
     window.addEventListener('pointercancel', handlePointerUp);
   }, [railWidth]);
 
-  const handleSideResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
-      return;
-    }
-
-    event.preventDefault();
-    if (!isSideExpanded) {
-      setIsSideExpanded(true);
-    }
-
-    setSideWidth((current) => {
-      if (event.key === 'Home') {
-        return NOTE_SIDE_WIDTH_BOUNDS.min;
-      }
-
-      if (event.key === 'End') {
-        return NOTE_SIDE_WIDTH_BOUNDS.max;
-      }
-
-      return clampNoteSideWidth(current + (event.key === 'ArrowLeft' ? 16 : -16));
-    });
-  }, [isSideExpanded]);
-
   const handleRailResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
       return;
@@ -524,12 +660,130 @@ export const KnowledgeNoteWorkspace = ({
     });
   }, []);
 
+  const renderKnowledgeTree = useCallback(
+    (folder: KnowledgeTreeFolderNode, depth = 0): ReactNode[] => {
+      const nextNodes: ReactNode[] = [];
+
+      for (const childFolder of folder.folders) {
+        const isExpanded =
+          selectedAncestorFolderPaths.has(childFolder.path) || !collapsedFolderPaths.has(childFolder.path);
+        const isSelected = selectedTreePaths.includes(childFolder.path);
+
+        nextNodes.push(
+          <div key={childFolder.path} className="gn-note-tree-group">
+            <div className="gn-note-tree-row">
+              <button
+                className={`gn-note-tree-item folder ${isSelected ? 'active' : ''}`}
+                type="button"
+                title={childFolder.path}
+                style={{
+                  gridTemplateColumns: '12px 16px minmax(0, 1fr) 38px',
+                  paddingLeft: `${8 + depth * 14}px`,
+                }}
+                onClick={(event) => {
+                  handleTreeSelection(childFolder.path, event.metaKey || event.ctrlKey, event.shiftKey);
+                  toggleFolderExpanded(childFolder.path);
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  const nextSelectedPaths = selectedTreePaths.includes(childFolder.path)
+                    ? selectedTreePaths
+                    : [childFolder.path];
+                  setSelectedTreePaths(nextSelectedPaths);
+                  setAnchorTreePath(childFolder.path);
+                  setContextMenuState({
+                    x: event.clientX,
+                    y: event.clientY,
+                    targetPath: childFolder.path,
+                    isFolder: true,
+                    selectedPaths: nextSelectedPaths,
+                  });
+                }}
+              >
+                <span className={`gn-note-tree-caret ${isExpanded ? 'expanded' : ''}`} aria-hidden="true">
+                  <TreeCaretIcon />
+                </span>
+                <span className="gn-note-tree-icon" aria-hidden="true" style={{ gridColumn: 2 }}>
+                  <FolderIcon />
+                </span>
+                <span className="gn-note-tree-label" style={{ gridColumn: 3 }}>
+                  {childFolder.name}
+                </span>
+                <span className="gn-note-tree-group-chip" style={{ gridColumn: 4 }}>
+                  {childFolder.fileCount}
+                </span>
+              </button>
+            </div>
+            {isExpanded ? <div className="gn-note-tree-children">{renderKnowledgeTree(childFolder, depth + 1)}</div> : null}
+          </div>
+        );
+      }
+
+      for (const file of folder.files) {
+        const noteMeta = file.note ? getNoteMeta(file.note) : null;
+        const isSelected = selectedTreePaths.includes(file.path);
+        nextNodes.push(
+          <div key={file.id} className="gn-note-tree-row">
+            <button
+              className={`gn-note-tree-item file ${selectedNote?.id === file.note?.id || isSelected ? 'active' : ''}`}
+              type="button"
+              title={file.path}
+              style={{ paddingLeft: `${22 + depth * 14}px` }}
+              onClick={(event) => {
+                handleTreeSelection(file.path, event.metaKey || event.ctrlKey, event.shiftKey);
+                if (file.note) {
+                  onSelectNote(file.note.id);
+                } else {
+                  onOpenAttachment(file.absolutePath);
+                }
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                const nextSelectedPaths = selectedTreePaths.includes(file.path)
+                  ? selectedTreePaths
+                  : [file.path];
+                setSelectedTreePaths(nextSelectedPaths);
+                setAnchorTreePath(file.path);
+                setContextMenuState({
+                  x: event.clientX,
+                  y: event.clientY,
+                  targetPath: file.path,
+                  isFolder: false,
+                  selectedPaths: nextSelectedPaths,
+                });
+              }}
+            >
+              <span className="gn-note-tree-icon" aria-hidden="true">
+                <NoteKindIcon kind={file.note?.kind} />
+              </span>
+              <span className="gn-note-tree-label">{file.name}</span>
+              {searchActive && file.note?.matchSnippet ? <span className="gn-note-tree-match">命中</span> : null}
+              <span className="gn-note-tree-badge">{noteMeta?.badge || (file.extension || 'FILE').toUpperCase()}</span>
+            </button>
+          </div>
+        );
+      }
+
+      return nextNodes;
+    },
+    [
+      collapsedFolderPaths,
+      handleTreeSelection,
+      onOpenAttachment,
+      onSelectNote,
+      searchActive,
+      selectedAncestorFolderPaths,
+      selectedNote?.id,
+      selectedTreePaths,
+      toggleFolderExpanded,
+    ]
+  );
+
   return (
     <section
-      className={`gn-note-workspace ${isSideExpanded ? 'side-expanded' : 'side-collapsed'} ${isRailResizing ? 'is-resizing-note-rail' : ''} ${isSideResizing ? 'is-resizing-note-side' : ''}`}
+      className={`gn-note-workspace ${isRailResizing ? 'is-resizing-note-rail' : ''}`}
       style={{
         '--gn-note-rail-width': `${railWidth}px`,
-        '--gn-note-side-width': `${sideWidth}px`,
       } as CSSProperties}
     >
       <aside className="gn-note-rail">
@@ -540,9 +794,7 @@ export const KnowledgeNoteWorkspace = ({
               className="product-input"
               value={knowledgeRetrievalMethod}
               onChange={(event) =>
-                onKnowledgeRetrievalMethodChange(
-                  event.target.value as KnowledgeRetrievalMethod
-                )
+                onKnowledgeRetrievalMethodChange(event.target.value as KnowledgeRetrievalMethod)
               }
             >
               {KNOWLEDGE_RETRIEVAL_OPTIONS.map((option) => (
@@ -596,24 +848,6 @@ export const KnowledgeNoteWorkspace = ({
           >
             <NoteAddIcon />
           </button>
-          <button
-            className="doc-action-btn secondary gn-note-icon-btn"
-            type="button"
-            onClick={onUpload}
-            title="导入 Markdown 到知识库"
-            aria-label="导入 Markdown 到知识库"
-          >
-            <MarkdownImportIcon />
-          </button>
-          <button
-            className="doc-action-btn secondary gn-note-icon-btn"
-            type="button"
-            onClick={onImportAssets}
-            title="导入资料"
-            aria-label="导入资料"
-          >
-            <AssetImportIcon />
-          </button>
         </div>
 
         <div className="gn-note-stats">
@@ -623,41 +857,135 @@ export const KnowledgeNoteWorkspace = ({
           {isSyncing ? <span>同步中</span> : null}
         </div>
 
+        {selectedTreePaths.length > 1 ? (
+          <div className="gn-note-stats">
+            <span>已选择 {selectedTreePaths.length} 项</span>
+            <button
+              className="pm-knowledge-context-action danger"
+              type="button"
+              onClick={() => onDeleteTreePaths(selectedTreePaths, null)}
+            >
+              批量删除
+            </button>
+          </div>
+        ) : null}
+
         {error ? <div className="gn-note-error">{error}</div> : null}
 
-        <div className="gn-note-list">
-          {visibleNotes.length > 0 ? (
-            visibleNoteSections.map((section) => (
-              <section key={section.id} className="gn-note-tree-section" aria-label={section.label}>
-                <div className="gn-note-tree-section-header">
-                  <span className="gn-note-tree-section-title">{section.label}</span>
-                  <span className="gn-note-tree-section-count">{section.notes.length}</span>
-                </div>
-                {section.notes.map((note) => {
-                  const noteMeta = getNoteMeta(note);
-                  return (
-                    <button
-                      key={note.id}
-                      className={`gn-note-tree-item file ${selectedNote?.id === note.id ? 'active' : ''}`}
-                      type="button"
-                      title={note.sourceUrl || note.title}
-                      onClick={() => onSelectNote(note.id)}
-                    >
-                      <span className="gn-note-tree-icon" aria-hidden="true">
-                        <NoteKindIcon kind={note.kind} />
-                      </span>
-                      <span className="gn-note-tree-label">{note.title}</span>
-                      {searchActive && note.matchSnippet ? <span className="gn-note-tree-match">命中</span> : null}
-                      <span className="gn-note-tree-badge">{noteMeta.badge}</span>
-                    </button>
-                  );
-                })}
-              </section>
-            ))
+        <div
+          className="gn-note-list"
+          onClick={closeKnowledgeContextMenu}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            setContextMenuState({
+              x: event.clientX,
+              y: event.clientY,
+              targetPath: null,
+              isFolder: null,
+              selectedPaths: selectedTreePaths,
+            });
+          }}
+        >
+          {hasVisibleTreeNodes ? (
+            renderKnowledgeTree(visibleKnowledgeTree)
           ) : (
             <div className="gn-note-empty">{searchActive ? '没有匹配的笔记。' : '还没有知识笔记。'}</div>
           )}
         </div>
+
+        {contextMenuState ? (
+          <div
+            className="pm-knowledge-context-menu"
+            ref={contextMenuRef}
+            style={{ left: `${contextMenuState.x}px`, top: `${contextMenuState.y}px` }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="pm-knowledge-context-action"
+              type="button"
+              onClick={() => {
+                closeKnowledgeContextMenu();
+                onCreateNoteAtPath(
+                  contextMenuState.isFolder === false && contextMenuState.targetPath
+                    ? contextMenuState.targetPath.replace(/\/[^/]+$/, '') || null
+                    : contextMenuState.targetPath
+                );
+              }}
+            >
+              新建笔记
+            </button>
+            <button
+              className="pm-knowledge-context-action"
+              type="button"
+              onClick={() => {
+                closeKnowledgeContextMenu();
+                onCreateFolderAtPath(
+                  contextMenuState.isFolder === false && contextMenuState.targetPath
+                    ? contextMenuState.targetPath.replace(/\/[^/]+$/, '') || null
+                    : contextMenuState.targetPath
+                );
+              }}
+            >
+              新建文件夹
+            </button>
+            {contextMenuState.targetPath ? (
+              <button
+                className="pm-knowledge-context-action"
+                type="button"
+                onClick={() => {
+                  const targetPath = contextMenuState.targetPath;
+                  if (!targetPath) {
+                    return;
+                  }
+
+                  closeKnowledgeContextMenu();
+                  onRenameTreePath(targetPath, contextMenuState.isFolder === true);
+                }}
+              >
+                重命名
+              </button>
+            ) : null}
+            <button
+              className="pm-knowledge-context-action"
+              type="button"
+              onClick={() => {
+                closeKnowledgeContextMenu();
+                void navigator.clipboard?.writeText(
+                  (contextMenuState.selectedPaths[0] || contextMenuState.targetPath || projectRootPath || '').toString()
+                );
+              }}
+            >
+              复制路径
+            </button>
+            <button
+              className="pm-knowledge-context-action"
+              type="button"
+              onClick={() => {
+                closeKnowledgeContextMenu();
+                onRefreshFilesystem();
+              }}
+            >
+              刷新目录
+            </button>
+            {contextMenuState.targetPath || contextMenuState.selectedPaths.length > 0 ? (
+              <button
+                className="pm-knowledge-context-action danger"
+                type="button"
+                onClick={() => {
+                  closeKnowledgeContextMenu();
+                  onDeleteTreePaths(
+                    contextMenuState.selectedPaths.length > 0
+                      ? contextMenuState.selectedPaths
+                      : (contextMenuState.targetPath as string),
+                    contextMenuState.isFolder
+                  );
+                }}
+              >
+                {contextMenuState.selectedPaths.length > 1 ? '批量删除' : '删除'}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </aside>
 
       <div
@@ -678,26 +1006,60 @@ export const KnowledgeNoteWorkspace = ({
           <>
             <div className="gn-note-editor-surface">
               <div className="gn-note-editor-title-row">
-                <input
-                  className="gn-note-title-input"
-                  type="text"
-                  value={titleValue}
-                  onChange={(event) => onTitleChange(event.target.value)}
-                  aria-label="笔记标题"
-                  disabled={!editable}
-                />
-                <div className="gn-note-storage-state" aria-label="笔记存储状态">
-                  <span>数据库笔记</span>
-                  <span>{mirrorSourcePath ? 'Markdown 镜像' : '未绑定 Markdown'}</span>
+                {viewMode === 'code' ? (
+                  <input
+                    className="gn-note-title-input"
+                    type="text"
+                    value={titleValue}
+                    onChange={(event) => onTitleChange(event.target.value)}
+                    aria-label="笔记标题"
+                    disabled={!editable}
+                  />
+                ) : (
+                  <div className="gn-note-reading-title-hint">
+                    <strong>{titleValue || selectedNote.title}</strong>
+                    <span>阅读态会隐藏 Markdown 语法，像文章一样展示。</span>
+                  </div>
+                )}
+                <div className="gn-note-reading-chrome">
+                  <div className="gn-note-mode-toggle" role="tablist" aria-label="Markdown 查看模式">
+                    <button
+                      className={viewMode === 'read' ? 'active' : ''}
+                      type="button"
+                      onClick={() => setViewMode('read')}
+                    >
+                      阅读
+                    </button>
+                    <button
+                      className={viewMode === 'code' ? 'active' : ''}
+                      type="button"
+                      onClick={() => setViewMode('code')}
+                    >
+                      代码
+                    </button>
+                  </div>
+                  <div className="gn-note-storage-state" aria-label="笔记存储状态">
+                    <span>{getNoteMeta(selectedNote).label}</span>
+                    <span>{mirrorSourcePath ? 'Markdown 镜像' : '未绑定 Markdown'}</span>
+                  </div>
                 </div>
               </div>
               <div className="gn-note-editor-body">
-                <GoodNightMarkdownEditor
-                  key={selectedNote.id}
-                  value={editorValue}
-                  onChange={onEditorChange}
-                  editable={editable}
-                />
+                {viewMode === 'read' ? (
+                  <div className="gn-note-reading-surface">
+                    <KnowledgeMarkdownViewer
+                      markdown={readingMarkdown}
+                      onOpenInternalLink={handleOpenInternalMarkdownLink}
+                    />
+                  </div>
+                ) : (
+                  <GoodNightMarkdownEditor
+                    key={selectedNote.id}
+                    value={editorValue}
+                    onChange={onEditorChange}
+                    editable={editable}
+                  />
+                )}
               </div>
             </div>
 
@@ -707,7 +1069,6 @@ export const KnowledgeNoteWorkspace = ({
               </span>
               <div className="gn-note-editor-footer-actions">
                 <span>更新于 {formatUpdatedAt(selectedNote.updatedAt)}</span>
-                {editorToolbar}
                 {editable ? (
                   <>
                     <button className="doc-action-btn secondary" type="button" onClick={onDelete}>
@@ -731,193 +1092,10 @@ export const KnowledgeNoteWorkspace = ({
               <button className="doc-action-btn secondary" type="button" onClick={onCreateNote}>
                 新建笔记
               </button>
-              {editorToolbar}
             </div>
           </div>
         )}
       </main>
-
-      <div
-        className="gn-note-side-resize-handle"
-        role="separator"
-        aria-label="调整详情栏宽度"
-        aria-orientation="vertical"
-        aria-valuemin={NOTE_SIDE_WIDTH_BOUNDS.min}
-        aria-valuemax={NOTE_SIDE_WIDTH_BOUNDS.max}
-        aria-valuenow={isSideExpanded ? sideWidth : 46}
-        tabIndex={0}
-        onPointerDown={handleSideResizePointerDown}
-        onKeyDown={handleSideResizeKeyDown}
-      />
-
-      <aside className={`gn-note-side ${isSideExpanded ? 'expanded' : 'collapsed'}`}>
-        <button
-          className="gn-note-side-toggle"
-          type="button"
-          onClick={() => setIsSideExpanded((current) => !current)}
-          aria-expanded={isSideExpanded}
-        >
-          {isSideExpanded ? '收起' : '详情'}
-        </button>
-        <section className="gn-note-side-card">
-          <div className="gn-note-side-card-header">
-            <div>
-              <h4>当前笔记</h4>
-              <p>这里展示当前选中笔记的基础元信息。</p>
-            </div>
-            <span className="gn-note-side-count">{selectedNote ? 1 : 0}</span>
-          </div>
-          {selectedNote ? (
-            <dl className="gn-note-meta-list">
-              <div>
-                <dt>类型</dt>
-                <dd>{selectedNoteMeta?.label}</dd>
-              </div>
-              <div>
-                <dt>标签</dt>
-                <dd>{selectedNoteTagLabels.length > 0 ? selectedNoteTagLabels.join(' / ') : '暂无标签'}</dd>
-              </div>
-              <div>
-                <dt>Markdown 镜像</dt>
-                <dd>{mirrorSourcePath || '未绑定 Markdown 镜像'}</dd>
-              </div>
-              <div>
-                <dt>摘要</dt>
-                <dd>{selectedNote.matchSnippet || summarizeBody(selectedNote.bodyMarkdown)}</dd>
-              </div>
-              <div>
-                <dt>引用来源</dt>
-                <dd>
-                  {selectedNote.referenceTitles.length > 0
-                    ? selectedNote.referenceTitles.join(' / ')
-                    : '暂无引用来源'}
-                </dd>
-              </div>
-            </dl>
-          ) : (
-            <div className="gn-note-empty">先从左侧选择一条笔记。</div>
-          )}
-        </section>
-
-        <section className="gn-note-side-card">
-          <div className="gn-note-side-card-header">
-            <div>
-              <h4>最近文档变更</h4>
-              <p>记录新增、修改、删除和同步导入的最近动作。</p>
-            </div>
-            <span className="gn-note-side-count">{documentEvents.length}</span>
-          </div>
-          {visibleDocumentEvents.length > 0 ? (
-            <div className="gn-note-activity-list">
-              {visibleDocumentEvents.map((event) => (
-                <div key={event.id} className="gn-note-activity-item">
-                  <strong>{event.documentTitle}</strong>
-                  <span>{event.summary}</span>
-                  <div className="gn-note-activity-meta">
-                    <em>{DOCUMENT_EVENT_TRIGGER_LABELS[event.trigger] || event.trigger}</em>
-                    <span>{event.trigger}</span>
-                    <span>{formatUpdatedAt(event.timestamp)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="gn-note-empty">还没有记录到文档变更。</div>
-          )}
-        </section>
-
-        {renderNoteList(
-          '类似笔记',
-          similarNotes,
-          onSelectNote,
-          '选中笔记后，这里会展示语义上更接近的内容。',
-          '快速查看和当前笔记最接近的知识条目。'
-        )}
-
-        <section className="gn-note-side-card">
-          <div className="gn-note-side-card-header">
-            <div>
-              <h4>系统索引图谱</h4>
-              <p>这里展示当前笔记的局部图谱，点击节点可以继续跳转到相邻上下文。</p>
-            </div>
-            <span className="gn-note-side-count">{graphNodeCount}</span>
-          </div>
-          <div className="gn-note-graph-numbers">
-            <span>{graphNodeCount} 个节点</span>
-            <span>{graphEdgeCount} 条边</span>
-          </div>
-          {neighborhoodGraph ? (
-            <div className="gn-note-graph-preview">
-              <KnowledgeGraphCanvas
-                graph={neighborhoodGraph}
-                mode="focused"
-                compact
-                selectedNoteId={selectedNote?.id || null}
-                onSelectNode={onSelectNote}
-              />
-            </div>
-          ) : (
-            <div className="gn-note-empty">当前笔记附近还没有更多可展示的关系节点。</div>
-          )}
-          <button className="doc-action-btn secondary" type="button" onClick={onOpenGlobalWikiGraph}>
-            打开系统索引图谱
-          </button>
-          {neighborhoodNotes.length > 0 ? (
-            <div className="gn-note-relation-list">
-              {neighborhoodNotes.map((note) => (
-                <button key={note.id} type="button" onClick={() => onSelectNote(note.id)}>
-                  <strong>{note.title}</strong>
-                  <span>{note.matchSnippet || summarizeBody(note.bodyMarkdown)}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </section>
-
-        <section className="gn-note-side-card">
-          <div className="gn-note-side-card-header">
-            <div>
-              <h4>附件资料</h4>
-              <p>把直接引用、附近资料和资料库入口都放在这里，减少来回找文件。</p>
-            </div>
-            <span className="gn-note-side-count">{visibleAttachmentCount}</span>
-          </div>
-          {attachmentCategoryCounts.length > 0 ? (
-            <div className="gn-note-category-grid">
-              {attachmentCategoryCounts.map((item) => (
-                <div key={item.category} className="gn-note-category-chip">
-                  <strong>{item.count}</strong>
-                  <span>{ATTACHMENT_CATEGORY_LABELS[item.category]}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="gn-note-empty">当前项目里还没有已识别的资料附件。</div>
-          )}
-
-          {renderAttachmentList(
-            '直接关联',
-            attachments,
-            onOpenAttachment,
-            '当前笔记还没有直接关联的资料。',
-            '正文里直接引用到的附件会优先出现在这里。'
-          )}
-          {renderAttachmentList(
-            '附近资料',
-            nearbyAttachments,
-            onOpenAttachment,
-            '附近目录里还没有更多可用资料。',
-            '同目录或相邻目录的资料会作为就近参考展示。'
-          )}
-          {renderAttachmentList(
-            '资料库',
-            libraryAttachments,
-            onOpenAttachment,
-            '资料库里还没有更多推荐附件。',
-            '面向整个项目知识库的可复用附件入口。'
-          )}
-        </section>
-      </aside>
     </section>
   );
 };
