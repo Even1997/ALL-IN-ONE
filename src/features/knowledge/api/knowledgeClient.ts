@@ -12,7 +12,11 @@ import type {
   LocalKnowledgeServerConfig,
   ProjectKnowledgeSource,
 } from '../model/knowledge';
+import { buildAtomWritePayload, normalizeKnowledgeTagNames } from './knowledgeAtomPayload';
 import { inferKnowledgeDocType } from '../model/knowledgeDocType';
+import { mergeKnowledgeSystemTags } from '../model/knowledgeTagMeta';
+import { resolveBrowserPreviewKnowledgeServerConfig } from './knowledgeBrowserPreviewConfig';
+import { parseKnowledgeReferenceTitles } from '../workspace/knowledgeNoteMarkdown';
 
 let localKnowledgeServerConfigPromise: Promise<LocalKnowledgeServerConfig> | null = null;
 const projectDatabaseIdPromises = new Map<string, Promise<string>>();
@@ -73,19 +77,30 @@ const resolveKnowledgeNoteKind = (
   return 'note';
 };
 
+const resolveKnowledgeClassification = (title: string, rawTags: string[]) => {
+  const docType = inferKnowledgeDocType(title);
+  const tags = mergeKnowledgeSystemTags(rawTags, docType);
+
+  return { docType, tags };
+};
+
 const mapAtomSummaryToKnowledgeNote = (atom: GoodnightAtomsResponse['atoms'][number]): KnowledgeNote => {
-  const tags = atom.tags.map((tag) => tag.name);
   const bodyMarkdown = atom.snippet;
   const sourceUrl = atom.source_url ?? null;
   const title = resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl);
+  const { docType, tags } = resolveKnowledgeClassification(
+    title,
+    atom.tags.map((tag) => tag.name)
+  );
 
   return {
     id: atom.id,
     title,
     bodyMarkdown,
     updatedAt: atom.updated_at,
-    docType: inferKnowledgeDocType(title),
+    docType,
     tags,
+    referenceTitles: parseKnowledgeReferenceTitles(bodyMarkdown),
     kind: resolveKnowledgeNoteKind(sourceUrl, tags),
     sourceUrl,
   };
@@ -95,36 +110,44 @@ const mapAtomWithTagsToKnowledgeNote = (
   atom: GoodnightAtomWithTags,
   fallbackTitle?: string
 ): KnowledgeNote => {
-  const tags = atom.tags.map((tag) => tag.name);
   const bodyMarkdown = atom.content;
   const sourceUrl = atom.source_url ?? null;
   const title = resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl, fallbackTitle);
+  const { docType, tags } = resolveKnowledgeClassification(
+    title,
+    atom.tags.map((tag) => tag.name)
+  );
 
   return {
     id: atom.id,
     title,
     bodyMarkdown,
     updatedAt: atom.updated_at,
-    docType: inferKnowledgeDocType(title),
+    docType,
     tags,
+    referenceTitles: parseKnowledgeReferenceTitles(bodyMarkdown),
     kind: resolveKnowledgeNoteKind(sourceUrl, tags),
     sourceUrl,
   };
 };
 
 const mapSearchResultToKnowledgeNote = (result: GoodnightSearchResult): KnowledgeNote => {
-  const tags = result.tags.map((tag) => tag.name);
   const bodyMarkdown = result.matching_chunk_content || result.snippet;
   const sourceUrl = result.source_url ?? null;
   const title = resolveKnowledgeNoteTitle(result.title, bodyMarkdown, sourceUrl);
+  const { docType, tags } = resolveKnowledgeClassification(
+    title,
+    result.tags.map((tag) => tag.name)
+  );
 
   return {
     id: result.id,
     title,
     bodyMarkdown,
     updatedAt: result.updated_at,
-    docType: inferKnowledgeDocType(title),
+    docType,
     tags,
+    referenceTitles: parseKnowledgeReferenceTitles(bodyMarkdown),
     kind: resolveKnowledgeNoteKind(sourceUrl, tags),
     sourceUrl,
     matchSnippet: result.match_snippet ?? null,
@@ -132,18 +155,22 @@ const mapSearchResultToKnowledgeNote = (result: GoodnightSearchResult): Knowledg
 };
 
 const mapSimilarResultToKnowledgeNote = (result: GoodnightSimilarAtomResult): KnowledgeNote => {
-  const tags = result.tags.map((tag) => tag.name);
   const bodyMarkdown = result.matching_chunk_content || result.snippet;
   const sourceUrl = result.source_url ?? null;
   const title = resolveKnowledgeNoteTitle(result.title, bodyMarkdown, sourceUrl);
+  const { docType, tags } = resolveKnowledgeClassification(
+    title,
+    result.tags.map((tag) => tag.name)
+  );
 
   return {
     id: result.id,
     title,
     bodyMarkdown,
     updatedAt: result.updated_at,
-    docType: inferKnowledgeDocType(title),
+    docType,
     tags,
+    referenceTitles: parseKnowledgeReferenceTitles(bodyMarkdown),
     kind: resolveKnowledgeNoteKind(sourceUrl, tags),
     sourceUrl,
   };
@@ -152,18 +179,22 @@ const mapSimilarResultToKnowledgeNote = (result: GoodnightSimilarAtomResult): Kn
 const mapNeighborhoodGraph = (graph: GoodnightNeighborhoodGraph): KnowledgeNeighborhoodGraph => ({
   centerNoteId: graph.center_atom_id,
   nodes: graph.atoms.map((atom) => {
-    const tags = atom.tags.map((tag) => tag.name);
     const bodyMarkdown = atom.snippet;
     const sourceUrl = atom.source_url ?? null;
     const title = resolveKnowledgeNoteTitle(atom.title, bodyMarkdown, sourceUrl);
+    const { docType, tags } = resolveKnowledgeClassification(
+      title,
+      atom.tags.map((tag) => tag.name)
+    );
 
     return {
       id: atom.id,
       title,
       bodyMarkdown,
       updatedAt: atom.updated_at,
-      docType: inferKnowledgeDocType(title),
+      docType,
       tags,
+      referenceTitles: parseKnowledgeReferenceTitles(bodyMarkdown),
       kind: resolveKnowledgeNoteKind(sourceUrl, tags),
       sourceUrl,
       depth: atom.depth,
@@ -232,6 +263,51 @@ const createDatabase = async (name: string) =>
     }
   );
 
+const listTags = async (databaseId: string) =>
+  requestKnowledgeJson<Array<{ id: string; name: string }>>(
+    '/api/tags',
+    {},
+    databaseId
+  );
+
+const createTag = async (databaseId: string, name: string) =>
+  requestKnowledgeJson<{ id: string; name: string }>(
+    '/api/tags',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name }),
+    },
+    databaseId
+  );
+
+const ensureTagIds = async (databaseId: string, tagNames: string[]) => {
+  const normalizedNames = normalizeKnowledgeTagNames(tagNames);
+  if (normalizedNames.length === 0) {
+    return [];
+  }
+
+  const existingTags = await listTags(databaseId);
+  const tagsByName = new Map(existingTags.map((tag) => [tag.name, tag.id]));
+  const resolvedTagIds: string[] = [];
+
+  for (const name of normalizedNames) {
+    const existingTagId = tagsByName.get(name);
+    if (existingTagId) {
+      resolvedTagIds.push(existingTagId);
+      continue;
+    }
+
+    const createdTag = await createTag(databaseId, name);
+    tagsByName.set(createdTag.name, createdTag.id);
+    resolvedTagIds.push(createdTag.id);
+  }
+
+  return resolvedTagIds;
+};
+
 const ensureProjectKnowledgeDatabase = async (projectId: string) => {
   const databaseName = getProjectDatabaseName(projectId);
   const existing = await listDatabases();
@@ -259,6 +335,7 @@ const getProjectKnowledgeDatabaseId = async (projectId: string) => {
 };
 
 const updateAtomContent = async (databaseId: string, atomId: string, source: ProjectKnowledgeSource) => {
+  const tagIds = await ensureTagIds(databaseId, source.tags);
   await requestKnowledgeJson<GoodnightAtomWithTags>(
     `/api/atoms/${encodeURIComponent(atomId)}/content`,
     {
@@ -266,18 +343,14 @@ const updateAtomContent = async (databaseId: string, atomId: string, source: Pro
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        content: source.content,
-        source_url: source.filePath,
-        published_at: null,
-        tag_ids: null,
-      }),
+      body: JSON.stringify(buildAtomWritePayload(source, tagIds)),
     },
     databaseId
   );
 };
 
 const createAtom = async (databaseId: string, source: ProjectKnowledgeSource) => {
+  const tagIds = await ensureTagIds(databaseId, source.tags);
   await requestKnowledgeJson<GoodnightAtomWithTags>(
     '/api/atoms',
     {
@@ -286,10 +359,7 @@ const createAtom = async (databaseId: string, source: ProjectKnowledgeSource) =>
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        content: source.content,
-        source_url: source.filePath,
-        published_at: null,
-        tag_ids: [],
+        ...buildAtomWritePayload(source, tagIds),
         skip_if_source_exists: true,
       }),
     },
@@ -326,6 +396,12 @@ const normalizeProjectSources = (sources: ProjectKnowledgeSource[]) => {
 };
 
 export const getLocalKnowledgeServerConfig = async () => {
+  const browserPreviewConfig =
+    typeof window !== 'undefined' ? resolveBrowserPreviewKnowledgeServerConfig(window.location.href) : null;
+  if (browserPreviewConfig) {
+    return browserPreviewConfig;
+  }
+
   if (!localKnowledgeServerConfigPromise) {
     localKnowledgeServerConfigPromise = invoke<LocalKnowledgeServerConfig>('get_local_knowledge_server_config');
   }
@@ -360,6 +436,7 @@ export const createProjectKnowledgeNote = async (
   source: ProjectKnowledgeSource
 ) => {
   const databaseId = await getProjectKnowledgeDatabaseId(projectId);
+  const tagIds = await ensureTagIds(databaseId, source.tags);
   const atom = await requestKnowledgeJson<GoodnightAtomWithTags>(
     '/api/atoms',
     {
@@ -368,10 +445,7 @@ export const createProjectKnowledgeNote = async (
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        content: source.content,
-        source_url: source.filePath.trim() || null,
-        published_at: null,
-        tag_ids: [],
+        ...buildAtomWritePayload(source, tagIds),
         skip_if_source_exists: false,
       }),
     },

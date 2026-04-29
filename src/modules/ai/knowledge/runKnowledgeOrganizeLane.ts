@@ -1,4 +1,5 @@
 import type { GeneratedFile, RequirementDoc } from '../../../types';
+import { KNOWLEDGE_ORGANIZE_DOC_TITLES } from './knowledgeOrganizeState.ts';
 
 type KnowledgeOrganizeDocKey =
   | 'project-overview'
@@ -31,11 +32,11 @@ const DOC_BLUEPRINTS: Array<{
   title: string;
   docType: KnowledgeOrganizeLaneDoc['docType'];
 }> = [
-  { key: 'project-overview', title: '项目总览.md', docType: 'wiki-index' },
-  { key: 'feature-inventory', title: '功能清单.md', docType: 'wiki-index' },
-  { key: 'page-inventory', title: '页面清单.md', docType: 'wiki-index' },
-  { key: 'terminology', title: '术语表.md', docType: 'ai-summary' },
-  { key: 'open-questions', title: '待确认问题.md', docType: 'ai-summary' },
+  { key: 'project-overview', title: KNOWLEDGE_ORGANIZE_DOC_TITLES[0], docType: 'wiki-index' },
+  { key: 'feature-inventory', title: KNOWLEDGE_ORGANIZE_DOC_TITLES[1], docType: 'wiki-index' },
+  { key: 'page-inventory', title: KNOWLEDGE_ORGANIZE_DOC_TITLES[2], docType: 'wiki-index' },
+  { key: 'terminology', title: KNOWLEDGE_ORGANIZE_DOC_TITLES[3], docType: 'ai-summary' },
+  { key: 'open-questions', title: KNOWLEDGE_ORGANIZE_DOC_TITLES[4], docType: 'ai-summary' },
 ];
 
 const extractJSONObject = (value: string) => {
@@ -92,27 +93,86 @@ const summarizeContent = (value: string) => {
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
 };
 
+const stripMarkdownExtension = (value: string) => value.replace(/\.(md|markdown)$/i, '');
+
+const extractLeadingHeading = (value: string) => {
+  const match = value.trim().match(/^#\s+(.+?)\s*$/m);
+  return match?.[1]?.trim() || '';
+};
+
+const removeLeadingHeading = (value: string) =>
+  value.trim().replace(/^#\s+.+?(?:\r?\n|$)/, '').trim();
+
+const buildWikiIndexSection = (body: string, summary: string) => {
+  const sectionTitles = Array.from(body.matchAll(/^##\s+(.+)$/gm))
+    .map((match) => match[1]?.trim() || '')
+    .filter((title) => title && !/^(index|\u7d22\u5f15)$/i.test(title));
+
+  const items = sectionTitles.length > 0 ? sectionTitles : [summary || '\u5f85\u8865\u5145'];
+  return `## \u7d22\u5f15\n${items.map((item) => `- ${item}`).join('\n')}`;
+};
+
+const normalizeWikiDraftContent = (title: string, content: string, summary: string) => {
+  const fallbackHeading = stripMarkdownExtension(title);
+  const heading = extractLeadingHeading(content) || fallbackHeading;
+  const rawBody = removeLeadingHeading(content);
+  const hasSecondaryHeading = /^##\s+/m.test(rawBody);
+  const hasIndexSection = /^##\s*(index|\u7d22\u5f15)\s*$/im.test(rawBody);
+
+  let body = rawBody;
+  if (!body) {
+    body = `## \u7d22\u5f15\n- ${summary || fallbackHeading}\n\n## \u5185\u5bb9\n- \u5f85\u8865\u5145`;
+  } else if (!hasSecondaryHeading) {
+    body = `${buildWikiIndexSection(body, summary)}\n\n## \u5185\u5bb9\n${body}`;
+  } else if (!hasIndexSection) {
+    body = `${buildWikiIndexSection(body, summary)}\n\n${body}`;
+  }
+
+  return `# ${heading}\n\n${body.trim()}`;
+};
+
+const normalizeDraftContent = (
+  title: string,
+  docType: KnowledgeOrganizeLaneDoc['docType'],
+  content: string,
+  summary: string
+) => {
+  if (docType === 'wiki-index') {
+    return normalizeWikiDraftContent(title, content, summary);
+  }
+
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return `# ${stripMarkdownExtension(title)}`;
+  }
+
+  if (/^#\s+/m.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `# ${stripMarkdownExtension(title)}\n\n${trimmed}`;
+};
+
 const buildLanePrompt = ({
   project,
   requirementDocs,
   generatedFiles,
 }: Omit<KnowledgeOrganizeLaneInput, 'executeText'>) => {
   const requirementSection = requirementDocs.length
-    ? requirementDocs
-        .map((doc) => `## ${doc.title}\n${doc.content.trim()}`)
-        .join('\n\n')
-    : '暂无需求文档。';
+    ? requirementDocs.map((doc) => `## ${doc.title}\n${doc.content.trim()}`).join('\n\n')
+    : 'No requirement documents yet.';
   const generatedSection = generatedFiles.length
     ? generatedFiles
         .slice(0, 12)
         .map((file) => `- ${file.path}: ${file.summary}`)
         .join('\n')
-    : '- 暂无生成产物';
+    : '- No generated artifacts yet';
 
   return [
-    `你是 ${project.name} 的产品知识库整理助手。`,
-    '请根据已有需求文档和现有产物，生成 5 份结构化知识文档。',
-    '只返回 JSON 对象，不要返回解释文字。',
+    `You are the product knowledge organizer for ${project.name}.`,
+    'Based on the current knowledge docs and generated artifacts, produce 5 structured wiki drafts.',
+    'For project-overview, feature-inventory, and page-inventory, the markdown must include an H1 title, a "## 索引" section with bullets, and at least one additional "##" section.',
+    'Return JSON only, without any extra explanation.',
     'JSON schema:',
     JSON.stringify(
       {
@@ -126,10 +186,10 @@ const buildLanePrompt = ({
       2
     ),
     '',
-    '# 需求文档',
+    '# Requirement docs',
     requirementSection,
     '',
-    '# 现有产物',
+    '# Existing artifacts',
     generatedSection,
   ].join('\n');
 };
@@ -137,7 +197,7 @@ const buildLanePrompt = ({
 const parseLanePayload = (raw: string) => {
   const payloadText = extractJSONObject(raw);
   if (!payloadText) {
-    throw new Error('知识整理没有返回有效 JSON。');
+    throw new Error('Knowledge organize did not return valid JSON.');
   }
 
   return JSON.parse(payloadText) as Partial<Record<KnowledgeOrganizeDocKey, Partial<KnowledgeOrganizeDocDraft>>>;
@@ -162,14 +222,16 @@ export const runKnowledgeOrganizeLane = async ({
   return DOC_BLUEPRINTS.map(({ key, title, docType }) => {
     const entry = payload[key];
     const content = typeof entry?.content === 'string' ? entry.content.trim() : '';
-    const summary = typeof entry?.summary === 'string' && entry.summary.trim()
-      ? entry.summary.trim()
-      : summarizeContent(content || title.replace(/\.md$/i, ''));
+    const summary =
+      typeof entry?.summary === 'string' && entry.summary.trim()
+        ? entry.summary.trim()
+        : summarizeContent(content || title.replace(/\.md$/i, ''));
+    const normalizedContent = normalizeDraftContent(title, docType, content, summary);
 
     return {
       id: `knowledge-organize:${project.id}:${key}`,
       title,
-      content: content || `# ${title.replace(/\.md$/i, '')}`,
+      content: normalizedContent,
       summary,
       kind: 'note',
       docType,

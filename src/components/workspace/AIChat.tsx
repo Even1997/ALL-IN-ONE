@@ -33,17 +33,26 @@ import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
+import { executeKnowledgeProposal } from '../../modules/ai/knowledge/executeKnowledgeProposal';
+import { buildChangeSyncProposal } from '../../modules/ai/knowledge/buildChangeSyncProposal';
+import { buildKnowledgeOrganizeProposal } from '../../modules/ai/knowledge/buildKnowledgeOrganizeProposal';
+import {
+  buildKnowledgeOrganizeWorkflowState,
+  planKnowledgeOrganizeRun,
+} from '../../modules/ai/knowledge/knowledgeOrganizeState';
 import { runChangeSyncLane } from '../../modules/ai/knowledge/runChangeSyncLane';
 import { runKnowledgeOrganizeLane } from '../../modules/ai/knowledge/runKnowledgeOrganizeLane';
+import { suggestKnowledgeProposalFromAnswer } from '../../modules/ai/knowledge/suggestKnowledgeProposal';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
+import type { KnowledgeProposal } from '../../features/knowledge/model/knowledgeProposal';
+import { useKnowledgeProposalStore } from '../../features/knowledge/store/knowledgeProposalStore';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
-import type { RequirementDoc } from '../../types';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
-import { getProjectDir, saveKnowledgeDocsToProjectDir } from '../../utils/projectPersistence';
+import { getProjectDir } from '../../utils/projectPersistence';
 import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
 import { chooseNextWorkflowPackage } from '../../modules/ai/workflow/chatWorkflowRouting';
 import {
@@ -213,15 +222,6 @@ const buildRunSummaryEntry = ({
     createdAt: Date.now(),
   };
 };
-
-const toKnowledgeSources = (docs: RequirementDoc[]) =>
-  docs.map((doc) => ({
-    title: doc.title,
-    content: doc.content,
-    filePath: doc.filePath || '',
-    updatedAt: doc.updatedAt,
-    tags: doc.tags || [],
-  }));
 
 const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
   id: 'custom',
@@ -473,9 +473,24 @@ export const AIChat: React.FC<AIChatProps> = ({
   const selectedElementId = usePreviewStore((state) => state.selectedElementId);
   const featureTree = useFeatureTreeStore((state) => state.tree);
   const serverNotes = useKnowledgeStore((state) => state.notes);
-  const syncKnowledgeNotes = useKnowledgeStore((state) => state.syncProjectNotes);
+  const createProjectNote = useKnowledgeStore((state) => state.createProjectNote);
+  const loadKnowledgeNotes = useKnowledgeStore((state) => state.loadNotes);
+  const updateProjectNote = useKnowledgeStore((state) => state.updateProjectNote);
   const aiContextState = useAIContextStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
+  );
+  const {
+    dismissProposal: dismissStoredKnowledgeProposal,
+    setOperationSelected,
+    setProposalStatus,
+    upsertProposal,
+  } = useKnowledgeProposalStore(
+    useShallow((state) => ({
+      dismissProposal: state.dismissProposal,
+      setOperationSelected: state.setOperationSelected,
+      setProposalStatus: state.setProposalStatus,
+      upsertProposal: state.upsertProposal,
+    }))
   );
 
   useEffect(() => {
@@ -498,6 +513,10 @@ export const AIChat: React.FC<AIChatProps> = ({
   const projectChatState = useAIChatStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
   );
+  const workflowProjectState = useAIWorkflowStore((state) =>
+    currentProject ? state.projects[currentProject.id] : undefined
+  );
+  const setKnowledgeOrganizeState = useAIWorkflowStore((state) => state.setKnowledgeOrganizeState);
   const {
     ensureProjectState,
     upsertSession,
@@ -541,6 +560,188 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const messages = activeSession?.messages || [];
   const activityEntries = projectChatState?.activityEntries || [];
+
+  const toggleProposalOperation = useCallback(
+    (messageId: string, operationId: string, selected: boolean) => {
+      if (!currentProject || !activeSessionId) {
+        return;
+      }
+
+      updateMessage(currentProject.id, activeSessionId, messageId, (message) => {
+        if (!message.knowledgeProposal) {
+          return message;
+        }
+
+        const nextProposal = {
+          ...message.knowledgeProposal,
+          operations: message.knowledgeProposal.operations.map((operation) =>
+            operation.id === operationId ? { ...operation, selected } : operation
+          ),
+        };
+        setOperationSelected(currentProject.id, nextProposal.id, operationId, selected);
+        return { ...message, knowledgeProposal: nextProposal };
+      });
+    },
+    [activeSessionId, currentProject, setOperationSelected, updateMessage]
+  );
+
+  const dismissKnowledgeProposal = useCallback(
+    (messageId: string) => {
+      if (!currentProject || !activeSessionId) {
+        return;
+      }
+
+      updateMessage(currentProject.id, activeSessionId, messageId, (message) => {
+        if (!message.knowledgeProposal) {
+          return message;
+        }
+
+        dismissStoredKnowledgeProposal(currentProject.id, message.knowledgeProposal.id);
+        return {
+          ...message,
+          knowledgeProposal: {
+            ...message.knowledgeProposal,
+            status: 'dismissed',
+          },
+        };
+      });
+    },
+    [activeSessionId, currentProject, dismissStoredKnowledgeProposal, updateMessage]
+  );
+
+  const handleExecuteKnowledgeProposal = useCallback(
+    async (messageId: string, proposal: KnowledgeProposal) => {
+      if (!currentProject || !activeSessionId) {
+        return;
+      }
+
+      setProposalStatus(currentProject.id, proposal.id, 'executing');
+      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+        ...message,
+        knowledgeProposal: message.knowledgeProposal
+          ? {
+              ...message.knowledgeProposal,
+              status: 'executing',
+            }
+          : message.knowledgeProposal,
+      }));
+
+      await executeKnowledgeProposal(proposal, {
+        createNote: async ({ title, content, tags }) => {
+          await createProjectNote(currentProject.id, {
+            title,
+            content,
+            filePath: '',
+            updatedAt: new Date().toISOString(),
+            tags,
+          });
+        },
+        updateNote: async ({ noteId, title, content, tags }) => {
+          const existingNote = serverNotes.find((note) => note.id === noteId);
+          await updateProjectNote(currentProject.id, noteId, {
+            title,
+            content: content ?? existingNote?.bodyMarkdown ?? '',
+            filePath: existingNote?.sourceUrl || '',
+            updatedAt: new Date().toISOString(),
+            tags: Array.from(new Set([...(existingNote?.tags || []), ...tags])),
+          });
+        },
+      });
+
+      await loadKnowledgeNotes(currentProject.id);
+      if (proposal.trigger === 'knowledge-organize' && proposal.operations.every((operation) => operation.selected)) {
+        const latestNotes = useKnowledgeStore.getState().notes;
+        setKnowledgeOrganizeState(
+          currentProject.id,
+          buildKnowledgeOrganizeWorkflowState({
+            docs: projectKnowledgeNotesToRequirementDocs(latestNotes),
+            lastKnowledgeOrganizeAt: new Date().toISOString(),
+          })
+        );
+      }
+      setProposalStatus(currentProject.id, proposal.id, 'executed');
+      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+        ...message,
+        knowledgeProposal: message.knowledgeProposal
+          ? {
+              ...message.knowledgeProposal,
+              status: 'executed',
+            }
+          : message.knowledgeProposal,
+      }));
+    },
+    [
+      activeSessionId,
+      createProjectNote,
+      currentProject,
+      loadKnowledgeNotes,
+      serverNotes,
+      setKnowledgeOrganizeState,
+      setProposalStatus,
+      updateMessage,
+      updateProjectNote,
+    ]
+  );
+
+  const renderKnowledgeProposal = useCallback(
+    (message: { id: string; knowledgeProposal?: KnowledgeProposal }) => {
+      const proposal = message.knowledgeProposal;
+      if (!proposal || proposal.status === 'dismissed') {
+        return null;
+      }
+
+      const executableCount = proposal.operations.filter((operation) => operation.selected).length;
+
+      return (
+        <section className="chat-knowledge-proposal-card">
+          <div className="chat-knowledge-proposal-head">
+            <strong>{proposal.summary}</strong>
+            <span>
+              {proposal.status === 'executed'
+                ? '已执行'
+                : proposal.status === 'executing'
+                  ? '执行中...'
+                  : `已选 ${executableCount} 项`}
+            </span>
+          </div>
+          <div className="chat-knowledge-proposal-list">
+            {proposal.operations.map((operation) => (
+              <label className="chat-knowledge-proposal-operation" key={operation.id}>
+                <input
+                  type="checkbox"
+                  checked={operation.selected}
+                  disabled={proposal.status !== 'pending'}
+                  onChange={(event) => toggleProposalOperation(message.id, operation.id, event.target.checked)}
+                />
+                <div>
+                  <strong>{operation.targetTitle}</strong>
+                  <span>{operation.reason}</span>
+                  <span>证据：{operation.evidence.join('、')}</span>
+                  {operation.draftContent ? <pre>{operation.draftContent}</pre> : null}
+                </div>
+              </label>
+            ))}
+          </div>
+          <div className="chat-knowledge-proposal-actions">
+            {proposal.status === 'pending' ? (
+              <>
+                <button type="button" onClick={() => void handleExecuteKnowledgeProposal(message.id, proposal)}>
+                  全部批准
+                </button>
+                <button type="button" onClick={() => void handleExecuteKnowledgeProposal(message.id, proposal)}>
+                  执行选中项
+                </button>
+                <button type="button" onClick={() => dismissKnowledgeProposal(message.id)}>
+                  忽略
+                </button>
+              </>
+            ) : null}
+          </div>
+        </section>
+      );
+    },
+    [dismissKnowledgeProposal, handleExecuteKnowledgeProposal, toggleProposalOperation]
+  );
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: isLoading ? 'auto' : 'smooth', block: 'end' });
@@ -677,27 +878,27 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const contextSnapshot = useMemo(
     () =>
-      buildChatContextSnapshot({
-        scene: aiContextState?.scene || 'knowledge',
-        pageTitle: selectedPage?.name || null,
-        selectedElementLabel,
-        knowledgeLabel: displayKnowledgeFile && isKnowledgeReferenceEnabled
-          ? `鐭ヨ瘑鏂囨。 / ${displayKnowledgeFile.title}`
+        buildChatContextSnapshot({
+          scene: aiContextState?.scene || 'knowledge',
+          pageTitle: selectedPage?.name || null,
+          selectedElementLabel,
+          knowledgeLabel: displayKnowledgeFile && isKnowledgeReferenceEnabled
+          ? `知识文档 / ${displayKnowledgeFile.title}`
           : null,
-      }),
+        }),
     [aiContextState?.scene, displayKnowledgeFile, isKnowledgeReferenceEnabled, selectedElementLabel, selectedPage?.name]
   );
 
   const currentContextUsage = useMemo(() => {
     const previewPrompt = buildDirectChatPrompt({
-      userInput: input.trim() || '缁х画褰撳墠瀵硅瘽',
+      userInput: input.trim() || '继续当前对话',
       currentProjectName: currentProject?.name,
       contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
       skillIntent: null,
       knowledgeSelection: knowledgeSelectionMeta,
       conversationHistory: activeSession?.messages || [],
       contextLabels: [
-        selectedRuntimeConfig ? `褰撳墠 AI / ${selectedRuntimeConfig.name}` : null,
+        selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
         contextSnapshot.primaryLabel,
         contextSnapshot.secondaryLabel,
         contextSnapshot.knowledgeLabel,
@@ -1040,7 +1241,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           knowledgeSelection: knowledgeSelectionMeta,
           conversationHistory: activeSession?.messages || [],
           contextLabels: [
-            selectedRuntimeConfig ? `褰撳墠 AI / ${selectedRuntimeConfig.name}` : null,
+            selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
             contextSnapshot.primaryLabel,
             contextSnapshot.secondaryLabel,
             contextSnapshot.knowledgeLabel,
@@ -1096,33 +1297,75 @@ export const AIChat: React.FC<AIChatProps> = ({
         if (skillIntent?.package === 'knowledge-organize') {
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: '正在整理知识库并生成 wiki 索引...',
+            content: '正在整理知识库并生成 wiki 提案...',
           }));
+
+          const knowledgeOrganizePlan = planKnowledgeOrganizeRun({
+            docs: knowledgeSourceDocs,
+            generatedFiles,
+            workflowState: workflowProjectState?.knowledgeOrganize,
+          });
+          if (knowledgeOrganizePlan.mode !== 'proceed') {
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              content: knowledgeOrganizePlan.message,
+            }));
+            appendActivityEntry(currentProject.id, {
+              id: createActivityEntryId(),
+              runId,
+              type: 'run-summary',
+              summary: knowledgeOrganizePlan.message,
+              changedPaths: [],
+              runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
+              skill: resolvedSkill,
+              createdAt: Date.now(),
+            });
+            return;
+          }
 
           const docs = await runKnowledgeOrganizeLane({
             project: {
               id: currentProject.id,
               name: currentProject.name,
             },
-            requirementDocs: knowledgeSourceDocs,
+            requirementDocs: [...knowledgeOrganizePlan.sourceDocs, ...knowledgeOrganizePlan.existingWikiDocs],
             generatedFiles,
             executeText: executeLaneText,
           });
-          const persistedDocs = await saveKnowledgeDocsToProjectDir(currentProject.id, docs);
-          const syncedNotes = await syncKnowledgeNotes(currentProject.id, toKnowledgeSources(persistedDocs));
-          const mergedDocs = projectKnowledgeNotesToRequirementDocs(syncedNotes);
-          replaceRequirementDocs(mergedDocs);
+          const existingWikiTargetsByTitle = Object.fromEntries(
+            knowledgeOrganizePlan.existingWikiDocs.map((doc) => [
+              doc.title,
+              {
+                id: doc.id,
+                title: doc.title,
+                manualEdited: knowledgeOrganizePlan.manualEditedWikiTitles.includes(doc.title),
+              },
+            ])
+          );
+          const knowledgeProposal = buildKnowledgeOrganizeProposal({
+            projectId: currentProject.id,
+            sourceTitles: knowledgeOrganizePlan.sourceDocs.map((doc) => doc.title),
+            docs,
+            existingWikiTargetsByTitle,
+          });
+          upsertProposal(knowledgeProposal);
+          const manualEditedCount = knowledgeOrganizePlan.manualEditedWikiTitles.length;
+          const knowledgeOrganizeSummary =
+            manualEditedCount > 0
+              ? `已生成 ${docs.length} 份 Wiki 更新建议，其中 ${manualEditedCount} 份检测到手动修改，请先审阅合并建议再执行。`
+              : `已生成 ${docs.length} 份 Wiki 更新建议，请在这条消息里勾选后执行。`;
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: `已整理知识库，并生成 ${docs.length} 份文档：${docs.map((doc) => doc.title).join('、')}`,
+            content: knowledgeOrganizeSummary,
+            knowledgeProposal,
           }));
           appendActivityEntry(currentProject.id, {
             id: createActivityEntryId(),
             runId,
             type: 'run-summary',
-            summary: `AI 整理了知识库并生成 ${docs.length} 份 wiki 文档`,
-            changedPaths: persistedDocs.map((doc) => doc.filePath || doc.title),
+            summary: knowledgeOrganizeSummary,
+            changedPaths: docs.map((doc) => doc.filePath || doc.title),
             runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
             skill: resolvedSkill,
             createdAt: Date.now(),
@@ -1145,22 +1388,24 @@ export const AIChat: React.FC<AIChatProps> = ({
             generatedFiles,
             executeText: executeLaneText,
           });
-          const persistedDocs = await saveKnowledgeDocsToProjectDir(currentProject.id, docs);
-          const syncedNotes = await syncKnowledgeNotes(currentProject.id, toKnowledgeSources(persistedDocs));
-          const mergedDocs = projectKnowledgeNotesToRequirementDocs(syncedNotes);
-          replaceRequirementDocs(mergedDocs);
+          const knowledgeProposal = buildChangeSyncProposal({
+            projectId: currentProject.id,
+            docs,
+          });
+          upsertProposal(knowledgeProposal);
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: `已生成 ${docs.length} 份变更同步文档：${docs.map((doc) => doc.title).join('、')}`,
+            content: `已生成 ${docs.length} 份变更同步提案建议，请在这条消息里勾选后执行。`,
+            knowledgeProposal,
           }));
 
           appendActivityEntry(currentProject.id, {
             id: createActivityEntryId(),
             runId,
             type: 'run-summary',
-            summary: `AI 生成了 ${docs.length} 份变更同步提案文档`,
-            changedPaths: persistedDocs.map((doc) => doc.filePath || doc.title),
+            summary: `AI 生成了 ${docs.length} 份变更同步提案建议`,
+            changedPaths: docs.map((doc) => doc.filePath || doc.title),
             runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
             skill: resolvedSkill,
             createdAt: Date.now(),
@@ -1234,10 +1479,25 @@ export const AIChat: React.FC<AIChatProps> = ({
           }
 
           const finalContent = result.content.trim() || '本地 Agent 已执行，但没有返回内容。';
+          const knowledgeProposal =
+            !skillIntent && currentProject
+              ? suggestKnowledgeProposalFromAnswer({
+                  projectId: currentProject.id,
+                  answerContent: finalContent,
+                  currentFile: knowledgeSelectionMeta.currentFile,
+                  relatedFiles: knowledgeSelectionMeta.relatedFiles,
+                })
+              : null;
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: finalContent,
+            content: knowledgeProposal
+              ? `${finalContent}\n\n我整理了一份可执行的知识库提案，你可以直接在这条消息里选择后执行。`
+              : finalContent,
+            knowledgeProposal: knowledgeProposal || undefined,
           }));
+          if (knowledgeProposal) {
+            upsertProposal(knowledgeProposal);
+          }
           const activityEntry = buildRunSummaryEntry({
             runId,
             content: finalContent,
@@ -1302,10 +1562,26 @@ export const AIChat: React.FC<AIChatProps> = ({
             ? streamedContent
             : response.trim() || '已收到请求，但这次没有返回内容。';
         clearStreamingDraft(assistantMessage.id);
+        const normalizedFinalContent = finalContent.trim() || response.trim() || '已收到请求，但这次没有返回内容。';
+        const knowledgeProposal =
+          !skillIntent && currentProject
+            ? suggestKnowledgeProposalFromAnswer({
+                projectId: currentProject.id,
+                answerContent: normalizedFinalContent,
+                currentFile: knowledgeSelectionMeta.currentFile,
+                relatedFiles: knowledgeSelectionMeta.relatedFiles,
+              })
+            : null;
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
-          content: finalContent.trim() || response.trim() || '已收到请求，但这次没有返回内容。',
+          content: knowledgeProposal
+            ? `${normalizedFinalContent}\n\n我整理了一份可执行的知识库提案，你可以直接在这条消息里选择后执行。`
+            : normalizedFinalContent,
+          knowledgeProposal: knowledgeProposal || undefined,
         }));
+        if (knowledgeProposal) {
+          upsertProposal(knowledgeProposal);
+        }
         const activityEntry = buildRunSummaryEntry({
           runId,
           content: finalContent,
@@ -1361,11 +1637,12 @@ export const AIChat: React.FC<AIChatProps> = ({
       setActiveSession,
       setRawRequirementInput,
       setSelectedChatAgentId,
-      syncKnowledgeNotes,
       updateMessage,
       updateStreamingDraft,
+      upsertProposal,
       upsertSession,
       workflowAvailability,
+      workflowProjectState,
     ]
   );
 
@@ -1572,6 +1849,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         formatTimestamp={formatTimestamp}
         parseMessageParts={parseAIChatMessageParts}
         renderMessagePart={renderMessagePart}
+        renderKnowledgeProposal={renderKnowledgeProposal}
         messagesEndRef={messagesEndRef}
         leadingContent={launchpad}
       />

@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { ActivityEntry } from '../skills/activityLog';
+import type { KnowledgeProposal } from '../../../features/knowledge/model/knowledgeProposal';
 
 export type StoredChatMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   tone?: 'default' | 'error';
+  knowledgeProposal?: KnowledgeProposal;
   createdAt: number;
 };
 

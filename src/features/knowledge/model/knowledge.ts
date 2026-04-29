@@ -5,6 +5,7 @@ export type KnowledgeNote = {
   updatedAt: string;
   docType?: 'wiki-index' | 'ai-summary';
   tags: string[];
+  referenceTitles: string[];
   kind?: 'note' | 'sketch' | 'design';
   sourceUrl?: string | null;
   matchSnippet?: string | null;

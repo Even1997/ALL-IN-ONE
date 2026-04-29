@@ -123,6 +123,7 @@ export const ClaudianMessageList: React.FC<{
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
+  renderKnowledgeProposal?: (message: StoredChatMessage) => React.ReactNode;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   leadingContent?: React.ReactNode;
 }> = ({
@@ -131,6 +132,7 @@ export const ClaudianMessageList: React.FC<{
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
+  renderKnowledgeProposal,
   messagesEndRef,
   leadingContent,
 }) => (
@@ -147,6 +149,7 @@ export const ClaudianMessageList: React.FC<{
           <div className="chat-message-bubble">
             <div className="chat-message-content">
               {parts.map((part, index) => renderMessagePart(message.id, part, index))}
+              {renderKnowledgeProposal ? renderKnowledgeProposal(message) : null}
             </div>
             <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
           </div>

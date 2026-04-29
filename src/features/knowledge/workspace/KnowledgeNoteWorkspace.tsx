@@ -7,6 +7,7 @@ import type {
   KnowledgeNeighborhoodGraph,
   KnowledgeNote,
 } from '../model/knowledge';
+import { formatKnowledgeTagLabels } from '../model/knowledgeTagMeta';
 import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas';
 
 type AttachmentCategoryCount = {
@@ -406,8 +407,8 @@ export const KnowledgeNoteWorkspace = ({
       })).filter((section) => section.notes.length > 0),
     [visibleNotes]
   );
-  const selectedNoteTags = useMemo(
-    () => selectedNote?.tags.filter((tag) => tag.trim().length > 0) || [],
+  const selectedNoteTagLabels = useMemo(
+    () => formatKnowledgeTagLabels(selectedNote?.tags || []),
     [selectedNote]
   );
 
@@ -741,7 +742,7 @@ export const KnowledgeNoteWorkspace = ({
               </div>
               <div>
                 <dt>标签</dt>
-                <dd>{selectedNoteTags.length > 0 ? selectedNoteTags.join(' / ') : '暂无标签'}</dd>
+                <dd>{selectedNoteTagLabels.length > 0 ? selectedNoteTagLabels.join(' / ') : '暂无标签'}</dd>
               </div>
               <div>
                 <dt>Markdown 镜像</dt>
@@ -750,6 +751,14 @@ export const KnowledgeNoteWorkspace = ({
               <div>
                 <dt>摘要</dt>
                 <dd>{selectedNote.matchSnippet || summarizeBody(selectedNote.bodyMarkdown)}</dd>
+              </div>
+              <div>
+                <dt>引用来源</dt>
+                <dd>
+                  {selectedNote.referenceTitles.length > 0
+                    ? selectedNote.referenceTitles.join(' / ')
+                    : '暂无引用来源'}
+                </dd>
               </div>
             </dl>
           ) : (

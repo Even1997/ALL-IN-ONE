@@ -25,8 +25,11 @@ test('AIChat exposes GN Agent command center lanes and hides debug-heavy chrome'
   assert.match(source, /chat-agent-capability-grid/);
   assert.match(source, /chat-agent-panel/);
   assert.match(source, /GN_AGENT_SUGGESTIONS/);
-  assert.match(source, /@整理|@鏁寸悊/);
-  assert.match(source, /@变更同步|@鍙樻洿鍚屾/);
+  assert.match(source, /@整理/);
+  assert.match(source, /@变更同步/);
+  assert.match(source, /知识文档 \//);
+  assert.match(source, /继续当前对话/);
+  assert.match(source, /当前 AI \//);
   assert.doesNotMatch(source, /Skill Library/);
   assert.doesNotMatch(source, /GitHub Repo/);
   assert.doesNotMatch(source, /chat-skill-menu/);

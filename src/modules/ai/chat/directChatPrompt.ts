@@ -1,5 +1,6 @@
 import { buildKnowledgeContextSections } from '../../knowledge/knowledgeContext.ts';
 import type { KnowledgeEntry } from '../../knowledge/knowledgeEntries.ts';
+import { buildKnowledgeOperationPolicy } from '../knowledge/knowledgeOperationPolicy.ts';
 import type { SkillIntent } from '../workflow/skillRouting.ts';
 
 type KnowledgeSelection = {
@@ -142,9 +143,10 @@ export const buildDirectChatPrompt = (options: {
   }
 
   return {
-    systemPrompt: skillLabel
-      ? buildSkillSystemPrompt(currentProjectName, skillLabel)
-      : buildFreeChatSystemPrompt(currentProjectName),
+    systemPrompt: [
+      skillLabel ? buildSkillSystemPrompt(currentProjectName, skillLabel) : buildFreeChatSystemPrompt(currentProjectName),
+      buildKnowledgeOperationPolicy(),
+    ].join('\n\n'),
     prompt: promptSections.join('\n\n'),
     skillLabel,
   };

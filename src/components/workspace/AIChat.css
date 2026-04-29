@@ -2728,6 +2728,96 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
   white-space: nowrap;
 }
 
+.chat-knowledge-proposal-card {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0.03));
+  display: grid;
+  gap: 12px;
+}
+
+.chat-knowledge-proposal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-knowledge-proposal-head strong {
+  font-size: 13px;
+  color: #10213d;
+}
+
+.chat-knowledge-proposal-head span {
+  font-size: 12px;
+  color: #4b6386;
+}
+
+.chat-knowledge-proposal-list {
+  display: grid;
+  gap: 10px;
+}
+
+.chat-knowledge-proposal-operation {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.chat-knowledge-proposal-operation div {
+  display: grid;
+  gap: 4px;
+}
+
+.chat-knowledge-proposal-operation strong {
+  font-size: 13px;
+  color: #10213d;
+}
+
+.chat-knowledge-proposal-operation span {
+  font-size: 12px;
+  color: #536a8b;
+}
+
+.chat-knowledge-proposal-operation pre {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.06);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  font-size: 12px;
+  color: #1e293b;
+}
+
+.chat-knowledge-proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-knowledge-proposal-actions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #10213d;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-knowledge-proposal-actions button:hover {
+  background: rgba(37, 99, 235, 0.14);
+}
+
 @media (max-width: 520px) {
   .gn-agent-workspace .chat-shell-embedded .chat-shell-header-main {
     grid-template-columns: minmax(0, 1fr);

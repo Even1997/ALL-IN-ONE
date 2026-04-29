@@ -8,12 +8,24 @@ import {
   StyleProfile,
 } from '../../../types';
 
+export interface KnowledgeOrganizeWikiSnapshot {
+  noteId?: string | null;
+  updatedAt: string;
+  contentHash: string;
+}
+
+export interface KnowledgeOrganizeWorkflowState {
+  lastKnowledgeOrganizeAt: string | null;
+  wikiSnapshots: Record<string, KnowledgeOrganizeWikiSnapshot>;
+}
+
 export interface WorkflowProjectState {
   runs: AIWorkflowRun[];
   styleProfiles: StyleProfile[];
   selectedStyleProfileId: string | null;
   executionMode: AIExperienceMode;
   htmlPrototypes: HTMLPrototypeDoc[];
+  knowledgeOrganize: KnowledgeOrganizeWorkflowState;
 }
 
 interface WorkflowStoreState {
@@ -25,9 +37,15 @@ interface WorkflowStoreState {
   setStyleProfiles: (projectId: string, profiles: StyleProfile[]) => void;
   selectStyleProfile: (projectId: string, styleProfileId: string) => void;
   saveHTMLPrototype: (projectId: string, prototype: HTMLPrototypeDoc) => void;
+  setKnowledgeOrganizeState: (projectId: string, knowledgeOrganize: KnowledgeOrganizeWorkflowState) => void;
   replaceProjectState: (projectId: string, state: WorkflowProjectState) => void;
   clearProjectState: (projectId: string) => void;
 }
+
+const createKnowledgeOrganizeState = (): KnowledgeOrganizeWorkflowState => ({
+  lastKnowledgeOrganizeAt: null,
+  wikiSnapshots: {},
+});
 
 const createProjectState = (): WorkflowProjectState => ({
   runs: [],
@@ -35,6 +53,7 @@ const createProjectState = (): WorkflowProjectState => ({
   selectedStyleProfileId: null,
   executionMode: 'standard',
   htmlPrototypes: [],
+  knowledgeOrganize: createKnowledgeOrganizeState(),
 });
 
 const normalizeStyleProfile = (value: unknown): StyleProfile | null => {
@@ -165,6 +184,42 @@ const normalizeHTMLPrototype = (value: unknown): HTMLPrototypeDoc | null => {
   };
 };
 
+const normalizeKnowledgeOrganizeState = (value: unknown): KnowledgeOrganizeWorkflowState => {
+  if (!value || typeof value !== 'object') {
+    return createKnowledgeOrganizeState();
+  }
+
+  const state = value as Partial<KnowledgeOrganizeWorkflowState>;
+  const snapshots =
+    state.wikiSnapshots && typeof state.wikiSnapshots === 'object'
+      ? Object.fromEntries(
+          Object.entries(state.wikiSnapshots)
+            .filter(([title]) => typeof title === 'string' && title.trim().length > 0)
+            .map(([title, snapshot]) => {
+              const typedSnapshot =
+                snapshot && typeof snapshot === 'object'
+                  ? (snapshot as Partial<KnowledgeOrganizeWikiSnapshot>)
+                  : null;
+
+              return [
+                title,
+                {
+                  noteId: typeof typedSnapshot?.noteId === 'string' ? typedSnapshot.noteId : null,
+                  updatedAt: typeof typedSnapshot?.updatedAt === 'string' ? typedSnapshot.updatedAt : new Date().toISOString(),
+                  contentHash: typeof typedSnapshot?.contentHash === 'string' ? typedSnapshot.contentHash : '',
+                },
+              ];
+            })
+        )
+      : {};
+
+  return {
+    lastKnowledgeOrganizeAt:
+      typeof state.lastKnowledgeOrganizeAt === 'string' ? state.lastKnowledgeOrganizeAt : null,
+    wikiSnapshots: snapshots,
+  };
+};
+
 const normalizeProjectState = (value: unknown): WorkflowProjectState => {
   if (!value || typeof value !== 'object') {
     return createProjectState();
@@ -185,6 +240,7 @@ const normalizeProjectState = (value: unknown): WorkflowProjectState => {
     htmlPrototypes: Array.isArray(project.htmlPrototypes)
       ? project.htmlPrototypes.map(normalizeHTMLPrototype).filter((item): item is HTMLPrototypeDoc => Boolean(item))
       : [],
+    knowledgeOrganize: normalizeKnowledgeOrganizeState(project.knowledgeOrganize),
   };
 };
 
@@ -304,6 +360,17 @@ export const useAIWorkflowStore = create<WorkflowStoreState>()(
           };
         }),
 
+      setKnowledgeOrganizeState: (projectId, knowledgeOrganize) =>
+        set((state) => ({
+          projects: {
+            ...state.projects,
+            [projectId]: {
+              ...(state.projects[projectId] || createProjectState()),
+              knowledgeOrganize: normalizeKnowledgeOrganizeState(knowledgeOrganize),
+            },
+          },
+        })),
+
       replaceProjectState: (projectId, projectState) =>
         set((state) => ({
           projects: {
@@ -321,7 +388,7 @@ export const useAIWorkflowStore = create<WorkflowStoreState>()(
     }),
     {
       name: 'goodnight-ai-workflow-store',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       merge: (persistedState, currentState) => {
         const typedState = persistedState as Partial<WorkflowStoreState>;

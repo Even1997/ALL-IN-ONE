@@ -1,8 +1,6 @@
 import type { GeneratedFile, RequirementDoc } from '../../../types';
 
-type ChangeSyncDocKey =
-  | 'change-sync-proposal'
-  | 'change-sync-checklist';
+type ChangeSyncDocKey = 'change-sync-proposal' | 'change-sync-checklist';
 
 type ChangeSyncDocDraft = {
   summary: string;
@@ -27,8 +25,8 @@ const DOC_BLUEPRINTS: Array<{
   key: ChangeSyncDocKey;
   title: string;
 }> = [
-  { key: 'change-sync-proposal', title: '变更同步提案.md' },
-  { key: 'change-sync-checklist', title: '待确认同步项.md' },
+  { key: 'change-sync-proposal', title: 'change-sync-proposal.md' },
+  { key: 'change-sync-checklist', title: 'change-sync-checklist.md' },
 ];
 
 const extractJSONObject = (value: string) => {
@@ -91,21 +89,19 @@ const buildLanePrompt = ({
   generatedFiles,
 }: Omit<ChangeSyncLaneInput, 'executeText'>) => {
   const requirementSection = requirementDocs.length
-    ? requirementDocs
-        .map((doc) => `## ${doc.title}\n${doc.content.trim()}`)
-        .join('\n\n')
-    : '暂无知识文档。';
+    ? requirementDocs.map((doc) => `## ${doc.title}\n${doc.content.trim()}`).join('\n\n')
+    : 'No knowledge documents yet.';
   const generatedSection = generatedFiles.length
     ? generatedFiles
         .slice(0, 16)
         .map((file) => `- ${file.path}: ${file.summary}`)
         .join('\n')
-    : '- 暂无产物';
+    : '- No generated artifacts yet';
 
   return [
-    `你是 ${project.name} 的变更同步助手。`,
-    '请根据当前知识文档和产物状态，生成一份可确认的变更同步提案，以及一份待确认同步项清单。',
-    '只返回 JSON 对象，不要返回解释文字。',
+    `You are the change sync assistant for ${project.name}.`,
+    'Compare the current knowledge documents with generated artifacts and produce a reviewable sync proposal plus a checklist.',
+    'Return JSON only, without any extra explanation.',
     'JSON schema:',
     JSON.stringify(
       {
@@ -116,10 +112,10 @@ const buildLanePrompt = ({
       2
     ),
     '',
-    '# 当前知识文档',
+    '# Current knowledge documents',
     requirementSection,
     '',
-    '# 当前产物',
+    '# Current artifacts',
     generatedSection,
   ].join('\n');
 };
@@ -127,7 +123,7 @@ const buildLanePrompt = ({
 const parseLanePayload = (raw: string) => {
   const payloadText = extractJSONObject(raw);
   if (!payloadText) {
-    throw new Error('变更同步没有返回有效 JSON。');
+    throw new Error('Change sync did not return valid JSON.');
   }
 
   return JSON.parse(payloadText) as Partial<Record<ChangeSyncDocKey, Partial<ChangeSyncDocDraft>>>;
@@ -152,9 +148,10 @@ export const runChangeSyncLane = async ({
   return DOC_BLUEPRINTS.map(({ key, title }) => {
     const entry = payload[key];
     const content = typeof entry?.content === 'string' ? entry.content.trim() : '';
-    const summary = typeof entry?.summary === 'string' && entry.summary.trim()
-      ? entry.summary.trim()
-      : summarizeContent(content || title.replace(/\.md$/i, ''));
+    const summary =
+      typeof entry?.summary === 'string' && entry.summary.trim()
+        ? entry.summary.trim()
+        : summarizeContent(content || title.replace(/\.md$/i, ''));
 
     return {
       id: `change-sync:${project.id}:${key}`,

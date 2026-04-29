@@ -9,7 +9,15 @@ import { runKnowledgeOrganizeLane } from '../../src/modules/ai/knowledge/runKnow
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
-const projectPersistencePath = path.resolve(__dirname, '../../src/utils/projectPersistence.ts');
+
+const buildLanePayload = () =>
+  JSON.stringify({
+    'project-overview': { summary: 'Project overview', content: '# Project overview' },
+    'feature-inventory': { summary: 'Feature inventory', content: '# Feature inventory' },
+    'page-inventory': { summary: 'Page inventory', content: '# Page inventory' },
+    terminology: { summary: 'Terminology', content: '# Terminology' },
+    'open-questions': { summary: 'Open questions', content: '# Open questions' },
+  });
 
 test('knowledge organize lane returns derived wiki docs with explicit typing', async () => {
   const docs = await runKnowledgeOrganizeLane({
@@ -17,43 +25,78 @@ test('knowledge organize lane returns derived wiki docs with explicit typing', a
     requirementDocs: [
       {
         id: 'req-1',
-        title: '产品目标.md',
-        content: '做一个产品经理可用的桌面端 AI 工作台。',
-        summary: '产品目标',
-        authorRole: '产品',
+        title: 'Product goals.md',
+        content: 'Build a desktop AI workspace for product managers.',
+        summary: 'Product goals',
+        authorRole: 'product',
         sourceType: 'manual',
         updatedAt: '2026-04-27T00:00:00.000Z',
         status: 'ready',
       },
     ],
     generatedFiles: [],
-    executeText: async () =>
-      JSON.stringify({
-        'project-overview': { summary: '项目总览', content: '# 项目总览' },
-        'feature-inventory': { summary: '功能清单', content: '# 功能清单' },
-        'page-inventory': { summary: '页面清单', content: '# 页面清单' },
-        terminology: { summary: '术语表', content: '# 术语表' },
-        'open-questions': { summary: '待确认问题', content: '# 待确认问题' },
-      }),
+    executeText: async () => buildLanePayload(),
   });
 
   assert.equal(docs.length, 5);
-  assert.equal(docs.some((doc) => doc.docType === 'wiki-index' && doc.title === '项目总览.md'), true);
-  assert.equal(docs.some((doc) => doc.docType === 'wiki-index' && doc.title === '功能清单.md'), true);
-  assert.equal(docs.some((doc) => doc.docType === 'wiki-index' && doc.title === '页面清单.md'), true);
-  assert.equal(docs.some((doc) => doc.docType === 'ai-summary' && doc.title === '术语表.md'), true);
+  assert.equal(docs.some((doc) => doc.docType === 'wiki-index' && doc.title.includes('overview')), true);
+  assert.equal(docs.some((doc) => doc.docType === 'wiki-index' && doc.title.includes('inventory')), true);
+  assert.equal(docs.some((doc) => doc.docType === 'ai-summary' && doc.title.toLowerCase().includes('terminology')), true);
 });
 
-test('knowledge organize persists generated wiki docs into the project knowledge directory before merging', async () => {
+test('knowledge organize lane reshapes wiki drafts into index-style markdown when the model returns plain prose', async () => {
+  const docs = await runKnowledgeOrganizeLane({
+    project: { id: 'project-1', name: 'GN Agent' },
+    requirementDocs: [],
+    generatedFiles: [],
+    executeText: async () =>
+      JSON.stringify({
+        'project-overview': { summary: 'Project overview', content: 'A concise overview of the project.' },
+        'feature-inventory': { summary: 'Feature inventory', content: '# 功能清单\n\n核心能力与信息架构说明。' },
+        'page-inventory': { summary: 'Page inventory', content: 'Page inventory prose.' },
+        terminology: { summary: 'Terminology', content: '# Terminology' },
+        'open-questions': { summary: 'Open questions', content: '# Open questions' },
+      }),
+  });
+
+  const featureInventory = docs.find((doc) => doc.title === 'feature-inventory.md');
+  assert.ok(featureInventory);
+  assert.equal(featureInventory.docType, 'wiki-index');
+  assert.match(featureInventory.content, /^# /m);
+  assert.match(featureInventory.content, /^## \u7d22\u5f15$/m);
+  assert.match(featureInventory.content, /^## \u5185\u5bb9$/m);
+});
+
+test('knowledge organize proposal builder converts derived docs into user-approved wiki operations', async () => {
+  const { buildKnowledgeOrganizeProposal } = await import('../../src/modules/ai/knowledge/buildKnowledgeOrganizeProposal.ts');
+  const docs = await runKnowledgeOrganizeLane({
+    project: { id: 'project-1', name: 'GN Agent' },
+    requirementDocs: [],
+    generatedFiles: [],
+    executeText: async () => buildLanePayload(),
+  });
+
+  const proposal = buildKnowledgeOrganizeProposal({
+    projectId: 'project-1',
+    sourceTitles: ['开放问题', '术语表'],
+    docs,
+  });
+
+  assert.equal(proposal.trigger, 'knowledge-organize');
+  assert.equal(proposal.operations.length, 5);
+  assert.equal(proposal.operations.every((operation) => operation.selected === true), true);
+  assert.equal(
+    proposal.operations.every((operation) => operation.type === 'create_wiki' || operation.type === 'update_wiki'),
+    true
+  );
+  assert.deepEqual(proposal.operations[0].referenceTitles, ['开放问题', '术语表']);
+});
+
+test('knowledge organize chat flow now surfaces proposal-first review instead of immediate persistence', async () => {
   const chatSource = await readFile(aiChatPath, 'utf8');
-  const persistenceSource = await readFile(projectPersistencePath, 'utf8');
 
-  assert.match(chatSource, /saveKnowledgeDocsToProjectDir/);
-  assert.match(chatSource, /const persistedDocs = await saveKnowledgeDocsToProjectDir\(currentProject\.id,\s*docs\);/);
-  assert.match(chatSource, /const syncedNotes = await syncKnowledgeNotes\(/);
-  assert.match(chatSource, /const mergedDocs = projectKnowledgeNotesToRequirementDocs\(syncedNotes\);/);
-
-  assert.match(persistenceSource, /export const saveKnowledgeDocsToProjectDir = async/);
-  assert.match(persistenceSource, /joinProjectRelativePath\(projectDir,\s*`project\/\$\{doc\.title\}`\)/);
-  assert.match(persistenceSource, /filePath:\s*filePath/);
+  assert.match(chatSource, /buildKnowledgeOrganizeProposal/);
+  assert.match(chatSource, /正在整理知识库并生成 wiki 提案/);
+  assert.match(chatSource, /已生成 .* 份 Wiki 更新建议/);
+  assert.doesNotMatch(chatSource, /const persistedDocs = await saveKnowledgeDocsToProjectDir\(currentProject\.id,\s*docs\);/);
 });

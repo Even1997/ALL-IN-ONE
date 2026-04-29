@@ -103,3 +103,38 @@ test('latest activity entries are kept in reverse chronological order', async ()
   const entries = useAIChatStore.getState().projects['project-order'].activityEntries;
   assert.equal(entries[0].id, 'a2');
 });
+
+test('ai chat store keeps assistant knowledge proposal metadata intact', async () => {
+  const { useAIChatStore, createChatSession, createStoredChatMessage } = await loadStore();
+  const store = useAIChatStore.getState();
+
+  const session = createChatSession('project-proposal', '知识库提案');
+  store.upsertSession('project-proposal', session);
+  store.appendMessage('project-proposal', session.id, {
+    ...createStoredChatMessage('assistant', '我发现知识库里有 1 项建议。'),
+    knowledgeProposal: {
+      id: 'proposal-1',
+      projectId: 'project-proposal',
+      summary: '发现 1 项 wiki 更新建议',
+      trigger: 'wiki-stale',
+      status: 'pending',
+      createdAt: 1,
+      operations: [
+        {
+          id: 'op-1',
+          type: 'update_wiki',
+          targetTitle: '项目总览.md',
+          reason: 'onboarding 流程已变更',
+          evidence: ['note:登录讨论.md'],
+          draftContent: '# 项目总览',
+          riskLevel: 'low',
+          selected: true,
+        },
+      ],
+    },
+  });
+
+  const savedMessage = useAIChatStore.getState().projects['project-proposal'].sessions[0].messages[0];
+  assert.equal(savedMessage.knowledgeProposal.summary, '发现 1 项 wiki 更新建议');
+  assert.equal(savedMessage.knowledgeProposal.operations[0].selected, true);
+});

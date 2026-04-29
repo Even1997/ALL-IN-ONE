@@ -17,9 +17,9 @@ test('buildDirectChatPrompt keeps default chat free-form when no explicit skill 
 
   assert.equal(result.skillLabel, null);
   assert.match(result.systemPrompt, /自然对话式/);
-  assert.doesNotMatch(result.systemPrompt, /整理知识/);
+  assert.doesNotMatch(result.systemPrompt, /知识整理/);
   assert.doesNotMatch(result.systemPrompt, /草图/);
-  assert.doesNotMatch(result.systemPrompt, /UI设计/);
+  assert.doesNotMatch(result.systemPrompt, /UI 设计/);
   assert.doesNotMatch(result.prompt, /mode:/);
   assert.match(result.prompt, /user_request:/);
   assert.match(result.prompt, /context_window:\s*200000 tokens/);

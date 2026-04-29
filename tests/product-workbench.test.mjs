@@ -61,7 +61,10 @@ test('knowledge note hydration preserves local drafts for metadata-only refreshe
   assert.match(source, /const nextHydratedSignature = `\$\{selectedServerNote\.id\}:\$\{selectedServerNote\.title\}:\$\{selectedServerNote\.bodyMarkdown\}`;/);
   assert.match(source, /if \(hydratedKnowledgeNoteSignatureRef\.current === nextHydratedSignature\) \{\s*return;\s*\}/s);
   assert.match(source, /setRequirementDraftTitle\(selectedServerNote\.title\)/);
-  assert.match(source, /setRequirementDraftContent\(selectedServerNote\.bodyMarkdown\)/);
+  assert.match(
+    source,
+    /setRequirementDraftContent\(extractKnowledgeNoteEditorBody\(selectedServerNote\.title,\s*selectedServerNote\.bodyMarkdown\)\)/s
+  );
   assert.doesNotMatch(source, /lastKnowledgeAutosaveSignatureRef/);
 });
 
@@ -72,7 +75,7 @@ test('markdown mirror rename syncs only for notes that already have a source fil
   assert.match(source, /invoke<\{ success: boolean; content: string; error: string \| null \}>\('tool_rename'/);
   assert.match(source, /const shouldSyncMarkdownMirror = Boolean\(canPersistRequirementToDisk && selectedServerNote\.sourceUrl && nextFilePath\)/);
   assert.match(source, /await updateServerNote\(currentProject\.id,\s*selectedServerNote\.id,/);
-  assert.match(source, /await writeRequirementFile\(currentFilePath,\s*requirementDraftContent\);\s*await renameRequirementFile\(currentFilePath,\s*nextFilePath\);/s);
+  assert.match(source, /await writeRequirementFile\(currentFilePath,\s*nextContent\);\s*await renameRequirementFile\(currentFilePath,\s*nextFilePath\);/s);
   assert.doesNotMatch(source, /await removeRequirementFile\(currentFilePath\);\s*\}/s);
 });
 
@@ -207,7 +210,7 @@ test('product workbench keeps page and knowledge labels in readable chinese', as
   assert.match(source, /添加模块/);
   assert.match(source, /模块清单/);
   assert.match(source, /页面画布/);
-  assert.doesNotMatch(source, /鏂板缓鑽夊浘|鏂板缓璁捐|鏂板缓椤圭洰鏂囦欢|妯″潡娓呭崟|椤甸潰鐢诲竷|鍏宠仈鏂囦欢|瀹炴椂棰勮|鍒犻櫎|缂栬緫|鍔犵矖|閾炬帴|鈮\?/);
+  assert.doesNotMatch(source, /新建草图|新建设计|新建项目文件|关联文件|实时预览|加粗|链接|≈\?/);
 });
 
 test('markdown reading surfaces use theme tokens instead of fixed dark colors', async () => {
