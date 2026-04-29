@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { AtomicMarkdownEditor } from '../../../components/product/AtomicMarkdownEditor';
+import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMarkdownEditor';
 import type { DocumentChangeEvent } from '../../../types';
 import type {
   KnowledgeAttachment,
@@ -21,6 +21,8 @@ type KnowledgeNoteWorkspaceProps = {
   filteredNotes: KnowledgeNote[];
   selectedNote: KnowledgeNote | null;
   activeFilter: KnowledgeNoteFilter;
+  titleValue: string;
+  mirrorSourcePath?: string | null;
   editorValue: string;
   editable: boolean;
   isSaving: boolean;
@@ -43,6 +45,7 @@ type KnowledgeNoteWorkspaceProps = {
   attachmentCategoryCounts: AttachmentCategoryCount[];
   onSearchChange: (value: string) => void;
   onSelectNote: (noteId: string) => void;
+  onTitleChange: (value: string) => void;
   onEditorChange: (value: string) => void;
   onSave: () => void;
   onDelete: () => void;
@@ -348,6 +351,8 @@ export const KnowledgeNoteWorkspace = ({
   filteredNotes,
   selectedNote,
   activeFilter,
+  titleValue,
+  mirrorSourcePath = null,
   editorValue,
   editable,
   isSaving,
@@ -370,6 +375,7 @@ export const KnowledgeNoteWorkspace = ({
   attachmentCategoryCounts,
   onSearchChange,
   onSelectNote,
+  onTitleChange,
   onEditorChange,
   onSave,
   onDelete,
@@ -560,8 +566,8 @@ export const KnowledgeNoteWorkspace = ({
             className="doc-action-btn secondary gn-note-icon-btn"
             type="button"
             onClick={onUpload}
-            title="导入 Markdown"
-            aria-label="导入 Markdown"
+            title="导入 Markdown 到知识库"
+            aria-label="导入 Markdown 到知识库"
           >
             <MarkdownImportIcon />
           </button>
@@ -637,11 +643,22 @@ export const KnowledgeNoteWorkspace = ({
         {selectedNote ? (
           <>
             <div className="gn-note-editor-surface">
-              <h2 className="gn-note-editor-title" title={selectedNote.title}>
-                {selectedNote.title}
-              </h2>
+              <div className="gn-note-editor-title-row">
+                <input
+                  className="gn-note-title-input"
+                  type="text"
+                  value={titleValue}
+                  onChange={(event) => onTitleChange(event.target.value)}
+                  aria-label="笔记标题"
+                  disabled={!editable}
+                />
+                <div className="gn-note-storage-state" aria-label="笔记存储状态">
+                  <span>数据库笔记</span>
+                  <span>{mirrorSourcePath ? 'Markdown 镜像' : '未绑定 Markdown'}</span>
+                </div>
+              </div>
               <div className="gn-note-editor-body">
-                <AtomicMarkdownEditor
+                <GoodNightMarkdownEditor
                   key={selectedNote.id}
                   value={editorValue}
                   onChange={onEditorChange}
@@ -652,7 +669,7 @@ export const KnowledgeNoteWorkspace = ({
 
             <footer className="gn-note-editor-footer">
               <span>
-                {saveMessage || (editable ? 'Markdown 请手动保存，也可以使用 Ctrl/Cmd+S。' : '当前是只读兼容投影。')}
+                {saveMessage || (editable ? '笔记保存到知识库；已绑定 Markdown 时会同步镜像。' : '当前是只读兼容投影。')}
               </span>
               <div className="gn-note-editor-footer-actions">
                 <span>更新于 {formatUpdatedAt(selectedNote.updatedAt)}</span>
@@ -660,10 +677,10 @@ export const KnowledgeNoteWorkspace = ({
                 {editable ? (
                   <>
                     <button className="doc-action-btn secondary" type="button" onClick={onDelete}>
-                      删除
+                      删除笔记
                     </button>
                     <button className="doc-action-btn" type="button" onClick={onSave} disabled={!canSave}>
-                      {isSaving ? '保存中...' : '保存'}
+                      {isSaving ? '保存中...' : '保存到知识库'}
                     </button>
                   </>
                 ) : null}
@@ -727,8 +744,8 @@ export const KnowledgeNoteWorkspace = ({
                 <dd>{selectedNoteTags.length > 0 ? selectedNoteTags.join(' / ') : '暂无标签'}</dd>
               </div>
               <div>
-                <dt>来源</dt>
-                <dd>{selectedNote.sourceUrl || '未绑定源文件'}</dd>
+                <dt>Markdown 镜像</dt>
+                <dd>{mirrorSourcePath || '未绑定 Markdown 镜像'}</dd>
               </div>
               <div>
                 <dt>摘要</dt>

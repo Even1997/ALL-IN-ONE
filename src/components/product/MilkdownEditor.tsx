@@ -1,4 +1,4 @@
-import { AtomicMarkdownEditor } from './AtomicMarkdownEditor';
+import { GoodNightMarkdownEditor } from './GoodNightMarkdownEditor';
 
 type MilkdownEditorProps = {
   value: string;
@@ -7,5 +7,5 @@ type MilkdownEditorProps = {
 };
 
 export const MilkdownEditor = (props: MilkdownEditorProps) => (
-  <AtomicMarkdownEditor {...props} />
+  <GoodNightMarkdownEditor {...props} />
 );

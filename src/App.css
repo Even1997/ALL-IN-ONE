@@ -9130,6 +9130,56 @@ body.ai-chat-sidebar-collapsed .app-main {
   white-space: nowrap;
 }
 
+.gn-note-editor-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: min(100%, var(--atomic-editor-measure));
+  margin: 0 auto;
+  padding: 14px 22px 8px;
+  box-sizing: border-box;
+}
+
+.gn-note-title-input {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--mode-border);
+  border-radius: 10px;
+  background: var(--mode-input);
+  color: var(--mode-text);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: 0;
+  padding: 0 10px;
+}
+
+.gn-note-title-input:focus {
+  border-color: rgba(0, 122, 255, 0.46);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.14);
+  outline: none;
+}
+
+.gn-note-storage-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.gn-note-storage-state span {
+  border: 1px solid rgba(0, 122, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(0, 122, 255, 0.08);
+  color: var(--mode-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
 .gn-note-editor-body {
   flex: 1 1 auto;
   min-height: 0;

@@ -47,28 +47,54 @@ test('knowledge filesystem refresh ignores stale async results from older runs',
   assert.match(source, /const requestId = \+\+knowledgeRefreshRequestIdRef\.current/);
   assert.match(source, /if \(requestId !== knowledgeRefreshRequestIdRef\.current\) \{\s*return;\s*\}/s);
   assert.match(source, /setKnowledgeDiskItems\(diskItems\)/);
-  assert.match(source, /replaceRequirementDocs\(docs\)/);
   assert.match(source, /loadSketchPageArtifactsFromProjectDir/);
   assert.match(source, /replacePageStructure\(sketchArtifacts\.pageStructure,\s*tree\)/);
   assert.match(source, /replaceWireframes\(sketchArtifacts\.wireframes,\s*tree\)/);
+  assert.doesNotMatch(source, /buildKnowledgeDocsFromDisk/);
+  assert.doesNotMatch(source, /syncServerNotes/);
 });
 
-test('knowledge note hydration does not re-arm autosave for metadata-only refreshes', async () => {
+test('knowledge note hydration preserves local drafts for metadata-only refreshes', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
   assert.match(source, /const hydratedKnowledgeNoteSignatureRef = useRef\(''\)/);
   assert.match(source, /const nextHydratedSignature = `\$\{selectedServerNote\.id\}:\$\{selectedServerNote\.title\}:\$\{selectedServerNote\.bodyMarkdown\}`;/);
   assert.match(source, /if \(hydratedKnowledgeNoteSignatureRef\.current === nextHydratedSignature\) \{\s*return;\s*\}/s);
-  assert.match(source, /lastKnowledgeAutosaveSignatureRef\.current = `\$\{selectedServerNote\.id\}:\$\{selectedServerNote\.bodyMarkdown\}`;/);
+  assert.match(source, /setRequirementDraftTitle\(selectedServerNote\.title\)/);
+  assert.match(source, /setRequirementDraftContent\(selectedServerNote\.bodyMarkdown\)/);
+  assert.doesNotMatch(source, /lastKnowledgeAutosaveSignatureRef/);
 });
 
-test('knowledge file rename uses tool_rename after persisting the latest content to the source file', async () => {
+test('markdown mirror rename syncs only for notes that already have a source file', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
   assert.match(source, /const renameRequirementFile = useCallback\(async \(fromPath: string, toPath: string\) =>/);
   assert.match(source, /invoke<\{ success: boolean; content: string; error: string \| null \}>\('tool_rename'/);
+  assert.match(source, /const shouldSyncMarkdownMirror = Boolean\(canPersistRequirementToDisk && selectedServerNote\.sourceUrl && nextFilePath\)/);
+  assert.match(source, /await updateServerNote\(currentProject\.id,\s*selectedServerNote\.id,/);
   assert.match(source, /await writeRequirementFile\(currentFilePath,\s*requirementDraftContent\);\s*await renameRequirementFile\(currentFilePath,\s*nextFilePath\);/s);
   assert.doesNotMatch(source, /await removeRequirementFile\(currentFilePath\);\s*\}/s);
+});
+
+test('product workbench uses an in-app confirmation dialog for destructive deletes', async () => {
+  const source = await readFile(productWorkbenchPath, 'utf8');
+
+  const noteDeleteStart = source.indexOf('const handleDeleteKnowledgeNote = useCallback');
+  const noteDeleteEnd = source.indexOf('const handleCreateKnowledgeNote = useCallback', noteDeleteStart);
+  const noteDeleteSource = source.slice(noteDeleteStart, noteDeleteEnd);
+  const pageDeleteStart = source.indexOf('const handleDeletePageById = useCallback');
+  const pageDeleteEnd = source.indexOf('const handleAddModule = useCallback', pageDeleteStart);
+  const pageDeleteSource = source.slice(pageDeleteStart, pageDeleteEnd);
+
+  assert.match(source, /import \{ MacDialog \} from '\.\.\/ui\/MacDialog'/);
+  assert.match(source, /pendingDeleteRequest/);
+  assert.match(source, /<MacDialog/);
+  assert.match(source, /确认删除/);
+  assert.match(source, /删除笔记/);
+  assert.match(source, /删除页面/);
+  assert.match(source, /删除模块/);
+  assert.doesNotMatch(noteDeleteSource, /window\.confirm/);
+  assert.doesNotMatch(pageDeleteSource, /window\.confirm/);
 });
 
 test('page workspace writes sketch page create and delete actions through real files', async () => {
@@ -77,7 +103,7 @@ test('page workspace writes sketch page create and delete actions through real f
   assert.match(source, /writeSketchPageFile/);
   assert.match(source, /deleteSketchPageFile/);
   assert.match(source, /await writeSketchPageFile\(currentProject\.id,/);
-  assert.match(source, /await deleteSketchPageFile\(currentProject\.id,\s*pageId\)/);
+  assert.match(source, /await deleteSketchPageFile\(currentProject\.id,\s*request\.id\)/);
 });
 
 test('page workspace falls back to in-memory page actions when Tauri runtime is unavailable', async () => {
@@ -87,7 +113,7 @@ test('page workspace falls back to in-memory page actions when Tauri runtime is 
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addRootPage\(\);/s);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addSiblingPage\(_pageId\);/s);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addChildPage\(_pageId\);/s);
-  assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*deletePageStructureNode\(pageId\);/s);
+  assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*deletePageStructureNode\(request\.id\);/s);
 });
 
 test('page workspace preserves current canvas and sketch persistence hooks', async () => {
@@ -103,22 +129,20 @@ test('page workspace preserves current canvas and sketch persistence hooks', asy
   assert.match(productSource, /<PageWorkspace/);
 });
 
-test('knowledge base has searchable filters and visible source summaries', async () => {
+test('knowledge base searches database notes and keeps filters in the note workspace', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
   assert.match(source, /const \[knowledgeSearch, setKnowledgeSearch\] = useState\(''\)/);
-  assert.match(source, /buildKnowledgeSearchIndex/);
-  assert.match(source, /searchKnowledgeEntries/);
-  assert.match(source, /const knowledgeSearchState = useMemo/);
-  assert.match(source, /const searchedKnowledgeEntries = useMemo/);
-  assert.match(source, /const filteredKnowledgeTree = useMemo/);
-  assert.match(source, /searchKnowledgeEntries\(knowledgeSearchState, knowledgeSearch\)/);
-  assert.match(source, /className="product-input pm-nav-header-search"/);
-  assert.match(source, /className="pm-knowledge-tree"/);
-  assert.match(source, /renderKnowledgeTree\(filteredKnowledgeTree\)/);
-  assert.match(source, /没有匹配的知识条目/);
+  assert.match(source, /const serverSearchResults = useKnowledgeStore\(\(state\) => state\.searchResults\)/);
+  assert.match(source, /const searchServerNotes = useKnowledgeStore\(\(state\) => state\.searchNotes\)/);
+  assert.match(source, /const filteredServerNotes = useMemo/);
+  assert.match(source, /filterKnowledgeNotesByType\(searchedNotes,\s*knowledgeFilter\)/);
+  assert.match(source, /searchValue=\{knowledgeSearch\}/);
+  assert.match(source, /onSearchChange=\{setKnowledgeSearch\}/);
+  assert.doesNotMatch(source, /buildKnowledgeSearchIndex/);
+  assert.doesNotMatch(source, /searchKnowledgeEntries/);
+  assert.doesNotMatch(source, /renderKnowledgeTree/);
   assert.doesNotMatch(source, /placeholder="搜索文档"/);
-  assert.doesNotMatch(source, /pm-knowledge-workspace-search/);
   assert.doesNotMatch(source, /设为当前/);
   assert.doesNotMatch(source, /知识库引用/);
   assert.doesNotMatch(source, /AI 会优先读取当前文档/);
@@ -133,11 +157,12 @@ test('chat sidebar reserves right-side space without changing vertical layout', 
 });
 
 
-test('product knowledge reading view keeps chrome compact for content-first reading', async () => {
+test('product knowledge reading view keeps chrome compact for note-first reading', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
   assert.match(source, /上传/);
-  assert.match(source, /Markdown 自动保存已开启/);
+  assert.match(source, /保存到知识库/);
+  assert.match(source, /Markdown 镜像/);
   assert.doesNotMatch(source, /项目内的 Markdown 草稿、说明文档和 HTML 设计稿都统一沉淀在这里。/);
   assert.doesNotMatch(source, /知识库引用/);
   assert.doesNotMatch(source, /AI 会优先读取当前文档/);
@@ -153,38 +178,35 @@ test('product knowledge reading view keeps chrome compact for content-first read
   assert.doesNotMatch(source, /从左侧文件树打开一个 Markdown 文件。/);
 });
 
-test('product workbench uses one left-nav search input and removes duplicate in-panel knowledge chrome', async () => {
+test('product workbench passes database note search into the note workspace', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
-  assert.match(source, /className="product-input pm-nav-header-search"/);
-  assert.match(source, /value=\{sidebarTab === 'requirement' \? knowledgeSearch : pageSearch\}/);
-  assert.match(source, /placeholder=\{sidebarTab === 'requirement' \? '搜索文档' : '搜索页面'\}/);
+  assert.match(source, /<KnowledgeNoteWorkspace/);
+  assert.match(source, /searchValue=\{knowledgeSearch\}/);
+  assert.match(source, /onSearchChange=\{setKnowledgeSearch\}/);
   assert.doesNotMatch(source, /className="product-input pm-knowledge-search-input"/);
-  assert.doesNotMatch(source, /className="product-input pm-page-search-input"/);
-  assert.doesNotMatch(source, /pm-knowledge-workspace-search/);
   assert.doesNotMatch(source, /selectedKnowledgeEntry\.status/);
   assert.doesNotMatch(source, /new Date\(selectedKnowledgeEntry\.updatedAt\)\.toLocaleString\(\)/);
   assert.doesNotMatch(source, /handleCreateKnowledgeFile\('project'\)/);
   assert.doesNotMatch(source, /从左侧文件树打开一个 Markdown 文件。/);
 });
 
-test('product workbench left-nav search keeps the header compact in css', async () => {
+test('knowledge note workspace search keeps the header compact in css', async () => {
   const source = await readFile(appCssPath, 'utf8');
 
-  assert.match(source, /\.pm-nav-header-search\s*{/);
+  assert.match(source, /\.gn-note-search-row,/);
+  assert.match(source, /\.gn-note-search-row \.product-input\s*{/);
 });
 
 test('product workbench keeps page and knowledge labels in readable chinese', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
-  assert.match(source, /新建草图\.md/);
-  assert.match(source, /新建设计\.md/);
-  assert.match(source, /新建项目文件\.md/);
+  assert.match(source, /未命名笔记/);
+  assert.match(source, /保存到知识库/);
+  assert.match(source, /Markdown 镜像/);
   assert.match(source, /添加模块/);
   assert.match(source, /模块清单/);
   assert.match(source, /页面画布/);
-  assert.match(source, /关联文件/);
-  assert.match(source, /Ctrl\+S 保存文件名/);
   assert.doesNotMatch(source, /鏂板缓鑽夊浘|鏂板缓璁捐|鏂板缓椤圭洰鏂囦欢|妯″潡娓呭崟|椤甸潰鐢诲竷|鍏宠仈鏂囦欢|瀹炴椂棰勮|鍒犻櫎|缂栬緫|鍔犵矖|閾炬帴|鈮\?/);
 });
 
@@ -198,25 +220,26 @@ test('markdown reading surfaces use theme tokens instead of fixed dark colors', 
   assert.doesNotMatch(source, /\.pm-knowledge-editor-surface\s*{[\s\S]*?background:\s*linear-gradient\(180deg, #12202f 0%, #0f172a 100%\)/);
 });
 
-test('ai chat supports opened document scope in knowledge mode', async () => {
+test('ai chat enables knowledge context when database notes are available', async () => {
   const source = await readFile(chatPath, 'utf8');
 
-  assert.match(source, /handleApplyReferenceScope\('open-tabs'\)/);
-  assert.match(source, /referenceScopeMode === 'open-tabs'/);
+  assert.match(source, /const effectiveKnowledgeMode = knowledgeEntries\.length > 0 \? 'all' : 'off'/);
+  assert.match(source, /resolveKnowledgeSelectionForPrompt/);
 });
 
-test('knowledge workbench starts without auto-opening the first knowledge file', async () => {
+test('knowledge workbench starts without auto-opening the first knowledge note', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
-  assert.match(source, /const \[selectedKnowledgeNodeId, setSelectedKnowledgeNodeId\] = useState<string \| null>\(null\)/);
-  assert.doesNotMatch(source, /selectedKnowledgeNodeId \|\| firstKnowledgeFileNode\?\.id \|\| null/);
-  assert.doesNotMatch(source, /setSelectedKnowledgeNodeId\(\(current\) =>\s*current && findKnowledgeTreeNode\(knowledgeTree, current\) \? current : firstKnowledgeFileNode\.id/s);
+  assert.match(source, /const \[selectedKnowledgeNoteId, setSelectedKnowledgeNoteId\] = useState<string \| null>\(null\)/);
+  assert.doesNotMatch(source, /selectedKnowledgeNoteId \|\| serverNotes\[0\]\?\.id \|\| null/);
+  assert.match(source, /setSelectedKnowledgeNoteId\(\(current\) =>\s*current && serverNotes\.some\(\(note\) => note\.id === current\) \? current : null\s*\)/);
 });
 
 test('ai chat current reference scope derives from the focused surface instead of accumulated knowledge selections', async () => {
   const source = await readFile(chatPath, 'utf8');
 
-  assert.match(source, /resolveCurrentReferenceFileIds/);
+  assert.match(source, /resolveKnowledgeSelectionForPrompt/);
+  assert.match(source, /activeKnowledgeFileId:\s*focusedKnowledgeFileId/);
   assert.doesNotMatch(source, /selectedKnowledgeContextIds\.forEach\(\(id\) => ids\.add\(id\)\)/);
 });
 

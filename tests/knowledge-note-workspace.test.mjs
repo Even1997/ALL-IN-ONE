@@ -57,15 +57,19 @@ test('knowledge note workspace exposes a read-only document activity panel', asy
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
   assert.match(source, /documentEvents: DocumentChangeEvent\[\]/);
-  assert.match(source, /最近文档变更|鏂囨。鍙樻洿/);
+  assert.match(source, /最近文档变更/);
+  assert.match(source, /记录新增、修改、删除和同步导入的最近动作。/);
   assert.match(source, /documentEvents\.slice\(0,\s*8\)/);
   assert.match(source, /event\.summary/);
   assert.match(source, /event\.trigger/);
 });
 
-test('knowledge note workspace describes manual saves instead of autosave', async () => {
+test('knowledge note workspace describes database saves instead of autosave', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
   assert.doesNotMatch(source, /自动保存已开启/);
-  assert.match(source, /请手动保存/);
+  assert.match(source, /笔记保存到知识库/);
+  assert.match(source, /保存到知识库/);
+  assert.match(source, /数据库笔记/);
+  assert.match(source, /Markdown 镜像/);
 });

@@ -7,35 +7,36 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
-const shellPath = path.resolve(__dirname, '../src/components/product/WorkbenchShell.tsx');
 const knowledgeWorkspacePath = path.resolve(__dirname, '../src/components/product/KnowledgeWorkspace.tsx');
-const editorPath = path.resolve(__dirname, '../src/components/product/MilkdownEditor.tsx');
+const noteWorkspacePath = path.resolve(__dirname, '../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
 
-test('product workbench delegates shell and workspace responsibilities to focused child components', async () => {
+test('product workbench delegates note graph and page responsibilities to focused workspaces', async () => {
   const source = await readFile(productPath, 'utf8');
 
-  assert.match(source, /import\s+\{\s*WorkbenchShell\s*\}\s+from '\.\/WorkbenchShell'/);
-  assert.match(source, /import\s+\{\s*KnowledgeWorkspace\s*\}\s+from '\.\/KnowledgeWorkspace'/);
+  assert.match(source, /import\s+\{\s*KnowledgeNoteWorkspace/);
+  assert.match(source, /import\s+\{\s*KnowledgeGraphWorkspace\s*\}/);
   assert.match(source, /import\s+\{\s*PageWorkspace\s*\}\s+from '\.\/PageWorkspace'/);
-  assert.match(source, /<WorkbenchShell/);
-  assert.match(source, /<KnowledgeWorkspace/);
+  assert.match(source, /<KnowledgeNoteWorkspace/);
+  assert.match(source, /<KnowledgeGraphWorkspace/);
   assert.match(source, /<PageWorkspace/);
 });
 
-test('workbench shell owns left center right layout and chrome classes', async () => {
-  const source = await readFile(shellPath, 'utf8');
+test('knowledge note workspace owns the compact note workbench layout and chrome classes', async () => {
+  const source = await readFile(noteWorkspacePath, 'utf8');
   const css = await readFile(appCssPath, 'utf8');
 
-  assert.match(source, /type WorkbenchShellProps =/);
-  assert.match(source, /leftPane: ReactNode/);
-  assert.match(source, /centerPane: ReactNode/);
-  assert.match(source, /rightPane: ReactNode/);
-  assert.match(source, /<Allotment/);
-  assert.match(css, /\.pm-workbench-shell\s*\{/);
-  assert.match(css, /\.pm-workbench-sidebar\s*\{/);
-  assert.match(css, /\.pm-workbench-main\s*\{/);
-  assert.match(css, /\.pm-workbench-ai-pane\s*\{/);
+  assert.match(source, /type KnowledgeNoteWorkspaceProps =/);
+  assert.match(source, /notes: KnowledgeNote\[\]/);
+  assert.match(source, /filteredNotes: KnowledgeNote\[\]/);
+  assert.match(source, /gn-note-workspace/);
+  assert.match(source, /gn-note-rail/);
+  assert.match(source, /gn-note-editor-column/);
+  assert.match(source, /gn-note-side/);
+  assert.match(css, /\.gn-note-workspace\s*\{/);
+  assert.match(css, /\.gn-note-rail,/);
+  assert.match(css, /\.gn-note-editor-column,/);
+  assert.match(css, /\.gn-note-side\s*\{/);
 });
 
 test('knowledge workspace owns toolbar and content slots without a duplicate search field', async () => {
@@ -52,14 +53,12 @@ test('knowledge workspace owns toolbar and content slots without a duplicate sea
   assert.doesNotMatch(source, /type="search"/);
 });
 
-test('knowledge workspace uses Milkdown editor instead of textarea-only reading view', async () => {
-  const editorSource = await readFile(editorPath, 'utf8');
-  const productSource = await readFile(productPath, 'utf8');
+test('knowledge note workspace uses the GoodNight markdown editor instead of textarea-only reading view', async () => {
+  const noteSource = await readFile(noteWorkspacePath, 'utf8');
 
-  assert.match(editorSource, /@milkdown\/react/);
-  assert.match(editorSource, /MilkdownProvider/);
-  assert.match(editorSource, /defaultValueCtx/);
-  assert.match(editorSource, /onChange/);
-  assert.match(productSource, /<MilkdownEditor/);
-  assert.doesNotMatch(productSource, /requirement-markdown-preview/);
+  assert.match(noteSource, /GoodNightMarkdownEditor/);
+  assert.doesNotMatch(noteSource, /AtomicMarkdownEditor/);
+  assert.match(noteSource, /value=\{editorValue\}/);
+  assert.match(noteSource, /onChange=\{onEditorChange\}/);
+  assert.doesNotMatch(noteSource, /requirement-markdown-preview/);
 });

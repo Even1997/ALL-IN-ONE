@@ -19,8 +19,8 @@ import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore
 import type { KnowledgeAttachment, KnowledgeNote } from '../../features/knowledge/model/knowledge';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
 import { buildGlobalKnowledgeGraph } from '../../features/knowledge/model/globalKnowledgeGraph';
-import { inferKnowledgeDocType } from '../../features/knowledge/model/knowledgeDocType';
 import { WorkbenchIcon } from '../ui/WorkbenchIcon';
+import { MacDialog } from '../ui/MacDialog';
 import {
   buildPageWireframeMarkdown,
   createWireframeModule,
@@ -54,10 +54,19 @@ import {
 import { PageWorkspace } from './PageWorkspace';
 import { KnowledgeGraphWorkspace } from '../../features/knowledge/workspace/KnowledgeGraphWorkspace';
 import { KnowledgeNoteWorkspace, type KnowledgeNoteFilter } from '../../features/knowledge/workspace/KnowledgeNoteWorkspace';
+import {
+  extractKnowledgeNoteEditorBody,
+  serializeKnowledgeNoteMarkdown,
+} from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
 
 type SidebarTab = 'knowledge' | 'wiki' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
 export type WorkbenchLayoutDensity = 'comfortable' | 'compact';
+
+type PendingDeleteRequest =
+  | { type: 'knowledge-note'; id: string; title: string; sourceUrl: string | null }
+  | { type: 'page'; id: string; title: string }
+  | { type: 'module'; id: string; title: string };
 
 const normalizeRequirementFilename = (value: string) => {
   const normalized = value.trim().replace(/[\\/:*?"<>|]/g, '-');
@@ -66,6 +75,11 @@ const normalizeRequirementFilename = (value: string) => {
   }
 
   return /\.(md|markdown)$/i.test(normalized) ? normalized : `${normalized}.md`;
+};
+
+const normalizeKnowledgeNoteTitle = (value: string) => {
+  const normalized = value.trim();
+  return normalized || '未命名笔记';
 };
 
 const joinDiskPath = (basePath: string, fileName: string) => joinFileSystemPath(basePath, fileName);
@@ -161,42 +175,6 @@ const listKnowledgeDiskItems = async (rootPath: string): Promise<KnowledgeDiskIt
   };
 
   return walk(rootPath);
-};
-
-const buildKnowledgeDocsFromDisk = async (
-  diskItems: KnowledgeDiskItem[],
-  readRequirementFile: (filePath: string) => Promise<string>,
-  groupOverrides: Record<string, KnowledgeGroupId>
-) => {
-  const markdownItems = diskItems.filter(
-    (item) => item.type === 'file' && /\.(md|markdown)$/i.test(item.relativePath)
-  );
-
-  return Promise.all(
-    markdownItems.map(async (item) => {
-      const content = await readRequirementFile(item.path);
-      const overrideGroup = groupOverrides[item.relativePath];
-      const isSketchPath = overrideGroup === 'sketch' || item.relativePath.startsWith('sketch/');
-      const resolvedGroup = overrideGroup || (item.relativePath.startsWith('design/') ? 'design' : isSketchPath ? 'sketch' : null);
-      const title = item.relativePath.split('/').pop() || item.relativePath;
-
-      return {
-        id: item.path,
-        title,
-        content,
-        summary: content.replace(/\s+/g, ' ').trim().slice(0, 96),
-        filePath: item.path,
-        kind: isSketchPath ? 'sketch' as const : 'note' as const,
-        docType: inferKnowledgeDocType(title),
-        tags: resolvedGroup ? [resolvedGroup] : [],
-        relatedIds: [],
-        authorRole: '产品' as const,
-        sourceType: 'manual' as const,
-        updatedAt: new Date().toISOString(),
-        status: 'ready' as const,
-      };
-    })
-  );
 };
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
@@ -459,6 +437,7 @@ interface WireframeSidebarProps {
   onAddChildPage: () => void;
   onGenerateSampleWireframe: () => void;
   onClearCurrentWireframe: () => void;
+  onRequestDeleteModule: (moduleId: string, moduleTitle: string) => void;
 }
 
 const getModuleDraft = (element: CanvasElement): WireframeModuleDraft => ({
@@ -485,13 +464,13 @@ interface WireframeModuleCardProps {
   draggingModuleId: string | null;
   setDraggingModuleId: Dispatch<SetStateAction<string | null>>;
   appType?: AppType;
+  onRequestDelete: (moduleId: string, moduleTitle: string) => void;
 }
 
-const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, draggingModuleId, setDraggingModuleId, appType }) => {
+const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, draggingModuleId, setDraggingModuleId, appType, onRequestDelete }) => {
   const element = usePreviewStore((state) => state.elements.find((item) => item.id === moduleId) || null);
   const isActive = usePreviewStore((state) => state.selectedElementId === moduleId);
   const selectElement = usePreviewStore((state) => state.selectElement);
-  const deleteElement = usePreviewStore((state) => state.deleteElement);
   const reorderElements = usePreviewStore((state) => state.reorderElements);
   const updateElement = usePreviewStore((state) => state.updateElement);
   const module = useMemo(() => (element ? getModuleDraft(element) : null), [element]);
@@ -643,7 +622,7 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
           type="button"
           onClick={(event) => {
             event.stopPropagation();
-            deleteElement(moduleId);
+            onRequestDelete(moduleId, module.name);
           }}
         >
           删除
@@ -772,6 +751,7 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
   onAddChildPage,
   onGenerateSampleWireframe,
   onClearCurrentWireframe,
+  onRequestDeleteModule,
 }) => {
   const [isMarkdownEditorOpen, setIsMarkdownEditorOpen] = useState(false);
   const [pageMarkdownDraft, setPageMarkdownDraft] = useState('');
@@ -977,6 +957,7 @@ const WireframeSidebar = memo<WireframeSidebarProps>(({
                 draggingModuleId={draggingModuleId}
                 setDraggingModuleId={setDraggingModuleId}
                 appType={appType}
+                onRequestDelete={onRequestDeleteModule}
               />
             ))
           ) : (
@@ -1104,6 +1085,7 @@ export const ProductWorkbench = ({
   const [knowledgeFilter, setKnowledgeFilter] = useState<KnowledgeNoteFilter>('all');
   const [knowledgeDiskItems, setKnowledgeDiskItems] = useState<KnowledgeDiskItem[]>([]);
   const [knowledgeGroupOverrides, setKnowledgeGroupOverrides] = useState<Record<string, KnowledgeGroupId>>({});
+  const [pendingDeleteRequest, setPendingDeleteRequest] = useState<PendingDeleteRequest | null>(null);
   const [pageSearch, setPageSearch] = useState('');
   const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
   const [frameEditorDraft, setFrameEditorDraft] = useState('');
@@ -1155,6 +1137,7 @@ export const ProductWorkbench = ({
   const clearCanvas = usePreviewStore((state) => state.clearCanvas);
   const loadFromCode = usePreviewStore((state) => state.loadFromCode);
   const selectElement = usePreviewStore((state) => state.selectElement);
+  const deleteElement = usePreviewStore((state) => state.deleteElement);
   const serverNotes = useKnowledgeStore((state) => state.notes);
   const serverSearchResults = useKnowledgeStore((state) => state.searchResults);
   const serverSearchQuery = useKnowledgeStore((state) => state.searchQuery);
@@ -1171,7 +1154,6 @@ export const ProductWorkbench = ({
   const loadServerNotes = useKnowledgeStore((state) => state.loadNotes);
   const createServerNote = useKnowledgeStore((state) => state.createProjectNote);
   const deleteServerNote = useKnowledgeStore((state) => state.deleteProjectNote);
-  const syncServerNotes = useKnowledgeStore((state) => state.syncProjectNotes);
   const updateServerNote = useKnowledgeStore((state) => state.updateProjectNote);
   const canUseProjectFilesystem = isTauriRuntimeAvailable();
 
@@ -1224,6 +1206,15 @@ export const ProductWorkbench = ({
     return neighborhoodGraph.nodes.filter((node) => node.id !== selectedServerNote.id);
   }, [neighborhoodGraph, neighborhoodSourceNoteId, selectedServerNote]);
   const currentKnowledgeEditorValue = selectedServerNote ? requirementDraftContent : '';
+  const selectedKnowledgeMarkdownValue = selectedServerNote
+    ? serializeKnowledgeNoteMarkdown(
+        selectedServerNote.title,
+        extractKnowledgeNoteEditorBody(selectedServerNote.title, selectedServerNote.bodyMarkdown)
+      )
+    : '';
+  const currentKnowledgeMarkdownValue = selectedServerNote
+    ? serializeKnowledgeNoteMarkdown(requirementDraftTitle, requirementDraftContent)
+    : '';
   const selectedKnowledgeAttachmentContext = useMemo(() => {
     const attachmentCategoryCounts = (
       Object.keys(KNOWLEDGE_ATTACHMENT_EXTENSION_MAP) as Array<keyof typeof KNOWLEDGE_ATTACHMENT_EXTENSION_MAP>
@@ -1330,7 +1321,7 @@ export const ProductWorkbench = ({
     };
   }, [currentKnowledgeEditorValue, knowledgeAttachments, projectRootDir, selectedServerNote]);
   const hasRequirementChanges = selectedServerNote
-    ? requirementDraftTitle !== selectedServerNote.title || requirementDraftContent !== selectedServerNote.bodyMarkdown
+    ? requirementDraftTitle !== selectedServerNote.title || currentKnowledgeMarkdownValue !== selectedKnowledgeMarkdownValue
     : false;
   const canPersistRequirementToDisk = Boolean(projectRootDir);
   const canSaveRequirement = Boolean(
@@ -1527,7 +1518,7 @@ export const ProductWorkbench = ({
 
     hydratedKnowledgeNoteSignatureRef.current = nextHydratedSignature;
     setRequirementDraftTitle(selectedServerNote.title);
-    setRequirementDraftContent(selectedServerNote.bodyMarkdown);
+    setRequirementDraftContent(extractKnowledgeNoteEditorBody(selectedServerNote.title, selectedServerNote.bodyMarkdown));
     setRequirementSaveMessage(null);
   }, [selectedServerNote]);
 
@@ -1545,7 +1536,7 @@ export const ProductWorkbench = ({
 
     if (!canUseProjectFilesystem) {
       setProjectRootDir(null);
-      setRequirementSaveMessage('当前运行在浏览器开发环境，需求文档会先保存在项目状态中；桌面版会同步到磁盘。');
+      setRequirementSaveMessage('当前运行在浏览器开发环境，知识笔记会保存到本地知识库；桌面版可同步 Markdown 镜像。');
       return;
     }
 
@@ -1565,7 +1556,7 @@ export const ProductWorkbench = ({
         }
 
         setProjectRootDir(null);
-        setRequirementSaveMessage('当前运行在浏览器开发环境，需求文档会先保存到项目状态；桌面版会同步到磁盘。');
+        setRequirementSaveMessage('当前运行在浏览器开发环境，知识笔记会保存到本地知识库；桌面版可同步 Markdown 镜像。');
       });
 
     return () => {
@@ -1594,18 +1585,6 @@ export const ProductWorkbench = ({
     }
   }, []);
 
-  const removeRequirementFile = useCallback(async (filePath: string) => {
-    const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_remove', {
-      params: {
-        file_path: filePath,
-      },
-    });
-
-    if (!result.success) {
-      throw new Error(result.error || `删除文件失败：${filePath}`);
-    }
-  }, []);
-
   const renameRequirementFile = useCallback(async (fromPath: string, toPath: string) => {
     const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_rename', {
       params: {
@@ -1619,28 +1598,7 @@ export const ProductWorkbench = ({
     }
   }, []);
 
-  const readRequirementFile = useCallback(async (filePath: string) => {
-    const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_view', {
-      params: {
-        file_path: filePath,
-        offset: 0,
-        limit: 2000,
-      },
-    });
-
-    if (!result.success) {
-      throw new Error(result.error || `读取文件失败：${filePath}`);
-    }
-
-    return result.content
-      .replace(/^<file>\n/, '')
-      .replace(/\n<\/file>\n?$/, '')
-      .split('\n')
-      .map((line) => line.replace(/^\s*\d+\|/, ''))
-      .join('\n');
-  }, []);
-
-  const refreshKnowledgeFilesystem = useCallback(async (overrides = knowledgeGroupOverrides) => {
+  const refreshKnowledgeFilesystem = useCallback(async (_overrides = knowledgeGroupOverrides) => {
     const requestId = ++knowledgeRefreshRequestIdRef.current;
 
     if (!canUseProjectFilesystem || !currentProject || !projectRootDir) {
@@ -1656,39 +1614,18 @@ export const ProductWorkbench = ({
     }
     setKnowledgeDiskItems(diskItems);
 
-    const docs = await buildKnowledgeDocsFromDisk(diskItems, readRequirementFile, overrides);
     const sketchArtifacts = await loadSketchPageArtifactsFromProjectDir(currentProject.id);
     if (requestId !== knowledgeRefreshRequestIdRef.current) {
       return;
     }
 
-    try {
-      await syncServerNotes(
-        currentProject.id,
-        docs.flatMap((doc) =>
-          doc.filePath ? [{
-            title: doc.title,
-            content: doc.content,
-            filePath: doc.filePath,
-            updatedAt: doc.updatedAt,
-            tags: doc.tags || [],
-          }] : []
-        )
-      );
-    } catch (error) {
-      if (requestId === knowledgeRefreshRequestIdRef.current) {
-        setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
-      }
-    }
-
     if (requestId !== knowledgeRefreshRequestIdRef.current) {
       return;
     }
 
-    replaceRequirementDocs(docs);
     replacePageStructure(sketchArtifacts.pageStructure, tree);
     replaceWireframes(sketchArtifacts.wireframes, tree);
-  }, [canUseProjectFilesystem, currentProject, knowledgeGroupOverrides, projectRootDir, readRequirementFile, replacePageStructure, replaceRequirementDocs, replaceWireframes, syncServerNotes, tree]);
+  }, [canUseProjectFilesystem, currentProject, knowledgeGroupOverrides, projectRootDir, replacePageStructure, replaceWireframes, tree]);
 
   const handleOrganizeKnowledge = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -1856,22 +1793,29 @@ export const ProductWorkbench = ({
       window.alert(`只能上传 Markdown 文件：${invalidFiles.map((file) => file.name).join('、')}`);
     }
 
-    if (!canPersistRequirementToDisk || !projectRootDir) {
-      window.alert('当前环境不支持直接导入到项目目录，请在桌面版中使用上传。');
+    if (!currentProject) {
       event.target.value = '';
       return;
     }
 
     try {
+      let lastCreatedNoteId: string | null = null;
       for (const file of markdownFiles) {
         const content = await file.text();
-        const normalizedTitle = normalizeRequirementFilename(file.name);
-        const filePath = joinDiskPath(projectRootDir, normalizedTitle);
-        await writeRequirementFile(filePath, content);
+        const note = await createServerNote(currentProject.id, {
+          title: normalizeKnowledgeNoteTitle(file.name),
+          content,
+          filePath: '',
+          updatedAt: new Date().toISOString(),
+          tags: [],
+        });
+        lastCreatedNoteId = note.id;
       }
 
-      await refreshKnowledgeFilesystem();
-      setRequirementSaveMessage(`已导入 ${markdownFiles.length} 个 Markdown 文件到 ${projectRootDir}`);
+      if (lastCreatedNoteId) {
+        setSelectedKnowledgeNoteId(lastCreatedNoteId);
+      }
+      setRequirementSaveMessage(`已导入 ${markdownFiles.length} 个 Markdown 文件到知识库。`);
     } catch (error) {
       setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
     }
@@ -1879,34 +1823,18 @@ export const ProductWorkbench = ({
     event.target.value = '';
   };
 
-  const handleDeleteKnowledgeNote = useCallback(async () => {
+  const handleDeleteKnowledgeNote = useCallback(() => {
     if (!currentProject || !selectedServerNote) {
       return;
     }
 
-    if (!window.confirm(`确定删除文件“${selectedServerNote.title}”吗？`)) {
-      return;
-    }
-
-    if (canPersistRequirementToDisk && selectedServerNote.sourceUrl) {
-      try {
-        await removeRequirementFile(selectedServerNote.sourceUrl);
-      } catch (error) {
-        window.alert(error instanceof Error ? error.message : String(error));
-        return;
-      }
-    }
-
-    await deleteServerNote(currentProject.id, selectedServerNote.id);
-    setSelectedKnowledgeNoteId(null);
-    setOpenKnowledgeTabIds((current) => current.filter((id) => id !== selectedServerNote.id));
-    if (canPersistRequirementToDisk && selectedServerNote.sourceUrl) {
-      await refreshKnowledgeFilesystem();
-      setRequirementSaveMessage('文件已从项目目录和知识库中删除。');
-    } else {
-      setRequirementSaveMessage('笔记已从知识库中删除。');
-    }
-  }, [canPersistRequirementToDisk, currentProject, deleteServerNote, refreshKnowledgeFilesystem, removeRequirementFile, selectedServerNote]);
+    setPendingDeleteRequest({
+      type: 'knowledge-note',
+      id: selectedServerNote.id,
+      title: selectedServerNote.title,
+      sourceUrl: selectedServerNote.sourceUrl || null,
+    });
+  }, [currentProject, selectedServerNote]);
 
   const handleCreateKnowledgeNote = useCallback(async () => {
     if (!currentProject) {
@@ -1914,7 +1842,7 @@ export const ProductWorkbench = ({
     }
 
     try {
-      const fallbackTitle = '未命名笔记.md';
+      const fallbackTitle = '未命名笔记';
       const note = await createServerNote(currentProject.id, {
         title: fallbackTitle,
         content: '',
@@ -1936,12 +1864,13 @@ export const ProductWorkbench = ({
       return;
     }
 
-    const nextTitle = normalizeRequirementFilename(requirementDraftTitle);
+    const nextTitle = normalizeKnowledgeNoteTitle(requirementDraftTitle);
+    const nextContent = serializeKnowledgeNoteMarkdown(nextTitle, requirementDraftContent);
     const currentFilePath = selectedServerNote.sourceUrl || '';
-    const currentDirectory = (currentFilePath ? getDirectoryPath(currentFilePath) : '') || projectRootDir || '';
+    const currentDirectory = currentFilePath ? getDirectoryPath(currentFilePath) : '';
     const nextFilePath =
-      canPersistRequirementToDisk && currentDirectory
-        ? joinDiskPath(currentDirectory, nextTitle)
+      canPersistRequirementToDisk && currentFilePath && currentDirectory
+        ? joinDiskPath(currentDirectory, normalizeRequirementFilename(nextTitle))
         : currentFilePath;
     const currentRelativePath = normalizeRelativePath(
       (currentFilePath && projectRootDir && getRelativePathFromRoot(currentFilePath, projectRootDir)) ||
@@ -1953,13 +1882,6 @@ export const ProductWorkbench = ({
 
     try {
       setIsSavingRequirement(true);
-
-      if (canPersistRequirementToDisk && currentFilePath && nextFilePath && currentFilePath !== nextFilePath) {
-        await writeRequirementFile(currentFilePath, requirementDraftContent);
-        await renameRequirementFile(currentFilePath, nextFilePath);
-      } else if (canPersistRequirementToDisk && nextFilePath) {
-        await writeRequirementFile(nextFilePath, requirementDraftContent);
-      }
 
       const nextOverrides = { ...knowledgeGroupOverrides };
       const overrideGroup = nextOverrides[currentRelativePath];
@@ -1975,21 +1897,29 @@ export const ProductWorkbench = ({
 
       await updateServerNote(currentProject.id, selectedServerNote.id, {
         title: nextTitle,
-        content: requirementDraftContent,
-        filePath: nextFilePath || '',
+        content: nextContent,
+        filePath: nextFilePath || currentFilePath || '',
         updatedAt: new Date().toISOString(),
         tags: selectedServerNote.tags,
       });
 
-      if (canPersistRequirementToDisk && nextFilePath) {
+      const shouldSyncMarkdownMirror = Boolean(canPersistRequirementToDisk && selectedServerNote.sourceUrl && nextFilePath);
+      if (shouldSyncMarkdownMirror && currentFilePath !== nextFilePath) {
+        await writeRequirementFile(currentFilePath, nextContent);
+        await renameRequirementFile(currentFilePath, nextFilePath);
+      } else if (shouldSyncMarkdownMirror) {
+        await writeRequirementFile(nextFilePath, nextContent);
+      }
+
+      if (shouldSyncMarkdownMirror) {
         await refreshKnowledgeFilesystem(nextOverrides);
       }
 
       setSelectedKnowledgeNoteId(selectedServerNote.id);
       setRequirementDraftTitle(nextTitle);
       setRequirementSaveMessage(
-        canPersistRequirementToDisk && nextFilePath
-          ? `已保存到 ${nextFilePath}`
+        shouldSyncMarkdownMirror
+          ? `已保存到知识库，并同步 Markdown 镜像：${nextFilePath}`
           : '已保存到知识库。'
       );
     } catch (error) {
@@ -2126,19 +2056,56 @@ export const ProductWorkbench = ({
     handleAddChildPageById(selectedPage.id);
   }, [handleAddChildPageById, selectedPage]);
 
-  const handleDeletePageById = useCallback(async (pageId: string) => {
+  const handleDeletePageById = useCallback((pageId: string) => {
     const page = designPages.find((item) => item.id === pageId);
     if (!page || !currentProject) {
       return;
     }
 
-    if (!window.confirm(`确定删除页面“${page.name}”吗？该页面下的所有子页面都会一起删除。`)) {
+    setPendingDeleteRequest({
+      type: 'page',
+      id: pageId,
+      title: page.name,
+    });
+  }, [currentProject, designPages]);
+
+  const handleRequestDeleteModule = useCallback((moduleId: string, moduleTitle: string) => {
+    setPendingDeleteRequest({
+      type: 'module',
+      id: moduleId,
+      title: moduleTitle,
+    });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDeleteRequest || !currentProject) {
+      setPendingDeleteRequest(null);
+      return;
+    }
+
+    const request = pendingDeleteRequest;
+    setPendingDeleteRequest(null);
+
+    if (request.type === 'knowledge-note') {
+      await deleteServerNote(currentProject.id, request.id);
+      setSelectedKnowledgeNoteId(null);
+      setOpenKnowledgeTabIds((current) => current.filter((id) => id !== request.id));
+      setRequirementSaveMessage(
+        request.sourceUrl
+          ? '笔记已从知识库中删除，Markdown 镜像文件会保留。'
+          : '笔记已从知识库中删除。'
+      );
+      return;
+    }
+
+    if (request.type === 'module') {
+      deleteElement(request.id);
       return;
     }
 
     if (!canUseProjectFilesystem) {
-      deletePageStructureNode(pageId);
-      if (selectedPage?.id === pageId) {
+      deletePageStructureNode(request.id);
+      if (selectedPage?.id === request.id) {
         setManualPageId(null);
         loadFromCode([]);
       }
@@ -2146,16 +2113,26 @@ export const ProductWorkbench = ({
     }
 
     try {
-      await deleteSketchPageFile(currentProject.id, pageId);
+      await deleteSketchPageFile(currentProject.id, request.id);
       await refreshKnowledgeFilesystem();
-      if (selectedPage?.id === pageId) {
+      if (selectedPage?.id === request.id) {
         setManualPageId(null);
         loadFromCode([]);
       }
     } catch {
       return;
     }
-  }, [canUseProjectFilesystem, currentProject, deletePageStructureNode, designPages, loadFromCode, refreshKnowledgeFilesystem, selectedPage]);
+  }, [
+    canUseProjectFilesystem,
+    currentProject,
+    deleteElement,
+    deletePageStructureNode,
+    deleteServerNote,
+    loadFromCode,
+    pendingDeleteRequest,
+    refreshKnowledgeFilesystem,
+    selectedPage?.id,
+  ]);
 
   const handleAddModule = useCallback(() => {
     const currentElements = usePreviewStore.getState().elements;
@@ -2217,6 +2194,8 @@ export const ProductWorkbench = ({
       filteredNotes={filteredServerNotes}
       selectedNote={selectedServerNote}
       activeFilter={knowledgeFilter}
+      titleValue={requirementDraftTitle}
+      mirrorSourcePath={selectedServerNote?.sourceUrl || null}
       editorValue={selectedServerNote ? requirementDraftContent : ''}
       editable={Boolean(selectedServerNote)}
       isSaving={isSavingRequirement}
@@ -2238,6 +2217,7 @@ export const ProductWorkbench = ({
       attachmentCategoryCounts={selectedKnowledgeAttachmentContext.counts}
       onSearchChange={setKnowledgeSearch}
       onSelectNote={openKnowledgeNote}
+      onTitleChange={setRequirementDraftTitle}
       onEditorChange={selectedServerNote ? setRequirementDraftContent : () => undefined}
       onSave={handleSaveKnowledgeNote}
       onDelete={handleDeleteKnowledgeNote}
@@ -2414,25 +2394,72 @@ export const ProductWorkbench = ({
           onAddChildPage={handleAddChildPage}
           onGenerateSampleWireframe={handleGenerateSampleWireframe}
           onClearCurrentWireframe={handleClearCurrentWireframe}
+          onRequestDeleteModule={handleRequestDeleteModule}
         />
       </div>
     );
   };
 
+  const deleteDialogDescription = pendingDeleteRequest
+    ? pendingDeleteRequest.type === 'knowledge-note'
+      ? `确定删除笔记“${pendingDeleteRequest.title}”吗？`
+      : pendingDeleteRequest.type === 'page'
+        ? `确定删除页面“${pendingDeleteRequest.title}”吗？`
+        : `确定删除模块“${pendingDeleteRequest.title}”吗？`
+    : '';
+  const deleteDialogBody = pendingDeleteRequest
+    ? pendingDeleteRequest.type === 'knowledge-note'
+      ? '这只会删除知识库里的笔记；Markdown 镜像文件会保留。'
+      : pendingDeleteRequest.type === 'page'
+        ? '该页面下的所有子页面都会一起删除。'
+        : '该模块会从当前页面草图中移除。'
+    : '';
+  const deleteDialogActionLabel = pendingDeleteRequest
+    ? pendingDeleteRequest.type === 'knowledge-note'
+      ? '删除笔记'
+      : pendingDeleteRequest.type === 'page'
+        ? '删除页面'
+        : '删除模块'
+    : '删除';
+
   return (
-    <div className="product-workbench-shell" style={layoutStyle}>
-      {sidebarTab === 'knowledge' && renderRequirementMain()}
-      {sidebarTab === 'wiki' && renderKnowledgeGraphMain()}
-      {sidebarTab === 'page' && renderPageLibraryMain()}
-      <input
-        ref={fileInputRef}
-        className="product-hidden-input"
-        type="file"
-        accept=".md,.markdown,text/markdown"
-        multiple
-        onChange={handleFileChange}
-      />
-    </div>
+    <>
+      <div className="product-workbench-shell" style={layoutStyle}>
+        {sidebarTab === 'knowledge' && renderRequirementMain()}
+        {sidebarTab === 'wiki' && renderKnowledgeGraphMain()}
+        {sidebarTab === 'page' && renderPageLibraryMain()}
+        <input
+          ref={fileInputRef}
+          className="product-hidden-input"
+          type="file"
+          accept=".md,.markdown,text/markdown"
+          multiple
+          onChange={handleFileChange}
+        />
+      </div>
+      <MacDialog
+        open={Boolean(pendingDeleteRequest)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteRequest(null);
+          }
+        }}
+        title="确认删除"
+        description={deleteDialogDescription}
+        footer={
+          <>
+            <button className="mac-button mac-button-secondary" type="button" onClick={() => setPendingDeleteRequest(null)}>
+              取消
+            </button>
+            <button className="mac-button mac-button-danger" type="button" onClick={() => void handleConfirmDelete()}>
+              {deleteDialogActionLabel}
+            </button>
+          </>
+        }
+      >
+        <p>{deleteDialogBody}</p>
+      </MacDialog>
+    </>
   );
 };
 

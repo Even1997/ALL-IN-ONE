@@ -540,7 +540,7 @@ pub async fn token(state: web::Data<AppState>, form: web::Form<TokenRequest>) ->
         .flatten()
         .unwrap_or_else(|| "OAuth Client".to_string());
 
-    // Create a new Atomic API token
+    // Create a new GoodNight API token
     let (token_info, raw_token) = match core
         .create_api_token(&format!("OAuth: {}", client_name))
         .await
@@ -599,7 +599,7 @@ fn consent_page_html(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Authorize 鈥?Atomic</title>
+<title>Authorize - GoodNight</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{ background: #1e1e1e; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }}
@@ -621,7 +621,7 @@ fn consent_page_html(
 <body>
 <div class="card">
   <h1>Authorize <span class="app-name">{client_name}</span></h1>
-  <p>This application wants to access your Atomic knowledge base. It will be able to search, read, and create atoms.</p>
+  <p>This application wants to access your GoodNight knowledge base. It will be able to search, read, and create notes.</p>
   <form method="POST" action="/oauth/authorize" id="authForm">
     <input type="hidden" name="client_id" value="{client_id}">
     <input type="hidden" name="redirect_uri" value="{redirect_uri}">
@@ -671,7 +671,7 @@ fn error_page_html(message: &str) -> String {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Error 鈥?Atomic</title>
+<title>Error - GoodNight</title>
 <style>
   body {{ background: #1e1e1e; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }}
   .card {{ background: #252525; border: 1px solid #333; border-radius: 12px; padding: 2rem; max-width: 420px; text-align: center; }}
