@@ -23,7 +23,8 @@ test('desktop app shell exposes edge-to-edge workbench classes', async () => {
   assert.match(source, /app-shell-desktop/);
   assert.match(css, /\.app-shell-desktop\s*\{/);
   assert.match(css, /\.app-main-desktop\s*\{/);
-  assert.match(css, /height:\s*calc\(100vh - var\(--desktop-topbar-height\)\)/);
+  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?width:\s*100vw;[\s\S]*?height:\s*100dvh;[\s\S]*?min-width:\s*1280px;[\s\S]*?min-height:\s*100dvh;/);
+  assert.match(css, /\.app-workbench-row\s*{[\s\S]*?height:\s*calc\(100dvh - var\(--desktop-topbar-height\)\);/);
 });
 
 test('workspace exposes horizontal and vertical resize splitters', async () => {

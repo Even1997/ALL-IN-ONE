@@ -75,3 +75,23 @@ test('macOS UI system is wired into the desktop shell and project manager', asyn
   assert.match(appCss, /:root\[data-theme='dark'\]\s*\{[\s\S]*?--macos-window-bg:/);
   assert.match(appCss, /:root\[data-theme='light'\]\s*\{[\s\S]*?--macos-window-bg:/);
 });
+
+test('desktop primary rail and menubar stay borderless inside the macOS workbench skin', async () => {
+  const appCss = await readFile(appCssPath, 'utf8');
+  const primaryRailBlock = appCss.match(/\.desktop-primary-rail\.mac-sidebar-panel\s*{([^}]*)}/);
+  const menubarBlock = appCss.match(/\.desktop-workbench-topbar\.mac-toolbar\.mac-panel\s*{([^}]*padding:\s*10px 14px;[^}]*)}/);
+
+  assert.ok(primaryRailBlock, 'expected macOS primary rail block');
+  assert.ok(menubarBlock, 'expected macOS menubar block');
+  assert.match(primaryRailBlock[1], /justify-content:\s*space-between;/);
+  assert.match(primaryRailBlock[1], /padding:\s*8px 6px 10px;/);
+  assert.match(primaryRailBlock[1], /background:\s*transparent;/);
+  assert.match(primaryRailBlock[1], /border:\s*0;/);
+  assert.match(primaryRailBlock[1], /border-radius:\s*0;/);
+  assert.match(primaryRailBlock[1], /box-shadow:\s*none;/);
+  assert.match(menubarBlock[1], /padding:\s*10px 14px;/);
+  assert.match(menubarBlock[1], /background:\s*transparent;/);
+  assert.match(menubarBlock[1], /border:\s*0;/);
+  assert.match(menubarBlock[1], /border-radius:\s*0;/);
+  assert.match(menubarBlock[1], /box-shadow:\s*none;/);
+});

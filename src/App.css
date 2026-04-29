@@ -10110,8 +10110,10 @@ body.ai-chat-sidebar-collapsed .app-main {
 .app-shell-desktop {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   min-width: 1280px;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
   background: var(--mode-surface, #0f1115);
 }
@@ -10800,6 +10802,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   display: flex;
   min-height: 0;
   height: calc(100vh - var(--desktop-topbar-height));
+  height: calc(100dvh - var(--desktop-topbar-height));
   width: 100%;
   padding: 0 var(--desktop-workbench-gutter) var(--desktop-workbench-gutter);
   overflow: hidden;
@@ -11629,10 +11632,11 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 .desktop-primary-rail.mac-sidebar-panel {
   justify-content: space-between;
   padding: 8px 6px 10px;
-  border-radius: 14px;
-  background: var(--macos-chrome-bg);
-  border: 1px solid var(--macos-chrome-border);
-  box-shadow: var(--macos-shadow-panel);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .desktop-brand-chip,
@@ -11672,10 +11676,11 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
 .desktop-workbench-topbar.mac-toolbar.mac-panel {
   padding: 10px 14px;
-  border-radius: 14px;
-  background: var(--macos-chrome-bg);
-  border: 1px solid var(--macos-chrome-border);
-  box-shadow: var(--macos-shadow-panel);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .desktop-workbench-title.compact h1,
