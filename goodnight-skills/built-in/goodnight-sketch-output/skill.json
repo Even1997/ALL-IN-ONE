@@ -1,0 +1,32 @@
+{
+  "id": "goodnight-sketch-output",
+  "name": "GoodNight Sketch Output",
+  "version": "1.0.0",
+  "category": "zone",
+  "source": {
+    "type": "built-in",
+    "upstream": {
+      "inspiredBy": [
+        "openai/superpowers",
+        "multica-ai/andrej-karpathy-skills"
+      ]
+    }
+  },
+  "zones": ["sketch"],
+  "capabilities": ["prompt"],
+  "entry": {
+    "prompt": "SKILL.md"
+  },
+  "support": {
+    "built-in": "full",
+    "codex": "partial",
+    "claude": "partial"
+  },
+  "install": {
+    "visibleByDefault": true,
+    "enabledByDefault": true,
+    "syncTargets": ["built-in", "codex", "claude"]
+  },
+  "reviewStatus": "reviewed",
+  "riskFlags": []
+}

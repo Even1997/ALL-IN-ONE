@@ -1,0 +1,48 @@
+{
+  "id": "goodnight-m-flow",
+  "name": "GoodNight M-Flow",
+  "version": "1.0.0",
+  "category": "knowledge",
+  "source": {
+    "type": "built-in",
+    "upstream": {
+      "inspiredBy": [
+        "FlowElement-ai/m_flow"
+      ]
+    }
+  },
+  "capabilities": ["prompt"],
+  "runtime": {
+    "knowledgeMethod": "m-flow",
+    "contextSection": "m_flow_paths",
+    "visibleOutputs": [
+      "_goodnight/outputs/m-flow/episodes/",
+      "_goodnight/outputs/m-flow/facets/",
+      "_goodnight/outputs/m-flow/facet-points/",
+      "_goodnight/outputs/m-flow/entities/",
+      "_goodnight/outputs/m-flow/paths/",
+      "_goodnight/outputs/m-flow/index.md"
+    ],
+    "stateOutputs": [
+      ".goodnight/skills/m-flow/graph.md",
+      ".goodnight/skills/m-flow/anchors.md",
+      ".goodnight/skills/m-flow/path-index.md"
+    ],
+    "promptPolicy": "M-Flow runtime policy: start from Markdown anchors, facets, facet points, and entities, then answer through the most relevant evidence path. Preserve why the evidence is related before citing isolated chunks."
+  },
+  "entry": {
+    "prompt": "SKILL.md"
+  },
+  "support": {
+    "built-in": "full",
+    "codex": "partial",
+    "claude": "partial"
+  },
+  "install": {
+    "visibleByDefault": true,
+    "enabledByDefault": true,
+    "syncTargets": ["built-in", "codex", "claude"]
+  },
+  "reviewStatus": "reviewed",
+  "riskFlags": []
+}

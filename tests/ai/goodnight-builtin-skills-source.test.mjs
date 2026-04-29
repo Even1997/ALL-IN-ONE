@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -38,6 +38,31 @@ test('goodnight ships official built-in skill source files and seeds them from t
     assert.match(skillMd, /^---/);
     assert.match(skillMd, /description:/);
     assert.match(manifest, /"source"\s*:\s*\{\s*"type"\s*:\s*"built-in"/);
+  }
+});
+
+test('knowledge built-in skills expose runtime adapter contracts', async () => {
+  const manifests = await Promise.all(
+    ['goodnight-m-flow', 'goodnight-llmwiki', 'goodnight-rag'].map(async (skillId) =>
+      JSON.parse(await readFile(path.join(builtinRoot, skillId, 'skill.json'), 'utf8'))
+    )
+  );
+
+  assert.deepEqual(
+    manifests.map((manifest) => manifest.runtime.knowledgeMethod).sort(),
+    ['llmwiki', 'm-flow', 'rag']
+  );
+
+  for (const manifest of manifests) {
+    assert.equal(typeof manifest.runtime.contextSection, 'string');
+    assert.equal(manifest.runtime.visibleOutputs.length > 0, true);
+    assert.equal(manifest.runtime.promptPolicy.includes('runtime policy'), true);
+  }
+
+  const markdownOnlyManifests = manifests.filter((manifest) => ['llmwiki', 'm-flow'].includes(manifest.runtime.knowledgeMethod));
+  for (const manifest of markdownOnlyManifests) {
+    assert.equal(manifest.runtime.stateOutputs.every((output) => output.endsWith('.md')), true);
+    assert.equal(manifest.runtime.visibleOutputs.some((output) => /\.(json|jsonl)$/i.test(output)), false);
   }
 });
 
@@ -99,12 +124,50 @@ test('built-in skills encode goodnight boundary and output contracts', async () 
   assert.match(mFlow, /m-flow/i);
   assert.match(mFlow, /manual refresh/i);
   assert.match(mFlow, /\.goodnight\/base-index/i);
+  assert.match(mFlow, /FacetPoint/i);
+  assert.match(mFlow, /inverted cone/i);
+  assert.match(mFlow, /Bundle/i);
+  assert.match(mFlow, /Path cost/i);
+  assert.match(mFlow, /not JSON/i);
 
   assert.match(llmwiki, /llmwiki/i);
   assert.match(llmwiki, /Karpathy/i);
-  assert.match(llmwiki, /reference-style summaries/i);
+  assert.match(llmwiki, /Ingest/i);
+  assert.match(llmwiki, /Compile/i);
+  assert.match(llmwiki, /Lint/i);
+  assert.match(llmwiki, /reference-style Markdown/i);
+  assert.match(llmwiki, /raw\/\*\.md/);
 
   assert.match(rag, /rag/i);
   assert.match(rag, /retrieval/i);
   assert.match(rag, /chunk/i);
+});
+
+test('deep knowledge skills ship method references for progressive disclosure', async () => {
+  await access(path.join(builtinRoot, 'goodnight-llmwiki', 'references', 'llmwiki-method.md'));
+  await access(path.join(builtinRoot, 'goodnight-llmwiki', 'references', 'raw-template.md'));
+  await access(path.join(builtinRoot, 'goodnight-llmwiki', 'references', 'article-template.md'));
+  await access(path.join(builtinRoot, 'goodnight-llmwiki', 'references', 'index-template.md'));
+  await access(path.join(builtinRoot, 'goodnight-llmwiki', 'references', 'archive-template.md'));
+  await access(path.join(builtinRoot, 'goodnight-m-flow', 'references', 'm-flow-method.md'));
+
+  const llmwikiReference = await readFile(
+    path.join(builtinRoot, 'goodnight-llmwiki', 'references', 'llmwiki-method.md'),
+    'utf8'
+  );
+  const mFlowReference = await readFile(
+    path.join(builtinRoot, 'goodnight-m-flow', 'references', 'm-flow-method.md'),
+    'utf8'
+  );
+
+  assert.match(llmwikiReference, /Raw Captures/i);
+  assert.match(llmwikiReference, /Compilation Heuristics/i);
+  const articleTemplate = await readFile(
+    path.join(builtinRoot, 'goodnight-llmwiki', 'references', 'article-template.md'),
+    'utf8'
+  );
+  assert.match(articleTemplate, /> Sources:/);
+  assert.match(articleTemplate, /> Raw:/);
+  assert.match(mFlowReference, /Graph Vocabulary/i);
+  assert.match(mFlowReference, /Bundle Search/i);
 });

@@ -42,10 +42,8 @@ import { runChangeSyncLane } from '../../modules/ai/knowledge/runChangeSyncLane'
 import { suggestKnowledgeProposalFromAnswer } from '../../modules/ai/knowledge/suggestKnowledgeProposal';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
-import {
-  buildProjectSystemIndexPromptContext,
-  ensureProjectSystemIndex,
-} from '../../modules/knowledge/systemIndexProject';
+import { ensureProjectSystemIndex } from '../../modules/knowledge/systemIndexProject';
+import { buildKnowledgeRuntimePromptContext } from '../../modules/knowledge/runtime/knowledgeRuntime';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
 import type { KnowledgeProposal } from '../../features/knowledge/model/knowledgeProposal';
 import { useKnowledgeProposalStore } from '../../features/knowledge/store/knowledgeProposalStore';
@@ -1251,7 +1249,11 @@ export const AIChat: React.FC<AIChatProps> = ({
               })
             : null;
         const systemIndexPromptContext = systemIndexRefreshResult
-          ? buildProjectSystemIndexPromptContext(systemIndexRefreshResult.index, cleanedContent)
+          ? buildKnowledgeRuntimePromptContext({
+              index: systemIndexRefreshResult.index,
+              knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
+              userInput: cleanedContent,
+            })
           : null;
         const directChat = buildDirectChatPrompt({
           userInput: cleanedContent,
@@ -1264,6 +1266,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             ? {
                 indexSection: systemIndexPromptContext.indexSection,
                 expandedSection: systemIndexPromptContext.expandedSection,
+                policySection: systemIndexPromptContext.policySection,
                 labels: systemIndexPromptContext.labels,
               }
             : null,

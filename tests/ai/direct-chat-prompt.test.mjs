@@ -105,6 +105,7 @@ test('buildDirectChatPrompt includes reference index and expanded file sections'
     referenceContext: {
       indexSection: '- sketch/pages/login.md | Login Sketch | Login structure',
       expandedSection: 'file: sketch/pages/login.md\n# Login Sketch',
+      policySection: 'Use structured wiki pages before raw source files.',
       labels: ['已选文件 / 2'],
     },
   });
@@ -112,6 +113,7 @@ test('buildDirectChatPrompt includes reference index and expanded file sections'
   assert.match(result.prompt, /reference_index:/);
   assert.match(result.prompt, /expanded_files:/);
   assert.match(result.prompt, /sketch\/pages\/login\.md/);
+  assert.match(result.systemPrompt, /Use structured wiki pages before raw source files\./);
 });
 
 test('buildDirectChatPrompt includes recent conversation history before the new request', () => {

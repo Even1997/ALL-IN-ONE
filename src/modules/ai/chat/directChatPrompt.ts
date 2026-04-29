@@ -87,6 +87,7 @@ export const buildDirectChatPrompt = (options: {
   referenceContext?: {
     indexSection: string;
     expandedSection: string;
+    policySection?: string;
     labels: string[];
   } | null;
 }) => {
@@ -153,6 +154,7 @@ export const buildDirectChatPrompt = (options: {
     systemPrompt: [
       skillLabel ? buildSkillSystemPrompt(currentProjectName, skillLabel) : buildFreeChatSystemPrompt(currentProjectName),
       referenceContext?.indexSection ? buildIndexedKnowledgePolicy() : null,
+      referenceContext?.policySection || null,
       buildKnowledgeOperationPolicy(),
     ]
       .filter((item): item is string => Boolean(item))

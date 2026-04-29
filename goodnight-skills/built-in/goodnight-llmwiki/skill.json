@@ -1,0 +1,44 @@
+{
+  "id": "goodnight-llmwiki",
+  "name": "GoodNight LLMWiki",
+  "version": "1.0.0",
+  "category": "knowledge",
+  "source": {
+    "type": "built-in",
+    "upstream": {
+      "inspiredBy": [
+        "Astro-Han/karpathy-llm-wiki"
+      ]
+    }
+  },
+  "capabilities": ["prompt"],
+  "runtime": {
+    "knowledgeMethod": "llmwiki",
+    "contextSection": "llmwiki_wiki_pages",
+    "visibleOutputs": [
+      "_goodnight/outputs/llmwiki/raw/",
+      "_goodnight/outputs/llmwiki/wiki/",
+      "_goodnight/outputs/llmwiki/index.md",
+      "_goodnight/outputs/llmwiki/log.md"
+    ],
+    "stateOutputs": [
+      ".goodnight/skills/llmwiki/manifest.md"
+    ],
+    "promptPolicy": "LLM Wiki runtime policy: use structured wiki pages, written as Markdown, as the primary source of stable knowledge. Fall back to raw Markdown captures or the base index only when the wiki page is insufficient."
+  },
+  "entry": {
+    "prompt": "SKILL.md"
+  },
+  "support": {
+    "built-in": "full",
+    "codex": "partial",
+    "claude": "partial"
+  },
+  "install": {
+    "visibleByDefault": true,
+    "enabledByDefault": false,
+    "syncTargets": ["built-in", "codex", "claude"]
+  },
+  "reviewStatus": "reviewed",
+  "riskFlags": []
+}

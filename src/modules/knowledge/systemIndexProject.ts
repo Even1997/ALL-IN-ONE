@@ -1,5 +1,10 @@
 import type { GeneratedFile, KnowledgeRetrievalMethod, RequirementDoc } from '../../types';
-import { getRelativePathFromRoot, normalizeRelativeFileSystemPath } from '../../utils/fileSystemPaths.ts';
+import {
+  getDirectoryPath,
+  getRelativePathFromRoot,
+  joinFileSystemPath,
+  normalizeRelativeFileSystemPath,
+} from '../../utils/fileSystemPaths.ts';
 import {
   ensureProjectDirectory,
   ensureVaultKnowledgeDirectoryStructure,
@@ -11,6 +16,7 @@ import {
   getSystemIndexSourcesPath,
   getSystemIndexTopicsPath,
   getVaultBaseIndexDir,
+  getVaultSkillOutputsDir,
   listProjectDirectory,
   readProjectJsonFile,
   readProjectTextFile,
@@ -28,6 +34,7 @@ import {
   type SystemIndexSourceRecord,
   type SystemIndexTopic,
 } from './systemIndex.ts';
+import { buildKnowledgeRuntimeArtifacts } from './runtime/knowledgeRuntime.ts';
 
 const INDEXABLE_EXTENSIONS = new Set([
   'md',
@@ -231,6 +238,26 @@ const parseChunksJsonl = (content: string): SystemIndexChunk[] =>
       }
     });
 
+const writeKnowledgeRuntimeArtifacts = async (
+  index: SystemIndexData,
+  vaultPath: string,
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod
+) => {
+  const artifacts = buildKnowledgeRuntimeArtifacts({
+    index,
+    vaultPath,
+    knowledgeRetrievalMethod,
+  });
+
+  for (const artifact of artifacts) {
+    const directoryPath = getDirectoryPath(artifact.path);
+    if (directoryPath) {
+      await ensureProjectDirectory(directoryPath);
+    }
+    await writeProjectTextFile(artifact.path, artifact.content);
+  }
+};
+
 export const loadProjectSystemIndex = async (projectDir: string): Promise<SystemIndexData | null> => {
   const manifest = await readProjectJsonFile<SystemIndexManifest>(getSystemIndexManifestPath(projectDir));
   if (!manifest) {
@@ -251,6 +278,56 @@ export const loadProjectSystemIndex = async (projectDir: string): Promise<System
     topics,
     docIntents,
   };
+};
+
+export const getProjectSystemIndexArtifactPath = (
+  vaultPath: string,
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod
+) => joinFileSystemPath(getVaultSkillOutputsDir(vaultPath, knowledgeRetrievalMethod), 'system-index.md');
+
+export const buildProjectSystemIndexArtifact = (
+  index: SystemIndexData,
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod
+) => {
+  const topicLines = index.topics
+    .slice(0, 8)
+    .map((topic) => `- ${topic.label} (${topic.sourceIds.length} sources, ${topic.chunkIds.length} chunks)`);
+  const sourceLines = index.sources
+    .slice(0, 12)
+    .map((source) => `- ${source.path} | ${source.kind} | ${source.summary || 'No summary'}`);
+  const intentLines = index.docIntents.map(
+    (intent) => `- ${intent.id} | ${intent.label} | ${intent.sourceIds.length} sources | ${intent.chunkIds.length} chunks`
+  );
+
+  return [
+    '# System Index Artifact',
+    '',
+    `Built at: ${index.manifest.builtAt}`,
+    `Project: ${index.manifest.projectName} (${index.manifest.projectId})`,
+    `Retrieval method: \`${knowledgeRetrievalMethod}\``,
+    `Fingerprint: \`${index.manifest.fingerprint}\``,
+    '',
+    '## Counts',
+    `- Sources: ${index.manifest.sourceCount}`,
+    `- Chunks: ${index.manifest.chunkCount}`,
+    `- Topics: ${index.manifest.topicCount}`,
+    '',
+    '## Canonical hidden files',
+    '- `.goodnight/base-index/manifest.json`',
+    '- `.goodnight/base-index/sources.json`',
+    '- `.goodnight/base-index/chunks.jsonl`',
+    '- `.goodnight/base-index/topics.json`',
+    '- `.goodnight/base-index/doc-intents.json`',
+    '',
+    '## Top topics',
+    ...(topicLines.length > 0 ? topicLines : ['- none']),
+    '',
+    '## Representative sources',
+    ...(sourceLines.length > 0 ? sourceLines : ['- none']),
+    '',
+    '## Doc intents',
+    ...(intentLines.length > 0 ? intentLines : ['- none']),
+  ].join('\n');
 };
 
 export const refreshProjectSystemIndex = async (options: {
@@ -285,6 +362,8 @@ export const refreshProjectSystemIndex = async (options: {
   const currentIndex = await loadProjectSystemIndex(projectDir);
 
   if (currentIndex?.manifest.fingerprint === nextIndex.manifest.fingerprint) {
+    await writeProjectTextFile(getProjectSystemIndexArtifactPath(options.vaultPath, options.knowledgeRetrievalMethod), buildProjectSystemIndexArtifact(currentIndex, options.knowledgeRetrievalMethod));
+    await writeKnowledgeRuntimeArtifacts(currentIndex, options.vaultPath, options.knowledgeRetrievalMethod);
     return {
       index: currentIndex,
       refreshed: false,
@@ -297,6 +376,8 @@ export const refreshProjectSystemIndex = async (options: {
   await writeProjectTextFile(getSystemIndexChunksPath(projectDir), serializeChunksJsonl(nextIndex.chunks));
   await writeProjectJsonFile(getSystemIndexTopicsPath(projectDir), nextIndex.topics);
   await writeProjectJsonFile(getSystemIndexDocIntentsPath(projectDir), nextIndex.docIntents);
+  await writeProjectTextFile(getProjectSystemIndexArtifactPath(options.vaultPath, options.knowledgeRetrievalMethod), buildProjectSystemIndexArtifact(nextIndex, options.knowledgeRetrievalMethod));
+  await writeKnowledgeRuntimeArtifacts(nextIndex, options.vaultPath, options.knowledgeRetrievalMethod);
 
   return {
     index: nextIndex,

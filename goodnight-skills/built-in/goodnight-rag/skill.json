@@ -1,0 +1,37 @@
+{
+  "id": "goodnight-rag",
+  "name": "GoodNight RAG",
+  "version": "1.0.0",
+  "category": "knowledge",
+  "source": {
+    "type": "built-in"
+  },
+  "capabilities": ["prompt"],
+  "runtime": {
+    "knowledgeMethod": "rag",
+    "contextSection": "rag_chunks",
+    "visibleOutputs": [
+      "_goodnight/outputs/rag/retrieval-guide.md",
+      "_goodnight/outputs/rag/source-digests/"
+    ],
+    "stateOutputs": [
+      ".goodnight/skills/rag/manifest.json"
+    ],
+    "promptPolicy": "RAG runtime policy: use standard chunk retrieval, rank the most relevant passages, cite source paths clearly, and avoid over-structured reasoning beyond the retrieved evidence."
+  },
+  "entry": {
+    "prompt": "SKILL.md"
+  },
+  "support": {
+    "built-in": "full",
+    "codex": "partial",
+    "claude": "partial"
+  },
+  "install": {
+    "visibleByDefault": true,
+    "enabledByDefault": false,
+    "syncTargets": ["built-in", "codex", "claude"]
+  },
+  "reviewStatus": "reviewed",
+  "riskFlags": []
+}
