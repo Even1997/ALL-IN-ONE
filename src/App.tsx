@@ -30,6 +30,7 @@ import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils
 import {
   getProjectDir,
   ensureProjectFilesystemStructure,
+  ensureVaultKnowledgeDirectoryStructure,
   getProjectStorageSettings,
   isTauriRuntimeAvailable,
   loadDesignBoardStateFromDisk,
@@ -510,7 +511,7 @@ const DESKTOP_WORKBENCH_ROLES: Array<{
   summary: string;
 }> = [
   { id: 'knowledge', label: '知识库', summary: '笔记与资料' },
-  { id: 'wiki', label: 'Wiki 图谱', summary: '关系与连接' },
+  { id: 'wiki', label: '系统索引', summary: '文件与知识索引' },
   { id: 'page', label: '页面', summary: '结构与草图' },
   { id: 'design', label: '设计', summary: '页面与画布' },
   { id: 'develop', label: '开发', summary: '文件与任务' },
@@ -803,6 +804,7 @@ const App: React.FC = () => {
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
   const [projectStorageSettings, setProjectStorageSettings] = useState<ProjectStorageSettings | null>(null);
   const [projectStorageDraftOverride, setProjectStorageDraftOverride] = useState<string | null>(null);
+  const [projectVaultDraftOverride, setProjectVaultDraftOverride] = useState<string | null>(null);
   const [projectStorageState, setProjectStorageState] = useState<ProjectStorageState>('idle');
   const [projectStorageMessage, setProjectStorageMessage] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
@@ -2124,6 +2126,33 @@ const App: React.FC = () => {
     }
   }, [projectStorageSettings]);
 
+  const handlePickProjectVaultPath = useCallback(async () => {
+    if (!isTauriRuntimeAvailable()) {
+      return;
+    }
+
+    try {
+      const selectedPath = await open({
+        directory: true,
+        multiple: false,
+        defaultPath:
+          projectVaultDraftOverride ||
+          currentProject?.vaultPath ||
+          projectStorageSettings?.rootPath ||
+          projectStorageSettings?.defaultPath,
+      });
+
+      if (typeof selectedPath !== 'string') {
+        return;
+      }
+
+      setProjectVaultDraftOverride(selectedPath);
+    } catch (error) {
+      setProjectStorageState('error');
+      setProjectStorageMessage(error instanceof Error ? error.message : '知识库目录选择失败。');
+    }
+  }, [currentProject?.vaultPath, projectStorageSettings?.defaultPath, projectStorageSettings?.rootPath, projectVaultDraftOverride]);
+
   const handleResetProjectStoragePath = useCallback(async () => {
     if (!isTauriRuntimeAvailable()) {
       return;
@@ -2151,7 +2180,11 @@ const App: React.FC = () => {
     setSelectedFeature(starterFeatureTree.children[0] || null);
     setCurrentRole('knowledge');
     setIsProjectManagerOpen(false);
+    setProjectVaultDraftOverride(null);
     void ensureProjectFilesystemStructure(project.id).catch(() => undefined);
+    if (project.vaultPath) {
+      void ensureVaultKnowledgeDirectoryStructure(project.vaultPath).catch(() => undefined);
+    }
   };
 
   const handleOpenProject = useCallback(async (projectId: string) => {
@@ -2186,6 +2219,10 @@ const App: React.FC = () => {
     clearCanvas();
     setCurrentRole('knowledge');
     setIsProjectManagerOpen(false);
+    void ensureProjectFilesystemStructure(targetProject.id).catch(() => undefined);
+    if (targetProject.vaultPath) {
+      void ensureVaultKnowledgeDirectoryStructure(targetProject.vaultPath).catch(() => undefined);
+    }
   }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, replaceWorkflowProjectState, setTree, switchProject]);
 
   const handleDeleteProject = useCallback(async (projectId: string) => {
@@ -2277,7 +2314,7 @@ const App: React.FC = () => {
         window.alert('当前界面参考桌面应用菜单栏布局：左侧切换工作区，顶部菜单负责项目级操作，内容区按默认窗口尺寸排布。');
         break;
       case 'help.knowledge_overview':
-        window.alert('知识库用于整理 Markdown 笔记、项目资料和关联上下文。');
+        window.alert('知识库用于承载用户内容；系统索引用于帮助 AI 快速检索和回答问题。');
         break;
       case 'help.page_overview':
         window.alert('页面用于维护页面结构、页面草图和画布模块。');
@@ -4700,6 +4737,7 @@ ${selectedContextPrompt}` : '',
           activeProjectId={currentProjectId}
           projectStorageSettings={projectStorageSettings}
           projectStorageDraftOverride={projectStorageDraftOverride}
+          projectVaultDraftOverride={projectVaultDraftOverride}
           projectStorageState={projectStorageState}
           projectStorageMessage={projectStorageMessage}
           onCreateProject={handleCreateProject}
@@ -4707,6 +4745,7 @@ ${selectedContextPrompt}` : '',
           onDeleteProject={handleDeleteProject}
           onSaveProjectStoragePath={handleSaveProjectStoragePath}
           onPickProjectStoragePath={handlePickProjectStoragePath}
+          onPickProjectVaultPath={handlePickProjectVaultPath}
           onResetProjectStoragePath={handleResetProjectStoragePath}
         />
         <UiFeedbackMode />
@@ -4736,6 +4775,7 @@ ${selectedContextPrompt}` : '',
       currentProjectName={currentProject?.name ?? null}
       projectStorageSettings={projectStorageSettings}
       projectStorageDraftOverride={projectStorageDraftOverride}
+      projectVaultDraftOverride={projectVaultDraftOverride}
       projectStorageState={projectStorageState}
       projectStorageMessage={projectStorageMessage}
       onCreateProject={handleCreateProject}
@@ -4743,6 +4783,7 @@ ${selectedContextPrompt}` : '',
       onDeleteProject={handleDeleteProject}
       onSaveProjectStoragePath={handleSaveProjectStoragePath}
       onPickProjectStoragePath={handlePickProjectStoragePath}
+      onPickProjectVaultPath={handlePickProjectVaultPath}
       onResetProjectStoragePath={handleResetProjectStoragePath}
       onClose={() => setIsProjectManagerOpen(false)}
     />

@@ -2,18 +2,21 @@ import type { KnowledgeEntry } from '../../knowledge/knowledgeEntries';
 import { buildKnowledgeProposal } from './buildKnowledgeProposal';
 import { shouldSuggestKnowledgeProposal } from './shouldSuggestKnowledgeProposal';
 
-const WIKI_TITLE_HINTS = ['总览', '清单', '术语', '问题', '决策', 'wiki', 'Wiki'];
+const SYSTEM_INDEX_TITLE_HINTS = ['总览', '清单', '术语', '问题', '决策', 'wiki', 'Wiki', '索引', 'Index'];
 
-const isWikiEntry = (entry: KnowledgeEntry | null) =>
+const isSystemIndexEntry = (entry: KnowledgeEntry | null) =>
   Boolean(
     entry &&
       entry.type === 'markdown' &&
-      (entry.docType === 'wiki-index' || WIKI_TITLE_HINTS.some((hint) => entry.title.includes(hint)))
+      (entry.docType === 'wiki-index' || SYSTEM_INDEX_TITLE_HINTS.some((hint) => entry.title.includes(hint)))
   );
+
+const resolveWritableNote = (entry: KnowledgeEntry | null) =>
+  entry && entry.type === 'markdown' && !isSystemIndexEntry(entry) ? entry : null;
 
 const buildSuggestionTitle = (answerContent: string) => {
   const firstSentence = answerContent.replace(/\s+/g, ' ').trim().slice(0, 18);
-  return firstSentence ? `AI 会话结论 ${firstSentence}.md` : 'AI 会话结论.md';
+  return firstSentence ? `AI 对话结论 ${firstSentence}.md` : 'AI 对话结论.md';
 };
 
 export const suggestKnowledgeProposalFromAnswer = ({
@@ -32,9 +35,10 @@ export const suggestKnowledgeProposalFromAnswer = ({
     return null;
   }
 
+  const writableCurrentFile = resolveWritableNote(currentFile);
   const signals = {
-    hasGap: !currentFile,
-    hasStaleWiki: isWikiEntry(currentFile),
+    hasGap: !writableCurrentFile,
+    hasStaleWiki: false,
     hasDuplicates: false,
     canDistill: relatedFiles.length >= 2,
   };
@@ -43,38 +47,26 @@ export const suggestKnowledgeProposalFromAnswer = ({
     return null;
   }
 
-  const targetTitle = currentFile?.title || buildSuggestionTitle(normalizedAnswer);
+  const targetTitle = writableCurrentFile?.title || buildSuggestionTitle(normalizedAnswer);
   const evidence = [
-    currentFile ? `current:${currentFile.title}` : 'chat:当前回答',
+    writableCurrentFile ? `current:${writableCurrentFile.title}` : 'chat:当前回答',
     ...relatedFiles.slice(0, 3).map((file) => `related:${file.title}`),
   ];
 
-  const type = isWikiEntry(currentFile)
-    ? 'update_wiki'
-    : currentFile?.type === 'markdown'
-      ? 'update_note'
-      : 'create_note';
-
-  const trigger = signals.hasStaleWiki ? 'wiki-stale' : signals.canDistill ? 'knowledge-organize' : 'answer-gap';
-
   return buildKnowledgeProposal({
     projectId,
-    summary: isWikiEntry(currentFile)
-      ? `发现 1 项 Wiki 更新建议：${targetTitle}`
-      : currentFile
-        ? `发现 1 项笔记补全建议：${targetTitle}`
-        : `发现 1 项新增知识建议：${targetTitle}`,
-    trigger,
+    summary: writableCurrentFile
+      ? `发现 1 项笔记补全建议：${targetTitle}`
+      : `发现 1 项新增知识建议：${targetTitle}`,
+    trigger: signals.canDistill ? 'knowledge-organize' : 'answer-gap',
     operations: [
       {
-        type,
-        targetId: currentFile?.type === 'markdown' ? currentFile.id : null,
+        type: writableCurrentFile ? 'update_note' : 'create_note',
+        targetId: writableCurrentFile?.id || null,
         targetTitle,
-        reason: isWikiEntry(currentFile)
-          ? '当前回答形成了可沉淀的结构化结论，适合回写到 Wiki。'
-          : currentFile
-            ? '当前回答补充了已选知识条目，适合回写到现有笔记。'
-            : '当前回答形成了新的项目事实，适合新增一条知识笔记。',
+        reason: writableCurrentFile
+          ? '当前回答补充了已选知识条目，适合回写到现有笔记。'
+          : '当前回答形成了新的项目事实，适合新增一条用户可维护的知识笔记。',
         evidence,
         draftContent: normalizedAnswer,
       },

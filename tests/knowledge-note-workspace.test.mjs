@@ -35,7 +35,9 @@ test('knowledge note workspace exposes organize action, current-note graph, and 
   assert.match(source, /mode="focused"/);
   assert.match(source, /onSelectNode=\{onSelectNote\}/);
   assert.match(source, /onClick=\{onOpenGlobalWikiGraph\}/);
-  assert.match(source, /Wiki/);
+  assert.match(source, /系统索引/);
+  assert.match(source, /刷新索引/);
+  assert.match(source, /打开系统索引图谱/);
 });
 
 test('knowledge note tree stays navigation-only without content previews', async () => {

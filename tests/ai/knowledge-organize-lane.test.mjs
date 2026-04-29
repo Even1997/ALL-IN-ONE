@@ -63,8 +63,8 @@ test('knowledge organize lane reshapes wiki drafts into index-style markdown whe
   assert.ok(featureInventory);
   assert.equal(featureInventory.docType, 'wiki-index');
   assert.match(featureInventory.content, /^# /m);
-  assert.match(featureInventory.content, /^## \u7d22\u5f15$/m);
-  assert.match(featureInventory.content, /^## \u5185\u5bb9$/m);
+  assert.match(featureInventory.content, /^## 索引$/m);
+  assert.match(featureInventory.content, /^## 内容$/m);
 });
 
 test('knowledge organize proposal builder converts derived docs into user-approved wiki operations', async () => {
@@ -95,8 +95,8 @@ test('knowledge organize proposal builder converts derived docs into user-approv
 test('knowledge organize chat flow now surfaces proposal-first review instead of immediate persistence', async () => {
   const chatSource = await readFile(aiChatPath, 'utf8');
 
-  assert.match(chatSource, /buildKnowledgeOrganizeProposal/);
-  assert.match(chatSource, /正在整理知识库并生成 wiki 提案/);
-  assert.match(chatSource, /已生成 .* 份 Wiki 更新建议/);
-  assert.doesNotMatch(chatSource, /const persistedDocs = await saveKnowledgeDocsToProjectDir\(currentProject\.id,\s*docs\);/);
+  assert.match(chatSource, /ensureProjectSystemIndex/);
+  assert.match(chatSource, /正在刷新系统索引/);
+  assert.match(chatSource, /系统索引已刷新/);
+  assert.match(chatSource, /系统索引已是最新状态/);
 });

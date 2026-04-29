@@ -9,14 +9,14 @@ import {
 } from '../src/features/knowledge/model/knowledgeTagMeta.ts';
 
 test('knowledge tag meta maps system tags to readable labels', () => {
-  assert.equal(formatKnowledgeTagLabel('kind/wiki'), 'Wiki');
+  assert.equal(formatKnowledgeTagLabel('kind/wiki'), '系统索引');
   assert.equal(formatKnowledgeTagLabel('topic/onboarding'), 'topic/onboarding');
 });
 
 test('knowledge tag meta keeps unique readable labels in order', () => {
   assert.deepEqual(
     formatKnowledgeTagLabels(['kind/wiki', 'status/stale', 'kind/wiki', '']),
-    ['Wiki', formatKnowledgeTagLabel('status/stale')]
+    ['系统索引', formatKnowledgeTagLabel('status/stale')]
   );
 });
 

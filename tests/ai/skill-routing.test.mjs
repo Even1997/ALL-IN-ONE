@@ -42,13 +42,24 @@ test('resolveSkillIntent falls back when no skill token exists', () => {
   assert.equal(result, null);
 });
 
-test('resolveSkillIntent detects organize and routes it to knowledge organize', () => {
+test('resolveSkillIntent detects index mode and routes it to knowledge organize', () => {
+  const result = resolveSkillIntent('@索引 帮我整理当前项目知识库');
+
+  assert.deepEqual(result, {
+    package: 'knowledge-organize',
+    skill: 'knowledge-organize',
+    cleanedInput: '帮我整理当前项目知识库',
+    token: '@索引',
+  });
+});
+
+test('resolveSkillIntent keeps the legacy organize alias working', () => {
   const result = resolveSkillIntent('@整理 帮我整理当前项目知识库');
 
   assert.deepEqual(result, {
     package: 'knowledge-organize',
     skill: 'knowledge-organize',
     cleanedInput: '帮我整理当前项目知识库',
-    token: '@整理',
+    token: '@索引',
   });
 });

@@ -100,16 +100,15 @@ const extractLeadingHeading = (value: string) => {
   return match?.[1]?.trim() || '';
 };
 
-const removeLeadingHeading = (value: string) =>
-  value.trim().replace(/^#\s+.+?(?:\r?\n|$)/, '').trim();
+const removeLeadingHeading = (value: string) => value.trim().replace(/^#\s+.+?(?:\r?\n|$)/, '').trim();
 
 const buildWikiIndexSection = (body: string, summary: string) => {
   const sectionTitles = Array.from(body.matchAll(/^##\s+(.+)$/gm))
     .map((match) => match[1]?.trim() || '')
-    .filter((title) => title && !/^(index|\u7d22\u5f15)$/i.test(title));
+    .filter((title) => title && !/^(index|索引)$/i.test(title));
 
-  const items = sectionTitles.length > 0 ? sectionTitles : [summary || '\u5f85\u8865\u5145'];
-  return `## \u7d22\u5f15\n${items.map((item) => `- ${item}`).join('\n')}`;
+  const items = sectionTitles.length > 0 ? sectionTitles : [summary || '待补充'];
+  return `## 索引\n${items.map((item) => `- ${item}`).join('\n')}`;
 };
 
 const normalizeWikiDraftContent = (title: string, content: string, summary: string) => {
@@ -117,13 +116,13 @@ const normalizeWikiDraftContent = (title: string, content: string, summary: stri
   const heading = extractLeadingHeading(content) || fallbackHeading;
   const rawBody = removeLeadingHeading(content);
   const hasSecondaryHeading = /^##\s+/m.test(rawBody);
-  const hasIndexSection = /^##\s*(index|\u7d22\u5f15)\s*$/im.test(rawBody);
+  const hasIndexSection = /^##\s*(index|索引)\s*$/im.test(rawBody);
 
   let body = rawBody;
   if (!body) {
-    body = `## \u7d22\u5f15\n- ${summary || fallbackHeading}\n\n## \u5185\u5bb9\n- \u5f85\u8865\u5145`;
+    body = `## 索引\n- ${summary || fallbackHeading}\n\n## 内容\n- 待补充`;
   } else if (!hasSecondaryHeading) {
-    body = `${buildWikiIndexSection(body, summary)}\n\n## \u5185\u5bb9\n${body}`;
+    body = `${buildWikiIndexSection(body, summary)}\n\n## 内容\n${body}`;
   } else if (!hasIndexSection) {
     body = `${buildWikiIndexSection(body, summary)}\n\n${body}`;
   }
@@ -170,7 +169,8 @@ const buildLanePrompt = ({
 
   return [
     `You are the product knowledge organizer for ${project.name}.`,
-    'Based on the current knowledge docs and generated artifacts, produce 5 structured wiki drafts.',
+    'Based on the current knowledge docs and generated artifacts, produce 5 structured system index drafts.',
+    'These drafts are system-maintained internal context, not editable user notes.',
     'For project-overview, feature-inventory, and page-inventory, the markdown must include an H1 title, a "## 索引" section with bullets, and at least one additional "##" section.',
     'Return JSON only, without any extra explanation.',
     'JSON schema:',

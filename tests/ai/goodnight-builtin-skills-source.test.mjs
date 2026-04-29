@@ -13,6 +13,9 @@ const skillIds = [
   'goodnight-workspace-context',
   'goodnight-sketch-output',
   'goodnight-design-output',
+  'goodnight-m-flow',
+  'goodnight-llmwiki',
+  'goodnight-rag',
 ];
 
 test('goodnight ships official built-in skill source files and seeds them from tauri', async () => {
@@ -23,6 +26,9 @@ test('goodnight ships official built-in skill source files and seeds them from t
   assert.match(libSource, /goodnight-workspace-context/);
   assert.match(libSource, /goodnight-sketch-output/);
   assert.match(libSource, /goodnight-design-output/);
+  assert.match(libSource, /goodnight-m-flow/);
+  assert.match(libSource, /goodnight-llmwiki/);
+  assert.match(libSource, /goodnight-rag/);
 
   for (const skillId of skillIds) {
     const skillDir = path.join(builtinRoot, skillId);
@@ -40,16 +46,23 @@ test('built-in skills encode goodnight boundary and output contracts', async () 
   const workspace = await readFile(path.join(builtinRoot, 'goodnight-workspace-context', 'SKILL.md'), 'utf8');
   const sketch = await readFile(path.join(builtinRoot, 'goodnight-sketch-output', 'SKILL.md'), 'utf8');
   const design = await readFile(path.join(builtinRoot, 'goodnight-design-output', 'SKILL.md'), 'utf8');
+  const mFlow = await readFile(path.join(builtinRoot, 'goodnight-m-flow', 'SKILL.md'), 'utf8');
+  const llmwiki = await readFile(path.join(builtinRoot, 'goodnight-llmwiki', 'SKILL.md'), 'utf8');
+  const rag = await readFile(path.join(builtinRoot, 'goodnight-rag', 'SKILL.md'), 'utf8');
 
   assert.match(boundary, /Knowledge Zone/);
   assert.match(boundary, /Sketch Zone/);
   assert.match(boundary, /Design Zone/);
   assert.match(boundary, /activity log/i);
+  assert.match(boundary, /\.goodnight\//);
+  assert.match(boundary, /_goodnight\/outputs/);
 
   assert.match(workspace, /sketch\/pages/);
   assert.match(workspace, /design\/prototypes/);
   assert.match(workspace, /design\/styles/);
-  assert.match(workspace, /\.devflow/);
+  assert.match(workspace, /\.goodnight\/base-index/);
+  assert.match(workspace, /_goodnight\/outputs\/<skill>/i);
+  assert.match(workspace, /vault/i);
 
   assert.match(sketch, /sketch\/pages/);
   assert.match(sketch, /wireframe/i);
@@ -67,6 +80,7 @@ test('built-in skills encode goodnight boundary and output contracts', async () 
 
   assert.match(design, /design\/styles/);
   assert.match(design, /design\/prototypes/);
+  assert.match(design, /_goodnight\/outputs\/goodnight-design-output/i);
   assert.match(design, /tokens/i);
   assert.match(design, /responsive/i);
   assert.match(design, /style-output\.md/);
@@ -81,4 +95,16 @@ test('built-in skills encode goodnight boundary and output contracts', async () 
   assert.match(design, /font-heading-primary/i);
   assert.match(design, /space-16/i);
   assert.match(design, /radius-card/i);
+
+  assert.match(mFlow, /m-flow/i);
+  assert.match(mFlow, /manual refresh/i);
+  assert.match(mFlow, /\.goodnight\/base-index/i);
+
+  assert.match(llmwiki, /llmwiki/i);
+  assert.match(llmwiki, /Karpathy/i);
+  assert.match(llmwiki, /reference-style summaries/i);
+
+  assert.match(rag, /rag/i);
+  assert.match(rag, /retrieval/i);
+  assert.match(rag, /chunk/i);
 });

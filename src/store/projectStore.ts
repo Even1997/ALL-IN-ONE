@@ -15,6 +15,7 @@ import {
   DesignTokenGroup,
   DevTask,
   GeneratedFile,
+  KnowledgeRetrievalMethod,
   PageStructureNode,
   ProductPRD,
   ProjectConfig,
@@ -31,6 +32,8 @@ import { buildWireframesMarkdown } from '../utils/wireframe';
 export interface CreateProjectInput {
   name: string;
   description: string;
+  vaultPath: string;
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
 }
 
 export interface ProjectWorkspaceSnapshot {
@@ -198,6 +201,9 @@ const normalizeRequirementTitle = (value: string) => {
 
   return /\.(md|markdown)$/i.test(normalized) ? normalized : `${normalized}.md`;
 };
+
+const normalizeKnowledgeRetrievalMethod = (value: unknown): KnowledgeRetrievalMethod =>
+  value === 'llmwiki' || value === 'rag' ? value : 'm-flow';
 
 const MAX_DOCUMENT_CHANGE_EVENTS = 200;
 
@@ -1537,6 +1543,11 @@ const normalizeProjectConfig = (value: unknown): ProjectConfig | null => {
     id: typeof project.id === 'string' ? project.id : uuidv4(),
     name: typeof project.name === 'string' && project.name.trim().length > 0 ? project.name : '未命名项目',
     description: typeof project.description === 'string' ? project.description : '',
+    vaultPath: typeof project.vaultPath === 'string' ? project.vaultPath.trim() : '',
+    knowledgeRetrievalMethod:
+      project.knowledgeRetrievalMethod === 'llmwiki' || project.knowledgeRetrievalMethod === 'rag'
+        ? project.knowledgeRetrievalMethod
+        : 'm-flow',
     appType: project.appType === 'mobile' || project.appType === 'mini_program' || project.appType === 'desktop' || project.appType === 'backend' || project.appType === 'api'
       ? project.appType
       : 'web',
@@ -2076,6 +2087,8 @@ export const useProjectStore = create<ProjectState>()(
           id: uuidv4(),
           name: input.name.trim(),
           description: input.description.trim(),
+          vaultPath: input.vaultPath.trim(),
+          knowledgeRetrievalMethod: normalizeKnowledgeRetrievalMethod(input.knowledgeRetrievalMethod),
           appType: defaults.appType,
           frontendFramework: defaults.frontendFramework,
           backendFramework: defaults.backendFramework,

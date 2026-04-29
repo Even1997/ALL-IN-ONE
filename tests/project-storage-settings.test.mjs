@@ -8,10 +8,10 @@ test('tauri project storage commands resolve defaults from documents and persist
   assert.match(source, /struct ProjectStorageSettings/);
   assert.match(source, /struct ProjectStorageSettingsPayload/);
   assert.match(source, /document_dir\(\)/);
-  assert.match(source, /join\("DevFlow"\)\.join\("projects"\)/);
+  assert.match(source, /join\("GoodNight"\)\.join\("projects"\)/);
   assert.match(source, /app_config_dir\(\)/);
-  assert.match(source, /fn get_project_storage_settings\(app_handle: tauri::AppHandle\)/);
-  assert.match(source, /fn set_project_storage_root\(app_handle: tauri::AppHandle,\s*root_path: Option<String>\)/);
+  assert.match(source, /fn get_project_storage_settings\(\s*app_handle: tauri::AppHandle,/);
+  assert.match(source, /fn set_project_storage_root\(\s*app_handle: tauri::AppHandle,\s*root_path: Option<String>,/);
   assert.match(source, /fn get_project_dir\(app_handle: tauri::AppHandle,\s*project_id: String\)/);
   assert.match(source, /get_projects_root_path\(&app_handle\)/);
 });

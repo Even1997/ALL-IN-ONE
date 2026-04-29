@@ -238,7 +238,11 @@ export const KnowledgeGraphCanvas = ({
   }
 
   return (
-    <svg className={`gn-graph-canvas${compact ? ' is-compact' : ''}`} viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} aria-label="Wiki graph canvas">
+      <svg
+        className={`gn-graph-canvas${compact ? ' is-compact' : ''}`}
+        viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+        aria-label="系统索引图谱画布"
+      >
       <defs>
         <radialGradient id={compact ? 'gn-graph-glow-compact' : 'gn-graph-glow'} cx="50%" cy="50%" r="64%">
           <stop offset="0%" stopColor="rgba(20, 184, 166, 0.24)" />

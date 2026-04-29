@@ -40,7 +40,7 @@ import {
 import {
   deleteSketchPageFile,
   ensureBuiltInStylePackFiles,
-  ensureProjectFilesystemStructure,
+  ensureVaultKnowledgeDirectoryStructure,
   isTauriRuntimeAvailable,
   loadSketchPageArtifactsFromProjectDir,
   writeSketchPageFile,
@@ -1111,6 +1111,7 @@ export const ProductWorkbench = ({
     replacePageStructure,
     replaceWireframes,
     updateWireframeFrame,
+    updateProject,
   } = useProjectStore(useShallow((state) => ({
     currentProject: state.currentProject,
     featuresMarkdown: state.featuresMarkdown,
@@ -1128,6 +1129,7 @@ export const ProductWorkbench = ({
     replacePageStructure: state.replacePageStructure,
     replaceWireframes: state.replaceWireframes,
     updateWireframeFrame: state.updateWireframeFrame,
+    updateProject: state.updateProject,
   })));
 
   const tree = useFeatureTreeStore((state) => state.tree);
@@ -1540,28 +1542,7 @@ export const ProductWorkbench = ({
       return;
     }
 
-    let isMounted = true;
-
-    invoke<string>('get_project_dir', { projectId: currentProject.id })
-      .then((dirPath) => {
-        if (!isMounted) {
-          return;
-        }
-
-        setProjectRootDir(dirPath);
-      })
-      .catch(() => {
-        if (!isMounted) {
-          return;
-        }
-
-        setProjectRootDir(null);
-        setRequirementSaveMessage('当前运行在浏览器开发环境，知识笔记会保存到本地知识库；桌面版可同步 Markdown 镜像。');
-      });
-
-    return () => {
-      isMounted = false;
-    };
+    setProjectRootDir(currentProject.vaultPath);
   }, [canUseProjectFilesystem, currentProject]);
 
   useEffect(() => {
@@ -1606,7 +1587,7 @@ export const ProductWorkbench = ({
       return;
     }
 
-    await ensureProjectFilesystemStructure(currentProject.id);
+    await ensureVaultKnowledgeDirectoryStructure(currentProject.vaultPath);
     await ensureBuiltInStylePackFiles(currentProject.id);
     const diskItems = await listKnowledgeDiskItems(projectRootDir);
     if (requestId !== knowledgeRefreshRequestIdRef.current) {
@@ -1634,11 +1615,19 @@ export const ProductWorkbench = ({
 
     window.dispatchEvent(new CustomEvent(AI_CHAT_COMMAND_EVENT, {
       detail: {
-        prompt: '@整理 请整理当前项目知识库，并输出清晰的 wiki 索引。',
+        prompt: '@索引 请刷新当前项目的系统索引，并为后续需求文档和功能文档准备上下文。',
         autoSubmit: true,
       },
     }));
   }, []);
+
+  const handleKnowledgeRetrievalMethodChange = useCallback(
+    (knowledgeRetrievalMethod: 'm-flow' | 'llmwiki' | 'rag') => {
+      updateProject({ knowledgeRetrievalMethod });
+      setRequirementSaveMessage(`默认检索方式已切换为 ${knowledgeRetrievalMethod}。`);
+    },
+    [updateProject]
+  );
 
   useEffect(() => {
     if (!currentProject || !projectRootDir) {
@@ -2187,8 +2176,13 @@ export const ProductWorkbench = ({
     setSidebarTab('page');
   }, [selectedServerNote, setActiveKnowledgeFileId]);
 
-  const renderRequirementMain = () => (
-    <KnowledgeNoteWorkspace
+  const renderRequirementMain = () => {
+    if (!currentProject) {
+      return null;
+    }
+
+    return (
+      <KnowledgeNoteWorkspace
       documentEvents={documentEvents}
       notes={serverNotes}
       filteredNotes={filteredServerNotes}
@@ -2202,6 +2196,7 @@ export const ProductWorkbench = ({
       saveMessage={requirementSaveMessage || ''}
       canSave={canSaveRequirement}
       canUseForDesign={selectedServerNote?.kind === 'sketch'}
+      knowledgeRetrievalMethod={currentProject.knowledgeRetrievalMethod}
       searchValue={knowledgeSearch}
       isSearching={isKnowledgeSearching}
       isSyncing={isKnowledgeSyncing}
@@ -2229,6 +2224,7 @@ export const ProductWorkbench = ({
       onCreateNote={() => {
         void handleCreateKnowledgeNote();
       }}
+      onKnowledgeRetrievalMethodChange={handleKnowledgeRetrievalMethodChange}
       onOpenGlobalWikiGraph={() => setSidebarTab('wiki')}
       onUseForDesign={handleUseKnowledgeForDesign}
       onFilterChange={setKnowledgeFilter}
@@ -2236,7 +2232,8 @@ export const ProductWorkbench = ({
         void handleOpenKnowledgeAttachment(attachmentPath);
       }}
     />
-  );
+    );
+  };
 
   const renderKnowledgeGraphMain = () => (
     <KnowledgeGraphWorkspace

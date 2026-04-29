@@ -44,12 +44,15 @@ test('knowledge graph workspace renders a global inspector around a shared graph
   assert.match(source, /mode=\{mode\}/);
   assert.match(source, /selectedNoteId=\{selectedNote\?\.id \|\| null\}/);
   assert.match(source, /onBack/);
+  assert.match(source, /系统索引图谱/);
+  assert.match(source, /索引节点/);
+  assert.match(source, /系统索引会优先连接/);
 
   assert.match(canvasSource, /type KnowledgeGraphCanvasProps =/);
   assert.match(canvasSource, /mode\?: 'focused' \| 'global'/);
   assert.match(canvasSource, /const layoutedNodes = useMemo/);
   assert.match(canvasSource, /const positionedEdges = useMemo/);
-  assert.match(canvasSource, /<svg className=\{`gn-graph-canvas/);
+  assert.match(canvasSource, /className=\{`gn-graph-canvas/);
   assert.match(canvasSource, /role="button"/);
   assert.match(canvasSource, /onSelectNode\(node\.id\)/);
 

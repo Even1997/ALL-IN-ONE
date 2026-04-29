@@ -97,6 +97,19 @@ test('supported proposal signals trigger knowledge suggestions', async () => {
   );
 });
 
+test('answer-derived knowledge proposals stop suggesting wiki rewrites', async () => {
+  const source = await readFile(
+    new URL('../src/modules/ai/knowledge/suggestKnowledgeProposal.ts', import.meta.url),
+    'utf8'
+  );
+
+  assert.doesNotMatch(source, /update_wiki/);
+  assert.doesNotMatch(source, /wiki-stale/);
+  assert.match(source, /create_note/);
+  assert.match(source, /update_note/);
+  assert.match(source, /docType === 'wiki-index'/);
+});
+
 test('delete-like operations are not executable knowledge proposal operations', async () => {
   const { isExecutableKnowledgeProposalOperation } = await import('../src/modules/ai/knowledge/executeKnowledgeProposal.ts');
 

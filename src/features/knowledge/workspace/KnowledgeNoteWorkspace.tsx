@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMarkdownEditor';
-import type { DocumentChangeEvent } from '../../../types';
+import type { DocumentChangeEvent, KnowledgeRetrievalMethod } from '../../../types';
 import type {
   KnowledgeAttachment,
   KnowledgeNeighborhoodGraph,
@@ -30,6 +30,7 @@ type KnowledgeNoteWorkspaceProps = {
   saveMessage: string;
   canSave: boolean;
   canUseForDesign: boolean;
+  knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   searchValue: string;
   isSearching: boolean;
   isSyncing: boolean;
@@ -54,14 +55,24 @@ type KnowledgeNoteWorkspaceProps = {
   onImportAssets: () => void;
   onOrganizeKnowledge: () => void;
   onCreateNote: () => void;
+  onKnowledgeRetrievalMethodChange: (method: KnowledgeRetrievalMethod) => void;
   onOpenGlobalWikiGraph: () => void;
   onUseForDesign: () => void;
   onFilterChange: (filter: KnowledgeNoteFilter) => void;
   onOpenAttachment: (attachmentPath: string) => void;
 };
 
+const KNOWLEDGE_RETRIEVAL_OPTIONS: Array<{
+  value: KnowledgeRetrievalMethod;
+  label: string;
+}> = [
+  { value: 'm-flow', label: 'm-flow' },
+  { value: 'llmwiki', label: 'llmwiki' },
+  { value: 'rag', label: 'rag' },
+];
+
 const DOC_TYPE_META: Record<NonNullable<KnowledgeNote['docType']>, { badge: string; label: string }> = {
-  'wiki-index': { badge: 'WIKI', label: 'Wiki 索引' },
+  'wiki-index': { badge: 'INDEX', label: '系统索引' },
   'ai-summary': { badge: 'AI', label: 'AI 摘要' },
 };
 
@@ -82,7 +93,7 @@ const ATTACHMENT_CATEGORY_LABELS: Record<KnowledgeAttachment['category'], string
 
 const FILTER_OPTIONS: Array<{ id: KnowledgeNoteFilter; label: string }> = [
   { id: 'all', label: '全部' },
-  { id: 'wiki-index', label: 'Wiki' },
+  { id: 'wiki-index', label: '索引' },
   { id: 'ai-summary', label: 'AI 摘要' },
   { id: 'note', label: '笔记' },
   { id: 'sketch', label: '草图' },
@@ -94,7 +105,7 @@ const NOTE_TREE_SECTIONS: Array<{
   label: string;
   matches: (note: KnowledgeNote) => boolean;
 }> = [
-  { id: 'wiki-index', label: 'Wiki 索引', matches: (note) => note.docType === 'wiki-index' },
+  { id: 'wiki-index', label: '系统索引', matches: (note) => note.docType === 'wiki-index' },
   { id: 'ai-summary', label: 'AI 摘要', matches: (note) => note.docType === 'ai-summary' },
   { id: 'note', label: '项目笔记', matches: (note) => !note.docType && (note.kind || 'note') === 'note' },
   { id: 'sketch', label: '草图说明', matches: (note) => !note.docType && note.kind === 'sketch' },
@@ -360,6 +371,7 @@ export const KnowledgeNoteWorkspace = ({
   saveMessage,
   canSave,
   canUseForDesign,
+  knowledgeRetrievalMethod,
   searchValue,
   isSearching,
   isSyncing,
@@ -384,6 +396,7 @@ export const KnowledgeNoteWorkspace = ({
   onImportAssets,
   onOrganizeKnowledge,
   onCreateNote,
+  onKnowledgeRetrievalMethodChange,
   onOpenGlobalWikiGraph,
   onUseForDesign,
   onFilterChange,
@@ -520,6 +533,26 @@ export const KnowledgeNoteWorkspace = ({
       } as CSSProperties}
     >
       <aside className="gn-note-rail">
+        <div className="gn-note-search-row">
+          <label className="gn-note-inline-field">
+            <span>检索方式</span>
+            <select
+              className="product-input"
+              value={knowledgeRetrievalMethod}
+              onChange={(event) =>
+                onKnowledgeRetrievalMethodChange(
+                  event.target.value as KnowledgeRetrievalMethod
+                )
+              }
+            >
+              {KNOWLEDGE_RETRIEVAL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         <div className="gn-note-search-row">
           <input
@@ -549,8 +582,8 @@ export const KnowledgeNoteWorkspace = ({
             className="doc-action-btn gn-note-icon-btn gn-note-wiki-btn"
             type="button"
             onClick={onOrganizeKnowledge}
-            title="生成 Wiki"
-            aria-label="生成 Wiki"
+            title="刷新索引"
+            aria-label="刷新索引"
           >
             <WikiGenerateIcon />
           </button>
@@ -693,7 +726,7 @@ export const KnowledgeNoteWorkspace = ({
             <h2>选择或新建一条知识笔记</h2>
             <div className="gn-note-empty-actions">
               <button className="doc-action-btn" type="button" onClick={onOrganizeKnowledge}>
-                生成 Wiki
+                刷新索引
               </button>
               <button className="doc-action-btn secondary" type="button" onClick={onCreateNote}>
                 新建笔记
@@ -804,7 +837,7 @@ export const KnowledgeNoteWorkspace = ({
         <section className="gn-note-side-card">
           <div className="gn-note-side-card-header">
             <div>
-              <h4>Wiki 图谱</h4>
+              <h4>系统索引图谱</h4>
               <p>这里展示当前笔记的局部图谱，点击节点可以继续跳转到相邻上下文。</p>
             </div>
             <span className="gn-note-side-count">{graphNodeCount}</span>
@@ -827,7 +860,7 @@ export const KnowledgeNoteWorkspace = ({
             <div className="gn-note-empty">当前笔记附近还没有更多可展示的关系节点。</div>
           )}
           <button className="doc-action-btn secondary" type="button" onClick={onOpenGlobalWikiGraph}>
-            打开 Wiki 图谱
+            打开系统索引图谱
           </button>
           {neighborhoodNotes.length > 0 ? (
             <div className="gn-note-relation-list">

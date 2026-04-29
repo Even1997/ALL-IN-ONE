@@ -36,7 +36,8 @@ test('knowledge organize run returns no-change when sources and managed wiki are
     docType: 'wiki-index',
   });
   const workflowState = buildKnowledgeOrganizeWorkflowState({
-    docs: [wikiDoc],
+    docs: [sourceDoc, wikiDoc],
+    generatedFiles: [],
     lastKnowledgeOrganizeAt: '2026-04-28T12:00:00.000Z',
   });
 
@@ -69,7 +70,8 @@ test('knowledge organize run preserves manual wiki edits when sources are unchan
     updatedAt: '2026-04-29T01:00:00.000Z',
   };
   const workflowState = buildKnowledgeOrganizeWorkflowState({
-    docs: [baselineWikiDoc],
+    docs: [sourceDoc, baselineWikiDoc],
+    generatedFiles: [],
     lastKnowledgeOrganizeAt: '2026-04-28T12:00:00.000Z',
   });
 
@@ -84,10 +86,17 @@ test('knowledge organize run preserves manual wiki edits when sources are unchan
   assert.match(plan.message, /手动修改/);
 });
 
-test('knowledge organize run proceeds when sources changed after the last organize time', () => {
+test('knowledge organize run proceeds when source content changed after the last organize time', () => {
+  const baselineSourceDoc = buildDoc({
+    id: 'source-1',
+    title: 'prd.md',
+    content: '# PRD\n\nOriginal content',
+    updatedAt: '2026-04-28T00:00:00.000Z',
+  });
   const sourceDoc = buildDoc({
     id: 'source-1',
     title: 'prd.md',
+    content: '# PRD\n\nUpdated content',
     updatedAt: '2026-04-29T08:00:00.000Z',
   });
   const wikiDoc = buildDoc({
@@ -98,7 +107,8 @@ test('knowledge organize run proceeds when sources changed after the last organi
     docType: 'wiki-index',
   });
   const workflowState = buildKnowledgeOrganizeWorkflowState({
-    docs: [wikiDoc],
+    docs: [baselineSourceDoc, wikiDoc],
+    generatedFiles: [],
     lastKnowledgeOrganizeAt: '2026-04-28T12:00:00.000Z',
   });
 
@@ -111,6 +121,80 @@ test('knowledge organize run proceeds when sources changed after the last organi
   assert.equal(plan.mode, 'proceed');
   assert.equal(plan.sourceDocs.length, 1);
   assert.equal(plan.existingWikiDocs.length, 1);
+});
+
+test('knowledge organize run skips when only timestamps changed but source fingerprint is unchanged', () => {
+  const sourceDoc = buildDoc({
+    id: 'source-1',
+    title: 'prd.md',
+    content: '# PRD\n\nStable content',
+    updatedAt: '2026-04-28T00:00:00.000Z',
+  });
+  const wikiDoc = buildDoc({
+    id: 'wiki-1',
+    title: 'project-overview.md',
+    content: '# Project overview\n\nBody',
+    updatedAt: '2026-04-28T01:00:00.000Z',
+    docType: 'wiki-index',
+  });
+  const workflowState = buildKnowledgeOrganizeWorkflowState({
+    docs: [sourceDoc, wikiDoc],
+    generatedFiles: [],
+    lastKnowledgeOrganizeAt: '2026-04-28T12:00:00.000Z',
+  });
+
+  const plan = planKnowledgeOrganizeRun({
+    docs: [
+      {
+        ...sourceDoc,
+        updatedAt: '2026-04-29T08:00:00.000Z',
+      },
+      wikiDoc,
+    ],
+    generatedFiles: [],
+    workflowState,
+  });
+
+  assert.equal(plan.mode, 'no-change');
+});
+
+test('knowledge organize run proceeds when source fingerprint changes even if timestamps do not move forward', () => {
+  const sourceDoc = buildDoc({
+    id: 'source-1',
+    title: 'prd.md',
+    content: '# PRD\n\nStable content',
+    updatedAt: '2026-04-28T00:00:00.000Z',
+  });
+  const wikiDoc = buildDoc({
+    id: 'wiki-1',
+    title: 'project-overview.md',
+    content: '# Project overview\n\nBody',
+    updatedAt: '2026-04-28T01:00:00.000Z',
+    docType: 'wiki-index',
+  });
+  const workflowState = buildKnowledgeOrganizeWorkflowState({
+    docs: [sourceDoc, wikiDoc],
+    generatedFiles: [],
+    lastKnowledgeOrganizeAt: '2026-04-28T12:00:00.000Z',
+  });
+
+  const plan = planKnowledgeOrganizeRun({
+    docs: [sourceDoc, wikiDoc],
+    generatedFiles: [
+      {
+        path: 'docs/new-context.md',
+        content: '# New context',
+        language: 'md',
+        category: 'design',
+        summary: 'New context file',
+        sourceTaskIds: [],
+        updatedAt: '2026-04-28T11:00:00.000Z',
+      },
+    ],
+    workflowState,
+  });
+
+  assert.equal(plan.mode, 'proceed');
 });
 
 test('knowledge organize proposal updates existing wiki instead of creating a duplicate', () => {
@@ -175,6 +259,7 @@ test('knowledge organize workflow state stores content hashes for managed wiki d
 
   const state = buildKnowledgeOrganizeWorkflowState({
     docs: [wikiDoc],
+    generatedFiles: [],
     lastKnowledgeOrganizeAt: '2026-04-29T09:00:00.000Z',
   });
 

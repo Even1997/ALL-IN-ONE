@@ -193,7 +193,37 @@ export const saveProjectIndexToDisk = async (projects: ProjectConfig[]) => {
   await writeJSONFile(indexPath, projects);
 };
 
-export const getProjectStateDir = (projectDir: string) => joinPath(projectDir, '.goodnight');
+const KNOWLEDGE_SKILL_IDS = ['llmwiki', 'rag', 'm-flow'] as const;
+
+export const getVaultStateDir = (vaultPath: string) => joinPath(vaultPath, '.goodnight');
+export const getVaultBaseIndexDir = (vaultPath: string) => joinPath(getVaultStateDir(vaultPath), 'base-index');
+export const getVaultSkillStateDir = (vaultPath: string, skill: (typeof KNOWLEDGE_SKILL_IDS)[number]) =>
+  joinPath(getVaultStateDir(vaultPath), 'skills', skill);
+export const getVaultOutputsDir = (vaultPath: string) => joinPath(vaultPath, '_goodnight', 'outputs');
+export const getVaultSkillOutputsDir = (vaultPath: string, skill: (typeof KNOWLEDGE_SKILL_IDS)[number]) =>
+  joinPath(getVaultOutputsDir(vaultPath), skill);
+export const ensureVaultKnowledgeDirectoryStructure = async (vaultPath: string) => {
+  await ensureDirectory(vaultPath);
+  await ensureDirectory(getVaultStateDir(vaultPath));
+  await ensureDirectory(getVaultBaseIndexDir(vaultPath));
+  await ensureDirectory(joinPath(getVaultStateDir(vaultPath), 'skills'));
+  await ensureDirectory(getVaultOutputsDir(vaultPath));
+
+  await Promise.all(
+    KNOWLEDGE_SKILL_IDS.flatMap((skill) => [
+      ensureDirectory(getVaultSkillStateDir(vaultPath, skill)),
+      ensureDirectory(getVaultSkillOutputsDir(vaultPath, skill)),
+    ])
+  );
+};
+
+export const getProjectStateDir = (projectDir: string) => getVaultStateDir(projectDir);
+export const getSystemIndexDir = (projectDir: string) => getVaultBaseIndexDir(projectDir);
+export const getSystemIndexManifestPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'manifest.json');
+export const getSystemIndexSourcesPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'sources.json');
+export const getSystemIndexChunksPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'chunks.jsonl');
+export const getSystemIndexTopicsPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'topics.json');
+export const getSystemIndexDocIntentsPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'doc-intents.json');
 
 export const getProjectSnapshotPath = (projectDir: string) =>
   joinPath(getProjectStateDir(projectDir), 'workspace.json');
@@ -226,6 +256,13 @@ export const ensureProjectFilesystemStructure = async (projectId: string) => {
 
   return projectDir;
 };
+
+export const writeProjectTextFile = writeTextFile;
+export const readProjectTextFile = readTextFile;
+export const readProjectJsonFile = readJSONFile;
+export const writeProjectJsonFile = writeJSONFile;
+export const ensureProjectDirectory = ensureDirectory;
+export const listProjectDirectory = listDirectory;
 
 export const saveKnowledgeDocsToProjectDir = async (projectId: string, docs: RequirementDoc[]) => {
   if (!isTauriRuntimeAvailable()) {

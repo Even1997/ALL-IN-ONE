@@ -39,15 +39,65 @@ export const splitKnowledgeOrganizeDocs = (docs: RequirementDoc[]) => ({
   existingWikiDocs: docs.filter((doc) => isKnowledgeOrganizeManagedTitle(doc.title)),
 });
 
+const serializeFingerprintEntry = (parts: Array<string | null | undefined>) =>
+  parts.map((part) => part || '').join('::');
+
+export const buildKnowledgeOrganizeSourceFingerprint = ({
+  sourceDocs,
+  generatedFiles,
+}: {
+  sourceDocs: RequirementDoc[];
+  generatedFiles: GeneratedFile[];
+}) => {
+  const sourceEntries = [...sourceDocs]
+    .sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
+    .map((doc) =>
+      serializeFingerprintEntry([
+        doc.title,
+        doc.filePath,
+        doc.sourceType,
+        doc.kind,
+        doc.docType,
+        doc.summary,
+        doc.content,
+      ])
+    );
+  const generatedEntries = [...generatedFiles]
+    .sort((left, right) => left.path.localeCompare(right.path, 'zh-CN'))
+    .map((file) =>
+      serializeFingerprintEntry([
+        file.path,
+        file.language,
+        file.category,
+        file.summary,
+        file.sourceRequirementId,
+        file.content,
+      ])
+    );
+
+  return hashKnowledgeContent([...sourceEntries, '---', ...generatedEntries].join('\n'));
+};
+
 export const hasKnowledgeOrganizeSourceChanges = ({
   sourceDocs,
   generatedFiles,
   lastKnowledgeOrganizeAt,
+  sourceFingerprint,
 }: {
   sourceDocs: RequirementDoc[];
   generatedFiles: GeneratedFile[];
   lastKnowledgeOrganizeAt: string | null;
+  sourceFingerprint: string | null;
 }) => {
+  const currentFingerprint = buildKnowledgeOrganizeSourceFingerprint({
+    sourceDocs,
+    generatedFiles,
+  });
+
+  if (sourceFingerprint) {
+    return currentFingerprint !== sourceFingerprint;
+  }
+
   if (!lastKnowledgeOrganizeAt) {
     return true;
   }
@@ -84,11 +134,17 @@ export const detectKnowledgeOrganizeManualEdits = ({
 
 export const buildKnowledgeOrganizeWorkflowState = ({
   docs,
+  generatedFiles,
   lastKnowledgeOrganizeAt,
 }: {
   docs: RequirementDoc[];
+  generatedFiles: GeneratedFile[];
   lastKnowledgeOrganizeAt: string;
 }): KnowledgeOrganizeWorkflowState => ({
+  sourceFingerprint: buildKnowledgeOrganizeSourceFingerprint({
+    sourceDocs: docs.filter((doc) => !isKnowledgeOrganizeManagedTitle(doc.title)),
+    generatedFiles,
+  }),
   lastKnowledgeOrganizeAt,
   wikiSnapshots: Object.fromEntries(
     docs
@@ -144,6 +200,7 @@ export const planKnowledgeOrganizeRun = ({
     sourceDocs,
     generatedFiles,
     lastKnowledgeOrganizeAt: workflowState?.lastKnowledgeOrganizeAt || null,
+    sourceFingerprint: workflowState?.sourceFingerprint || null,
   });
 
   if (hasSourceChanges) {
@@ -158,7 +215,7 @@ export const planKnowledgeOrganizeRun = ({
   if (manualEditedWikiTitles.length > 0) {
     return {
       mode: 'manual-review-only',
-      message: `检测到现有 Wiki 已被手动修改，且源文档暂未发现变动。本次不自动改写：${manualEditedWikiTitles.join('、')}`,
+      message: `检测到现有系统索引文档已被手动修改，且源文档暂未发现变动。本次不自动改写：${manualEditedWikiTitles.join('、')}`,
       sourceDocs,
       existingWikiDocs,
       manualEditedWikiTitles,

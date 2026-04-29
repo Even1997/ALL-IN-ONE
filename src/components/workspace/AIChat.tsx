@@ -35,16 +35,17 @@ import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
 import { executeKnowledgeProposal } from '../../modules/ai/knowledge/executeKnowledgeProposal';
 import { buildChangeSyncProposal } from '../../modules/ai/knowledge/buildChangeSyncProposal';
-import { buildKnowledgeOrganizeProposal } from '../../modules/ai/knowledge/buildKnowledgeOrganizeProposal';
 import {
   buildKnowledgeOrganizeWorkflowState,
-  planKnowledgeOrganizeRun,
 } from '../../modules/ai/knowledge/knowledgeOrganizeState';
 import { runChangeSyncLane } from '../../modules/ai/knowledge/runChangeSyncLane';
-import { runKnowledgeOrganizeLane } from '../../modules/ai/knowledge/runKnowledgeOrganizeLane';
 import { suggestKnowledgeProposalFromAnswer } from '../../modules/ai/knowledge/suggestKnowledgeProposal';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
+import {
+  buildProjectSystemIndexPromptContext,
+  ensureProjectSystemIndex,
+} from '../../modules/knowledge/systemIndexProject';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
 import type { KnowledgeProposal } from '../../features/knowledge/model/knowledgeProposal';
 import { useKnowledgeProposalStore } from '../../features/knowledge/store/knowledgeProposalStore';
@@ -52,7 +53,7 @@ import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
-import { getProjectDir } from '../../utils/projectPersistence';
+import { getProjectDir, isTauriRuntimeAvailable } from '../../utils/projectPersistence';
 import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
 import { chooseNextWorkflowPackage } from '../../modules/ai/workflow/chatWorkflowRouting';
 import {
@@ -168,9 +169,9 @@ const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toSt
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const GN_AGENT_SUGGESTIONS: GNAgentSuggestion[] = [
   {
-    label: '@整理',
-    description: '整理知识库并补齐项目索引',
-    prompt: '@整理 帮我整理当前项目知识库，并输出清晰的 wiki 索引',
+    label: '@索引',
+    description: '刷新系统索引并准备文档上下文',
+    prompt: '@索引 请刷新当前项目的系统索引，并为后续需求文档和功能文档准备上下文',
   },
   {
     label: '@需求',
@@ -655,6 +656,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           currentProject.id,
           buildKnowledgeOrganizeWorkflowState({
             docs: projectKnowledgeNotesToRequirementDocs(latestNotes),
+            generatedFiles,
             lastKnowledgeOrganizeAt: new Date().toISOString(),
           })
         );
@@ -1194,7 +1196,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       const cleanedContent = skillIntent?.cleanedInput.trim()
         ? skillIntent.cleanedInput.trim()
         : skillIntent?.package === 'knowledge-organize'
-          ? '请整理当前项目知识库，并输出清晰的 wiki 索引。'
+          ? '请刷新当前项目的系统索引，并为问答和文档生成准备上下文。'
           : skillIntent?.package === 'change-sync'
             ? '请检查当前原型、知识文档和已有产物的差异，生成可确认的变更同步提案。'
             : rawContent;
@@ -1233,6 +1235,19 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       try {
+        const systemIndexRefreshResult =
+          isTauriRuntimeAvailable() && currentProject && currentProject.vaultPath
+            ? await ensureProjectSystemIndex({
+                projectId: currentProject.id,
+                projectName: currentProject.name,
+                vaultPath: currentProject.vaultPath,
+                requirementDocs: knowledgeSourceDocs,
+                generatedFiles,
+              })
+            : null;
+        const systemIndexPromptContext = systemIndexRefreshResult
+          ? buildProjectSystemIndexPromptContext(systemIndexRefreshResult.index, cleanedContent)
+          : null;
         const directChat = buildDirectChatPrompt({
           userInput: cleanedContent,
           currentProjectName: currentProject.name,
@@ -1240,11 +1255,19 @@ export const AIChat: React.FC<AIChatProps> = ({
           skillIntent,
           knowledgeSelection: knowledgeSelectionMeta,
           conversationHistory: activeSession?.messages || [],
+          referenceContext: systemIndexPromptContext
+            ? {
+                indexSection: systemIndexPromptContext.indexSection,
+                expandedSection: systemIndexPromptContext.expandedSection,
+                labels: systemIndexPromptContext.labels,
+              }
+            : null,
           contextLabels: [
             selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
             contextSnapshot.primaryLabel,
             contextSnapshot.secondaryLabel,
             contextSnapshot.knowledgeLabel,
+            ...(systemIndexPromptContext?.labels || []),
           ].filter((item): item is string => Boolean(item)),
         });
 
@@ -1297,75 +1320,36 @@ export const AIChat: React.FC<AIChatProps> = ({
         if (skillIntent?.package === 'knowledge-organize') {
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: '正在整理知识库并生成 wiki 提案...',
+            content: '正在刷新系统索引...',
           }));
 
-          const knowledgeOrganizePlan = planKnowledgeOrganizeRun({
-            docs: knowledgeSourceDocs,
-            generatedFiles,
-            workflowState: workflowProjectState?.knowledgeOrganize,
-          });
-          if (knowledgeOrganizePlan.mode !== 'proceed') {
-            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-              ...message,
-              content: knowledgeOrganizePlan.message,
-            }));
-            appendActivityEntry(currentProject.id, {
-              id: createActivityEntryId(),
-              runId,
-              type: 'run-summary',
-              summary: knowledgeOrganizePlan.message,
-              changedPaths: [],
-              runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
-              skill: resolvedSkill,
-              createdAt: Date.now(),
-            });
-            return;
+          if (!currentProject.vaultPath) {
+            throw new Error('当前项目还没有绑定本地知识库文件夹。');
           }
 
-          const docs = await runKnowledgeOrganizeLane({
-            project: {
-              id: currentProject.id,
-              name: currentProject.name,
-            },
-            requirementDocs: [...knowledgeOrganizePlan.sourceDocs, ...knowledgeOrganizePlan.existingWikiDocs],
-            generatedFiles,
-            executeText: executeLaneText,
-          });
-          const existingWikiTargetsByTitle = Object.fromEntries(
-            knowledgeOrganizePlan.existingWikiDocs.map((doc) => [
-              doc.title,
-              {
-                id: doc.id,
-                title: doc.title,
-                manualEdited: knowledgeOrganizePlan.manualEditedWikiTitles.includes(doc.title),
-              },
-            ])
-          );
-          const knowledgeProposal = buildKnowledgeOrganizeProposal({
-            projectId: currentProject.id,
-            sourceTitles: knowledgeOrganizePlan.sourceDocs.map((doc) => doc.title),
-            docs,
-            existingWikiTargetsByTitle,
-          });
-          upsertProposal(knowledgeProposal);
-          const manualEditedCount = knowledgeOrganizePlan.manualEditedWikiTitles.length;
-          const knowledgeOrganizeSummary =
-            manualEditedCount > 0
-              ? `已生成 ${docs.length} 份 Wiki 更新建议，其中 ${manualEditedCount} 份检测到手动修改，请先审阅合并建议再执行。`
-              : `已生成 ${docs.length} 份 Wiki 更新建议，请在这条消息里勾选后执行。`;
+          const ensuredIndex =
+            systemIndexRefreshResult ||
+            (await ensureProjectSystemIndex({
+              projectId: currentProject.id,
+              projectName: currentProject.name,
+              vaultPath: currentProject.vaultPath,
+              requirementDocs: knowledgeSourceDocs,
+              generatedFiles,
+            }));
+          const knowledgeOrganizeSummary = ensuredIndex.refreshed
+            ? `系统索引已刷新：${ensuredIndex.index.manifest.sourceCount} 个来源，${ensuredIndex.index.manifest.chunkCount} 个索引块。`
+            : `系统索引已是最新状态：${ensuredIndex.index.manifest.sourceCount} 个来源，${ensuredIndex.index.manifest.chunkCount} 个索引块。`;
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
             content: knowledgeOrganizeSummary,
-            knowledgeProposal,
           }));
           appendActivityEntry(currentProject.id, {
             id: createActivityEntryId(),
             runId,
             type: 'run-summary',
             summary: knowledgeOrganizeSummary,
-            changedPaths: docs.map((doc) => doc.filePath || doc.title),
+            changedPaths: ensuredIndex.index.sources.slice(0, 12).map((source) => source.path),
             runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
             skill: resolvedSkill,
             createdAt: Date.now(),
@@ -1897,7 +1881,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               </article>
             ))
           ) : (
-            <div className="chat-panel-note">还没有可展示的产物。执行 @整理、@需求、@草图 或 @UI 后会出现在这里。</div>
+            <div className="chat-panel-note">还没有可展示的产物。执行 @索引、@需求、@草图 或 @UI 后会出现在这里。</div>
           )}
         </div>
       </section>

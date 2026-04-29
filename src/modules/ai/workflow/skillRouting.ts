@@ -4,7 +4,7 @@ export type SkillIntent = {
   package: AIWorkflowPackage | 'knowledge-organize' | 'change-sync';
   skill: 'knowledge-organize' | 'requirements' | 'sketch' | 'ui-design' | 'change-sync';
   cleanedInput: string;
-  token: '@整理' | '@需求' | '@草图' | '@UI' | '@变更同步';
+  token: '@索引' | '@需求' | '@草图' | '@UI' | '@变更同步';
 };
 
 const SKILL_PATTERNS: Array<{
@@ -13,7 +13,12 @@ const SKILL_PATTERNS: Array<{
   skill: SkillIntent['skill'];
   token: SkillIntent['token'];
 }> = [
-  { patterns: ['@整理', '@organize'], package: 'knowledge-organize', skill: 'knowledge-organize', token: '@整理' },
+  {
+    patterns: ['@索引', '@整理', '@index', '@organize'],
+    package: 'knowledge-organize',
+    skill: 'knowledge-organize',
+    token: '@索引',
+  },
   { patterns: ['@需求', '@requirement', '@requirements'], package: 'requirements', skill: 'requirements', token: '@需求' },
   { patterns: ['@草图', '@sketch'], package: 'prototype', skill: 'sketch', token: '@草图' },
   { patterns: ['@ui设计', '@ui', '@设计'], package: 'page', skill: 'ui-design', token: '@UI' },
@@ -46,7 +51,7 @@ export const resolveSkillIntent = (input: string): SkillIntent | null => {
 };
 
 export const AVAILABLE_CHAT_SKILLS: Array<Pick<SkillIntent, 'skill' | 'token' | 'package'>> = [
-  { skill: 'knowledge-organize', token: '@整理', package: 'knowledge-organize' },
+  { skill: 'knowledge-organize', token: '@索引', package: 'knowledge-organize' },
   { skill: 'requirements', token: '@需求', package: 'requirements' },
   { skill: 'sketch', token: '@草图', package: 'prototype' },
   { skill: 'ui-design', token: '@UI', package: 'page' },

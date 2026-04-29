@@ -16,6 +16,7 @@ export interface KnowledgeOrganizeWikiSnapshot {
 
 export interface KnowledgeOrganizeWorkflowState {
   lastKnowledgeOrganizeAt: string | null;
+  sourceFingerprint: string | null;
   wikiSnapshots: Record<string, KnowledgeOrganizeWikiSnapshot>;
 }
 
@@ -44,6 +45,7 @@ interface WorkflowStoreState {
 
 const createKnowledgeOrganizeState = (): KnowledgeOrganizeWorkflowState => ({
   lastKnowledgeOrganizeAt: null,
+  sourceFingerprint: null,
   wikiSnapshots: {},
 });
 
@@ -216,6 +218,7 @@ const normalizeKnowledgeOrganizeState = (value: unknown): KnowledgeOrganizeWorkf
   return {
     lastKnowledgeOrganizeAt:
       typeof state.lastKnowledgeOrganizeAt === 'string' ? state.lastKnowledgeOrganizeAt : null,
+    sourceFingerprint: typeof state.sourceFingerprint === 'string' ? state.sourceFingerprint : null,
     wikiSnapshots: snapshots,
   };
 };

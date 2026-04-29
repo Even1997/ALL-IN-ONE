@@ -14,7 +14,7 @@ type ConversationHistoryMessage = {
 };
 
 export const SKILL_LABELS: Record<SkillIntent['skill'], string> = {
-  'knowledge-organize': '知识整理',
+  'knowledge-organize': '知识索引',
   requirements: '需求',
   sketch: '草图',
   'ui-design': 'UI 设计',
@@ -38,6 +38,13 @@ const buildSkillSystemPrompt = (projectName: string | undefined, skillLabel: str
     skillLabel === 'UI 设计'
       ? '如果涉及 UI 设计，必须尊重现有草图和信息层级，不擅自改写核心布局语义。'
       : '输出保持直接、可执行，避免空泛描述。',
+  ].join('\n');
+
+const buildIndexedKnowledgePolicy = () =>
+  [
+    '当 reference_index 和 expanded_files 出现时，把它们当作本次回答的首要事实来源。',
+    '优先根据索引命中的文件作答，并尽量引用具体文件路径或标题。',
+    '如果需要补全推断，请明确标出“推测”或“Inferred”，不要把推测伪装成事实。',
   ].join('\n');
 
 const stripInternalThinking = (content: string) =>
@@ -145,8 +152,11 @@ export const buildDirectChatPrompt = (options: {
   return {
     systemPrompt: [
       skillLabel ? buildSkillSystemPrompt(currentProjectName, skillLabel) : buildFreeChatSystemPrompt(currentProjectName),
+      referenceContext?.indexSection ? buildIndexedKnowledgePolicy() : null,
       buildKnowledgeOperationPolicy(),
-    ].join('\n\n'),
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join('\n\n'),
     prompt: promptSections.join('\n\n'),
     skillLabel,
   };

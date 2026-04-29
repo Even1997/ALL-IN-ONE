@@ -7,7 +7,7 @@ export type RoleTab = {
 
 export const VISIBLE_ROLE_TABS: RoleTab[] = [
   { id: 'knowledge', label: '知识库' },
-  { id: 'wiki', label: 'Wiki 图谱' },
+  { id: 'wiki', label: '系统索引' },
   { id: 'page', label: '页面' },
   { id: 'design', label: '设计' },
   { id: 'develop', label: '开发' },

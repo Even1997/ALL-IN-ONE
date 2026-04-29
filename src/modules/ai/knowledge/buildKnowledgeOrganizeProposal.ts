@@ -1,5 +1,5 @@
-import { buildKnowledgeProposal } from './buildKnowledgeProposal.ts';
 import type { RequirementDoc } from '../../../types';
+import { buildKnowledgeProposal } from './buildKnowledgeProposal.ts';
 
 type ExistingKnowledgeWikiTarget = {
   id: string;
@@ -32,7 +32,7 @@ export const buildKnowledgeOrganizeProposal = ({
   buildKnowledgeProposal({
     projectId,
     trigger: 'knowledge-organize',
-    summary: `已生成 ${docs.length} 份 Wiki 更新建议，请确认后再写入知识库。`,
+    summary: `已生成 ${docs.length} 份系统索引更新建议，请确认后再写入知识库。`,
     operations: docs.map((doc) => {
       const existingWikiTarget = existingWikiTargetsByTitle[doc.title];
 
@@ -42,9 +42,9 @@ export const buildKnowledgeOrganizeProposal = ({
         targetTitle: existingWikiTarget?.title || doc.title,
         reason: existingWikiTarget
           ? existingWikiTarget.manualEdited
-            ? '检测到该 Wiki 在上次整理后被手动修改，本次先生成合并建议，请确认后再覆盖。'
-            : 'AI 已根据最新来源内容整理出该 Wiki 的更新建议。'
-          : 'AI 已根据当前知识和产物整理出一份候选 Wiki。',
+            ? '检测到该系统索引文档在上次整理后被手动修改，本次先生成合并建议，请确认后再覆盖。'
+            : 'AI 已根据最新来源内容整理出该系统索引文档的更新建议。'
+          : 'AI 已根据当前知识和产物整理出一份候选系统索引文档。',
         evidence: [doc.summary || doc.title],
         draftContent: doc.content,
         referenceTitles: normalizeReferenceTitles(sourceTitles),

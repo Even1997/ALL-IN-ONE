@@ -2,11 +2,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::menu::{AboutMetadataBuilder, Menu, MenuBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
@@ -17,6 +19,20 @@ const KNOWLEDGE_HEALTH_TIMEOUT_MS: u64 = 10_000;
 const KNOWLEDGE_PID_FILE_NAME: &str = "goodnight-knowledge-sidecar.pid";
 const KNOWLEDGE_TOKEN_FILE_NAME: &str = "goodnight_local_server_token";
 const NATIVE_MENU_EVENT_NAME: &str = "native-menu-event";
+const GOODNIGHT_SKILLS_DIR_NAME: &str = "goodnight-skills";
+const GOODNIGHT_BUILTIN_SKILLS_DIR_NAME: &str = "built-in";
+const GOODNIGHT_IMPORTED_SKILLS_DIR_NAME: &str = "imported";
+const GOODNIGHT_SKILL_MARKDOWN_FILE_NAME: &str = "SKILL.md";
+const GOODNIGHT_SKILL_MANIFEST_FILE_NAME: &str = "skill.json";
+const GOODNIGHT_BUILTIN_SKILL_IDS: &[&str] = &[
+    "goodnight-boundary",
+    "goodnight-workspace-context",
+    "goodnight-sketch-output",
+    "goodnight-design-output",
+    "goodnight-m-flow",
+    "goodnight-llmwiki",
+    "goodnight-rag",
+];
 
 fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
     let bytes = fs::read(file_path)?;
@@ -323,6 +339,71 @@ pub struct LocalAgentConfigSnapshot {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct DiscoverLocalSkillsParams {
+    project_root: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportLocalSkillParams {
+    source_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportGithubSkillParams {
+    repo: String,
+    path: String,
+    git_ref: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncSkillToRuntimeParams {
+    skill_id: String,
+    runtime: SkillRuntimeTarget,
+    project_root: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillDiscoveryEntry {
+    id: String,
+    name: String,
+    source: String,
+    path: String,
+    manifest_path: String,
+    imported: bool,
+    synced_to_codex: bool,
+    synced_to_claude: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillRuntimeSyncResult {
+    skill_id: String,
+    runtime: SkillRuntimeTarget,
+    target_path: String,
+    synced: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum SkillRuntimeTarget {
+    Codex,
+    Claude,
+}
+
+#[derive(Debug, Clone)]
+struct SkillDescriptor {
+    id: String,
+    name: String,
+    skill_dir: PathBuf,
+    manifest_path: PathBuf,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ProjectStorageSettingsPayload {
     root_path: Option<String>,
 }
@@ -494,6 +575,479 @@ fn build_local_config_probe(path: PathBuf, include_content: bool) -> LocalConfig
         exists,
         content,
     }
+}
+
+fn get_goodnight_skill_root_from_data_dir(app_data_dir: &Path) -> PathBuf {
+    app_data_dir.join(GOODNIGHT_SKILLS_DIR_NAME)
+}
+
+fn get_goodnight_builtin_skill_root_from_data_dir(app_data_dir: &Path) -> PathBuf {
+    get_goodnight_skill_root_from_data_dir(app_data_dir).join(GOODNIGHT_BUILTIN_SKILLS_DIR_NAME)
+}
+
+fn get_goodnight_imported_skill_root_from_data_dir(app_data_dir: &Path) -> PathBuf {
+    get_goodnight_skill_root_from_data_dir(app_data_dir).join(GOODNIGHT_IMPORTED_SKILLS_DIR_NAME)
+}
+
+fn get_goodnight_skill_source_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join(GOODNIGHT_SKILLS_DIR_NAME)
+        .join(GOODNIGHT_BUILTIN_SKILLS_DIR_NAME)
+}
+
+fn ensure_goodnight_skill_library_dirs(app_data_dir: &Path) -> Result<(), String> {
+    for dir in [
+        get_goodnight_skill_root_from_data_dir(app_data_dir),
+        get_goodnight_builtin_skill_root_from_data_dir(app_data_dir),
+        get_goodnight_imported_skill_root_from_data_dir(app_data_dir),
+    ] {
+        fs::create_dir_all(&dir)
+            .map_err(|error| format!("Failed to create skill library directory {}: {}", dir.display(), error))?;
+    }
+
+    Ok(())
+}
+
+fn copy_directory_contents(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
+    fs::create_dir_all(target_dir)
+        .map_err(|error| format!("Failed to create directory {}: {}", target_dir.display(), error))?;
+
+    let entries = fs::read_dir(source_dir)
+        .map_err(|error| format!("Failed to read directory {}: {}", source_dir.display(), error))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Failed to read directory entry in {}: {}",
+                source_dir.display(),
+                error
+            )
+        })?;
+        let source_path = entry.path();
+        let target_path = target_dir.join(entry.file_name());
+
+        if source_path.is_dir() {
+            copy_directory_contents(&source_path, &target_path)?;
+        } else {
+            fs::copy(&source_path, &target_path).map_err(|error| {
+                format!(
+                    "Failed to copy {} to {}: {}",
+                    source_path.display(),
+                    target_path.display(),
+                    error
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn ensure_builtin_skills_installed(app_data_dir: &Path) -> Result<(), String> {
+    ensure_goodnight_skill_library_dirs(app_data_dir)?;
+
+    let source_root = get_goodnight_skill_source_root();
+    let builtin_root = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir);
+
+    for skill_id in GOODNIGHT_BUILTIN_SKILL_IDS {
+        let source_dir = source_root.join(skill_id);
+        if !source_dir.is_dir() {
+            return Err(format!(
+                "Built-in skill source is missing: {}",
+                source_dir.display()
+            ));
+        }
+
+        copy_directory_contents(&source_dir, &builtin_root.join(skill_id))?;
+    }
+
+    Ok(())
+}
+
+fn parse_skill_frontmatter(markdown: &str) -> (Option<String>, Option<String>) {
+    let mut lines = markdown.lines();
+    if lines.next() != Some("---") {
+        return (None, None);
+    }
+
+    let mut name = None;
+    let mut description = None;
+    for line in lines {
+        if line.trim() == "---" {
+            break;
+        }
+
+        if let Some((key, value)) = line.split_once(':') {
+            let normalized_value = value.trim().trim_matches('"').trim_matches('\'').to_string();
+            match key.trim() {
+                "name" if !normalized_value.is_empty() => name = Some(normalized_value),
+                "description" if !normalized_value.is_empty() => description = Some(normalized_value),
+                _ => {}
+            }
+        }
+    }
+
+    (name, description)
+}
+
+fn sanitize_skill_id(raw: &str) -> String {
+    let mut id = String::new();
+    let mut last_was_dash = false;
+
+    for ch in raw.chars() {
+        let normalized = ch.to_ascii_lowercase();
+        if normalized.is_ascii_alphanumeric() {
+            id.push(normalized);
+            last_was_dash = false;
+        } else if !last_was_dash && !id.is_empty() {
+            id.push('-');
+            last_was_dash = true;
+        }
+    }
+
+    let trimmed = id.trim_matches('-').to_string();
+    if trimmed.is_empty() {
+        "skill".to_string()
+    } else {
+        trimmed
+    }
+}
+
+fn humanize_skill_id(skill_id: &str) -> String {
+    skill_id
+        .split(['-', '_'])
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| {
+            let mut chars = segment.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut label = first.to_ascii_uppercase().to_string();
+                    label.push_str(chars.as_str());
+                    label
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn generate_skill_manifest(
+    skill_id: &str,
+    skill_name: &str,
+    source_type: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "id": skill_id,
+        "name": skill_name,
+        "version": "1.0.0",
+        "category": "knowledge",
+        "source": {
+            "type": source_type
+        },
+        "capabilities": ["prompt"],
+        "entry": {
+            "prompt": GOODNIGHT_SKILL_MARKDOWN_FILE_NAME
+        },
+        "support": {
+            "built-in": "full",
+            "codex": "partial",
+            "claude": "partial"
+        }
+    })
+}
+
+fn load_skill_descriptor(skill_dir: &Path, allow_seed_manifest: bool) -> Result<SkillDescriptor, String> {
+    let prompt_path = skill_dir.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME);
+    if !prompt_path.is_file() {
+        return Err(format!(
+            "Skill prompt file is missing: {}",
+            prompt_path.display()
+        ));
+    }
+
+    let prompt_source = read_file_as_string(&prompt_path)
+        .map_err(|error| format!("Failed to read skill prompt {}: {}", prompt_path.display(), error))?;
+    let manifest_path = skill_dir.join(GOODNIGHT_SKILL_MANIFEST_FILE_NAME);
+    let (frontmatter_name, _) = parse_skill_frontmatter(&prompt_source);
+    let fallback_id = skill_dir
+        .file_name()
+        .map(|value| sanitize_skill_id(&value.to_string_lossy()))
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "skill".to_string());
+
+    let existing_manifest = if manifest_path.is_file() {
+        let content = read_file_as_string(&manifest_path).map_err(|error| {
+            format!(
+                "Failed to read skill manifest {}: {}",
+                manifest_path.display(),
+                error
+            )
+        })?;
+        serde_json::from_str::<serde_json::Value>(&content).ok()
+    } else {
+        None
+    };
+
+    let skill_id = existing_manifest
+        .as_ref()
+        .and_then(|manifest| manifest.get("id"))
+        .and_then(|value| value.as_str())
+        .map(sanitize_skill_id)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| fallback_id.clone());
+
+    let skill_name = existing_manifest
+        .as_ref()
+        .and_then(|manifest| manifest.get("name"))
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+        .filter(|value| !value.trim().is_empty())
+        .or(frontmatter_name)
+        .unwrap_or_else(|| humanize_skill_id(&skill_id));
+
+    if allow_seed_manifest && !manifest_path.is_file() {
+        let manifest = generate_skill_manifest(&skill_id, &skill_name, "imported");
+        let content = serde_json::to_string_pretty(&manifest)
+            .map_err(|error| format!("Failed to serialize generated skill manifest: {}", error))?;
+        fs::write(&manifest_path, content).map_err(|error| {
+            format!(
+                "Failed to write generated skill manifest {}: {}",
+                manifest_path.display(),
+                error
+            )
+        })?;
+    }
+
+    Ok(SkillDescriptor {
+        id: skill_id,
+        name: skill_name,
+        skill_dir: skill_dir.to_path_buf(),
+        manifest_path,
+    })
+}
+
+fn list_skill_directories(root_dir: &Path) -> Result<Vec<PathBuf>, String> {
+    if !root_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut directories = Vec::new();
+    for entry in fs::read_dir(root_dir)
+        .map_err(|error| format!("Failed to read skills directory {}: {}", root_dir.display(), error))?
+    {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Failed to read skills directory entry in {}: {}",
+                root_dir.display(),
+                error
+            )
+        })?;
+        let candidate = entry.path();
+        if candidate.is_dir() && candidate.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME).is_file() {
+            directories.push(candidate);
+        }
+    }
+
+    Ok(directories)
+}
+
+fn is_skill_imported(app_data_dir: &Path, skill_id: &str) -> bool {
+    let builtin_dir = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir).join(skill_id);
+    let imported_dir = get_goodnight_imported_skill_root_from_data_dir(app_data_dir).join(skill_id);
+    builtin_dir.is_dir() || imported_dir.is_dir()
+}
+
+fn is_skill_synced_to_codex(home_dir: &Path, skill_id: &str) -> bool {
+    home_dir.join(".codex").join("skills").join(skill_id).is_dir()
+}
+
+fn get_claude_command_path(home_dir: &Path, skill_id: &str) -> PathBuf {
+    home_dir
+        .join(".claude")
+        .join("commands")
+        .join(format!("{}.md", skill_id))
+}
+
+fn get_claude_plugin_skill_dir(home_dir: &Path, skill_id: &str) -> PathBuf {
+    home_dir
+        .join(".claude")
+        .join("plugins")
+        .join(GOODNIGHT_SKILLS_DIR_NAME)
+        .join(skill_id)
+}
+
+fn is_skill_synced_to_claude(home_dir: &Path, skill_id: &str) -> bool {
+    get_claude_command_path(home_dir, skill_id).is_file()
+        || get_claude_plugin_skill_dir(home_dir, skill_id).is_dir()
+}
+
+fn build_skill_entry(
+    _app_data_dir: &Path,
+    home_dir: &Path,
+    skill_dir: &Path,
+    source: &str,
+    imported: bool,
+    allow_seed_manifest: bool,
+) -> Result<SkillDiscoveryEntry, String> {
+    let descriptor = load_skill_descriptor(skill_dir, allow_seed_manifest)?;
+
+    Ok(SkillDiscoveryEntry {
+        id: descriptor.id.clone(),
+        name: descriptor.name,
+        source: source.to_string(),
+        path: descriptor.skill_dir.to_string_lossy().to_string(),
+        manifest_path: descriptor.manifest_path.to_string_lossy().to_string(),
+        imported,
+        synced_to_codex: is_skill_synced_to_codex(home_dir, &descriptor.id),
+        synced_to_claude: is_skill_synced_to_claude(home_dir, &descriptor.id),
+    })
+}
+
+fn find_library_skill_dir(app_data_dir: &Path, skill_id: &str) -> Option<PathBuf> {
+    for root in [
+        get_goodnight_builtin_skill_root_from_data_dir(app_data_dir),
+        get_goodnight_imported_skill_root_from_data_dir(app_data_dir),
+    ] {
+        let candidate = root.join(skill_id);
+        if candidate.is_dir() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn build_github_skill_download_temp_dir(app_data_dir: &Path) -> PathBuf {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    get_goodnight_imported_skill_root_from_data_dir(app_data_dir)
+        .join(format!("__incoming__{}", millis))
+}
+
+fn github_client() -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .user_agent("GoodNight Desktop")
+        .build()
+        .map_err(|error| format!("Failed to create GitHub client: {}", error))
+}
+
+fn download_github_contents(
+    client: &reqwest::blocking::Client,
+    api_url: &str,
+    target_dir: &Path,
+) -> Result<(), String> {
+    fs::create_dir_all(target_dir)
+        .map_err(|error| format!("Failed to create GitHub import directory {}: {}", target_dir.display(), error))?;
+
+    let response = client
+        .get(api_url)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .map_err(|error| format!("Failed to query GitHub contents API: {}", error))?
+        .error_for_status()
+        .map_err(|error| format!("GitHub contents API returned an error: {}", error))?;
+
+    let payload = response
+        .json::<serde_json::Value>()
+        .map_err(|error| format!("Failed to parse GitHub contents response: {}", error))?;
+
+    let entries = payload
+        .as_array()
+        .cloned()
+        .unwrap_or_else(|| vec![payload]);
+
+    for entry in entries {
+        let entry_type = entry
+            .get("type")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default();
+        let name = entry
+            .get("name")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| "GitHub content entry is missing a file name.".to_string())?;
+
+        match entry_type {
+            "file" => {
+                let download_url = entry
+                    .get("download_url")
+                    .and_then(|value| value.as_str())
+                    .ok_or_else(|| format!("GitHub file entry {} does not include a download URL.", name))?;
+                let bytes = client
+                    .get(download_url)
+                    .send()
+                    .map_err(|error| format!("Failed to download GitHub file {}: {}", download_url, error))?
+                    .error_for_status()
+                    .map_err(|error| format!("GitHub file download failed for {}: {}", download_url, error))?
+                    .bytes()
+                    .map_err(|error| format!("Failed to read GitHub file bytes {}: {}", download_url, error))?;
+
+                fs::write(target_dir.join(name), &bytes).map_err(|error| {
+                    format!(
+                        "Failed to write imported GitHub file {}: {}",
+                        target_dir.join(name).display(),
+                        error
+                    )
+                })?;
+            }
+            "dir" => {
+                let next_url = entry
+                    .get("url")
+                    .and_then(|value| value.as_str())
+                    .ok_or_else(|| format!("GitHub directory entry {} does not include an API URL.", name))?;
+                download_github_contents(client, next_url, &target_dir.join(name))?;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+fn collect_skill_discovery_entries(app_data_dir: &Path) -> Result<Vec<SkillDiscoveryEntry>, String> {
+    ensure_builtin_skills_installed(app_data_dir)?;
+
+    let home_dir = resolve_home_dir()?;
+    let builtin_root = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir);
+    let imported_root = get_goodnight_imported_skill_root_from_data_dir(app_data_dir);
+    let codex_root = home_dir.join(".codex").join("skills");
+    let mut seen_paths = HashSet::new();
+    let mut entries = Vec::new();
+
+    for (root, source_label, imported, allow_seed_manifest) in [
+        (builtin_root.as_path(), "GoodNight built-in", true, false),
+        (imported_root.as_path(), "GoodNight imported", true, true),
+        (codex_root.as_path(), "Codex local", false, false),
+    ] {
+        for skill_dir in list_skill_directories(root)? {
+            let path_key = skill_dir.to_string_lossy().to_string();
+            if !seen_paths.insert(path_key) {
+                continue;
+            }
+
+            let entry = build_skill_entry(
+                app_data_dir,
+                &home_dir,
+                &skill_dir,
+                source_label,
+                imported || is_skill_imported(app_data_dir, &load_skill_descriptor(&skill_dir, false)?.id),
+                allow_seed_manifest,
+            )?;
+            entries.push(entry);
+        }
+    }
+
+    entries.sort_by(|left, right| {
+        left.source
+            .cmp(&right.source)
+            .then_with(|| left.name.cmp(&right.name))
+            .then_with(|| left.path.cmp(&right.path))
+    });
+
+    Ok(entries)
 }
 
 fn build_local_agent_interface_command(
@@ -699,6 +1253,225 @@ fn get_local_agent_config_snapshot() -> Result<LocalAgentConfigSnapshot, String>
         codex_home: build_local_config_probe(codex_home.clone(), false),
         codex_skills: build_local_config_probe(codex_home.join("skills"), false),
         codex_agents: build_local_config_probe(codex_home.join("agents"), false),
+    })
+}
+
+#[tauri::command]
+fn discover_local_skills(
+    app_handle: tauri::AppHandle,
+    _params: Option<DiscoverLocalSkillsParams>,
+) -> Result<Vec<SkillDiscoveryEntry>, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
+
+    collect_skill_discovery_entries(&app_data_dir)
+}
+
+#[tauri::command]
+fn import_local_skill(
+    app_handle: tauri::AppHandle,
+    params: ImportLocalSkillParams,
+) -> Result<SkillDiscoveryEntry, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
+    ensure_builtin_skills_installed(&app_data_dir)?;
+
+    let source_path = PathBuf::from(params.source_path.trim());
+    if !source_path.exists() {
+        return Err(format!("Skill source path does not exist: {}", source_path.display()));
+    }
+
+    let imported_root = get_goodnight_imported_skill_root_from_data_dir(&app_data_dir);
+    fs::create_dir_all(&imported_root)
+        .map_err(|error| format!("Failed to create imported skills directory: {}", error))?;
+
+    let target_dir = if source_path.is_dir() {
+        let descriptor = load_skill_descriptor(&source_path, false)?;
+        let target_dir = imported_root.join(&descriptor.id);
+        copy_directory_contents(&source_path, &target_dir)?;
+        target_dir
+    } else {
+        let prompt_source = read_file_as_string(&source_path)
+            .map_err(|error| format!("Failed to read skill source {}: {}", source_path.display(), error))?;
+        let (frontmatter_name, _) = parse_skill_frontmatter(&prompt_source);
+        let file_stem = source_path
+            .file_stem()
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_else(|| "skill".to_string());
+        let skill_id = sanitize_skill_id(&file_stem);
+        let skill_name = frontmatter_name.unwrap_or_else(|| humanize_skill_id(&skill_id));
+        let target_dir = imported_root.join(&skill_id);
+        fs::create_dir_all(&target_dir).map_err(|error| {
+            format!(
+                "Failed to create imported skill directory {}: {}",
+                target_dir.display(),
+                error
+            )
+        })?;
+
+        fs::write(
+            target_dir.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME),
+            prompt_source,
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to write imported skill prompt {}: {}",
+                target_dir.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME).display(),
+                error
+            )
+        })?;
+
+        let manifest = generate_skill_manifest(&skill_id, &skill_name, "imported");
+        let manifest_source = serde_json::to_string_pretty(&manifest)
+            .map_err(|error| format!("Failed to serialize generated imported manifest: {}", error))?;
+        fs::write(
+            target_dir.join(GOODNIGHT_SKILL_MANIFEST_FILE_NAME),
+            manifest_source,
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to write imported skill manifest {}: {}",
+                target_dir.join(GOODNIGHT_SKILL_MANIFEST_FILE_NAME).display(),
+                error
+            )
+        })?;
+
+        target_dir
+    };
+
+    let home_dir = resolve_home_dir()?;
+    build_skill_entry(
+        &app_data_dir,
+        &home_dir,
+        &target_dir,
+        "GoodNight imported",
+        true,
+        true,
+    )
+}
+
+#[tauri::command]
+fn import_github_skill(
+    app_handle: tauri::AppHandle,
+    params: ImportGithubSkillParams,
+) -> Result<SkillDiscoveryEntry, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
+    ensure_builtin_skills_installed(&app_data_dir)?;
+
+    let repo = params.repo.trim();
+    if repo.is_empty() || !repo.contains('/') {
+        return Err("GitHub repo must use the owner/repo format.".to_string());
+    }
+
+    let skill_path = params.path.trim().trim_matches('/');
+    if skill_path.is_empty() {
+        return Err("GitHub skill path cannot be empty.".to_string());
+    }
+
+    let git_ref = params
+        .git_ref
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("main");
+    let contents_url = format!(
+        "https://api.github.com/repos/{}/contents/{}?ref={}",
+        repo, skill_path, git_ref
+    );
+
+    let imported_root = get_goodnight_imported_skill_root_from_data_dir(&app_data_dir);
+    fs::create_dir_all(&imported_root)
+        .map_err(|error| format!("Failed to create imported skills directory: {}", error))?;
+
+    let temp_dir = build_github_skill_download_temp_dir(&app_data_dir);
+    let client = github_client()?;
+    download_github_contents(&client, &contents_url, &temp_dir)?;
+
+    if !temp_dir.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME).is_file() {
+        return Err(format!(
+            "Imported GitHub directory does not contain {} at its root.",
+            GOODNIGHT_SKILL_MARKDOWN_FILE_NAME
+        ));
+    }
+
+    let descriptor = load_skill_descriptor(&temp_dir, true)?;
+    let target_dir = imported_root.join(&descriptor.id);
+    copy_directory_contents(&temp_dir, &target_dir)?;
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    let home_dir = resolve_home_dir()?;
+    build_skill_entry(
+        &app_data_dir,
+        &home_dir,
+        &target_dir,
+        format!("GitHub {}", repo).as_str(),
+        true,
+        true,
+    )
+}
+
+#[tauri::command]
+fn sync_skill_to_runtime(
+    app_handle: tauri::AppHandle,
+    params: SyncSkillToRuntimeParams,
+) -> Result<SkillRuntimeSyncResult, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
+    ensure_builtin_skills_installed(&app_data_dir)?;
+
+    let skill_id = sanitize_skill_id(params.skill_id.trim());
+    if skill_id.is_empty() {
+        return Err("Skill id cannot be empty.".to_string());
+    }
+
+    let source_dir = find_library_skill_dir(&app_data_dir, &skill_id)
+        .ok_or_else(|| format!("Skill {} is not installed in GoodNight.", skill_id))?;
+    let source_prompt_path = source_dir.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME);
+    let home_dir = resolve_home_dir()?;
+
+    let target_path = match params.runtime {
+        SkillRuntimeTarget::Codex => {
+            let target_dir = home_dir.join(".codex").join("skills").join(&skill_id);
+            copy_directory_contents(&source_dir, &target_dir)?;
+            target_dir
+        }
+        SkillRuntimeTarget::Claude => {
+            let command_path = get_claude_command_path(&home_dir, &skill_id);
+            let plugin_dir = get_claude_plugin_skill_dir(&home_dir, &skill_id);
+            fs::create_dir_all(
+                command_path
+                    .parent()
+                    .ok_or_else(|| "Failed to resolve Claude commands directory.".to_string())?,
+            )
+            .map_err(|error| format!("Failed to create Claude commands directory: {}", error))?;
+            copy_directory_contents(&source_dir, &plugin_dir)?;
+            let prompt_source = read_file_as_string(&source_prompt_path).map_err(|error| {
+                format!(
+                    "Failed to read GoodNight skill prompt {}: {}",
+                    source_prompt_path.display(),
+                    error
+                )
+            })?;
+            fs::write(&command_path, prompt_source)
+                .map_err(|error| format!("Failed to write Claude command {}: {}", command_path.display(), error))?;
+            command_path
+        }
+    };
+
+    Ok(SkillRuntimeSyncResult {
+        skill_id,
+        runtime: params.runtime,
+        target_path: target_path.to_string_lossy().to_string(),
+        synced: true,
     })
 }
 
@@ -1558,6 +2331,7 @@ pub fn run() {
 
             fs::create_dir_all(&app_data_dir)
                 .map_err(|error| format!("Failed to create app data directory: {}", error))?;
+            ensure_builtin_skills_installed(&app_data_dir)?;
 
             let auth_token = ensure_local_knowledge_token(&app_data_dir)?;
             let config = LocalKnowledgeServerConfig {
@@ -1596,6 +2370,10 @@ pub fn run() {
             open_local_agent_interface,
             run_local_agent_prompt,
             get_local_agent_config_snapshot,
+            discover_local_skills,
+            import_local_skill,
+            import_github_skill,
+            sync_skill_to_runtime,
             import_knowledge_assets,
             read_text_file,
             open_path_in_shell,
