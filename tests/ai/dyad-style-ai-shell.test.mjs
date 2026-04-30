@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const layoutPath = path.resolve(__dirname, '../../src/components/ai/workspaces/ProviderWorkspaceLayout.tsx');
-const shellCssPath = path.resolve(__dirname, '../../src/components/ai/claudian-shell/ClaudianShell.css');
+const shellCssPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentShell.css');
 
 test('provider workspace layout exposes dyad-style session sidebar, message viewport, and composer zones', async () => {
   const source = await readFile(layoutPath, 'utf8');
@@ -19,17 +19,18 @@ test('provider workspace layout exposes dyad-style session sidebar, message view
 
 test('ai shell css defines the compact shared panel surface', async () => {
   const source = await readFile(shellCssPath, 'utf8');
-  const shellRule = source.match(/\.claudian-shell\s*\{([\s\S]*?)\n\}/);
-  const shellMainRule = source.match(/\.claudian-shell-main\s*\{([\s\S]*?)\n\}/);
-  const providerLayoutRule = source.match(/\.claudian-shell\s+\.provider-workspace-layout\s*\{([\s\S]*?)\n\}/);
-  assert.ok(shellRule, 'expected .claudian-shell rule');
-  assert.ok(shellMainRule, 'expected .claudian-shell-main rule');
-  assert.ok(providerLayoutRule, 'expected .claudian-shell .provider-workspace-layout rule');
-  assert.match(source, /--claudian-bg/);
+  const shellRule = source.match(/\.gn-agent-shell\s*\{([\s\S]*?)\n\}/);
+  const shellMainRule = source.match(/\.gn-agent-shell-main\s*\{([\s\S]*?)\n\}/);
+  const providerLayoutRule = source.match(/\.gn-agent-shell\s+\.provider-workspace-layout\s*\{([\s\S]*?)\n\}/);
+  assert.ok(shellRule, 'expected .gn-agent-shell rule');
+  assert.ok(shellMainRule, 'expected .gn-agent-shell-main rule');
+  assert.ok(providerLayoutRule, 'expected .gn-agent-shell .provider-workspace-layout rule');
+  assert.match(source, /--gn-agent-bg/);
   assert.match(shellRule[1], /display:\s*flex;/);
   assert.match(shellRule[1], /flex-direction:\s*column;/);
   assert.match(shellMainRule[1], /flex:\s*1;/);
   assert.match(shellMainRule[1], /min-height:\s*0;/);
   assert.match(providerLayoutRule[1], /min-height:\s*0;/);
-  assert.doesNotMatch(source, /\.claudian-launcher-hero\b/);
+  assert.doesNotMatch(source, /\.gn-agent-launcher-hero\b/);
 });
+

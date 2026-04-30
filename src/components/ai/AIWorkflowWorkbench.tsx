@@ -353,7 +353,7 @@ export const AIWorkflowWorkbench: React.FC<AIWorkflowWorkbenchProps> = ({
             <div className="ai-workflow-block">
               <div className="ai-workflow-block-header">
                 <strong>待确认阶段</strong>
-                <span>只有确认后，后续批处理才会继续解锁。</span>
+                <span>确认只用于记录阶段状态；你也可以直接继续运行后续能力。</span>
               </div>
               <div className="ai-workflow-confirm-list">
                 {pendingConfirmations.map((stage) => (

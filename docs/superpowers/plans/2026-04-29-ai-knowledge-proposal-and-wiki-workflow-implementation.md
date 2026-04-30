@@ -240,7 +240,7 @@ git commit -m "feat: add knowledge proposal execution helpers"
 **Files:**
 - Modify: `C:\Users\Even\Documents\ALL-IN-ONE\src\components\workspace\AIChat.tsx`
 - Modify: `C:\Users\Even\Documents\ALL-IN-ONE\src\modules\ai\store\aiChatStore.ts`
-- Modify: `C:\Users\Even\Documents\ALL-IN-ONE\src\components\ai\claudian\ClaudianEmbeddedPieces.tsx`
+- Modify: `C:\Users\Even\Documents\ALL-IN-ONE\src\components\ai\gn-agent\GNAgentEmbeddedPieces.tsx`
 - Modify: `C:\Users\Even\Documents\ALL-IN-ONE\src\components\workspace\AIChat.css`
 - Test: `C:\Users\Even\Documents\ALL-IN-ONE\tests\knowledge-proposal-chat-ui.test.mjs`
 
@@ -284,7 +284,7 @@ Expected: PASS
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/components/workspace/AIChat.tsx src/modules/ai/store/aiChatStore.ts src/components/ai/claudian/ClaudianEmbeddedPieces.tsx src/components/workspace/AIChat.css tests/knowledge-proposal-chat-ui.test.mjs
+git add src/components/workspace/AIChat.tsx src/modules/ai/store/aiChatStore.ts src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx src/components/workspace/AIChat.css tests/knowledge-proposal-chat-ui.test.mjs
 git commit -m "feat: surface knowledge proposals in AI chat"
 ```
 

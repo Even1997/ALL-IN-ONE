@@ -5761,6 +5761,16 @@ body,
   gap: 8px;
 }
 
+.design-flow-card-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.design-flow-card-action-btn {
+  position: relative;
+  z-index: 2;
+}
+
 .design-flow-card-title strong {
   font-size: 14px;
   white-space: nowrap;
@@ -6258,6 +6268,57 @@ body,
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.design-module-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.design-module-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.design-module-summary-head strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.design-module-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.design-module-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.design-module-list-item strong {
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+.design-module-list-item span,
+.design-module-list-more {
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .design-style-editor-switch,
@@ -10665,6 +10726,13 @@ body.ai-chat-sidebar-collapsed .app-main {
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+.desktop-workflow-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .desktop-workbench-title div {

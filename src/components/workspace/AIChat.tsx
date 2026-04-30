@@ -21,9 +21,9 @@ import { PROVIDER_PRESETS, type ProviderPreset } from '../../modules/ai/provider
 import type { ActivityEntry } from '../../modules/ai/skills/activityLog';
 import { type AIConfigEntry, hasUsableAIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { toRuntimeAIConfig } from '../../modules/ai/store/aiConfigState';
-import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../../modules/ai/claudian/localConfig';
-import { ClaudeRuntime } from '../../modules/ai/claudian/runtime/claude/ClaudeRuntime';
-import { CodexRuntime } from '../../modules/ai/claudian/runtime/codex/CodexRuntime';
+import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../../modules/ai/gn-agent/localConfig';
+import { ClaudeRuntime } from '../../modules/ai/gn-agent/runtime/claude/ClaudeRuntime';
+import { CodexRuntime } from '../../modules/ai/gn-agent/runtime/codex/CodexRuntime';
 import {
   createChatSession,
   createStoredChatMessage,
@@ -39,7 +39,6 @@ import {
   buildKnowledgeOrganizeWorkflowState,
 } from '../../modules/ai/knowledge/knowledgeOrganizeState';
 import { runChangeSyncLane } from '../../modules/ai/knowledge/runChangeSyncLane';
-import { suggestKnowledgeProposalFromAnswer } from '../../modules/ai/knowledge/suggestKnowledgeProposal';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
 import { ensureProjectSystemIndex } from '../../modules/knowledge/systemIndexProject';
@@ -48,19 +47,26 @@ import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge
 import type { KnowledgeProposal } from '../../features/knowledge/model/knowledgeProposal';
 import { useKnowledgeProposalStore } from '../../features/knowledge/store/knowledgeProposalStore';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
+import { buildKnowledgeNoteRootMirrorPath } from '../../features/knowledge/workspace/knowledgeNoteFilePaths';
+import { serializeKnowledgeNoteMarkdown } from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
-import { getProjectDir, getProjectKnowledgeRootDir, isTauriRuntimeAvailable } from '../../utils/projectPersistence';
-import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
-import { chooseNextWorkflowPackage } from '../../modules/ai/workflow/chatWorkflowRouting';
 import {
-  ClaudianActivityPanel,
-  ClaudianEmbeddedComposer,
-  ClaudianHistoryMenu,
-  ClaudianMessageList,
-} from '../ai/claudian/ClaudianEmbeddedPieces';
-import { ClaudianModeSwitch } from '../ai/claudian-shell/ClaudianModeSwitch';
+  getProjectDir,
+  getProjectKnowledgeRootDir,
+  isTauriRuntimeAvailable,
+  readProjectTextFile,
+  writeProjectTextFile,
+} from '../../utils/projectPersistence';
+import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
+import {
+  GNAgentActivityPanel,
+  GNAgentEmbeddedComposer,
+  GNAgentHistoryMenu,
+  GNAgentMessageList,
+} from '../ai/gn-agent/GNAgentEmbeddedPieces';
+import { GNAgentModeSwitch } from '../ai/gn-agent-shell/GNAgentModeSwitch';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -90,7 +96,7 @@ type AIProviderTypeOption = {
 };
 
 type AIChatProps = {
-  variant?: 'default' | 'claudian-embedded' | 'gn-agent-embedded';
+  variant?: 'default' | 'provider-embedded' | 'gn-agent-embedded';
   runtimeConfigIdOverride?: string | null;
   providerExecutionMode?: 'claude' | 'codex' | null;
   collapsed?: boolean;
@@ -104,7 +110,7 @@ type ChatAgentAvailability = {
 };
 
 type DrawerPanelId = 'context' | 'run' | 'artifacts';
-type AgentLaneId = 'chat' | 'tasks' | 'artifacts' | 'context' | 'skills' | 'activity';
+type AgentLaneId = 'chat' | 'tasks' | 'artifacts' | 'context' | 'activity';
 
 type GNAgentSuggestion = {
   label: string;
@@ -117,7 +123,6 @@ const GN_AGENT_LANES: Array<{ id: AgentLaneId; label: string; description: strin
   { id: 'tasks', label: 'Tasks', description: '任务与运行状态' },
   { id: 'artifacts', label: 'Artifacts', description: '产物和变更' },
   { id: 'context', label: 'Context', description: '引用与上下文' },
-  { id: 'skills', label: 'Skills', description: 'GN Agent 能力' },
   { id: 'activity', label: 'Activity', description: '执行记录' },
 ];
 
@@ -139,6 +144,34 @@ const normalizeErrorMessage = (error: unknown) => {
   }
 
   return raw;
+};
+
+const resolveKnowledgeNoteMirrorPath = async ({
+  projectKnowledgeRootDir,
+  title,
+  content,
+  existingFilePath,
+}: {
+  projectKnowledgeRootDir: string;
+  title: string;
+  content: string;
+  existingFilePath?: string;
+}) => {
+  if (existingFilePath) {
+    await writeProjectTextFile(existingFilePath, content);
+    return existingFilePath;
+  }
+
+  for (let suffix = 1; suffix <= 50; suffix += 1) {
+    const candidatePath = buildKnowledgeNoteRootMirrorPath(projectKnowledgeRootDir, title, suffix);
+    const existingContent = await readProjectTextFile(candidatePath);
+    if (existingContent === null || existingContent === content) {
+      await writeProjectTextFile(candidatePath, content);
+      return candidatePath;
+    }
+  }
+
+  throw new Error('无法在项目知识根目录创建笔记镜像，请先整理重名文件。');
 };
 
 const createWelcomeSession = (projectId: string, projectName?: string | null) => {
@@ -391,9 +424,10 @@ export const AIChat: React.FC<AIChatProps> = ({
   collapsed,
   onCollapsedChange,
 }) => {
+  const isProviderEmbedded = variant === 'provider-embedded';
   const isGNAgentEmbedded = variant === 'gn-agent-embedded';
-  const isClaudianEmbedded = variant === 'claudian-embedded' || isGNAgentEmbedded;
-  const lockExpandedForEmbedded = variant === 'claudian-embedded';
+  const isEmbedded = isProviderEmbedded || isGNAgentEmbedded;
+  const lockExpandedForEmbedded = isProviderEmbedded;
   const [input, setInput] = useState('');
   const [activeDrawer, setActiveDrawer] = useState<DrawerPanelId | null>(null);
   const [activeAgentLane, setActiveAgentLane] = useState<AgentLaneId>('chat');
@@ -631,20 +665,39 @@ export const AIChat: React.FC<AIChatProps> = ({
 
       await executeKnowledgeProposal(proposal, {
         createNote: async ({ title, content, tags }) => {
+          const normalizedContent = serializeKnowledgeNoteMarkdown(title, content);
+          const filePath =
+            isTauriRuntimeAvailable() && projectKnowledgeRootDir
+              ? await resolveKnowledgeNoteMirrorPath({
+                  projectKnowledgeRootDir,
+                  title,
+                  content: normalizedContent,
+                })
+              : '';
           await createProjectNote(currentProject.id, {
             title,
-            content,
-            filePath: '',
+            content: normalizedContent,
+            filePath,
             updatedAt: new Date().toISOString(),
             tags,
           });
         },
         updateNote: async ({ noteId, title, content, tags }) => {
           const existingNote = serverNotes.find((note) => note.id === noteId);
+          const nextContent = serializeKnowledgeNoteMarkdown(title, content ?? existingNote?.bodyMarkdown ?? '');
+          const filePath =
+            isTauriRuntimeAvailable() && projectKnowledgeRootDir
+              ? await resolveKnowledgeNoteMirrorPath({
+                  projectKnowledgeRootDir,
+                  title,
+                  content: nextContent,
+                  existingFilePath: existingNote?.sourceUrl || undefined,
+                })
+              : existingNote?.sourceUrl || '';
           await updateProjectNote(currentProject.id, noteId, {
             title,
-            content: content ?? existingNote?.bodyMarkdown ?? '',
-            filePath: existingNote?.sourceUrl || '',
+            content: nextContent,
+            filePath,
             updatedAt: new Date().toISOString(),
             tags: Array.from(new Set([...(existingNote?.tags || []), ...tags])),
           });
@@ -679,6 +732,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       createProjectNote,
       currentProject,
       loadKnowledgeNotes,
+      projectKnowledgeRootDir,
       serverNotes,
       setKnowledgeOrganizeState,
       setProposalStatus,
@@ -1411,12 +1465,8 @@ export const AIChat: React.FC<AIChatProps> = ({
             aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
           }
 
-          const fallbackWorkflowPackage = chooseNextWorkflowPackage(workflowAvailability);
           const requestedWorkflowPackage = skillIntent.package;
-          const targetWorkflowPackage =
-            requestedWorkflowPackage === 'requirements' || requestedWorkflowPackage === fallbackWorkflowPackage
-              ? requestedWorkflowPackage
-              : fallbackWorkflowPackage;
+          const targetWorkflowPackage = requestedWorkflowPackage;
 
           await runAIWorkflowPackage(targetWorkflowPackage);
 
@@ -1472,25 +1522,10 @@ export const AIChat: React.FC<AIChatProps> = ({
           }
 
           const finalContent = result.content.trim() || '本地 Agent 已执行，但没有返回内容。';
-          const knowledgeProposal =
-            !skillIntent && currentProject
-              ? suggestKnowledgeProposalFromAnswer({
-                  projectId: currentProject.id,
-                  answerContent: finalContent,
-                  currentFile: knowledgeSelectionMeta.currentFile,
-                  relatedFiles: knowledgeSelectionMeta.relatedFiles,
-                })
-              : null;
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: knowledgeProposal
-              ? `${finalContent}\n\n我整理了一份可执行的知识库提案，你可以直接在这条消息里选择后执行。`
-              : finalContent,
-            knowledgeProposal: knowledgeProposal || undefined,
+            content: finalContent,
           }));
-          if (knowledgeProposal) {
-            upsertProposal(knowledgeProposal);
-          }
           const activityEntry = buildRunSummaryEntry({
             runId,
             content: finalContent,
@@ -1556,25 +1591,10 @@ export const AIChat: React.FC<AIChatProps> = ({
             : response.trim() || '已收到请求，但这次没有返回内容。';
         clearStreamingDraft(assistantMessage.id);
         const normalizedFinalContent = finalContent.trim() || response.trim() || '已收到请求，但这次没有返回内容。';
-        const knowledgeProposal =
-          !skillIntent && currentProject
-            ? suggestKnowledgeProposalFromAnswer({
-                projectId: currentProject.id,
-                answerContent: normalizedFinalContent,
-                currentFile: knowledgeSelectionMeta.currentFile,
-                relatedFiles: knowledgeSelectionMeta.relatedFiles,
-              })
-            : null;
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
-          content: knowledgeProposal
-            ? `${normalizedFinalContent}\n\n我整理了一份可执行的知识库提案，你可以直接在这条消息里选择后执行。`
-            : normalizedFinalContent,
-          knowledgeProposal: knowledgeProposal || undefined,
+          content: normalizedFinalContent,
         }));
-        if (knowledgeProposal) {
-          upsertProposal(knowledgeProposal);
-        }
         const activityEntry = buildRunSummaryEntry({
           runId,
           content: finalContent,
@@ -1683,7 +1703,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   };
 
   const historyMenu = showHistoryMenu ? (
-    <ClaudianHistoryMenu
+    <GNAgentHistoryMenu
       sessions={sessions}
       activeSessionId={activeSessionId}
       onCreateSession={handleCreateSession}
@@ -1794,7 +1814,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         </div>
       </div>
 
-      <ClaudianActivityPanel activityEntries={activityEntries} formatTimestamp={formatTimestamp} />
+      <GNAgentActivityPanel activityEntries={activityEntries} formatTimestamp={formatTimestamp} />
     </div>
   ) : activeDrawer === 'artifacts' ? (
     <div className="chat-shell-drawer-panel">
@@ -1836,7 +1856,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const agentLaneContent =
     activeAgentLane === 'chat' ? (
-      <ClaudianMessageList
+      <GNAgentMessageList
         messages={messages}
         draftContents={streamingDraftContents}
         formatTimestamp={formatTimestamp}
@@ -1919,26 +1939,6 @@ export const AIChat: React.FC<AIChatProps> = ({
           ) : null}
         </div>
       </section>
-    ) : activeAgentLane === 'skills' ? (
-      <section className="chat-agent-panel chat-agent-skills-panel" aria-label="GN Agent skills">
-        <div className="chat-agent-panel-header">
-          <strong>Skills</strong>
-          <span>选择一个能力，GN Agent 会把对应指令放入输入区。</span>
-        </div>
-        <div className="chat-agent-capability-grid">
-          {GN_AGENT_SUGGESTIONS.map((suggestion) => (
-            <button
-              key={suggestion.label}
-              type="button"
-              className="chat-agent-capability-card"
-              onClick={() => handleApplySuggestion(suggestion.prompt)}
-            >
-              <strong>{suggestion.label}</strong>
-              <span>{suggestion.description}</span>
-            </button>
-          ))}
-        </div>
-      </section>
     ) : (
       <section className="chat-agent-panel chat-agent-activity-panel" aria-label="GN Agent activity">
         <div className="chat-agent-panel-header">
@@ -1984,9 +1984,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       {isSettingsOpen ? <div className="chat-settings-overlay" onClick={closeSettings} /> : null}
 
       <section
-        className={`${getChatShellLayoutClassName(lockExpandedForEmbedded ? false : isCollapsed)}${isClaudianEmbedded ? ' chat-shell-embedded' : ''}`}
+        className={`${getChatShellLayoutClassName(lockExpandedForEmbedded ? false : isCollapsed)}${isEmbedded ? ' chat-shell-embedded' : ''}`}
       >
-        <header className={`chat-shell-header chat-shell-gn-header${isClaudianEmbedded ? ' embedded' : ''}`}>
+        <header className={`chat-shell-header chat-shell-gn-header${isEmbedded ? ' embedded' : ''}`}>
           <div className="chat-shell-header-main">
             <div className="chat-shell-title">
               <span className="chat-shell-kicker">GN Agent</span>
@@ -1994,7 +1994,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               {showExpandedShell ? <span>{currentProject?.name || '未打开项目'}</span> : null}
             </div>
 
-            {showExpandedShell && !isGNAgentEmbedded ? (
+            {showExpandedShell && !isEmbedded ? (
               <div className="chat-shell-status-strip">
                 <span className="chat-shell-status-pill">{selectedAgent.label}</span>
                 <span className="chat-shell-status-pill">{selectedRuntimeConfig?.model || '未启用模型'}</span>
@@ -2073,7 +2073,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                 </>
               ) : null}
 
-              {!isClaudianEmbedded ? (
+              {!isEmbedded ? (
                 <button
                   className="chat-shell-icon-btn"
                   type="button"
@@ -2114,10 +2114,10 @@ export const AIChat: React.FC<AIChatProps> = ({
             <>
             {agentLaneContent}
 
-            {isClaudianEmbedded ? (
+            {isEmbedded ? (
                 <>
-                  <ClaudianEmbeddedComposer
-                    entrySwitch={isGNAgentEmbedded ? null : <ClaudianModeSwitch compact />}
+                  <GNAgentEmbeddedComposer
+                    entrySwitch={isGNAgentEmbedded ? null : <GNAgentModeSwitch compact />}
                     input={input}
                     setInput={setInput}
                     textareaRef={textareaRef}
@@ -2458,4 +2458,5 @@ export const AIChat: React.FC<AIChatProps> = ({
     </>
   );
 };
+
 

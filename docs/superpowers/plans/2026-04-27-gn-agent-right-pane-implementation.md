@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the right-side AI surface feel like a complete GN Agent command center rather than a hidden chat box or Claudian shell.
+**Goal:** Make the right-side AI surface feel like a complete GN Agent command center rather than a hidden chat box or legacy AI shell.
 
-**Architecture:** Keep `AIChat` as the execution owner and add a lane-based agent UI around its existing chat, context, skills, artifact, and activity state. Remove visible Claudian product language by routing the workspace through GN Agent naming while preserving existing local runtime bridges as internal execution plugins.
+**Architecture:** Keep `AIChat` as the execution owner and add a lane-based agent UI around its existing chat, context, skills, artifact, and activity state. Remove visible legacy shell language by routing the workspace through GN Agent naming while preserving existing local runtime bridges as internal execution plugins.
 
 **Tech Stack:** React 19, TypeScript, Zustand, Vite, static Node tests, Tauri invoke bridge.
 
@@ -21,7 +21,7 @@
   - Add stable three-layer GN Agent layout styles.
   - Add lane tab, task, artifact, context, skill, and activity panel styles.
 - Modify: `src/components/ai/AIWorkspace.tsx`
-  - Route the right-side workspace through GN Agent identity instead of `ClaudianWorkspace`.
+  - Route the right-side workspace through GN Agent identity instead of the legacy workspace wrapper.
 - Create: `src/components/ai/GNAgentWorkspace.tsx`
   - Small wrapper for the right pane using `AIChat`.
 - Modify: `tests/ai/ai-chat-skills-and-activity-ui.test.mjs`
@@ -44,8 +44,8 @@ assert.match(source, /Activity/);
 assert.match(source, /chat-agent-lane-tabs/);
 assert.match(source, /chat-agent-capability-grid/);
 assert.match(source, /@变更同步|@鍙樻洿鍚屾/);
-assert.doesNotMatch(source, /Claudian Workspace/);
-assert.doesNotMatch(source, /Claudian Settings/);
+assert.doesNotMatch(source, /Legacy Workspace/);
+assert.doesNotMatch(source, /Legacy Settings/);
 ```
 
 - [ ] **Step 2: Run test and verify it fails**
@@ -113,7 +113,7 @@ Render chat messages only when `activeAgentLane === 'chat'`. For other lanes, re
 ```tsx
 const activeLaneContent =
   activeAgentLane === 'chat' ? (
-    <ClaudianMessageList ... />
+    <GNAgentMessageList ... />
   ) : activeAgentLane === 'tasks' ? (
     <section className="chat-agent-panel chat-agent-task-panel">...</section>
   ) : activeAgentLane === 'artifacts' ? (
@@ -156,14 +156,14 @@ export const GNAgentWorkspace: React.FC = () => (
 
 - [ ] **Step 2: Route `AIWorkspace` to `GNAgentWorkspace`**
 
-Replace the `ClaudianWorkspace` import and usage in `src/components/ai/AIWorkspace.tsx` with `GNAgentWorkspace`.
+Replace the legacy workspace import and usage in `src/components/ai/AIWorkspace.tsx` with `GNAgentWorkspace`.
 
-- [ ] **Step 3: Verify source no longer exposes Claudian as the active right-pane workspace**
+- [ ] **Step 3: Verify source no longer exposes legacy shell naming as the active right-pane workspace**
 
 Run:
 
 ```bash
-Select-String -Path src\components\ai\AIWorkspace.tsx -Pattern 'Claudian'
+Select-String -Path src\components\ai\AIWorkspace.tsx -Pattern 'GNAgentWorkspace'
 ```
 
 Expected: no matches.
@@ -250,6 +250,6 @@ Expected: TypeScript and Vite build complete with exit code 0.
 
 ## Self-Review
 
-- Spec coverage: the plan covers GN Agent identity, six lanes, visible skills, context/artifacts/activity panels, and visible Claudian removal.
+- Spec coverage: the plan covers GN Agent identity, six lanes, visible skills, context/artifacts/activity panels, and legacy shell removal.
 - Placeholder scan: no `TBD` or `TODO` remains.
 - Type consistency: `AgentLaneId`, `GN_AGENT_LANES`, and CSS class names are defined once and reused consistently.

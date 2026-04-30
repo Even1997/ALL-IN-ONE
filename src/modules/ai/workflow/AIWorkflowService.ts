@@ -7,6 +7,7 @@ import {
   createWireframeModule,
   getCanvasPreset,
   isMobileAppType,
+  toWireframeModuleDrafts,
 } from '../../../utils/wireframe';
 import { buildKnowledgeContextSections } from '../../knowledge/knowledgeContext';
 import { buildKnowledgeContextSelection, buildKnowledgeEntries } from '../../knowledge/knowledgeEntries';
@@ -76,6 +77,9 @@ type PageStructureSkillOutput = {
 
 type StructuredWireframeModule = {
   name: string;
+  purpose?: string;
+  actions?: string[];
+  priority?: string;
   content: string;
   x: number;
   y: number;
@@ -135,7 +139,7 @@ const WORKFLOW_PROMPTS: Record<AISkillName, string> = {
   page_structure_skill:
     '你是信息架构设计师。请把功能树映射为页面结构，优先页面目标和用户任务闭环，不要生成实现细节。',
   wireframe_skill:
-    '你是低保真原型设计师。请只输出布局模块，不输出视觉设计词，不输出前端代码。',
+    '你是低保真原型设计师。请先做模块设计，再输出线框。每个页面必须拆成 4-8 个功能模块，模块名要体现业务职责，不能只写“容器/卡片/区域”。每个模块都要填写 purpose、content、actions、priority，说明它承载的目标、信息和关键操作。只输出模块化线框，不输出视觉风格词，不输出前端代码。',
   html_prototype_skill:
     '你是前端原型设计师。请基于已确认草图生成可预览 HTML 原型，保留低到中保真交互，不实现真实业务逻辑。',
 };
@@ -571,6 +575,46 @@ const buildPageNode = (
   children: input.children.map((child) => buildPageNode(child, featureIdMap, child.children.length > 0 ? '产品' : 'UI设计')),
 });
 
+const buildWireframeModuleSummary = (module: StructuredWireframeModule) => {
+  const sections = [
+    module.purpose ? `职责：${module.purpose}` : '',
+    module.content ? `内容：${module.content}` : '',
+    module.actions && module.actions.length > 0 ? `操作：${module.actions.join(' / ')}` : '',
+    module.priority ? `优先级：${module.priority}` : '',
+  ].filter(Boolean);
+
+  return sections.join('\n');
+};
+
+const buildWireframePageContext = (pages: PageStructureNode[], featureTree: FeatureTree) => {
+  const designPages = collectDesignPages(pages);
+  const featureNodeQueue = [...featureTree.children];
+  const featureMap = new Map<string, string>();
+
+  while (featureNodeQueue.length > 0) {
+    const node = featureNodeQueue.shift();
+    if (!node) {
+      continue;
+    }
+
+    featureMap.set(node.id, node.name);
+    featureNodeQueue.push(...node.children);
+  }
+
+  return designPages
+    .map((page) => {
+      const featureNames = page.featureIds.map((id) => featureMap.get(id) || id).filter(Boolean);
+      return [
+        `page: ${page.name}`,
+        `route: ${page.metadata.route}`,
+        `goal: ${page.metadata.goal || page.description || page.name}`,
+        `description: ${page.description || page.metadata.goal || page.name}`,
+        `features: ${featureNames.join(' / ') || '无'}`,
+      ].join('\n');
+    })
+    .join('\n\n---\n\n');
+};
+
 const buildWireframeModules = (
   page: PageStructureNode,
   appType: StyleProfile['appType'],
@@ -582,19 +626,109 @@ const buildWireframeModules = (
 
   if (mobile) {
     return [
-      { name: `${page.name} 顶部栏`, content: promptSummary || page.name, x: 20, y: 28, width: 318, height: 92 },
-      { name: '主视觉区', content: featureLabels[0] || '核心信息与操作入口', x: 20, y: 138, width: 318, height: 144 },
-      { name: '内容区', content: featureLabels[1] || '主要内容模块', x: 20, y: 302, width: 318, height: 208 },
-      { name: '操作区', content: '提交、下一步、状态反馈', x: 20, y: 530, width: 318, height: 168 },
-      { name: '底部栏', content: '导航 / 主要操作', x: 20, y: 720, width: 318, height: 84 },
+      {
+        name: `${page.name} 顶部导航`,
+        purpose: '帮助用户确认页面位置并快速返回关键入口。',
+        actions: ['返回上一级', '查看标题'],
+        priority: 'high',
+        content: promptSummary || page.name,
+        x: 20,
+        y: 28,
+        width: 318,
+        height: 92,
+      },
+      {
+        name: '核心信息模块',
+        purpose: '展示当前页面最重要的信息或结果。',
+        actions: ['查看核心信息'],
+        priority: 'high',
+        content: featureLabels[0] || '核心信息与主要价值说明',
+        x: 20,
+        y: 138,
+        width: 318,
+        height: 144,
+      },
+      {
+        name: '主要内容模块',
+        purpose: '承载用户完成当前任务所需的主体内容。',
+        actions: ['浏览内容', '编辑内容'],
+        priority: 'high',
+        content: featureLabels[1] || '主体内容模块',
+        x: 20,
+        y: 302,
+        width: 318,
+        height: 208,
+      },
+      {
+        name: '关键操作模块',
+        purpose: '承接提交、下一步、确认等主操作。',
+        actions: ['提交', '下一步', '保存'],
+        priority: 'high',
+        content: '提交、下一步、状态反馈',
+        x: 20,
+        y: 530,
+        width: 318,
+        height: 168,
+      },
+      {
+        name: '底部导航模块',
+        purpose: '提供辅助导航或高频切换入口。',
+        actions: ['切换 Tab', '进入常用入口'],
+        priority: 'medium',
+        content: '导航 / 常用操作',
+        x: 20,
+        y: 720,
+        width: 318,
+        height: 84,
+      },
     ];
   }
 
   return [
-    { name: `${page.name} 顶部导航`, content: promptSummary || page.name, x: 36, y: 28, width: 1160, height: 84 },
-    { name: '侧边导航 / 筛选', content: featureLabels[0] || '一级导航和筛选条件', x: 36, y: 136, width: 252, height: 536 },
-    { name: '主内容区', content: featureLabels[1] || '主体内容与关键任务流', x: 320, y: 136, width: 560, height: 536 },
-    { name: '辅助信息区', content: featureLabels[2] || '说明、状态和补充信息', x: 912, y: 136, width: 284, height: 536 },
+    {
+      name: `${page.name} 顶部导航`,
+      purpose: '帮助用户理解当前页面位置并进入关键入口。',
+      actions: ['全局导航', '搜索', '快捷入口'],
+      priority: 'high',
+      content: promptSummary || page.name,
+      x: 36,
+      y: 28,
+      width: 1160,
+      height: 84,
+    },
+    {
+      name: '筛选与导航模块',
+      purpose: '帮助用户缩小范围、切换视角或选择工作对象。',
+      actions: ['筛选', '切换分类'],
+      priority: 'high',
+      content: featureLabels[0] || '一级导航和筛选条件',
+      x: 36,
+      y: 136,
+      width: 252,
+      height: 536,
+    },
+    {
+      name: '主任务模块',
+      purpose: '承接当前页面最核心的主任务流程。',
+      actions: ['查看详情', '执行主任务'],
+      priority: 'high',
+      content: featureLabels[1] || '主体内容与关键任务流',
+      x: 320,
+      y: 136,
+      width: 560,
+      height: 536,
+    },
+    {
+      name: '辅助信息模块',
+      purpose: '补充说明、状态、提示和上下文信息。',
+      actions: ['查看说明', '确认状态'],
+      priority: 'medium',
+      content: featureLabels[2] || '说明、状态和补充信息',
+      x: 912,
+      y: 136,
+      width: 284,
+      height: 536,
+    },
   ];
 };
 
@@ -639,7 +773,10 @@ const mapWireframesToDocuments = (
         createWireframeModule(
           {
             name: module.name,
-            content: module.content,
+            purpose: module.purpose,
+            actions: module.actions,
+            priority: module.priority,
+            content: buildWireframeModuleSummary(module) || module.content,
             x: module.x,
             y: module.y,
             width: module.width,
@@ -661,6 +798,44 @@ const escapeHTML = (value: string) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+
+const buildPrototypeModuleMeta = (element: WireframeDocument['elements'][number]) => {
+  const purpose = String(element.props.purpose || '').trim();
+  const priority = String(element.props.priority || '').trim();
+  const actions = Array.isArray(element.props.actions)
+    ? element.props.actions
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+    : [];
+
+  return {
+    purpose,
+    priority,
+    actions,
+  };
+};
+
+const buildHTMLWireframeModulePrompt = (wireframes: Record<string, WireframeDocument>) =>
+  Object.values(wireframes)
+    .map((wireframe) => {
+      const modules = toWireframeModuleDrafts(wireframe.elements || []);
+      const moduleLines = modules
+        .map((module, index) =>
+          [
+            `${index + 1}. ${module.name}`,
+            module.purpose ? `purpose: ${module.purpose}` : '',
+            module.actions && module.actions.length > 0 ? `actions: ${module.actions.join(' / ')}` : '',
+            module.priority ? `priority: ${module.priority}` : '',
+            module.content ? `content: ${module.content}` : '',
+          ]
+            .filter(Boolean)
+            .join(' | ')
+        )
+        .join('\n');
+
+      return `${wireframe.pageName}:\n${moduleLines || '暂无模块'}`;
+    })
+    .join('\n\n');
 
 const buildPrototypeHTML = (
   page: PageStructureNode,
@@ -684,10 +859,28 @@ const buildPrototypeHTML = (
           .map((element) => {
             const label = String(element.props.name || element.props.title || '模块');
             const content = String(element.props.content || element.props.text || '');
+            const meta = buildPrototypeModuleMeta(element);
+            const actionsMarkup =
+              meta.actions.length > 0
+                ? `<div class="module-card-actions">${meta.actions
+                    .map((action) => `<span class="module-card-action">${escapeHTML(action)}</span>`)
+                    .join('')}</div>`
+                : '';
+            const purposeMarkup = meta.purpose
+              ? `<div class="module-card-purpose">${escapeHTML(meta.purpose)}</div>`
+              : '';
+            const priorityMarkup = meta.priority
+              ? `<span class="module-card-priority">${escapeHTML(meta.priority)}</span>`
+              : '';
 
             return `<section class="module-card" style="left:${element.x}px;top:${element.y}px;width:${element.width}px;height:${element.height}px;">
-  <div class="module-card-head">${escapeHTML(label)}</div>
+  <div class="module-card-head">
+    <span>${escapeHTML(label)}</span>
+    ${priorityMarkup}
+  </div>
+  ${purposeMarkup}
   <div class="module-card-body">${escapeHTML(content || '内容待补充')}</div>
+  ${actionsMarkup}
 </section>`;
           })
           .join('\n')
@@ -815,13 +1008,46 @@ const buildPrototypeHTML = (
         box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
       }
       .module-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
         font-weight: 700;
         margin-bottom: 10px;
+      }
+      .module-card-priority {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent-soft) 32%, white);
+        color: var(--text);
+        font-size: 11px;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+      .module-card-purpose {
+        margin-bottom: 10px;
+        color: color-mix(in srgb, var(--text) 82%, transparent);
+        font-size: 13px;
+        line-height: 1.5;
       }
       .module-card-body {
         color: color-mix(in srgb, var(--text) 68%, transparent);
         font-size: 14px;
         line-height: 1.6;
+      }
+      .module-card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .module-card-action {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.12);
+        color: color-mix(in srgb, var(--text) 80%, transparent);
+        font-size: 11px;
+        line-height: 1;
       }
       @media (max-width: 1100px) {
         .shell {
@@ -994,7 +1220,7 @@ const buildSkillSchema = (skill: AISkillName) => {
     case 'page_structure_skill':
       return `{"summary":"string","pages":[{"name":"string","description":"string","route":"string","goal":"string","template":"workspace|form|list|detail|dashboard|custom","featureNames":["string"],"children":[...]}]}`;
     case 'wireframe_skill':
-      return `{"summary":"string","pages":[{"pageName":"string","modules":[{"name":"string","content":"string","x":0,"y":0,"width":0,"height":0}]}]}`;
+      return `{"summary":"string","pages":[{"pageName":"string","modules":[{"name":"string","purpose":"string","actions":["string"],"priority":"critical|high|medium|low","content":"string","x":0,"y":0,"width":0,"height":0}]}]}`;
     case 'html_prototype_skill':
       return `{"summary":"string","pages":[{"path":"string","title":"string","html":"string","cssTokensUsed":["string"]}]}`;
     default:
@@ -1094,19 +1320,9 @@ const buildRun = (projectId: string, targetPackage: AIWorkflowPackage, mode: AIE
 };
 
 export const canRunTargetPackage = (projectId: string, targetPackage: AIWorkflowPackage) => {
-  const workflowStore = useAIWorkflowStore.getState();
-  const latestRun = workflowStore.projects[projectId]?.runs?.[0];
-  const confirmed = new Set(latestRun?.confirmedStages || []);
-
-  if (targetPackage === 'requirements') {
-    return true;
-  }
-
-  if (targetPackage === 'prototype') {
-    return confirmed.has('requirements_spec') && confirmed.has('feature_tree');
-  }
-
-  return confirmed.has('page_structure') && confirmed.has('wireframes');
+  void projectId;
+  void targetPackage;
+  return true;
 };
 
 export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => {
@@ -1114,10 +1330,10 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
   void buildFeatureFallback;
   void buildPageStructureFallback;
   void buildWireframeFallback;
-  const projectStore = useProjectStore.getState();
-  const featureTreeStore = useFeatureTreeStore.getState();
+  let projectStore = useProjectStore.getState();
+  let featureTreeStore = useFeatureTreeStore.getState();
   const workflowStore = useAIWorkflowStore.getState();
-  const project = projectStore.currentProject;
+  let project = projectStore.currentProject;
 
   if (!project) {
     throw new Error('Please open a project before running the AI workflow');
@@ -1125,6 +1341,33 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
 
   if (!aiService.isConfigured()) {
     throw buildAIConfigurationError();
+  }
+
+  if (targetPackage === 'prototype' && !featureTreeStore.tree) {
+    await runAIWorkflowPackage('requirements');
+    projectStore = useProjectStore.getState();
+    featureTreeStore = useFeatureTreeStore.getState();
+    project = projectStore.currentProject;
+  }
+
+  if (targetPackage === 'page') {
+    if (!featureTreeStore.tree) {
+      await runAIWorkflowPackage('requirements');
+      projectStore = useProjectStore.getState();
+      featureTreeStore = useFeatureTreeStore.getState();
+      project = projectStore.currentProject;
+    }
+
+    if (projectStore.pageStructure.length === 0 || Object.keys(projectStore.wireframes).length === 0) {
+      await runAIWorkflowPackage('prototype');
+      projectStore = useProjectStore.getState();
+      featureTreeStore = useFeatureTreeStore.getState();
+      project = projectStore.currentProject;
+    }
+  }
+
+  if (!project) {
+    throw new Error('Please open a project before running the AI workflow');
   }
 
   ensureProjectWorkflowState(project.id, project.appType);
@@ -1136,10 +1379,6 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
     htmlPrototypes: [],
   };
   const mode = projectWorkflowState.executionMode;
-
-  if (!canRunTargetPackage(project.id, targetPackage)) {
-    throw new Error('Please confirm the previous workflow package before continuing');
-  }
 
   const inputSummary = summarize(projectStore.rawRequirementInput, 180) || `${project.name} workflow run`;
   let run = buildRun(project.id, targetPackage, mode, inputSummary);
@@ -1330,8 +1569,10 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
 
       const wireframePrompt = trimAndJoin(
         `app_type: ${project.appType}`,
-        `page_names:\n${collectDesignPages(nextPageStructure).map((page) => page.name).join('\n')}`,
-        `feature_names:\n${flattenFeatureNames(currentFeatureTree.children).join('\n')}`
+        'design_goal: 先拆模块，再输出线框；每个模块都要写清职责、内容、关键操作和优先级。',
+        `page_context:
+${buildWireframePageContext(nextPageStructure, currentFeatureTree)}`
+          + `\n\nfeature_names:\n${flattenFeatureNames(currentFeatureTree.children).join('\n')}`,
       );
       const wireframeResult = await executeWithAI('wireframe_skill', wireframePrompt, validateWireframes);
 
@@ -1389,9 +1630,7 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
         `style_profile: ${selected.name}`,
         `style_summary: ${selected.summary}`,
         `page_names:\n${collectDesignPages(projectStore.pageStructure).map((page) => page.name).join('\n')}`,
-        `wireframe_modules:\n${Object.values(projectStore.wireframes)
-          .map((wireframe) => `${wireframe.pageName}: ${wireframe.elements.length} modules`)
-          .join('\n')}`
+        `wireframe_modules:\n${buildHTMLWireframeModulePrompt(projectStore.wireframes)}`
       );
       const htmlResult = await executeWithAI('html_prototype_skill', htmlPrompt, validateHTMLPrototype);
       const fallbackPrototype = buildHTMLPrototypeFallback(project.id, projectStore.pageStructure, projectStore.wireframes, selected);

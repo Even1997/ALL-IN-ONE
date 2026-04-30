@@ -365,6 +365,12 @@ struct SyncSkillToRuntimeParams {
     project_root: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteLibrarySkillParams {
+    skill_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SkillDiscoveryEntry {
@@ -374,6 +380,8 @@ struct SkillDiscoveryEntry {
     path: String,
     manifest_path: String,
     imported: bool,
+    builtin: bool,
+    deletable: bool,
     synced_to_codex: bool,
     synced_to_claude: bool,
 }
@@ -385,6 +393,14 @@ struct SkillRuntimeSyncResult {
     runtime: SkillRuntimeTarget,
     target_path: String,
     synced: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillDeleteResult {
+    skill_id: String,
+    deleted_path: String,
+    deleted: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -853,6 +869,43 @@ fn list_skill_directories(root_dir: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(directories)
 }
 
+fn list_skill_directories_recursive(root_dir: &Path) -> Result<Vec<PathBuf>, String> {
+    if !root_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut directories = Vec::new();
+    let mut pending = vec![root_dir.to_path_buf()];
+
+    while let Some(current_dir) = pending.pop() {
+        for entry in fs::read_dir(&current_dir)
+            .map_err(|error| format!("Failed to read skills directory {}: {}", current_dir.display(), error))?
+        {
+            let entry = entry.map_err(|error| {
+                format!(
+                    "Failed to read skills directory entry in {}: {}",
+                    current_dir.display(),
+                    error
+                )
+            })?;
+            let candidate = entry.path();
+            if !candidate.is_dir() {
+                continue;
+            }
+
+            if candidate.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME).is_file() {
+                directories.push(candidate);
+            } else {
+                pending.push(candidate);
+            }
+        }
+    }
+
+    directories.sort();
+    directories.dedup();
+    Ok(directories)
+}
+
 fn is_skill_imported(app_data_dir: &Path, skill_id: &str) -> bool {
     let builtin_dir = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir).join(skill_id);
     let imported_dir = get_goodnight_imported_skill_root_from_data_dir(app_data_dir).join(skill_id);
@@ -889,6 +942,8 @@ fn build_skill_entry(
     skill_dir: &Path,
     source: &str,
     imported: bool,
+    builtin: bool,
+    deletable: bool,
     allow_seed_manifest: bool,
 ) -> Result<SkillDiscoveryEntry, String> {
     let descriptor = load_skill_descriptor(skill_dir, allow_seed_manifest)?;
@@ -900,6 +955,8 @@ fn build_skill_entry(
         path: descriptor.skill_dir.to_string_lossy().to_string(),
         manifest_path: descriptor.manifest_path.to_string_lossy().to_string(),
         imported,
+        builtin,
+        deletable,
         synced_to_codex: is_skill_synced_to_codex(home_dir, &descriptor.id),
         synced_to_claude: is_skill_synced_to_claude(home_dir, &descriptor.id),
     })
@@ -1014,37 +1071,93 @@ fn collect_skill_discovery_entries(app_data_dir: &Path) -> Result<Vec<SkillDisco
     let builtin_root = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir);
     let imported_root = get_goodnight_imported_skill_root_from_data_dir(app_data_dir);
     let codex_root = home_dir.join(".codex").join("skills");
+    let claude_plugins_root = home_dir.join(".claude").join("plugins");
     let mut seen_paths = HashSet::new();
     let mut entries = Vec::new();
 
-    for (root, source_label, imported, allow_seed_manifest) in [
-        (builtin_root.as_path(), "GoodNight built-in", true, false),
-        (imported_root.as_path(), "GoodNight imported", true, true),
-        (codex_root.as_path(), "Codex local", false, false),
-    ] {
-        for skill_dir in list_skill_directories(root)? {
-            let path_key = skill_dir.to_string_lossy().to_string();
-            if !seen_paths.insert(path_key) {
-                continue;
-            }
-
-            let entry = build_skill_entry(
-                app_data_dir,
-                &home_dir,
-                &skill_dir,
-                source_label,
-                imported || is_skill_imported(app_data_dir, &load_skill_descriptor(&skill_dir, false)?.id),
-                allow_seed_manifest,
-            )?;
-            entries.push(entry);
+    for skill_dir in list_skill_directories(&builtin_root)? {
+        let path_key = skill_dir.to_string_lossy().to_string();
+        if !seen_paths.insert(path_key) {
+            continue;
         }
+
+        let entry = build_skill_entry(
+            app_data_dir,
+            &home_dir,
+            &skill_dir,
+            "GoodNight built-in",
+            true,
+            true,
+            false,
+            false,
+        )?;
+        entries.push(entry);
+    }
+
+    for skill_dir in list_skill_directories(&imported_root)? {
+        let path_key = skill_dir.to_string_lossy().to_string();
+        if !seen_paths.insert(path_key) {
+            continue;
+        }
+
+        let entry = build_skill_entry(
+            app_data_dir,
+            &home_dir,
+            &skill_dir,
+            "GoodNight imported",
+            true,
+            false,
+            true,
+            true,
+        )?;
+        entries.push(entry);
+    }
+
+    for skill_dir in list_skill_directories(&codex_root)? {
+        let path_key = skill_dir.to_string_lossy().to_string();
+        if !seen_paths.insert(path_key) {
+            continue;
+        }
+
+        let descriptor = load_skill_descriptor(&skill_dir, false)?;
+        let entry = build_skill_entry(
+            app_data_dir,
+            &home_dir,
+            &skill_dir,
+            "Codex local",
+            is_skill_imported(app_data_dir, &descriptor.id),
+            false,
+            false,
+            false,
+        )?;
+        entries.push(entry);
+    }
+
+    for skill_dir in list_skill_directories_recursive(&claude_plugins_root)? {
+        let path_key = skill_dir.to_string_lossy().to_string();
+        if !seen_paths.insert(path_key) {
+            continue;
+        }
+
+        let descriptor = load_skill_descriptor(&skill_dir, false)?;
+        let entry = build_skill_entry(
+            app_data_dir,
+            &home_dir,
+            &skill_dir,
+            "Claude local",
+            is_skill_imported(app_data_dir, &descriptor.id),
+            false,
+            false,
+            false,
+        )?;
+        entries.push(entry);
     }
 
     entries.sort_by(|left, right| {
         left.source
             .cmp(&right.source)
             .then_with(|| left.name.cmp(&right.name))
-            .then_with(|| left.path.cmp(&right.path))
+            .then_with(|| left.id.cmp(&right.id))
     });
 
     Ok(entries)
@@ -1350,6 +1463,8 @@ fn import_local_skill(
         &target_dir,
         "GoodNight imported",
         true,
+        false,
+        true,
         true,
     )
 }
@@ -1413,6 +1528,8 @@ fn import_github_skill(
         &target_dir,
         format!("GitHub {}", repo).as_str(),
         true,
+        false,
+        true,
         true,
     )
 }
@@ -1472,6 +1589,42 @@ fn sync_skill_to_runtime(
         runtime: params.runtime,
         target_path: target_path.to_string_lossy().to_string(),
         synced: true,
+    })
+}
+
+#[tauri::command]
+fn delete_library_skill(
+    app_handle: tauri::AppHandle,
+    params: DeleteLibrarySkillParams,
+) -> Result<SkillDeleteResult, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
+    ensure_builtin_skills_installed(&app_data_dir)?;
+
+    let skill_id = sanitize_skill_id(params.skill_id.trim());
+    if skill_id.is_empty() {
+        return Err("Skill id cannot be empty.".to_string());
+    }
+
+    let builtin_dir = get_goodnight_builtin_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
+    if builtin_dir.is_dir() {
+        return Err("Built-in skills cannot be deleted.".to_string());
+    }
+
+    let imported_dir = get_goodnight_imported_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
+    if !imported_dir.is_dir() {
+        return Err("Only imported GoodNight skills can be deleted.".to_string());
+    }
+
+    fs::remove_dir_all(&imported_dir)
+        .map_err(|error| format!("Failed to delete skill {}: {}", imported_dir.display(), error))?;
+
+    Ok(SkillDeleteResult {
+        skill_id,
+        deleted_path: imported_dir.to_string_lossy().to_string(),
+        deleted: true,
     })
 }
 
@@ -2374,6 +2527,7 @@ pub fn run() {
             import_local_skill,
             import_github_skill,
             sync_skill_to_runtime,
+            delete_library_skill,
             import_knowledge_assets,
             read_text_file,
             open_path_in_shell,

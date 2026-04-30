@@ -8,26 +8,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 const aiChatCssPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.css');
-const claudianPiecesPath = path.resolve(__dirname, '../../src/components/ai/claudian/ClaudianEmbeddedPieces.tsx');
+const gnAgentPiecesPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx');
 
-test('AIChat uses icon-first composer controls and a unified reference menu trigger', async () => {
+test('AIChat keeps icon-first shell controls and GN Agent embedded entry support', async () => {
   const source = await readFile(aiChatPath, 'utf8');
-  const pieces = await readFile(claudianPiecesPath, 'utf8');
+  const pieces = await readFile(gnAgentPiecesPath, 'utf8');
 
-  assert.match(source, /chat-composer-plus-btn/);
   assert.match(source, /chat-shell-icon-btn/);
-  assert.match(source, /ClaudianReferenceMenu/);
-  assert.match(pieces, /chat-reference-menu/);
-  assert.match(source, /selectedReferenceFileIds/);
-  assert.match(source, /handleApplyReferenceScope/);
+  assert.match(source, /GNAgentModeSwitch/);
+  assert.match(source, /@skill/);
+  assert.match(pieces, /chat-composer-gn-agent-entry/);
+  assert.match(pieces, /chat-composer-embedded-toolbar/);
 });
 
-test('AIChat keeps reference scope actions out of the main composer surface', async () => {
+test('AIChat no longer renders the old reference menu surface in the embedded GN Agent pieces', async () => {
   const source = await readFile(aiChatPath, 'utf8');
-  const pieces = await readFile(claudianPiecesPath, 'utf8');
+  const pieces = await readFile(gnAgentPiecesPath, 'utf8');
 
   assert.doesNotMatch(source, /chat-reference-scope-actions/);
-  assert.match(pieces, /chat-reference-menu-action/);
+  assert.doesNotMatch(source, /GNAgentReferenceMenu/);
+  assert.doesNotMatch(pieces, /chat-reference-menu-action/);
+});
+
+test('GN Agent embedded pieces only keep the active chat primitives', async () => {
+  const pieces = await readFile(gnAgentPiecesPath, 'utf8');
+
+  assert.doesNotMatch(pieces, /GNAgentEmbeddedTopbar/);
+  assert.doesNotMatch(pieces, /GNAgentSkillsPanel/);
 });
 
 test('AIChat stylesheet defines selected-file chip and menu styling', async () => {
@@ -37,3 +44,4 @@ test('AIChat stylesheet defines selected-file chip and menu styling', async () =
   assert.match(source, /\.chat-selected-reference-chips/);
   assert.match(source, /\.chat-reference-chip/);
 });
+

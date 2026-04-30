@@ -40,9 +40,9 @@ This plan was revised after an engineering review of the plan itself. The main f
   Record active page context, expose manual `变更同步`, and keep autosave separate from semantic sync.
 - `src/store/previewStore.ts`
   Keep current canvas behavior, but add semantic action logging, unsynced state, and synced baseline snapshots.
-- `src/modules/ai/claudian/runtime/claude/ClaudeRuntime.ts`
+- `src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts`
   Stop implying “local runtime” when the class is actually remote-provider execution.
-- `src/modules/ai/claudian/runtime/codex/CodexRuntime.ts`
+- `src/modules/ai/gn-agent/runtime/codex/CodexRuntime.ts`
   Same truthfulness fix as Claude.
 
 ### New files to create
@@ -347,8 +347,8 @@ git commit -m "feat: add chat orchestration and intent routing"
 
 **Files:**
 - Modify: `src/components/workspace/AIChat.tsx`
-- Modify: `src/modules/ai/claudian/runtime/claude/ClaudeRuntime.ts`
-- Modify: `src/modules/ai/claudian/runtime/codex/CodexRuntime.ts`
+- Modify: `src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts`
+- Modify: `src/modules/ai/gn-agent/runtime/codex/CodexRuntime.ts`
 - Test: `tests/ai/chat-workflow-routing.test.mjs`
 - Test: `tests/ai/local-agent-tabs-ui.test.mjs`
 
@@ -420,12 +420,12 @@ if (runtimeTarget.mode === 'local-agent') {
 ```
 
 ```ts
-// src/modules/ai/claudian/runtime/claude/ClaudeRuntime.ts
+// src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts
 summary: 'Claude provider runtime 将使用应用内 Anthropic 配置',
 ```
 
 ```ts
-// src/modules/ai/claudian/runtime/codex/CodexRuntime.ts
+// src/modules/ai/gn-agent/runtime/codex/CodexRuntime.ts
 summary: 'Codex provider runtime 将使用应用内 OpenAI Compatible 配置',
 ```
 
@@ -442,7 +442,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/workspace/AIChat.tsx src/modules/ai/claudian/runtime/claude/ClaudeRuntime.ts src/modules/ai/claudian/runtime/codex/CodexRuntime.ts tests/ai/chat-workflow-routing.test.mjs tests/ai/local-agent-tabs-ui.test.mjs
+git add src/components/workspace/AIChat.tsx src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts src/modules/ai/gn-agent/runtime/codex/CodexRuntime.ts tests/ai/chat-workflow-routing.test.mjs tests/ai/local-agent-tabs-ui.test.mjs
 git commit -m "refactor: route ai chat through unified orchestration"
 ```
 

@@ -13,7 +13,6 @@ export type GraphNodeType =
   | 'wireframe'
   | 'component'
   | 'api'
-  | 'database'
   | 'test'
   | 'deploy';
 
@@ -24,11 +23,6 @@ export interface ProjectConfig {
   vaultPath: string;
   knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   appType: AppType;
-  frontendFramework: string;
-  backendFramework: string;
-  database: string;
-  uiFramework: string;
-  deployment: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,7 +48,6 @@ export interface ProjectGraph {
 }
 
 export interface ProjectMemory {
-  techStack: Record<string, string>;
   designSystem: Record<string, unknown>;
   codeStructure: Record<string, unknown>;
 }

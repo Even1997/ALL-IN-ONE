@@ -1,13 +1,13 @@
-import React from 'react';
-import { AIChat } from '../workspace/AIChat';
+﻿import React from 'react';
+import { GNAgentShell } from './gn-agent-shell/GNAgentShell';
 
 type GNAgentWorkspaceProps = {
-  collapsed?: boolean;
-  onCollapsedChange?: (collapsed: boolean) => void;
+  mode?: 'panel';
 };
 
-export const GNAgentWorkspace: React.FC<GNAgentWorkspaceProps> = ({ collapsed, onCollapsedChange }) => (
-  <section className="gn-agent-workspace">
-    <AIChat variant="gn-agent-embedded" collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
+export const GNAgentWorkspace: React.FC<GNAgentWorkspaceProps> = () => (
+  <section className="gn-agent-workspace gn-agent-workspace-panel">
+    <GNAgentShell mode="panel" />
   </section>
 );
+

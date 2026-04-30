@@ -4,7 +4,7 @@ Date: 2026-04-27
 
 ## Goal
 
-Turn the current right-side AI chat into GN Agent: a visible agent command center that makes project AI capabilities discoverable, inspectable, and actionable without exposing the old Claudian product shell.
+Turn the current right-side AI chat into GN Agent: a visible agent command center that makes project AI capabilities discoverable, inspectable, and actionable without exposing the old legacy shell.
 
 ## Assumptions
 
@@ -40,7 +40,7 @@ The composer stays available across lanes so the user can issue follow-up instru
 - Clicking a skill should prefill the composer with its `@token` prompt.
 - Clicking Context should expose the existing reference menu and context budget information.
 - Clicking Tasks, Artifacts, or Activity should not navigate away from the agent; these are plugin-like panes inside the right rail.
-- Runtime names can appear as technical details only where needed, but Claudian must not appear as a visible product label.
+- Runtime names can appear as technical details only where needed, but legacy shell naming must not appear as a visible product label.
 
 ## Existing Code To Reuse
 
@@ -67,5 +67,5 @@ The composer stays available across lanes so the user can issue follow-up instru
 - Existing chat messages and composer still work in the Chat lane.
 - Skills are visible as first-class capabilities, not hidden in helper text.
 - Artifacts and activity data already available in the chat layer are surfaced in dedicated panes.
-- User-facing Claudian product labels are removed from the right-pane workspace.
+- User-facing legacy shell labels are removed from the right-pane workspace.
 - Targeted tests and `npm run build` pass after implementation.

@@ -1012,6 +1012,7 @@ interface ProductWorkbenchProps {
   layoutFocus: WorkbenchLayoutFocus;
   layoutDensity: WorkbenchLayoutDensity;
   entryTab?: SidebarTab;
+  preferredPageId?: string | null;
   onEntryTabChange?: (tab: SidebarTab) => void;
 }
 
@@ -1020,6 +1021,7 @@ export const ProductWorkbench = ({
   layoutFocus,
   layoutDensity,
   entryTab,
+  preferredPageId,
   onEntryTabChange,
 }: ProductWorkbenchProps) => {
   const [internalSidebarTab, setInternalSidebarTab] = useState<SidebarTab>('knowledge');
@@ -1689,6 +1691,14 @@ export const ProductWorkbench = ({
       current && designPages.some((page) => page.id === current) ? current : designPages[0].id
     );
   }, [clearCanvas, designPages]);
+
+  useEffect(() => {
+    if (!preferredPageId || !designPages.some((page) => page.id === preferredPageId)) {
+      return;
+    }
+
+    setManualPageId((current) => (current === preferredPageId ? current : preferredPageId));
+  }, [designPages, preferredPageId]);
 
   useEffect(() => {
     if (!canUseProjectFilesystem || !currentProject || !selectedPage) {

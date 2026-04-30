@@ -1,8 +1,9 @@
-import React from 'react';
-import { ClaudianChatPage } from '../claudian-shell/ClaudianChatPage';
+﻿import React from 'react';
+import { GNAgentChatPage } from '../gn-agent-shell/GNAgentChatPage';
 
 export const ClassicWorkspace: React.FC<{
   mode?: 'panel' | 'full-page';
 }> = ({ mode = 'full-page' }) => (
-  <ClaudianChatPage providerId="classic" mode={mode} />
+  <GNAgentChatPage providerId="classic" mode={mode} />
 );
+

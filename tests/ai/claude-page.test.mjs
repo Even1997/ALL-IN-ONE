@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -29,5 +29,6 @@ test('app keeps AI in the shared right pane instead of a dedicated Claude route'
 test('ai chat no longer exposes a dedicated claude full-page variant', async () => {
   const source = await readFile(aiChatPath, 'utf8');
 
-  assert.doesNotMatch(source, /claudian-full-page/);
+  assert.doesNotMatch(source, /gn-agent-full-page/);
 });
+

@@ -157,15 +157,6 @@ const buildStarterFeatureTree = (projectName: string): FeatureTree => ({
   ],
 });
 
-const getDefaultProjectSettings = () => ({
-  appType: 'desktop' as const,
-  frontendFramework: 'React',
-  backendFramework: 'Tauri',
-  database: 'SQLite',
-  uiFramework: 'Tailwind',
-  deployment: 'Local Server',
-});
-
 const createFeature = (
   name: string,
   overrides: Partial<FeatureNode> = {},
@@ -419,22 +410,14 @@ const buildFeatureTreeFromRequirements = (
   };
 };
 
-const buildProjectMemory = (project: ProjectConfig): ProjectMemory => ({
-  techStack: {
-    appType: project.appType,
-    frontend: project.frontendFramework,
-    backend: project.backendFramework,
-    database: project.database,
-    uiFramework: project.uiFramework,
-    deployment: project.deployment,
-  },
+const buildProjectMemory = (_project: ProjectConfig): ProjectMemory => ({
   designSystem: {
     mode: 'draft',
-    uiFramework: project.uiFramework,
+    source: 'workspace',
   },
   codeStructure: {
     frontendRoot: 'src',
-    backendRoot: project.backendFramework ? 'src-tauri / server' : 'src',
+    generatedRoot: 'src/generated',
   },
 });
 
@@ -732,7 +715,7 @@ const buildDesignSystemDoc = (
   return {
     id: uuidv4(),
     name: `${project.name} Design System`,
-    summary: `围绕 ${project.uiFramework} 与 ${project.frontendFramework} 生成的基础设计系统草案。`,
+    summary: '围绕当前页面结构与线框生成的基础设计系统草案。',
     principles: [
       '优先保持页面结构与功能任务的一致性',
       '组件命名和布局语义应能映射到开发任务',
@@ -807,7 +790,7 @@ const buildDevTasks = (
   features: FeatureNode[],
   pages: PageStructureNode[],
   uiSpecs: UISpecDoc[],
-  project: ProjectConfig
+  _project: ProjectConfig
 ): DevTask[] => {
   const frontendTasks = pages.map((page) => {
     const spec = uiSpecs.find((item) => item.pageId === page.id);
@@ -815,7 +798,7 @@ const buildDevTasks = (
     return {
       id: uuidv4(),
       title: `实现页面：${page.name}`,
-      summary: `基于 ${page.name} 的 UI Spec 搭建 ${project.frontendFramework} 页面骨架。`,
+      summary: `基于 ${page.name} 的 UI Spec 搭建页面骨架。`,
       owner: 'frontend' as const,
       status: 'ready' as const,
       pageId: page.id,
@@ -852,7 +835,7 @@ const buildDevTasks = (
 
   const devopsTask: DevTask = {
     id: uuidv4(),
-    title: `部署到 ${project.deployment}`,
+    title: '准备部署方案',
     summary: '生成部署脚本、环境变量清单与交付流程说明。',
     owner: 'devops',
     status: 'ready',
@@ -864,7 +847,7 @@ const buildDevTasks = (
 };
 
 const buildGeneratedFiles = (
-  project: ProjectConfig,
+  _project: ProjectConfig,
   designSystem: DesignSystemDoc,
   uiSpecs: UISpecDoc[],
   devTasks: DevTask[],
@@ -928,7 +911,7 @@ const buildGeneratedFiles = (
     },
     {
       path: 'src/generated/deploy/deploy-plan.md',
-      content: `# Deploy Plan\n\nTarget: ${project.deployment}\n\n${deployPlan.steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n`,
+      content: `# Deploy Plan\n\nTarget: ${deployPlan.target}\n\n${deployPlan.steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n`,
       language: 'md' as const,
       category: 'deploy' as const,
       summary: '部署计划文档',
@@ -937,7 +920,7 @@ const buildGeneratedFiles = (
     },
     {
       path: 'src/generated/deploy/deploy.sh',
-      content: `#!/usr/bin/env bash\nnpm run build\n# deploy to ${project.deployment}\n`,
+      content: `#!/usr/bin/env bash\nnpm run build\n# deploy to target after environment review\n`,
       language: 'sh' as const,
       category: 'deploy' as const,
       summary: '部署脚本草案',
@@ -990,7 +973,6 @@ const buildPlanningFiles = (
         `# ${project.name} 需求资料`,
         '',
         `> 项目：${project.name}`,
-        `> 技术栈：${project.frontendFramework} / ${project.backendFramework} / ${project.database}`,
         '',
         '## 原始需求',
         '',
@@ -1095,21 +1077,21 @@ const buildTestPlan = (features: FeatureNode[], pages: PageStructureNode[], uiSp
 };
 
 const buildDeployPlan = (
-  project: ProjectConfig,
+  _project: ProjectConfig,
   generatedFiles: Pick<GeneratedFile, 'path'>[]
 ): DeployPlanDoc => {
   const now = new Date().toISOString();
 
   return {
     id: uuidv4(),
-    target: project.deployment,
-    summary: `围绕 ${project.deployment} 输出的基础交付计划。`,
+    target: '待定',
+    summary: '围绕当前项目输出的基础交付计划。',
     environments: ['development', 'staging', 'production'],
     envVars: ['APP_ENV', 'API_BASE_URL', 'DATABASE_URL'],
     steps: [
       '校验项目配置与设计/开发产物一致',
       '执行 npm run build 构建前端产物',
-      `按 ${project.deployment} 目标准备部署配置`,
+      '按目标环境补齐部署配置',
       '发布后执行核心页面冒烟测试',
     ],
     artifacts: generatedFiles.map((file) => file.path),
@@ -1263,20 +1245,6 @@ const buildProjectGraph = (
         summary: task.summary,
       },
     }));
-  const databaseNodes: GraphNodeBase[] =
-    project.database && project.database !== 'None'
-      ? [
-          {
-            id: `${project.id}-database`,
-            type: 'database',
-            name: project.database,
-            status: 'ready',
-            metadata: {
-              provider: project.database,
-            },
-          },
-        ]
-      : [];
   const testNodes: GraphNodeBase[] = (testPlan?.cases || []).map((item) => ({
     id: item.id,
     type: 'test',
@@ -1312,11 +1280,6 @@ const buildProjectGraph = (
       status: 'ready',
       metadata: {
         appType: project.appType,
-        frontendFramework: project.frontendFramework,
-        backendFramework: project.backendFramework,
-        database: project.database,
-        uiFramework: project.uiFramework,
-        deployment: project.deployment,
       },
     },
     ...requirementNodes,
@@ -1340,7 +1303,6 @@ const buildProjectGraph = (
       : []),
     ...componentNodes,
     ...apiNodes,
-    ...databaseNodes,
     ...testNodes,
     ...deployNodes,
   ];
@@ -1408,12 +1370,6 @@ const buildProjectGraph = (
       from: project.id,
       to: node.id,
       relation: 'implements' as const,
-    })),
-    ...databaseNodes.map((node) => ({
-      id: uuidv4(),
-      from: project.id,
-      to: node.id,
-      relation: 'depends_on' as const,
     })),
     ...(testPlan?.cases || []).map((item) => ({
       id: uuidv4(),
@@ -1551,11 +1507,6 @@ const normalizeProjectConfig = (value: unknown): ProjectConfig | null => {
     appType: project.appType === 'mobile' || project.appType === 'mini_program' || project.appType === 'desktop' || project.appType === 'backend' || project.appType === 'api'
       ? project.appType
       : 'web',
-    frontendFramework: typeof project.frontendFramework === 'string' ? project.frontendFramework : '',
-    backendFramework: typeof project.backendFramework === 'string' ? project.backendFramework : '',
-    database: typeof project.database === 'string' ? project.database : '',
-    uiFramework: typeof project.uiFramework === 'string' ? project.uiFramework : '',
-    deployment: typeof project.deployment === 'string' ? project.deployment : '',
     createdAt: typeof project.createdAt === 'string' ? project.createdAt : now,
     updatedAt: typeof project.updatedAt === 'string' ? project.updatedAt : typeof project.createdAt === 'string' ? project.createdAt : now,
   };
@@ -1907,7 +1858,6 @@ const normalizeProjectMemory = (value: unknown): ProjectMemory | null => {
   const memory = value as Partial<ProjectMemory>;
 
   return {
-    techStack: memory.techStack && typeof memory.techStack === 'object' ? memory.techStack as Record<string, string> : {},
     designSystem: memory.designSystem && typeof memory.designSystem === 'object' ? memory.designSystem as Record<string, unknown> : {},
     codeStructure: memory.codeStructure && typeof memory.codeStructure === 'object' ? memory.codeStructure as Record<string, unknown> : {},
   };
@@ -2082,19 +2032,13 @@ export const useProjectStore = create<ProjectState>()(
 
       createProject: (input) => {
         const now = new Date().toISOString();
-        const defaults = getDefaultProjectSettings();
         const project: ProjectConfig = {
           id: uuidv4(),
           name: input.name.trim(),
           description: input.description.trim(),
           vaultPath: input.vaultPath.trim(),
           knowledgeRetrievalMethod: normalizeKnowledgeRetrievalMethod(input.knowledgeRetrievalMethod),
-          appType: defaults.appType,
-          frontendFramework: defaults.frontendFramework,
-          backendFramework: defaults.backendFramework,
-          database: defaults.database,
-          uiFramework: defaults.uiFramework,
-          deployment: defaults.deployment,
+          appType: 'desktop',
           createdAt: now,
           updatedAt: now,
         };

@@ -20,11 +20,21 @@ import {
 } from './modules/design/stylePack';
 import { buildDesignStyleReferencePath, buildSketchReferencePath } from './modules/knowledge/referenceFiles';
 import { useAIWorkflowStore } from './modules/ai/store/workflowStore';
+import { createDefaultStyleProfiles, runAIWorkflowPackage } from './modules/ai/workflow/AIWorkflowService';
 import { useProjectStore } from './store/projectStore';
 import { APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appTheme';
 import type { RoleView } from './appNavigation';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
-import type { AppType, FeatureNode, GeneratedFile, PageStructureNode, ProjectConfig, WireframeDocument } from './types';
+import type {
+  AIWorkflowPackage,
+  AppType,
+  FeatureNode,
+  GeneratedFile,
+  PageStructureNode,
+  ProjectConfig,
+  StyleProfile,
+  WireframeDocument,
+} from './types';
 import { clampLayoutSize, LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
 import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
 import {
@@ -546,6 +556,9 @@ const getSketchPreviewLabel = (element: { props: Record<string, unknown> }) =>
 const getSketchPreviewContent = (element: { props: Record<string, unknown> }) =>
   String(element.props.content || element.props.placeholder || '').trim();
 
+const getWireframeElementLabel = (element: { props: Record<string, unknown> }) =>
+  String(element.props.name || element.props.title || element.props.text || '模块');
+
 const escapeSketchPreviewSvgText = (value: string) =>
   value
     .replace(/&/g, '&amp;')
@@ -611,6 +624,13 @@ const buildDesignPageModuleMarkdown = (
   const modules = (wireframe?.elements || []).map((element, index) => {
     const name = String(element.props.name || element.props.title || element.props.text || `模块 ${index + 1}`).trim();
     const content = String(element.props.content || element.props.placeholder || '').trim();
+    const purpose = String(element.props.purpose || '').trim();
+    const priority = String(element.props.priority || '').trim();
+    const actions = Array.isArray(element.props.actions)
+      ? element.props.actions
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean)
+      : [];
 
     return {
       name: name || `模块 ${index + 1}`,
@@ -618,6 +638,9 @@ const buildDesignPageModuleMarkdown = (
       y: Math.max(0, Math.round(element.y)),
       width: Math.max(0, Math.round(element.width)),
       height: Math.max(0, Math.round(element.height)),
+      purpose,
+      priority,
+      actions,
       content,
     };
   });
@@ -630,6 +653,9 @@ const buildDesignPageModuleMarkdown = (
           `- name: ${module.name}`,
           `  position: ${module.x}, ${module.y}`,
           `  size: ${module.width}, ${module.height}`,
+          ...(module.purpose ? [`  purpose: ${module.purpose}`] : []),
+          ...(module.actions.length > 0 ? [`  actions: ${module.actions.join(' / ')}`] : []),
+          ...(module.priority ? [`  priority: ${module.priority}`] : []),
           `  content: ${module.content || '无'}`,
         ])
       : ['- 暂无模块']),
@@ -665,6 +691,25 @@ const buildDesignDraftElements = (
     createWireframeModule({ name: '辅助信息区', x: 912, y: 136, width: 284, height: 536, content: sectionC }, appType),
   ];
 };
+
+const buildWorkflowStyleProfileFromDesignNode = (
+  node: DesignStyleNode,
+  appType?: AppType | null
+): StyleProfile => ({
+  id: `design-style-${node.id}`,
+  name: node.title || 'Design Style',
+  summary: node.summary || node.prompt || '当前设计画布中选择的样式节点。',
+  industry: 'Custom',
+  direction: node.prompt || node.summary || 'Canvas-selected style direction',
+  colorMood: node.keywords.slice(0, 2).join(' / ') || 'Custom',
+  appType: appType || 'web',
+  palette: node.palette,
+  typography: { heading: 'Manrope', body: 'Inter' },
+  radius: '18px',
+  notes: [node.prompt, ...node.keywords].filter(Boolean),
+  status: 'ready',
+  updatedAt: new Date().toISOString(),
+});
 
 const renderGeneratedFileLabel = (file: GeneratedFile) => file.path.split('/').pop() || file.path;
 
@@ -822,6 +867,7 @@ const App: React.FC = () => {
   });
   const [selectedFeature, setSelectedFeature] = useState<FeatureNode | null>(null);
   const [selectedDesignPageId, setSelectedDesignPageId] = useState<string | null>(null);
+  const [pageWorkbenchTargetPageId, setPageWorkbenchTargetPageId] = useState<string | null>(null);
   const [designCanvasSelection, setDesignCanvasSelection] = useState<DesignCanvasSelection>(null);
   const [designSelectionIds, setDesignSelectionIds] = useState<string[]>([]);
   const [designMarqueeSelection, setDesignMarqueeSelection] = useState<DesignMarqueeSelection | null>(null);
@@ -845,6 +891,7 @@ const App: React.FC = () => {
   const [designCanvasContextMenu, setDesignCanvasContextMenu] = useState<DesignCanvasContextMenuState>(null);
   const [isSketchLibraryOpen, setIsSketchLibraryOpen] = useState(true);
   const [sketchLibrarySearch, setSketchLibrarySearch] = useState('');
+  const [activeWorkflowAction, setActiveWorkflowAction] = useState<AIWorkflowPackage | null>(null);
   const [styleInspectorMode, setStyleInspectorMode] = useState<'fields' | 'markdown'>('fields');
   const [styleMarkdownDraft, setStyleMarkdownDraft] = useState('');
   const [expandedSketchLibraryNodeIds, setExpandedSketchLibraryNodeIds] = useState<Set<string>>(() => new Set());
@@ -891,6 +938,8 @@ const App: React.FC = () => {
   const workflowProjects = useAIWorkflowStore((state) => state.projects);
   const replaceWorkflowProjectState = useAIWorkflowStore((state) => state.replaceProjectState);
   const clearWorkflowProjectState = useAIWorkflowStore((state) => state.clearProjectState);
+  const setWorkflowStyleProfiles = useAIWorkflowStore((state) => state.setStyleProfiles);
+  const selectWorkflowStyleProfile = useAIWorkflowStore((state) => state.selectStyleProfile);
   const {
     currentProjectId,
     currentProject,
@@ -1073,10 +1122,29 @@ const App: React.FC = () => {
       return items;
     }, []);
   }, [designAINodes, designFlowNodes, designPageNodes, designPages, designSelectionIds, designStyleNodes, designTextNodes, wireframes]);
-  const linkedStyleNodesForSelectedPage = useMemo(
-    () => designStyleNodes.filter((node) => designSelectionIds.includes(node.id)),
-    [designSelectionIds, designStyleNodes]
-  );
+  const linkedStyleNodesForSelectedPage = useMemo(() => {
+    if (selectedPageNode) {
+      const linkedStyleIds = new Set(
+        designFlowEdges.flatMap((edge) => {
+          if (edge.from === selectedPageNode.id) {
+            return [edge.to];
+          }
+
+          if (edge.to === selectedPageNode.id) {
+            return [edge.from];
+          }
+
+          return [];
+        })
+      );
+      const linkedByEdge = designStyleNodes.filter((node) => linkedStyleIds.has(node.id));
+      if (linkedByEdge.length > 0) {
+        return linkedByEdge;
+      }
+    }
+
+    return designStyleNodes.filter((node) => designSelectionIds.includes(node.id));
+  }, [designFlowEdges, designSelectionIds, designStyleNodes, selectedPageNode]);
   const canUseProjectFilesystem = isTauriRuntimeAvailable();
   const activeDesktopRole = useMemo(
     () => DESKTOP_WORKBENCH_ROLES.find((role) => role.id === currentRole) || DESKTOP_WORKBENCH_ROLES[0],
@@ -2355,6 +2423,55 @@ const App: React.FC = () => {
   const handleGenerateDelivery = () => {
     generateDeliveryArtifacts(featureTree);
   };
+
+  const syncSelectedStyleToWorkflow = useCallback(() => {
+    if (!currentProject || !selectedStyleNode) {
+      return;
+    }
+
+    const workflowProfiles =
+      workflowProjects[currentProject.id]?.styleProfiles.length
+        ? workflowProjects[currentProject.id]?.styleProfiles || []
+        : createDefaultStyleProfiles(currentProject.appType);
+    const nextProfile = buildWorkflowStyleProfileFromDesignNode(selectedStyleNode, currentProject.appType);
+    const nextProfiles = [nextProfile, ...workflowProfiles.filter((profile) => profile.id !== nextProfile.id)];
+
+    setWorkflowStyleProfiles(currentProject.id, nextProfiles);
+    selectWorkflowStyleProfile(currentProject.id, nextProfile.id);
+  }, [
+    currentProject,
+    selectedStyleNode,
+    selectWorkflowStyleProfile,
+    setWorkflowStyleProfiles,
+    workflowProjects,
+  ]);
+
+  const handleRunWorkflowAction = useCallback(
+    async (targetPackage: AIWorkflowPackage) => {
+      if (!currentProject) {
+        return;
+      }
+
+      if (!rawRequirementInput.trim()) {
+        window.alert('请先输入需求，再触发 AI 生成。');
+        return;
+      }
+
+      if (targetPackage === 'page') {
+        syncSelectedStyleToWorkflow();
+      }
+
+      setActiveWorkflowAction(targetPackage);
+      try {
+        await runAIWorkflowPackage(targetPackage);
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : String(error));
+      } finally {
+        setActiveWorkflowAction(null);
+      }
+    },
+    [currentProject, rawRequirementInput, syncSelectedStyleToWorkflow]
+  );
 
   const handleGenerateDesignDraft = useCallback(() => {
     if (!selectedDesignPage || designCanvasSelection?.type !== 'page') {
@@ -3635,12 +3752,22 @@ ${selectedContextPrompt}` : '',
     };
   }, [designCanvasContextMenu]);
 
+  const handleOpenPageModules = useCallback((pageId: string | null | undefined) => {
+    if (!pageId) {
+      return;
+    }
+
+    setPageWorkbenchTargetPageId(pageId);
+    setCurrentRole('page');
+  }, []);
+
   const renderProductView = (entryTab: 'knowledge' | 'page') => (
     <ProductWorkbench
       onFeatureSelect={(node) => setSelectedFeature(node)}
       layoutFocus="balanced"
       layoutDensity="comfortable"
       entryTab={entryTab}
+      preferredPageId={pageWorkbenchTargetPageId}
       onEntryTabChange={(tab) => setCurrentRole(tab)}
     />
   );
@@ -3672,6 +3799,32 @@ ${selectedContextPrompt}` : '',
                   type="button"
                 >
                   {isConnectorMode ? '退出连线' : '开始连线'}
+                </button>
+              </div>
+              <div className="design-workbench-action-group">
+                <button
+                  className="doc-action-btn secondary"
+                  onClick={() => void handleRunWorkflowAction('requirements')}
+                  type="button"
+                  disabled={activeWorkflowAction !== null}
+                >
+                  {activeWorkflowAction === 'requirements' ? '整理需求中...' : 'AI 整理需求'}
+                </button>
+                <button
+                  className="doc-action-btn secondary"
+                  onClick={() => void handleRunWorkflowAction('prototype')}
+                  type="button"
+                  disabled={activeWorkflowAction !== null}
+                >
+                  {activeWorkflowAction === 'prototype' ? '生成草图中...' : 'AI 生成页面草图'}
+                </button>
+                <button
+                  className="doc-action-btn secondary"
+                  onClick={() => void handleRunWorkflowAction('page')}
+                  type="button"
+                  disabled={activeWorkflowAction !== null}
+                >
+                  {activeWorkflowAction === 'page' ? '生成原型中...' : 'AI 生成 HTML 原型'}
                 </button>
               </div>
               <div className="design-workbench-action-group design-workbench-action-group-primary">
@@ -3780,6 +3933,43 @@ ${selectedContextPrompt}` : '',
                       }
                     />
                   </label>
+                  <div className="design-module-summary">
+                    <div className="design-module-summary-head">
+                      <strong>
+                        {selectedWireframe?.elements?.length
+                          ? `已生成 ${selectedWireframe.elements.length} 个模块`
+                          : '当前还没有模块'}
+                      </strong>
+                      <button
+                        className="doc-action-btn secondary"
+                        type="button"
+                        onClick={() => handleOpenPageModules(selectedDesignPage.id)}
+                      >
+                        打开模块画布
+                      </button>
+                    </div>
+                    {selectedWireframe?.elements?.length ? (
+                      <div className="design-module-list">
+                        {selectedWireframe.elements.slice(0, 6).map((element, index) => (
+                          <div className="design-module-list-item" key={element.id}>
+                            <strong>{getWireframeElementLabel(element)}</strong>
+                            <span>
+                              {String(element.props.purpose || '').trim() || `${Math.round(element.width)} x ${Math.round(element.height)} · 模块 ${index + 1}`}
+                            </span>
+                          </div>
+                        ))}
+                        {selectedWireframe.elements.length > 6 ? (
+                          <span className="design-module-list-more">
+                            还有 {selectedWireframe.elements.length - 6} 个模块，进入画布后可继续编辑。
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="design-style-markdown-hint">
+                        可以先让 AI 生成草图，或者直接进入模块画布手动添加模块。
+                      </span>
+                    )}
+                  </div>
                   <label className="pm-field-stack">
                     <span>模块清单 Markdown</span>
                     <textarea
@@ -4139,6 +4329,20 @@ ${selectedContextPrompt}` : '',
                     <div className="design-flow-card-meta">
                       <span>{pageSpec?.route || page.metadata.route}</span>
                       <span>{pageWireframeElements.length || 0} 个模块</span>
+                    </div>
+                    <div className="design-flow-card-actions">
+                      <button
+                        className="doc-action-btn secondary design-flow-card-action-btn"
+                        type="button"
+                        tabIndex={-1}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleOpenPageModules(page.id);
+                        }}
+                      >
+                        编辑模块
+                      </button>
                     </div>
                     <button className="design-node-handle design-node-handle-left" type="button" tabIndex={-1} aria-label="输入端点" />
                     <button
@@ -4661,15 +4865,17 @@ ${selectedContextPrompt}` : '',
         <div className="deploy-targets">
           <div className="target-card">
             <div className="target-info">
-              <span className="target-name">{currentProject?.deployment}</span>
-              <span className="target-desc">当前项目部署目标</span>
+              <span className="target-name">{currentProject?.name || '当前项目'}</span>
+              <span className="target-desc">当前工作区</span>
             </div>
             <span className="target-status connected">在线</span>
           </div>
           <div className="target-card">
             <div className="target-info">
               <span className="target-name">Project Memory</span>
-              <span className="target-desc">{Object.keys(memory?.techStack || {}).length} 项技术上下文</span>
+              <span className="target-desc">
+                {Object.keys(memory?.designSystem || {}).length + Object.keys(memory?.codeStructure || {}).length} 项工作记忆
+              </span>
             </div>
             <span className="target-status connected">在线</span>
           </div>
@@ -4852,6 +5058,32 @@ ${selectedContextPrompt}` : '',
 
               <div className="desktop-workbench-tools">
                 {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
+                <div className="desktop-workflow-actions">
+                  <button
+                    className="doc-action-btn secondary"
+                    onClick={() => void handleRunWorkflowAction('requirements')}
+                    type="button"
+                    disabled={activeWorkflowAction !== null}
+                  >
+                    {activeWorkflowAction === 'requirements' ? '整理需求中...' : 'AI 整理需求'}
+                  </button>
+                  <button
+                    className="doc-action-btn secondary"
+                    onClick={() => void handleRunWorkflowAction('prototype')}
+                    type="button"
+                    disabled={activeWorkflowAction !== null}
+                  >
+                    {activeWorkflowAction === 'prototype' ? '生成草图中...' : 'AI 页面草图'}
+                  </button>
+                  <button
+                    className="doc-action-btn secondary"
+                    onClick={() => void handleRunWorkflowAction('page')}
+                    type="button"
+                    disabled={activeWorkflowAction !== null}
+                  >
+                    {activeWorkflowAction === 'page' ? '生成原型中...' : 'AI HTML 原型'}
+                  </button>
+                </div>
                 <MacSelectField
                   className="desktop-project-switcher"
                   label="项目"
@@ -4933,7 +5165,7 @@ ${selectedContextPrompt}` : '',
           <div className="header-project">
             <h1 className="app-title">{currentProject.name}</h1>
             <span className="app-subtitle">
-              {currentProject.description || `${currentProject.appType} · ${currentProject.frontendFramework} · ${currentProject.backendFramework}`}
+              {currentProject.description || currentProject.appType}
             </span>
           </div>
         </div>

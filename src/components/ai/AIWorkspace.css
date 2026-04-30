@@ -1,4 +1,4 @@
-.floating-ai-workspace {
+﻿.floating-ai-workspace {
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -27,100 +27,100 @@ body.desktop-workbench-mode .floating-ai-workspace {
 }
 
 .gn-agent-workspace,
-.claudian-workspace {
-  --claudian-bg: #f6f1e8;
-  --claudian-surface: #fbf8f2;
-  --claudian-surface-alt: #f2ece2;
-  --claudian-border: #d7cfc2;
-  --claudian-border-strong: #2f2923;
-  --claudian-text: #26211b;
-  --claudian-muted: #8b8174;
-  --claudian-accent: #cb7a46;
-  --claudian-chip: #ece5d9;
+.gn-agent-workspace {
+  --gn-agent-bg: #f6f1e8;
+  --gn-agent-surface: #fbf8f2;
+  --gn-agent-surface-alt: #f2ece2;
+  --gn-agent-border: #d7cfc2;
+  --gn-agent-border-strong: #2f2923;
+  --gn-agent-text: #26211b;
+  --gn-agent-muted: #8b8174;
+  --gn-agent-accent: #cb7a46;
+  --gn-agent-chip: #ece5d9;
   height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 0;
   padding: 10px 12px 12px;
-  background: var(--claudian-bg);
-  color: var(--claudian-text);
+  background: var(--gn-agent-bg);
+  color: var(--gn-agent-text);
 }
 
 .gn-agent-workspace {
-  --claudian-bg: #171819;
-  --claudian-surface: #1c1e20;
-  --claudian-surface-alt: #232629;
-  --claudian-border: rgba(255, 255, 255, 0.08);
-  --claudian-border-strong: rgba(255, 255, 255, 0.18);
-  --claudian-text: #e9e9e6;
-  --claudian-muted: #8c9299;
-  --claudian-accent: #5aa7d6;
-  --claudian-chip: rgba(255, 255, 255, 0.055);
-  --claudian-user-bubble: #2d3033;
-  --claudian-composer: #1b1d20;
-  --claudian-send: #d8d8d4;
-  --claudian-send-text: #151617;
+  --gn-agent-bg: #171819;
+  --gn-agent-surface: #1c1e20;
+  --gn-agent-surface-alt: #232629;
+  --gn-agent-border: rgba(255, 255, 255, 0.08);
+  --gn-agent-border-strong: rgba(255, 255, 255, 0.18);
+  --gn-agent-text: #e9e9e6;
+  --gn-agent-muted: #8c9299;
+  --gn-agent-accent: #5aa7d6;
+  --gn-agent-chip: rgba(255, 255, 255, 0.055);
+  --gn-agent-user-bubble: #2d3033;
+  --gn-agent-composer: #1b1d20;
+  --gn-agent-send: #d8d8d4;
+  --gn-agent-send-text: #151617;
   grid-template-rows: minmax(0, 1fr);
   padding: 0;
-  background: var(--claudian-bg);
+  background: var(--gn-agent-bg);
 }
 
 :root[data-theme='light'] .gn-agent-workspace {
-  --claudian-bg: #f7f6f3;
-  --claudian-surface: #ffffff;
-  --claudian-surface-alt: #eeece7;
-  --claudian-border: rgba(32, 31, 29, 0.12);
-  --claudian-border-strong: rgba(32, 31, 29, 0.28);
-  --claudian-text: #20201e;
-  --claudian-muted: #73706a;
-  --claudian-accent: #2d7faa;
-  --claudian-chip: rgba(32, 31, 29, 0.055);
-  --claudian-user-bubble: #e8e3da;
-  --claudian-composer: #ffffff;
-  --claudian-send: #20201e;
-  --claudian-send-text: #faf9f6;
-  background: var(--claudian-bg);
+  --gn-agent-bg: #f7f6f3;
+  --gn-agent-surface: #ffffff;
+  --gn-agent-surface-alt: #eeece7;
+  --gn-agent-border: rgba(32, 31, 29, 0.12);
+  --gn-agent-border-strong: rgba(32, 31, 29, 0.28);
+  --gn-agent-text: #20201e;
+  --gn-agent-muted: #73706a;
+  --gn-agent-accent: #2d7faa;
+  --gn-agent-chip: rgba(32, 31, 29, 0.055);
+  --gn-agent-user-bubble: #e8e3da;
+  --gn-agent-composer: #ffffff;
+  --gn-agent-send: #20201e;
+  --gn-agent-send-text: #faf9f6;
+  background: var(--gn-agent-bg);
 }
 
-.claudian-header {
+.gn-agent-header {
   position: relative;
   display: flex;
   align-items: center;
   padding: 0 2px 10px;
-  border-bottom: 1px solid var(--claudian-border);
+  border-bottom: 1px solid var(--gn-agent-border);
 }
 
-.claudian-context-badge {
+.gn-agent-context-badge {
   width: fit-content;
   padding: 3px 8px;
   border-radius: 999px;
-  background: var(--claudian-chip);
-  color: var(--claudian-muted);
+  background: var(--gn-agent-chip);
+  color: var(--gn-agent-muted);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.claudian-logo {
+.gn-agent-logo {
   width: 18px;
   height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: var(--claudian-surface);
-  border: 1px solid var(--claudian-border);
+  background: var(--gn-agent-surface);
+  border: 1px solid var(--gn-agent-border);
 }
 
-.claudian-logo-dot {
+.gn-agent-logo-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--claudian-accent);
+  background: var(--gn-agent-accent);
 }
 
-.claudian-title-slot {
+.gn-agent-title-slot {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -128,14 +128,14 @@ body.desktop-workbench-mode .floating-ai-workspace {
   min-width: 0;
 }
 
-.claudian-title-text {
+.gn-agent-title-text {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--claudian-text);
+  color: var(--gn-agent-text);
 }
 
-.claudian-header-actions {
+.gn-agent-header-actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -143,14 +143,14 @@ body.desktop-workbench-mode .floating-ai-workspace {
   margin-inline-start: auto;
 }
 
-.claudian-tab-bar-container,
-.claudian-tab-badges {
+.gn-agent-tab-bar-container,
+.gn-agent-tab-badges {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.claudian-tab-badge {
+.gn-agent-tab-badge {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,45 +158,45 @@ body.desktop-workbench-mode .floating-ai-workspace {
   height: 24px;
   padding: 0;
   border-radius: 4px;
-  border: 2px solid var(--claudian-border);
+  border: 2px solid var(--gn-agent-border);
   font-size: 12px;
   font-weight: 500;
-  color: var(--claudian-muted);
-  background: var(--claudian-surface);
+  color: var(--gn-agent-muted);
+  background: var(--gn-agent-surface);
   cursor: pointer;
   appearance: none;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.claudian-tab-badge:hover {
-  color: var(--claudian-text);
-  background: var(--claudian-surface-alt);
+.gn-agent-tab-badge:hover {
+  color: var(--gn-agent-text);
+  background: var(--gn-agent-surface-alt);
 }
 
-.claudian-tab-badge-active {
-  border-color: var(--claudian-border-strong);
-  color: var(--claudian-text);
+.gn-agent-tab-badge-active {
+  border-color: var(--gn-agent-border-strong);
+  color: var(--gn-agent-text);
 }
 
-.claudian-tab-badge-idle {
-  border-color: var(--claudian-border);
+.gn-agent-tab-badge-idle {
+  border-color: var(--gn-agent-border);
 }
 
-.claudian-context-pane,
-.claudian-chat-pane {
+.gn-agent-context-pane,
+.gn-agent-chat-pane {
   min-height: 0;
-  border: 1px solid var(--claudian-border);
-  background: var(--claudian-surface);
+  border: 1px solid var(--gn-agent-border);
+  background: var(--gn-agent-surface);
   overflow: hidden;
 }
 
-.claudian-context-pane {
+.gn-agent-context-pane {
   margin-top: 10px;
   padding: 0;
   border-radius: 10px;
 }
 
-.claudian-context-card {
+.gn-agent-context-card {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -205,51 +205,51 @@ body.desktop-workbench-mode .floating-ai-workspace {
   background: transparent;
 }
 
-.claudian-context-eyebrow {
-  color: var(--claudian-muted);
+.gn-agent-context-eyebrow {
+  color: var(--gn-agent-muted);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.claudian-context-card strong {
-  color: var(--claudian-text);
+.gn-agent-context-card strong {
+  color: var(--gn-agent-text);
   font-size: 14px;
 }
 
-.claudian-context-card span {
-  color: var(--claudian-muted);
+.gn-agent-context-card span {
+  color: var(--gn-agent-muted);
   font-size: 12px;
   min-width: 0;
 }
 
-.claudian-context-subtitle {
+.gn-agent-context-subtitle {
   flex: 1 1 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.claudian-context-meta {
+.gn-agent-context-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.claudian-context-meta code {
+.gn-agent-context-meta code {
   padding: 4px 8px;
   border-radius: 4px;
-  background: var(--claudian-surface-alt);
-  color: var(--claudian-text);
+  background: var(--gn-agent-surface-alt);
+  color: var(--gn-agent-text);
 }
 
-.claudian-chat-pane {
+.gn-agent-chat-pane {
   position: relative;
   margin-top: 12px;
   border-radius: 14px;
 }
 
-.claudian-chat-pane .chat-shell {
+.gn-agent-chat-pane .chat-shell {
   position: absolute;
   top: 0;
   right: 0;
@@ -261,15 +261,16 @@ body.desktop-workbench-mode .floating-ai-workspace {
   box-shadow: none;
 }
 
-.claudian-chat-pane .chat-shell.chat-shell-embedded {
+.gn-agent-chat-pane .chat-shell.chat-shell-embedded {
   position: relative;
   inset: auto;
   height: 100%;
-  background: var(--claudian-surface);
+  background: var(--gn-agent-surface);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 
-.claudian-chat-pane .chat-shell-header {
-  border-bottom: 1px solid var(--claudian-border);
+.gn-agent-chat-pane .chat-shell-header {
+  border-bottom: 1px solid var(--gn-agent-border);
 }
+

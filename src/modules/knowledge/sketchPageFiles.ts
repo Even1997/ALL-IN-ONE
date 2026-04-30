@@ -1,7 +1,15 @@
-import type { AppType, CanvasElement, PageStructureNode, WireframeDocument } from '../../types';
+import type { AppType, PageStructureNode, WireframeDocument } from '../../types';
+import {
+  createWireframeModule,
+  getCanvasPreset,
+  getMarkdownModuleMatches,
+  MIN_MODULE_HEIGHT,
+  MIN_MODULE_WIDTH,
+  toWireframeModuleDrafts,
+} from '../../utils/wireframe';
 
-const MIN_MODULE_WIDTH = 80;
-const MIN_MODULE_HEIGHT = 60;
+const EMPTY_MODULE_NAME = '暂无模块';
+const EMPTY_MODULE_CONTENT = '无';
 
 const normalizePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/');
 
@@ -33,39 +41,20 @@ const getGoal = (page: Partial<PageStructureNode>) =>
   page.metadata?.goal || page.description || page.name || '未命名页面';
 
 const getDefaultFrame = (appType?: AppType | null) => {
-  if (appType === 'mini_program') {
-    return '390x844';
-  }
-
-  if (appType === 'mobile') {
-    return '390x844';
-  }
-
-  return '1280x800';
+  const preset = getCanvasPreset(appType);
+  return `${preset.width}x${preset.height}`;
 };
 
-const toModules = (elements: CanvasElement[] | undefined) =>
-  (elements || []).map((element, index) => ({
-    name:
-      String(element.props.name || element.props.title || element.props.text || `模块 ${index + 1}`).trim() ||
-      `模块 ${index + 1}`,
-    x: Number.isFinite(element.x) ? Math.max(0, Math.round(element.x)) : 0,
-    y: Number.isFinite(element.y) ? Math.max(0, Math.round(element.y)) : 0,
-    width: Number.isFinite(element.width) ? Math.max(MIN_MODULE_WIDTH, Math.round(element.width)) : MIN_MODULE_WIDTH,
-    height: Number.isFinite(element.height) ? Math.max(MIN_MODULE_HEIGHT, Math.round(element.height)) : MIN_MODULE_HEIGHT,
-    content: String(element.props.content || element.props.placeholder || element.props.text || '').trim(),
-  }));
-
-const buildModulesSection = (elements: CanvasElement[] | undefined) => {
-  const modules = toModules(elements);
+const buildModulesSection = (wireframe: WireframeDocument | null | undefined) => {
+  const modules = toWireframeModuleDrafts(wireframe?.elements || []);
 
   if (modules.length === 0) {
     return [
       '- modules:',
-      '  - name: 暂无模块',
+      `  - name: ${EMPTY_MODULE_NAME}`,
       '    position: 0, 0',
       `    size: ${MIN_MODULE_WIDTH}, ${MIN_MODULE_HEIGHT}`,
-      '    content: 无',
+      `    content: ${EMPTY_MODULE_CONTENT}`,
     ];
   }
 
@@ -74,8 +63,11 @@ const buildModulesSection = (elements: CanvasElement[] | undefined) => {
     ...modules.flatMap((module) => [
       `  - name: ${module.name}`,
       `    position: ${module.x}, ${module.y}`,
-      `    size: ${module.width}, ${module.height}`,
-      `    content: ${module.content || '无'}`,
+      `    size: ${module.width ?? MIN_MODULE_WIDTH}, ${module.height ?? MIN_MODULE_HEIGHT}`,
+      ...(module.purpose ? [`    purpose: ${module.purpose}`] : []),
+      ...(module.actions && module.actions.length > 0 ? [`    actions: ${module.actions.join(' / ')}`] : []),
+      ...(module.priority ? [`    priority: ${module.priority}`] : []),
+      `    content: ${module.content || EMPTY_MODULE_CONTENT}`,
     ]),
   ];
 };
@@ -91,7 +83,7 @@ export const buildSketchPageContent = (
     `- route: ${getRoute(page)}`,
     `- frame: ${wireframe?.frame || getDefaultFrame(appType)}`,
     `- goal: ${getGoal(page)}`,
-    ...buildModulesSection(wireframe?.elements),
+    ...buildModulesSection(wireframe),
   ].join('\n');
 
 const parseField = (content: string, name: 'route' | 'goal' | 'frame') => {
@@ -105,32 +97,20 @@ export const parseSketchPageFile = (relativePath: string, content: string) => {
   const frame = parseField(content, 'frame');
   const goal = parseField(content, 'goal') || name;
   const pageId = normalizePath(relativePath);
-  const moduleRegex =
-    /(^|\n)\s*-\s+name:\s*(.+?)\s*\n\s+position:\s*(\d+)\s*,\s*(\d+)\s*\n\s+size:\s*(\d+)\s*,\s*(\d+)\s*\n\s+content:\s*(.+?)(?=\n\s*-\s+name:|\n*$)/gms;
-  const elements: CanvasElement[] = [];
-  let match = moduleRegex.exec(content);
-
-  while (match) {
-    const moduleName = match[2].trim();
-    if (moduleName !== '暂无模块') {
-      const moduleContent = match[7].trim() === '无' ? '' : match[7].trim();
-      elements.push({
-        id: `${pageId}:module:${elements.length + 1}`,
-        type: 'wireframe-block',
-        x: Number(match[3]),
-        y: Number(match[4]),
-        width: Number(match[5]),
-        height: Number(match[6]),
-        props: {
-          name: moduleName,
-          content: moduleContent,
-        },
-        children: [],
-      });
-    }
-
-    match = moduleRegex.exec(content);
-  }
+  const elements = getMarkdownModuleMatches(content).map((module, index) =>
+    createWireframeModule({
+      id: `${pageId}:module:${index + 1}`,
+      name: module.name,
+      x: module.x,
+      y: module.y,
+      width: module.width,
+      height: module.height,
+      purpose: module.purpose,
+      actions: module.actions,
+      priority: module.priority,
+      content: module.content,
+    })
+  );
 
   const page: PageStructureNode = {
     id: pageId,

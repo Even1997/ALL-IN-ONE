@@ -15,6 +15,9 @@ export interface WireframeModuleDraft {
   y: number;
   width?: number;
   height?: number;
+  purpose?: string;
+  actions?: string[];
+  priority?: string;
   content: string;
 }
 
@@ -24,6 +27,9 @@ export interface MarkdownModuleMatch {
   y: number;
   width?: number;
   height?: number;
+  purpose?: string;
+  actions?: string[];
+  priority?: string;
   content: string;
   start: number;
   end: number;
@@ -34,6 +40,8 @@ export const MIN_MODULE_WIDTH = 80;
 export const MIN_MODULE_HEIGHT = 60;
 const FRAME_SIZE_REGEX = /^(?:(.+?)\s+)?(\d+)\s*x\s*(\d+)$/i;
 const MOBILE_FRAME_REGEX = /(mobile|mini|phone|移动|手机|小程序)/i;
+const EMPTY_MODULE_NAME = '暂无模块';
+const EMPTY_MODULE_CONTENT = '无';
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [
@@ -49,6 +57,23 @@ const getPageMetadata = (
   goal: node.metadata?.goal || node.description || '承接当前页面的核心任务',
   template: node.metadata?.template || (node.kind === 'flow' ? 'workspace' : 'custom'),
 });
+
+const normalizeModuleActions = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[|/、，,]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
 
 export const isMobileAppType = (appType?: AppType | null) => Boolean(appType && MOBILE_APP_TYPES.includes(appType));
 
@@ -138,7 +163,17 @@ const getElementContent = (element: CanvasElement) => {
     element.props.placeholder,
   ].find((value) => typeof value === 'string');
 
-  return rawContent ? String(rawContent) : '';
+  return rawContent ? String(rawContent).trim() : '';
+};
+
+const getElementPurpose = (element: CanvasElement) => {
+  const rawPurpose = element.props.purpose;
+  return typeof rawPurpose === 'string' ? rawPurpose.trim() : '';
+};
+
+const getElementPriority = (element: CanvasElement) => {
+  const rawPriority = element.props.priority;
+  return typeof rawPriority === 'string' ? rawPriority.trim() : '';
 };
 
 export const toWireframeModuleDrafts = (elements: CanvasElement[]): WireframeModuleDraft[] =>
@@ -149,6 +184,9 @@ export const toWireframeModuleDrafts = (elements: CanvasElement[]): WireframeMod
     y: Number.isFinite(element.y) ? Math.max(0, Math.round(element.y)) : 0,
     width: Number.isFinite(element.width) ? Math.max(MIN_MODULE_WIDTH, Math.round(element.width)) : MIN_MODULE_WIDTH,
     height: Number.isFinite(element.height) ? Math.max(MIN_MODULE_HEIGHT, Math.round(element.height)) : MIN_MODULE_HEIGHT,
+    purpose: getElementPurpose(element),
+    actions: normalizeModuleActions(element.props.actions),
+    priority: getElementPriority(element),
     content: getElementContent(element),
   }));
 
@@ -169,8 +207,11 @@ export const createWireframeModule = (
     width,
     height,
     props: {
-      name: draft.name.trim() || '未命名模块',
+      name: draft.name.trim() || '模块',
       content,
+      purpose: draft.purpose?.trim() || '',
+      actions: normalizeModuleActions(draft.actions),
+      priority: draft.priority?.trim() || '',
     },
     children: [],
   };
@@ -178,6 +219,16 @@ export const createWireframeModule = (
 
 export const snapToGrid = (value: number, gridSize = 8) =>
   Math.round(value / gridSize) * gridSize;
+
+const buildModuleMarkdownLines = (module: WireframeModuleDraft) => [
+  `  - name: ${module.name}`,
+  `    position: ${module.x}, ${module.y}`,
+  `    size: ${module.width ?? MIN_MODULE_WIDTH}, ${module.height ?? MIN_MODULE_HEIGHT}`,
+  ...(module.purpose ? [`    purpose: ${module.purpose}`] : []),
+  ...(module.actions && module.actions.length > 0 ? [`    actions: ${module.actions.join(' / ')}`] : []),
+  ...(module.priority ? [`    priority: ${module.priority}`] : []),
+  `    content: ${module.content || EMPTY_MODULE_CONTENT}`,
+];
 
 export const buildPageWireframeMarkdown = (
   page: PageStructureNode,
@@ -200,13 +251,13 @@ export const buildPageWireframeMarkdown = (
     `- feature: ${featureNames.join(' / ') || metadata.goal}`,
     '- modules:',
     ...(modules.length > 0
-      ? modules.flatMap((module) => [
-          `  - name: ${module.name}`,
-          `    position: ${module.x}, ${module.y}`,
-          `    size: ${module.width ?? MIN_MODULE_WIDTH}, ${module.height ?? MIN_MODULE_HEIGHT}`,
-          `    content: ${module.content || '无'}`,
-        ])
-      : ['  - name: 暂无模块', '    position: 0, 0', `    size: ${MIN_MODULE_WIDTH}, ${MIN_MODULE_HEIGHT}`, '    content: 无']),
+      ? modules.flatMap((module) => buildModuleMarkdownLines(module))
+      : [
+          `  - name: ${EMPTY_MODULE_NAME}`,
+          '    position: 0, 0',
+          `    size: ${MIN_MODULE_WIDTH}, ${MIN_MODULE_HEIGHT}`,
+          `    content: ${EMPTY_MODULE_CONTENT}`,
+        ]),
   ].join('\n');
 };
 
@@ -234,15 +285,22 @@ export const parsePageWireframeMarkdown = (
   appType?: AppType | null
 ): CanvasElement[] => {
   return getMarkdownModuleMatches(markdown)
-    .map((module) => ({
-      name: module.name,
-      x: module.x,
-      y: module.y,
-      width: module.width,
-      height: module.height,
-      content: module.content,
-    }))
-    .map((module) => createWireframeModule(module, appType));
+    .map((module) =>
+      createWireframeModule(
+        {
+          name: module.name,
+          x: module.x,
+          y: module.y,
+          width: module.width,
+          height: module.height,
+          purpose: module.purpose,
+          actions: module.actions,
+          priority: module.priority,
+          content: module.content,
+        },
+        appType
+      )
+    );
 };
 
 export const parseFrameFromWireframeMarkdown = (markdown: string) => {
@@ -253,7 +311,7 @@ export const parseFrameFromWireframeMarkdown = (markdown: string) => {
 export const getMarkdownModuleMatches = (markdown: string): MarkdownModuleMatch[] => {
   const matches: MarkdownModuleMatch[] = [];
   const moduleRegex =
-    /(^|\n)(\s*-\s+name:\s*(.+?)\s*\n\s+position:\s*(\d+)\s*,\s*(\d+)\s*(?:\n\s+size:\s*(\d+)\s*,\s*(\d+)\s*)?\n\s+content:\s*(.+?))(?=\n\s+-\s+name:|\n*$)/gms;
+    /(^|\n)(\s*-\s+name:\s*(.+?)\s*\n\s+position:\s*(\d+)\s*,\s*(\d+)\s*(?:\n\s+size:\s*(\d+)\s*,\s*(\d+)\s*)?(?:\n\s+purpose:\s*(.+?)\s*)?(?:\n\s+actions:\s*(.+?)\s*)?(?:\n\s+priority:\s*(.+?)\s*)?\n\s+content:\s*(.+?))(?=\n\s+-\s+name:|\n*$)/gms;
 
   let match = moduleRegex.exec(markdown);
 
@@ -262,14 +320,17 @@ export const getMarkdownModuleMatches = (markdown: string): MarkdownModuleMatch[
     const block = match[2];
     const name = match[3].trim();
 
-    if (name !== '暂无模块') {
+    if (name !== EMPTY_MODULE_NAME) {
       matches.push({
         name,
         x: Number(match[4]),
         y: Number(match[5]),
         width: match[6] ? Number(match[6]) : undefined,
         height: match[7] ? Number(match[7]) : undefined,
-        content: match[8].trim() === '无' ? '' : match[8].trim(),
+        purpose: match[8]?.trim() || '',
+        actions: normalizeModuleActions(match[9]),
+        priority: match[10]?.trim() || '',
+        content: match[11].trim() === EMPTY_MODULE_CONTENT ? '' : match[11].trim(),
         start: blockStart,
         end: blockStart + block.length,
       });
@@ -291,13 +352,17 @@ export const findMarkdownModuleMatch = (
 
   const matches = getMarkdownModuleMatches(markdown);
 
-  return matches.find((match) =>
-    match.name === moduleDraft.name &&
-    match.x === moduleDraft.x &&
-    match.y === moduleDraft.y &&
-    (match.width == null || match.width === moduleDraft.width) &&
-    (match.height == null || match.height === moduleDraft.height)
-  ) || matches.find((match) => match.name === moduleDraft.name) || null;
+  return (
+    matches.find((match) =>
+      match.name === moduleDraft.name &&
+      match.x === moduleDraft.x &&
+      match.y === moduleDraft.y &&
+      (match.width == null || match.width === moduleDraft.width) &&
+      (match.height == null || match.height === moduleDraft.height)
+    ) ||
+    matches.find((match) => match.name === moduleDraft.name) ||
+    null
+  );
 };
 
 export const findMarkdownModuleByOffset = (markdown: string, offset: number) =>

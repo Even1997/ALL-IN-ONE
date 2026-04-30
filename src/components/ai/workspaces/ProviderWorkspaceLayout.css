@@ -1,12 +1,13 @@
-.provider-workspace {
+﻿.provider-workspace {
   display: flex;
   flex-direction: column;
   min-height: 0;
   flex: 1;
 }
 
-.provider-workspace-main > .provider-message-viewport .claudian-shell-page,
-.provider-workspace-main > .provider-message-viewport .claudian-shell-chat-body,
-.provider-workspace-main > .provider-message-viewport .claudian-shell-chat-stack {
+.provider-workspace-main > .provider-message-viewport .gn-agent-shell-page,
+.provider-workspace-main > .provider-message-viewport .gn-agent-shell-chat-body,
+.provider-workspace-main > .provider-message-viewport .gn-agent-shell-chat-stack {
   min-height: 0;
 }
+

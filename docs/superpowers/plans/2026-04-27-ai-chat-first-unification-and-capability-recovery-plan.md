@@ -189,8 +189,8 @@ without making the user think in terms of separate products.
 
 - `src/components/workspace/AIChat.tsx`
 - `src/modules/ai/workflow/skillRouting.ts`
-- `src/modules/ai/claudian/runtime/claude/ClaudeRuntime.ts`
-- `src/modules/ai/claudian/runtime/codex/CodexRuntime.ts`
+- `src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts`
+- `src/modules/ai/gn-agent/runtime/codex/CodexRuntime.ts`
 - new `src/modules/ai/orchestration/*`
 
 ### Tests
@@ -402,7 +402,7 @@ Modules:
 
 - `src/components/workspace/`
 - `src/modules/ai/orchestration/`
-- `src/modules/ai/claudian/runtime/`
+- `src/modules/ai/gn-agent/runtime/`
 
 ### Lane B: knowledge intelligence and document typing
 

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { GNAgentWorkspace } from './GNAgentWorkspace';
 import { useProjectStore } from '../../store/projectStore';
@@ -9,7 +9,7 @@ type AIWorkspaceProps = {
   onCollapsedChange?: (collapsed: boolean) => void;
 };
 
-export const AIWorkspace: React.FC<AIWorkspaceProps> = ({ collapsed, onCollapsedChange }) => {
+export const AIWorkspace: React.FC<AIWorkspaceProps> = () => {
   const { currentProject } = useProjectStore(
     useShallow((state) => ({
       currentProject: state.currentProject,
@@ -24,9 +24,10 @@ export const AIWorkspace: React.FC<AIWorkspaceProps> = ({ collapsed, onCollapsed
     <section className="floating-ai-workspace">
       <div className="ai-workspace-shell">
         <div className="ai-workspace-body">
-          <GNAgentWorkspace collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
+          <GNAgentWorkspace mode="panel" />
         </div>
       </div>
     </section>
   );
 };
+

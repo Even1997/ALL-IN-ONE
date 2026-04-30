@@ -7,6 +7,8 @@ export type SkillDiscoveryEntry = {
   path: string;
   manifestPath: string;
   imported: boolean;
+  builtin: boolean;
+  deletable: boolean;
   syncedToCodex: boolean;
   syncedToClaude: boolean;
 };
@@ -18,6 +20,12 @@ export type SkillRuntimeSyncResult = {
   runtime: SkillRuntimeTarget;
   targetPath: string;
   synced: boolean;
+};
+
+export type SkillDeleteResult = {
+  skillId: string;
+  deletedPath: string;
+  deleted: boolean;
 };
 
 export type GitHubSkillImportParams = {
@@ -40,3 +48,6 @@ export const syncSkillToRuntime = (params: {
   runtime: SkillRuntimeTarget;
   projectRoot?: string | null;
 }) => invoke<SkillRuntimeSyncResult>('sync_skill_to_runtime', { params });
+
+export const deleteLibrarySkill = (skillId: string) =>
+  invoke<SkillDeleteResult>('delete_library_skill', { params: { skillId } });
