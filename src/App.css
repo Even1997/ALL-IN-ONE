@@ -9456,6 +9456,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 10px 16px;
   border-top: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
@@ -9468,8 +9469,18 @@ body.ai-chat-sidebar-collapsed .app-main {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  flex-shrink: 0;
+  min-width: 0;
+  flex: 0 1 auto;
   flex-wrap: wrap;
+}
+
+.gn-note-editor-footer-path {
+  display: block;
+  min-width: 0;
+  max-width: min(100%, 56ch);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gn-note-editor-footer-actions .gn-note-header-toolbar {

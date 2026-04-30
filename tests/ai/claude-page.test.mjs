@@ -16,14 +16,10 @@ test('app keeps AI in the shared right pane instead of a dedicated Claude route'
   assert.doesNotMatch(source, /<ClaudePage\s*\/>/);
   assert.doesNotMatch(source, /currentRole === 'ai'/);
   assert.doesNotMatch(source, /isAIPage/);
-  assert.match(
-    source,
-    /{isDesktopWorkbenchMode\s*\?\s*\([\s\S]*<Allotment\.Pane minSize=\{640\}>[\s\S]*<main className="app-main app-main-desktop">\{appDesktopContent\}<\/main>[\s\S]*<\/Allotment\.Pane>[\s\S]*<Allotment\.Pane[\s\S]*<aside className="app-ai-activity-pane">[\s\S]*<AIWorkspace \/>[\s\S]*<\/aside>[\s\S]*<\/Allotment\.Pane>/
-  );
-  assert.match(
-    source,
-    /:\s*\([\s\S]*<main className="app-main app-main-desktop">\{appMainContent\}<\/main>[\s\S]*<AIWorkspace \/>[\s\S]*\)\s*}/
-  );
+  assert.match(source, /<AIWorkspace collapsed=\{isDesktopAiCollapsed\} onCollapsedChange=\{setIsDesktopAiCollapsed\} \/>/);
+  assert.match(source, /<main className="app-main app-main-desktop">\{appDesktopContent\}<\/main>/);
+  assert.match(source, /<aside className="app-ai-activity-pane">\s*<AIWorkspace \/>\s*<\/aside>/);
+  assert.match(source, /\{currentRole !== 'design' \? <AIWorkspace \/> : null\}/);
 });
 
 test('ai chat no longer exposes a dedicated claude full-page variant', async () => {

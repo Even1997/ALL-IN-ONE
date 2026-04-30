@@ -210,13 +210,30 @@ export const ensureVaultKnowledgeDirectoryStructure = async (vaultPath: string) 
   await ensureDirectory(getVaultStateDir(vaultPath));
   await ensureDirectory(getVaultBaseIndexDir(vaultPath));
   await ensureDirectory(joinPath(getVaultStateDir(vaultPath), 'skills'));
-  await ensureDirectory(getVaultOutputsDir(vaultPath));
+};
 
+export const ensureVaultKnowledgeRuntimeDirectoryStructure = async (
+  vaultPath: string,
+  skill: (typeof KNOWLEDGE_SKILL_IDS)[number]
+) => {
+  await ensureVaultKnowledgeDirectoryStructure(vaultPath);
+  await ensureDirectory(getVaultOutputsDir(vaultPath));
+  await ensureDirectory(getVaultSkillStateDir(vaultPath, skill));
+  await ensureDirectory(getVaultSkillOutputsDir(vaultPath, skill));
+};
+
+export const removeVaultKnowledgeOutputsExcept = async (
+  vaultPath: string,
+  skill: (typeof KNOWLEDGE_SKILL_IDS)[number]
+) => {
   await Promise.all(
-    KNOWLEDGE_SKILL_IDS.flatMap((skill) => [
-      ensureDirectory(getVaultSkillStateDir(vaultPath, skill)),
-      ensureDirectory(getVaultSkillOutputsDir(vaultPath, skill)),
-    ])
+    KNOWLEDGE_SKILL_IDS.filter((candidate) => candidate !== skill).map(async (candidate) => {
+      try {
+        await removePath(getVaultSkillOutputsDir(vaultPath, candidate));
+      } catch {
+        // Ignore missing output directories for methods that have never been organized.
+      }
+    })
   );
 };
 

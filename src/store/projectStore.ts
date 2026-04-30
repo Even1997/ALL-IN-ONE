@@ -157,6 +157,8 @@ const buildStarterFeatureTree = (projectName: string): FeatureTree => ({
   ],
 });
 
+void buildStarterFeatureTree;
+
 const createFeature = (
   name: string,
   overrides: Partial<FeatureNode> = {},
@@ -425,6 +427,8 @@ const buildStarterRawRequirementInput = (projectName: string, projectDescription
   projectDescription.trim()
     ? `${projectName}\n${projectDescription.trim()}`
     : `${projectName} 需要成为一个可视化的软件生产工作台。\n支持需求梳理、功能拆分、页面结构设计、线框图编辑，并逐步衔接代码、测试和部署流程。`;
+
+void buildStarterRawRequirementInput;
 
 const mapRequirementStatus = (status: RequirementDoc['status']): GraphNodeBase['status'] =>
   status === 'ready' ? 'ready' : 'draft';
@@ -2045,24 +2049,16 @@ export const useProjectStore = create<ProjectState>()(
 
         const requirementDocs: RequirementDoc[] = [];
         const activeKnowledgeFileId = null;
-        const featureTree = buildStarterFeatureTree(project.name);
-        const rawRequirementInput = buildStarterRawRequirementInput(project.name, project.description);
-        const prd = buildPRDFromProject(project, requirementDocs, rawRequirementInput, featureTree);
+        const featureTree: FeatureTree = {
+          id: uuidv4(),
+          name: project.name,
+          children: [],
+        };
+        const rawRequirementInput = '';
+        const prd = null;
         const pageStructure: PageStructureNode[] = [];
         const wireframes: Record<string, WireframeDocument> = {};
         const memory = buildProjectMemory(project);
-        const planningArtifacts = buildPlanningFiles(
-          project,
-          rawRequirementInput,
-          requirementDocs,
-          featureTree,
-          '',
-          prd,
-          pageStructure,
-          wireframes
-        );
-        const deliveryArtifacts = buildDeliveryArtifacts(project, featureTree, pageStructure, wireframes);
-        const generatedFiles = mergeGeneratedFiles(planningArtifacts.files, deliveryArtifacts.generatedFiles);
         const graph = buildProjectGraph(
           project,
           requirementDocs,
@@ -2070,12 +2066,12 @@ export const useProjectStore = create<ProjectState>()(
           prd,
           pageStructure,
           wireframes,
-          deliveryArtifacts.designSystem,
-          deliveryArtifacts.uiSpecs,
-          deliveryArtifacts.devTasks,
-          generatedFiles,
-          deliveryArtifacts.testPlan,
-          deliveryArtifacts.deployPlan
+          null,
+          [],
+          [],
+          [],
+          null,
+          null
         );
 
         set({
@@ -2085,25 +2081,25 @@ export const useProjectStore = create<ProjectState>()(
           graph,
           memory,
           rawRequirementInput,
-          featuresMarkdown: planningArtifacts.featuresMarkdown,
-          wireframesMarkdown: planningArtifacts.wireframesMarkdown,
+          featuresMarkdown: '',
+          wireframesMarkdown: '',
           requirementDocs,
           activeKnowledgeFileId,
           selectedKnowledgeContextIds: activeKnowledgeFileId ? [activeKnowledgeFileId] : [],
           prd,
           pageStructure,
           wireframes,
-          designSystem: deliveryArtifacts.designSystem,
-          uiSpecs: deliveryArtifacts.uiSpecs,
-          devTasks: deliveryArtifacts.devTasks,
-          generatedFiles,
-          testPlan: deliveryArtifacts.testPlan,
-          deployPlan: deliveryArtifacts.deployPlan,
+          designSystem: null,
+          uiSpecs: [],
+          devTasks: [],
+          generatedFiles: [],
+          testPlan: null,
+          deployPlan: null,
         });
 
         return {
           project,
-          featureTree: syncFeatureTreeWithPageStructure(featureTree, pageStructure) || featureTree,
+          featureTree,
         };
       },
 

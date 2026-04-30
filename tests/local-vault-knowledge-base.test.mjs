@@ -29,6 +29,8 @@ test('project persistence exposes vault helpers and hidden knowledge directory s
   assert.match(source, /export const getVaultStateDir =/);
   assert.match(source, /export const getVaultOutputsDir =/);
   assert.match(source, /export const ensureVaultKnowledgeDirectoryStructure = async/);
+  assert.match(source, /export const ensureVaultKnowledgeRuntimeDirectoryStructure = async/);
+  assert.match(source, /export const removeVaultKnowledgeOutputsExcept = async/);
   assert.match(source, /joinPath\(vaultPath,\s*'\.goodnight'\)/);
   assert.match(source, /joinPath\(vaultPath,\s*'_goodnight',\s*'outputs'\)/);
   assert.match(source, /'llmwiki'/);

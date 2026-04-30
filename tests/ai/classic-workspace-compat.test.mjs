@@ -10,6 +10,7 @@ const classicPath = path.resolve(__dirname, '../../src/components/ai/workspaces/
 
 test('classic workspace keeps AIChat as compatibility mode only', async () => {
   const source = await readFile(classicPath, 'utf8');
-  assert.match(source, /AIChat/);
+  assert.match(source, /GNAgentChatPage/);
+  assert.match(source, /providerId="classic"/);
   assert.match(source, /classic/i);
 });

@@ -66,3 +66,14 @@ test('knowledge note workspace keeps the markdown editor while adding a dedicate
   assert.match(css, /\.gn-note-reading-surface/);
   assert.match(css, /\.gn-markdown-viewer/);
 });
+
+test('raw markdown preview footer truncates long file paths instead of breaking narrow reader layouts', async () => {
+  const noteSource = await readFile(noteWorkspacePath, 'utf8');
+  const css = await readFile(appCssPath, 'utf8');
+
+  assert.match(noteSource, /className="gn-note-editor-footer-path"/);
+  assert.match(css, /\.gn-note-editor-footer-path\s*\{/);
+  assert.match(css, /\.gn-note-editor-footer-path\s*{[\s\S]*?overflow:\s*hidden;/);
+  assert.match(css, /\.gn-note-editor-footer-path\s*{[\s\S]*?text-overflow:\s*ellipsis;/);
+  assert.match(css, /\.gn-note-editor-footer-path\s*{[\s\S]*?white-space:\s*nowrap;/);
+});

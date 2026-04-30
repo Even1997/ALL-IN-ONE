@@ -15,6 +15,18 @@ test('product workbench drops legacy knowledge entry/tree/search pipeline from t
   assert.match(source, /deleteServerNote = useKnowledgeStore/);
 });
 
+test('product workbench clears stale outputs when switching retrieval methods', async () => {
+  const source = await readFile(new URL('../src/components/product/ProductWorkbench.tsx', import.meta.url), 'utf8');
+
+  const changeStart = source.indexOf('const handleKnowledgeRetrievalMethodChange = useCallback');
+  const changeEnd = source.indexOf('useEffect(() => {', changeStart);
+  const changeSource = source.slice(changeStart, changeEnd);
+
+  assert.match(source, /removeVaultKnowledgeOutputsExcept/);
+  assert.match(changeSource, /await removeVaultKnowledgeOutputsExcept\(projectRootDir,\s*knowledgeRetrievalMethod\)/);
+  assert.match(changeSource, /await refreshKnowledgeFilesystem\(\)/);
+});
+
 test('product workbench wires KnowledgeNoteWorkspace with minimal note-first props and actions', async () => {
   const source = await readFile(new URL('../src/components/product/ProductWorkbench.tsx', import.meta.url), 'utf8');
 

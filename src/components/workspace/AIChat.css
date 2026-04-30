@@ -44,6 +44,23 @@
 }
 
 .chat-shell-embedded {
+  --gn-agent-bg: color-mix(in srgb, var(--mode-panel, #ffffff) 98%, var(--mode-surface, #ffffff));
+  --gn-agent-surface: color-mix(in srgb, var(--mode-panel-alt, #ffffff) 98%, var(--mode-surface, #ffffff));
+  --gn-agent-surface-alt: color-mix(in srgb, var(--mode-panel-alt, #ffffff) 94%, var(--mode-surface, #ffffff));
+  --gn-agent-composer: color-mix(in srgb, var(--mode-panel, #ffffff) 96%, var(--mode-surface, #ffffff));
+  --gn-agent-text: var(--mode-text, #111827);
+  --gn-agent-muted: color-mix(in srgb, var(--mode-text, #111827) 60%, transparent);
+  --gn-agent-border: var(--mode-border, rgba(148, 163, 184, 0.18));
+  --gn-agent-border-strong: color-mix(
+    in srgb,
+    var(--mode-text, #111827) 14%,
+    var(--mode-border, rgba(148, 163, 184, 0.18))
+  );
+  --gn-agent-chip: color-mix(in srgb, var(--mode-panel-alt, #ffffff) 96%, var(--mode-surface, #ffffff));
+  --gn-agent-user-bubble: color-mix(in srgb, var(--mode-panel-alt, #ffffff) 92%, var(--mode-surface, #ffffff));
+  --gn-agent-send: var(--mode-button, var(--mode-text, #111827));
+  --gn-agent-send-text: var(--mode-button-text, #ffffff);
+  --gn-agent-accent: var(--mode-accent, #0f766e);
   color: var(--gn-agent-text, #26211b);
 }
 
@@ -1370,7 +1387,7 @@
 
 .chat-shell-embedded .chat-message.user .chat-message-bubble {
   max-width: min(620px, 92%);
-  background: #ebe4d8;
+  background: var(--gn-agent-user-bubble, #ebe4d8);
   border-bottom-right-radius: 4px;
 }
 
@@ -1378,7 +1395,7 @@
   width: 100%;
   max-width: 100%;
   border-radius: 0;
-  background: #f4ebdf;
+  background: var(--gn-agent-surface-alt, #f4ebdf);
 }
 
 .chat-shell-embedded .chat-message-content {
@@ -1514,7 +1531,7 @@
 
 .chat-shell-embedded .chat-composer-embedded-toolbar {
   padding: 6px 8px 8px;
-  border-top: 1px solid #efe7da;
+  border-top: 1px solid var(--gn-agent-border, #efe7da);
 }
 
 .chat-shell-embedded .chat-composer-input::placeholder {
@@ -1527,7 +1544,7 @@
   border: 1px solid var(--gn-agent-border, #d7cfc2);
   border-radius: 10px;
   background: var(--gn-agent-surface, #fbf8f2);
-  box-shadow: 0 18px 40px rgba(75, 61, 44, 0.14);
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--mode-text, #111827) 12%, transparent);
 }
 
 .chat-shell-embedded .chat-history-new-btn,

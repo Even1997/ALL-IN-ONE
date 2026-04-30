@@ -40,6 +40,7 @@ import {
   getProjectKnowledgeRootDir,
   isTauriRuntimeAvailable,
   loadSketchPageArtifactsFromProjectDir,
+  removeVaultKnowledgeOutputsExcept,
   writeSketchPageFile,
 } from '../../utils/projectPersistence';
 import {
@@ -1646,11 +1647,27 @@ export const ProductWorkbench = ({
   }, [canUseProjectFilesystem, currentProject, generatedFiles, projectRootDir, projectedRequirementDocs, refreshKnowledgeFilesystem]);
 
   const handleKnowledgeRetrievalMethodChange = useCallback(
-    (knowledgeRetrievalMethod: 'm-flow' | 'llmwiki' | 'rag') => {
+    async (knowledgeRetrievalMethod: 'm-flow' | 'llmwiki' | 'rag') => {
+      if (!currentProject) {
+        return;
+      }
+
       updateProject({ knowledgeRetrievalMethod });
-      setRequirementSaveMessage(`默认检索方式已切换为 ${knowledgeRetrievalMethod}。`);
+
+      if (!canUseProjectFilesystem || !projectRootDir) {
+        setRequirementSaveMessage(`默认检索方式已切换为 ${knowledgeRetrievalMethod}。`);
+        return;
+      }
+
+      try {
+        await removeVaultKnowledgeOutputsExcept(projectRootDir, knowledgeRetrievalMethod);
+        await refreshKnowledgeFilesystem();
+        setRequirementSaveMessage(`默认检索方式已切换为 ${knowledgeRetrievalMethod}，已清理其他 outputs。`);
+      } catch (error) {
+        setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
+      }
     },
-    [updateProject]
+    [canUseProjectFilesystem, currentProject, projectRootDir, refreshKnowledgeFilesystem, updateProject]
   );
 
   useEffect(() => {

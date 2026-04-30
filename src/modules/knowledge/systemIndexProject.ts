@@ -8,6 +8,7 @@ import {
 import {
   ensureProjectDirectory,
   ensureVaultKnowledgeDirectoryStructure,
+  ensureVaultKnowledgeRuntimeDirectoryStructure,
   getProjectDir,
   getSystemIndexChunksPath,
   getSystemIndexDir,
@@ -337,6 +338,7 @@ export const refreshProjectSystemIndex = async (options: {
   knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   requirementDocs: RequirementDoc[];
   generatedFiles: GeneratedFile[];
+  writeRuntimeArtifacts?: boolean;
 }) => {
   await ensureVaultKnowledgeDirectoryStructure(options.vaultPath);
   const projectDir = options.vaultPath;
@@ -362,8 +364,14 @@ export const refreshProjectSystemIndex = async (options: {
   const currentIndex = await loadProjectSystemIndex(projectDir);
 
   if (currentIndex?.manifest.fingerprint === nextIndex.manifest.fingerprint) {
-    await writeProjectTextFile(getProjectSystemIndexArtifactPath(options.vaultPath, options.knowledgeRetrievalMethod), buildProjectSystemIndexArtifact(currentIndex, options.knowledgeRetrievalMethod));
-    await writeKnowledgeRuntimeArtifacts(currentIndex, options.vaultPath, options.knowledgeRetrievalMethod);
+    if (options.writeRuntimeArtifacts !== false) {
+      await ensureVaultKnowledgeRuntimeDirectoryStructure(options.vaultPath, options.knowledgeRetrievalMethod);
+      await writeProjectTextFile(
+        getProjectSystemIndexArtifactPath(options.vaultPath, options.knowledgeRetrievalMethod),
+        buildProjectSystemIndexArtifact(currentIndex, options.knowledgeRetrievalMethod)
+      );
+      await writeKnowledgeRuntimeArtifacts(currentIndex, options.vaultPath, options.knowledgeRetrievalMethod);
+    }
     return {
       index: currentIndex,
       refreshed: false,
@@ -376,8 +384,14 @@ export const refreshProjectSystemIndex = async (options: {
   await writeProjectTextFile(getSystemIndexChunksPath(projectDir), serializeChunksJsonl(nextIndex.chunks));
   await writeProjectJsonFile(getSystemIndexTopicsPath(projectDir), nextIndex.topics);
   await writeProjectJsonFile(getSystemIndexDocIntentsPath(projectDir), nextIndex.docIntents);
-  await writeProjectTextFile(getProjectSystemIndexArtifactPath(options.vaultPath, options.knowledgeRetrievalMethod), buildProjectSystemIndexArtifact(nextIndex, options.knowledgeRetrievalMethod));
-  await writeKnowledgeRuntimeArtifacts(nextIndex, options.vaultPath, options.knowledgeRetrievalMethod);
+  if (options.writeRuntimeArtifacts !== false) {
+    await ensureVaultKnowledgeRuntimeDirectoryStructure(options.vaultPath, options.knowledgeRetrievalMethod);
+    await writeProjectTextFile(
+      getProjectSystemIndexArtifactPath(options.vaultPath, options.knowledgeRetrievalMethod),
+      buildProjectSystemIndexArtifact(nextIndex, options.knowledgeRetrievalMethod)
+    );
+    await writeKnowledgeRuntimeArtifacts(nextIndex, options.vaultPath, options.knowledgeRetrievalMethod);
+  }
 
   return {
     index: nextIndex,
@@ -393,6 +407,7 @@ export const ensureProjectSystemIndex = async (options: {
   knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   requirementDocs: RequirementDoc[];
   generatedFiles: GeneratedFile[];
+  writeRuntimeArtifacts?: boolean;
 }) => refreshProjectSystemIndex(options);
 
 export const buildProjectSystemIndexPromptContext = (index: SystemIndexData, userInput: string) =>

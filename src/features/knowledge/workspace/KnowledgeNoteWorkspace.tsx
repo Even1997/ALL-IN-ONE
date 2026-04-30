@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMarkdownEditor';
@@ -115,11 +116,30 @@ type KnowledgeContextMenuState =
     }
   | null;
 
+type RawMarkdownPreview = {
+  path: string;
+  title: string;
+  markdown: string;
+  state: 'loading' | 'ready' | 'error';
+};
+
 const NOTE_RAIL_WIDTH_BOUNDS = { min: 220, max: 420 };
 const NOTE_RAIL_DEFAULT_WIDTH = 280;
+const PREVIEWABLE_KNOWLEDGE_FILE_EXTENSIONS = new Set(['md', 'markdown']);
 
 const clampNoteRailWidth = (value: number) =>
   Math.min(NOTE_RAIL_WIDTH_BOUNDS.max, Math.max(NOTE_RAIL_WIDTH_BOUNDS.min, value));
+
+const isPreviewableKnowledgeFile = (extension: string) =>
+  PREVIEWABLE_KNOWLEDGE_FILE_EXTENSIONS.has(extension.toLowerCase());
+
+const normalizeToolViewContent = (content: string) =>
+  content
+    .replace(/^<file>\n/, '')
+    .replace(/\n<\/file>\n?$/, '')
+    .split('\n')
+    .map((line) => line.replace(/^\s*\d+\|/, ''))
+    .join('\n');
 
 const NoteAddIcon = () => (
   <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -456,6 +476,7 @@ export const KnowledgeNoteWorkspace = ({
   onFilterChange,
   onOpenAttachment,
 }: KnowledgeNoteWorkspaceProps) => {
+  const rawMarkdownRequestIdRef = useRef(0);
   const [railWidth, setRailWidth] = useState(NOTE_RAIL_DEFAULT_WIDTH);
   const [isRailResizing, setIsRailResizing] = useState(false);
   const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<Set<string>>(() => new Set());
@@ -463,6 +484,7 @@ export const KnowledgeNoteWorkspace = ({
   const [anchorTreePath, setAnchorTreePath] = useState<string | null>(null);
   const [contextMenuState, setContextMenuState] = useState<KnowledgeContextMenuState>(null);
   const [viewMode, setViewMode] = useState<KnowledgeViewMode>('read');
+  const [rawMarkdownPreview, setRawMarkdownPreview] = useState<RawMarkdownPreview | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const searchActive = searchValue.trim().length > 0;
   const visibleNotes = filteredNotes;
@@ -575,6 +597,55 @@ export const KnowledgeNoteWorkspace = ({
     setContextMenuState(null);
   }, []);
 
+  const handleOpenRawMarkdownPreview = useCallback(async (file: KnowledgeTreeFileNode) => {
+    const requestId = rawMarkdownRequestIdRef.current + 1;
+    rawMarkdownRequestIdRef.current = requestId;
+    setViewMode('read');
+    setRawMarkdownPreview({
+      path: file.absolutePath,
+      title: file.name,
+      markdown: '正在载入 Markdown 预览...',
+      state: 'loading',
+    });
+
+    try {
+      const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_view', {
+        params: {
+          file_path: file.absolutePath,
+          offset: 0,
+          limit: 4000,
+        },
+      });
+
+      if (rawMarkdownRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || `读取文件失败：${file.name}`);
+      }
+
+      setRawMarkdownPreview({
+        path: file.absolutePath,
+        title: file.name,
+        markdown: normalizeToolViewContent(result.content),
+        state: 'ready',
+      });
+    } catch (error) {
+      if (rawMarkdownRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setRawMarkdownPreview({
+        path: file.absolutePath,
+        title: file.name,
+        markdown: `> 无法读取这个 Markdown 文件。\n\n\`\`\`\n${errorMessage}\n\`\`\``,
+        state: 'error',
+      });
+    }
+  }, []);
+
   const handleOpenInternalMarkdownLink = useCallback(
     (target: KnowledgeInternalLinkTarget) => {
       const normalizedTitle = target.noteTitle?.trim().toLowerCase();
@@ -597,6 +668,7 @@ export const KnowledgeNoteWorkspace = ({
 
   useEffect(() => {
     setViewMode('read');
+    setRawMarkdownPreview(null);
   }, [selectedNote?.id]);
 
   useEffect(() => {
@@ -732,7 +804,10 @@ export const KnowledgeNoteWorkspace = ({
               onClick={(event) => {
                 handleTreeSelection(file.path, event.metaKey || event.ctrlKey, event.shiftKey);
                 if (file.note) {
+                  setRawMarkdownPreview(null);
                   onSelectNote(file.note.id);
+                } else if (isPreviewableKnowledgeFile(file.extension)) {
+                  void handleOpenRawMarkdownPreview(file);
                 } else {
                   onOpenAttachment(file.absolutePath);
                 }
@@ -769,12 +844,14 @@ export const KnowledgeNoteWorkspace = ({
     [
       collapsedFolderPaths,
       handleTreeSelection,
+      handleOpenRawMarkdownPreview,
       onOpenAttachment,
       onSelectNote,
       searchActive,
       selectedAncestorFolderPaths,
       selectedNote?.id,
       selectedTreePaths,
+      setRawMarkdownPreview,
       toggleFolderExpanded,
     ]
   );
@@ -1002,7 +1079,47 @@ export const KnowledgeNoteWorkspace = ({
       />
 
       <main className="gn-note-editor-column">
-        {selectedNote ? (
+        {rawMarkdownPreview ? (
+          <>
+            <div className="gn-note-editor-surface">
+              <div className="gn-note-editor-title-row">
+                <div className="gn-note-reading-title-hint">
+                  <strong>{rawMarkdownPreview.title}</strong>
+                  <span>从项目文件只读预览，当前不会写回知识库。</span>
+                </div>
+                <div className="gn-note-reading-chrome">
+                  <div className="gn-note-storage-state" aria-label="Markdown 文件预览状态">
+                    <span>只读预览</span>
+                    <span>
+                      {rawMarkdownPreview.state === 'loading'
+                        ? '读取中'
+                        : rawMarkdownPreview.state === 'error'
+                          ? '读取失败'
+                          : '项目 Markdown'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="gn-note-editor-body">
+                <div className="gn-note-reading-surface">
+                  <KnowledgeMarkdownViewer
+                    markdown={rawMarkdownPreview.markdown}
+                    onOpenInternalLink={handleOpenInternalMarkdownLink}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <footer className="gn-note-editor-footer">
+              <span>从项目文件只读预览</span>
+              <div className="gn-note-editor-footer-actions">
+                <span className="gn-note-editor-footer-path" title={rawMarkdownPreview.path}>
+                  {rawMarkdownPreview.path}
+                </span>
+              </div>
+            </footer>
+          </>
+        ) : selectedNote ? (
           <>
             <div className="gn-note-editor-surface">
               <div className="gn-note-editor-title-row">

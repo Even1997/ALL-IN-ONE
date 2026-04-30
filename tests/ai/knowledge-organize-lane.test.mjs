@@ -97,6 +97,7 @@ test('knowledge organize chat flow now surfaces proposal-first review instead of
   const chatSource = await readFile(aiChatPath, 'utf8');
 
   assert.match(chatSource, /ensureProjectSystemIndex/);
+  assert.match(chatSource, /writeRuntimeArtifacts:\s*skillIntent\?\.package === 'knowledge-organize'/);
   assert.match(chatSource, /正在刷新系统索引/);
   assert.match(chatSource, /系统索引已刷新/);
   assert.match(chatSource, /系统索引已是最新状态/);

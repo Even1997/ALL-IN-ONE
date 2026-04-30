@@ -68,3 +68,11 @@ test('refreshProjectSystemIndex persists a visible artifact alongside hidden bas
   assert.match(source, /export const buildProjectSystemIndexArtifact =/);
   assert.match(source, /writeProjectTextFile\(getProjectSystemIndexArtifactPath\(options\.vaultPath, options\.knowledgeRetrievalMethod\), buildProjectSystemIndexArtifact\(nextIndex, options\.knowledgeRetrievalMethod\)\)/);
 });
+
+test('refreshProjectSystemIndex can skip visible retrieval artifacts and keep only hidden base-index files fresh', async () => {
+  const source = await readFile(new URL('../src/modules/knowledge/systemIndexProject.ts', import.meta.url), 'utf8');
+
+  assert.match(source, /writeRuntimeArtifacts\?: boolean/);
+  assert.match(source, /if \(options\.writeRuntimeArtifacts !== false\)/);
+  assert.match(source, /ensureVaultKnowledgeRuntimeDirectoryStructure\(options\.vaultPath,\s*options\.knowledgeRetrievalMethod\)/);
+});

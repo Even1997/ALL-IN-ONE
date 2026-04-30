@@ -111,3 +111,13 @@ test('knowledge note workspace defaults to reading mode and exposes a code toggl
   assert.match(source, /GoodNightMarkdownEditor/);
   assert.match(source, /serializeKnowledgeNoteMarkdown/);
 });
+
+test('knowledge note workspace previews unmapped markdown files inside the app instead of opening them as attachments', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /type RawMarkdownPreview =/);
+  assert.match(source, /const isPreviewableKnowledgeFile = \(extension: string\)/);
+  assert.match(source, /else if \(isPreviewableKnowledgeFile\(file\.extension\)\) {\s*void handleOpenRawMarkdownPreview\(file\);\s*} else {\s*onOpenAttachment\(file\.absolutePath\);\s*}/s);
+  assert.match(source, /rawMarkdownPreview \? \(/);
+  assert.match(source, /从项目文件只读预览/);
+});

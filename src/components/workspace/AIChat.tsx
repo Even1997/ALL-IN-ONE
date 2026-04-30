@@ -51,7 +51,6 @@ import { buildKnowledgeNoteRootMirrorPath } from '../../features/knowledge/works
 import { serializeKnowledgeNoteMarkdown } from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
-import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import {
   getProjectDir,
   getProjectKnowledgeRootDir,
@@ -61,7 +60,6 @@ import {
 } from '../../utils/projectPersistence';
 import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
 import {
-  GNAgentActivityPanel,
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
   GNAgentMessageList,
@@ -109,22 +107,11 @@ type ChatAgentAvailability = {
   fallbackMessage: string | null;
 };
 
-type DrawerPanelId = 'context' | 'run' | 'artifacts';
-type AgentLaneId = 'chat' | 'tasks' | 'artifacts' | 'context' | 'activity';
-
 type GNAgentSuggestion = {
   label: string;
   description: string;
   prompt: string;
 };
-
-const GN_AGENT_LANES: Array<{ id: AgentLaneId; label: string; description: string }> = [
-  { id: 'chat', label: 'Chat', description: '自然语言协作' },
-  { id: 'tasks', label: 'Tasks', description: '任务与运行状态' },
-  { id: 'artifacts', label: 'Artifacts', description: '产物和变更' },
-  { id: 'context', label: 'Context', description: '引用与上下文' },
-  { id: 'activity', label: 'Activity', description: '执行记录' },
-];
 
 const formatTimestamp = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
@@ -429,8 +416,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const isEmbedded = isProviderEmbedded || isGNAgentEmbedded;
   const lockExpandedForEmbedded = isProviderEmbedded;
   const [input, setInput] = useState('');
-  const [activeDrawer, setActiveDrawer] = useState<DrawerPanelId | null>(null);
-  const [activeAgentLane, setActiveAgentLane] = useState<AgentLaneId>('chat');
   const [isLoading, setIsLoading] = useState(false);
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -486,7 +471,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     selectedKnowledgeContextIds,
     generatedFiles,
     pageStructure,
-    wireframes,
     replaceRequirementDocs,
     setRawRequirementInput,
   } = useProjectStore(
@@ -497,7 +481,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       selectedKnowledgeContextIds: state.selectedKnowledgeContextIds,
       generatedFiles: state.generatedFiles,
       pageStructure: state.pageStructure,
-      wireframes: state.wireframes,
       replaceRequirementDocs: state.replaceRequirementDocs,
       setRawRequirementInput: state.setRawRequirementInput,
     }))
@@ -508,7 +491,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const previewElements = usePreviewStore((state) => state.elements);
   const selectedElementId = usePreviewStore((state) => state.selectedElementId);
-  const featureTree = useFeatureTreeStore((state) => state.tree);
   const serverNotes = useKnowledgeStore((state) => state.notes);
   const createProjectNote = useKnowledgeStore((state) => state.createProjectNote);
   const loadKnowledgeNotes = useKnowledgeStore((state) => state.loadNotes);
@@ -875,17 +857,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
-  const workflowAvailability = useMemo(
-    () => ({
-      hasRequirementsSpec: requirementDocs.some(
-        (doc) => doc.sourceType === 'ai' && doc.title.includes('需求规格说明书')
-      ),
-      hasFeatureTree: Boolean(featureTree?.children.length),
-      hasPageStructure: designPages.length > 0,
-      hasWireframes: Object.keys(wireframes).length > 0,
-    }),
-    [designPages.length, featureTree, requirementDocs, wireframes]
-  );
   const agentAvailability: Record<ChatAgentId, ChatAgentAvailability> = useMemo(() => ({
     claude: {
       ready: Boolean(localAgentSnapshot?.claudeHome.exists || localAgentSnapshot?.claudeSettings.exists),
@@ -982,24 +953,9 @@ export const AIChat: React.FC<AIChatProps> = ({
     [selectedChatAgentId]
   );
   const isFreshSession = messages.length <= 1;
-  const artifactPaths = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          activityEntries
-            .flatMap((entry) => entry.changedPaths)
-            .filter(Boolean)
-        )
-      ),
-    [activityEntries]
-  );
   const latestActivityEntry = activityEntries[0] || null;
   const runStateLabel = isLoading ? 'Running' : latestActivityEntry?.type === 'failed' ? 'Failed' : 'Ready';
   const runStateTone = isLoading ? 'running' : latestActivityEntry?.type === 'failed' ? 'error' : 'success';
-  const toggleDrawer = useCallback((drawer: DrawerPanelId) => {
-    setActiveDrawer((current) => (current === drawer ? null : drawer));
-    setShowHistoryMenu(false);
-  }, []);
   const flushStreamingDrafts = useCallback(() => {
     streamingFlushFrameRef.current = null;
     setStreamingDraftContents({ ...streamingDraftBufferRef.current });
@@ -1036,7 +992,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   }, []);
   const handleApplySuggestion = useCallback((prompt: string) => {
     setInput(prompt);
-    setActiveAgentLane('chat');
     setShowHistoryMenu(false);
     textareaRef.current?.focus();
   }, []);
@@ -1293,15 +1248,16 @@ export const AIChat: React.FC<AIChatProps> = ({
       try {
         const systemIndexRefreshResult =
           isTauriRuntimeAvailable() && currentProject && projectKnowledgeRootDir
-            ? await ensureProjectSystemIndex({
-                projectId: currentProject.id,
-                projectName: currentProject.name,
-                vaultPath: projectKnowledgeRootDir,
-                knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
-                requirementDocs: knowledgeSourceDocs,
-                generatedFiles,
-              })
-            : null;
+              ? await ensureProjectSystemIndex({
+                  projectId: currentProject.id,
+                  projectName: currentProject.name,
+                  vaultPath: projectKnowledgeRootDir,
+                  knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
+                  requirementDocs: knowledgeSourceDocs,
+                  generatedFiles,
+                  writeRuntimeArtifacts: skillIntent?.package === 'knowledge-organize',
+                })
+              : null;
         const systemIndexPromptContext = systemIndexRefreshResult
           ? buildKnowledgeRuntimePromptContext({
               index: systemIndexRefreshResult.index,
@@ -1654,7 +1610,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       updateStreamingDraft,
       upsertProposal,
       upsertSession,
-      workflowAvailability,
       workflowProjectState,
     ]
   );
@@ -1721,12 +1676,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const launchpad = isFreshSession ? (
     <section className="chat-launchpad" aria-label="GN Agent quick actions">
       <div className="chat-launchpad-hero">
-        <span className="chat-shell-kicker">AI Workspace</span>
         <h2>让 GN Agent 直接开始推进项目</h2>
-        <p>
-          它现在更像一个真正的 AI 产品：先聊天，再按需展开 Context、Run 和 Artifacts。
-          你可以直接描述目标，或者从下面的 PM 超能力开始。
-        </p>
       </div>
 
       <div className="chat-launchpad-status">
@@ -1750,229 +1700,18 @@ export const AIChat: React.FC<AIChatProps> = ({
       </div>
     </section>
   ) : null;
-  const headerDrawerContent = activeDrawer === 'context' ? (
-    <div className="chat-shell-drawer-panel">
-      <div className="chat-shell-drawer-header">
-        <div>
-          <strong>Context Drawer</strong>
-          <span>AI 当前会读到的上下文和预算。</span>
-        </div>
-        <button className="chat-shell-drawer-close" type="button" onClick={() => setActiveDrawer(null)}>
-          关闭
-        </button>
-      </div>
-
-      <div className="chat-shell-drawer-summary-grid">
-        <div className="chat-shell-drawer-summary-card">
-          <span>Agent</span>
-          <strong>{selectedAgent.label}</strong>
-        </div>
-        <div className="chat-shell-drawer-summary-card">
-          <span>Model</span>
-          <strong>{selectedRuntimeConfig?.model || '未启用 AI'}</strong>
-        </div>
-        <div className="chat-shell-drawer-summary-card">
-          <span>Context</span>
-          <strong>{currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}</strong>
-        </div>
-      </div>
-
-      <div className="chat-shell-context-stack">
-        <div className="chat-shell-drawer-copy">
-          <strong>当前摘要</strong>
-          <div className="chat-context-strip">
-            {contextSnapshot.primaryLabel ? <span className="chat-context-chip subtle">{contextSnapshot.primaryLabel}</span> : null}
-            {contextSnapshot.secondaryLabel ? <span className="chat-context-chip subtle">{contextSnapshot.secondaryLabel}</span> : null}
-            {contextSnapshot.knowledgeLabel ? <span className="chat-context-chip subtle">{contextSnapshot.knowledgeLabel}</span> : null}
-            {!contextSnapshot.primaryLabel && !contextSnapshot.secondaryLabel && !contextSnapshot.knowledgeLabel ? (
-              <span className="chat-context-chip subtle">当前没有额外上下文摘要</span>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </div>
-  ) : activeDrawer === 'run' ? (
-    <div className="chat-shell-drawer-panel">
-      <div className="chat-shell-drawer-header">
-        <div>
-          <strong>Run Drawer</strong>
-          <span>AI 做了什么、当前跑到哪一步。</span>
-        </div>
-        <button className="chat-shell-drawer-close" type="button" onClick={() => setActiveDrawer(null)}>
-          关闭
-        </button>
-      </div>
-
-      <div className="chat-shell-drawer-summary-grid">
-        <div className={`chat-shell-drawer-summary-card ${runStateTone}`}>
-          <span>Run State</span>
-          <strong>{runStateLabel}</strong>
-        </div>
-        <div className="chat-shell-drawer-summary-card">
-          <span>Latest Event</span>
-          <strong>{latestActivityEntry?.summary || '暂无执行记录'}</strong>
-        </div>
-      </div>
-
-      <GNAgentActivityPanel activityEntries={activityEntries} formatTimestamp={formatTimestamp} />
-    </div>
-  ) : activeDrawer === 'artifacts' ? (
-    <div className="chat-shell-drawer-panel">
-      <div className="chat-shell-drawer-header">
-        <div>
-          <strong>Artifacts Drawer</strong>
-          <span>本轮对项目留下了什么产物。</span>
-        </div>
-        <button className="chat-shell-drawer-close" type="button" onClick={() => setActiveDrawer(null)}>
-          关闭
-        </button>
-      </div>
-
-      <div className="chat-shell-drawer-summary-grid">
-        <div className="chat-shell-drawer-summary-card">
-          <span>Changed Files</span>
-          <strong>{artifactPaths.length}</strong>
-        </div>
-        <div className="chat-shell-drawer-summary-card">
-          <span>Latest Summary</span>
-          <strong>{latestActivityEntry?.summary || '暂无产物摘要'}</strong>
-        </div>
-      </div>
-
-      <div className="chat-shell-artifact-list">
-        {artifactPaths.length > 0 ? (
-          artifactPaths.map((artifactPath) => (
-            <article key={artifactPath} className="chat-shell-artifact-card">
-              <strong>{artifactPath.split('/').pop() || artifactPath}</strong>
-              <span>{artifactPath}</span>
-            </article>
-          ))
-        ) : (
-          <div className="chat-panel-note">还没有检测到可归档的文件变更。</div>
-        )}
-      </div>
-    </div>
-  ) : null;
-
-  const agentLaneContent =
-    activeAgentLane === 'chat' ? (
-      <GNAgentMessageList
-        messages={messages}
-        draftContents={streamingDraftContents}
-        formatTimestamp={formatTimestamp}
-        parseMessageParts={parseAIChatMessageParts}
-        renderMessagePart={renderMessagePart}
-        renderKnowledgeProposal={renderKnowledgeProposal}
-        messagesEndRef={messagesEndRef}
-        leadingContent={launchpad}
-      />
-    ) : activeAgentLane === 'tasks' ? (
-      <section className="chat-agent-panel chat-agent-task-panel" aria-label="GN Agent tasks">
-        <div className="chat-agent-panel-header">
-          <strong>Tasks</strong>
-          <span>GN Agent 当前任务、能力链和运行状态。</span>
-        </div>
-        <div className="chat-agent-task-list">
-          <article className={`chat-agent-task-card ${runStateTone}`}>
-            <div>
-              <strong>{isLoading ? '正在执行当前请求' : '等待你的下一条指令'}</strong>
-              <span>{latestActivityEntry?.summary || '还没有新的执行记录。'}</span>
-            </div>
-            <span>{runStateLabel}</span>
-          </article>
-          <article className="chat-agent-task-card">
-            <div>
-              <strong>下一段能力链</strong>
-              <span>
-                {!workflowAvailability.hasRequirementsSpec || !workflowAvailability.hasFeatureTree
-                  ? '需求分析'
-                  : !workflowAvailability.hasPageStructure || !workflowAvailability.hasWireframes
-                    ? '原型草图'
-                    : 'UI 设计'}
-              </span>
-            </div>
-            <span>Ready</span>
-          </article>
-        </div>
-      </section>
-    ) : activeAgentLane === 'artifacts' ? (
-      <section className="chat-agent-panel chat-agent-artifact-panel" aria-label="GN Agent artifacts">
-        <div className="chat-agent-panel-header">
-          <strong>Artifacts</strong>
-          <span>Agent 生成、更新或引用过的项目产物。</span>
-        </div>
-        <div className="chat-agent-artifact-list">
-          {artifactPaths.length > 0 ? (
-            artifactPaths.map((artifactPath) => (
-              <article key={artifactPath} className="chat-agent-artifact-card">
-                <strong>{artifactPath.split('/').pop() || artifactPath}</strong>
-                <span>{artifactPath}</span>
-              </article>
-            ))
-          ) : (
-            <div className="chat-panel-note">还没有可展示的产物。执行 @索引、@需求、@草图 或 @UI 后会出现在这里。</div>
-          )}
-        </div>
-      </section>
-    ) : activeAgentLane === 'context' ? (
-      <section className="chat-agent-panel chat-agent-context-panel" aria-label="GN Agent context">
-        <div className="chat-agent-panel-header">
-          <strong>Context</strong>
-          <span>GN Agent 当前会读到的项目和上下文预算。</span>
-        </div>
-        <div className="chat-shell-drawer-summary-grid">
-          <div className="chat-shell-drawer-summary-card">
-            <span>Project</span>
-            <strong>{currentProject?.name || '未打开项目'}</strong>
-          </div>
-          <div className="chat-shell-drawer-summary-card">
-            <span>Budget</span>
-            <strong>{currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}</strong>
-          </div>
-        </div>
-        <div className="chat-context-strip">
-          {contextSnapshot.primaryLabel ? <span className="chat-context-chip subtle">{contextSnapshot.primaryLabel}</span> : null}
-          {contextSnapshot.secondaryLabel ? <span className="chat-context-chip subtle">{contextSnapshot.secondaryLabel}</span> : null}
-          {contextSnapshot.knowledgeLabel ? <span className="chat-context-chip subtle">{contextSnapshot.knowledgeLabel}</span> : null}
-          {!contextSnapshot.primaryLabel && !contextSnapshot.secondaryLabel && !contextSnapshot.knowledgeLabel ? (
-            <span className="chat-context-chip subtle">当前没有额外上下文摘要</span>
-          ) : null}
-        </div>
-      </section>
-    ) : (
-      <section className="chat-agent-panel chat-agent-activity-panel" aria-label="GN Agent activity">
-        <div className="chat-agent-panel-header">
-          <strong>Activity</strong>
-          <span>记录 GN Agent 的真实执行、产物和失败节点。</span>
-        </div>
-        <div className="chat-activity-list">
-          {activityEntries.length > 0 ? (
-            activityEntries.map((entry) => (
-              <article key={entry.id} className="chat-activity-entry">
-                <div className="chat-activity-entry-head">
-                  <strong>{entry.summary}</strong>
-                  <span>{formatTimestamp(entry.createdAt)}</span>
-                </div>
-                <div className="chat-activity-entry-meta">
-                  <span>{entry.type}</span>
-                  {entry.skill ? <span>{entry.skill}</span> : null}
-                  <span>{entry.runtime}</span>
-                </div>
-                {entry.changedPaths.length > 0 ? (
-                  <div className="chat-activity-entry-paths">
-                    {entry.changedPaths.map((changedPath) => (
-                      <code key={changedPath}>{changedPath}</code>
-                    ))}
-                  </div>
-                ) : null}
-              </article>
-            ))
-          ) : (
-            <div className="chat-panel-note">还没有执行记录。Agent 产生变更或运行能力链后会写入这里。</div>
-          )}
-        </div>
-      </section>
-    );
+  const agentChatContent = (
+    <GNAgentMessageList
+      messages={messages}
+      draftContents={streamingDraftContents}
+      formatTimestamp={formatTimestamp}
+      parseMessageParts={parseAIChatMessageParts}
+      renderMessagePart={renderMessagePart}
+      renderKnowledgeProposal={renderKnowledgeProposal}
+      messagesEndRef={messagesEndRef}
+      leadingContent={launchpad}
+    />
+  );
   useEffect(() => {
     if (selectedChatAgentId !== 'built-in' && !agentAvailability[selectedChatAgentId].ready) {
       setSelectedChatAgentId('built-in');
@@ -1989,9 +1728,9 @@ export const AIChat: React.FC<AIChatProps> = ({
         <header className={`chat-shell-header chat-shell-gn-header${isEmbedded ? ' embedded' : ''}`}>
           <div className="chat-shell-header-main">
             <div className="chat-shell-title">
-              <span className="chat-shell-kicker">GN Agent</span>
+              {!isEmbedded ? <span className="chat-shell-kicker">GN Agent</span> : null}
               <strong>{isCollapsed && !lockExpandedForEmbedded ? 'GN' : activeSession?.title || '新对话'}</strong>
-              {showExpandedShell ? <span>{currentProject?.name || '未打开项目'}</span> : null}
+              {showExpandedShell && !isEmbedded ? <span>{currentProject?.name || '未打开项目'}</span> : null}
             </div>
 
             {showExpandedShell && !isEmbedded ? (
@@ -2008,36 +1747,6 @@ export const AIChat: React.FC<AIChatProps> = ({
             <div className="chat-shell-header-actions">
               {showExpandedShell ? (
                 <>
-                  <button
-                    className={`chat-shell-drawer-toggle ${activeDrawer === 'context' ? 'active' : ''}`}
-                    type="button"
-                    aria-pressed={activeDrawer === 'context'}
-                    aria-expanded={activeDrawer === 'context'}
-                    onClick={() => toggleDrawer('context')}
-                  >
-                    <span>Context</span>
-                    <strong>{currentContextUsage.usedLabel}</strong>
-                  </button>
-                  <button
-                    className={`chat-shell-drawer-toggle ${activeDrawer === 'run' ? 'active' : ''}`}
-                    type="button"
-                    aria-pressed={activeDrawer === 'run'}
-                    aria-expanded={activeDrawer === 'run'}
-                    onClick={() => toggleDrawer('run')}
-                  >
-                    <span>Run</span>
-                    <strong>{activityEntries.length}</strong>
-                  </button>
-                  <button
-                    className={`chat-shell-drawer-toggle ${activeDrawer === 'artifacts' ? 'active' : ''}`}
-                    type="button"
-                    aria-pressed={activeDrawer === 'artifacts'}
-                    aria-expanded={activeDrawer === 'artifacts'}
-                    onClick={() => toggleDrawer('artifacts')}
-                  >
-                    <span>Artifacts</span>
-                    <strong>{artifactPaths.length}</strong>
-                  </button>
                   <div className="chat-header-menu">
                     <button
                       className="chat-shell-icon-btn"
@@ -2086,34 +1795,11 @@ export const AIChat: React.FC<AIChatProps> = ({
               ) : null}
             </div>
           </div>
-
-          {showExpandedShell ? (
-            <nav className="chat-agent-lane-tabs" aria-label="GN Agent capabilities">
-              {GN_AGENT_LANES.map((lane) => (
-                <button
-                  key={lane.id}
-                  type="button"
-                  className={lane.id === activeAgentLane ? 'active' : ''}
-                  aria-pressed={lane.id === activeAgentLane}
-                  title={lane.description}
-                  onClick={() => {
-                    setActiveAgentLane(lane.id);
-                    setActiveDrawer(null);
-                  }}
-                >
-                  {lane.label}
-                </button>
-              ))}
-            </nav>
-          ) : null}
-
-          {headerDrawerContent}
         </header>
 
           {showExpandedShell ? (
             <>
-            {agentLaneContent}
-
+            {agentChatContent}
             {isEmbedded ? (
                 <>
                   <GNAgentEmbeddedComposer
