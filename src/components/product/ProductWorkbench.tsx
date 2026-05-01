@@ -1068,7 +1068,6 @@ export const ProductWorkbench = ({
   const {
     currentProject,
     featuresMarkdown,
-    generatedFiles,
     pageStructure,
     requirementDocs,
     wireframes,
@@ -1084,7 +1083,6 @@ export const ProductWorkbench = ({
   } = useProjectStore(useShallow((state) => ({
     currentProject: state.currentProject,
     featuresMarkdown: state.featuresMarkdown,
-    generatedFiles: state.generatedFiles,
     pageStructure: state.pageStructure,
     requirementDocs: state.requirementDocs,
     wireframes: state.wireframes,

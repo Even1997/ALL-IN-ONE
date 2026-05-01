@@ -51,4 +51,6 @@ test('product workbench source search-filters notes without knowledge-type filte
   assert.doesNotMatch(source, /knowledgeFilter/);
   assert.doesNotMatch(source, /filterKnowledgeNotesByType/);
   assert.doesNotMatch(source, /handleOrganizeKnowledge/);
+  assert.doesNotMatch(source, /generatedFiles:\s*state\.generatedFiles/);
+  assert.doesNotMatch(source, /\bgeneratedFiles,\s*\n\s*requirementDocs,/);
 });
