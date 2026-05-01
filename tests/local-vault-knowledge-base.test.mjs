@@ -24,9 +24,12 @@ test('vault persistence now targets the real project vault root only', async () 
 
   assert.match(source, /getProjectVaultRootDir = \(project: Pick<ProjectConfig, 'vaultPath'>\) => project\.vaultPath/);
   assert.doesNotMatch(source, /getProjectKnowledgeRootDir/);
+  assert.doesNotMatch(source, /getVaultStateDir/);
   assert.doesNotMatch(source, /getVaultMFlowDir/);
   assert.doesNotMatch(source, /getVaultOutputsDir/);
+  assert.doesNotMatch(source, /getVaultMFlowOutputsDir/);
   assert.doesNotMatch(source, /ensureVaultKnowledgeDirectoryStructure/);
+  assert.doesNotMatch(source, /ensureVaultMFlowDirectoryStructure/);
   assert.doesNotMatch(source, /ensureProjectKnowledgeDirectory/);
 });
 
