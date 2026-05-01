@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { rebuildProjectMFlow, buildMFlowPromptContext } from '../src/modules/knowledge/m-flow/runtime.ts';
+import { rebuildProjectMFlow, buildMFlowPromptContext, loadMFlowPromptState } from '../src/modules/knowledge/m-flow/runtime.ts';
 
 test('native m-flow runtime rebuilds state and returns artifact paths for hidden state plus rendered outputs', async () => {
   const rebuilt = await rebuildProjectMFlow({
@@ -51,4 +51,35 @@ test('native m-flow runtime builds prompt context from episode bundle scoring', 
   assert.match(promptContext.expandedSection, /episode_bundle:/);
   assert.match(promptContext.indexSection, /episode:deadline/);
   assert.equal(promptContext.labels.length > 0, true);
+});
+
+test('native m-flow runtime prefers cached prompt state before rebuilding', async () => {
+  const cached = (
+    await rebuildProjectMFlow({
+      projectId: 'project-1',
+      projectName: 'GoodNight',
+      vaultPath: 'C:/vault/demo',
+      requirementDocs: [],
+      generatedFiles: [],
+      projectFiles: [
+        {
+          path: 'project/cached.md',
+          content: '# Cached\n\nReuse the existing prompt state when available.',
+          updatedAt: '2026-05-01T00:00:00.000Z',
+        },
+      ],
+    })
+  ).state;
+
+  const loaded = await loadMFlowPromptState({
+    projectId: 'project-1',
+    projectName: 'GoodNight',
+    vaultPath: 'C:/vault/demo',
+    requirementDocs: [],
+    generatedFiles: [],
+    cachedState: cached,
+  });
+
+  assert.equal(loaded.source, 'cache');
+  assert.equal(loaded.state, cached);
 });

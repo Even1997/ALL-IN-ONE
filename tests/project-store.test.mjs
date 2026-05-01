@@ -33,7 +33,7 @@ test('app design workspace loads and creates sketch pages through project files'
   assert.match(source, /loadSketchPageArtifactsFromProjectDir/);
   assert.match(source, /replacePageStructure\(sketchArtifacts\.pageStructure,\s*featureTree\)/);
   assert.match(source, /replaceWireframes\(sketchArtifacts\.wireframes,\s*featureTree\)/);
-  assert.match(source, /await writeSketchPageFile\(currentProject\.id,\s*nextPage,\s*null\)/);
+  assert.match(source, /await writeSketchPageFile\(currentProject\.id,\s*nextPage,\s*null,\s*currentProject\.appType\)/);
 });
 
 test('app design workspace falls back to store page creation when Tauri runtime is unavailable', async () => {
@@ -75,4 +75,21 @@ test('createProject starts from an empty workspace instead of auto-generating pl
   assert.match(createProjectBlock, /generatedFiles:\s*\[\],/);
   assert.match(createProjectBlock, /testPlan:\s*null,/);
   assert.match(createProjectBlock, /deployPlan:\s*null,/);
+});
+
+test('replaceRequirementDocs bails out when normalized docs already match store state', async () => {
+  const source = await readFile(new URL('../src/store/projectStore.ts', import.meta.url), 'utf8');
+
+  assert.match(
+    source,
+    /const requirementDocs = docs\.map\(\(doc\) => \(\{[\s\S]*?title: normalizeRequirementTitle\(doc\.title\),[\s\S]*?\}\)\);/
+  );
+  assert.match(
+    source,
+    /const areRequirementDocsEquivalent = \(left: RequirementDoc\[], right: RequirementDoc\[]\) =>[\s\S]*?doc\.id === other\.id && doc\.updatedAt === other\.updatedAt && !hasRequirementDocChanged\(doc, other\)/
+  );
+  assert.match(
+    source,
+    /replaceRequirementDocs:\s*\(docs\)\s*=>[\s\S]*?if \(areRequirementDocsEquivalent\(state\.requirementDocs, requirementDocs\)\) \{\s*return state;\s*\}/
+  );
 });

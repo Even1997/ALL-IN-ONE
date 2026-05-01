@@ -206,6 +206,13 @@ const hasRequirementDocChanged = (previous: RequirementDoc, next: RequirementDoc
   !areStringArraysEqual(previous.tags || [], next.tags || []) ||
   !areStringArraysEqual(previous.relatedIds || [], next.relatedIds || []);
 
+const areRequirementDocsEquivalent = (left: RequirementDoc[], right: RequirementDoc[]) =>
+  left.length === right.length &&
+  left.every((doc, index) => {
+    const other = right[index];
+    return Boolean(other) && doc.id === other.id && doc.updatedAt === other.updatedAt && !hasRequirementDocChanged(doc, other);
+  });
+
 const buildDocumentChangeSummary = (
   documentTitle: string,
   action: DocumentChangeAction,
@@ -2463,6 +2470,9 @@ export const useProjectStore = create<ProjectState>()(
             relatedIds: doc.relatedIds || [],
             updatedAt: doc.updatedAt || new Date().toISOString(),
           }));
+          if (areRequirementDocsEquivalent(state.requirementDocs, requirementDocs)) {
+            return state;
+          }
           const documentEvents = appendDocumentEvents(
             state.documentEvents,
             collectRequirementDocEvents(state.requirementDocs, requirementDocs, state.currentProject.id, 'sync')

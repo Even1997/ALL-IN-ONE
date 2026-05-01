@@ -65,6 +65,7 @@ import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries'
 import {
   buildMFlowPromptContext,
   formatMFlowRefreshSummary,
+  loadMFlowPromptState,
   rebuildProjectMFlow,
 } from '../../modules/knowledge/m-flow/runtime.ts';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
@@ -700,6 +701,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mFlowPromptStateRef = useRef<Awaited<ReturnType<typeof loadMFlowPromptState>>['state'] | null>(null);
   const streamingDraftBufferRef = useRef<Record<string, string>>({});
   const streamingFlushFrameRef = useRef<number | null>(null);
 
@@ -1912,43 +1914,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       try {
-        const mFlowRefreshResult =
-          isTauriRuntimeAvailable() && currentProject && projectKnowledgeRootDir
-              ? await rebuildProjectMFlow({
-                  projectId: currentProject.id,
-                  projectName: currentProject.name,
-                  vaultPath: projectKnowledgeRootDir,
-                  requirementDocs: knowledgeSourceDocs,
-                  generatedFiles,
-                  writeArtifacts: skillIntent?.package === 'knowledge-organize',
-                })
-              : null;
-        const mFlowPromptContext = mFlowRefreshResult
-          ? buildMFlowPromptContext(mFlowRefreshResult.state, cleanedContent)
-          : null;
-        const directChat = buildDirectChatPrompt({
-          userInput: cleanedContent,
-          currentProjectName: currentProject.name,
-          contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
-          skillIntent,
-          conversationHistory: activeSession?.messages || [],
-          referenceContext: mFlowPromptContext
-            ? {
-                indexSection: mFlowPromptContext.indexSection,
-                expandedSection: mFlowPromptContext.expandedSection,
-                policySection: mFlowPromptContext.policySection,
-                labels: mFlowPromptContext.labels,
-              }
-            : null,
-          contextLabels: [
-            selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
-            contextSnapshot.primaryLabel,
-            contextSnapshot.secondaryLabel,
-            contextSnapshot.knowledgeLabel,
-            ...(mFlowPromptContext?.labels || []),
-          ].filter((item): item is string => Boolean(item)),
-        });
-
         const executeLaneText = async (prompt: string) => {
           if (effectiveChatAgentId !== 'built-in') {
             const projectRoot = await getProjectDir(currentProject.id);
@@ -1991,6 +1956,51 @@ export const AIChat: React.FC<AIChatProps> = ({
           });
         };
 
+        const buildDirectChatRequest = async () => {
+          const mFlowPromptStateResult =
+            isTauriRuntimeAvailable() && projectKnowledgeRootDir
+              ? await loadMFlowPromptState({
+                  projectId: currentProject.id,
+                  projectName: currentProject.name,
+                  vaultPath: projectKnowledgeRootDir,
+                  requirementDocs: knowledgeSourceDocs,
+                  generatedFiles,
+                  cachedState: mFlowPromptStateRef.current,
+                })
+              : null;
+
+          if (mFlowPromptStateResult) {
+            mFlowPromptStateRef.current = mFlowPromptStateResult.state;
+          }
+
+          const mFlowPromptContext = mFlowPromptStateResult
+            ? buildMFlowPromptContext(mFlowPromptStateResult.state, cleanedContent)
+            : null;
+
+          return buildDirectChatPrompt({
+            userInput: cleanedContent,
+            currentProjectName: currentProject.name,
+            contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
+            skillIntent,
+            conversationHistory: activeSession?.messages || [],
+            referenceContext: mFlowPromptContext
+              ? {
+                  indexSection: mFlowPromptContext.indexSection,
+                  expandedSection: mFlowPromptContext.expandedSection,
+                  policySection: mFlowPromptContext.policySection,
+                  labels: mFlowPromptContext.labels,
+                }
+              : null,
+            contextLabels: [
+              selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
+              contextSnapshot.primaryLabel,
+              contextSnapshot.secondaryLabel,
+              contextSnapshot.knowledgeLabel,
+              ...(mFlowPromptContext?.labels || []),
+            ].filter((item): item is string => Boolean(item)),
+          });
+        };
+
         if (skillIntent?.skill === 'requirements') {
           setRawRequirementInput(cleanedContent);
         }
@@ -2005,16 +2015,15 @@ export const AIChat: React.FC<AIChatProps> = ({
             throw new Error('当前项目还没有绑定本地知识库文件夹。');
           }
 
-          const ensuredMFlow =
-            mFlowRefreshResult ||
-            (await rebuildProjectMFlow({
-              projectId: currentProject.id,
-              projectName: currentProject.name,
-              vaultPath: projectKnowledgeRootDir,
-              requirementDocs: knowledgeSourceDocs,
-              generatedFiles,
-              writeArtifacts: true,
-            }));
+          const ensuredMFlow = await rebuildProjectMFlow({
+            projectId: currentProject.id,
+            projectName: currentProject.name,
+            vaultPath: projectKnowledgeRootDir,
+            requirementDocs: knowledgeSourceDocs,
+            generatedFiles,
+            writeArtifacts: true,
+          });
+          mFlowPromptStateRef.current = ensuredMFlow.state;
           const knowledgeOrganizeSummary = formatMFlowRefreshSummary(
             ensuredMFlow.state,
             ensuredMFlow.refreshed
@@ -2246,6 +2255,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         }
 
         if (effectiveChatAgentId !== 'built-in') {
+          const directChat = await buildDirectChatRequest();
           const projectRoot = await getProjectDir(currentProject.id);
           const localAgentPrompt = [
             directChat.systemPrompt ? `<system>\n${directChat.systemPrompt}\n</system>` : null,
@@ -2281,6 +2291,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
         let thinkingContent = '';
         let answerContent = '';
+        const directChat = await buildDirectChatRequest();
         const buildStreamingMessage = (completeThinking: boolean) => {
           const sections: string[] = [];
           if (thinkingContent.trim()) {

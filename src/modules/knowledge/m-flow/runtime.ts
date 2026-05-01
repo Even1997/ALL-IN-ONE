@@ -231,6 +231,41 @@ export const rebuildProjectMFlow = async (options: {
   };
 };
 
+export const loadMFlowPromptState = async (options: {
+  projectId: string;
+  projectName: string;
+  vaultPath: string;
+  requirementDocs: RequirementDoc[];
+  generatedFiles: GeneratedFile[];
+  projectFiles?: MFlowProjectFileInput[];
+  cachedState?: MFlowState | null;
+}) => {
+  if (options.cachedState) {
+    return {
+      state: options.cachedState,
+      source: 'cache' as const,
+    };
+  }
+
+  const existingState = isTauriRuntimeAvailable() ? await readMFlowState(options.vaultPath) : null;
+  if (existingState) {
+    return {
+      state: existingState,
+      source: 'disk' as const,
+    };
+  }
+
+  const rebuilt = await rebuildProjectMFlow({
+    ...options,
+    writeArtifacts: false,
+  });
+
+  return {
+    state: rebuilt.state,
+    source: 'rebuild' as const,
+  };
+};
+
 export const buildMFlowPromptContext = (state: MFlowState, userInput: string) => {
   const bundles = scoreEpisodeBundles({
     state,
