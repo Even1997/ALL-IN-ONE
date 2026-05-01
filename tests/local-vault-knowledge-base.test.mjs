@@ -19,20 +19,15 @@ test('project config source drops retrieval-mode variants from the product contr
   assert.doesNotMatch(createProjectLiteral, /knowledgeRetrievalMethod:/);
 });
 
-test('vault persistence source targets native m-flow state and outputs', async () => {
+test('vault persistence now targets the real project vault root only', async () => {
   const source = await readFile(new URL('../src/utils/projectPersistence.ts', import.meta.url), 'utf8');
 
-  assert.match(source, /getVaultMFlowDir = \(vaultPath: string\) => joinPath\(getVaultStateDir\(vaultPath\), 'm-flow'\)/);
-  assert.match(source, /getVaultMFlowOutputsDir = \(vaultPath: string\) => joinPath\(getVaultOutputsDir\(vaultPath\), 'm-flow'\)/);
-  assert.doesNotMatch(source, /getVaultBaseIndexDir/);
-  assert.doesNotMatch(source, /getVaultSkillStateDir/);
-  assert.doesNotMatch(source, /getVaultSkillOutputsDir/);
-  assert.doesNotMatch(source, /ensureVaultKnowledgeRuntimeDirectoryStructure/);
-  assert.doesNotMatch(source, /\.goodnight[\\/]+base-index/);
-  assert.doesNotMatch(source, /_goodnight[\\/]+outputs[\\/]+llmwiki/);
-  assert.doesNotMatch(source, /_goodnight[\\/]+outputs[\\/]+rag/);
-  assert.doesNotMatch(source, /\.goodnight[\\/]+skills/);
-  assert.match(source, /getSystemIndexDir = \(projectDir: string\) => getVaultMFlowDir\(projectDir\)/);
+  assert.match(source, /getProjectVaultRootDir = \(project: Pick<ProjectConfig, 'vaultPath'>\) => project\.vaultPath/);
+  assert.doesNotMatch(source, /getProjectKnowledgeRootDir/);
+  assert.doesNotMatch(source, /getVaultMFlowDir/);
+  assert.doesNotMatch(source, /getVaultOutputsDir/);
+  assert.doesNotMatch(source, /ensureVaultKnowledgeDirectoryStructure/);
+  assert.doesNotMatch(source, /ensureProjectKnowledgeDirectory/);
 });
 
 test('knowledge workspace source removes retrieval-method controls and copy', async () => {

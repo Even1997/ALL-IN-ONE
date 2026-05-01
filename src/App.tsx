@@ -39,7 +39,7 @@ import { clampLayoutSize, LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSiz
 import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
 import {
   getProjectDir,
-  ensureProjectKnowledgeDirectory,
+  ensureProjectVaultDirectory,
   ensureProjectFilesystemStructure,
   getProjectStorageSettings,
   isTauriRuntimeAvailable,
@@ -2247,7 +2247,7 @@ const App: React.FC = () => {
     setProjectVaultDraftOverride(null);
     void ensureProjectFilesystemStructure(project.id).catch(() => undefined);
     if (project.vaultPath) {
-      void ensureProjectKnowledgeDirectory(project).catch(() => undefined);
+      void ensureProjectVaultDirectory(project).catch(() => undefined);
     }
   };
 
@@ -2285,7 +2285,7 @@ const App: React.FC = () => {
     setIsProjectManagerOpen(false);
     void ensureProjectFilesystemStructure(targetProject.id).catch(() => undefined);
     if (targetProject.vaultPath) {
-      void ensureProjectKnowledgeDirectory(targetProject).catch(() => undefined);
+      void ensureProjectVaultDirectory(targetProject).catch(() => undefined);
     }
   }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, replaceWorkflowProjectState, setTree, switchProject]);
 

@@ -193,38 +193,14 @@ export const saveProjectIndexToDisk = async (projects: ProjectConfig[]) => {
   await writeJSONFile(indexPath, projects);
 };
 
-export const getProjectKnowledgeRootDir = (project: Pick<ProjectConfig, 'id' | 'name' | 'vaultPath'>) =>
-  joinPath(project.vaultPath, sanitizeProjectPathSegment(project.name || project.id));
+export const getProjectVaultRootDir = (project: Pick<ProjectConfig, 'vaultPath'>) => project.vaultPath;
 
-export const getVaultStateDir = (vaultPath: string) => joinPath(vaultPath, '.goodnight');
-export const getVaultMFlowDir = (vaultPath: string) => joinPath(getVaultStateDir(vaultPath), 'm-flow');
-export const getVaultOutputsDir = (vaultPath: string) => joinPath(vaultPath, '_goodnight', 'outputs');
-export const getVaultMFlowOutputsDir = (vaultPath: string) => joinPath(getVaultOutputsDir(vaultPath), 'm-flow');
-export const ensureVaultKnowledgeDirectoryStructure = async (vaultPath: string) => {
-  await ensureDirectory(vaultPath);
-  await ensureDirectory(getVaultStateDir(vaultPath));
-  await ensureDirectory(getVaultMFlowDir(vaultPath));
+export const ensureProjectVaultDirectory = async (project: Pick<ProjectConfig, 'vaultPath'>) => {
+  await ensureDirectory(project.vaultPath);
+  return project.vaultPath;
 };
 
-export const ensureVaultMFlowDirectoryStructure = async (vaultPath: string) => {
-  await ensureVaultKnowledgeDirectoryStructure(vaultPath);
-  await ensureDirectory(getVaultOutputsDir(vaultPath));
-  await ensureDirectory(getVaultMFlowOutputsDir(vaultPath));
-};
-
-export const ensureProjectKnowledgeDirectory = async (project: Pick<ProjectConfig, 'id' | 'name' | 'vaultPath'>) => {
-  const projectKnowledgeRootDir = getProjectKnowledgeRootDir(project);
-  await ensureVaultKnowledgeDirectoryStructure(projectKnowledgeRootDir);
-  return projectKnowledgeRootDir;
-};
-
-export const getProjectStateDir = (projectDir: string) => getVaultStateDir(projectDir);
-export const getSystemIndexDir = (projectDir: string) => getVaultMFlowDir(projectDir);
-export const getSystemIndexManifestPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'manifest.json');
-export const getSystemIndexSourcesPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'sources.json');
-export const getSystemIndexChunksPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'chunks.jsonl');
-export const getSystemIndexTopicsPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'topics.json');
-export const getSystemIndexDocIntentsPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'doc-intents.json');
+export const getProjectStateDir = (projectDir: string) => joinPath(projectDir, '.goodnight');
 
 export const getProjectSnapshotPath = (projectDir: string) =>
   joinPath(getProjectStateDir(projectDir), 'workspace.json');
