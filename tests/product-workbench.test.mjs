@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productWorkbenchPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
 const pageWorkspacePath = path.resolve(__dirname, '../src/components/product/PageWorkspace.tsx');
+const noteWorkspacePath = path.resolve(__dirname, '../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
 const chatPath = path.resolve(__dirname, '../src/components/workspace/AIChat.tsx');
 
@@ -68,14 +69,16 @@ test('knowledge note hydration preserves local drafts for metadata-only refreshe
   assert.doesNotMatch(source, /lastKnowledgeAutosaveSignatureRef/);
 });
 
-test('markdown mirror rename syncs only for notes that already have a source file', async () => {
+test('markdown mirror rename sync follows current vault-save branches in product workbench', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
   assert.match(source, /const renameRequirementFile = useCallback\(async \(fromPath: string, toPath: string\) =>/);
   assert.match(source, /invoke<\{ success: boolean; content: string; error: string \| null \}>\('tool_rename'/);
-  assert.match(source, /const shouldSyncMarkdownMirror = Boolean\(canPersistRequirementToDisk && selectedServerNote\.sourceUrl && nextFilePath\)/);
+  assert.match(source, /const shouldSyncMarkdownMirror = Boolean\(canPersistRequirementToDisk && nextFilePath\)/);
   assert.match(source, /await updateServerNote\(currentProject\.id,\s*selectedServerNote\.id,/);
   assert.match(source, /await writeRequirementFile\(currentFilePath,\s*nextContent\);\s*await renameRequirementFile\(currentFilePath,\s*nextFilePath\);/s);
+  assert.match(source, /else if \(shouldSyncMarkdownMirror\) \{\s*await writeRequirementFile\(nextFilePath,\s*nextContent\);/s);
+  assert.match(source, /if \(shouldSyncMarkdownMirror\) \{\s*await refreshKnowledgeFilesystem\(\);/s);
   assert.doesNotMatch(source, /await removeRequirementFile\(currentFilePath\);\s*\}/s);
 });
 
@@ -132,16 +135,20 @@ test('page workspace preserves current canvas and sketch persistence hooks', asy
   assert.match(productSource, /<PageWorkspace/);
 });
 
-test('knowledge base searches database notes and keeps filters in the note workspace', async () => {
+test('knowledge base searches database notes with search-filtered results only', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
   assert.match(source, /const \[knowledgeSearch, setKnowledgeSearch\] = useState\(''\)/);
   assert.match(source, /const serverSearchResults = useKnowledgeStore\(\(state\) => state\.searchResults\)/);
   assert.match(source, /const searchServerNotes = useKnowledgeStore\(\(state\) => state\.searchNotes\)/);
   assert.match(source, /const filteredServerNotes = useMemo/);
-  assert.match(source, /filterKnowledgeNotesByType\(searchedNotes,\s*knowledgeFilter\)/);
+  assert.match(source, /return !normalizedSearch\s*\?\s*serverNotes\s*:\s*serverSearchQuery === normalizedSearch/s);
+  assert.match(source, /filterKnowledgeNotes\(serverNotes,\s*normalizedSearch\)/);
   assert.match(source, /searchValue=\{knowledgeSearch\}/);
   assert.match(source, /onSearchChange=\{setKnowledgeSearch\}/);
+  assert.doesNotMatch(source, /KnowledgeNoteFilter/);
+  assert.doesNotMatch(source, /knowledgeFilter/);
+  assert.doesNotMatch(source, /filterKnowledgeNotesByType/);
   assert.doesNotMatch(source, /buildKnowledgeSearchIndex/);
   assert.doesNotMatch(source, /searchKnowledgeEntries/);
   assert.doesNotMatch(source, /renderKnowledgeTree/);
@@ -160,25 +167,26 @@ test('chat sidebar reserves right-side space without changing vertical layout', 
 });
 
 
-test('product knowledge reading view keeps chrome compact for note-first reading', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+test('product knowledge reading view keeps chrome compact in the dedicated note workspace', async () => {
+  const productSource = await readFile(productWorkbenchPath, 'utf8');
+  const noteSource = await readFile(noteWorkspacePath, 'utf8');
 
-  assert.match(source, /上传/);
-  assert.match(source, /保存到知识库/);
-  assert.match(source, /Markdown 镜像/);
-  assert.doesNotMatch(source, /项目内的 Markdown 草稿、说明文档和 HTML 设计稿都统一沉淀在这里。/);
-  assert.doesNotMatch(source, /知识库引用/);
-  assert.doesNotMatch(source, /AI 会优先读取当前文档/);
-  assert.doesNotMatch(source, /人工文档/);
-  assert.doesNotMatch(source, /当前选中文档/);
-  assert.doesNotMatch(source, /设为当前/);
-  assert.doesNotMatch(source, /activeKnowledgeFileId === selectedRequirement\.id \? '当前'/);
-  assert.doesNotMatch(source, /activeKnowledgeFileId === selectedKnowledgeEntry\.id \? '当前'/);
-  assert.doesNotMatch(source, /<span>\{selectedRequirement\.title\}<\/span>/);
-  assert.doesNotMatch(source, /进入编辑/);
-  assert.doesNotMatch(source, /编辑完成后点击保存。/);
-  assert.doesNotMatch(source, /handleCreateKnowledgeFile\('project'\)/);
-  assert.doesNotMatch(source, /从左侧文件树打开一个 Markdown 文件。/);
+  assert.match(productSource, /import \{ KnowledgeNoteWorkspace \} from '\.\.\/\.\.\/features\/knowledge\/workspace\/KnowledgeNoteWorkspace'/);
+  assert.match(productSource, /<KnowledgeNoteWorkspace/);
+  assert.match(noteSource, /保存到知识库/);
+  assert.match(noteSource, /Markdown 镜像/);
+  assert.match(noteSource, /KnowledgeMarkdownViewer/);
+  assert.match(noteSource, /GoodNightMarkdownEditor/);
+  assert.doesNotMatch(noteSource, /上传/);
+  assert.doesNotMatch(noteSource, /知识库引用/);
+  assert.doesNotMatch(noteSource, /AI 会优先读取当前文档/);
+  assert.doesNotMatch(noteSource, /人工文档/);
+  assert.doesNotMatch(noteSource, /当前选中文档/);
+  assert.doesNotMatch(noteSource, /设为当前/);
+  assert.doesNotMatch(noteSource, /进入编辑/);
+  assert.doesNotMatch(noteSource, /编辑完成后点击保存。/);
+  assert.doesNotMatch(noteSource, /handleCreateKnowledgeFile\('project'\)/);
+  assert.doesNotMatch(noteSource, /从左侧文件树打开一个 Markdown 文件。/);
 });
 
 test('product workbench passes database note search into the note workspace', async () => {
