@@ -296,6 +296,8 @@ const buildSessionPreview = (content: string) => {
 
 const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const KNOWLEDGE_WORKSPACE_FOCUS_EVENT = 'goodnight:focus-knowledge-pane';
+const TEMPORARY_ARTIFACT_PROMOTION_SUMMARY_PREFIX = '已从会话临时内容生成待确认知识：';
 const RUNNABLE_KNOWLEDGE_PROPOSAL_OPERATION_TYPES = new Set([
   'create_note',
   'update_note',
@@ -346,13 +348,26 @@ export function buildRecoverableKnowledgeProposalAfterFailure(
   };
 }
 
+const buildTemporaryArtifactPromotionSummary = (title: string) =>
+  `${TEMPORARY_ARTIFACT_PROMOTION_SUMMARY_PREFIX}${title}`;
+
+const proposalMatchesTemporaryArtifact = (
+  proposal: Pick<KnowledgeProposal, 'summary' | 'operations'>,
+  artifact: Pick<KnowledgeSessionArtifact, 'title'>
+) =>
+  proposal.summary === buildTemporaryArtifactPromotionSummary(artifact.title) &&
+  proposal.operations.some(
+    (operation) => operation.type === 'create_note' && operation.targetTitle === artifact.title
+  );
+
 const KnowledgeTruthStructuredCards: React.FC<{
   cards: ChatStructuredCard[];
   canOpenArtifacts: boolean;
   onOpenArtifact: (artifactId: string) => void;
   onPromoteArtifact: (artifactId: string) => void;
+  pendingPromotionArtifactIds: Set<string>;
   onSelectNextStep: (prompt: string) => void;
-}> = ({ cards, canOpenArtifacts, onOpenArtifact, onPromoteArtifact, onSelectNextStep }) => (
+}> = ({ cards, canOpenArtifacts, onOpenArtifact, onPromoteArtifact, pendingPromotionArtifactIds, onSelectNextStep }) => (
   <div className="chat-structured-cards">
     {cards.map((card, index) => {
       if (card.type === 'summary') {
@@ -387,7 +402,11 @@ const KnowledgeTruthStructuredCards: React.FC<{
               <button
                 type="button"
                 onClick={() => onPromoteArtifact(card.artifactId)}
-                disabled={!canOpenArtifacts || card.status !== 'session'}
+                disabled={
+                  !canOpenArtifacts ||
+                  card.status !== 'session' ||
+                  pendingPromotionArtifactIds.has(card.artifactId)
+                }
               >
                 采纳为正式内容
               </button>
@@ -824,6 +843,26 @@ export const AIChat: React.FC<AIChatProps> = ({
   const sessionArtifacts = useKnowledgeSessionArtifactsStore((state) =>
     currentProject && activeSessionId ? state.artifactsBySession[`${currentProject.id}:${activeSessionId}`] || [] : []
   );
+  const pendingPromotionArtifactIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    for (const artifact of sessionArtifacts) {
+      const hasPendingProposal = messages.some((message) => {
+        const proposal = message.knowledgeProposal;
+        if (!proposal || (proposal.status !== 'pending' && proposal.status !== 'executing')) {
+          return false;
+        }
+
+        return proposalMatchesTemporaryArtifact(proposal, artifact);
+      });
+
+      if (hasPendingProposal) {
+        ids.add(artifact.id);
+      }
+    }
+
+    return ids;
+  }, [messages, sessionArtifacts]);
 
   const toggleProposalOperation = useCallback(
     (messageId: string, operationId: string, selected: boolean) => {
@@ -952,6 +991,17 @@ export const AIChat: React.FC<AIChatProps> = ({
         });
 
         await loadKnowledgeNotes(currentProject.id);
+        const artifactStore = useKnowledgeSessionArtifactsStore.getState();
+        const sessionKey = `${currentProject.id}:${activeSessionId}`;
+        const matchedArtifact = (artifactStore.artifactsBySession[sessionKey] || []).find(
+          (artifact) => artifact.status === 'session' && proposalMatchesTemporaryArtifact(proposal, artifact)
+        );
+        if (matchedArtifact) {
+          setArtifactStatus(currentProject.id, activeSessionId, matchedArtifact.id, 'promoted');
+          if (artifactStore.activeArtifactIdBySession[sessionKey] === matchedArtifact.id) {
+            setActiveArtifact(currentProject.id, activeSessionId, null);
+          }
+        }
         if (proposal.trigger === 'knowledge-organize' && proposal.operations.every((operation) => operation.selected)) {
           const latestNotes = useKnowledgeStore.getState().notes;
           setKnowledgeOrganizeState(
@@ -992,6 +1042,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       loadKnowledgeNotes,
       projectKnowledgeRootDir,
       serverNotes,
+      setActiveArtifact,
+      setArtifactStatus,
       setKnowledgeOrganizeState,
       setProposalStatus,
       upsertProposal,
@@ -1025,12 +1077,12 @@ export const AIChat: React.FC<AIChatProps> = ({
 
       const proposal = buildChangeSyncProposal({
         projectId: currentProject.id,
-        summaryText: `已从会话临时内容生成待确认知识：${artifact.title}`,
+        summaryText: buildTemporaryArtifactPromotionSummary(artifact.title),
         reasonText: artifact.summary,
         docs: [
           {
             id: `temporary-artifact-${artifact.id}`,
-            title: `${artifact.title}.md`,
+            title: artifact.title,
             summary: artifact.title,
             content: artifact.body,
             authorRole: '产品',
@@ -1045,10 +1097,8 @@ export const AIChat: React.FC<AIChatProps> = ({
         ...createStoredChatMessage('assistant', `我已把“${artifact.title}”转成待确认知识提案。`),
         knowledgeProposal: proposal,
       });
-      setArtifactStatus(currentProject.id, activeSessionId, artifact.id, 'promoted');
-      setActiveArtifact(currentProject.id, activeSessionId, null);
     },
-    [activeSessionId, appendMessage, currentProject, setActiveArtifact, setArtifactStatus, upsertProposal]
+    [activeSessionId, appendMessage, currentProject, upsertProposal]
   );
 
   const renderKnowledgeProposal = useCallback(
@@ -1140,22 +1190,24 @@ export const AIChat: React.FC<AIChatProps> = ({
             }
 
             setActiveArtifact(currentProject.id, activeSessionId, artifactId);
+            window.dispatchEvent(new CustomEvent(KNOWLEDGE_WORKSPACE_FOCUS_EVENT));
           }}
           onPromoteArtifact={(artifactId) => {
             const artifact = sessionArtifacts.find(
               (item) => item.id === artifactId && item.status === 'session'
             );
-            if (!artifact) {
+            if (!artifact || pendingPromotionArtifactIds.has(artifact.id)) {
               return;
             }
 
             promoteTemporaryArtifact(artifact);
           }}
+          pendingPromotionArtifactIds={pendingPromotionArtifactIds}
           onSelectNextStep={setInput}
         />
       );
     },
-    [activeSessionId, currentProject?.id, promoteTemporaryArtifact, sessionArtifacts, setActiveArtifact, setInput]
+    [activeSessionId, currentProject?.id, pendingPromotionArtifactIds, promoteTemporaryArtifact, sessionArtifacts, setActiveArtifact, setInput]
   );
 
   const executeProjectFileOperations = useCallback(

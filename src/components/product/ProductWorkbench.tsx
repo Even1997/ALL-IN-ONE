@@ -1224,6 +1224,21 @@ export const ProductWorkbench = ({
   );
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleFocusKnowledgePane = () => {
+      setSidebarTab('knowledge');
+    };
+
+    window.addEventListener('goodnight:focus-knowledge-pane', handleFocusKnowledgePane);
+    return () => {
+      window.removeEventListener('goodnight:focus-knowledge-pane', handleFocusKnowledgePane);
+    };
+  }, [setSidebarTab]);
+
+  useEffect(() => {
     if (!tree) {
       return;
     }

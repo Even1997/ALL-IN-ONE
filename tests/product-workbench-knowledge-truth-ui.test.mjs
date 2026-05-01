@@ -14,11 +14,27 @@ test('product workbench reads active session artifacts and passes a temporary pr
   const productSource = await readFile(productPath, 'utf8');
   const noteSource = await readFile(noteWorkspacePath, 'utf8');
   const aiChatSource = await readFile(aiChatPath, 'utf8');
+  const promoteStart = aiChatSource.indexOf('const promoteTemporaryArtifact = useCallback');
+  const promoteEnd = aiChatSource.indexOf('const renderKnowledgeProposal = useCallback', promoteStart);
+  const executeStart = aiChatSource.indexOf('const handleExecuteKnowledgeProposal = useCallback');
+  const executeEnd = aiChatSource.indexOf('const handleApproveAllKnowledgeProposal = useCallback', executeStart);
+  const promoteSource = aiChatSource.slice(promoteStart, promoteEnd);
+  const executeSource = aiChatSource.slice(executeStart, executeEnd);
 
   assert.match(productSource, /useKnowledgeSessionArtifactsStore/);
   assert.match(productSource, /activeTemporaryArtifact/);
+  assert.match(productSource, /addEventListener\('goodnight:focus-knowledge-pane'/);
+  assert.match(productSource, /setSidebarTab\('knowledge'\)/);
   assert.match(noteSource, /temporaryContentPreview\?:/);
   assert.match(noteSource, /gn-note-temporary-preview/);
   assert.match(aiChatSource, /authorRole: '产品'/);
   assert.doesNotMatch(aiChatSource, /authorRole: '浜у搧'/);
+  assert.match(aiChatSource, /const KNOWLEDGE_WORKSPACE_FOCUS_EVENT = 'goodnight:focus-knowledge-pane'/);
+  assert.match(aiChatSource, /dispatchEvent\(new CustomEvent\(KNOWLEDGE_WORKSPACE_FOCUS_EVENT\)\)/);
+  assert.match(aiChatSource, /title: artifact\.title/);
+  assert.doesNotMatch(aiChatSource, /title:\s*`\$\{artifact\.title\}\.md`/);
+  assert.doesNotMatch(promoteSource, /setArtifactStatus\(/);
+  assert.doesNotMatch(promoteSource, /setActiveArtifact\([^)]*null\)/);
+  assert.match(executeSource, /proposalMatchesTemporaryArtifact/);
+  assert.match(executeSource, /setArtifactStatus\(currentProject\.id,\s*activeSessionId,\s*matchedArtifact\.id,\s*'promoted'\)/);
 });
