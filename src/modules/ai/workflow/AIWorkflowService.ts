@@ -1170,8 +1170,7 @@ const flattenFeatureNames = (nodes: FeatureNode[]): string[] =>
 const buildContextPrompt = (
   projectName: string,
   rawInput: string,
-  docs: RequirementDoc[],
-  generatedFiles: GeneratedFile[]
+  docs: RequirementDoc[]
 ) => {
   return trimAndJoin(
     `project: ${projectName}`,
@@ -1370,8 +1369,7 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
       const requirementsPrompt = buildContextPrompt(
         project.name,
         projectStore.rawRequirementInput,
-        projectStore.requirementDocs,
-        projectStore.generatedFiles
+        projectStore.requirementDocs
       );
       const requirementsResult = await executeWithAI(
         'requirements_spec_skill',
@@ -1429,8 +1427,7 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
         buildContextPrompt(
           project.name,
           projectStore.rawRequirementInput,
-          mergedDocs,
-          projectStore.generatedFiles
+          mergedDocs
         ),
         `requirement_spec_markdown:\n${aiRequirementDoc.content}`
       );
@@ -1482,8 +1479,7 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
         buildContextPrompt(
           project.name,
           projectStore.rawRequirementInput,
-          projectStore.requirementDocs,
-          projectStore.generatedFiles
+          projectStore.requirementDocs
         ),
         `feature_tree_nodes:\n${flattenFeatureNames(currentFeatureTree.children).join('\n')}`
       );
@@ -1589,8 +1585,7 @@ ${buildWireframePageContext(nextPageStructure, currentFeatureTree)}`
         buildContextPrompt(
           project.name,
           projectStore.rawRequirementInput,
-          projectStore.requirementDocs,
-          projectStore.generatedFiles
+          projectStore.requirementDocs
         ),
         `style_profile: ${selected.name}`,
         `style_summary: ${selected.summary}`,
