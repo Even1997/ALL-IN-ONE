@@ -293,12 +293,51 @@ const buildSessionPreview = (content: string) => {
 
 const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const approveAllKnowledgeProposalOperations = (proposal: KnowledgeProposal): KnowledgeProposal => ({
-  ...proposal,
-  operations: proposal.operations.map((operation) =>
-    operation.selected ? operation : { ...operation, selected: true }
-  ),
-});
+const RUNNABLE_KNOWLEDGE_PROPOSAL_OPERATION_TYPES = new Set([
+  'create_note',
+  'update_note',
+  'create_wiki',
+  'update_wiki',
+  'merge_candidate',
+  'archive_candidate',
+  'mark_stale',
+]);
+
+export function getRunnableKnowledgeProposalOperationIds(proposal: Pick<KnowledgeProposal, 'operations'>): string[] {
+  return proposal.operations
+    .filter((operation) => {
+      if (!operation.selected || !RUNNABLE_KNOWLEDGE_PROPOSAL_OPERATION_TYPES.has(operation.type)) {
+        return false;
+      }
+
+      return operation.type === 'create_note' || operation.type === 'create_wiki' || Boolean(operation.targetId);
+    })
+    .map((operation) => operation.id);
+}
+
+export function approveAllKnowledgeProposalOperations(proposal: KnowledgeProposal): KnowledgeProposal {
+  return {
+    ...proposal,
+    operations: proposal.operations.map((operation) =>
+      operation.selected ? operation : { ...operation, selected: true }
+    ),
+  };
+}
+
+export function buildRecoverableKnowledgeProposalAfterFailure(
+  proposal: KnowledgeProposal,
+  succeededOperationIds: string[]
+): KnowledgeProposal {
+  const succeededOperationIdSet = new Set(succeededOperationIds);
+
+  return {
+    ...proposal,
+    status: 'pending',
+    operations: proposal.operations.map((operation) =>
+      succeededOperationIdSet.has(operation.id) ? { ...operation, selected: false } : operation
+    ),
+  };
+}
 
 const KnowledgeTruthStructuredCards: React.FC<{
   cards: ChatStructuredCard[];
@@ -819,6 +858,19 @@ export const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
+      const succeededOperationIds: string[] = [];
+      const runnableOperationIds = getRunnableKnowledgeProposalOperationIds(proposal);
+      let runnableOperationIndex = 0;
+      const recordSuccessfulOperation = () => {
+        const operationId = runnableOperationIds[runnableOperationIndex];
+        if (!operationId) {
+          return;
+        }
+
+        succeededOperationIds.push(operationId);
+        runnableOperationIndex += 1;
+      };
+
       setProposalStatus(currentProject.id, proposal.id, 'executing');
       updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
         ...message,
@@ -849,6 +901,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               updatedAt: new Date().toISOString(),
               tags,
             });
+            recordSuccessfulOperation();
           },
           updateNote: async ({ noteId, title, content, tags }) => {
             const existingNote = serverNotes.find((note) => note.id === noteId);
@@ -869,6 +922,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               updatedAt: new Date().toISOString(),
               tags: Array.from(new Set([...(existingNote?.tags || []), ...tags])),
             });
+            recordSuccessfulOperation();
           },
         });
 
@@ -896,15 +950,11 @@ export const AIChat: React.FC<AIChatProps> = ({
         }));
       } catch (error) {
         const errorMessage = normalizeErrorMessage(error);
-        setProposalStatus(currentProject.id, proposal.id, 'pending');
+        const recoverableProposal = buildRecoverableKnowledgeProposalAfterFailure(proposal, succeededOperationIds);
+        upsertProposal(recoverableProposal);
         updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
           ...message,
-          knowledgeProposal: message.knowledgeProposal
-            ? {
-                ...message.knowledgeProposal,
-                status: 'pending',
-              }
-            : message.knowledgeProposal,
+          knowledgeProposal: recoverableProposal,
         }));
         appendMessage(currentProject.id, activeSessionId, createStoredChatMessage('system', errorMessage, 'error'));
       }
@@ -919,6 +969,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       serverNotes,
       setKnowledgeOrganizeState,
       setProposalStatus,
+      upsertProposal,
       updateMessage,
       updateProjectNote,
     ]
