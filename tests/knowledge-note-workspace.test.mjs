@@ -52,7 +52,7 @@ test('knowledge note workspace removes organize, filter, and graph-only controls
   assert.doesNotMatch(source, /onOpenGlobalWikiGraph/);
 });
 
-test('knowledge note tree stays navigation-only without content previews', async () => {
+test('knowledge note tree stays navigation-only while preserving generic note classification', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
   const listStart = source.indexOf('<div className="gn-note-list">');
@@ -65,6 +65,7 @@ test('knowledge note tree stays navigation-only without content previews', async
   assert.match(source, /gn-note-tree-item folder/);
   assert.match(source, /gn-note-tree-children/);
   assert.match(source, /gn-note-tree-match/);
+  assert.match(source, /gn-note-tree-badge/);
   assert.doesNotMatch(source, /系统索引/);
   assert.doesNotMatch(source, /AI 摘要/);
   assert.doesNotMatch(source, /NOTE_TREE_SECTIONS/);
@@ -107,14 +108,17 @@ test('knowledge note workspace describes database saves instead of autosave', as
   assert.match(source, /Markdown/);
 });
 
-test('knowledge note workspace keeps editor metadata basics without doc-type badges or reference-heavy detail panes', async () => {
+test('knowledge note workspace keeps generic metadata basics without doc-type-specific wording or reference-heavy detail panes', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
   assert.doesNotMatch(source, /referenceTitles/);
   assert.doesNotMatch(source, /selectedNote\.referenceTitles/);
   assert.match(source, /mirrorSourcePath/);
-  assert.doesNotMatch(source, /DOC_TYPE_META/);
-  assert.doesNotMatch(source, /getNoteMeta/);
+  assert.match(source, /getNoteMeta/);
+  assert.match(source, /项目笔记/);
+  assert.match(source, /系统生成/);
+  assert.doesNotMatch(source, /系统索引/);
+  assert.doesNotMatch(source, /AI 摘要/);
 });
 
 test('knowledge note workspace defaults to reading mode and exposes a code toggle for markdown editing', async () => {

@@ -67,6 +67,7 @@ test('knowledge note workspace keeps the markdown editor while adding a dedicate
   assert.match(css, /\.gn-note-mode-toggle/);
   assert.match(css, /\.gn-note-reading-surface/);
   assert.match(css, /\.gn-markdown-viewer/);
+  assert.match(noteSource, /getNoteMeta/);
   assert.doesNotMatch(noteSource, /系统索引/);
   assert.doesNotMatch(noteSource, /AI 摘要/);
 });
@@ -93,4 +94,16 @@ test('knowledge note workspace presents vault-first actions instead of organize/
   assert.doesNotMatch(source, /onOrganizeKnowledge/);
   assert.doesNotMatch(source, /isSyncing/);
   assert.doesNotMatch(source, /KnowledgeGraphCanvas/);
+});
+
+test('knowledge note workspace keeps lightweight generic classification without old doc-type names', async () => {
+  const source = await readFile(noteWorkspacePath, 'utf8');
+
+  assert.match(source, /const getNoteMeta =/);
+  assert.match(source, /badge: 'SYSTEM'/);
+  assert.match(source, /label: '系统生成'/);
+  assert.match(source, /badge: 'SKETCH'/);
+  assert.match(source, /badge: 'DESIGN'/);
+  assert.doesNotMatch(source, /系统索引/);
+  assert.doesNotMatch(source, /AI 摘要/);
 });

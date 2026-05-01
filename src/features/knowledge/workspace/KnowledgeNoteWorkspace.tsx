@@ -270,6 +270,23 @@ const formatUpdatedAt = (value: string) => {
   });
 };
 
+const NOTE_KIND_META: Record<NonNullable<KnowledgeNote['kind']>, { badge: string; label: string }> = {
+  note: { badge: 'NOTE', label: '项目笔记' },
+  sketch: { badge: 'SKETCH', label: '草图笔记' },
+  design: { badge: 'DESIGN', label: '设计笔记' },
+};
+
+const getNoteMeta = (note: KnowledgeNote) => {
+  if (note.docType) {
+    return {
+      badge: 'SYSTEM',
+      label: '系统生成',
+    };
+  }
+
+  return NOTE_KIND_META[note.kind || 'note'];
+};
+
 const compareTreeNames = (left: string, right: string) =>
   left.localeCompare(right, 'zh-CN', {
     numeric: true,
@@ -771,6 +788,7 @@ export const KnowledgeNoteWorkspace = ({
       }
 
       for (const file of folder.files) {
+        const noteMeta = file.note ? getNoteMeta(file.note) : null;
         const isSelected = selectedTreePaths.includes(file.path);
         nextNodes.push(
           <div key={file.id} className="gn-note-tree-row">
@@ -811,7 +829,7 @@ export const KnowledgeNoteWorkspace = ({
               </span>
               <span className="gn-note-tree-label">{file.name}</span>
               {searchActive && file.note?.matchSnippet ? <span className="gn-note-tree-match">命中</span> : null}
-              <span className="gn-note-tree-badge">{file.note ? 'NOTE' : (file.extension || 'FILE').toUpperCase()}</span>
+              <span className="gn-note-tree-badge">{noteMeta?.badge || (file.extension || 'FILE').toUpperCase()}</span>
             </button>
           </div>
         );
@@ -1103,7 +1121,7 @@ export const KnowledgeNoteWorkspace = ({
                     </button>
                   </div>
                   <div className="gn-note-storage-state" aria-label="笔记存储状态">
-                    <span>项目笔记</span>
+                    <span>{getNoteMeta(selectedNote).label}</span>
                     <span>{mirrorSourcePath ? 'Markdown 镜像' : '未绑定 Markdown'}</span>
                   </div>
                 </div>
