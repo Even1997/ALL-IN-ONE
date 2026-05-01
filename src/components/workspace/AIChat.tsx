@@ -78,7 +78,6 @@ import {
 } from '../../utils/projectPersistence';
 import { getDirectoryPath } from '../../utils/fileSystemPaths';
 import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
-import { buildKnowledgeProposal } from '../../modules/ai/knowledge/buildKnowledgeProposal';
 import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
@@ -1024,18 +1023,19 @@ export const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
-      const proposal = buildKnowledgeProposal({
+      const proposal = buildChangeSyncProposal({
         projectId: currentProject.id,
-        trigger: 'change-sync',
-        summary: `已从会话临时内容生成待确认知识：${artifact.title}`,
-        operations: [
+        summaryText: `已从会话临时内容生成待确认知识：${artifact.title}`,
+        reasonText: artifact.summary,
+        docs: [
           {
-            type: 'create_note',
-            targetTitle: `${artifact.title}.md`,
-            reason: artifact.summary,
-            evidence: [artifact.title],
-            draftContent: artifact.body,
-            riskLevel: 'low',
+            id: `temporary-artifact-${artifact.id}`,
+            title: `${artifact.title}.md`,
+            summary: artifact.title,
+            content: artifact.body,
+            authorRole: '浜у搧',
+            updatedAt: new Date().toISOString(),
+            status: 'draft',
           },
         ],
       });
