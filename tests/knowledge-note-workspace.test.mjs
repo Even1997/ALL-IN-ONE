@@ -14,6 +14,15 @@ test('knowledge note workspace drops legacy knowledge entries while accepting di
   assert.match(source, /onSelectNote: \(noteId: string\) => void/);
 });
 
+test('knowledge note workspace accepts and renders a temporary content preview above the editor column', async () => {
+  const noteSource = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+  const css = noteSource;
+
+  assert.match(noteSource, /temporaryContentPreview\?:/);
+  assert.match(noteSource, /gn-note-temporary-preview/);
+  assert.match(css, /\.gn-note-temporary-preview/);
+});
+
 test('knowledge note workspace removes auxiliary context panels in minimalist mode', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 

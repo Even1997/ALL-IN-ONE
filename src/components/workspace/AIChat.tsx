@@ -60,7 +60,10 @@ import {
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
 import type { KnowledgeProposal } from '../../features/knowledge/model/knowledgeProposal';
 import { useKnowledgeProposalStore } from '../../features/knowledge/store/knowledgeProposalStore';
-import { useKnowledgeSessionArtifactsStore } from '../../features/knowledge/store/knowledgeSessionArtifactsStore';
+import {
+  type KnowledgeSessionArtifact,
+  useKnowledgeSessionArtifactsStore,
+} from '../../features/knowledge/store/knowledgeSessionArtifactsStore';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
 import { buildKnowledgeNoteRootMirrorPath } from '../../features/knowledge/workspace/knowledgeNoteFilePaths';
 import { serializeKnowledgeNoteMarkdown } from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
@@ -75,6 +78,7 @@ import {
 } from '../../utils/projectPersistence';
 import { getDirectoryPath } from '../../utils/fileSystemPaths';
 import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
+import { buildKnowledgeProposal } from '../../modules/ai/knowledge/buildKnowledgeProposal';
 import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
@@ -347,8 +351,9 @@ const KnowledgeTruthStructuredCards: React.FC<{
   cards: ChatStructuredCard[];
   canOpenArtifacts: boolean;
   onOpenArtifact: (artifactId: string) => void;
+  onPromoteArtifact: (artifactId: string) => void;
   onSelectNextStep: (prompt: string) => void;
-}> = ({ cards, canOpenArtifacts, onOpenArtifact, onSelectNextStep }) => (
+}> = ({ cards, canOpenArtifacts, onOpenArtifact, onPromoteArtifact, onSelectNextStep }) => (
   <div className="chat-structured-cards">
     {cards.map((card, index) => {
       if (card.type === 'summary') {
@@ -376,9 +381,18 @@ const KnowledgeTruthStructuredCards: React.FC<{
           <section key={card.artifactId} className="chat-structured-card temporary-content">
             <strong>{card.title}</strong>
             <p>{card.summary}</p>
-            <button type="button" onClick={() => onOpenArtifact(card.artifactId)} disabled={!canOpenArtifacts}>
-              在中间查看
-            </button>
+            <div className="chat-next-step-actions">
+              <button type="button" onClick={() => onOpenArtifact(card.artifactId)} disabled={!canOpenArtifacts}>
+                在中间查看
+              </button>
+              <button
+                type="button"
+                onClick={() => onPromoteArtifact(card.artifactId)}
+                disabled={!canOpenArtifacts || card.status !== 'session'}
+              >
+                采纳为正式内容
+              </button>
+            </div>
           </section>
         );
       }
@@ -723,6 +737,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const loadKnowledgeNotes = useKnowledgeStore((state) => state.loadNotes);
   const updateProjectNote = useKnowledgeStore((state) => state.updateProjectNote);
   const setActiveArtifact = useKnowledgeSessionArtifactsStore((state) => state.setActiveArtifact);
+  const setArtifactStatus = useKnowledgeSessionArtifactsStore((state) => state.setArtifactStatus);
   const aiContextState = useAIContextStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
   );
@@ -807,6 +822,9 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const messages = activeSession?.messages || [];
   const activityEntries = projectChatState?.activityEntries || [];
+  const sessionArtifacts = useKnowledgeSessionArtifactsStore((state) =>
+    currentProject && activeSessionId ? state.artifactsBySession[`${currentProject.id}:${activeSessionId}`] || [] : []
+  );
 
   const toggleProposalOperation = useCallback(
     (messageId: string, operationId: string, selected: boolean) => {
@@ -1000,6 +1018,39 @@ export const AIChat: React.FC<AIChatProps> = ({
     [activeSessionId, currentProject, handleExecuteKnowledgeProposal, updateMessage, upsertProposal]
   );
 
+  const promoteTemporaryArtifact = useCallback(
+    (artifact: KnowledgeSessionArtifact) => {
+      if (!currentProject || !activeSessionId) {
+        return;
+      }
+
+      const proposal = buildKnowledgeProposal({
+        projectId: currentProject.id,
+        trigger: 'change-sync',
+        summary: `已从会话临时内容生成待确认知识：${artifact.title}`,
+        operations: [
+          {
+            type: 'create_note',
+            targetTitle: `${artifact.title}.md`,
+            reason: artifact.summary,
+            evidence: [artifact.title],
+            draftContent: artifact.body,
+            riskLevel: 'low',
+          },
+        ],
+      });
+
+      upsertProposal(proposal);
+      appendMessage(currentProject.id, activeSessionId, {
+        ...createStoredChatMessage('assistant', `我已把“${artifact.title}”转成待确认知识提案。`),
+        knowledgeProposal: proposal,
+      });
+      setArtifactStatus(currentProject.id, activeSessionId, artifact.id, 'promoted');
+      setActiveArtifact(currentProject.id, activeSessionId, null);
+    },
+    [activeSessionId, appendMessage, currentProject, setActiveArtifact, setArtifactStatus, upsertProposal]
+  );
+
   const renderKnowledgeProposal = useCallback(
     (message: { id: string; knowledgeProposal?: KnowledgeProposal }) => {
       const proposal = message.knowledgeProposal;
@@ -1090,11 +1141,21 @@ export const AIChat: React.FC<AIChatProps> = ({
 
             setActiveArtifact(currentProject.id, activeSessionId, artifactId);
           }}
+          onPromoteArtifact={(artifactId) => {
+            const artifact = sessionArtifacts.find(
+              (item) => item.id === artifactId && item.status === 'session'
+            );
+            if (!artifact) {
+              return;
+            }
+
+            promoteTemporaryArtifact(artifact);
+          }}
           onSelectNextStep={setInput}
         />
       );
     },
-    [activeSessionId, currentProject?.id, setActiveArtifact, setInput]
+    [activeSessionId, currentProject?.id, promoteTemporaryArtifact, sessionArtifacts, setActiveArtifact, setInput]
   );
 
   const executeProjectFileOperations = useCallback(

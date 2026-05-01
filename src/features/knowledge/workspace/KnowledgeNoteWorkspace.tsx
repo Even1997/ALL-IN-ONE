@@ -18,6 +18,12 @@ type KnowledgeNoteWorkspaceProps = {
   selectedNote: KnowledgeNote | null;
   activeFilter: KnowledgeNoteFilter;
   projectRootPath?: string | null;
+  temporaryContentPreview?: {
+    title: string;
+    artifactType: string;
+    summary: string;
+    body: string;
+  } | null;
   titleValue: string;
   mirrorSourcePath?: string | null;
   editorValue: string;
@@ -114,6 +120,57 @@ type RawMarkdownPreview = {
 const NOTE_RAIL_WIDTH_BOUNDS = { min: 220, max: 420 };
 const NOTE_RAIL_DEFAULT_WIDTH = 280;
 const PREVIEWABLE_KNOWLEDGE_FILE_EXTENSIONS = new Set(['md', 'markdown']);
+const TEMPORARY_PREVIEW_STYLES = `
+.gn-note-temporary-preview {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(120, 140, 180, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(246, 249, 255, 0.98), rgba(239, 244, 255, 0.92));
+  box-shadow: 0 16px 28px rgba(24, 39, 75, 0.08);
+}
+
+.gn-note-temporary-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gn-note-temporary-preview-head strong {
+  font-size: 15px;
+}
+
+.gn-note-temporary-preview-head span {
+  color: rgba(57, 78, 112, 0.76);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.gn-note-temporary-preview p,
+.gn-note-temporary-preview pre {
+  margin: 0;
+}
+
+.gn-note-temporary-preview p {
+  color: rgba(33, 45, 68, 0.82);
+  line-height: 1.6;
+}
+
+.gn-note-temporary-preview pre {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  color: rgba(24, 39, 75, 0.88);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+`;
 
 const clampNoteRailWidth = (value: number) =>
   Math.min(NOTE_RAIL_WIDTH_BOUNDS.max, Math.max(NOTE_RAIL_WIDTH_BOUNDS.min, value));
@@ -435,6 +492,7 @@ export const KnowledgeNoteWorkspace = ({
   selectedNote,
   activeFilter,
   projectRootPath = null,
+  temporaryContentPreview = null,
   titleValue,
   mirrorSourcePath = null,
   editorValue,
@@ -1046,6 +1104,17 @@ export const KnowledgeNoteWorkspace = ({
       />
 
       <main className="gn-note-editor-column">
+        <style>{TEMPORARY_PREVIEW_STYLES}</style>
+        {temporaryContentPreview ? (
+          <section className="gn-note-temporary-preview">
+            <div className="gn-note-temporary-preview-head">
+              <strong>{temporaryContentPreview.title}</strong>
+              <span>{temporaryContentPreview.artifactType}</span>
+            </div>
+            <p>{temporaryContentPreview.summary}</p>
+            <pre>{temporaryContentPreview.body}</pre>
+          </section>
+        ) : null}
         {rawMarkdownPreview ? (
           <>
             <div className="gn-note-editor-surface">

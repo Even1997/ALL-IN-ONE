@@ -7,6 +7,7 @@ import {
   type KnowledgeGroupId,
 } from '../../modules/knowledge/knowledgeTree';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
+import { useAIChatStore } from '../../modules/ai/store/aiChatStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import { usePreviewStore } from '../../store/previewStore';
 import { useProjectStore } from '../../store/projectStore';
@@ -14,6 +15,7 @@ import { AppType, CanvasElement, FeatureNode, FeatureTree, PageStructureNode } f
 import { featureTreeToMarkdown } from '../../utils/featureTreeToMarkdown';
 import { useShallow } from 'zustand/react/shallow';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
+import { useKnowledgeSessionArtifactsStore } from '../../features/knowledge/store/knowledgeSessionArtifactsStore';
 import type { KnowledgeNote } from '../../features/knowledge/model/knowledge';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
 import { formatMFlowRefreshSummary, rebuildProjectMFlow } from '../../modules/knowledge/m-flow/runtime.ts';
@@ -1106,6 +1108,19 @@ export const ProductWorkbench = ({
   const deleteServerNote = useKnowledgeStore((state) => state.deleteProjectNote);
   const updateServerNote = useKnowledgeStore((state) => state.updateProjectNote);
   const canUseProjectFilesystem = isTauriRuntimeAvailable();
+  const activeChatSessionId = useAIChatStore((state) =>
+    currentProject ? state.projects[currentProject.id]?.activeSessionId || null : null
+  );
+  const activeArtifactId = useKnowledgeSessionArtifactsStore((state) =>
+    currentProject && activeChatSessionId
+      ? state.activeArtifactIdBySession[`${currentProject.id}:${activeChatSessionId}`] || null
+      : null
+  );
+  const activeSessionArtifacts = useKnowledgeSessionArtifactsStore((state) =>
+    currentProject && activeChatSessionId
+      ? state.artifactsBySession[`${currentProject.id}:${activeChatSessionId}`] || []
+      : []
+  );
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
   const selectedPage = designPages.find((page) => page.id === manualPageId) || designPages[0] || null;
@@ -1169,6 +1184,16 @@ export const ProductWorkbench = ({
   }, [tree]);
   const linkedFeatures = selectedPage?.featureIds.map((id) => featureMap.get(id)).filter(Boolean) as FeatureNode[] | undefined;
   const linkedFeatureName = linkedFeatures?.map((feature) => feature.name).join(' / ') || '核心页面';
+  const activeTemporaryArtifact = useMemo(() => {
+    if (!activeArtifactId) {
+      return null;
+    }
+
+    return (
+      activeSessionArtifacts.find((artifact) => artifact.id === activeArtifactId && artifact.status === 'session') ||
+      null
+    );
+  }, [activeArtifactId, activeSessionArtifacts]);
   const layoutStyle = useMemo<CSSProperties>(() => {
     const pageColumns =
       layoutFocus === 'canvas'
@@ -2145,6 +2170,16 @@ export const ProductWorkbench = ({
         selectedNote={selectedServerNote}
         activeFilter={knowledgeFilter}
         projectRootPath={projectRootDir}
+        temporaryContentPreview={
+          activeTemporaryArtifact
+            ? {
+                title: activeTemporaryArtifact.title,
+                artifactType: activeTemporaryArtifact.artifactType,
+                summary: activeTemporaryArtifact.summary,
+                body: activeTemporaryArtifact.body,
+              }
+            : null
+        }
         titleValue={requirementDraftTitle}
         mirrorSourcePath={selectedServerNote?.sourceUrl || null}
         editorValue={selectedServerNote ? requirementDraftContent : ''}
