@@ -11,9 +11,9 @@ This skill keeps sketch work structural. The primary output is a clear sketch pa
 
 ## Boundary
 
-- Read context from the current vault, `.goodnight/m-flow/`, and `_goodnight/outputs/m-flow/` first.
+- Read context from the current vault and visible project files first.
 - Do not rewrite user original files just to make a sketch cleaner.
-- If a shareable sketch summary is needed, add a separate file under `_goodnight/outputs/<skill>/`.
+- If a shareable sketch summary is needed, keep it in a visible vault file only when the task calls for that output.
 
 ## Default Target
 

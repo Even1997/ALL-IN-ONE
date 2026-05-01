@@ -63,6 +63,9 @@ test('built-in skills encode vault-safe boundary and output contracts', async ()
   assert.match(sketch, /sketch\/pages/);
   assert.match(sketch, /wireframe/i);
   assert.match(sketch, /route/i);
+  assert.doesNotMatch(sketch, /\.goodnight\/m-flow/);
+  assert.doesNotMatch(sketch, /_goodnight\/outputs\/m-flow/i);
+  assert.doesNotMatch(sketch, /_goodnight\/outputs\/<skill>/i);
   assert.match(sketch, /##\s*新页面 1/);
   assert.match(sketch, /- route:\s*\/pages\/新页面-1/);
   assert.match(sketch, /- frame:\s*1280x800/);
@@ -76,7 +79,8 @@ test('built-in skills encode vault-safe boundary and output contracts', async ()
 
   assert.match(design, /design\/styles/);
   assert.match(design, /design\/prototypes/);
-  assert.match(design, /_goodnight\/outputs\/goodnight-design-output/i);
+  assert.doesNotMatch(design, /_goodnight\/outputs/i);
+  assert.doesNotMatch(design, /_goodnight\/outputs\/goodnight-design-output/i);
   assert.match(design, /tokens/i);
   assert.match(design, /responsive/i);
   assert.match(design, /style-output\.md/);

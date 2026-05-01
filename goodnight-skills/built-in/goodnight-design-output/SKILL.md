@@ -13,7 +13,7 @@ This skill turns design requests into file-ready GoodNight artifacts. Favor expl
 
 - `design/styles/*.md` for design language, style packs, and reusable UI direction
 - `design/prototypes/*` for prototype HTML and related manifest files
-- `_goodnight/outputs/goodnight-design-output/` for optional user-visible design summaries that should not overwrite source files
+- visible vault design files for any optional summaries that should stay paired with the design work instead of overwriting source files
 
 ## File Naming Rules
 
