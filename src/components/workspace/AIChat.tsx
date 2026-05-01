@@ -1080,6 +1080,34 @@ export const AIChat: React.FC<AIChatProps> = ({
       }),
     [aiContextState?.scene, currentFileLabel, selectedElementLabel, selectedPage?.name, vaultLabel]
   );
+  const explicitReferenceLabels = useMemo(() => {
+    const labels: string[] = [];
+    const selectedReferenceIds = aiContextState?.selectedReferenceFileIds || [];
+    const visibleFileById = new Map(visibleContextFiles.map((file) => [file.id, file]));
+
+    for (const referenceId of selectedReferenceIds) {
+      const file = visibleFileById.get(referenceId);
+      if (file) {
+        labels.push(`Reference / ${file.title}`);
+      }
+    }
+
+    if (aiContextState?.referenceScopeMode === 'directory' && aiContextState.selectedReferenceDirectory) {
+      labels.push(`Reference dir / ${aiContextState.selectedReferenceDirectory}`);
+    } else if (aiContextState?.referenceScopeMode === 'all') {
+      labels.push('Reference scope / all visible files');
+    } else if (aiContextState?.referenceScopeMode === 'open-tabs' && (aiContextState.openedKnowledgeEntryIds?.length || 0) > 0) {
+      labels.push(`Reference scope / ${aiContextState.openedKnowledgeEntryIds.length} open tabs`);
+    }
+
+    return labels;
+  }, [
+    aiContextState?.openedKnowledgeEntryIds,
+    aiContextState?.referenceScopeMode,
+    aiContextState?.selectedReferenceDirectory,
+    aiContextState?.selectedReferenceFileIds,
+    visibleContextFiles,
+  ]);
 
   const currentContextUsage = useMemo(() => {
     const previewPrompt = buildDirectChatPrompt({
@@ -1094,6 +1122,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         contextSnapshot.secondaryLabel,
         contextSnapshot.currentFileLabel,
         contextSnapshot.vaultLabel,
+        ...explicitReferenceLabels,
       ].filter((item): item is string => Boolean(item)),
     });
 
@@ -1107,6 +1136,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     contextSnapshot.secondaryLabel,
     contextSnapshot.vaultLabel,
     currentProject?.name,
+    explicitReferenceLabels,
     input,
     activeSession?.messages,
     selectedRuntimeConfig,
@@ -1422,6 +1452,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               contextSnapshot.secondaryLabel,
               contextSnapshot.currentFileLabel,
               contextSnapshot.vaultLabel,
+              ...explicitReferenceLabels,
             ].filter((item): item is string => Boolean(item)),
           });
         };
@@ -1734,6 +1765,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       contextSnapshot.secondaryLabel,
       contextSnapshot.vaultLabel,
       currentProject,
+      explicitReferenceLabels,
       isLoading,
       isRuntimeConfigured,
       providerExecutionMode,
