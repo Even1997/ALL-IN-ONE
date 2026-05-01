@@ -4,7 +4,6 @@ export type ChangeType = 'modify' | 'add' | 'delete' | 'replace';
 export type ElementType = 'component' | 'page' | 'api' | 'model' | 'style';
 export type AIStreamStatus = 'idle' | 'streaming' | 'completed' | 'error';
 export type AppType = 'web' | 'mobile' | 'mini_program' | 'desktop' | 'backend' | 'api';
-export type KnowledgeRetrievalMethod = 'm-flow' | 'llmwiki' | 'rag';
 export type GraphNodeType =
   | 'requirement'
   | 'prd'
@@ -21,7 +20,6 @@ export interface ProjectConfig {
   name: string;
   description: string;
   vaultPath: string;
-  knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   appType: AppType;
   createdAt: string;
   updatedAt: string;

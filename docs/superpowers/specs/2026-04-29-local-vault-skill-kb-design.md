@@ -1,5 +1,23 @@
 # GoodNight 本地 Vault + 技能化知识库设计
 
+> Status: Superseded by `docs/superpowers/specs/2026-05-01-goodnight-native-m-flow-cutover-design.zh-CN.md`.
+> This document describes the pre-cutover multi-engine and `base-index` direction, and should not be used as the current architecture reference.
+
+## 替代说明
+
+这份设计保留作为历史背景，主要用于理解 GoodNight 为什么一度会走向：
+
+- `LLMWiki / RAG / M-Flow` 并列的多引擎产品心智
+- `.goodnight/base-index/` 作为共享底座
+- 用户可切换知识检索模式
+
+这些前提在 2026-05-01 的原生 `m-flow` cutover 后已经不再成立。当前实现应以新文档为准：
+
+- 用户只使用一个知识引擎：`m-flow`
+- 内部状态目录是 `.goodnight/m-flow/`
+- `llmwiki` 和 `rag` 只保留为隐藏兼容技能，不再是主架构
+- 旧文档中关于 `base-index`、多模式切换、并列 runtime 的描述都应视为历史方案
+
 ## 结论
 
 GoodNight 的知识库产品应从“内置 wiki 功能”切换为“本地 Vault 底座 + 技能化检索/整理能力”。

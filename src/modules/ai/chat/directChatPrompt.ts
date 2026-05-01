@@ -1,12 +1,5 @@
-import { buildKnowledgeContextSections } from '../../knowledge/knowledgeContext.ts';
-import type { KnowledgeEntry } from '../../knowledge/knowledgeEntries.ts';
 import { buildKnowledgeOperationPolicy } from '../knowledge/knowledgeOperationPolicy.ts';
 import type { SkillIntent } from '../workflow/skillRouting.ts';
-
-type KnowledgeSelection = {
-  currentFile: KnowledgeEntry | null;
-  relatedFiles: KnowledgeEntry[];
-};
 
 type ConversationHistoryMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -81,7 +74,6 @@ export const buildDirectChatPrompt = (options: {
   currentProjectName?: string;
   contextWindowTokens?: number;
   skillIntent: SkillIntent | null;
-  knowledgeSelection: KnowledgeSelection;
   conversationHistory?: ConversationHistoryMessage[];
   contextLabels?: string[];
   referenceContext?: {
@@ -96,29 +88,12 @@ export const buildDirectChatPrompt = (options: {
     currentProjectName,
     contextWindowTokens,
     skillIntent,
-    knowledgeSelection,
     conversationHistory = [],
     contextLabels = [],
     referenceContext = null,
   } = options;
   const skillLabel = skillIntent ? SKILL_LABELS[skillIntent.skill] : null;
   const conversationHistorySection = buildConversationHistorySection(conversationHistory);
-  const knowledgeContext = buildKnowledgeContextSections({
-    currentFile: knowledgeSelection.currentFile
-      ? {
-          title: knowledgeSelection.currentFile.title,
-          type: knowledgeSelection.currentFile.type,
-          summary: knowledgeSelection.currentFile.summary,
-          content: knowledgeSelection.currentFile.content,
-        }
-      : null,
-    relatedFiles: knowledgeSelection.relatedFiles.map((file) => ({
-      title: file.title,
-      type: file.type,
-      summary: file.summary,
-      content: file.content,
-    })),
-  });
 
   const promptSections = [`user_request:\n${userInput.trim()}`];
 
@@ -132,10 +107,6 @@ export const buildDirectChatPrompt = (options: {
 
   if (contextWindowTokens) {
     promptSections.push(`context_window:\n${contextWindowTokens} tokens`);
-  }
-
-  if (knowledgeContext) {
-    promptSections.push(`knowledge_context:\n${knowledgeContext}`);
   }
 
   if (referenceContext?.indexSection) {

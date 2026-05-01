@@ -22,7 +22,7 @@ GoodNight adapts that into Markdown artifacts so a human or agent can inspect th
 
 Think of M-Flow as an inverted cone.
 
-- Start broad: detect candidate facets from the user's question and the base index.
+- Start broad: detect candidate facets from the user's question and the native M-Flow state.
 - Narrow through facet points: find the concrete claims or observations that matter.
 - Anchor on entities: identify the specific module, doc, decision, person, object, or workflow.
 - Expand into bundles: pull nearby episodes and sources that make the path understandable.
@@ -30,12 +30,11 @@ Think of M-Flow as an inverted cone.
 
 ## Working Contract
 
-- Start from `.goodnight/base-index/` after a manual refresh.
-- Treat `.goodnight/base-index/` as the raw index, not the final memory graph.
+- Start from `.goodnight/m-flow/` after a manual refresh or rebuild.
+- Treat `.goodnight/m-flow/*.json` as the native persisted graph state.
 - Store generated M-Flow artifacts under `_goodnight/outputs/m-flow/`.
-- Store routing notes under `.goodnight/skills/m-flow/`.
-- Use Markdown for model-facing artifacts. The agent-readable graph is Markdown, not JSON.
-- Do not serialize the graph as JSON for the agent to read.
+- Use `_goodnight/outputs/m-flow/` as the readable surface for humans and agents.
+- Use the persisted JSON state to inspect structure, but answer through evidence paths and episode bundles rather than raw dumps.
 - Prefer the smallest evidence bundle that explains the answer and why it is relevant.
 
 ## Artifact Roles
@@ -76,13 +75,17 @@ question -> facet -> facet point -> entity -> episode/source
 
 Each path should include `why_relevant`, supporting evidence, source paths, and neighboring evidence that may matter.
 
-### Graph Notes
+### Persisted State
 
-Write these as Markdown under `.goodnight/skills/m-flow/`:
+Treat these JSON files under `.goodnight/m-flow/` as the native runtime state:
 
-- `graph.md`: nodes and edges in readable form.
-- `anchors.md`: source-to-facet/entity anchors.
-- `path-index.md`: reusable path summaries and their costs.
+- `manifest.json`: build metadata and counts.
+- `sources.json`: ingested source snapshots.
+- `episodes.json`: episode nodes.
+- `facets.json`: facet nodes.
+- `facet-points.json`: facet point nodes.
+- `entities.json`: entity nodes.
+- `edges.json`: semantic relationships and edge text.
 
 ## Retrieval Procedure
 
@@ -98,7 +101,7 @@ Within each candidate facet, identify facet points that match the user's intent.
 
 Map facet points to entities. Prefer concrete anchors over abstract labels:
 
-- `src/modules/knowledge/systemIndexProject.ts` is better than `indexing`.
+- `src/modules/knowledge/m-flow/runtime.ts` is better than `indexing`.
 - `AIChat.tsx composer state` is better than `UI`.
 - `manual refresh rebuild rule` is better than `workflow`.
 
@@ -171,7 +174,7 @@ Good M-Flow output is:
 - Do not ignore fresh user-selected files after a manual refresh.
 - Do not let keyword overlap outrank a stronger semantic path.
 - Do not hide path cost or uncertainty.
-- Do not produce model-facing JSON or JSONL graph artifacts.
+- Do not answer by pasting raw JSON when a path or bundle artifact explains the result more clearly.
 
 ## When More Detail Is Needed
 

@@ -19,10 +19,8 @@ Use GoodNight's local vault filesystem as the default working map. Prefer real v
   Style packs, design language docs, and reusable visual direction files.
 - `design/prototypes/`
   HTML prototypes and related prototype manifests.
-- `.goodnight/base-index/`
-  Shared system index for the current vault.
-- `.goodnight/skills/<skill>/`
-  Skill-specific retrieval caches and internal state.
+- `.goodnight/m-flow/`
+  Native M-Flow state for the current vault.
 - `_goodnight/outputs/<skill>/`
   User-visible AI outputs produced for a retrieval skill.
 
@@ -37,7 +35,7 @@ Use GoodNight's local vault filesystem as the default working map. Prefer real v
 ## Derived And Generated Artifacts
 
 - The vault is the primary context source.
-- The system index is `.goodnight/base-index/`, not a visible wiki tree.
+- The native knowledge state is `.goodnight/m-flow/`, and the readable knowledge artifacts live under `_goodnight/outputs/m-flow/`.
 - Generated outputs should still resolve into visible vault paths the user can inspect.
 - When explaining changes, reference the final vault-relative path the user can inspect.
 

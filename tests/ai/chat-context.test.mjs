@@ -5,7 +5,6 @@ import {
   buildChatContextSnapshot,
   resolveCurrentReferenceFileIds,
   resolveKnowledgeContextSelection,
-  resolveKnowledgeSelectionForPrompt,
 } from '../../src/modules/ai/chat/chatContext.ts';
 
 const knowledgeEntries = [
@@ -43,7 +42,6 @@ test('resolveKnowledgeContextSelection focuses active doc and keeps the rest as 
     knowledgeMode: 'off',
     knowledgeEntries,
     activeKnowledgeFileId: 'doc-1',
-    selectedKnowledgeContextIds: ['doc-2'],
   });
 
   assert.equal(result.currentFile?.id, 'doc-1');
@@ -57,40 +55,23 @@ test('resolveKnowledgeContextSelection can clear document focus while keeping kn
     knowledgeMode: 'all',
     knowledgeEntries,
     activeKnowledgeFileId: null,
-    selectedKnowledgeContextIds: ['doc-2'],
   });
 
   assert.equal(result.currentFile, null);
   assert.equal(result.relatedFiles.length, 2);
 });
 
-test('resolveKnowledgeSelectionForPrompt does not restore first doc after focus is cleared', () => {
-  const result = resolveKnowledgeSelectionForPrompt({
-    scene: 'knowledge',
-    knowledgeMode: 'all',
-    knowledgeEntries,
-    activeKnowledgeFileId: null,
-    selectedKnowledgeContextIds: ['doc-2'],
-  });
-
-  assert.equal(result.currentFile, null);
-  assert.deepEqual(
-    result.relatedFiles.map((file) => file.id),
-    ['doc-1', 'doc-2']
-  );
-});
-
-test('resolveKnowledgeContextSelection respects user-selected mode in page scene', () => {
+test('resolveKnowledgeContextSelection uses the active doc when page chat enables knowledge context', () => {
   const result = resolveKnowledgeContextSelection({
     scene: 'page',
-    knowledgeMode: 'selected',
+    knowledgeMode: 'all',
     knowledgeEntries,
     activeKnowledgeFileId: 'doc-1',
-    selectedKnowledgeContextIds: ['doc-2'],
   });
 
-  assert.equal(result.currentFile?.id, 'doc-2');
-  assert.equal(result.relatedFiles.length, 0);
+  assert.equal(result.currentFile?.id, 'doc-1');
+  assert.equal(result.relatedFiles.length, 1);
+  assert.equal(result.relatedFiles[0].id, 'doc-2');
 });
 
 test('buildChatContextSnapshot keeps page context primary and knowledge optional', () => {
@@ -121,7 +102,6 @@ test('resolveCurrentReferenceFileIds keeps knowledge current scope on the focuse
   const result = resolveCurrentReferenceFileIds({
     scene: 'knowledge',
     activeKnowledgeFileId: 'doc-2',
-    selectedKnowledgeContextIds: ['doc-1', 'doc-2', 'doc-3'],
     selectedPagePath: null,
     availableFileIds: ['doc-1', 'doc-2', 'doc-3'],
   });
@@ -133,7 +113,6 @@ test('resolveCurrentReferenceFileIds stays empty when knowledge focus is cleared
   const result = resolveCurrentReferenceFileIds({
     scene: 'knowledge',
     activeKnowledgeFileId: null,
-    selectedKnowledgeContextIds: ['doc-1', 'doc-2'],
     selectedPagePath: null,
     availableFileIds: ['doc-1', 'doc-2'],
   });
@@ -145,7 +124,6 @@ test('resolveCurrentReferenceFileIds keeps page current scope on the focused pag
   const result = resolveCurrentReferenceFileIds({
     scene: 'page',
     activeKnowledgeFileId: 'doc-2',
-    selectedKnowledgeContextIds: ['doc-1', 'doc-2'],
     selectedPagePath: 'sketch/pages/home.md',
     availableFileIds: ['doc-1', 'doc-2', 'sketch/pages/home.md'],
   });

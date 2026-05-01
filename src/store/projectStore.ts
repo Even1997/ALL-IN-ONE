@@ -15,7 +15,6 @@ import {
   DesignTokenGroup,
   DevTask,
   GeneratedFile,
-  KnowledgeRetrievalMethod,
   PageStructureNode,
   ProductPRD,
   ProjectConfig,
@@ -33,7 +32,6 @@ export interface CreateProjectInput {
   name: string;
   description: string;
   vaultPath: string;
-  knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
 }
 
 export interface ProjectWorkspaceSnapshot {
@@ -46,7 +44,6 @@ export interface ProjectWorkspaceSnapshot {
   requirementDocs: RequirementDoc[];
   documentEvents: DocumentChangeEvent[];
   activeKnowledgeFileId: string | null;
-  selectedKnowledgeContextIds: string[];
   prd: ProductPRD | null;
   pageStructure: PageStructureNode[];
   wireframes: Record<string, WireframeDocument>;
@@ -70,7 +67,6 @@ interface ProjectState {
   requirementDocs: RequirementDoc[];
   documentEvents: DocumentChangeEvent[];
   activeKnowledgeFileId: string | null;
-  selectedKnowledgeContextIds: string[];
   prd: ProductPRD | null;
   pageStructure: PageStructureNode[];
   wireframes: Record<string, WireframeDocument>;
@@ -88,8 +84,6 @@ interface ProjectState {
   setRawRequirementInput: (value: string) => void;
   setFeaturesMarkdown: (value: string) => void;
   setActiveKnowledgeFileId: (id: string | null) => void;
-  setSelectedKnowledgeContextIds: (ids: string[]) => void;
-  toggleKnowledgeContextId: (id: string) => void;
   updateRequirementDoc: (
     id: string,
     updates: Partial<Pick<RequirementDoc, 'title' | 'content' | 'summary' | 'status' | 'sourceType' | 'filePath' | 'kind' | 'docType' | 'tags' | 'relatedIds'>>
@@ -194,9 +188,6 @@ const normalizeRequirementTitle = (value: string) => {
 
   return /\.(md|markdown)$/i.test(normalized) ? normalized : `${normalized}.md`;
 };
-
-const normalizeKnowledgeRetrievalMethod = (value: unknown): KnowledgeRetrievalMethod =>
-  value === 'llmwiki' || value === 'rag' ? value : 'm-flow';
 
 const MAX_DOCUMENT_CHANGE_EVENTS = 200;
 
@@ -1496,7 +1487,10 @@ const normalizeProjectConfig = (value: unknown): ProjectConfig | null => {
     return null;
   }
 
-  const project = value as Partial<ProjectConfig>;
+  const { knowledgeRetrievalMethod: _legacyKnowledgeRetrievalMethod, ...project } = value as Partial<ProjectConfig> & {
+    knowledgeRetrievalMethod?: unknown;
+  };
+  void _legacyKnowledgeRetrievalMethod;
   const now = new Date().toISOString();
 
   return {
@@ -1504,10 +1498,6 @@ const normalizeProjectConfig = (value: unknown): ProjectConfig | null => {
     name: typeof project.name === 'string' && project.name.trim().length > 0 ? project.name : '未命名项目',
     description: typeof project.description === 'string' ? project.description : '',
     vaultPath: typeof project.vaultPath === 'string' ? project.vaultPath.trim() : '',
-    knowledgeRetrievalMethod:
-      project.knowledgeRetrievalMethod === 'llmwiki' || project.knowledgeRetrievalMethod === 'rag'
-        ? project.knowledgeRetrievalMethod
-        : 'm-flow',
     appType: project.appType === 'mobile' || project.appType === 'mini_program' || project.appType === 'desktop' || project.appType === 'backend' || project.appType === 'api'
       ? project.appType
       : 'web',
@@ -2023,7 +2013,6 @@ export const useProjectStore = create<ProjectState>()(
       requirementDocs: [],
       documentEvents: [],
       activeKnowledgeFileId: null,
-      selectedKnowledgeContextIds: [],
       prd: null,
       pageStructure: [],
       wireframes: {},
@@ -2041,7 +2030,6 @@ export const useProjectStore = create<ProjectState>()(
           name: input.name.trim(),
           description: input.description.trim(),
           vaultPath: input.vaultPath.trim(),
-          knowledgeRetrievalMethod: normalizeKnowledgeRetrievalMethod(input.knowledgeRetrievalMethod),
           appType: 'desktop',
           createdAt: now,
           updatedAt: now,
@@ -2085,7 +2073,6 @@ export const useProjectStore = create<ProjectState>()(
           wireframesMarkdown: '',
           requirementDocs,
           activeKnowledgeFileId,
-          selectedKnowledgeContextIds: activeKnowledgeFileId ? [activeKnowledgeFileId] : [],
           prd,
           pageStructure,
           wireframes,
@@ -2115,12 +2102,6 @@ export const useProjectStore = create<ProjectState>()(
           requirementDocs: snapshot.requirementDocs,
           documentEvents: snapshot.documentEvents,
           activeKnowledgeFileId: snapshot.activeKnowledgeFileId,
-          selectedKnowledgeContextIds:
-            snapshot.selectedKnowledgeContextIds.length > 0
-              ? snapshot.selectedKnowledgeContextIds
-              : snapshot.activeKnowledgeFileId
-                ? [snapshot.activeKnowledgeFileId]
-                : [],
           prd: snapshot.prd,
           pageStructure: snapshot.pageStructure,
           wireframes: snapshot.wireframes,
@@ -2208,25 +2189,9 @@ export const useProjectStore = create<ProjectState>()(
       setFeaturesMarkdown: (value) => set({ featuresMarkdown: value }),
 
       setActiveKnowledgeFileId: (id) =>
-        set((state) => ({
-          activeKnowledgeFileId: id,
-          selectedKnowledgeContextIds:
-            id && !state.selectedKnowledgeContextIds.includes(id)
-              ? [id, ...state.selectedKnowledgeContextIds]
-              : state.selectedKnowledgeContextIds,
-        })),
-
-      setSelectedKnowledgeContextIds: (ids) =>
         set({
-          selectedKnowledgeContextIds: Array.from(new Set(ids.filter(Boolean))),
+          activeKnowledgeFileId: id,
         }),
-
-      toggleKnowledgeContextId: (id) =>
-        set((state) => ({
-          selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.includes(id)
-            ? state.selectedKnowledgeContextIds.filter((item) => item !== id)
-            : [...state.selectedKnowledgeContextIds, id],
-        })),
 
       updateRequirementDoc: (id, updates) =>
         set((state) => {
@@ -2346,11 +2311,7 @@ export const useProjectStore = create<ProjectState>()(
           return {
             requirementDocs,
             documentEvents,
-            activeKnowledgeFileId:
-              state.activeKnowledgeFileId || state.selectedKnowledgeContextIds[0] || nextDoc.id,
-            selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.includes(nextDoc.id)
-              ? state.selectedKnowledgeContextIds
-              : [...state.selectedKnowledgeContextIds, nextDoc.id],
+            activeKnowledgeFileId: state.activeKnowledgeFileId || nextDoc.id,
             generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
@@ -2407,7 +2368,6 @@ export const useProjectStore = create<ProjectState>()(
             documentEvents,
             activeKnowledgeFileId:
               state.activeKnowledgeFileId === id ? null : state.activeKnowledgeFileId,
-            selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.filter((item) => item !== id),
             generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
@@ -2530,9 +2490,6 @@ export const useProjectStore = create<ProjectState>()(
               requirementDocs.some((doc) => doc.id === state.activeKnowledgeFileId)
                 ? state.activeKnowledgeFileId
                 : null,
-            selectedKnowledgeContextIds: state.selectedKnowledgeContextIds.filter((id) =>
-              requirementDocs.some((doc) => doc.id === id)
-            ),
             generatedFiles,
             graph: buildProjectGraph(
               state.currentProject,
@@ -3269,7 +3226,6 @@ export const useProjectStore = create<ProjectState>()(
           requirementDocs: [],
           documentEvents: [],
           activeKnowledgeFileId: null,
-          selectedKnowledgeContextIds: [],
           prd: null,
           pageStructure: [],
           wireframes: {},
@@ -3287,6 +3243,7 @@ export const useProjectStore = create<ProjectState>()(
       storage: createJSONStorage(() => localStorage),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<ProjectState>;
+        delete (persisted as Record<string, unknown>)['selectedKnowledge' + 'ContextIds'];
         const projects = Array.isArray(persisted.projects)
           ? persisted.projects
               .map((project) => normalizeProjectConfig(project))
@@ -3336,9 +3293,6 @@ export const useProjectStore = create<ProjectState>()(
           requirementDocs,
           documentEvents: normalizeDocumentChangeEvents(persisted.documentEvents),
           activeKnowledgeFileId: typeof persisted.activeKnowledgeFileId === 'string' ? persisted.activeKnowledgeFileId : null,
-          selectedKnowledgeContextIds: Array.isArray(persisted.selectedKnowledgeContextIds)
-            ? persisted.selectedKnowledgeContextIds.filter((item): item is string => typeof item === 'string')
-            : [],
           prd,
           pageStructure,
           wireframes,

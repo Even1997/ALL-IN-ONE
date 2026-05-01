@@ -223,11 +223,12 @@ test('markdown reading surfaces use theme tokens instead of fixed dark colors', 
   assert.doesNotMatch(source, /\.pm-knowledge-editor-surface\s*{[\s\S]*?background:\s*linear-gradient\(180deg, #12202f 0%, #0f172a 100%\)/);
 });
 
-test('ai chat enables knowledge context when database notes are available', async () => {
+test('ai chat no longer injects knowledge note bodies into the direct chat prompt', async () => {
   const source = await readFile(chatPath, 'utf8');
 
-  assert.match(source, /const effectiveKnowledgeMode = knowledgeEntries\.length > 0 \? 'all' : 'off'/);
-  assert.match(source, /resolveKnowledgeSelectionForPrompt/);
+  assert.doesNotMatch(source, /const effectiveKnowledgeMode = knowledgeEntries\.length > 0 \? 'all' : 'off'/);
+  assert.doesNotMatch(source, /resolveKnowledgeSelectionForPrompt/);
+  assert.doesNotMatch(source, /knowledgeSelection:/);
 });
 
 test('knowledge workbench starts without auto-opening the first knowledge note', async () => {
@@ -238,12 +239,19 @@ test('knowledge workbench starts without auto-opening the first knowledge note',
   assert.match(source, /setSelectedKnowledgeNoteId\(\(current\) =>\s*current && serverNotes\.some\(\(note\) => note\.id === current\) \? current : null\s*\)/);
 });
 
-test('ai chat current reference scope derives from the focused surface instead of accumulated knowledge selections', async () => {
+test('ai chat no longer derives direct chat prompt context from focused knowledge selection', async () => {
   const source = await readFile(chatPath, 'utf8');
 
-  assert.match(source, /resolveKnowledgeSelectionForPrompt/);
-  assert.match(source, /activeKnowledgeFileId:\s*focusedKnowledgeFileId/);
+  assert.doesNotMatch(source, /resolveKnowledgeSelectionForPrompt/);
+  assert.doesNotMatch(source, /activeKnowledgeFileId:\s*focusedKnowledgeFileId/);
   assert.doesNotMatch(source, /selectedKnowledgeContextIds\.forEach\(\(id\) => ids\.add\(id\)\)/);
+});
+
+test('ai workflow service no longer derives related requirement ids from selected knowledge context ids', async () => {
+  const source = await readFile(new URL('../src/modules/ai/workflow/AIWorkflowService.ts', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(source, /selectedKnowledgeContextIds/);
+  assert.doesNotMatch(source, /relatedRequirementIds = knowledgeSelection\.relatedFiles/);
 });
 
 test('ai chat reference menu wraps actions and keeps selects within the popover width', async () => {

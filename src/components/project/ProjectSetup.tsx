@@ -1,18 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { MacButton, MacField, MacInput, MacPanel } from '../ui';
-import type { KnowledgeRetrievalMethod, ProjectConfig } from '../../types';
+import type { ProjectConfig } from '../../types';
 import type { CreateProjectInput } from '../../store/projectStore';
 import type { ProjectStorageSettings } from '../../utils/projectPersistence';
-
-const KNOWLEDGE_RETRIEVAL_OPTIONS: Array<{
-  value: KnowledgeRetrievalMethod;
-  label: string;
-  description: string;
-}> = [
-  { value: 'm-flow', label: 'm-flow', description: '默认推荐，偏向结构化索引和低 token 检索。' },
-  { value: 'llmwiki', label: 'llmwiki', description: '更接近 Karpathy 风格的文档整理与索引。' },
-  { value: 'rag', label: 'rag', description: '保留为检索型知识库模式。' },
-];
 
 interface ProjectSetupProps {
   projects: ProjectConfig[];
@@ -54,8 +44,6 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [vaultPath, setVaultPath] = useState('');
-  const [knowledgeRetrievalMethod, setKnowledgeRetrievalMethod] =
-    useState<KnowledgeRetrievalMethod>('m-flow');
   const [projectStorageDraft, setProjectStorageDraft] = useState(
     projectStorageSettings?.rootPath || ''
   );
@@ -90,13 +78,11 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
       name: trimmedName,
       description: trimmedDescription,
       vaultPath: trimmedVaultPath,
-      knowledgeRetrievalMethod,
     });
 
     setName('');
     setDescription('');
     setVaultPath('');
-    setKnowledgeRetrievalMethod('m-flow');
   };
 
   const isProjectStorageBusy =
@@ -208,13 +194,13 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
           className="project-setup-card project-manager-panel project-manager-form"
           onSubmit={handleSubmit}
         >
-          <div className="project-setup-header">
-            <div>
-              <h2>新建项目</h2>
-              <p>先绑定本地知识库文件夹，再决定默认检索方式。</p>
+            <div className="project-setup-header">
+              <div>
+                <h2>新建项目</h2>
+                <p>先绑定本地知识库文件夹，后续知识索引会直接走原生 m-flow 路径。</p>
+              </div>
+              <div className="project-setup-status">Create</div>
             </div>
-            <div className="project-setup-status">Create</div>
-          </div>
 
           <MacField label="项目名称" className="setup-field">
             <MacInput
@@ -251,29 +237,6 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
                 选择文件夹
               </MacButton>
             </div>
-          </MacField>
-
-          <MacField label="检索方式" className="setup-field">
-            <select
-              className="mac-input"
-              value={knowledgeRetrievalMethod}
-              onChange={(event) =>
-                setKnowledgeRetrievalMethod(event.target.value as KnowledgeRetrievalMethod)
-              }
-            >
-              {KNOWLEDGE_RETRIEVAL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <p className="setup-helper-text">
-              {
-                KNOWLEDGE_RETRIEVAL_OPTIONS.find(
-                  (option) => option.value === knowledgeRetrievalMethod
-                )?.description
-              }
-            </p>
           </MacField>
 
           <div className="setup-actions">

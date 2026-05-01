@@ -34,7 +34,7 @@ The log explains the latest build in chronological form. The manifest explains w
 
 - Answer from `wiki/` first.
 - Use `raw/` to verify compressed claims.
-- Use `.goodnight/base-index/` only when generated pages are missing or stale.
+- Use `.goodnight/m-flow/` only when generated pages are missing or stale.
 - Cite source paths in user-facing answers when the claim depends on a local document.
 
 ## Lint Checklist

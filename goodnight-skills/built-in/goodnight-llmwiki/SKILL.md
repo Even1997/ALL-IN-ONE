@@ -7,6 +7,8 @@ description: Use when GoodNight should transform local vault material into Karpa
 
 ## Design Intent
 
+This is a hidden compatibility skill in the current GoodNight product. Use it only when the user explicitly re-enables or asks for a wiki-style knowledge compilation workflow.
+
 Use `llmwiki` when the user wants durable knowledge distillation, not just retrieval. The upstream pattern is a compiler-like loop:
 
 1. Ingest raw source material into stable Markdown captures.
@@ -24,7 +26,7 @@ This intentionally mirrors `Astro-Han/karpathy-llm-wiki`: use `raw/` for immutab
 - Treat `wiki/` as maintained knowledge pages. They should be short, linked, titled, and stable enough to answer future questions.
 - Treat `index.md` as the navigation surface. It should make the wiki searchable by topic, source, status, and update time.
 - Treat `log.md` and `.goodnight/skills/llmwiki/manifest.md` as the build record. They explain what changed and what was skipped.
-- Prefer Markdown over JSON for every model-facing artifact. JSON belongs to the base index internals only.
+- Prefer Markdown over JSON for every model-facing artifact. If the native M-Flow state is consulted, use it only as backing structure, not as the final user-facing format.
 
 ## Operating Modes
 
@@ -32,8 +34,8 @@ This intentionally mirrors `Astro-Han/karpathy-llm-wiki`: use `raw/` for immutab
 
 Run ingest when a manual refresh happens, when the user asks to rebuild LLMWiki pages, or when a selected source has changed.
 
-1. Read `.goodnight/base-index/manifest.json` to understand build time, source count, and fingerprint.
-2. Read `.goodnight/base-index/sources.json` and relevant chunks from `.goodnight/base-index/chunks.jsonl`.
+1. Read `.goodnight/m-flow/manifest.json` to understand build time, source count, and fingerprint.
+2. Read `.goodnight/m-flow/sources.json` and relevant episodes from `.goodnight/m-flow/episodes.json`.
 3. Skip prior runtime outputs under `_goodnight/outputs/` and `.goodnight/skills/`.
 4. Write one Markdown raw capture per source:
    - path: `_goodnight/outputs/llmwiki/raw/<source-slug>.md`
@@ -58,7 +60,7 @@ Run query when the user asks a knowledge question and the selected retrieval met
 
 1. Search `index.md` and relevant `wiki/*.md` pages first.
 2. If a wiki page is thin or outdated, inspect its matching `raw/*.md` capture.
-3. If raw capture is insufficient, fall back to `.goodnight/base-index/` and then to the original vault file.
+3. If raw capture is insufficient, fall back to `.goodnight/m-flow/` and then to the original vault file.
 4. Answer from the stable wiki page when possible, but cite the original source path or raw capture when making factual claims.
 5. If the wiki cannot support the answer, say what is missing and suggest a refresh or page creation.
 
@@ -113,7 +115,7 @@ Keep `_goodnight/outputs/llmwiki/index.md` useful for humans and agents:
 # LLMWiki Index
 
 Built at: <timestamp>
-Fingerprint: <base-index fingerprint>
+Fingerprint: <m-flow fingerprint>
 
 ## Stable Pages
 

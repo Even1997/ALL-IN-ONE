@@ -25,7 +25,7 @@ GoodNight is a local-vault product workbench, not a general OS copilot. Stay ins
 
 - Keep this zone open.
 - Broad Q&A, research, synthesis, and non-product knowledge are allowed.
-- Prefer the shared `.goodnight/base-index/` before re-reading the whole vault.
+- Prefer the native `.goodnight/m-flow/` state and `_goodnight/outputs/m-flow/` artifacts before re-reading the whole vault.
 - Do not force every knowledge request into a rigid product workflow.
 
 ### Sketch Zone

@@ -160,11 +160,6 @@ export const GNAgentEmbeddedComposer: React.FC<{
           </button>
         </div>
 
-        <div className="chat-composer-hints">
-          <span>Enter 发送</span>
-          <span>Shift + Enter 换行</span>
-          <span>用 @skill 精准触发能力</span>
-        </div>
       </div>
     </div>
   </div>

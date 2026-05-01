@@ -50,6 +50,20 @@ test('project store keeps knowledge focus empty instead of restoring the first d
   assert.doesNotMatch(source, /typeof persisted\.activeKnowledgeFileId === 'string'[\s\S]*:\s*requirementDocs\[0\]\?\.id \|\| null/);
 });
 
+test('project store no longer keeps multi-select knowledge context state', async () => {
+  const source = await readFile(new URL('../src/store/projectStore.ts', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(source, /selectedKnowledgeContextIds:/);
+  assert.doesNotMatch(source, /setSelectedKnowledgeContextIds:/);
+  assert.doesNotMatch(source, /toggleKnowledgeContextId:/);
+});
+
+test('app project snapshots no longer persist selected knowledge context ids', async () => {
+  const source = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(source, /selectedKnowledgeContextIds,/);
+});
+
 test('createProject starts from an empty workspace instead of auto-generating planning and delivery artifacts', async () => {
   const source = await readFile(new URL('../src/store/projectStore.ts', import.meta.url), 'utf8');
   const createProjectBlock = sliceMethodBlock(source, 'createProject', 'loadProjectWorkspace');

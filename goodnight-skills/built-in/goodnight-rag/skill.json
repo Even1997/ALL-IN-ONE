@@ -28,7 +28,7 @@
     "claude": "partial"
   },
   "install": {
-    "visibleByDefault": true,
+    "visibleByDefault": false,
     "enabledByDefault": false,
     "syncTargets": ["built-in", "codex", "claude"]
   },

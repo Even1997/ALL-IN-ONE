@@ -16,7 +16,6 @@ import {
   buildChatContextSnapshot,
   collectDesignPages,
   getSelectedElementLabel,
-  resolveKnowledgeSelectionForPrompt,
 } from '../../modules/ai/chat/chatContext';
 import { PROVIDER_PRESETS, type ProviderPreset } from '../../modules/ai/providerPresets';
 import type { ActivityEntry } from '../../modules/ai/skills/activityLog';
@@ -52,8 +51,11 @@ import {
   isSupportedProjectTextFilePath,
 } from '../../modules/ai/chat/projectFileOperations';
 import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
-import { ensureProjectSystemIndex } from '../../modules/knowledge/systemIndexProject';
-import { buildKnowledgeRuntimePromptContext } from '../../modules/knowledge/runtime/knowledgeRuntime';
+import {
+  buildMFlowPromptContext,
+  formatMFlowRefreshSummary,
+  rebuildProjectMFlow,
+} from '../../modules/knowledge/m-flow/runtime.ts';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
 import type { KnowledgeProposal } from '../../features/knowledge/model/knowledgeProposal';
 import { useKnowledgeProposalStore } from '../../features/knowledge/store/knowledgeProposalStore';
@@ -543,7 +545,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [selectedSettingsConfigId, setSelectedSettingsConfigId] = useState<string | null>(null);
   const [selectedChatAgentId, setSelectedChatAgentId] = useState<ChatAgentId>('built-in');
   const [localAgentSnapshot, setLocalAgentSnapshot] = useState<LocalAgentConfigSnapshot | null>(null);
-  const [isKnowledgeReferenceEnabled] = useState(true);
   const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
   const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, string>>({});
   const [projectFileOperationMode, setProjectFileOperationMode] = useState<ProjectFileOperationMode>('manual');
@@ -583,7 +584,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     currentProject,
     requirementDocs,
     activeKnowledgeFileId,
-    selectedKnowledgeContextIds,
     generatedFiles,
     pageStructure,
     replaceRequirementDocs,
@@ -593,7 +593,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       currentProject: state.currentProject,
       requirementDocs: state.requirementDocs,
       activeKnowledgeFileId: state.activeKnowledgeFileId,
-      selectedKnowledgeContextIds: state.selectedKnowledgeContextIds,
       generatedFiles: state.generatedFiles,
       pageStructure: state.pageStructure,
       replaceRequirementDocs: state.replaceRequirementDocs,
@@ -1245,22 +1244,9 @@ export const AIChat: React.FC<AIChatProps> = ({
     () => getSelectedElementLabel(previewElements, selectedElementId),
     [previewElements, selectedElementId]
   );
-  const effectiveKnowledgeMode = knowledgeEntries.length > 0 ? 'all' : 'off';
   const displayKnowledgeFile = useMemo(
     () => knowledgeEntries.find((entry) => entry.id === activeKnowledgeFileId) || null,
     [activeKnowledgeFileId, knowledgeEntries]
-  );
-  const focusedKnowledgeFileId = isKnowledgeReferenceEnabled ? activeKnowledgeFileId : null;
-  const knowledgeSelectionMeta = useMemo(
-    () =>
-      resolveKnowledgeSelectionForPrompt({
-        scene: aiContextState?.scene || 'knowledge',
-        knowledgeMode: effectiveKnowledgeMode,
-        knowledgeEntries,
-        activeKnowledgeFileId: focusedKnowledgeFileId,
-        selectedKnowledgeContextIds,
-      }),
-    [aiContextState?.scene, effectiveKnowledgeMode, focusedKnowledgeFileId, knowledgeEntries, selectedKnowledgeContextIds]
   );
   const contextSnapshot = useMemo(
     () =>
@@ -1268,11 +1254,9 @@ export const AIChat: React.FC<AIChatProps> = ({
           scene: aiContextState?.scene || 'knowledge',
           pageTitle: selectedPage?.name || null,
           selectedElementLabel,
-          knowledgeLabel: displayKnowledgeFile && isKnowledgeReferenceEnabled
-          ? `知识文档 / ${displayKnowledgeFile.title}`
-          : null,
+          knowledgeLabel: displayKnowledgeFile ? `知识文档 / ${displayKnowledgeFile.title}` : null,
         }),
-    [aiContextState?.scene, displayKnowledgeFile, isKnowledgeReferenceEnabled, selectedElementLabel, selectedPage?.name]
+    [aiContextState?.scene, displayKnowledgeFile, selectedElementLabel, selectedPage?.name]
   );
 
   const currentContextUsage = useMemo(() => {
@@ -1281,7 +1265,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       currentProjectName: currentProject?.name,
       contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
       skillIntent: null,
-      knowledgeSelection: knowledgeSelectionMeta,
       conversationHistory: activeSession?.messages || [],
       contextLabels: [
         selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
@@ -1301,7 +1284,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     contextSnapshot.secondaryLabel,
     currentProject?.name,
     input,
-    knowledgeSelectionMeta,
     activeSession?.messages,
     selectedRuntimeConfig,
   ]);
@@ -1607,38 +1589,32 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       try {
-        const systemIndexRefreshResult =
+        const mFlowRefreshResult =
           isTauriRuntimeAvailable() && currentProject && projectKnowledgeRootDir
-              ? await ensureProjectSystemIndex({
+              ? await rebuildProjectMFlow({
                   projectId: currentProject.id,
                   projectName: currentProject.name,
                   vaultPath: projectKnowledgeRootDir,
-                  knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
                   requirementDocs: knowledgeSourceDocs,
                   generatedFiles,
-                  writeRuntimeArtifacts: skillIntent?.package === 'knowledge-organize',
+                  writeArtifacts: skillIntent?.package === 'knowledge-organize',
                 })
               : null;
-        const systemIndexPromptContext = systemIndexRefreshResult
-          ? buildKnowledgeRuntimePromptContext({
-              index: systemIndexRefreshResult.index,
-              knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
-              userInput: cleanedContent,
-            })
+        const mFlowPromptContext = mFlowRefreshResult
+          ? buildMFlowPromptContext(mFlowRefreshResult.state, cleanedContent)
           : null;
         const directChat = buildDirectChatPrompt({
           userInput: cleanedContent,
           currentProjectName: currentProject.name,
           contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
           skillIntent,
-          knowledgeSelection: knowledgeSelectionMeta,
           conversationHistory: activeSession?.messages || [],
-          referenceContext: systemIndexPromptContext
+          referenceContext: mFlowPromptContext
             ? {
-                indexSection: systemIndexPromptContext.indexSection,
-                expandedSection: systemIndexPromptContext.expandedSection,
-                policySection: systemIndexPromptContext.policySection,
-                labels: systemIndexPromptContext.labels,
+                indexSection: mFlowPromptContext.indexSection,
+                expandedSection: mFlowPromptContext.expandedSection,
+                policySection: mFlowPromptContext.policySection,
+                labels: mFlowPromptContext.labels,
               }
             : null,
           contextLabels: [
@@ -1646,7 +1622,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             contextSnapshot.primaryLabel,
             contextSnapshot.secondaryLabel,
             contextSnapshot.knowledgeLabel,
-            ...(systemIndexPromptContext?.labels || []),
+            ...(mFlowPromptContext?.labels || []),
           ].filter((item): item is string => Boolean(item)),
         });
 
@@ -1699,26 +1675,27 @@ export const AIChat: React.FC<AIChatProps> = ({
         if (skillIntent?.package === 'knowledge-organize') {
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: '正在刷新系统索引...',
+            content: '正在刷新原生 m-flow...',
           }));
 
           if (!projectKnowledgeRootDir) {
             throw new Error('当前项目还没有绑定本地知识库文件夹。');
           }
 
-          const ensuredIndex =
-            systemIndexRefreshResult ||
-            (await ensureProjectSystemIndex({
+          const ensuredMFlow =
+            mFlowRefreshResult ||
+            (await rebuildProjectMFlow({
               projectId: currentProject.id,
               projectName: currentProject.name,
               vaultPath: projectKnowledgeRootDir,
-              knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
               requirementDocs: knowledgeSourceDocs,
               generatedFiles,
+              writeArtifacts: true,
             }));
-          const knowledgeOrganizeSummary = ensuredIndex.refreshed
-            ? `系统索引已刷新：${ensuredIndex.index.manifest.sourceCount} 个来源，${ensuredIndex.index.manifest.chunkCount} 个索引块。`
-            : `系统索引已是最新状态：${ensuredIndex.index.manifest.sourceCount} 个来源，${ensuredIndex.index.manifest.chunkCount} 个索引块。`;
+          const knowledgeOrganizeSummary = formatMFlowRefreshSummary(
+            ensuredMFlow.state,
+            ensuredMFlow.refreshed
+          );
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
@@ -1729,7 +1706,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             runId,
             type: 'run-summary',
             summary: knowledgeOrganizeSummary,
-            changedPaths: ensuredIndex.index.sources.slice(0, 12).map((source) => source.path),
+            changedPaths: ensuredMFlow.artifacts.slice(0, 12).map((artifact) => artifact.path),
             runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
             skill: resolvedSkill,
             createdAt: Date.now(),
@@ -2077,7 +2054,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       generatedFiles,
       isLoading,
       isRuntimeConfigured,
-      knowledgeSelectionMeta,
       knowledgeSourceDocs,
       providerExecutionMode,
       renameSession,
@@ -2370,11 +2346,6 @@ export const AIChat: React.FC<AIChatProps> = ({
                             自动确认
                           </button>
                         </div>
-                      </div>
-                      <div className="chat-composer-hints">
-                        <span>Enter 发送</span>
-                        <span>Shift + Enter 换行</span>
-                        <span>用 @skill 精准触发能力</span>
                       </div>
                   </div>
                 </form>

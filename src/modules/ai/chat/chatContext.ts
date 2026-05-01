@@ -1,9 +1,9 @@
 import type { CanvasElement, PageStructureNode } from '../../../types';
-import { buildKnowledgeContextSelection, type KnowledgeEntry } from '../../knowledge/knowledgeEntries.ts';
+import type { KnowledgeEntry } from '../../knowledge/knowledgeEntries.ts';
 import type { ReferenceFile } from '../../knowledge/referenceFiles.ts';
 
 export type AIChatScene = 'knowledge' | 'page';
-export type AIKnowledgeMode = 'off' | 'current' | 'selected' | 'all';
+export type AIKnowledgeMode = 'off' | 'all';
 export type AIReferenceScopeMode = 'current' | 'directory' | 'open-tabs' | 'all';
 
 type ResolveKnowledgeContextSelectionOptions = {
@@ -11,7 +11,6 @@ type ResolveKnowledgeContextSelectionOptions = {
   knowledgeMode: AIKnowledgeMode;
   knowledgeEntries: KnowledgeEntry[];
   activeKnowledgeFileId: string | null;
-  selectedKnowledgeContextIds: string[];
 };
 
 export const resolveKnowledgeContextSelection = ({
@@ -19,7 +18,6 @@ export const resolveKnowledgeContextSelection = ({
   knowledgeMode,
   knowledgeEntries,
   activeKnowledgeFileId,
-  selectedKnowledgeContextIds,
 }: ResolveKnowledgeContextSelectionOptions) => {
   if (scene === 'knowledge') {
     const currentFile = knowledgeEntries.find((entry) => entry.id === activeKnowledgeFileId) || null;
@@ -30,18 +28,9 @@ export const resolveKnowledgeContextSelection = ({
     };
   }
 
-  if (knowledgeMode !== 'off') {
-    const selectedEntries = selectedKnowledgeContextIds
-      .map((id) => knowledgeEntries.find((entry) => entry.id === id) || null)
-      .filter((entry): entry is KnowledgeEntry => Boolean(entry));
-    const currentFile =
-      knowledgeMode === 'selected'
-        ? selectedEntries[0] || null
-        : knowledgeEntries.find((entry) => entry.id === activeKnowledgeFileId) || null;
-    const relatedFiles =
-      knowledgeMode === 'all'
-        ? knowledgeEntries.filter((entry) => entry.id !== currentFile?.id)
-        : selectedEntries.filter((entry) => entry.id !== currentFile?.id);
+  if (knowledgeMode === 'all') {
+    const currentFile = knowledgeEntries.find((entry) => entry.id === activeKnowledgeFileId) || null;
+    const relatedFiles = knowledgeEntries.filter((entry) => entry.id !== currentFile?.id);
 
     return {
       currentFile,
@@ -105,7 +94,6 @@ export const getSelectedElementLabel = (elements: CanvasElement[], selectedEleme
 export const resolveCurrentReferenceFileIds = (options: {
   scene: AIChatScene;
   activeKnowledgeFileId: string | null;
-  selectedKnowledgeContextIds: string[];
   selectedPagePath: string | null;
   availableFileIds: string[];
 }) => {
@@ -154,25 +142,3 @@ export const resolveReferenceScopeSelection = (options: {
   return Array.from(new Set(options.currentFileIds));
 };
 
-export const resolveKnowledgeSelectionForPrompt = (options: ResolveKnowledgeContextSelectionOptions) => {
-  const selection = resolveKnowledgeContextSelection(options);
-  if (options.scene === 'knowledge' && options.knowledgeEntries.length > 0) {
-    if (!selection.currentFile) {
-      return {
-        currentFile: null,
-        relatedFiles: selection.relatedFiles,
-      };
-    }
-
-    return buildKnowledgeContextSelection(
-      options.knowledgeEntries,
-      selection.currentFile.id,
-      options.knowledgeEntries.map((entry) => entry.id).filter((id) => id !== selection.currentFile?.id)
-    );
-  }
-
-  return {
-    currentFile: selection.currentFile,
-    relatedFiles: selection.relatedFiles,
-  };
-};

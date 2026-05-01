@@ -193,48 +193,23 @@ export const saveProjectIndexToDisk = async (projects: ProjectConfig[]) => {
   await writeJSONFile(indexPath, projects);
 };
 
-const KNOWLEDGE_SKILL_IDS = ['llmwiki', 'rag', 'm-flow'] as const;
-
 export const getProjectKnowledgeRootDir = (project: Pick<ProjectConfig, 'id' | 'name' | 'vaultPath'>) =>
   joinPath(project.vaultPath, sanitizeProjectPathSegment(project.name || project.id));
 
 export const getVaultStateDir = (vaultPath: string) => joinPath(vaultPath, '.goodnight');
-export const getVaultBaseIndexDir = (vaultPath: string) => joinPath(getVaultStateDir(vaultPath), 'base-index');
-export const getVaultSkillStateDir = (vaultPath: string, skill: (typeof KNOWLEDGE_SKILL_IDS)[number]) =>
-  joinPath(getVaultStateDir(vaultPath), 'skills', skill);
+export const getVaultMFlowDir = (vaultPath: string) => joinPath(getVaultStateDir(vaultPath), 'm-flow');
 export const getVaultOutputsDir = (vaultPath: string) => joinPath(vaultPath, '_goodnight', 'outputs');
-export const getVaultSkillOutputsDir = (vaultPath: string, skill: (typeof KNOWLEDGE_SKILL_IDS)[number]) =>
-  joinPath(getVaultOutputsDir(vaultPath), skill);
+export const getVaultMFlowOutputsDir = (vaultPath: string) => joinPath(getVaultOutputsDir(vaultPath), 'm-flow');
 export const ensureVaultKnowledgeDirectoryStructure = async (vaultPath: string) => {
   await ensureDirectory(vaultPath);
   await ensureDirectory(getVaultStateDir(vaultPath));
-  await ensureDirectory(getVaultBaseIndexDir(vaultPath));
-  await ensureDirectory(joinPath(getVaultStateDir(vaultPath), 'skills'));
+  await ensureDirectory(getVaultMFlowDir(vaultPath));
 };
 
-export const ensureVaultKnowledgeRuntimeDirectoryStructure = async (
-  vaultPath: string,
-  skill: (typeof KNOWLEDGE_SKILL_IDS)[number]
-) => {
+export const ensureVaultMFlowDirectoryStructure = async (vaultPath: string) => {
   await ensureVaultKnowledgeDirectoryStructure(vaultPath);
   await ensureDirectory(getVaultOutputsDir(vaultPath));
-  await ensureDirectory(getVaultSkillStateDir(vaultPath, skill));
-  await ensureDirectory(getVaultSkillOutputsDir(vaultPath, skill));
-};
-
-export const removeVaultKnowledgeOutputsExcept = async (
-  vaultPath: string,
-  skill: (typeof KNOWLEDGE_SKILL_IDS)[number]
-) => {
-  await Promise.all(
-    KNOWLEDGE_SKILL_IDS.filter((candidate) => candidate !== skill).map(async (candidate) => {
-      try {
-        await removePath(getVaultSkillOutputsDir(vaultPath, candidate));
-      } catch {
-        // Ignore missing output directories for methods that have never been organized.
-      }
-    })
-  );
+  await ensureDirectory(getVaultMFlowOutputsDir(vaultPath));
 };
 
 export const ensureProjectKnowledgeDirectory = async (project: Pick<ProjectConfig, 'id' | 'name' | 'vaultPath'>) => {
@@ -244,7 +219,7 @@ export const ensureProjectKnowledgeDirectory = async (project: Pick<ProjectConfi
 };
 
 export const getProjectStateDir = (projectDir: string) => getVaultStateDir(projectDir);
-export const getSystemIndexDir = (projectDir: string) => getVaultBaseIndexDir(projectDir);
+export const getSystemIndexDir = (projectDir: string) => getVaultMFlowDir(projectDir);
 export const getSystemIndexManifestPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'manifest.json');
 export const getSystemIndexSourcesPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'sources.json');
 export const getSystemIndexChunksPath = (projectDir: string) => joinPath(getSystemIndexDir(projectDir), 'chunks.jsonl');

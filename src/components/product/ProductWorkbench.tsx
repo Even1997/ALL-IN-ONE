@@ -16,6 +16,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
 import type { KnowledgeNote } from '../../features/knowledge/model/knowledge';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
+import { formatMFlowRefreshSummary, rebuildProjectMFlow } from '../../modules/knowledge/m-flow/runtime.ts';
 import { WorkbenchIcon } from '../ui/WorkbenchIcon';
 import { MacDialog } from '../ui/MacDialog';
 import {
@@ -40,7 +41,6 @@ import {
   getProjectKnowledgeRootDir,
   isTauriRuntimeAvailable,
   loadSketchPageArtifactsFromProjectDir,
-  removeVaultKnowledgeOutputsExcept,
   writeSketchPageFile,
 } from '../../utils/projectPersistence';
 import {
@@ -55,7 +55,6 @@ import {
   extractKnowledgeNoteEditorBody,
   serializeKnowledgeNoteMarkdown,
 } from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
-import { ensureProjectSystemIndex } from '../../modules/knowledge/systemIndexProject';
 
 type SidebarTab = 'knowledge' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
@@ -1052,9 +1051,10 @@ export const ProductWorkbench = ({
   const {
     currentProject,
     featuresMarkdown,
-    pageStructure,
-    wireframes,
     generatedFiles,
+    pageStructure,
+    requirementDocs,
+    wireframes,
     setFeaturesMarkdown,
     addRootPage,
     addSiblingPage,
@@ -1064,13 +1064,13 @@ export const ProductWorkbench = ({
     replacePageStructure,
     replaceWireframes,
     updateWireframeFrame,
-    updateProject,
   } = useProjectStore(useShallow((state) => ({
     currentProject: state.currentProject,
     featuresMarkdown: state.featuresMarkdown,
-    pageStructure: state.pageStructure,
-    wireframes: state.wireframes,
     generatedFiles: state.generatedFiles,
+    pageStructure: state.pageStructure,
+    requirementDocs: state.requirementDocs,
+    wireframes: state.wireframes,
     setFeaturesMarkdown: state.setFeaturesMarkdown,
     addRootPage: state.addRootPage,
     addSiblingPage: state.addSiblingPage,
@@ -1080,7 +1080,6 @@ export const ProductWorkbench = ({
     replacePageStructure: state.replacePageStructure,
     replaceWireframes: state.replaceWireframes,
     updateWireframeFrame: state.updateWireframeFrame,
-    updateProject: state.updateProject,
   })));
   const projectKnowledgeRootDir = useMemo(
     () => (currentProject?.vaultPath ? getProjectKnowledgeRootDir(currentProject) : null),
@@ -1620,55 +1619,38 @@ export const ProductWorkbench = ({
     }
 
     if (!canUseProjectFilesystem) {
-      setRequirementSaveMessage('当前运行在浏览器开发环境，暂不支持刷新本地系统索引。');
+      setRequirementSaveMessage('当前运行在浏览器开发环境，暂不支持刷新本地知识目录。');
       return;
     }
 
-    setRequirementSaveMessage('正在刷新系统索引...');
+    setRequirementSaveMessage('正在刷新原生 m-flow 知识目录...');
 
     try {
-      const ensuredIndex = await ensureProjectSystemIndex({
+      await ensureProjectKnowledgeDirectory(currentProject);
+      await refreshKnowledgeFilesystem();
+      const knowledgeDocs =
+        serverNotes.length > 0 ? projectKnowledgeNotesToRequirementDocs(serverNotes) : requirementDocs;
+      const rebuilt = await rebuildProjectMFlow({
         projectId: currentProject.id,
         projectName: currentProject.name,
         vaultPath: projectRootDir,
-        knowledgeRetrievalMethod: currentProject.knowledgeRetrievalMethod,
-        requirementDocs: projectedRequirementDocs,
+        requirementDocs: knowledgeDocs,
         generatedFiles,
+        writeArtifacts: true,
       });
-      await refreshKnowledgeFilesystem();
-      setRequirementSaveMessage(
-        ensuredIndex.refreshed
-          ? `系统索引已刷新：${ensuredIndex.index.manifest.sourceCount} 个来源，${ensuredIndex.index.manifest.chunkCount} 个索引块。`
-          : `系统索引已是最新状态：${ensuredIndex.index.manifest.sourceCount} 个来源，${ensuredIndex.index.manifest.chunkCount} 个索引块。`
-      );
+      setRequirementSaveMessage(formatMFlowRefreshSummary(rebuilt.state, rebuilt.refreshed));
     } catch (error) {
       setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
     }
-  }, [canUseProjectFilesystem, currentProject, generatedFiles, projectRootDir, projectedRequirementDocs, refreshKnowledgeFilesystem]);
-
-  const handleKnowledgeRetrievalMethodChange = useCallback(
-    async (knowledgeRetrievalMethod: 'm-flow' | 'llmwiki' | 'rag') => {
-      if (!currentProject) {
-        return;
-      }
-
-      updateProject({ knowledgeRetrievalMethod });
-
-      if (!canUseProjectFilesystem || !projectRootDir) {
-        setRequirementSaveMessage(`默认检索方式已切换为 ${knowledgeRetrievalMethod}。`);
-        return;
-      }
-
-      try {
-        await removeVaultKnowledgeOutputsExcept(projectRootDir, knowledgeRetrievalMethod);
-        await refreshKnowledgeFilesystem();
-        setRequirementSaveMessage(`默认检索方式已切换为 ${knowledgeRetrievalMethod}，已清理其他 outputs。`);
-      } catch (error) {
-        setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
-      }
-    },
-    [canUseProjectFilesystem, currentProject, projectRootDir, refreshKnowledgeFilesystem, updateProject]
-  );
+  }, [
+    canUseProjectFilesystem,
+    currentProject,
+    generatedFiles,
+    projectRootDir,
+    refreshKnowledgeFilesystem,
+    requirementDocs,
+    serverNotes,
+  ]);
 
   useEffect(() => {
     if (!currentProject || !projectRootDir) {
@@ -2170,7 +2152,6 @@ export const ProductWorkbench = ({
         isSaving={isSavingRequirement}
         saveMessage={requirementSaveMessage || ''}
         canSave={canSaveRequirement}
-        knowledgeRetrievalMethod={currentProject.knowledgeRetrievalMethod}
         searchValue={knowledgeSearch}
         isSearching={isKnowledgeSearching}
         isSyncing={isKnowledgeSyncing}
@@ -2190,7 +2171,6 @@ export const ProductWorkbench = ({
         onRenameTreePath={handleRenameKnowledgeTreePath}
         onDeleteTreePaths={handleDeleteKnowledgeTreePaths}
         onRefreshFilesystem={handleRefreshKnowledgeFilesystem}
-        onKnowledgeRetrievalMethodChange={handleKnowledgeRetrievalMethodChange}
         onFilterChange={setKnowledgeFilter}
         onOpenAttachment={(attachmentPath) => {
           void handleOpenKnowledgeAttachment(attachmentPath);

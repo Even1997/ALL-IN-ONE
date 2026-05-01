@@ -7,11 +7,13 @@ description: Use when GoodNight should answer from the vault with RAG-style chun
 
 ## Overview
 
+This is a hidden compatibility skill in the current GoodNight product. Use it only when the user explicitly re-enables or asks for a conventional chunk-retrieval workflow.
+
 Use `rag` when the user wants conventional retrieval over chunked vault content with grounded evidence selection.
 
 ## Working Contract
 
-- Start from `.goodnight/base-index/` and the current `.goodnight/skills/rag/` state.
+- Start from `.goodnight/m-flow/`, the rendered `_goodnight/outputs/m-flow/` artifacts, and the current `.goodnight/skills/rag/` state when this legacy mode is explicitly enabled.
 - Split large source material into chunk-oriented retrieval units when needed.
 - Prefer explicit evidence and short retrieval chains over broad synthesis.
 - Write optional generated deliverables to `_goodnight/outputs/rag/`.

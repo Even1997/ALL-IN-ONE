@@ -1,5 +1,8 @@
 # GoodNight 原生 M-Flow 一次性切换设计
 
+> Status: Current architecture reference after the native `m-flow` cutover.
+> This document supersedes the earlier multi-engine / `base-index` design docs from 2026-04-29 and 2026-04-30.
+
 ## 结论
 
 GoodNight 的知识内核从当前“通用 system index + 多 skill 运行时”的结构，一次性切换为“单一原生 `m-flow` 内核”。
@@ -595,7 +598,7 @@ _goodnight/
 
 ## 代码结构重组
 
-现有 [systemIndex.ts](/c:/Users/Even/Documents/ALL-IN-ONE/src/modules/knowledge/systemIndex.ts) 不再继续扩展。
+旧 `systemIndex.ts` 已移除，不再继续扩展。
 
 建议拆分为新的 `m-flow` 内核目录：
 

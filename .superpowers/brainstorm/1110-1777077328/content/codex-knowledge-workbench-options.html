@@ -1,0 +1,181 @@
+<h2>知识型 Codex 工作台</h2>
+<p class="subtitle">目标：保留你现有的统一输入、右侧 AI 区和中央工作区，但让整体更像 Codex，且核心围绕知识吸收、冲突确认、临时内容和可选产物同步。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. 推荐：中央内容层 + 右侧 AI 侧栏</div>
+        <div class="mockup-body" style="padding:0;">
+          <div style="display:grid; grid-template-rows:42px 1fr 76px; min-height:290px; background:#0d1117;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:0 14px; border-bottom:1px solid rgba(255,255,255,.08); color:#e6edf3; font-size:12px;">
+              <div style="display:flex; gap:10px; align-items:center;">
+                <strong style="font-size:13px;">Project</strong>
+                <span style="opacity:.65;">知识工作台</span>
+              </div>
+              <div style="display:flex; gap:8px; opacity:.7;">
+                <span>搜索</span>
+                <span>历史</span>
+                <span>设置</span>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1.65fr .75fr; min-height:0;">
+              <div style="padding:14px; border-right:1px solid rgba(255,255,255,.08); display:grid; grid-template-rows:auto auto 1fr; gap:10px;">
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <span style="padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.08); color:#e6edf3; font-size:11px;">正式内容</span>
+                  <span style="padding:4px 10px; border-radius:999px; background:rgba(110,168,254,.18); color:#cfe1ff; font-size:11px;">临时内容</span>
+                  <span style="padding:4px 10px; border-radius:999px; background:rgba(255,196,0,.16); color:#ffe28a; font-size:11px;">待确认 3</span>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
+                  <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px; color:#e6edf3;">
+                    <div style="font-size:11px; opacity:.6; margin-bottom:6px;">来源</div>
+                    <div style="font-size:12px;">原始文档 / 历史知识</div>
+                  </div>
+                  <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px; color:#e6edf3;">
+                    <div style="font-size:11px; opacity:.6; margin-bottom:6px;">真相层</div>
+                    <div style="font-size:12px;">事实 / 冲突 / 缺口</div>
+                  </div>
+                  <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px; color:#e6edf3;">
+                    <div style="font-size:11px; opacity:.6; margin-bottom:6px;">产物层</div>
+                    <div style="font-size:12px;">需求 / 原型 / 设计</div>
+                  </div>
+                </div>
+                <div style="border:1px solid rgba(255,255,255,.08); border-radius:14px; background:rgba(255,255,255,.03); padding:12px; color:#e6edf3; display:grid; gap:10px;">
+                  <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                    <strong style="font-size:13px;">临时内容：需求变更影响分析</strong>
+                    <span style="font-size:11px; opacity:.6;">会话内保留</span>
+                  </div>
+                  <div style="font-size:12px; line-height:1.6; opacity:.82;">
+                    新知识提到“会员页增加团队权限”，与当前项目事实中的“个人订阅模型”发生冲突。建议先确认业务模型，再决定是否同步更新需求文档和原型。
+                  </div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <span style="padding:6px 10px; border-radius:10px; background:rgba(255,255,255,.08); font-size:11px;">查看冲突</span>
+                    <span style="padding:6px 10px; border-radius:10px; background:rgba(255,255,255,.08); font-size:11px;">采纳为正式知识</span>
+                    <span style="padding:6px 10px; border-radius:10px; background:rgba(255,255,255,.05); font-size:11px;">丢弃临时内容</span>
+                  </div>
+                </div>
+              </div>
+              <div style="padding:14px; display:grid; grid-template-rows:auto auto auto 1fr; gap:10px; color:#e6edf3;">
+                <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px;">
+                  <div style="font-size:11px; opacity:.6; margin-bottom:6px;">AI 状态</div>
+                  <div style="font-size:12px;">m-flow 已加载，发现 3 条待吸收知识</div>
+                </div>
+                <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px;">
+                  <div style="font-size:11px; opacity:.6; margin-bottom:6px;">待处理</div>
+                  <div style="font-size:12px;">2 个冲突，1 个知识缺口</div>
+                </div>
+                <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px;">
+                  <div style="font-size:11px; opacity:.6; margin-bottom:6px;">下一步建议</div>
+                  <div style="font-size:12px;">先确认知识，再决定是否同步原型</div>
+                </div>
+                <div style="border:1px dashed rgba(255,255,255,.12); border-radius:12px; padding:10px; font-size:12px; opacity:.72;">
+                  右侧不做长聊天，而是像 Codex 那样更偏任务状态、摘要、确认入口。
+                </div>
+              </div>
+            </div>
+            <div style="padding:12px 14px; border-top:1px solid rgba(255,255,255,.08); display:grid; gap:8px;">
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <span style="padding:4px 9px; border-radius:999px; background:rgba(255,255,255,.08); color:#e6edf3; font-size:11px;">项目知识</span>
+                <span style="padding:4px 9px; border-radius:999px; background:rgba(255,255,255,.08); color:#e6edf3; font-size:11px;">需求草案</span>
+              </div>
+              <div style="display:grid; grid-template-columns:34px 1fr 40px; gap:10px; align-items:center;">
+                <div style="width:34px; height:34px; border-radius:10px; background:rgba(255,255,255,.08); color:#e6edf3; display:flex; align-items:center; justify-content:center;">+</div>
+                <div style="height:42px; border-radius:14px; background:rgba(255,255,255,.06); color:rgba(230,237,243,.72); display:flex; align-items:center; padding:0 12px; font-size:12px;">
+                  输入新知识，或让 AI 基于已确认知识做影响分析…
+                </div>
+                <div style="width:40px; height:40px; border-radius:12px; background:#2f81f7; color:white; display:flex; align-items:center; justify-content:center;">↑</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>内容优先，AI 辅助决策</h3>
+      <p>最接近你现在的结构：中间始终是内容层，右边是 AI 状态和确认区，底部输入像 Codex，但驱动的是知识整理和同步决策。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. 更强左侧知识树</div>
+        <div class="mockup-body" style="display:grid; grid-template-columns:.8fr 1.2fr .75fr; gap:0; min-height:290px; background:#0d1117;">
+          <div style="border-right:1px solid rgba(255,255,255,.08); padding:12px; color:#e6edf3; font-size:12px;">
+            <div style="opacity:.65; margin-bottom:10px;">知识目录</div>
+            <div style="line-height:1.8;">项目概览</div>
+            <div style="line-height:1.8;">需求事实</div>
+            <div style="line-height:1.8;">原型事实</div>
+            <div style="line-height:1.8;">代码事实</div>
+            <div style="line-height:1.8;">冲突队列</div>
+            <div style="line-height:1.8;">会话临时内容</div>
+          </div>
+          <div style="border-right:1px solid rgba(255,255,255,.08); padding:12px; color:#e6edf3;">
+            <div style="font-size:12px; opacity:.65; margin-bottom:10px;">主内容</div>
+            <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px; min-height:220px; font-size:12px; line-height:1.6;">
+              更像“知识库工作台”，导航能力更强，但会比 Codex 更像后台系统。
+            </div>
+          </div>
+          <div style="padding:12px; color:#e6edf3;">
+            <div style="font-size:12px; opacity:.65; margin-bottom:10px;">AI</div>
+            <div style="display:grid; gap:8px;">
+              <div style="border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px; font-size:12px;">待确认 3</div>
+              <div style="border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px; font-size:12px;">建议动作</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>导航更强，但产品味更重</h3>
+      <p>适合知识库操作很多的情况，不过会弱化 Codex 那种“输入驱动、内容聚焦”的感觉。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. 更像纯 Codex 的极简版本</div>
+        <div class="mockup-body" style="display:grid; grid-template-columns:1fr .62fr; min-height:290px; background:#0d1117;">
+          <div style="border-right:1px solid rgba(255,255,255,.08); padding:12px; color:#e6edf3;">
+            <div style="font-size:12px; opacity:.65; margin-bottom:10px;">主内容层</div>
+            <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px; min-height:220px; font-size:12px; line-height:1.6;">
+              页面几乎只剩一个大内容区和底部输入，知识来源、冲突、版本这些都尽量藏进二级入口。
+            </div>
+          </div>
+          <div style="padding:12px; color:#e6edf3;">
+            <div style="font-size:12px; opacity:.65; margin-bottom:10px;">AI 摘要</div>
+            <div style="display:grid; gap:8px;">
+              <div style="border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px; font-size:12px;">本轮输入摘要</div>
+              <div style="border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px; font-size:12px;">最新建议</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>最像 Codex，但知识可见性偏弱</h3>
+      <p>很干净，但对你这种“项目真相管理”产品来说，原始来源、冲突、版本会被藏得太深。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>我的推荐</h4>
+      <ul>
+        <li>A 最平衡：保留 Codex 的输入重心，同时让知识真相层和临时内容成为主角。</li>
+        <li>它最容易复用你现在已经存在的统一输入、右侧 AI 区和中央工作区。</li>
+        <li>也最符合你刚才定下来的“先更新知识，再决定是否同步原型和设计”。</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>需要注意</h4>
+      <ul>
+        <li>A 的关键不是加更多面板，而是让中央区内部把正式内容和临时内容区分清楚。</li>
+        <li>如果右侧又变成长聊天历史，就会重新偏离你现在想做的方向。</li>
+      </ul>
+    </div>
+  </div>
+</div>

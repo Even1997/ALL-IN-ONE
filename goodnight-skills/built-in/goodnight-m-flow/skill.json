@@ -16,19 +16,20 @@
     "knowledgeMethod": "m-flow",
     "contextSection": "m_flow_paths",
     "visibleOutputs": [
+      "_goodnight/outputs/m-flow/index.md",
       "_goodnight/outputs/m-flow/episodes/",
-      "_goodnight/outputs/m-flow/facets/",
-      "_goodnight/outputs/m-flow/facet-points/",
-      "_goodnight/outputs/m-flow/entities/",
-      "_goodnight/outputs/m-flow/paths/",
-      "_goodnight/outputs/m-flow/index.md"
+      "_goodnight/outputs/m-flow/paths/"
     ],
     "stateOutputs": [
-      ".goodnight/skills/m-flow/graph.md",
-      ".goodnight/skills/m-flow/anchors.md",
-      ".goodnight/skills/m-flow/path-index.md"
+      ".goodnight/m-flow/manifest.json",
+      ".goodnight/m-flow/sources.json",
+      ".goodnight/m-flow/episodes.json",
+      ".goodnight/m-flow/facets.json",
+      ".goodnight/m-flow/facet-points.json",
+      ".goodnight/m-flow/entities.json",
+      ".goodnight/m-flow/edges.json"
     ],
-    "promptPolicy": "M-Flow runtime policy: start from Markdown anchors, facets, facet points, and entities, then answer through the most relevant evidence path. Preserve why the evidence is related before citing isolated chunks."
+    "promptPolicy": "M-Flow runtime policy: start from native m-flow state plus rendered path artifacts, then answer through the lowest-cost evidence path. Preserve why the evidence is related before citing isolated facts."
   },
   "entry": {
     "prompt": "SKILL.md"

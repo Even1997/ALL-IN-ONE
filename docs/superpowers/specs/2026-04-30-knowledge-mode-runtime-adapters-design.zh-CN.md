@@ -1,5 +1,25 @@
 # GoodNight 知识模式运行时适配设计
 
+> Status: Superseded by `docs/superpowers/specs/2026-05-01-goodnight-native-m-flow-cutover-design.zh-CN.md`.
+> This document describes the pre-cutover multi-runtime adapter architecture, and should not be used as the current architecture reference.
+
+## 替代说明
+
+这份设计描述的是 cutover 之前的过渡阶段思路：在保留多知识模式入口的前提下，为 `m-flow`、`llmwiki`、`rag` 分别建立 runtime adapter。
+
+这个方向后来被主动放弃，原因是：
+
+- 它仍然要求用户理解并切换多种知识模式
+- 它继续把 `.goodnight/base-index/` 当作共享底座
+- 它会把 GoodNight 锁定在“统一索引 + 多 adapter”的架构，而不是原生单核 `m-flow`
+
+当前实现和后续设计应以 2026-05-01 的 cutover 文档为准：
+
+- 不再保留 `KnowledgeRetrievalMethod` 作为产品主心智
+- 不再继续扩展多 adapter runtime
+- 原生 `m-flow` 直接负责 ingest、graph build、anchor search、bundle scoring、artifact rendering
+- 这份文档中的多 runtime 分流、旧目录约定、`base-index` 回落策略都应视为历史方案
+
 ## 背景
 
 当前项目已经在项目配置里提供了三种知识检索模式：

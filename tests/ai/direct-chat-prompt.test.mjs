@@ -5,87 +5,46 @@ import { buildDirectChatPrompt } from '../../src/modules/ai/chat/directChatPromp
 
 test('buildDirectChatPrompt keeps default chat free-form when no explicit skill is provided', () => {
   const result = buildDirectChatPrompt({
-    userInput: '帮我整理当前知识',
+    userInput: 'Help me organize the current knowledge',
     currentProjectName: 'PM Workspace',
     contextWindowTokens: 200000,
     skillIntent: null,
-    knowledgeSelection: {
-      currentFile: null,
-      relatedFiles: [],
-    },
   });
 
   assert.equal(result.skillLabel, null);
-  assert.match(result.systemPrompt, /自然对话式/);
-  assert.doesNotMatch(result.systemPrompt, /知识整理/);
-  assert.doesNotMatch(result.systemPrompt, /草图/);
-  assert.doesNotMatch(result.systemPrompt, /UI 设计/);
-  assert.doesNotMatch(result.prompt, /mode:/);
   assert.match(result.prompt, /user_request:/);
   assert.match(result.prompt, /context_window:\s*200000 tokens/);
+  assert.doesNotMatch(result.prompt, /mode:/);
+  assert.doesNotMatch(result.prompt, /knowledge_context:/);
 });
 
-test('buildDirectChatPrompt adds explicit skill focus and knowledge context', () => {
+test('buildDirectChatPrompt adds explicit skill focus without injecting knowledge file bodies', () => {
   const result = buildDirectChatPrompt({
-    userInput: '基于当前草图生成首页设计',
+    userInput: 'Generate a home page design from the current sketch',
     currentProjectName: 'PM Workspace',
     contextWindowTokens: 200000,
     skillIntent: {
       package: 'page',
       skill: 'ui-design',
-      cleanedInput: '基于当前草图生成首页设计',
-    },
-    knowledgeSelection: {
-      currentFile: {
-        id: 'doc-1',
-        title: '首页草图.md',
-        summary: '首页有头图、推荐区和底部导航',
-        content: '# 首页草图',
-        type: 'markdown',
-        source: 'requirement',
-        updatedAt: new Date().toISOString(),
-        status: 'ready',
-        kind: 'sketch',
-        tags: ['sketch'],
-        relatedIds: ['doc-2'],
-      },
-      relatedFiles: [
-        {
-          id: 'doc-2',
-          title: '视觉说明.md',
-          summary: '卡片轻量、留白充足',
-          content: '使用卡片和浅色背景',
-          type: 'markdown',
-          source: 'requirement',
-          updatedAt: new Date().toISOString(),
-          status: 'ready',
-          kind: 'note',
-          tags: ['style'],
-          relatedIds: [],
-        },
-      ],
+      cleanedInput: 'Generate a home page design from the current sketch',
+      token: '@UI',
     },
   });
 
   assert.equal(result.skillLabel, 'UI 设计');
   assert.match(result.prompt, /mode: UI 设计/);
-  assert.match(result.prompt, /current_file/);
-  assert.match(result.prompt, /related_files/);
-  assert.match(result.prompt, /首页草图\.md/);
-  assert.match(result.systemPrompt, /@技能/);
   assert.match(result.prompt, /context_window:\s*200000 tokens/);
+  assert.doesNotMatch(result.prompt, /knowledge_context:/);
+  assert.doesNotMatch(result.prompt, /current_file/);
+  assert.doesNotMatch(result.prompt, /related_files/);
 });
 
 test('buildDirectChatPrompt no longer injects agent plan metadata', () => {
   const result = buildDirectChatPrompt({
-    userInput: '整理需求',
+    userInput: 'Organize requirements',
     currentProjectName: 'PM Workspace',
     contextWindowTokens: 200000,
     skillIntent: null,
-    knowledgeSelection: {
-      currentFile: null,
-      relatedFiles: [],
-    },
   });
 
   assert.doesNotMatch(result.prompt, /agent_plan:/);
@@ -98,15 +57,11 @@ test('buildDirectChatPrompt includes reference index and expanded file sections'
     currentProjectName: 'PM Workspace',
     contextWindowTokens: 200000,
     skillIntent: null,
-    knowledgeSelection: {
-      currentFile: null,
-      relatedFiles: [],
-    },
     referenceContext: {
       indexSection: '- sketch/pages/login.md | Login Sketch | Login structure',
       expandedSection: 'file: sketch/pages/login.md\n# Login Sketch',
       policySection: 'Use structured wiki pages before raw source files.',
-      labels: ['已选文件 / 2'],
+      labels: ['selected files / 2'],
     },
   });
 
@@ -122,10 +77,6 @@ test('buildDirectChatPrompt includes recent conversation history before the new 
     currentProjectName: 'PM Workspace',
     contextWindowTokens: 200000,
     skillIntent: null,
-    knowledgeSelection: {
-      currentFile: null,
-      relatedFiles: [],
-    },
     conversationHistory: [
       { role: 'user', content: 'We decided GN Agent should keep context visible.' },
       { role: 'assistant', content: 'Yes, the Context lane should expose references and budget.' },

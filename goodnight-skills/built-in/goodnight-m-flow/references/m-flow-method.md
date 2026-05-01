@@ -43,13 +43,13 @@ Use high cost when the path is mostly keyword overlap, old generated output, vag
 ## Nodes
 - facet:architecture
 - facet-point:index rebuilds on manual refresh
-- entity:systemIndexProject.ts
+- entity:m-flow/runtime.ts
 - episode:project/indexing-notes.md
 
 ## Edges
 - facet:architecture -> facet-point:index rebuilds on manual refresh
-- facet-point:index rebuilds on manual refresh -> entity:systemIndexProject.ts
-- entity:systemIndexProject.ts -> episode:project/indexing-notes.md
+- facet-point:index rebuilds on manual refresh -> entity:m-flow/runtime.ts
+- entity:m-flow/runtime.ts -> episode:project/indexing-notes.md
 ```
 
 ## Answering Rules

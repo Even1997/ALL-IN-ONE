@@ -2450,6 +2450,17 @@ body.desktop-workbench-mode .chat-shell.is-collapsed {
   box-shadow: none;
 }
 
+.gn-agent-workspace .chat-shell-embedded .chat-shell-icon-btn.chat-skills-entry-btn {
+  border: 1px solid var(--gn-agent-border, rgba(255, 255, 255, 0.08));
+  background: var(--gn-agent-surface-alt, rgba(255, 255, 255, 0.045));
+  color: var(--gn-agent-text, #e9e9e6);
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-shell-icon-btn.chat-skills-entry-btn:hover {
+  border-color: var(--gn-agent-border-strong, rgba(255, 255, 255, 0.18));
+  background: color-mix(in srgb, var(--gn-agent-surface-alt, rgba(255, 255, 255, 0.045)) 88%, white 12%);
+}
+
 .gn-agent-workspace .chat-shell-embedded .chat-agent-lane-tabs {
   display: flex;
   gap: 14px;

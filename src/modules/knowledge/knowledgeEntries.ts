@@ -98,18 +98,11 @@ export const findKnowledgeEntry = (entries: KnowledgeEntry[], id: string | null)
 
 export const buildKnowledgeContextSelection = (
   entries: KnowledgeEntry[],
-  activeKnowledgeFileId: string | null,
-  selectedKnowledgeContextIds: string[]
+  activeKnowledgeFileId: string | null
 ) => {
-  const currentFile =
-    findKnowledgeEntry(entries, activeKnowledgeFileId) ||
-    findKnowledgeEntry(entries, selectedKnowledgeContextIds[0] || null) ||
-    null;
-
-  const selectedIds = new Set(selectedKnowledgeContextIds);
-  const relatedFiles = entries.filter(
-    (entry) => entry.id !== currentFile?.id && (selectedIds.has(entry.id) || currentFile?.relatedIds.includes(entry.id))
-  );
+  const currentFile = findKnowledgeEntry(entries, activeKnowledgeFileId) || null;
+  const relatedIds = new Set(currentFile?.relatedIds || []);
+  const relatedFiles = entries.filter((entry) => entry.id !== currentFile?.id && relatedIds.has(entry.id));
 
   return {
     currentFile,

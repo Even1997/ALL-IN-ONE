@@ -41,7 +41,7 @@ test('goodnight ships official built-in skill source files and seeds them from t
   }
 });
 
-test('knowledge built-in skills expose runtime adapter contracts', async () => {
+test('knowledge built-in skills keep m-flow visible and legacy methods hidden', async () => {
   const manifests = await Promise.all(
     ['goodnight-m-flow', 'goodnight-llmwiki', 'goodnight-rag'].map(async (skillId) =>
       JSON.parse(await readFile(path.join(builtinRoot, skillId, 'skill.json'), 'utf8'))
@@ -59,11 +59,19 @@ test('knowledge built-in skills expose runtime adapter contracts', async () => {
     assert.equal(manifest.runtime.promptPolicy.includes('runtime policy'), true);
   }
 
-  const markdownOnlyManifests = manifests.filter((manifest) => ['llmwiki', 'm-flow'].includes(manifest.runtime.knowledgeMethod));
-  for (const manifest of markdownOnlyManifests) {
-    assert.equal(manifest.runtime.stateOutputs.every((output) => output.endsWith('.md')), true);
-    assert.equal(manifest.runtime.visibleOutputs.some((output) => /\.(json|jsonl)$/i.test(output)), false);
-  }
+  const mFlowManifest = manifests.find((manifest) => manifest.runtime.knowledgeMethod === 'm-flow');
+  const llmwikiManifest = manifests.find((manifest) => manifest.runtime.knowledgeMethod === 'llmwiki');
+  const ragManifest = manifests.find((manifest) => manifest.runtime.knowledgeMethod === 'rag');
+
+  assert.equal(mFlowManifest.install.visibleByDefault, true);
+  assert.equal(mFlowManifest.install.enabledByDefault, true);
+  assert.equal(mFlowManifest.runtime.stateOutputs.every((output) => output.endsWith('.json')), true);
+  assert.equal(mFlowManifest.runtime.visibleOutputs.some((output) => /\.(json|jsonl)$/i.test(output)), false);
+
+  assert.equal(llmwikiManifest.install.visibleByDefault, false);
+  assert.equal(llmwikiManifest.install.enabledByDefault, false);
+  assert.equal(ragManifest.install.visibleByDefault, false);
+  assert.equal(ragManifest.install.enabledByDefault, false);
 });
 
 test('built-in skills encode goodnight boundary and output contracts', async () => {
@@ -85,7 +93,7 @@ test('built-in skills encode goodnight boundary and output contracts', async () 
   assert.match(workspace, /sketch\/pages/);
   assert.match(workspace, /design\/prototypes/);
   assert.match(workspace, /design\/styles/);
-  assert.match(workspace, /\.goodnight\/base-index/);
+  assert.match(workspace, /\.goodnight\/m-flow/);
   assert.match(workspace, /_goodnight\/outputs\/<skill>/i);
   assert.match(workspace, /vault/i);
 
@@ -123,14 +131,17 @@ test('built-in skills encode goodnight boundary and output contracts', async () 
 
   assert.match(mFlow, /m-flow/i);
   assert.match(mFlow, /manual refresh/i);
-  assert.match(mFlow, /\.goodnight\/base-index/i);
+  assert.match(mFlow, /\.goodnight\/m-flow/i);
+  assert.match(mFlow, /manifest\.json/i);
+  assert.match(mFlow, /episodes\.json/i);
   assert.match(mFlow, /FacetPoint/i);
   assert.match(mFlow, /inverted cone/i);
   assert.match(mFlow, /Bundle/i);
   assert.match(mFlow, /Path cost/i);
-  assert.match(mFlow, /not JSON/i);
+  assert.match(mFlow, /raw dumps/i);
 
   assert.match(llmwiki, /llmwiki/i);
+  assert.match(llmwiki, /hidden compatibility skill/i);
   assert.match(llmwiki, /Karpathy/i);
   assert.match(llmwiki, /Ingest/i);
   assert.match(llmwiki, /Compile/i);
@@ -139,6 +150,7 @@ test('built-in skills encode goodnight boundary and output contracts', async () 
   assert.match(llmwiki, /raw\/\*\.md/);
 
   assert.match(rag, /rag/i);
+  assert.match(rag, /hidden compatibility skill/i);
   assert.match(rag, /retrieval/i);
   assert.match(rag, /chunk/i);
 });
@@ -170,4 +182,20 @@ test('deep knowledge skills ship method references for progressive disclosure', 
   assert.match(articleTemplate, /> Raw:/);
   assert.match(mFlowReference, /Graph Vocabulary/i);
   assert.match(mFlowReference, /Bundle Search/i);
+});
+
+test('repo vendors the reviewed upstream m-flow reference tree', async () => {
+  const upstreamRoot = path.resolve(testDir, '../../docs/references/upstream/m-flow');
+
+  await access(path.join(upstreamRoot, 'README.md'));
+  await access(path.join(upstreamRoot, 'docs', 'RETRIEVAL_ARCHITECTURE.md'));
+  await access(path.join(upstreamRoot, 'm_flow', 'core', 'domain', 'models', 'Episode.py'));
+  await access(path.join(upstreamRoot, 'm_flow', 'core', 'domain', 'models', 'Facet.py'));
+  await access(path.join(upstreamRoot, 'm_flow', 'core', 'domain', 'models', 'FacetPoint.py'));
+  await access(path.join(upstreamRoot, 'm_flow', 'core', 'domain', 'models', 'Entity.py'));
+  await access(path.join(upstreamRoot, 'm_flow', 'knowledge', 'graph_ops', 'm_flow_graph', 'MemoryGraphElements.py'));
+  await access(path.join(upstreamRoot, 'm_flow', 'retrieval', 'episodic', 'bundle_scorer.py'));
+  await access(path.join(upstreamRoot, 'm_flow', 'memory', 'episodic', 'edge_text_generators.py'));
+  await access(path.join(upstreamRoot, 'm_flow', 'memory', 'episodic', 'episode_builder', 'step35_node_edge_creation.py'));
+  await access(path.join(upstreamRoot, 'SOURCE.md'));
 });

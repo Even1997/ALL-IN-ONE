@@ -9,7 +9,6 @@ import {
   isMobileAppType,
   toWireframeModuleDrafts,
 } from '../../../utils/wireframe';
-import { buildKnowledgeContextSections } from '../../knowledge/knowledgeContext';
 import { buildKnowledgeContextSelection, buildKnowledgeEntries } from '../../knowledge/knowledgeEntries';
 import {
   AIExperienceMode,
@@ -1172,33 +1171,8 @@ const buildContextPrompt = (
   projectName: string,
   rawInput: string,
   docs: RequirementDoc[],
-  generatedFiles: GeneratedFile[],
-  activeKnowledgeFileId: string | null,
-  selectedKnowledgeContextIds: string[]
+  generatedFiles: GeneratedFile[]
 ) => {
-  const knowledgeEntries = buildKnowledgeEntries(docs, generatedFiles);
-  const knowledgeSelection = buildKnowledgeContextSelection(
-    knowledgeEntries,
-    activeKnowledgeFileId,
-    selectedKnowledgeContextIds
-  );
-  const knowledgeContext = buildKnowledgeContextSections({
-    currentFile: knowledgeSelection.currentFile
-      ? {
-          title: knowledgeSelection.currentFile.title,
-          type: knowledgeSelection.currentFile.type,
-          summary: knowledgeSelection.currentFile.summary,
-          content: knowledgeSelection.currentFile.content,
-        }
-      : null,
-    relatedFiles: knowledgeSelection.relatedFiles.map((file) => ({
-      title: file.title,
-      type: file.type,
-      summary: file.summary,
-      content: file.content,
-    })),
-  });
-
   return trimAndJoin(
     `project: ${projectName}`,
     `raw_requirement:\n${rawInput}`,
@@ -1206,8 +1180,7 @@ const buildContextPrompt = (
       ? `existing_requirement_docs:\n${docs
           .map((doc) => `title: ${doc.title}\nsummary: ${doc.summary}\ncontent:\n${doc.content}`)
           .join('\n\n---\n\n')}`
-      : undefined,
-    knowledgeContext ? `knowledge_context:\n${knowledgeContext}` : undefined
+      : undefined
   );
 };
 
@@ -1398,9 +1371,7 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
         project.name,
         projectStore.rawRequirementInput,
         projectStore.requirementDocs,
-        projectStore.generatedFiles,
-        projectStore.activeKnowledgeFileId,
-        projectStore.selectedKnowledgeContextIds
+        projectStore.generatedFiles
       );
       const requirementsResult = await executeWithAI(
         'requirements_spec_skill',
@@ -1459,9 +1430,7 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
           project.name,
           projectStore.rawRequirementInput,
           mergedDocs,
-          projectStore.generatedFiles,
-          projectStore.activeKnowledgeFileId,
-          projectStore.selectedKnowledgeContextIds
+          projectStore.generatedFiles
         ),
         `requirement_spec_markdown:\n${aiRequirementDoc.content}`
       );
@@ -1514,9 +1483,7 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
           project.name,
           projectStore.rawRequirementInput,
           projectStore.requirementDocs,
-          projectStore.generatedFiles,
-          projectStore.activeKnowledgeFileId,
-          projectStore.selectedKnowledgeContextIds
+          projectStore.generatedFiles
         ),
         `feature_tree_nodes:\n${flattenFeatureNames(currentFeatureTree.children).join('\n')}`
       );
@@ -1623,9 +1590,7 @@ ${buildWireframePageContext(nextPageStructure, currentFeatureTree)}`
           project.name,
           projectStore.rawRequirementInput,
           projectStore.requirementDocs,
-          projectStore.generatedFiles,
-          projectStore.activeKnowledgeFileId,
-          projectStore.selectedKnowledgeContextIds
+          projectStore.generatedFiles
         ),
         `style_profile: ${selected.name}`,
         `style_summary: ${selected.summary}`,
@@ -1637,14 +1602,13 @@ ${buildWireframePageContext(nextPageStructure, currentFeatureTree)}`
       const pages = collectDesignPages(projectStore.pageStructure);
       const knowledgeSelection = buildKnowledgeContextSelection(
         buildKnowledgeEntries(projectStore.requirementDocs, projectStore.generatedFiles),
-        projectStore.activeKnowledgeFileId,
-        projectStore.selectedKnowledgeContextIds
+        projectStore.activeKnowledgeFileId
       );
       const sourceRequirementId =
         knowledgeSelection.currentFile?.source === 'requirement' ? knowledgeSelection.currentFile.id : undefined;
-      const relatedRequirementIds = knowledgeSelection.relatedFiles
-        .filter((file) => file.source === 'requirement')
-        .map((file) => file.id);
+      const relatedRequirementIds = (knowledgeSelection.currentFile?.relatedIds || []).filter((id) =>
+        projectStore.requirementDocs.some((doc) => doc.id === id)
+      );
       const htmlPrototype = {
         prototype: {
           ...fallbackPrototype,

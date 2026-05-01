@@ -53,7 +53,7 @@ test('knowledge organize lane reshapes wiki drafts into index-style markdown whe
     executeText: async () =>
       JSON.stringify({
         'project-overview': { summary: 'Project overview', content: 'A concise overview of the project.' },
-        'feature-inventory': { summary: 'Feature inventory', content: '# 功能清单\n\n核心能力与信息架构说明。' },
+        'feature-inventory': { summary: 'Feature inventory', content: '# 鍔熻兘娓呭崟\n\n鏍稿績鑳藉姏涓庝俊鎭灦鏋勮鏄庛€?' },
         'page-inventory': { summary: 'Page inventory', content: 'Page inventory prose.' },
         terminology: { summary: 'Terminology', content: '# Terminology' },
         'open-questions': { summary: 'Open questions', content: '# Open questions' },
@@ -79,7 +79,7 @@ test('knowledge organize proposal builder converts derived docs into user-approv
 
   const proposal = buildKnowledgeOrganizeProposal({
     projectId: 'project-1',
-    sourceTitles: ['开放问题', '术语表'],
+    sourceTitles: ['寮€鏀鹃棶棰?', '鏈琛?'],
     docs,
   });
 
@@ -90,17 +90,16 @@ test('knowledge organize proposal builder converts derived docs into user-approv
     proposal.operations.every((operation) => operation.type === 'create_wiki' || operation.type === 'update_wiki'),
     true
   );
-  assert.deepEqual(proposal.operations[0].referenceTitles, ['开放问题', '术语表']);
+  assert.deepEqual(proposal.operations[0].referenceTitles, ['寮€鏀鹃棶棰?', '鏈琛?']);
 });
 
 test('knowledge organize chat flow now surfaces proposal-first review instead of immediate persistence', async () => {
   const chatSource = await readFile(aiChatPath, 'utf8');
 
-  assert.match(chatSource, /ensureProjectSystemIndex/);
-  assert.match(chatSource, /writeRuntimeArtifacts:\s*skillIntent\?\.package === 'knowledge-organize'/);
-  assert.match(chatSource, /正在刷新系统索引/);
-  assert.match(chatSource, /系统索引已刷新/);
-  assert.match(chatSource, /系统索引已是最新状态/);
+  assert.match(chatSource, /rebuildProjectMFlow/);
+  assert.match(chatSource, /writeArtifacts:\s*skillIntent\?\.package === 'knowledge-organize'/);
+  assert.match(chatSource, /正在刷新原生 m-flow/);
+  assert.match(chatSource, /formatMFlowRefreshSummary/);
 });
 
 test('knowledge organize lane prompt requires Obsidian-style internal links and external footnotes', async () => {

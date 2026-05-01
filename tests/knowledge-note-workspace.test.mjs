@@ -27,15 +27,15 @@ test('knowledge note workspace removes auxiliary context panels in minimalist mo
   assert.doesNotMatch(source, /onUseForDesign/);
 });
 
-test('knowledge note workspace keeps retrieval switching and manual indexing without wiki graph UI', async () => {
+test('knowledge note workspace keeps manual m-flow refresh without retrieval switching or wiki graph UI', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
   assert.match(source, /onOrganizeKnowledge: \(\) => void/);
-  assert.match(source, /knowledgeRetrievalMethod: KnowledgeRetrievalMethod/);
-  assert.match(source, /onKnowledgeRetrievalMethodChange: \(method: KnowledgeRetrievalMethod\) => void/);
   assert.match(source, /activeFilter: KnowledgeNoteFilter/);
   assert.match(source, /onFilterChange: \(filter: KnowledgeNoteFilter\) => void/);
-  assert.match(source, /刷新索引/);
+  assert.doesNotMatch(source, /knowledgeRetrievalMethod/);
+  assert.doesNotMatch(source, /onKnowledgeRetrievalMethodChange/);
+  assert.match(source, /刷新/);
   assert.doesNotMatch(source, /KnowledgeGraphCanvas/);
   assert.doesNotMatch(source, /onOpenGlobalWikiGraph/);
 });
@@ -119,5 +119,5 @@ test('knowledge note workspace previews unmapped markdown files inside the app i
   assert.match(source, /const isPreviewableKnowledgeFile = \(extension: string\)/);
   assert.match(source, /else if \(isPreviewableKnowledgeFile\(file\.extension\)\) {\s*void handleOpenRawMarkdownPreview\(file\);\s*} else {\s*onOpenAttachment\(file\.absolutePath\);\s*}/s);
   assert.match(source, /rawMarkdownPreview \? \(/);
-  assert.match(source, /从项目文件只读预览/);
+  assert.match(source, /Markdown 预览/);
 });

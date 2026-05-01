@@ -6,7 +6,7 @@ import {
   MIN_MODULE_HEIGHT,
   MIN_MODULE_WIDTH,
   toWireframeModuleDrafts,
-} from '../../utils/wireframe';
+} from '../../utils/wireframe.ts';
 
 const EMPTY_MODULE_NAME = '暂无模块';
 const EMPTY_MODULE_CONTENT = '无';

@@ -1,5 +1,30 @@
 # GoodNight Native M-Flow Cutover Implementation Plan
 
+> Status: Historical execution plan. The native `m-flow` cutover has been completed.
+> Note: transitional items mentioned below, such as `systemIndexProject.ts` and `tests/system-index-project.test.mjs`, were removed after the cutover landed.
+
+## Completion Status
+
+This plan has been executed and landed. Read the remaining sections as the implementation record, not as pending work.
+
+Completed work summary:
+
+- Task 1 completed: the single-engine native `m-flow` contract was locked with source-level tests.
+- Task 2 completed: the reviewed upstream `m-flow` reference tree was vendored under `docs/references/upstream/m-flow/`.
+- Task 3 completed: product state and UI were cut over from multi-method retrieval to a single native `m-flow` flow.
+- Task 4 completed: the native `m-flow` model and persistence layer were added.
+- Task 5 completed: ingest and graph construction modules were added.
+- Task 6 completed: anchor search and bundle scoring were added.
+- Task 7 completed: rebuild, prompt context, and artifact rendering were wired into the app runtime.
+- Task 8 completed: the old knowledge runtime files were removed.
+
+Post-plan cleanup that also landed:
+
+- The temporary `systemIndexProject.ts` compatibility shim was removed after callers were migrated.
+- The temporary `tests/system-index-project.test.mjs` source-level compatibility test was removed with the shim.
+- Built-in GoodNight skills were aligned so `m-flow` is the only visible default knowledge engine, while `llmwiki` and `rag` remain hidden compatibility skills.
+- Earlier 2026-04-29 and 2026-04-30 architecture specs were marked as superseded by the 2026-05-01 native `m-flow` cutover design.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the legacy shared `systemIndex` / multi-method knowledge runtime with a single native `m-flow` knowledge core that matches official M-flow’s model and retrieval philosophy.

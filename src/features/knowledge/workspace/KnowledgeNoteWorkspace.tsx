@@ -2,7 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMarkdownEditor';
-import type { KnowledgeRetrievalMethod } from '../../../types';
 import { getRelativePathFromRoot, normalizeRelativeFileSystemPath } from '../../../utils/fileSystemPaths';
 import type { KnowledgeDiskItem } from '../../../modules/knowledge/knowledgeTree';
 import type { KnowledgeNote } from '../model/knowledge';
@@ -26,7 +25,6 @@ type KnowledgeNoteWorkspaceProps = {
   isSaving: boolean;
   saveMessage: string;
   canSave: boolean;
-  knowledgeRetrievalMethod: KnowledgeRetrievalMethod;
   searchValue: string;
   isSearching: boolean;
   isSyncing: boolean;
@@ -44,19 +42,9 @@ type KnowledgeNoteWorkspaceProps = {
   onRenameTreePath: (relativePath: string, isFolder: boolean) => void;
   onDeleteTreePaths: (relativePaths: string[] | string, isFolder: boolean | null) => void;
   onRefreshFilesystem: () => void;
-  onKnowledgeRetrievalMethodChange: (method: KnowledgeRetrievalMethod) => void;
   onFilterChange: (filter: KnowledgeNoteFilter) => void;
   onOpenAttachment: (attachmentPath: string) => void;
 };
-
-const KNOWLEDGE_RETRIEVAL_OPTIONS: Array<{
-  value: KnowledgeRetrievalMethod;
-  label: string;
-}> = [
-  { value: 'm-flow', label: 'm-flow' },
-  { value: 'llmwiki', label: 'llmwiki' },
-  { value: 'rag', label: 'rag' },
-];
 
 const DOC_TYPE_META: Record<NonNullable<KnowledgeNote['docType']>, { badge: string; label: string }> = {
   'wiki-index': { badge: 'INDEX', label: '系统索引' },
@@ -454,7 +442,6 @@ export const KnowledgeNoteWorkspace = ({
   isSaving,
   saveMessage,
   canSave,
-  knowledgeRetrievalMethod,
   searchValue,
   isSearching,
   isSyncing,
@@ -472,7 +459,6 @@ export const KnowledgeNoteWorkspace = ({
   onRenameTreePath,
   onDeleteTreePaths,
   onRefreshFilesystem,
-  onKnowledgeRetrievalMethodChange,
   onFilterChange,
   onOpenAttachment,
 }: KnowledgeNoteWorkspaceProps) => {
@@ -865,25 +851,6 @@ export const KnowledgeNoteWorkspace = ({
     >
       <aside className="gn-note-rail">
         <div className="gn-note-search-row">
-          <label className="gn-note-inline-field">
-            <span>检索方式</span>
-            <select
-              className="product-input"
-              value={knowledgeRetrievalMethod}
-              onChange={(event) =>
-                onKnowledgeRetrievalMethodChange(event.target.value as KnowledgeRetrievalMethod)
-              }
-            >
-              {KNOWLEDGE_RETRIEVAL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="gn-note-search-row">
           <input
             className="product-input"
             type="search"
@@ -911,8 +878,8 @@ export const KnowledgeNoteWorkspace = ({
             className="doc-action-btn gn-note-icon-btn gn-note-wiki-btn"
             type="button"
             onClick={onOrganizeKnowledge}
-            title="刷新索引"
-            aria-label="刷新索引"
+            title="刷新 m-flow 知识目录"
+            aria-label="刷新 m-flow 知识目录"
           >
             <WikiGenerateIcon />
           </button>
@@ -1204,7 +1171,7 @@ export const KnowledgeNoteWorkspace = ({
             <h2>选择或新建一条知识笔记</h2>
             <div className="gn-note-empty-actions">
               <button className="doc-action-btn" type="button" onClick={onOrganizeKnowledge}>
-                刷新索引
+                刷新 m-flow 知识目录
               </button>
               <button className="doc-action-btn secondary" type="button" onClick={onCreateNote}>
                 新建笔记
