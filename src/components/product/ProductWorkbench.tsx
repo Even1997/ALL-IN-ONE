@@ -11,7 +11,7 @@ import { useAIChatStore } from '../../modules/ai/store/aiChatStore';
 import { useFeatureTreeStore } from '../../store/featureTreeStore';
 import { usePreviewStore } from '../../store/previewStore';
 import { useProjectStore } from '../../store/projectStore';
-import { AppType, CanvasElement, FeatureNode, FeatureTree, PageStructureNode } from '../../types';
+import { AppType, CanvasElement, FeatureNode, FeatureTree, PageStructureNode, type RequirementDoc } from '../../types';
 import { featureTreeToMarkdown } from '../../utils/featureTreeToMarkdown';
 import { useShallow } from 'zustand/react/shallow';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
@@ -215,6 +215,31 @@ const getRelativeDirectory = (value: string) => {
   const normalized = normalizeRelativePath(value);
   return normalized.includes('/') ? normalized.replace(/\/[^/]+$/, '') : '';
 };
+
+const areRequirementDocsEqual = (left: RequirementDoc[], right: RequirementDoc[]) =>
+  left.length === right.length &&
+  left.every((doc, index) => {
+    const other = right[index];
+    if (!other) {
+      return false;
+    }
+
+    return (
+      doc.id === other.id &&
+      doc.title === other.title &&
+      doc.content === other.content &&
+      doc.summary === other.summary &&
+      doc.filePath === other.filePath &&
+      doc.kind === other.kind &&
+      doc.docType === other.docType &&
+      doc.authorRole === other.authorRole &&
+      doc.sourceType === other.sourceType &&
+      doc.updatedAt === other.updatedAt &&
+      doc.status === other.status &&
+      (doc.tags || []).join('\u0000') === (other.tags || []).join('\u0000') &&
+      (doc.relatedIds || []).join('\u0000') === (other.relatedIds || []).join('\u0000')
+    );
+  });
 
 const getRelativePathWithinKnowledgeRoots = (
   filePath: string,
@@ -1336,8 +1361,12 @@ export const ProductWorkbench = ({
       return;
     }
 
+    if (areRequirementDocsEqual(requirementDocs, projectedRequirementDocs)) {
+      return;
+    }
+
     replaceRequirementDocs(projectedRequirementDocs);
-  }, [projectedRequirementDocs, replaceRequirementDocs, serverNotes.length]);
+  }, [projectedRequirementDocs, replaceRequirementDocs, requirementDocs, serverNotes.length]);
 
   useEffect(() => {
     if (!currentProject) {

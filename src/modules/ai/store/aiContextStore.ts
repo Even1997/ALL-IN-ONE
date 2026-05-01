@@ -38,61 +38,111 @@ const createProjectState = (): AIContextProjectState => ({
   referenceScopeMode: 'current',
 });
 
+const arraysEqual = (left: string[], right: string[]) =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
 export const useAIContextStore = create<AIContextStoreState>((set) => ({
   projects: {},
 
   setSceneContext: (projectId, updates) =>
-    set((state) => ({
-      projects: {
-        ...state.projects,
-        [projectId]: {
-          ...(state.projects[projectId] || createProjectState()),
-          ...updates,
+    set((state) => {
+      const current = state.projects[projectId] || createProjectState();
+      const next = {
+        ...current,
+        ...updates,
+      };
+
+      if (
+        current.scene === next.scene &&
+        current.selectedKnowledgeEntryId === next.selectedKnowledgeEntryId &&
+        current.selectedPageId === next.selectedPageId &&
+        current.knowledgeMode === next.knowledgeMode &&
+        current.selectedReferenceDirectory === next.selectedReferenceDirectory &&
+        current.referenceScopeMode === next.referenceScopeMode &&
+        arraysEqual(current.openedKnowledgeEntryIds, next.openedKnowledgeEntryIds) &&
+        arraysEqual(current.selectedReferenceFileIds, next.selectedReferenceFileIds)
+      ) {
+        return state;
+      }
+
+      return {
+        projects: {
+          ...state.projects,
+          [projectId]: next,
         },
-      },
-    })),
+      };
+    }),
 
   setKnowledgeMode: (projectId, mode) =>
-    set((state) => ({
-      projects: {
-        ...state.projects,
-        [projectId]: {
-          ...(state.projects[projectId] || createProjectState()),
-          knowledgeMode: mode,
+    set((state) => {
+      const current = state.projects[projectId] || createProjectState();
+      if (current.knowledgeMode === mode) {
+        return state;
+      }
+
+      return {
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...current,
+            knowledgeMode: mode,
+          },
         },
-      },
-    })),
+      };
+    }),
 
   setSelectedReferenceFileIds: (projectId, ids) =>
-    set((state) => ({
-      projects: {
-        ...state.projects,
-        [projectId]: {
-          ...(state.projects[projectId] || createProjectState()),
-          selectedReferenceFileIds: Array.from(new Set(ids.filter(Boolean))),
+    set((state) => {
+      const current = state.projects[projectId] || createProjectState();
+      const nextIds = Array.from(new Set(ids.filter(Boolean)));
+      if (arraysEqual(current.selectedReferenceFileIds, nextIds)) {
+        return state;
+      }
+
+      return {
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...current,
+            selectedReferenceFileIds: nextIds,
+          },
         },
-      },
-    })),
+      };
+    }),
 
   setSelectedReferenceDirectory: (projectId, path) =>
-    set((state) => ({
-      projects: {
-        ...state.projects,
-        [projectId]: {
-          ...(state.projects[projectId] || createProjectState()),
-          selectedReferenceDirectory: path,
+    set((state) => {
+      const current = state.projects[projectId] || createProjectState();
+      if (current.selectedReferenceDirectory === path) {
+        return state;
+      }
+
+      return {
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...current,
+            selectedReferenceDirectory: path,
+          },
         },
-      },
-    })),
+      };
+    }),
 
   setReferenceScopeMode: (projectId, mode) =>
-    set((state) => ({
-      projects: {
-        ...state.projects,
-        [projectId]: {
-          ...(state.projects[projectId] || createProjectState()),
-          referenceScopeMode: mode,
+    set((state) => {
+      const current = state.projects[projectId] || createProjectState();
+      if (current.referenceScopeMode === mode) {
+        return state;
+      }
+
+      return {
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...current,
+            referenceScopeMode: mode,
+          },
         },
-      },
-    })),
+      };
+    }),
 }));
