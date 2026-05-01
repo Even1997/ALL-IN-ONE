@@ -8,6 +8,7 @@ import type { AITextStreamEvent } from '../../modules/ai/core/AIService';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import type { ChatStructuredCard } from '../../modules/ai/chat/chatCards';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
+import { buildReferencePromptContext } from '../../modules/ai/chat/referencePromptContext';
 import {
   CHAT_AGENTS,
   type ChatAgentId,
@@ -17,6 +18,7 @@ import {
   buildChatContextSnapshot,
   collectDesignPages,
   getSelectedElementLabel,
+  resolveReferenceScopeSelection,
 } from '../../modules/ai/chat/chatContext';
 import { PROVIDER_PRESETS, type ProviderPreset } from '../../modules/ai/providerPresets';
 import type { ActivityEntry } from '../../modules/ai/skills/activityLog';
@@ -159,6 +161,15 @@ const normalizeErrorMessage = (error: unknown) => {
 };
 
 const READ_ONLY_CHAT_TOOLS = ['glob', 'grep', 'ls', 'view'];
+const normalizeReferencePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '');
+const summarizeReferenceContent = (value: string, fallback = '', maxLength = 120) => {
+  const normalized = (value || fallback).replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 3)}...` : normalized;
+};
 
 const createProjectFileProposalId = () => `file-proposal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -1043,21 +1054,49 @@ export const AIChat: React.FC<AIChatProps> = ({
       serverNotes.length > 0
         ? serverNotes.map((note) => ({
             id: note.id,
+            path: normalizeReferencePath(note.sourceUrl || `${note.title}.md`),
             title: note.title,
-            filePath: note.sourceUrl || '',
+            content: note.bodyMarkdown,
+            type: 'md' as const,
+            group:
+              note.kind === 'design' ? ('design' as const) : note.kind === 'sketch' ? ('sketch' as const) : ('project' as const),
+            source: 'user' as const,
+            updatedAt: note.updatedAt,
+            readableByAI: true,
+            summary: summarizeReferenceContent(note.matchSnippet || note.bodyMarkdown, note.title),
+            relatedIds: [],
+            tags: note.tags.slice(),
           }))
         : requirementDocs.map((doc) => ({
             id: doc.id,
+            path: normalizeReferencePath(doc.filePath || `${doc.title}.md`),
             title: doc.title,
-            filePath: doc.filePath || '',
+            content: doc.content,
+            type: 'md' as const,
+            group: doc.kind === 'sketch' ? ('sketch' as const) : ('project' as const),
+            source: doc.sourceType === 'ai' ? ('ai' as const) : ('user' as const),
+            updatedAt: doc.updatedAt,
+            readableByAI: true,
+            summary: doc.summary || summarizeReferenceContent(doc.content, doc.title),
+            relatedIds: (doc.relatedIds || []).slice(),
+            tags: (doc.tags || []).slice(),
           }));
 
     const generatedContextFiles = generatedFiles
       .filter((file) => file.language === 'html' || file.language === 'md')
       .map((file) => ({
         id: `generated:${file.path}`,
+        path: normalizeReferencePath(file.path),
         title: file.path.split('/').pop() || file.path,
-        filePath: file.path,
+        content: file.content,
+        type: file.language === 'html' ? ('html' as const) : ('md' as const),
+        group: file.category === 'design' ? ('design' as const) : ('project' as const),
+        source: 'ai' as const,
+        updatedAt: file.updatedAt,
+        readableByAI: true,
+        summary: file.summary || summarizeReferenceContent(file.content, file.path),
+        relatedIds: (file.relatedRequirementIds || []).slice(),
+        tags: (file.tags || []).slice(),
       }));
 
     return [...vaultFiles, ...generatedContextFiles];
@@ -1108,6 +1147,42 @@ export const AIChat: React.FC<AIChatProps> = ({
     aiContextState?.selectedReferenceFileIds,
     visibleContextFiles,
   ]);
+  const resolvedReferenceContextFiles = useMemo(() => {
+    const visibleFileById = new Map(visibleContextFiles.map((file) => [file.id, file]));
+    const scopedReferenceIds = resolveReferenceScopeSelection({
+      mode: aiContextState?.referenceScopeMode || 'current',
+      currentFileIds: visibleContextFileId ? [visibleContextFileId] : [],
+      openTabFileIds: aiContextState?.openedKnowledgeEntryIds || [],
+      directoryPath: aiContextState?.selectedReferenceDirectory || null,
+      allFiles: visibleContextFiles.map((file) => ({
+        id: file.id,
+        path: file.path,
+        readableByAI: file.readableByAI,
+      })),
+    });
+    const selectedReferenceIds = aiContextState?.selectedReferenceFileIds || [];
+
+    return Array.from(new Set([...selectedReferenceIds, ...scopedReferenceIds]))
+      .map((referenceId) => visibleFileById.get(referenceId) || null)
+      .filter((file): file is NonNullable<typeof file> => Boolean(file));
+  }, [
+    aiContextState?.openedKnowledgeEntryIds,
+    aiContextState?.referenceScopeMode,
+    aiContextState?.selectedReferenceDirectory,
+    aiContextState?.selectedReferenceFileIds,
+    visibleContextFileId,
+    visibleContextFiles,
+  ]);
+  const previewReferenceContext = useMemo(
+    () =>
+      resolvedReferenceContextFiles.length > 0
+        ? buildReferencePromptContext({
+            userInput: input.trim() || '继续当前对话',
+            selectedFiles: resolvedReferenceContextFiles,
+          })
+        : null,
+    [input, resolvedReferenceContextFiles]
+  );
 
   const currentContextUsage = useMemo(() => {
     const previewPrompt = buildDirectChatPrompt({
@@ -1116,6 +1191,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
       skillIntent: null,
       conversationHistory: activeSession?.messages || [],
+      referenceContext: previewReferenceContext,
       contextLabels: [
         selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
         contextSnapshot.primaryLabel,
@@ -1139,6 +1215,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     explicitReferenceLabels,
     input,
     activeSession?.messages,
+    previewReferenceContext,
     selectedRuntimeConfig,
   ]);
   const selectedAgent = useMemo(
@@ -1439,6 +1516,13 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       try {
+        const buildPromptReferenceContext = (userInput: string) =>
+          resolvedReferenceContextFiles.length > 0
+            ? buildReferencePromptContext({
+                userInput,
+                selectedFiles: resolvedReferenceContextFiles,
+              })
+            : null;
         const buildDirectChatRequest = () => {
           return buildDirectChatPrompt({
             userInput: cleanedContent,
@@ -1446,6 +1530,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
             skillIntent,
             conversationHistory: activeSession?.messages || [],
+            referenceContext: buildPromptReferenceContext(cleanedContent),
             contextLabels: [
               selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
               contextSnapshot.primaryLabel,
@@ -1769,6 +1854,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       isLoading,
       isRuntimeConfigured,
       providerExecutionMode,
+      resolvedReferenceContextFiles,
       renameSession,
       selectedChatAgentId,
       selectedRuntimeConfig,
