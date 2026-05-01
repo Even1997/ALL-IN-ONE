@@ -17,7 +17,9 @@ test('AIChat keeps icon-first shell controls and GN Agent embedded entry support
   assert.match(source, /chat-shell-icon-btn/);
   assert.match(source, /GNAgentSkillsEntryButton/);
   assert.match(source, /GNAgentSkillsPage/);
-  assert.match(source, /@skill/);
+  assert.match(source, /GN_AGENT_SUGGESTIONS/);
+  assert.match(source, /@索引/);
+  assert.match(source, /@需求/);
   assert.match(pieces, /chat-composer-gn-agent-entry/);
   assert.match(pieces, /chat-composer-embedded-toolbar/);
 });
@@ -45,4 +47,3 @@ test('AIChat stylesheet defines selected-file chip and menu styling', async () =
   assert.match(source, /\.chat-selected-reference-chips/);
   assert.match(source, /\.chat-reference-chip/);
 });
-

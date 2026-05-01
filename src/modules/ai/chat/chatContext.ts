@@ -2,7 +2,7 @@ import type { CanvasElement, PageStructureNode } from '../../../types';
 import type { KnowledgeEntry } from '../../knowledge/knowledgeEntries.ts';
 import type { ReferenceFile } from '../../knowledge/referenceFiles.ts';
 
-export type AIChatScene = 'knowledge' | 'page';
+export type AIChatScene = 'vault' | 'page';
 export type AIKnowledgeMode = 'off' | 'all';
 export type AIReferenceScopeMode = 'current' | 'directory' | 'open-tabs' | 'all';
 
@@ -13,29 +13,30 @@ type ResolveKnowledgeContextSelectionOptions = {
   activeKnowledgeFileId: string | null;
 };
 
+const buildCurrentFileLabel = (title: string | null) =>
+  title ? `Current file / ${title}` : 'Vault / Visible files';
+
 export const resolveKnowledgeContextSelection = ({
   scene,
   knowledgeMode,
   knowledgeEntries,
   activeKnowledgeFileId,
 }: ResolveKnowledgeContextSelectionOptions) => {
-  if (scene === 'knowledge') {
-    const currentFile = knowledgeEntries.find((entry) => entry.id === activeKnowledgeFileId) || null;
+  const currentFile = knowledgeEntries.find((entry) => entry.id === activeKnowledgeFileId) || null;
+
+  if (scene === 'vault') {
     return {
       currentFile,
       relatedFiles: knowledgeEntries.filter((entry) => entry.id !== currentFile?.id),
-      label: currentFile ? `知识文档 / ${currentFile.title}` : '知识库 / 按问题自动参考',
+      label: buildCurrentFileLabel(currentFile?.title || null),
     };
   }
 
   if (knowledgeMode === 'all') {
-    const currentFile = knowledgeEntries.find((entry) => entry.id === activeKnowledgeFileId) || null;
-    const relatedFiles = knowledgeEntries.filter((entry) => entry.id !== currentFile?.id);
-
     return {
       currentFile,
-      relatedFiles,
-      label: currentFile ? `知识文档 / ${currentFile.title}` : '知识库 / 按问题自动参考',
+      relatedFiles: knowledgeEntries.filter((entry) => entry.id !== currentFile?.id),
+      label: buildCurrentFileLabel(currentFile?.title || null),
     };
   }
 
@@ -69,22 +70,25 @@ export const buildChatContextSnapshot = (options: {
   scene: AIChatScene;
   pageTitle?: string | null;
   selectedElementLabel?: string | null;
-  knowledgeLabel?: string | null;
+  currentFileLabel?: string | null;
+  vaultLabel?: string | null;
 }) => {
-  const { scene, pageTitle, selectedElementLabel, knowledgeLabel } = options;
+  const { scene, pageTitle, selectedElementLabel, currentFileLabel, vaultLabel } = options;
 
-  if (scene === 'knowledge') {
+  if (scene === 'vault') {
     return {
-      primaryLabel: knowledgeLabel,
-      secondaryLabel: null,
-      knowledgeLabel: null,
+      primaryLabel: currentFileLabel || vaultLabel || null,
+      secondaryLabel: currentFileLabel && vaultLabel ? vaultLabel : null,
+      currentFileLabel: null,
+      vaultLabel: null,
     };
   }
 
   return {
-    primaryLabel: pageTitle ? `页面 / ${pageTitle}` : null,
-    secondaryLabel: selectedElementLabel ? `设计 / ${selectedElementLabel}` : null,
-    knowledgeLabel,
+    primaryLabel: pageTitle ? `Page / ${pageTitle}` : null,
+    secondaryLabel: selectedElementLabel ? `Canvas / ${selectedElementLabel}` : null,
+    currentFileLabel,
+    vaultLabel,
   };
 };
 
@@ -141,4 +145,3 @@ export const resolveReferenceScopeSelection = (options: {
 
   return Array.from(new Set(options.currentFileIds));
 };
-

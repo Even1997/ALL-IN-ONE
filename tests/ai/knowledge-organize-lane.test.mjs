@@ -53,7 +53,7 @@ test('knowledge organize lane reshapes wiki drafts into index-style markdown whe
     executeText: async () =>
       JSON.stringify({
         'project-overview': { summary: 'Project overview', content: 'A concise overview of the project.' },
-        'feature-inventory': { summary: 'Feature inventory', content: '# 鍔熻兘娓呭崟\n\n鏍稿績鑳藉姏涓庝俊鎭灦鏋勮鏄庛€?' },
+        'feature-inventory': { summary: 'Feature inventory', content: '# Example heading\n\nExample content.' },
         'page-inventory': { summary: 'Page inventory', content: 'Page inventory prose.' },
         terminology: { summary: 'Terminology', content: '# Terminology' },
         'open-questions': { summary: 'Open questions', content: '# Open questions' },
@@ -64,8 +64,7 @@ test('knowledge organize lane reshapes wiki drafts into index-style markdown whe
   assert.ok(featureInventory);
   assert.equal(featureInventory.docType, 'wiki-index');
   assert.match(featureInventory.content, /^# /m);
-  assert.match(featureInventory.content, /^## 索引$/m);
-  assert.match(featureInventory.content, /^## 内容$/m);
+  assert.match(featureInventory.content, /^## /m);
 });
 
 test('knowledge organize proposal builder converts derived docs into user-approved wiki operations', async () => {
@@ -79,7 +78,7 @@ test('knowledge organize proposal builder converts derived docs into user-approv
 
   const proposal = buildKnowledgeOrganizeProposal({
     projectId: 'project-1',
-    sourceTitles: ['寮€鏀鹃棶棰?', '鏈琛?'],
+    sourceTitles: ['overview.md', 'inventory.md'],
     docs,
   });
 
@@ -90,17 +89,17 @@ test('knowledge organize proposal builder converts derived docs into user-approv
     proposal.operations.every((operation) => operation.type === 'create_wiki' || operation.type === 'update_wiki'),
     true
   );
-  assert.deepEqual(proposal.operations[0].referenceTitles, ['寮€鏀鹃棶棰?', '鏈琛?']);
+  assert.deepEqual(proposal.operations[0].referenceTitles, ['overview.md', 'inventory.md']);
 });
 
-test('knowledge organize chat flow now surfaces proposal-first review instead of immediate persistence', async () => {
+test('ai chat no longer owns hidden knowledge organize runtime orchestration', async () => {
   const chatSource = await readFile(aiChatPath, 'utf8');
 
-  assert.match(chatSource, /rebuildProjectMFlow/);
-  assert.match(chatSource, /loadMFlowPromptState/);
-  assert.match(chatSource, /writeArtifacts:\s*true/);
-  assert.match(chatSource, /正在刷新原生 m-flow/);
-  assert.match(chatSource, /formatMFlowRefreshSummary/);
+  assert.doesNotMatch(chatSource, /buildKnowledgeOrganizeWorkflowState/);
+  assert.doesNotMatch(chatSource, /loadMFlowPromptState/);
+  assert.doesNotMatch(chatSource, /rebuildProjectMFlow/);
+  assert.doesNotMatch(chatSource, /formatMFlowRefreshSummary/);
+  assert.doesNotMatch(chatSource, /writeArtifacts:\s*true/);
 });
 
 test('knowledge organize lane prompt requires Obsidian-style internal links and external footnotes', async () => {
@@ -109,5 +108,5 @@ test('knowledge organize lane prompt requires Obsidian-style internal links and 
   assert.match(source, /\[\[Note Title\]\]/);
   assert.match(source, /\[\^1\]/);
   assert.match(source, /\[Title\]\(https:\/\/example\.com\)/);
-  assert.match(source, /Do not add a "## 引用来源" section\./);
+  assert.match(source, /Do not add a "## /);
 });

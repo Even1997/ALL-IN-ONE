@@ -9,7 +9,7 @@ const chatPath = path.resolve(testDir, '../../src/components/workspace/AIChat.ts
 const messageListPath = path.resolve(testDir, '../../src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx');
 const cssPath = path.resolve(testDir, '../../src/components/workspace/AIChat.css');
 
-test('AIChat renders structured knowledge-truth cards inside the normal chat flow', async () => {
+test('AIChat keeps generic structured cards without temporary artifact orchestration', async () => {
   const chatSource = await readFile(chatPath, 'utf8');
   const messageListSource = await readFile(messageListPath, 'utf8');
   const css = await readFile(cssPath, 'utf8');
@@ -17,9 +17,10 @@ test('AIChat renders structured knowledge-truth cards inside the normal chat flo
   assert.match(messageListSource, /renderStructuredCards/);
   assert.match(chatSource, /chat-structured-card/);
   assert.match(chatSource, /KnowledgeTruthStructuredCards/);
-  assert.match(chatSource, /temporary-content/);
-  assert.match(chatSource, /setActiveArtifact/);
   assert.match(chatSource, /chat-next-step-action/);
+  assert.doesNotMatch(chatSource, /syncTemporaryArtifactCardStatuses/);
+  assert.doesNotMatch(chatSource, /setActiveArtifact/);
+  assert.doesNotMatch(chatSource, /buildTemporaryArtifactPromotionProposal/);
   assert.match(css, /\.chat-structured-card/);
   assert.match(css, /\.chat-structured-card\.conflict/);
   assert.match(css, /\.chat-next-step-action/);

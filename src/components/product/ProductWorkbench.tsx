@@ -1359,7 +1359,7 @@ export const ProductWorkbench = ({
     }
 
     setSceneContext(currentProject.id, {
-      scene: sidebarTab === 'knowledge' ? 'knowledge' : 'page',
+      scene: sidebarTab === 'knowledge' ? 'vault' : 'page',
       selectedKnowledgeEntryId: selectedServerNote?.id || null,
       selectedPageId: selectedPage?.id || null,
       openedKnowledgeEntryIds: openKnowledgeTabIds,

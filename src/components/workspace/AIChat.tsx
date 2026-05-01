@@ -35,21 +35,6 @@ import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
-import { executeKnowledgeProposal } from '../../modules/ai/knowledge/executeKnowledgeProposal';
-import {
-  buildKnowledgeOrganizeWorkflowState,
-} from '../../modules/ai/knowledge/knowledgeOrganizeState';
-import { runChangeSyncLane } from '../../modules/ai/knowledge/runChangeSyncLane';
-import {
-  buildSessionArtifactsFromStoredMessages,
-  buildChangeSyncSessionArtifacts,
-  buildChangeSyncTemporaryReply,
-  buildTemporaryArtifactPromotionProposal,
-  collectPendingTemporaryArtifactIds,
-  findExistingTemporaryArtifactProposal,
-  findTemporaryArtifactForProposal,
-  syncTemporaryArtifactCardStatuses,
-} from '../../modules/ai/knowledge/temporaryKnowledgeFlow.ts';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
   detectProjectFileReadIntent,
@@ -61,29 +46,11 @@ import {
   resolveProjectOperationPath,
   isSupportedProjectTextFilePath,
 } from '../../modules/ai/chat/projectFileOperations';
-import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
-import {
-  buildMFlowPromptContext,
-  formatMFlowRefreshSummary,
-  loadMFlowPromptState,
-  rebuildProjectMFlow,
-} from '../../modules/knowledge/m-flow/runtime.ts';
-import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
-import type { KnowledgeProposal } from '../../features/knowledge/model/knowledgeProposal';
-import { useKnowledgeProposalStore } from '../../features/knowledge/store/knowledgeProposalStore';
-import {
-  type KnowledgeSessionArtifact,
-  useKnowledgeSessionArtifactsStore,
-} from '../../features/knowledge/store/knowledgeSessionArtifactsStore';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
-import { buildKnowledgeNoteRootMirrorPath } from '../../features/knowledge/workspace/knowledgeNoteFilePaths';
-import { serializeKnowledgeNoteMarkdown } from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import {
   getProjectDir,
-  getProjectKnowledgeRootDir,
-  isTauriRuntimeAvailable,
   readProjectTextFile,
   writeProjectTextFile,
 } from '../../utils/projectPersistence';
@@ -157,7 +124,6 @@ type TauriToolResponse = {
 
 const EMPTY_MESSAGES: StoredChatMessage[] = [];
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
-const EMPTY_SESSION_ARTIFACTS: KnowledgeSessionArtifact[] = [];
 
 const GNAgentSkillsEntryButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <button
@@ -259,34 +225,6 @@ const projectFileProposalStatusLabel: Record<ProjectFileProposal['status'], stri
   failed: '执行失败',
 };
 
-const resolveKnowledgeNoteMirrorPath = async ({
-  projectKnowledgeRootDir,
-  title,
-  content,
-  existingFilePath,
-}: {
-  projectKnowledgeRootDir: string;
-  title: string;
-  content: string;
-  existingFilePath?: string;
-}) => {
-  if (existingFilePath) {
-    await writeProjectTextFile(existingFilePath, content);
-    return existingFilePath;
-  }
-
-  for (let suffix = 1; suffix <= 50; suffix += 1) {
-    const candidatePath = buildKnowledgeNoteRootMirrorPath(projectKnowledgeRootDir, title, suffix);
-    const existingContent = await readProjectTextFile(candidatePath);
-    if (existingContent === null || existingContent === content) {
-      await writeProjectTextFile(candidatePath, content);
-      return candidatePath;
-    }
-  }
-
-  throw new Error('无法在项目知识根目录创建笔记镜像，请先整理重名文件。');
-};
-
 const createWelcomeSession = (projectId: string, projectName?: string | null) => {
   const session = createChatSession(projectId, '新对话');
   return {
@@ -311,65 +249,11 @@ const buildSessionPreview = (content: string) => {
 
 const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const KNOWLEDGE_WORKSPACE_FOCUS_EVENT = 'goodnight:focus-knowledge-pane';
-const RUNNABLE_KNOWLEDGE_PROPOSAL_OPERATION_TYPES = new Set([
-  'create_note',
-  'update_note',
-  'create_wiki',
-  'update_wiki',
-  'merge_candidate',
-  'archive_candidate',
-  'mark_stale',
-]);
-
-export function getRunnableKnowledgeProposalOperationIds(proposal: Pick<KnowledgeProposal, 'operations'>): string[] {
-  return proposal.operations
-    .filter((operation) => {
-      if (!operation.selected || !RUNNABLE_KNOWLEDGE_PROPOSAL_OPERATION_TYPES.has(operation.type)) {
-        return false;
-      }
-
-      return operation.type === 'create_note' || operation.type === 'create_wiki' || Boolean(operation.targetId);
-    })
-    .map((operation) => operation.id);
-}
-
-export function hasRunnableKnowledgeProposalOperations(proposal: Pick<KnowledgeProposal, 'operations'>): boolean {
-  return getRunnableKnowledgeProposalOperationIds(proposal).length > 0;
-}
-
-export function approveAllKnowledgeProposalOperations(proposal: KnowledgeProposal): KnowledgeProposal {
-  return {
-    ...proposal,
-    operations: proposal.operations.map((operation) =>
-      operation.selected ? operation : { ...operation, selected: true }
-    ),
-  };
-}
-
-export function buildRecoverableKnowledgeProposalAfterFailure(
-  proposal: KnowledgeProposal,
-  succeededOperationIds: string[]
-): KnowledgeProposal {
-  const succeededOperationIdSet = new Set(succeededOperationIds);
-
-  return {
-    ...proposal,
-    status: 'pending',
-    operations: proposal.operations.map((operation) =>
-      succeededOperationIdSet.has(operation.id) ? { ...operation, selected: false } : operation
-    ),
-  };
-}
 
 const KnowledgeTruthStructuredCards: React.FC<{
   cards: ChatStructuredCard[];
-  canOpenArtifacts: boolean;
-  onOpenArtifact: (artifactId: string) => void;
-  onPromoteArtifact: (artifactId: string) => void;
-  pendingPromotionArtifactIds: Set<string>;
   onSelectNextStep: (prompt: string) => void;
-}> = ({ cards, canOpenArtifacts, onOpenArtifact, onPromoteArtifact, pendingPromotionArtifactIds, onSelectNextStep }) => (
+}> = ({ cards, onSelectNextStep }) => (
   <div className="chat-structured-cards">
     {cards.map((card, index) => {
       if (card.type === 'summary') {
@@ -397,22 +281,7 @@ const KnowledgeTruthStructuredCards: React.FC<{
           <section key={card.artifactId} className="chat-structured-card temporary-content">
             <strong>{card.title}</strong>
             <p>{card.summary}</p>
-            <div className="chat-next-step-actions">
-              <button type="button" onClick={() => onOpenArtifact(card.artifactId)} disabled={!canOpenArtifacts}>
-                在中间查看
-              </button>
-              <button
-                type="button"
-                onClick={() => onPromoteArtifact(card.artifactId)}
-                disabled={
-                  !canOpenArtifacts ||
-                  card.status !== 'session' ||
-                  pendingPromotionArtifactIds.has(card.artifactId)
-                }
-              >
-                采纳为正式内容
-              </button>
-            </div>
+            <pre>{card.body}</pre>
           </section>
         );
       }
@@ -701,7 +570,6 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mFlowPromptStateRef = useRef<Awaited<ReturnType<typeof loadMFlowPromptState>>['state'] | null>(null);
   const streamingDraftBufferRef = useRef<Record<string, string>>({});
   const streamingFlushFrameRef = useRef<number | null>(null);
 
@@ -734,7 +602,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     activeKnowledgeFileId,
     generatedFiles,
     pageStructure,
-    replaceRequirementDocs,
     setRawRequirementInput,
   } = useProjectStore(
     useShallow((state) => ({
@@ -743,37 +610,15 @@ export const AIChat: React.FC<AIChatProps> = ({
       activeKnowledgeFileId: state.activeKnowledgeFileId,
       generatedFiles: state.generatedFiles,
       pageStructure: state.pageStructure,
-      replaceRequirementDocs: state.replaceRequirementDocs,
       setRawRequirementInput: state.setRawRequirementInput,
     }))
   );
-  const projectKnowledgeRootDir = useMemo(
-    () => (currentProject?.vaultPath ? getProjectKnowledgeRootDir(currentProject) : ''),
-    [currentProject]
-  );
+  const projectRoot = currentProject?.vaultPath || '';
   const previewElements = usePreviewStore((state) => state.elements);
   const selectedElementId = usePreviewStore((state) => state.selectedElementId);
   const serverNotes = useKnowledgeStore((state) => state.notes);
-  const createProjectNote = useKnowledgeStore((state) => state.createProjectNote);
-  const loadKnowledgeNotes = useKnowledgeStore((state) => state.loadNotes);
-  const updateProjectNote = useKnowledgeStore((state) => state.updateProjectNote);
-  const setActiveArtifact = useKnowledgeSessionArtifactsStore((state) => state.setActiveArtifact);
-  const setArtifactStatus = useKnowledgeSessionArtifactsStore((state) => state.setArtifactStatus);
   const aiContextState = useAIContextStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
-  );
-  const {
-    dismissProposal: dismissStoredKnowledgeProposal,
-    setOperationSelected,
-    setProposalStatus,
-    upsertProposal,
-  } = useKnowledgeProposalStore(
-    useShallow((state) => ({
-      dismissProposal: state.dismissProposal,
-      setOperationSelected: state.setOperationSelected,
-      setProposalStatus: state.setProposalStatus,
-      upsertProposal: state.upsertProposal,
-    }))
   );
 
   useEffect(() => {
@@ -796,10 +641,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const projectChatState = useAIChatStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
   );
-  const workflowProjectState = useAIWorkflowStore((state) =>
-    currentProject ? state.projects[currentProject.id] : undefined
-  );
-  const setKnowledgeOrganizeState = useAIWorkflowStore((state) => state.setKnowledgeOrganizeState);
   const {
     ensureProjectState,
     upsertSession,
@@ -843,383 +684,20 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const messages = activeSession?.messages || EMPTY_MESSAGES;
   const activityEntries = projectChatState?.activityEntries || EMPTY_ACTIVITY_ENTRIES;
-  const sessionArtifacts = useKnowledgeSessionArtifactsStore((state) =>
-    currentProject && activeSessionId
-      ? state.artifactsBySession[`${currentProject.id}:${activeSessionId}`] || EMPTY_SESSION_ARTIFACTS
-      : EMPTY_SESSION_ARTIFACTS
-  );
-
-  useEffect(() => {
-    if (!currentProject?.id || !activeSessionId || !activeSession) {
-      return;
-    }
-
-    const artifactStore = useKnowledgeSessionArtifactsStore.getState();
-    const rehydratedArtifacts = buildSessionArtifactsFromStoredMessages({
-      projectId: currentProject.id,
-      sessionId: activeSessionId,
-      messages,
-    });
-
-    if (rehydratedArtifacts.length === 0) {
-      artifactStore.clearSessionArtifacts(currentProject.id, activeSessionId);
-      return;
-    }
-
-    for (const artifact of rehydratedArtifacts) {
-      artifactStore.upsertArtifact(artifact);
-    }
-  }, [activeSessionId, currentProject?.id, messages]);
-
-  const pendingPromotionArtifactIds = useMemo(() => {
-    return collectPendingTemporaryArtifactIds(
-      sessionArtifacts,
-      messages.flatMap((message) => (message.knowledgeProposal ? [message.knowledgeProposal] : []))
-    );
-  }, [messages, sessionArtifacts]);
-
-  const toggleProposalOperation = useCallback(
-    (messageId: string, operationId: string, selected: boolean) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => {
-        if (!message.knowledgeProposal) {
-          return message;
-        }
-
-        const nextProposal = {
-          ...message.knowledgeProposal,
-          operations: message.knowledgeProposal.operations.map((operation) =>
-            operation.id === operationId ? { ...operation, selected } : operation
-          ),
-        };
-        setOperationSelected(currentProject.id, nextProposal.id, operationId, selected);
-        return { ...message, knowledgeProposal: nextProposal };
-      });
-    },
-    [activeSessionId, currentProject, setOperationSelected, updateMessage]
-  );
-
-  const dismissKnowledgeProposal = useCallback(
-    (messageId: string) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => {
-        if (!message.knowledgeProposal) {
-          return message;
-        }
-
-        dismissStoredKnowledgeProposal(currentProject.id, message.knowledgeProposal.id);
-        return {
-          ...message,
-          knowledgeProposal: {
-            ...message.knowledgeProposal,
-            status: 'dismissed',
-          },
-        };
-      });
-    },
-    [activeSessionId, currentProject, dismissStoredKnowledgeProposal, updateMessage]
-  );
-
-  const handleExecuteKnowledgeProposal = useCallback(
-    async (messageId: string, proposal: KnowledgeProposal) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      const runnableOperationIds = getRunnableKnowledgeProposalOperationIds(proposal);
-      if (runnableOperationIds.length === 0) {
-        return;
-      }
-
-      const succeededOperationIds: string[] = [];
-      let runnableOperationIndex = 0;
-      const recordSuccessfulOperation = () => {
-        const operationId = runnableOperationIds[runnableOperationIndex];
-        if (!operationId) {
-          return;
-        }
-
-        succeededOperationIds.push(operationId);
-        runnableOperationIndex += 1;
-      };
-
-      setProposalStatus(currentProject.id, proposal.id, 'executing');
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        knowledgeProposal: message.knowledgeProposal
-          ? {
-              ...message.knowledgeProposal,
-              status: 'executing',
-            }
-          : message.knowledgeProposal,
-      }));
-
-      try {
-        await executeKnowledgeProposal(proposal, {
-          createNote: async ({ title, content, tags }) => {
-            const normalizedContent = serializeKnowledgeNoteMarkdown(title, content);
-            const filePath =
-              isTauriRuntimeAvailable() && projectKnowledgeRootDir
-                ? await resolveKnowledgeNoteMirrorPath({
-                    projectKnowledgeRootDir,
-                    title,
-                    content: normalizedContent,
-                  })
-                : '';
-            await createProjectNote(currentProject.id, {
-              title,
-              content: normalizedContent,
-              filePath,
-              updatedAt: new Date().toISOString(),
-              tags,
-            });
-            recordSuccessfulOperation();
-          },
-          updateNote: async ({ noteId, title, content, tags }) => {
-            const existingNote = serverNotes.find((note) => note.id === noteId);
-            const nextContent = serializeKnowledgeNoteMarkdown(title, content ?? existingNote?.bodyMarkdown ?? '');
-            const filePath =
-              isTauriRuntimeAvailable() && projectKnowledgeRootDir
-                ? await resolveKnowledgeNoteMirrorPath({
-                    projectKnowledgeRootDir,
-                    title,
-                    content: nextContent,
-                    existingFilePath: existingNote?.sourceUrl || undefined,
-                  })
-                : existingNote?.sourceUrl || '';
-            await updateProjectNote(currentProject.id, noteId, {
-              title,
-              content: nextContent,
-              filePath,
-              updatedAt: new Date().toISOString(),
-              tags: Array.from(new Set([...(existingNote?.tags || []), ...tags])),
-            });
-            recordSuccessfulOperation();
-          },
-        });
-
-        await loadKnowledgeNotes(currentProject.id);
-        const artifactStore = useKnowledgeSessionArtifactsStore.getState();
-        const sessionKey = `${currentProject.id}:${activeSessionId}`;
-        const matchedArtifact = findTemporaryArtifactForProposal(
-          artifactStore.artifactsBySession[sessionKey] || [],
-          proposal
-        );
-        if (matchedArtifact) {
-          setArtifactStatus(currentProject.id, activeSessionId, matchedArtifact.id, 'promoted');
-          if (artifactStore.activeArtifactIdBySession[sessionKey] === matchedArtifact.id) {
-            setActiveArtifact(currentProject.id, activeSessionId, null);
-          }
-        }
-        if (proposal.trigger === 'knowledge-organize' && proposal.operations.every((operation) => operation.selected)) {
-          const latestNotes = useKnowledgeStore.getState().notes;
-          setKnowledgeOrganizeState(
-            currentProject.id,
-            buildKnowledgeOrganizeWorkflowState({
-              docs: projectKnowledgeNotesToRequirementDocs(latestNotes),
-              generatedFiles,
-              lastKnowledgeOrganizeAt: new Date().toISOString(),
-            })
-          );
-        }
-        setProposalStatus(currentProject.id, proposal.id, 'executed');
-        updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-          ...message,
-          knowledgeProposal: message.knowledgeProposal
-            ? {
-                ...message.knowledgeProposal,
-                status: 'executed',
-              }
-            : message.knowledgeProposal,
-        }));
-      } catch (error) {
-        const errorMessage = normalizeErrorMessage(error);
-        const recoverableProposal = buildRecoverableKnowledgeProposalAfterFailure(proposal, succeededOperationIds);
-        upsertProposal(recoverableProposal);
-        updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-          ...message,
-          knowledgeProposal: recoverableProposal,
-        }));
-        appendMessage(currentProject.id, activeSessionId, createStoredChatMessage('system', errorMessage, 'error'));
-      }
-    },
-    [
-      activeSessionId,
-      appendMessage,
-      createProjectNote,
-      currentProject,
-      loadKnowledgeNotes,
-      projectKnowledgeRootDir,
-      serverNotes,
-      setActiveArtifact,
-      setArtifactStatus,
-      setKnowledgeOrganizeState,
-      setProposalStatus,
-      upsertProposal,
-      updateMessage,
-      updateProjectNote,
-    ]
-  );
-
-  const handleApproveAllKnowledgeProposal = useCallback(
-    (messageId: string, proposal: KnowledgeProposal) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      const approvedProposal = approveAllKnowledgeProposalOperations(proposal);
-      upsertProposal(approvedProposal);
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        knowledgeProposal: approvedProposal,
-      }));
-      void handleExecuteKnowledgeProposal(messageId, approvedProposal);
-    },
-    [activeSessionId, currentProject, handleExecuteKnowledgeProposal, updateMessage, upsertProposal]
-  );
-
-  const promoteTemporaryArtifact = useCallback(
-    (artifact: KnowledgeSessionArtifact) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      const activeProjectMessages =
-        useAIChatStore
-          .getState()
-          .projects[currentProject.id]
-          ?.sessions.find((session) => session.id === activeSessionId)?.messages || [];
-      if (findExistingTemporaryArtifactProposal(activeProjectMessages, artifact)) {
-        return;
-      }
-
-      const proposal = buildTemporaryArtifactPromotionProposal({
-        projectId: currentProject.id,
-        artifact,
-      });
-
-      upsertProposal(proposal);
-      appendMessage(currentProject.id, activeSessionId, {
-        ...createStoredChatMessage('assistant', `我已把“${artifact.title}”转成待确认知识提案。`),
-        knowledgeProposal: proposal,
-      });
-    },
-    [activeSessionId, appendMessage, currentProject, upsertProposal]
-  );
-
-  const renderKnowledgeProposal = useCallback(
-    (message: { id: string; knowledgeProposal?: KnowledgeProposal }) => {
-      const proposal = message.knowledgeProposal;
-      if (!proposal || proposal.status === 'dismissed') {
-        return null;
-      }
-
-      const approvedProposal = approveAllKnowledgeProposalOperations(proposal);
-      const executableCount = proposal.operations.filter((operation) => operation.selected).length;
-      const canExecuteSelected = hasRunnableKnowledgeProposalOperations(proposal);
-      const canApproveAll = hasRunnableKnowledgeProposalOperations(approvedProposal);
-
-      return (
-        <section className="chat-knowledge-proposal-card">
-          <div className="chat-knowledge-proposal-head">
-            <strong>{proposal.summary}</strong>
-            <span>
-              {proposal.status === 'executed'
-                ? '已执行'
-                : proposal.status === 'executing'
-                  ? '执行中...'
-                  : `已选 ${executableCount} 项`}
-            </span>
-          </div>
-          <div className="chat-knowledge-proposal-list">
-            {proposal.operations.map((operation) => (
-              <label className="chat-knowledge-proposal-operation" key={operation.id}>
-                <input
-                  type="checkbox"
-                  checked={operation.selected}
-                  disabled={proposal.status !== 'pending'}
-                  onChange={(event) => toggleProposalOperation(message.id, operation.id, event.target.checked)}
-                />
-                <div>
-                  <strong>{operation.targetTitle}</strong>
-                  <span>{operation.reason}</span>
-                  <span>证据：{operation.evidence.join('、')}</span>
-                  {operation.draftContent ? <pre>{operation.draftContent}</pre> : null}
-                </div>
-              </label>
-            ))}
-          </div>
-          <div className="chat-knowledge-proposal-actions">
-            {proposal.status === 'pending' ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleApproveAllKnowledgeProposal(message.id, proposal)}
-                  disabled={!canApproveAll}
-                >
-                  全部批准
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleExecuteKnowledgeProposal(message.id, proposal)}
-                  disabled={!canExecuteSelected}
-                >
-                  执行选中项
-                </button>
-                <button type="button" onClick={() => dismissKnowledgeProposal(message.id)}>
-                  忽略
-                </button>
-              </>
-            ) : null}
-          </div>
-        </section>
-      );
-    },
-    [dismissKnowledgeProposal, handleExecuteKnowledgeProposal, toggleProposalOperation]
-  );
-
   const renderStructuredCards = useCallback(
     (message: { structuredCards?: ChatStructuredCard[] }) => {
       if (!message.structuredCards || message.structuredCards.length === 0) {
         return null;
       }
 
-      const canOpenArtifacts = Boolean(currentProject?.id && activeSessionId);
-
       return (
         <KnowledgeTruthStructuredCards
-          cards={syncTemporaryArtifactCardStatuses(message.structuredCards, sessionArtifacts)}
-          canOpenArtifacts={canOpenArtifacts}
-          onOpenArtifact={(artifactId) => {
-            if (!currentProject?.id || !activeSessionId) {
-              return;
-            }
-
-            setActiveArtifact(currentProject.id, activeSessionId, artifactId);
-            window.dispatchEvent(new CustomEvent(KNOWLEDGE_WORKSPACE_FOCUS_EVENT));
-          }}
-          onPromoteArtifact={(artifactId) => {
-            const artifact = sessionArtifacts.find(
-              (item) => item.id === artifactId && item.status === 'session'
-            );
-            if (!artifact || pendingPromotionArtifactIds.has(artifact.id)) {
-              return;
-            }
-
-            promoteTemporaryArtifact(artifact);
-          }}
-          pendingPromotionArtifactIds={pendingPromotionArtifactIds}
+          cards={message.structuredCards}
           onSelectNextStep={setInput}
         />
       );
     },
-    [activeSessionId, currentProject?.id, pendingPromotionArtifactIds, promoteTemporaryArtifact, sessionArtifacts, setActiveArtifact, setInput]
+    [setInput]
   );
 
   const executeProjectFileOperations = useCallback(
@@ -1528,15 +1006,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     [settingsDraft.provider]
   );
 
-  const knowledgeSourceDocs = useMemo(
-    () => serverNotes.length > 0 ? projectKnowledgeNotesToRequirementDocs(serverNotes) : requirementDocs,
-    [serverNotes, requirementDocs]
-  );
-  const knowledgeEntries = useMemo(
-    () => buildKnowledgeEntries(knowledgeSourceDocs, generatedFiles),
-    [generatedFiles, knowledgeSourceDocs]
-  );
-
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
   const agentAvailability: Record<ChatAgentId, ChatAgentAvailability> = useMemo(() => ({
     claude: {
@@ -1569,19 +1038,47 @@ export const AIChat: React.FC<AIChatProps> = ({
     () => getSelectedElementLabel(previewElements, selectedElementId),
     [previewElements, selectedElementId]
   );
-  const displayKnowledgeFile = useMemo(
-    () => knowledgeEntries.find((entry) => entry.id === activeKnowledgeFileId) || null,
-    [activeKnowledgeFileId, knowledgeEntries]
+  const visibleContextFiles = useMemo(() => {
+    const vaultFiles =
+      serverNotes.length > 0
+        ? serverNotes.map((note) => ({
+            id: note.id,
+            title: note.title,
+            filePath: note.sourceUrl || '',
+          }))
+        : requirementDocs.map((doc) => ({
+            id: doc.id,
+            title: doc.title,
+            filePath: doc.filePath || '',
+          }));
+
+    const generatedContextFiles = generatedFiles
+      .filter((file) => file.language === 'html' || file.language === 'md')
+      .map((file) => ({
+        id: `generated:${file.path}`,
+        title: file.path.split('/').pop() || file.path,
+        filePath: file.path,
+      }));
+
+    return [...vaultFiles, ...generatedContextFiles];
+  }, [generatedFiles, requirementDocs, serverNotes]);
+  const visibleContextFileId = aiContextState?.selectedKnowledgeEntryId || activeKnowledgeFileId || null;
+  const displayContextFile = useMemo(
+    () => visibleContextFiles.find((entry) => entry.id === visibleContextFileId) || null,
+    [visibleContextFileId, visibleContextFiles]
   );
+  const currentFileLabel = displayContextFile ? `Current file / ${displayContextFile.title}` : null;
+  const vaultLabel = projectRoot ? `Vault / ${projectRoot}` : null;
   const contextSnapshot = useMemo(
     () =>
-        buildChatContextSnapshot({
-          scene: aiContextState?.scene || 'knowledge',
-          pageTitle: selectedPage?.name || null,
-          selectedElementLabel,
-          knowledgeLabel: displayKnowledgeFile ? `知识文档 / ${displayKnowledgeFile.title}` : null,
-        }),
-    [aiContextState?.scene, displayKnowledgeFile, selectedElementLabel, selectedPage?.name]
+      buildChatContextSnapshot({
+        scene: aiContextState?.scene || 'vault',
+        pageTitle: selectedPage?.name || null,
+        selectedElementLabel,
+        currentFileLabel,
+        vaultLabel,
+      }),
+    [aiContextState?.scene, currentFileLabel, selectedElementLabel, selectedPage?.name, vaultLabel]
   );
 
   const currentContextUsage = useMemo(() => {
@@ -1595,7 +1092,8 @@ export const AIChat: React.FC<AIChatProps> = ({
         selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
         contextSnapshot.primaryLabel,
         contextSnapshot.secondaryLabel,
-        contextSnapshot.knowledgeLabel,
+        contextSnapshot.currentFileLabel,
+        contextSnapshot.vaultLabel,
       ].filter((item): item is string => Boolean(item)),
     });
 
@@ -1604,9 +1102,10 @@ export const AIChat: React.FC<AIChatProps> = ({
       selectedRuntimeConfig?.contextWindowTokens || 200000
     );
   }, [
-    contextSnapshot.knowledgeLabel,
+    contextSnapshot.currentFileLabel,
     contextSnapshot.primaryLabel,
     contextSnapshot.secondaryLabel,
+    contextSnapshot.vaultLabel,
     currentProject?.name,
     input,
     activeSession?.messages,
@@ -1874,11 +1373,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         selectedChatAgentId !== effectiveChatAgentId ? agentAvailability[selectedChatAgentId].fallbackMessage : null;
       const cleanedContent = skillIntent?.cleanedInput.trim()
         ? skillIntent.cleanedInput.trim()
-        : skillIntent?.package === 'knowledge-organize'
-          ? '请刷新当前项目的系统索引，并为问答和文档生成准备上下文。'
-          : skillIntent?.package === 'change-sync'
-            ? '请检查当前原型、知识文档和已有产物的差异，生成可确认的变更同步提案。'
-            : rawContent;
+        : rawContent;
       const userMessage = createStoredChatMessage('user', rawContent);
 
       appendMessage(currentProject.id, targetSessionId, userMessage);
@@ -1914,89 +1409,19 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       try {
-        const executeLaneText = async (prompt: string) => {
-          if (effectiveChatAgentId !== 'built-in') {
-            const projectRoot = await getProjectDir(currentProject.id);
-            const result = await invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
-              params: {
-                agent: effectiveChatAgentId,
-                projectRoot,
-                prompt,
-              },
-            });
-
-            if (!result.success) {
-              throw new Error(result.error || 'Local agent execution failed.');
-            }
-
-            return result.content.trim();
-          }
-
-          if (providerExecutionMode === 'claude' && selectedRuntimeConfig) {
-            return claudeRuntimeExecutor.executePrompt({
-              sessionId: targetSessionId,
-              config: selectedRuntimeConfig,
-              systemPrompt: '你是产品知识库整理助手。',
-              prompt,
-            });
-          }
-
-          if (providerExecutionMode === 'codex' && selectedRuntimeConfig) {
-            return codexRuntimeExecutor.executePrompt({
-              sessionId: targetSessionId,
-              config: selectedRuntimeConfig,
-              systemPrompt: 'You are a product knowledge base organizer.',
-              prompt,
-            });
-          }
-
-          return aiService.completeText({
-            systemPrompt: '你是产品知识库整理助手。',
-            prompt,
-          });
-        };
-
-        const buildDirectChatRequest = async () => {
-          const mFlowPromptStateResult =
-            isTauriRuntimeAvailable() && projectKnowledgeRootDir
-              ? await loadMFlowPromptState({
-                  projectId: currentProject.id,
-                  projectName: currentProject.name,
-                  vaultPath: projectKnowledgeRootDir,
-                  requirementDocs: knowledgeSourceDocs,
-                  generatedFiles,
-                  cachedState: mFlowPromptStateRef.current,
-                })
-              : null;
-
-          if (mFlowPromptStateResult) {
-            mFlowPromptStateRef.current = mFlowPromptStateResult.state;
-          }
-
-          const mFlowPromptContext = mFlowPromptStateResult
-            ? buildMFlowPromptContext(mFlowPromptStateResult.state, cleanedContent)
-            : null;
-
+        const buildDirectChatRequest = () => {
           return buildDirectChatPrompt({
             userInput: cleanedContent,
             currentProjectName: currentProject.name,
             contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
             skillIntent,
             conversationHistory: activeSession?.messages || [],
-            referenceContext: mFlowPromptContext
-              ? {
-                  indexSection: mFlowPromptContext.indexSection,
-                  expandedSection: mFlowPromptContext.expandedSection,
-                  policySection: mFlowPromptContext.policySection,
-                  labels: mFlowPromptContext.labels,
-                }
-              : null,
             contextLabels: [
               selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
               contextSnapshot.primaryLabel,
               contextSnapshot.secondaryLabel,
-              contextSnapshot.knowledgeLabel,
-              ...(mFlowPromptContext?.labels || []),
+              contextSnapshot.currentFileLabel,
+              contextSnapshot.vaultLabel,
             ].filter((item): item is string => Boolean(item)),
           });
         };
@@ -2005,99 +1430,17 @@ export const AIChat: React.FC<AIChatProps> = ({
           setRawRequirementInput(cleanedContent);
         }
 
-        if (skillIntent?.package === 'knowledge-organize') {
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            content: '正在刷新原生 m-flow...',
-          }));
-
-          if (!projectKnowledgeRootDir) {
-            throw new Error('当前项目还没有绑定本地知识库文件夹。');
-          }
-
-          const ensuredMFlow = await rebuildProjectMFlow({
-            projectId: currentProject.id,
-            projectName: currentProject.name,
-            vaultPath: projectKnowledgeRootDir,
-            requirementDocs: knowledgeSourceDocs,
-            generatedFiles,
-            writeArtifacts: true,
-          });
-          mFlowPromptStateRef.current = ensuredMFlow.state;
-          const knowledgeOrganizeSummary = formatMFlowRefreshSummary(
-            ensuredMFlow.state,
-            ensuredMFlow.refreshed
-          );
-
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            content: knowledgeOrganizeSummary,
-          }));
-          appendActivityEntry(currentProject.id, {
-            id: createActivityEntryId(),
-            runId,
-            type: 'run-summary',
-            summary: knowledgeOrganizeSummary,
-            changedPaths: ensuredMFlow.artifacts.slice(0, 12).map((artifact) => artifact.path),
-            runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
-            skill: resolvedSkill,
-            createdAt: Date.now(),
-          });
-          return;
-        }
-
-        if (skillIntent?.package === 'change-sync') {
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            content: '正在检查差异并生成会话临时内容...',
-          }));
-
-          const docs = await runChangeSyncLane({
-            project: {
-              id: currentProject.id,
-              name: currentProject.name,
-            },
-            requirementDocs: knowledgeSourceDocs,
-            generatedFiles,
-            executeText: executeLaneText,
-          });
-          const artifacts = buildChangeSyncSessionArtifacts({
-            projectId: currentProject.id,
-            sessionId: targetSessionId,
-            docs,
-          });
-          const reply = buildChangeSyncTemporaryReply(artifacts);
-
-          for (const artifact of artifacts) {
-            useKnowledgeSessionArtifactsStore.getState().upsertArtifact(artifact);
-          }
-
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            content: reply.content,
-            structuredCards: reply.cards,
-          }));
-
-          appendActivityEntry(currentProject.id, {
-            id: createActivityEntryId(),
-            runId,
-            type: 'run-summary',
-            summary: `AI 生成了 ${artifacts.length} 份会话临时内容`,
-            changedPaths: docs.map((doc) => doc.filePath || doc.title),
-            runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
-            skill: resolvedSkill,
-            createdAt: Date.now(),
-          });
-          return;
-        }
-
-        if (skillIntent) {
+        if (
+          skillIntent &&
+          (skillIntent.package === 'requirements' ||
+            skillIntent.package === 'prototype' ||
+            skillIntent.package === 'page')
+        ) {
           if (selectedRuntimeConfig) {
             aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
           }
 
-          const requestedWorkflowPackage = skillIntent.package;
-          const targetWorkflowPackage = requestedWorkflowPackage;
+          const targetWorkflowPackage = skillIntent.package;
 
           await runAIWorkflowPackage(targetWorkflowPackage);
 
@@ -2255,7 +1598,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         }
 
         if (effectiveChatAgentId !== 'built-in') {
-          const directChat = await buildDirectChatRequest();
+          const directChat = buildDirectChatRequest();
           const projectRoot = await getProjectDir(currentProject.id);
           const localAgentPrompt = [
             directChat.systemPrompt ? `<system>\n${directChat.systemPrompt}\n</system>` : null,
@@ -2291,7 +1634,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
         let thinkingContent = '';
         let answerContent = '';
-        const directChat = await buildDirectChatRequest();
+        const directChat = buildDirectChatRequest();
         const buildStreamingMessage = (completeThinking: boolean) => {
           const sections: string[] = [];
           if (thinkingContent.trim()) {
@@ -2386,17 +1729,15 @@ export const AIChat: React.FC<AIChatProps> = ({
       appendActivityEntry,
       appendMessage,
       clearStreamingDraft,
-      contextSnapshot.knowledgeLabel,
+      contextSnapshot.currentFileLabel,
       contextSnapshot.primaryLabel,
       contextSnapshot.secondaryLabel,
+      contextSnapshot.vaultLabel,
       currentProject,
-      generatedFiles,
       isLoading,
       isRuntimeConfigured,
-      knowledgeSourceDocs,
       providerExecutionMode,
       renameSession,
-      replaceRequirementDocs,
       selectedChatAgentId,
       selectedRuntimeConfig,
       setActiveSession,
@@ -2406,9 +1747,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       setSelectedChatAgentId,
       updateMessage,
       updateStreamingDraft,
-      upsertProposal,
       upsertSession,
-      workflowProjectState,
     ]
   );
 
@@ -2506,7 +1845,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       parseMessageParts={parseAIChatMessageParts}
       renderMessagePart={renderMessagePart}
       renderStructuredCards={renderStructuredCards}
-      renderKnowledgeProposal={renderKnowledgeProposal}
       renderProjectFileProposal={renderProjectFileProposal}
       messagesEndRef={messagesEndRef}
       leadingContent={launchpad}

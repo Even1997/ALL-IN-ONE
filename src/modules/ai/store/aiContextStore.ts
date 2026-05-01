@@ -1,7 +1,7 @@
-import type { AIReferenceScopeMode } from '../chat/chatContext.ts';
 import { create } from 'zustand';
+import type { AIReferenceScopeMode } from '../chat/chatContext.ts';
 
-export type AIContextScene = 'knowledge' | 'page';
+export type AIContextScene = 'vault' | 'page';
 export type AIKnowledgeMode = 'off' | 'all';
 
 type AIContextProjectState = {
@@ -28,7 +28,7 @@ type AIContextStoreState = {
 };
 
 const createProjectState = (): AIContextProjectState => ({
-  scene: 'knowledge',
+  scene: 'vault',
   selectedKnowledgeEntryId: null,
   selectedPageId: null,
   openedKnowledgeEntryIds: [],

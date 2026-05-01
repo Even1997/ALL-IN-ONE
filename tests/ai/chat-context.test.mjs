@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -7,7 +8,7 @@ import {
   resolveKnowledgeContextSelection,
 } from '../../src/modules/ai/chat/chatContext.ts';
 
-const knowledgeEntries = [
+const visibleFiles = [
   {
     id: 'doc-1',
     title: 'requirements-overview.md',
@@ -36,71 +37,64 @@ const knowledgeEntries = [
   },
 ];
 
-test('resolveKnowledgeContextSelection focuses active doc and keeps the rest as background', () => {
+test('resolveKnowledgeContextSelection focuses the current file in vault scene', () => {
   const result = resolveKnowledgeContextSelection({
-    scene: 'knowledge',
+    scene: 'vault',
     knowledgeMode: 'off',
-    knowledgeEntries,
+    knowledgeEntries: visibleFiles,
     activeKnowledgeFileId: 'doc-1',
   });
 
   assert.equal(result.currentFile?.id, 'doc-1');
   assert.equal(result.relatedFiles.length, 1);
   assert.equal(result.relatedFiles[0].id, 'doc-2');
+  assert.equal(result.label, 'Current file / requirements-overview.md');
 });
 
-test('resolveKnowledgeContextSelection can clear document focus while keeping knowledge background', () => {
+test('resolveKnowledgeContextSelection falls back to vault-wide context when no file is focused', () => {
   const result = resolveKnowledgeContextSelection({
-    scene: 'knowledge',
+    scene: 'vault',
     knowledgeMode: 'all',
-    knowledgeEntries,
+    knowledgeEntries: visibleFiles,
     activeKnowledgeFileId: null,
   });
 
   assert.equal(result.currentFile, null);
   assert.equal(result.relatedFiles.length, 2);
+  assert.equal(result.label, 'Vault / Visible files');
 });
 
-test('resolveKnowledgeContextSelection uses the active doc when page chat enables knowledge context', () => {
-  const result = resolveKnowledgeContextSelection({
-    scene: 'page',
-    knowledgeMode: 'all',
-    knowledgeEntries,
-    activeKnowledgeFileId: 'doc-1',
-  });
-
-  assert.equal(result.currentFile?.id, 'doc-1');
-  assert.equal(result.relatedFiles.length, 1);
-  assert.equal(result.relatedFiles[0].id, 'doc-2');
-});
-
-test('buildChatContextSnapshot keeps page context primary and knowledge optional', () => {
+test('buildChatContextSnapshot keeps page context primary and vault context explicit', () => {
   const result = buildChatContextSnapshot({
     scene: 'page',
     pageTitle: 'Home',
     selectedElementLabel: 'Hero section',
-    knowledgeLabel: 'Knowledge / current.md',
+    currentFileLabel: 'Current file / requirements-overview.md',
+    vaultLabel: 'Vault / C:/vaults/demo',
   });
 
-  assert.equal(result.primaryLabel, '页面 / Home');
-  assert.equal(result.secondaryLabel, '设计 / Hero section');
-  assert.equal(result.knowledgeLabel, 'Knowledge / current.md');
+  assert.equal(result.primaryLabel, 'Page / Home');
+  assert.equal(result.secondaryLabel, 'Canvas / Hero section');
+  assert.equal(result.currentFileLabel, 'Current file / requirements-overview.md');
+  assert.equal(result.vaultLabel, 'Vault / C:/vaults/demo');
 });
 
-test('buildChatContextSnapshot does not duplicate knowledge label in knowledge scene', () => {
+test('buildChatContextSnapshot uses current file wording in vault scene without duplication', () => {
   const result = buildChatContextSnapshot({
-    scene: 'knowledge',
-    knowledgeLabel: 'Knowledge / requirements.md',
+    scene: 'vault',
+    currentFileLabel: 'Current file / requirements-overview.md',
+    vaultLabel: 'Vault / C:/vaults/demo',
   });
 
-  assert.equal(result.primaryLabel, 'Knowledge / requirements.md');
-  assert.equal(result.secondaryLabel, null);
-  assert.equal(result.knowledgeLabel, null);
+  assert.equal(result.primaryLabel, 'Current file / requirements-overview.md');
+  assert.equal(result.secondaryLabel, 'Vault / C:/vaults/demo');
+  assert.equal(result.currentFileLabel, null);
+  assert.equal(result.vaultLabel, null);
 });
 
-test('resolveCurrentReferenceFileIds keeps knowledge current scope on the focused file only', () => {
+test('resolveCurrentReferenceFileIds keeps vault current scope on the focused file only', () => {
   const result = resolveCurrentReferenceFileIds({
-    scene: 'knowledge',
+    scene: 'vault',
     activeKnowledgeFileId: 'doc-2',
     selectedPagePath: null,
     availableFileIds: ['doc-1', 'doc-2', 'doc-3'],
@@ -109,9 +103,9 @@ test('resolveCurrentReferenceFileIds keeps knowledge current scope on the focuse
   assert.deepEqual(result, ['doc-2']);
 });
 
-test('resolveCurrentReferenceFileIds stays empty when knowledge focus is cleared', () => {
+test('resolveCurrentReferenceFileIds stays empty when vault focus is cleared', () => {
   const result = resolveCurrentReferenceFileIds({
-    scene: 'knowledge',
+    scene: 'vault',
     activeKnowledgeFileId: null,
     selectedPagePath: null,
     availableFileIds: ['doc-1', 'doc-2'],
@@ -129,4 +123,18 @@ test('resolveCurrentReferenceFileIds keeps page current scope on the focused pag
   });
 
   assert.deepEqual(result, ['sketch/pages/home.md']);
+});
+
+test('AIChat no longer references hidden knowledge runtime helpers', async () => {
+  const source = await readFile(new URL('../../src/components/workspace/AIChat.tsx', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(source, /executeKnowledgeProposal/);
+  assert.doesNotMatch(source, /buildKnowledgeOrganizeWorkflowState/);
+  assert.doesNotMatch(source, /runChangeSyncLane/);
+  assert.doesNotMatch(source, /buildChangeSyncSessionArtifacts/);
+  assert.doesNotMatch(source, /buildMFlowPromptContext/);
+  assert.doesNotMatch(source, /loadMFlowPromptState/);
+  assert.doesNotMatch(source, /rebuildProjectMFlow/);
+  assert.doesNotMatch(source, /projectKnowledgeNotesToRequirementDocs/);
+  assert.doesNotMatch(source, /getProjectKnowledgeRootDir/);
 });
