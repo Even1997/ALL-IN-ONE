@@ -39,6 +39,15 @@ export default {
   return import(`data:text/javascript;charset=utf-8,${encodeURIComponent(transpiled.outputText)}`);
 };
 
+const loadKnowledgeProposalStore = async () =>
+  import(`../../src/features/knowledge/store/knowledgeProposalStore.ts?test=${Date.now()}_${Math.random()}`);
+
+const loadKnowledgeSessionArtifactsStore = async () =>
+  import(`../../src/features/knowledge/store/knowledgeSessionArtifactsStore.ts?test=${Date.now()}_${Math.random()}`);
+
+const loadTemporaryKnowledgeFlow = async () =>
+  import(`../../src/modules/ai/knowledge/temporaryKnowledgeFlow.ts?test=${Date.now()}_${Math.random()}`);
+
 test('AIChat exposes knowledge proposal controls in assistant messages', async () => {
   const chatSource = await readFile(chatPath, 'utf8');
   const messageListSource = await readFile(messageListPath, 'utf8');
@@ -164,4 +173,130 @@ test('no-op proposals report no runnable operations even after approve-all', asy
 
   assert.deepEqual(getRunnableKnowledgeProposalOperationIds(approvedProposal), []);
   assert.equal(hasRunnableKnowledgeProposalOperations(approvedProposal), false);
+});
+
+test('dismissing a proposal leaves its temporary artifact in session state', async () => {
+  const { useKnowledgeProposalStore } = await loadKnowledgeProposalStore();
+  const { useKnowledgeSessionArtifactsStore } = await loadKnowledgeSessionArtifactsStore();
+  const proposalStore = useKnowledgeProposalStore.getState();
+  const artifactStore = useKnowledgeSessionArtifactsStore.getState();
+
+  artifactStore.upsertArtifact({
+    id: 'artifact-1',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    title: '变更同步候选.md',
+    artifactType: 'candidate-summary',
+    summary: '待确认候选',
+    body: '# Candidate',
+    status: 'session',
+    createdAt: 1,
+  });
+  proposalStore.upsertProposal({
+    id: 'proposal-1',
+    projectId: 'project-1',
+    sourceArtifactId: 'artifact-1',
+    summary: '已从会话临时内容生成待确认知识：变更同步候选.md',
+    trigger: 'change-sync',
+    createdAt: 1,
+    status: 'pending',
+    operations: [
+      {
+        id: 'op-1',
+        type: 'create_note',
+        targetTitle: '变更同步候选.md',
+        reason: '待确认候选',
+        evidence: ['变更同步候选.md'],
+        draftContent: '# Candidate',
+        riskLevel: 'low',
+        selected: true,
+      },
+    ],
+  });
+
+  proposalStore.dismissProposal('project-1', 'proposal-1');
+
+  const storedProposal = useKnowledgeProposalStore.getState().proposalsByProject['project-1'][0];
+  const storedArtifact =
+    useKnowledgeSessionArtifactsStore.getState().artifactsBySession['project-1:session-1'][0];
+
+  assert.equal(storedProposal.status, 'dismissed');
+  assert.equal(storedArtifact.status, 'session');
+});
+
+test('executing a proposal promotes only the linked artifact when duplicate titles exist', async () => {
+  const { useKnowledgeProposalStore } = await loadKnowledgeProposalStore();
+  const { useKnowledgeSessionArtifactsStore } = await loadKnowledgeSessionArtifactsStore();
+  const { findTemporaryArtifactForProposal } = await loadTemporaryKnowledgeFlow();
+  const proposalStore = useKnowledgeProposalStore.getState();
+  const artifactStore = useKnowledgeSessionArtifactsStore.getState();
+
+  artifactStore.upsertArtifact({
+    id: 'artifact-a',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    title: '同名候选.md',
+    artifactType: 'candidate-summary',
+    summary: 'A 版本',
+    body: '# A',
+    status: 'session',
+    createdAt: 1,
+  });
+  artifactStore.upsertArtifact({
+    id: 'artifact-b',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    title: '同名候选.md',
+    artifactType: 'candidate-summary',
+    summary: 'B 版本',
+    body: '# B',
+    status: 'session',
+    createdAt: 2,
+  });
+  artifactStore.setActiveArtifact('project-1', 'session-1', 'artifact-a');
+  proposalStore.upsertProposal({
+    id: 'proposal-a',
+    projectId: 'project-1',
+    sourceArtifactId: 'artifact-a',
+    summary: '已从会话临时内容生成待确认知识：同名候选.md',
+    trigger: 'change-sync',
+    createdAt: 1,
+    status: 'executing',
+    operations: [
+      {
+        id: 'op-a',
+        type: 'create_note',
+        targetTitle: '同名候选.md',
+        reason: 'A 版本',
+        evidence: ['同名候选.md'],
+        draftContent: '# A',
+        riskLevel: 'low',
+        selected: true,
+      },
+    ],
+  });
+
+  const artifactStateBefore = useKnowledgeSessionArtifactsStore.getState();
+  const matchedArtifact = findTemporaryArtifactForProposal(
+    artifactStateBefore.artifactsBySession['project-1:session-1'],
+    useKnowledgeProposalStore.getState().proposalsByProject['project-1'][0]
+  );
+
+  assert.equal(matchedArtifact?.id, 'artifact-a');
+
+  artifactStore.setArtifactStatus('project-1', 'session-1', matchedArtifact.id, 'promoted');
+  if (artifactStateBefore.activeArtifactIdBySession['project-1:session-1'] === matchedArtifact.id) {
+    artifactStore.setActiveArtifact('project-1', 'session-1', null);
+  }
+  proposalStore.setProposalStatus('project-1', 'proposal-a', 'executed');
+
+  const [artifactB, artifactA] =
+    useKnowledgeSessionArtifactsStore.getState().artifactsBySession['project-1:session-1'];
+
+  assert.deepEqual(
+    [artifactB.id, artifactB.status, artifactA.id, artifactA.status],
+    ['artifact-b', 'session', 'artifact-a', 'promoted']
+  );
+  assert.equal(useKnowledgeSessionArtifactsStore.getState().activeArtifactIdBySession['project-1:session-1'], null);
+  assert.equal(useKnowledgeProposalStore.getState().proposalsByProject['project-1'][0].status, 'executed');
 });

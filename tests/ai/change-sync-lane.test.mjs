@@ -56,11 +56,12 @@ test('change sync proposal builder converts derived docs into user-approved note
   assert.equal(proposal.operations.every((operation) => operation.type === 'create_note'), true);
 });
 
-test('change sync chat flow now surfaces proposal-first review instead of immediate persistence', async () => {
+test('change sync chat flow now surfaces session temporary content before any promotion proposal exists', async () => {
   const chatSource = await readFile(aiChatPath, 'utf8');
 
-  assert.match(chatSource, /buildChangeSyncProposal/);
-  assert.match(chatSource, /正在检查差异并生成变更同步提案/);
-  assert.match(chatSource, /已生成 .* 份变更同步提案建议/);
+  assert.match(chatSource, /buildChangeSyncSessionArtifacts/);
+  assert.match(chatSource, /buildChangeSyncTemporaryReply/);
+  assert.match(chatSource, /正在检查差异并生成会话临时内容/);
+  assert.match(chatSource, /AI 生成了 \$\{artifacts\.length\} 份会话临时内容/);
   assert.doesNotMatch(chatSource, /const savedDocs = await saveKnowledgeDocsToProjectDir\(currentProject\.id,\s*docs\);/);
 });

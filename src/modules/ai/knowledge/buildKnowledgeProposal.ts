@@ -17,6 +17,7 @@ const materializeOperation = (operation: KnowledgeProposalDraftOperation) => ({
 export const buildKnowledgeProposal = (draft: KnowledgeProposalDraft): KnowledgeProposal => ({
   id: createProposalId(),
   projectId: draft.projectId,
+  sourceArtifactId: draft.sourceArtifactId ?? null,
   summary: draft.summary,
   trigger: draft.trigger,
   operations: draft.operations.map(materializeOperation),

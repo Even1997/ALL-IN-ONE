@@ -6,6 +6,7 @@ type BuildChangeSyncProposalInput = {
   docs: RequirementDoc[];
   summaryText?: string;
   reasonText?: string;
+  sourceArtifactId?: string | null;
 };
 
 const DEFAULT_SUMMARY_TEXT = (count: number) =>
@@ -18,9 +19,11 @@ export const buildChangeSyncProposal = ({
   docs,
   summaryText,
   reasonText,
+  sourceArtifactId,
 }: BuildChangeSyncProposalInput) =>
   buildKnowledgeProposal({
     projectId,
+    sourceArtifactId,
     trigger: 'change-sync',
     summary: summaryText || DEFAULT_SUMMARY_TEXT(docs.length),
     operations: docs.map((doc) => ({

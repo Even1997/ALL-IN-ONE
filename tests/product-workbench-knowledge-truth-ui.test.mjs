@@ -9,11 +9,13 @@ const __dirname = path.dirname(__filename);
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
 const noteWorkspacePath = path.resolve(__dirname, '../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx');
 const aiChatPath = path.resolve(__dirname, '../src/components/workspace/AIChat.tsx');
+const temporaryKnowledgeFlowPath = path.resolve(__dirname, '../src/modules/ai/knowledge/temporaryKnowledgeFlow.ts');
 
 test('product workbench reads active session artifacts and passes a temporary preview into the knowledge workspace', async () => {
   const productSource = await readFile(productPath, 'utf8');
   const noteSource = await readFile(noteWorkspacePath, 'utf8');
   const aiChatSource = await readFile(aiChatPath, 'utf8');
+  const temporaryKnowledgeFlowSource = await readFile(temporaryKnowledgeFlowPath, 'utf8');
   const promoteStart = aiChatSource.indexOf('const promoteTemporaryArtifact = useCallback');
   const promoteEnd = aiChatSource.indexOf('const renderKnowledgeProposal = useCallback', promoteStart);
   const executeStart = aiChatSource.indexOf('const handleExecuteKnowledgeProposal = useCallback');
@@ -27,14 +29,15 @@ test('product workbench reads active session artifacts and passes a temporary pr
   assert.match(productSource, /setSidebarTab\('knowledge'\)/);
   assert.match(noteSource, /temporaryContentPreview\?:/);
   assert.match(noteSource, /gn-note-temporary-preview/);
-  assert.match(aiChatSource, /authorRole: '产品'/);
-  assert.doesNotMatch(aiChatSource, /authorRole: '浜у搧'/);
+  assert.match(temporaryKnowledgeFlowSource, /authorRole: '产品'/);
   assert.match(aiChatSource, /const KNOWLEDGE_WORKSPACE_FOCUS_EVENT = 'goodnight:focus-knowledge-pane'/);
   assert.match(aiChatSource, /dispatchEvent\(new CustomEvent\(KNOWLEDGE_WORKSPACE_FOCUS_EVENT\)\)/);
-  assert.match(aiChatSource, /title: artifact\.title/);
-  assert.doesNotMatch(aiChatSource, /title:\s*`\$\{artifact\.title\}\.md`/);
+  assert.match(temporaryKnowledgeFlowSource, /title: artifact\.title/);
+  assert.doesNotMatch(temporaryKnowledgeFlowSource, /title:\s*`\$\{artifact\.title\}\.md`/);
+  assert.match(aiChatSource, /buildTemporaryArtifactPromotionProposal/);
   assert.doesNotMatch(promoteSource, /setArtifactStatus\(/);
   assert.doesNotMatch(promoteSource, /setActiveArtifact\([^)]*null\)/);
-  assert.match(executeSource, /proposalMatchesTemporaryArtifact/);
+  assert.match(executeSource, /findTemporaryArtifactForProposal/);
   assert.match(executeSource, /setArtifactStatus\(currentProject\.id,\s*activeSessionId,\s*matchedArtifact\.id,\s*'promoted'\)/);
+  assert.match(aiChatSource, /syncTemporaryArtifactCardStatuses\(message\.structuredCards,\s*sessionArtifacts\)/);
 });

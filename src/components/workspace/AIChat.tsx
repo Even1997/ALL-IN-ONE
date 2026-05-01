@@ -35,11 +35,20 @@ import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
 import { executeKnowledgeProposal } from '../../modules/ai/knowledge/executeKnowledgeProposal';
-import { buildChangeSyncProposal } from '../../modules/ai/knowledge/buildChangeSyncProposal';
 import {
   buildKnowledgeOrganizeWorkflowState,
 } from '../../modules/ai/knowledge/knowledgeOrganizeState';
 import { runChangeSyncLane } from '../../modules/ai/knowledge/runChangeSyncLane';
+import {
+  buildSessionArtifactsFromStoredMessages,
+  buildChangeSyncSessionArtifacts,
+  buildChangeSyncTemporaryReply,
+  buildTemporaryArtifactPromotionProposal,
+  collectPendingTemporaryArtifactIds,
+  findExistingTemporaryArtifactProposal,
+  findTemporaryArtifactForProposal,
+  syncTemporaryArtifactCardStatuses,
+} from '../../modules/ai/knowledge/temporaryKnowledgeFlow.ts';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
   detectProjectFileReadIntent,
@@ -297,7 +306,6 @@ const buildSessionPreview = (content: string) => {
 const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const KNOWLEDGE_WORKSPACE_FOCUS_EVENT = 'goodnight:focus-knowledge-pane';
-const TEMPORARY_ARTIFACT_PROMOTION_SUMMARY_PREFIX = '已从会话临时内容生成待确认知识：';
 const RUNNABLE_KNOWLEDGE_PROPOSAL_OPERATION_TYPES = new Set([
   'create_note',
   'update_note',
@@ -347,18 +355,6 @@ export function buildRecoverableKnowledgeProposalAfterFailure(
     ),
   };
 }
-
-const buildTemporaryArtifactPromotionSummary = (title: string) =>
-  `${TEMPORARY_ARTIFACT_PROMOTION_SUMMARY_PREFIX}${title}`;
-
-const proposalMatchesTemporaryArtifact = (
-  proposal: Pick<KnowledgeProposal, 'summary' | 'operations'>,
-  artifact: Pick<KnowledgeSessionArtifact, 'title'>
-) =>
-  proposal.summary === buildTemporaryArtifactPromotionSummary(artifact.title) &&
-  proposal.operations.some(
-    (operation) => operation.type === 'create_note' && operation.targetTitle === artifact.title
-  );
 
 const KnowledgeTruthStructuredCards: React.FC<{
   cards: ChatStructuredCard[];
@@ -843,25 +839,34 @@ export const AIChat: React.FC<AIChatProps> = ({
   const sessionArtifacts = useKnowledgeSessionArtifactsStore((state) =>
     currentProject && activeSessionId ? state.artifactsBySession[`${currentProject.id}:${activeSessionId}`] || [] : []
   );
-  const pendingPromotionArtifactIds = useMemo(() => {
-    const ids = new Set<string>();
 
-    for (const artifact of sessionArtifacts) {
-      const hasPendingProposal = messages.some((message) => {
-        const proposal = message.knowledgeProposal;
-        if (!proposal || (proposal.status !== 'pending' && proposal.status !== 'executing')) {
-          return false;
-        }
-
-        return proposalMatchesTemporaryArtifact(proposal, artifact);
-      });
-
-      if (hasPendingProposal) {
-        ids.add(artifact.id);
-      }
+  useEffect(() => {
+    if (!currentProject?.id || !activeSessionId) {
+      return;
     }
 
-    return ids;
+    const artifactStore = useKnowledgeSessionArtifactsStore.getState();
+    const rehydratedArtifacts = buildSessionArtifactsFromStoredMessages({
+      projectId: currentProject.id,
+      sessionId: activeSessionId,
+      messages,
+    });
+
+    if (rehydratedArtifacts.length === 0) {
+      artifactStore.clearSessionArtifacts(currentProject.id, activeSessionId);
+      return;
+    }
+
+    for (const artifact of rehydratedArtifacts) {
+      artifactStore.upsertArtifact(artifact);
+    }
+  }, [activeSessionId, currentProject?.id, messages]);
+
+  const pendingPromotionArtifactIds = useMemo(() => {
+    return collectPendingTemporaryArtifactIds(
+      sessionArtifacts,
+      messages.flatMap((message) => (message.knowledgeProposal ? [message.knowledgeProposal] : []))
+    );
   }, [messages, sessionArtifacts]);
 
   const toggleProposalOperation = useCallback(
@@ -993,8 +998,9 @@ export const AIChat: React.FC<AIChatProps> = ({
         await loadKnowledgeNotes(currentProject.id);
         const artifactStore = useKnowledgeSessionArtifactsStore.getState();
         const sessionKey = `${currentProject.id}:${activeSessionId}`;
-        const matchedArtifact = (artifactStore.artifactsBySession[sessionKey] || []).find(
-          (artifact) => artifact.status === 'session' && proposalMatchesTemporaryArtifact(proposal, artifact)
+        const matchedArtifact = findTemporaryArtifactForProposal(
+          artifactStore.artifactsBySession[sessionKey] || [],
+          proposal
         );
         if (matchedArtifact) {
           setArtifactStatus(currentProject.id, activeSessionId, matchedArtifact.id, 'promoted');
@@ -1075,21 +1081,18 @@ export const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
-      const proposal = buildChangeSyncProposal({
+      const activeProjectMessages =
+        useAIChatStore
+          .getState()
+          .projects[currentProject.id]
+          ?.sessions.find((session) => session.id === activeSessionId)?.messages || [];
+      if (findExistingTemporaryArtifactProposal(activeProjectMessages, artifact)) {
+        return;
+      }
+
+      const proposal = buildTemporaryArtifactPromotionProposal({
         projectId: currentProject.id,
-        summaryText: buildTemporaryArtifactPromotionSummary(artifact.title),
-        reasonText: artifact.summary,
-        docs: [
-          {
-            id: `temporary-artifact-${artifact.id}`,
-            title: artifact.title,
-            summary: artifact.title,
-            content: artifact.body,
-            authorRole: '产品',
-            updatedAt: new Date().toISOString(),
-            status: 'draft',
-          },
-        ],
+        artifact,
       });
 
       upsertProposal(proposal);
@@ -1182,7 +1185,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
       return (
         <KnowledgeTruthStructuredCards
-          cards={message.structuredCards}
+          cards={syncTemporaryArtifactCardStatuses(message.structuredCards, sessionArtifacts)}
           canOpenArtifacts={canOpenArtifacts}
           onOpenArtifact={(artifactId) => {
             if (!currentProject?.id || !activeSessionId) {
@@ -2030,7 +2033,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         if (skillIntent?.package === 'change-sync') {
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: '正在检查差异并生成变更同步提案...',
+            content: '正在检查差异并生成会话临时内容...',
           }));
 
           const docs = await runChangeSyncLane({
@@ -2042,23 +2045,28 @@ export const AIChat: React.FC<AIChatProps> = ({
             generatedFiles,
             executeText: executeLaneText,
           });
-          const knowledgeProposal = buildChangeSyncProposal({
+          const artifacts = buildChangeSyncSessionArtifacts({
             projectId: currentProject.id,
+            sessionId: targetSessionId,
             docs,
           });
-          upsertProposal(knowledgeProposal);
+          const reply = buildChangeSyncTemporaryReply(artifacts);
+
+          for (const artifact of artifacts) {
+            useKnowledgeSessionArtifactsStore.getState().upsertArtifact(artifact);
+          }
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: `已生成 ${docs.length} 份变更同步提案建议，请在这条消息里勾选后执行。`,
-            knowledgeProposal,
+            content: reply.content,
+            structuredCards: reply.cards,
           }));
 
           appendActivityEntry(currentProject.id, {
             id: createActivityEntryId(),
             runId,
             type: 'run-summary',
-            summary: `AI 生成了 ${docs.length} 份变更同步提案建议`,
+            summary: `AI 生成了 ${artifacts.length} 份会话临时内容`,
             changedPaths: docs.map((doc) => doc.filePath || doc.title),
             runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
             skill: resolvedSkill,

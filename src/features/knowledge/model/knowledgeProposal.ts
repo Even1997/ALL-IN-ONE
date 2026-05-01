@@ -33,6 +33,7 @@ export type KnowledgeProposalOperation = {
 export type KnowledgeProposal = {
   id: string;
   projectId: string;
+  sourceArtifactId?: string | null;
   summary: string;
   trigger: KnowledgeProposalTrigger;
   operations: KnowledgeProposalOperation[];
