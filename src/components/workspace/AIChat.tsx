@@ -28,6 +28,7 @@ import { CodexRuntime } from '../../modules/ai/gn-agent/runtime/codex/CodexRunti
 import {
   createChatSession,
   createStoredChatMessage,
+  type StoredChatMessage,
   useAIChatStore,
 } from '../../modules/ai/store/aiChatStore';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
@@ -152,6 +153,10 @@ type TauriToolResponse = {
   content: string;
   error: string | null;
 };
+
+const EMPTY_MESSAGES: StoredChatMessage[] = [];
+const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
+const EMPTY_SESSION_ARTIFACTS: KnowledgeSessionArtifact[] = [];
 
 const GNAgentSkillsEntryButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <button
@@ -834,14 +839,16 @@ export const AIChat: React.FC<AIChatProps> = ({
     () => sessions.find((session) => session.id === activeSessionId) || null,
     [activeSessionId, sessions]
   );
-  const messages = activeSession?.messages || [];
-  const activityEntries = projectChatState?.activityEntries || [];
+  const messages = activeSession?.messages || EMPTY_MESSAGES;
+  const activityEntries = projectChatState?.activityEntries || EMPTY_ACTIVITY_ENTRIES;
   const sessionArtifacts = useKnowledgeSessionArtifactsStore((state) =>
-    currentProject && activeSessionId ? state.artifactsBySession[`${currentProject.id}:${activeSessionId}`] || [] : []
+    currentProject && activeSessionId
+      ? state.artifactsBySession[`${currentProject.id}:${activeSessionId}`] || EMPTY_SESSION_ARTIFACTS
+      : EMPTY_SESSION_ARTIFACTS
   );
 
   useEffect(() => {
-    if (!currentProject?.id || !activeSessionId) {
+    if (!currentProject?.id || !activeSessionId || !activeSession) {
       return;
     }
 
