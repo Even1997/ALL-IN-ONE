@@ -78,6 +78,10 @@ type KnowledgePathDialogState =
     }
   | null;
 
+const EMPTY_SESSION_ARTIFACTS: ReturnType<
+  typeof useKnowledgeSessionArtifactsStore.getState
+>['artifactsBySession'][string] = [];
+
 const normalizeRequirementFilename = (value: string) => {
   const normalized = value.trim().replace(/[\\/:*?"<>|]/g, '-');
   if (!normalized) {
@@ -1143,8 +1147,8 @@ export const ProductWorkbench = ({
   );
   const activeSessionArtifacts = useKnowledgeSessionArtifactsStore((state) =>
     currentProject && activeChatSessionId
-      ? state.artifactsBySession[`${currentProject.id}:${activeChatSessionId}`] || []
-      : []
+      ? state.artifactsBySession[`${currentProject.id}:${activeChatSessionId}`] || EMPTY_SESSION_ARTIFACTS
+      : EMPTY_SESSION_ARTIFACTS
   );
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
