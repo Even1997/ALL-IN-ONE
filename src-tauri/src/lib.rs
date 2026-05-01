@@ -473,6 +473,35 @@ fn ensure_builtin_skills_installed(app_data_dir: &Path) -> Result<(), String> {
 
     let source_root = get_goodnight_skill_source_root();
     let builtin_root = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir);
+    let expected_skill_ids: HashSet<&str> = GOODNIGHT_BUILTIN_SKILL_IDS.iter().copied().collect();
+
+    let installed_entries = fs::read_dir(&builtin_root)
+        .map_err(|error| format!("Failed to read built-in skill directory {}: {}", builtin_root.display(), error))?;
+
+    for entry in installed_entries {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Failed to read directory entry in {}: {}",
+                builtin_root.display(),
+                error
+            )
+        })?;
+        let installed_skill_dir = entry.path();
+        if !installed_skill_dir.is_dir() {
+            continue;
+        }
+
+        let skill_id = entry.file_name().to_string_lossy().to_string();
+        if !expected_skill_ids.contains(skill_id.as_str()) {
+            fs::remove_dir_all(&installed_skill_dir).map_err(|error| {
+                format!(
+                    "Failed to remove stale built-in skill directory {}: {}",
+                    installed_skill_dir.display(),
+                    error
+                )
+            })?;
+        }
+    }
 
     for skill_id in GOODNIGHT_BUILTIN_SKILL_IDS {
         let source_dir = source_root.join(skill_id);

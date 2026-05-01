@@ -40,6 +40,15 @@ test('goodnight ships official built-in skill source files and seeds them from t
   }
 });
 
+test('tauri builtin skill install prunes stale built-in directories from app data', async () => {
+  const libSource = await readFile(libPath, 'utf8');
+
+  assert.match(libSource, /GOODNIGHT_BUILTIN_SKILL_IDS\.iter\(\)\.copied\(\)\.collect/);
+  assert.match(libSource, /fs::read_dir\(&builtin_root\)/);
+  assert.match(libSource, /if !expected_skill_ids\.contains\(skill_id.as_str\(\)\)/);
+  assert.match(libSource, /fs::remove_dir_all\(&installed_skill_dir\)/);
+});
+
 test('built-in skills encode vault-safe boundary and output contracts', async () => {
   const boundary = await readFile(path.join(builtinRoot, 'goodnight-boundary', 'SKILL.md'), 'utf8');
   const workspace = await readFile(path.join(builtinRoot, 'goodnight-workspace-context', 'SKILL.md'), 'utf8');
