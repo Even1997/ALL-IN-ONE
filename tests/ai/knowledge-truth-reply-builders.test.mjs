@@ -72,6 +72,25 @@ test('buildKnowledgeTruthReply omits missing sections without changing summary-f
   assert.deepEqual(reply.cards.map((card) => card.type), ['summary', 'next-step']);
 });
 
+test('buildKnowledgeTruthReply omits next-step card when next steps are empty', async () => {
+  const { buildKnowledgeTruthReply } = await import('../../src/modules/ai/knowledge/buildKnowledgeTruthReply.ts');
+
+  const reply = buildKnowledgeTruthReply({
+    summary: '这次没有额外操作建议。',
+    conflicts: [],
+    temporaryArtifacts: [],
+    nextSteps: [],
+  });
+
+  assert.deepEqual(reply.cards, [
+    {
+      type: 'summary',
+      title: '本轮识别结果',
+      body: '这次没有额外操作建议。',
+    },
+  ]);
+});
+
 test('buildChangeSyncProposal uses readable knowledge-first summary copy', async () => {
   const { buildChangeSyncProposal } = await import('../../src/modules/ai/knowledge/buildChangeSyncProposal.ts');
 
@@ -91,4 +110,35 @@ test('buildChangeSyncProposal uses readable knowledge-first summary copy', async
     proposal.summary,
     'AI 已基于最新确认知识整理出 1 份待确认同步内容，请确认后再写入正式知识。'
   );
+});
+
+test('buildChangeSyncProposal maps builder-owned fields and falls back to title when summary is missing', async () => {
+  const { buildChangeSyncProposal } = await import('../../src/modules/ai/knowledge/buildChangeSyncProposal.ts');
+
+  const proposal = buildChangeSyncProposal({
+    projectId: 'project-1',
+    docs: [
+      {
+        id: 'doc-1',
+        title: '同步候选.md',
+        summary: '待确认同步内容',
+        content: '# 同步候选',
+      },
+      {
+        id: 'doc-2',
+        title: '仅标题候选.md',
+        summary: '',
+        content: '# 仅标题候选',
+      },
+    ],
+  });
+
+  assert.equal(proposal.operations.length, 2);
+  assert.equal(proposal.operations[0].reason, 'AI 已根据当前产品差异整理出一份待确认的变更同步材料。');
+  assert.deepEqual(proposal.operations[0].evidence, ['待确认同步内容']);
+  assert.equal(proposal.operations[0].draftContent, '# 同步候选');
+  assert.equal(proposal.operations[0].riskLevel, 'low');
+  assert.deepEqual(proposal.operations[1].evidence, ['仅标题候选.md']);
+  assert.equal(proposal.operations[1].draftContent, '# 仅标题候选');
+  assert.equal(proposal.operations[1].riskLevel, 'low');
 });
