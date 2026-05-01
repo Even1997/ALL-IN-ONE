@@ -51,9 +51,13 @@ test('knowledge session artifacts store clears one session without touching anot
     status: 'session',
     createdAt: 2,
   });
+  store.setActiveArtifact('project-1', 'session-a', 'artifact-a');
+  store.setActiveArtifact('project-1', 'session-b', 'artifact-b');
 
   store.clearSessionArtifacts('project-1', 'session-a');
 
   assert.equal(useKnowledgeSessionArtifactsStore.getState().artifactsBySession['project-1:session-a']?.length ?? 0, 0);
   assert.equal(useKnowledgeSessionArtifactsStore.getState().artifactsBySession['project-1:session-b'].length, 1);
+  assert.equal(useKnowledgeSessionArtifactsStore.getState().activeArtifactIdBySession['project-1:session-a'] ?? null, null);
+  assert.equal(useKnowledgeSessionArtifactsStore.getState().activeArtifactIdBySession['project-1:session-b'], 'artifact-b');
 });

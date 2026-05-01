@@ -23,8 +23,8 @@ class MemoryStorage {
   }
 }
 
-const loadStore = async () => {
-  globalThis.localStorage = new MemoryStorage();
+const loadStore = async (storage = new MemoryStorage()) => {
+  globalThis.localStorage = storage;
   return import(`../../src/modules/ai/store/aiChatStore.ts?test=${Date.now()}`);
 };
 
@@ -35,12 +35,12 @@ test('ai chat store saves complete project sessions and keeps messages intact', 
   const session = createChatSession('project-1', '默认会话');
   store.upsertSession('project-1', session);
   store.appendMessage('project-1', session.id, createStoredChatMessage('user', '@需求 帮我整理登录流程'));
-  store.appendMessage('project-1', session.id, createStoredChatMessage('assistant', '这里是完整回复'));
+  store.appendMessage('project-1', session.id, createStoredChatMessage('assistant', '这里是完整回答'));
 
   const savedSession = useAIChatStore.getState().projects['project-1'].sessions[0];
   assert.equal(savedSession.messages.length, 2);
   assert.equal(savedSession.messages[0].content, '@需求 帮我整理登录流程');
-  assert.equal(savedSession.messages[1].content, '这里是完整回复');
+  assert.equal(savedSession.messages[1].content, '这里是完整回答');
 });
 
 test('ai chat store keeps active session per project', async () => {
@@ -138,8 +138,10 @@ test('ai chat store keeps assistant knowledge proposal metadata intact', async (
   assert.equal(savedMessage.knowledgeProposal.summary, '发现 1 项 wiki 更新建议');
   assert.equal(savedMessage.knowledgeProposal.operations[0].selected, true);
 });
-test('ai chat store keeps assistant structured cards intact', async () => {
-  const { useAIChatStore, createChatSession, createStoredChatMessage } = await loadStore();
+
+test('ai chat store keeps assistant structured cards intact after persistence and rehydration', async () => {
+  const storage = new MemoryStorage();
+  const { useAIChatStore, createChatSession, createStoredChatMessage } = await loadStore(storage);
   const store = useAIChatStore.getState();
 
   const session = createChatSession('project-cards', '知识会话');
@@ -160,7 +162,8 @@ test('ai chat store keeps assistant structured cards intact', async () => {
     ],
   });
 
-  const savedMessage = useAIChatStore.getState().projects['project-cards'].sessions[0].messages[0];
+  const { useAIChatStore: rehydratedStore } = await loadStore(storage);
+  const savedMessage = rehydratedStore.getState().projects['project-cards'].sessions[0].messages[0];
   assert.equal(savedMessage.structuredCards[0].type, 'summary');
   assert.equal(savedMessage.structuredCards[1].actions[0].label, '先确认冲突');
 });
