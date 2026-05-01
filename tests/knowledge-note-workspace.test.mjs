@@ -12,6 +12,8 @@ test('knowledge note workspace drops legacy knowledge entries while accepting di
   assert.match(source, /diskItems: KnowledgeDiskItem\[\]/);
   assert.match(source, /selectedNote: KnowledgeNote \| null/);
   assert.match(source, /onSelectNote: \(noteId: string\) => void/);
+  assert.doesNotMatch(source, /KnowledgeNoteFilter/);
+  assert.doesNotMatch(source, /FILTER_OPTIONS/);
 });
 
 test('knowledge note workspace accepts and renders a temporary content preview above the editor column', async () => {
@@ -36,15 +38,16 @@ test('knowledge note workspace removes auxiliary context panels in minimalist mo
   assert.doesNotMatch(source, /onUseForDesign/);
 });
 
-test('knowledge note workspace keeps manual m-flow refresh without retrieval switching or wiki graph UI', async () => {
+test('knowledge note workspace removes organize, filter, and graph-only controls', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /onOrganizeKnowledge: \(\) => void/);
-  assert.match(source, /activeFilter: KnowledgeNoteFilter/);
-  assert.match(source, /onFilterChange: \(filter: KnowledgeNoteFilter\) => void/);
+  assert.doesNotMatch(source, /onOrganizeKnowledge: \(\) => void/);
+  assert.doesNotMatch(source, /activeFilter:/);
+  assert.doesNotMatch(source, /onFilterChange:/);
+  assert.doesNotMatch(source, /pm-knowledge-filter-tabs/);
+  assert.doesNotMatch(source, /m-flow/i);
   assert.doesNotMatch(source, /knowledgeRetrievalMethod/);
   assert.doesNotMatch(source, /onKnowledgeRetrievalMethodChange/);
-  assert.match(source, /刷新/);
   assert.doesNotMatch(source, /KnowledgeGraphCanvas/);
   assert.doesNotMatch(source, /onOpenGlobalWikiGraph/);
 });
@@ -62,6 +65,8 @@ test('knowledge note tree stays navigation-only without content previews', async
   assert.match(source, /gn-note-tree-item folder/);
   assert.match(source, /gn-note-tree-children/);
   assert.match(source, /gn-note-tree-match/);
+  assert.doesNotMatch(source, /系统索引/);
+  assert.doesNotMatch(source, /AI 摘要/);
   assert.doesNotMatch(source, /NOTE_TREE_SECTIONS/);
   assert.doesNotMatch(listSource, /gn-note-tree-section/);
   assert.doesNotMatch(listSource, /summarizeBody\(note\.bodyMarkdown\)/);
@@ -102,12 +107,14 @@ test('knowledge note workspace describes database saves instead of autosave', as
   assert.match(source, /Markdown/);
 });
 
-test('knowledge note workspace keeps editor metadata basics without reference-heavy detail panes', async () => {
+test('knowledge note workspace keeps editor metadata basics without doc-type badges or reference-heavy detail panes', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
   assert.doesNotMatch(source, /referenceTitles/);
   assert.doesNotMatch(source, /selectedNote\.referenceTitles/);
   assert.match(source, /mirrorSourcePath/);
+  assert.doesNotMatch(source, /DOC_TYPE_META/);
+  assert.doesNotMatch(source, /getNoteMeta/);
 });
 
 test('knowledge note workspace defaults to reading mode and exposes a code toggle for markdown editing', async () => {
@@ -128,5 +135,14 @@ test('knowledge note workspace previews unmapped markdown files inside the app i
   assert.match(source, /const isPreviewableKnowledgeFile = \(extension: string\)/);
   assert.match(source, /else if \(isPreviewableKnowledgeFile\(file\.extension\)\) {\s*void handleOpenRawMarkdownPreview\(file\);\s*} else {\s*onOpenAttachment\(file\.absolutePath\);\s*}/s);
   assert.match(source, /rawMarkdownPreview \? \(/);
-  assert.match(source, /Markdown 预览/);
+  assert.match(source, /Markdown/);
+});
+
+test('knowledge note workspace empty state stays vault-first', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /选择或新建一条/);
+  assert.match(source, /新建笔记/);
+  assert.doesNotMatch(source, /刷新 m-flow/);
+  assert.doesNotMatch(source, /知识图谱/);
 });

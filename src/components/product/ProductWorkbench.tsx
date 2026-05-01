@@ -18,7 +18,6 @@ import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore
 import { useKnowledgeSessionArtifactsStore } from '../../features/knowledge/store/knowledgeSessionArtifactsStore';
 import type { KnowledgeNote } from '../../features/knowledge/model/knowledge';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
-import { formatMFlowRefreshSummary, rebuildProjectMFlow } from '../../modules/knowledge/m-flow/runtime.ts';
 import { WorkbenchIcon } from '../ui/WorkbenchIcon';
 import { MacDialog } from '../ui/MacDialog';
 import {
@@ -39,8 +38,8 @@ import {
 } from '../../utils/wireframe';
 import {
   deleteSketchPageFile,
-  ensureProjectKnowledgeDirectory,
-  getProjectKnowledgeRootDir,
+  ensureProjectVaultDirectory,
+  getProjectVaultRootDir,
   isTauriRuntimeAvailable,
   loadSketchPageArtifactsFromProjectDir,
   writeSketchPageFile,
@@ -52,7 +51,7 @@ import {
   normalizeRelativeFileSystemPath,
 } from '../../utils/fileSystemPaths.ts';
 import { PageWorkspace } from './PageWorkspace';
-import { KnowledgeNoteWorkspace, type KnowledgeNoteFilter } from '../../features/knowledge/workspace/KnowledgeNoteWorkspace';
+import { KnowledgeNoteWorkspace } from '../../features/knowledge/workspace/KnowledgeNoteWorkspace';
 import {
   extractKnowledgeNoteEditorBody,
   serializeKnowledgeNoteMarkdown,
@@ -267,18 +266,6 @@ const filterKnowledgeNotes = (notes: KnowledgeNote[], keyword: string) => {
       .filter(Boolean)
       .some((value) => value.toLowerCase().includes(normalizedKeyword))
   );
-};
-
-const filterKnowledgeNotesByType = (notes: KnowledgeNote[], filter: KnowledgeNoteFilter) => {
-  if (filter === 'all') {
-    return notes;
-  }
-
-  if (filter === 'wiki-index' || filter === 'ai-summary') {
-    return notes.filter((note) => note.docType === filter);
-  }
-
-  return notes.filter((note) => (note.kind || 'note') === filter);
 };
 
 const createCanvasId = () =>
@@ -1067,7 +1054,6 @@ export const ProductWorkbench = ({
   const [manualPageId, setManualPageId] = useState<string | null>(null);
   const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
-  const [knowledgeFilter, setKnowledgeFilter] = useState<KnowledgeNoteFilter>('all');
   const [knowledgeDiskItems, setKnowledgeDiskItems] = useState<KnowledgeDiskItem[]>([]);
   const [knowledgeGroupOverrides, setKnowledgeGroupOverrides] = useState<Record<string, KnowledgeGroupId>>({});
   const [pendingDeleteRequest, setPendingDeleteRequest] = useState<PendingDeleteRequest | null>(null);
@@ -1112,8 +1098,8 @@ export const ProductWorkbench = ({
     replaceWireframes: state.replaceWireframes,
     updateWireframeFrame: state.updateWireframeFrame,
   })));
-  const projectKnowledgeRootDir = useMemo(
-    () => (currentProject?.vaultPath ? getProjectKnowledgeRootDir(currentProject) : null),
+  const vaultRootDir = useMemo(
+    () => (currentProject?.vaultPath ? getProjectVaultRootDir(currentProject) : null),
     [currentProject]
   );
 
@@ -1129,7 +1115,6 @@ export const ProductWorkbench = ({
   const serverSearchResults = useKnowledgeStore((state) => state.searchResults);
   const serverSearchQuery = useKnowledgeStore((state) => state.searchQuery);
   const isKnowledgeSearching = useKnowledgeStore((state) => state.isSearching);
-  const isKnowledgeSyncing = useKnowledgeStore((state) => state.isSyncing);
   const knowledgeSidecarError = useKnowledgeStore((state) => state.error);
   const searchServerNotes = useKnowledgeStore((state) => state.searchNotes);
   const loadServerNotes = useKnowledgeStore((state) => state.loadNotes);
@@ -1166,14 +1151,12 @@ export const ProductWorkbench = ({
   );
   const filteredServerNotes = useMemo(() => {
     const normalizedSearch = knowledgeSearch.trim();
-    const searchedNotes = !normalizedSearch
+    return !normalizedSearch
       ? serverNotes
       : serverSearchQuery === normalizedSearch
         ? serverSearchResults
         : filterKnowledgeNotes(serverNotes, normalizedSearch);
-
-    return filterKnowledgeNotesByType(searchedNotes, knowledgeFilter);
-  }, [knowledgeFilter, knowledgeSearch, serverNotes, serverSearchQuery, serverSearchResults]);
+  }, [knowledgeSearch, serverNotes, serverSearchQuery, serverSearchResults]);
   const filteredPageStructure = useMemo(() => filterPageTree(pageStructure, pageSearch), [pageSearch, pageStructure]);
   const filteredDesignPages = useMemo(() => collectDesignPages(filteredPageStructure), [filteredPageStructure]);
   const selectedServerNote = useMemo(
@@ -1423,8 +1406,8 @@ export const ProductWorkbench = ({
       return;
     }
 
-    setProjectRootDir(projectKnowledgeRootDir);
-  }, [canUseProjectFilesystem, currentProject, projectKnowledgeRootDir]);
+    setProjectRootDir(vaultRootDir);
+  }, [canUseProjectFilesystem, currentProject, vaultRootDir]);
 
   useEffect(() => {
     setKnowledgeGroupOverrides(readKnowledgeGroupOverrides(currentProject?.id || null));
@@ -1492,7 +1475,7 @@ export const ProductWorkbench = ({
       return;
     }
 
-    await ensureProjectKnowledgeDirectory(currentProject);
+    await ensureProjectVaultDirectory(currentProject);
     const diskItems = await listKnowledgeDiskItems(projectRootDir);
     if (requestId !== knowledgeRefreshRequestIdRef.current) {
       return;
@@ -1683,46 +1666,6 @@ export const ProductWorkbench = ({
     renameRequirementFile,
     updateServerNote,
     writeRequirementFile,
-  ]);
-
-  const handleOrganizeKnowledge = useCallback(async () => {
-    if (!currentProject || !projectRootDir) {
-      setRequirementSaveMessage('当前项目还没有绑定本地知识库文件夹。');
-      return;
-    }
-
-    if (!canUseProjectFilesystem) {
-      setRequirementSaveMessage('当前运行在浏览器开发环境，暂不支持刷新本地知识目录。');
-      return;
-    }
-
-    setRequirementSaveMessage('正在刷新原生 m-flow 知识目录...');
-
-    try {
-      await ensureProjectKnowledgeDirectory(currentProject);
-      await refreshKnowledgeFilesystem();
-      const knowledgeDocs =
-        serverNotes.length > 0 ? projectKnowledgeNotesToRequirementDocs(serverNotes) : requirementDocs;
-      const rebuilt = await rebuildProjectMFlow({
-        projectId: currentProject.id,
-        projectName: currentProject.name,
-        vaultPath: projectRootDir,
-        requirementDocs: knowledgeDocs,
-        generatedFiles,
-        writeArtifacts: true,
-      });
-      setRequirementSaveMessage(formatMFlowRefreshSummary(rebuilt.state, rebuilt.refreshed));
-    } catch (error) {
-      setRequirementSaveMessage(error instanceof Error ? error.message : String(error));
-    }
-  }, [
-    canUseProjectFilesystem,
-    currentProject,
-    generatedFiles,
-    projectRootDir,
-    refreshKnowledgeFilesystem,
-    requirementDocs,
-    serverNotes,
   ]);
 
   useEffect(() => {
@@ -2216,7 +2159,6 @@ export const ProductWorkbench = ({
         filteredNotes={filteredServerNotes}
         diskItems={knowledgeDiskItems}
         selectedNote={selectedServerNote}
-        activeFilter={knowledgeFilter}
         projectRootPath={projectRootDir}
         temporaryContentPreview={
           activeTemporaryArtifact
@@ -2237,7 +2179,6 @@ export const ProductWorkbench = ({
         canSave={canSaveRequirement}
         searchValue={knowledgeSearch}
         isSearching={isKnowledgeSearching}
-        isSyncing={isKnowledgeSyncing}
         error={knowledgeSidecarError}
         onSearchChange={setKnowledgeSearch}
         onSelectNote={openKnowledgeNote}
@@ -2245,7 +2186,6 @@ export const ProductWorkbench = ({
         onEditorChange={selectedServerNote ? setRequirementDraftContent : () => undefined}
         onSave={handleSaveKnowledgeNote}
         onDelete={handleDeleteKnowledgeNote}
-        onOrganizeKnowledge={handleOrganizeKnowledge}
         onCreateNote={() => {
           void handleCreateKnowledgeNote();
         }}
@@ -2254,7 +2194,6 @@ export const ProductWorkbench = ({
         onRenameTreePath={handleRenameKnowledgeTreePath}
         onDeleteTreePaths={handleDeleteKnowledgeTreePaths}
         onRefreshFilesystem={handleRefreshKnowledgeFilesystem}
-        onFilterChange={setKnowledgeFilter}
         onOpenAttachment={(attachmentPath) => {
           void handleOpenKnowledgeAttachment(attachmentPath);
         }}

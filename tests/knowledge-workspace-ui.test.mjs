@@ -33,6 +33,8 @@ test('knowledge note workspace owns the compact note workbench layout and chrome
   assert.match(css, /\.gn-note-workspace\s*\{/);
   assert.match(css, /\.gn-note-rail,/);
   assert.match(css, /\.gn-note-editor-column,/);
+  assert.doesNotMatch(source, /pm-knowledge-filter-tabs/);
+  assert.doesNotMatch(source, /KnowledgeNoteFilter/);
 });
 
 test('knowledge workspace owns toolbar and content slots without a duplicate search field', async () => {
@@ -65,6 +67,8 @@ test('knowledge note workspace keeps the markdown editor while adding a dedicate
   assert.match(css, /\.gn-note-mode-toggle/);
   assert.match(css, /\.gn-note-reading-surface/);
   assert.match(css, /\.gn-markdown-viewer/);
+  assert.doesNotMatch(noteSource, /系统索引/);
+  assert.doesNotMatch(noteSource, /AI 摘要/);
 });
 
 test('raw markdown preview footer truncates long file paths instead of breaking narrow reader layouts', async () => {
@@ -76,4 +80,17 @@ test('raw markdown preview footer truncates long file paths instead of breaking 
   assert.match(css, /\.gn-note-editor-footer-path\s*{[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /\.gn-note-editor-footer-path\s*{[\s\S]*?text-overflow:\s*ellipsis;/);
   assert.match(css, /\.gn-note-editor-footer-path\s*{[\s\S]*?white-space:\s*nowrap;/);
+});
+
+test('knowledge note workspace presents vault-first actions instead of organize/runtime controls', async () => {
+  const source = await readFile(noteWorkspacePath, 'utf8');
+
+  assert.match(source, /onCreateNoteAtPath/);
+  assert.match(source, /onCreateFolderAtPath/);
+  assert.match(source, /onRenameTreePath/);
+  assert.match(source, /onDeleteTreePaths/);
+  assert.match(source, /onRefreshFilesystem/);
+  assert.doesNotMatch(source, /onOrganizeKnowledge/);
+  assert.doesNotMatch(source, /isSyncing/);
+  assert.doesNotMatch(source, /KnowledgeGraphCanvas/);
 });

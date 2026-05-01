@@ -8,7 +8,6 @@ import type { KnowledgeNote } from '../model/knowledge';
 import { serializeKnowledgeNoteMarkdown } from './knowledgeNoteMarkdown';
 import { KnowledgeMarkdownViewer, type KnowledgeInternalLinkTarget } from './KnowledgeMarkdownViewer';
 
-export type KnowledgeNoteFilter = 'all' | 'wiki-index' | 'ai-summary' | 'note' | 'sketch' | 'design';
 type KnowledgeViewMode = 'read' | 'code';
 
 type KnowledgeNoteWorkspaceProps = {
@@ -16,7 +15,6 @@ type KnowledgeNoteWorkspaceProps = {
   filteredNotes: KnowledgeNote[];
   diskItems: KnowledgeDiskItem[];
   selectedNote: KnowledgeNote | null;
-  activeFilter: KnowledgeNoteFilter;
   projectRootPath?: string | null;
   temporaryContentPreview?: {
     title: string;
@@ -33,7 +31,6 @@ type KnowledgeNoteWorkspaceProps = {
   canSave: boolean;
   searchValue: string;
   isSearching: boolean;
-  isSyncing: boolean;
   error: string | null;
   onSearchChange: (value: string) => void;
   onSelectNote: (noteId: string) => void;
@@ -41,36 +38,14 @@ type KnowledgeNoteWorkspaceProps = {
   onEditorChange: (value: string) => void;
   onSave: () => void;
   onDelete: () => void;
-  onOrganizeKnowledge: () => void;
   onCreateNote: () => void;
   onCreateNoteAtPath: (relativeDirectory: string | null) => void;
   onCreateFolderAtPath: (relativeDirectory: string | null) => void;
   onRenameTreePath: (relativePath: string, isFolder: boolean) => void;
   onDeleteTreePaths: (relativePaths: string[] | string, isFolder: boolean | null) => void;
   onRefreshFilesystem: () => void;
-  onFilterChange: (filter: KnowledgeNoteFilter) => void;
   onOpenAttachment: (attachmentPath: string) => void;
 };
-
-const DOC_TYPE_META: Record<NonNullable<KnowledgeNote['docType']>, { badge: string; label: string }> = {
-  'wiki-index': { badge: 'INDEX', label: '系统索引' },
-  'ai-summary': { badge: 'AI', label: 'AI 摘要' },
-};
-
-const NOTE_KIND_META: Record<NonNullable<KnowledgeNote['kind']>, { badge: string; label: string }> = {
-  note: { badge: 'NOTE', label: '项目笔记' },
-  sketch: { badge: 'SKETCH', label: '草图说明' },
-  design: { badge: 'DESIGN', label: '设计沉淀' },
-};
-
-const FILTER_OPTIONS: Array<{ id: KnowledgeNoteFilter; label: string }> = [
-  { id: 'all', label: '全部' },
-  { id: 'wiki-index', label: '索引' },
-  { id: 'ai-summary', label: 'AI 摘要' },
-  { id: 'note', label: '笔记' },
-  { id: 'sketch', label: '草图' },
-  { id: 'design', label: '设计' },
-];
 
 type KnowledgeTreeFileNode = {
   id: string;
@@ -198,33 +173,6 @@ const NoteAddIcon = () => (
   </svg>
 );
 
-const WikiGenerateIcon = () => (
-  <svg viewBox="0 0 20 20" aria-hidden="true">
-    <path
-      d="M4.75 5.75a2 2 0 0 1 2-2h6.5a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-6.5a2 2 0 0 1-2-2v-8.5Z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M7.25 7.25h5.5M7.25 10h5.5M7.25 12.75h3.2"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-    <path
-      d="M13.25 3.75v12.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      opacity="0.45"
-    />
-  </svg>
-);
-
 const NoteKindIcon = ({ kind }: { kind?: KnowledgeNote['kind'] }) => {
   if (kind === 'design') {
     return (
@@ -322,14 +270,6 @@ const formatUpdatedAt = (value: string) => {
   });
 };
 
-const getNoteMeta = (note: KnowledgeNote) => {
-  if (note.docType) {
-    return DOC_TYPE_META[note.docType];
-  }
-
-  return NOTE_KIND_META[note.kind || 'note'];
-};
-
 const compareTreeNames = (left: string, right: string) =>
   left.localeCompare(right, 'zh-CN', {
     numeric: true,
@@ -367,7 +307,6 @@ const buildKnowledgeTree = (
   notes: KnowledgeNote[],
   filteredNotes: KnowledgeNote[],
   searchValue: string,
-  activeFilter: KnowledgeNoteFilter,
   projectRootPath?: string | null
 ): KnowledgeTreeFolderNode => {
   const root: MutableKnowledgeTreeFolderNode = {
@@ -435,7 +374,7 @@ const buildKnowledgeTree = (
       if (!visibleNoteIds.has(linkedNote.id)) {
         continue;
       }
-    } else if (activeFilter !== 'all' || !matchesGenericSearch) {
+    } else if (!matchesGenericSearch) {
       continue;
     }
 
@@ -490,7 +429,6 @@ export const KnowledgeNoteWorkspace = ({
   filteredNotes,
   diskItems,
   selectedNote,
-  activeFilter,
   projectRootPath = null,
   temporaryContentPreview = null,
   titleValue,
@@ -502,7 +440,6 @@ export const KnowledgeNoteWorkspace = ({
   canSave,
   searchValue,
   isSearching,
-  isSyncing,
   error,
   onSearchChange,
   onSelectNote,
@@ -510,14 +447,12 @@ export const KnowledgeNoteWorkspace = ({
   onEditorChange,
   onSave,
   onDelete,
-  onOrganizeKnowledge,
   onCreateNote,
   onCreateNoteAtPath,
   onCreateFolderAtPath,
   onRenameTreePath,
   onDeleteTreePaths,
   onRefreshFilesystem,
-  onFilterChange,
   onOpenAttachment,
 }: KnowledgeNoteWorkspaceProps) => {
   const rawMarkdownRequestIdRef = useRef(0);
@@ -533,8 +468,8 @@ export const KnowledgeNoteWorkspace = ({
   const searchActive = searchValue.trim().length > 0;
   const visibleNotes = filteredNotes;
   const visibleKnowledgeTree = useMemo(
-    () => buildKnowledgeTree(diskItems, notes, filteredNotes, searchValue, activeFilter, projectRootPath),
-    [activeFilter, diskItems, filteredNotes, notes, projectRootPath, searchValue]
+    () => buildKnowledgeTree(diskItems, notes, filteredNotes, searchValue, projectRootPath),
+    [diskItems, filteredNotes, notes, projectRootPath, searchValue]
   );
   const hasVisibleTreeNodes = visibleKnowledgeTree.folders.length > 0 || visibleKnowledgeTree.files.length > 0;
   const selectedTreeFilePath = useMemo(
@@ -836,7 +771,6 @@ export const KnowledgeNoteWorkspace = ({
       }
 
       for (const file of folder.files) {
-        const noteMeta = file.note ? getNoteMeta(file.note) : null;
         const isSelected = selectedTreePaths.includes(file.path);
         nextNodes.push(
           <div key={file.id} className="gn-note-tree-row">
@@ -877,7 +811,7 @@ export const KnowledgeNoteWorkspace = ({
               </span>
               <span className="gn-note-tree-label">{file.name}</span>
               {searchActive && file.note?.matchSnippet ? <span className="gn-note-tree-match">命中</span> : null}
-              <span className="gn-note-tree-badge">{noteMeta?.badge || (file.extension || 'FILE').toUpperCase()}</span>
+              <span className="gn-note-tree-badge">{file.note ? 'NOTE' : (file.extension || 'FILE').toUpperCase()}</span>
             </button>
           </div>
         );
@@ -918,29 +852,7 @@ export const KnowledgeNoteWorkspace = ({
           />
         </div>
 
-        <div className="pm-knowledge-filter-tabs">
-          {FILTER_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              className={activeFilter === option.id ? 'active' : ''}
-              type="button"
-              onClick={() => onFilterChange(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
         <div className="gn-note-rail-actions">
-          <button
-            className="doc-action-btn gn-note-icon-btn gn-note-wiki-btn"
-            type="button"
-            onClick={onOrganizeKnowledge}
-            title="刷新 m-flow 知识目录"
-            aria-label="刷新 m-flow 知识目录"
-          >
-            <WikiGenerateIcon />
-          </button>
           <button
             className="doc-action-btn gn-note-icon-btn"
             type="button"
@@ -956,7 +868,6 @@ export const KnowledgeNoteWorkspace = ({
           <span>{notes.length} 条知识笔记</span>
           <span>{visibleNotes.length} 条当前可见</span>
           {isSearching ? <span>搜索中</span> : null}
-          {isSyncing ? <span>同步中</span> : null}
         </div>
 
         {selectedTreePaths.length > 1 ? (
@@ -1192,7 +1103,7 @@ export const KnowledgeNoteWorkspace = ({
                     </button>
                   </div>
                   <div className="gn-note-storage-state" aria-label="笔记存储状态">
-                    <span>{getNoteMeta(selectedNote).label}</span>
+                    <span>项目笔记</span>
                     <span>{mirrorSourcePath ? 'Markdown 镜像' : '未绑定 Markdown'}</span>
                   </div>
                 </div>
@@ -1237,12 +1148,9 @@ export const KnowledgeNoteWorkspace = ({
           </>
         ) : (
           <div className="gn-note-empty-main">
-            <h2>选择或新建一条知识笔记</h2>
+            <h2>选择或新建一条 Vault 笔记</h2>
             <div className="gn-note-empty-actions">
-              <button className="doc-action-btn" type="button" onClick={onOrganizeKnowledge}>
-                刷新 m-flow 知识目录
-              </button>
-              <button className="doc-action-btn secondary" type="button" onClick={onCreateNote}>
+              <button className="doc-action-btn" type="button" onClick={onCreateNote}>
                 新建笔记
               </button>
             </div>
