@@ -1,7 +1,7 @@
 import type {
   KnowledgeSessionArtifactStatus,
   KnowledgeSessionArtifactType,
-} from '../../../features/knowledge/model/knowledgeSessionArtifact';
+} from '../../../features/knowledge/store/knowledgeSessionArtifactsStore';
 
 export type ChatCardAction = {
   id: string;

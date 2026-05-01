@@ -1,8 +1,13 @@
 import { create } from 'zustand';
-import type {
-  KnowledgeSessionArtifactStatus,
-  KnowledgeSessionArtifactType,
-} from '../model/knowledgeSessionArtifact';
+
+export type KnowledgeSessionArtifactType =
+  | 'impact-analysis'
+  | 'candidate-summary'
+  | 'candidate-structure'
+  | 'prototype-draft'
+  | 'design-draft';
+
+export type KnowledgeSessionArtifactStatus = 'session' | 'promoted' | 'discarded';
 
 export type KnowledgeSessionArtifact = {
   id: string;
