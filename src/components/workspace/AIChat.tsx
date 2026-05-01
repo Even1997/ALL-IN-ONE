@@ -315,6 +315,10 @@ export function getRunnableKnowledgeProposalOperationIds(proposal: Pick<Knowledg
     .map((operation) => operation.id);
 }
 
+export function hasRunnableKnowledgeProposalOperations(proposal: Pick<KnowledgeProposal, 'operations'>): boolean {
+  return getRunnableKnowledgeProposalOperationIds(proposal).length > 0;
+}
+
 export function approveAllKnowledgeProposalOperations(proposal: KnowledgeProposal): KnowledgeProposal {
   return {
     ...proposal,
@@ -858,8 +862,12 @@ export const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
-      const succeededOperationIds: string[] = [];
       const runnableOperationIds = getRunnableKnowledgeProposalOperationIds(proposal);
+      if (runnableOperationIds.length === 0) {
+        return;
+      }
+
+      const succeededOperationIds: string[] = [];
       let runnableOperationIndex = 0;
       const recordSuccessfulOperation = () => {
         const operationId = runnableOperationIds[runnableOperationIndex];
@@ -999,7 +1007,10 @@ export const AIChat: React.FC<AIChatProps> = ({
         return null;
       }
 
+      const approvedProposal = approveAllKnowledgeProposalOperations(proposal);
       const executableCount = proposal.operations.filter((operation) => operation.selected).length;
+      const canExecuteSelected = hasRunnableKnowledgeProposalOperations(proposal);
+      const canApproveAll = hasRunnableKnowledgeProposalOperations(approvedProposal);
 
       return (
         <section className="chat-knowledge-proposal-card">
@@ -1034,10 +1045,18 @@ export const AIChat: React.FC<AIChatProps> = ({
           <div className="chat-knowledge-proposal-actions">
             {proposal.status === 'pending' ? (
               <>
-                <button type="button" onClick={() => handleApproveAllKnowledgeProposal(message.id, proposal)}>
+                <button
+                  type="button"
+                  onClick={() => handleApproveAllKnowledgeProposal(message.id, proposal)}
+                  disabled={!canApproveAll}
+                >
                   全部批准
                 </button>
-                <button type="button" onClick={() => void handleExecuteKnowledgeProposal(message.id, proposal)}>
+                <button
+                  type="button"
+                  onClick={() => void handleExecuteKnowledgeProposal(message.id, proposal)}
+                  disabled={!canExecuteSelected}
+                >
                   执行选中项
                 </button>
                 <button type="button" onClick={() => dismissKnowledgeProposal(message.id)}>

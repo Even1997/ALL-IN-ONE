@@ -22,6 +22,7 @@ const loadKnowledgeProposalHelpers = async () => {
 
 export default {
   getRunnableKnowledgeProposalOperationIds,
+  hasRunnableKnowledgeProposalOperations,
   approveAllKnowledgeProposalOperations,
   buildRecoverableKnowledgeProposalAfterFailure,
 };
@@ -55,7 +56,9 @@ test('AIChat exposes knowledge proposal controls in assistant messages', async (
   assert.match(chatSource, /handleApproveAllKnowledgeProposal/);
   assert.match(chatSource, /upsertProposal\(approvedProposal\)/);
   assert.match(chatSource, /getRunnableKnowledgeProposalOperationIds/);
+  assert.match(chatSource, /hasRunnableKnowledgeProposalOperations/);
   assert.match(chatSource, /buildRecoverableKnowledgeProposalAfterFailure/);
+  assert.match(chatSource, /if \(runnableOperationIds\.length === 0\)/);
   assert.match(chatSource, /catch\s*\(error\)/);
   assert.match(chatSource, /createStoredChatMessage\('system',\s*errorMessage,\s*'error'\)/);
   assert.doesNotMatch(chatSource, /suggestKnowledgeProposalFromAnswer/);
@@ -133,4 +136,32 @@ test('partial proposal failure recovery keeps succeeded operations from being re
       { id: 'op-5', selected: false },
     ]
   );
+});
+
+test('no-op proposals report no runnable operations even after approve-all', async () => {
+  const {
+    getRunnableKnowledgeProposalOperationIds,
+    hasRunnableKnowledgeProposalOperations,
+    approveAllKnowledgeProposalOperations,
+  } = await loadKnowledgeProposalHelpers();
+  const proposal = {
+    id: 'proposal-3',
+    projectId: 'project-1',
+    summary: 'proposal',
+    trigger: 'wiki-stale',
+    createdAt: 1,
+    status: 'pending',
+    operations: [
+      { id: 'op-1', type: 'link_notes', selected: true },
+      { id: 'op-2', type: 'archive_candidate', selected: false },
+    ],
+  };
+
+  assert.deepEqual(getRunnableKnowledgeProposalOperationIds(proposal), []);
+  assert.equal(hasRunnableKnowledgeProposalOperations(proposal), false);
+
+  const approvedProposal = approveAllKnowledgeProposalOperations(proposal);
+
+  assert.deepEqual(getRunnableKnowledgeProposalOperationIds(approvedProposal), []);
+  assert.equal(hasRunnableKnowledgeProposalOperations(approvedProposal), false);
 });
