@@ -1,4 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
 import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
@@ -40,6 +41,16 @@ import {
 } from '../../modules/ai/knowledge/knowledgeOrganizeState';
 import { runChangeSyncLane } from '../../modules/ai/knowledge/runChangeSyncLane';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
+import {
+  detectProjectFileReadIntent,
+  detectProjectFileWriteIntent,
+  type ProjectFileOperation,
+  type ProjectFileOperationMode,
+  type ProjectFileProposal,
+  parseProjectFileOperationsPlan,
+  resolveProjectOperationPath,
+  isSupportedProjectTextFilePath,
+} from '../../modules/ai/chat/projectFileOperations';
 import { buildKnowledgeEntries } from '../../modules/knowledge/knowledgeEntries';
 import { ensureProjectSystemIndex } from '../../modules/knowledge/systemIndexProject';
 import { buildKnowledgeRuntimePromptContext } from '../../modules/knowledge/runtime/knowledgeRuntime';
@@ -58,13 +69,14 @@ import {
   readProjectTextFile,
   writeProjectTextFile,
 } from '../../utils/projectPersistence';
+import { getDirectoryPath } from '../../utils/fileSystemPaths';
 import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
 import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
   GNAgentMessageList,
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
-import { GNAgentModeSwitch } from '../ai/gn-agent-shell/GNAgentModeSwitch';
+import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -113,6 +125,31 @@ type GNAgentSuggestion = {
   prompt: string;
 };
 
+type ProjectFileExecutionResult = {
+  ok: boolean;
+  changedPaths: string[];
+  message: string;
+};
+
+type TauriToolResponse = {
+  success: boolean;
+  content: string;
+  error: string | null;
+};
+
+const GNAgentSkillsEntryButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+  <button
+    type="button"
+    className="chat-shell-icon-btn chat-skills-entry-btn"
+    aria-haspopup="dialog"
+    aria-label="打开技能页"
+    title="打开技能页"
+    onClick={onClick}
+  >
+    <SkillsIcon />
+  </button>
+);
+
 const formatTimestamp = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
@@ -131,6 +168,73 @@ const normalizeErrorMessage = (error: unknown) => {
   }
 
   return raw;
+};
+
+const READ_ONLY_CHAT_TOOLS = ['glob', 'grep', 'ls', 'view'];
+
+const createProjectFileProposalId = () => `file-proposal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const modeLabelMap: Record<ProjectFileOperationMode, string> = {
+  manual: '手动确认',
+  auto: '自动确认',
+};
+
+const buildProjectFilePlanningSystemPrompt = (projectName: string, projectRoot: string) => `你是 ${projectName} 的项目文件助手。
+你只能规划当前项目根目录内的文本文件操作，根目录是 ${projectRoot}。
+你可以使用只读工具 glob、grep、ls、view 来查看目录和文件，但绝不能尝试 write、edit、remove。
+
+你必须只返回合法 JSON，对象结构如下：
+{
+  "status": "ready" | "needs_clarification" | "reject",
+  "assistantMessage": "string",
+  "summary": "string",
+  "operations": [
+    {
+      "type": "create_file" | "edit_file" | "delete_file",
+      "targetPath": "相对路径，优先使用相对项目根目录的路径",
+      "summary": "本次操作摘要",
+      "content": "create_file 或全量 edit_file 时需要",
+      "oldString": "局部替换 edit_file 时需要",
+      "newString": "局部替换 edit_file 时需要"
+    }
+  ]
+}
+
+规则：
+1. 查询和读取不属于这个 JSON 规划范围，只有写操作才返回 operations。
+2. 如果信息不足，返回 status = "needs_clarification"。
+3. 不要规划目录删除。
+4. 不要规划二进制文件写改删。
+5. create_file 不能把已存在文件静默当作新建覆盖。
+6. 只返回 JSON，不要返回 Markdown。`;
+
+const buildProjectFilePlanningPrompt = (userInput: string) => `请根据用户请求规划项目文件写操作。
+
+用户请求：
+${userInput}
+
+如果这是新建、编辑或删除文件的请求，请返回 JSON 计划。
+如果用户请求不明确，返回 needs_clarification。
+如果请求不应该执行，返回 reject。`;
+
+const buildProjectFileReadSystemPrompt = (projectName: string, projectRoot: string) => `你是 ${projectName} 的项目文件阅读助手。
+当前项目根目录是 ${projectRoot}。
+你可以使用 glob、grep、ls、view 这四个只读工具来帮助回答用户关于项目文件的问题。
+不要尝试 write、edit、remove 之类的写工具。
+先查看必要文件，再用简洁中文回答。`;
+
+const projectFileOperationTypeLabel: Record<ProjectFileOperation['type'], string> = {
+  create_file: '新建',
+  edit_file: '编辑',
+  delete_file: '删除',
+};
+
+const projectFileProposalStatusLabel: Record<ProjectFileProposal['status'], string> = {
+  pending: '待确认',
+  executing: '执行中',
+  executed: '已执行',
+  cancelled: '已取消',
+  failed: '执行失败',
 };
 
 const resolveKnowledgeNoteMirrorPath = async ({
@@ -301,6 +405,15 @@ const HistoryIcon = () => (
   </svg>
 );
 
+const SkillsIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+    <path d="M6.25 4.25H13.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M5.25 8.25H14.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M7.25 12.25H12.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M8.5 16L10 14.5L11.5 16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 const ComposeIcon = () => (
   <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
     <path d="M4.5 14.8L5.05 11.85L12.85 4.05C13.43 3.47 14.37 3.47 14.95 4.05L15.95 5.05C16.53 5.63 16.53 6.57 15.95 7.15L8.15 14.95L5.2 15.5L4.5 14.8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -419,6 +532,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [providerSearch, setProviderSearch] = useState('');
@@ -432,6 +546,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [isKnowledgeReferenceEnabled] = useState(true);
   const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
   const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, string>>({});
+  const [projectFileOperationMode, setProjectFileOperationMode] = useState<ProjectFileOperationMode>('manual');
   const isControlledCollapse = typeof collapsed === 'boolean';
   const isCollapsed = isControlledCollapse ? Boolean(collapsed) : internalIsCollapsed;
   const showExpandedShell = !isCollapsed || lockExpandedForEmbedded;
@@ -781,6 +896,248 @@ export const AIChat: React.FC<AIChatProps> = ({
       );
     },
     [dismissKnowledgeProposal, handleExecuteKnowledgeProposal, toggleProposalOperation]
+  );
+
+  const executeProjectFileOperations = useCallback(
+    async (projectRoot: string, operations: ProjectFileOperation[]): Promise<ProjectFileExecutionResult> => {
+      const changedPaths: string[] = [];
+
+      for (const operation of operations) {
+        const absolutePath = resolveProjectOperationPath(projectRoot, operation.targetPath);
+
+        if (!isSupportedProjectTextFilePath(absolutePath)) {
+          throw new Error(`当前版本只支持文本文件操作：${operation.targetPath}`);
+        }
+
+        if (operation.type === 'create_file') {
+          if (typeof operation.content !== 'string') {
+            throw new Error(`新建文件缺少内容：${operation.targetPath}`);
+          }
+
+          const existingContent = await readProjectTextFile(absolutePath);
+          if (existingContent !== null) {
+            throw new Error(`文件已存在，不能按“新建”覆盖：${operation.targetPath}`);
+          }
+
+          const parentDirectory = getDirectoryPath(absolutePath);
+          if (parentDirectory) {
+            const mkdirResult = await invoke<TauriToolResponse>('tool_mkdir', {
+              params: {
+                file_path: parentDirectory,
+              },
+            });
+
+            if (!mkdirResult.success) {
+              throw new Error(mkdirResult.error || `无法创建目录：${parentDirectory}`);
+            }
+          }
+
+          await writeProjectTextFile(absolutePath, operation.content);
+          changedPaths.push(operation.targetPath);
+          continue;
+        }
+
+        if (operation.type === 'edit_file') {
+          const existingContent = await readProjectTextFile(absolutePath);
+          if (existingContent === null) {
+            throw new Error(`找不到要编辑的文件：${operation.targetPath}`);
+          }
+
+          if (typeof operation.oldString === 'string') {
+            const editResult = await invoke<TauriToolResponse>('tool_edit', {
+              params: {
+                file_path: absolutePath,
+                old_string: operation.oldString,
+                new_string: operation.newString ?? '',
+              },
+            });
+
+            if (!editResult.success) {
+              throw new Error(editResult.error || `编辑文件失败：${operation.targetPath}`);
+            }
+          } else if (typeof operation.content === 'string') {
+            await writeProjectTextFile(absolutePath, operation.content);
+          } else {
+            throw new Error(`编辑文件缺少可执行内容：${operation.targetPath}`);
+          }
+
+          changedPaths.push(operation.targetPath);
+          continue;
+        }
+
+        const viewResult = await invoke<TauriToolResponse>('tool_view', {
+          params: {
+            file_path: absolutePath,
+            offset: 0,
+            limit: 1,
+          },
+        });
+        if (!viewResult.success) {
+          throw new Error(viewResult.error || `只能删除已存在的文本文件：${operation.targetPath}`);
+        }
+
+        const removeResult = await invoke<TauriToolResponse>('tool_remove', {
+          params: {
+            file_path: absolutePath,
+          },
+        });
+        if (!removeResult.success) {
+          throw new Error(removeResult.error || `删除文件失败：${operation.targetPath}`);
+        }
+
+        changedPaths.push(operation.targetPath);
+      }
+
+      return {
+        ok: true,
+        changedPaths,
+        message:
+          changedPaths.length > 0
+            ? `已执行 ${changedPaths.length} 项文件操作：${changedPaths.join('、')}`
+            : '没有执行任何文件操作。',
+      };
+    },
+    []
+  );
+
+  const handleCancelProjectFileProposal = useCallback(
+    (messageId: string) => {
+      if (!currentProject || !activeSessionId) {
+        return;
+      }
+
+      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+        ...message,
+        projectFileProposal: message.projectFileProposal
+          ? {
+              ...message.projectFileProposal,
+              status: 'cancelled',
+              executionMessage: '已取消本次文件操作。',
+            }
+          : message.projectFileProposal,
+      }));
+    },
+    [activeSessionId, currentProject, updateMessage]
+  );
+
+  const handleExecuteProjectFileProposal = useCallback(
+    async (messageId: string, proposal: ProjectFileProposal) => {
+      if (!currentProject || !activeSessionId) {
+        return;
+      }
+
+      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+        ...message,
+        projectFileProposal: message.projectFileProposal
+          ? {
+              ...message.projectFileProposal,
+              status: 'executing',
+              executionMessage: '正在执行文件操作...',
+            }
+          : message.projectFileProposal,
+      }));
+
+      const runId = createRunId();
+
+      try {
+        const projectRoot = await getProjectDir(currentProject.id);
+        const result = await executeProjectFileOperations(projectRoot, proposal.operations);
+
+        updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+          ...message,
+          content: proposal.assistantMessage,
+          projectFileProposal: message.projectFileProposal
+            ? {
+                ...message.projectFileProposal,
+                status: 'executed',
+                executionMessage: result.message,
+              }
+            : message.projectFileProposal,
+        }));
+
+        appendActivityEntry(currentProject.id, {
+          id: createActivityEntryId(),
+          runId,
+          type: 'run-summary',
+          summary: result.message,
+          changedPaths: result.changedPaths,
+          runtime: 'built-in',
+          skill: 'project-file-ops',
+          createdAt: Date.now(),
+        });
+      } catch (error) {
+        const message = normalizeErrorMessage(error);
+
+        updateMessage(currentProject.id, activeSessionId, messageId, (currentMessage) => ({
+          ...currentMessage,
+          projectFileProposal: currentMessage.projectFileProposal
+            ? {
+                ...currentMessage.projectFileProposal,
+                status: 'failed',
+                executionMessage: message,
+              }
+            : currentMessage.projectFileProposal,
+        }));
+
+        appendActivityEntry(currentProject.id, {
+          id: createActivityEntryId(),
+          runId,
+          type: 'failed',
+          summary: message,
+          changedPaths: proposal.operations.map((operation) => operation.targetPath),
+          runtime: 'built-in',
+          skill: 'project-file-ops',
+          createdAt: Date.now(),
+        });
+      }
+    },
+    [activeSessionId, appendActivityEntry, currentProject, executeProjectFileOperations, updateMessage]
+  );
+
+  const renderProjectFileProposal = useCallback(
+    (message: { id: string; projectFileProposal?: ProjectFileProposal }) => {
+      const proposal = message.projectFileProposal;
+      if (!proposal) {
+        return null;
+      }
+
+      return (
+        <section className="chat-project-file-proposal-card">
+          <div className="chat-project-file-proposal-head">
+            <strong>{proposal.summary}</strong>
+            <span>{projectFileProposalStatusLabel[proposal.status]}</span>
+          </div>
+          <div className="chat-project-file-proposal-meta">
+            <span>模式：{modeLabelMap[proposal.mode]}</span>
+            <span>{proposal.operations.length} 项操作</span>
+          </div>
+          <div className="chat-project-file-proposal-list">
+            {proposal.operations.map((operation) => (
+              <div className="chat-project-file-proposal-operation" key={operation.id}>
+                <strong>
+                  {projectFileOperationTypeLabel[operation.type]} <code>{operation.targetPath}</code>
+                </strong>
+                <span>{operation.summary || '等待执行'}</span>
+              </div>
+            ))}
+          </div>
+          {proposal.executionMessage ? <div className="chat-project-file-proposal-note">{proposal.executionMessage}</div> : null}
+          <div className="chat-project-file-proposal-actions">
+            {proposal.status === 'pending' ? (
+              <>
+                <button type="button" onClick={() => void handleExecuteProjectFileProposal(message.id, proposal)}>
+                  确认执行
+                </button>
+                <button type="button" onClick={() => handleCancelProjectFileProposal(message.id)}>
+                  取消
+                </button>
+              </>
+            ) : null}
+          </div>
+        </section>
+      );
+    },
+    [handleCancelProjectFileProposal, handleExecuteProjectFileProposal]
   );
 
   useEffect(() => {
@@ -1169,6 +1526,10 @@ export const AIChat: React.FC<AIChatProps> = ({
     setShowApiKey(false);
   }, []);
 
+  const closeSkillsModal = useCallback(() => {
+    setIsSkillsModalOpen(false);
+  }, []);
+
   const handleCreateSession = useCallback(() => {
     if (!currentProject) {
       return;
@@ -1459,6 +1820,126 @@ export const AIChat: React.FC<AIChatProps> = ({
           return;
         }
 
+        const isProjectFileWriteRequest = detectProjectFileWriteIntent(cleanedContent);
+        const isProjectFileReadRequest = detectProjectFileReadIntent(cleanedContent);
+
+        if (effectiveChatAgentId === 'built-in' && (isProjectFileWriteRequest || isProjectFileReadRequest)) {
+          const projectRoot = await getProjectDir(currentProject.id);
+
+          if (selectedRuntimeConfig) {
+            aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
+          }
+
+          if (isProjectFileReadRequest && !isProjectFileWriteRequest) {
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              content: '正在读取项目文件...',
+            }));
+
+            const readResponse = await aiService.chatWithTools({
+              prompt: cleanedContent,
+              systemPrompt: buildProjectFileReadSystemPrompt(currentProject.name || '当前项目', projectRoot),
+              allowedTools: READ_ONLY_CHAT_TOOLS,
+            });
+            const finalContent = readResponse.trim() || '已读取相关文件，但这次没有返回内容。';
+
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              content: finalContent,
+            }));
+
+            return;
+          }
+
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content: projectFileOperationMode === 'auto' ? '正在规划并执行文件操作...' : '正在生成文件操作提案...',
+          }));
+
+          const planResponse = await aiService.chatWithTools({
+            prompt: buildProjectFilePlanningPrompt(cleanedContent),
+            systemPrompt: buildProjectFilePlanningSystemPrompt(currentProject.name || '当前项目', projectRoot),
+            allowedTools: READ_ONLY_CHAT_TOOLS,
+          });
+          const plan = parseProjectFileOperationsPlan(planResponse);
+
+          if (plan.status !== 'ready' || plan.operations.length === 0) {
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              content: plan.assistantMessage.trim() || plan.summary.trim() || '这次还不能安全执行文件操作，请补充更明确的路径和内容。',
+            }));
+            return;
+          }
+
+          const proposal: ProjectFileProposal = {
+            id: createProjectFileProposalId(),
+            mode: projectFileOperationMode,
+            status: projectFileOperationMode === 'auto' ? 'executing' : 'pending',
+            summary: plan.summary.trim() || `计划执行 ${plan.operations.length} 项文件操作`,
+            assistantMessage: plan.assistantMessage.trim() || plan.summary.trim() || '我已经整理好本次文件操作计划。',
+            operations: plan.operations,
+            executionMessage: projectFileOperationMode === 'auto' ? '系统已自动确认，正在执行。' : '请确认后执行。',
+          };
+
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            content: proposal.assistantMessage,
+            projectFileProposal: proposal,
+          }));
+
+          if (projectFileOperationMode === 'manual') {
+            return;
+          }
+
+          try {
+            const result = await executeProjectFileOperations(projectRoot, proposal.operations);
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              projectFileProposal: message.projectFileProposal
+                ? {
+                    ...message.projectFileProposal,
+                    status: 'executed',
+                    executionMessage: result.message,
+                  }
+                : message.projectFileProposal,
+            }));
+            appendActivityEntry(currentProject.id, {
+              id: createActivityEntryId(),
+              runId,
+              type: 'run-summary',
+              summary: result.message,
+              changedPaths: result.changedPaths,
+              runtime: 'built-in',
+              skill: 'project-file-ops',
+              createdAt: Date.now(),
+            });
+          } catch (error) {
+            const message = normalizeErrorMessage(error);
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
+              ...currentMessage,
+              projectFileProposal: currentMessage.projectFileProposal
+                ? {
+                    ...currentMessage.projectFileProposal,
+                    status: 'failed',
+                    executionMessage: message,
+                  }
+                : currentMessage.projectFileProposal,
+            }));
+            appendActivityEntry(currentProject.id, {
+              id: createActivityEntryId(),
+              runId,
+              type: 'failed',
+              summary: message,
+              changedPaths: proposal.operations.map((operation) => operation.targetPath),
+              runtime: 'built-in',
+              skill: 'project-file-ops',
+              createdAt: Date.now(),
+            });
+          }
+
+          return;
+        }
+
         if (effectiveChatAgentId !== 'built-in') {
           const projectRoot = await getProjectDir(currentProject.id);
           const localAgentPrompt = [
@@ -1604,6 +2085,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       selectedChatAgentId,
       selectedRuntimeConfig,
       setActiveSession,
+      executeProjectFileOperations,
+      projectFileOperationMode,
       setRawRequirementInput,
       setSelectedChatAgentId,
       updateMessage,
@@ -1708,6 +2191,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       parseMessageParts={parseAIChatMessageParts}
       renderMessagePart={renderMessagePart}
       renderKnowledgeProposal={renderKnowledgeProposal}
+      renderProjectFileProposal={renderProjectFileProposal}
       messagesEndRef={messagesEndRef}
       leadingContent={launchpad}
     />
@@ -1718,10 +2202,23 @@ export const AIChat: React.FC<AIChatProps> = ({
     }
   }, [agentAvailability, selectedChatAgentId]);
 
+  useEffect(() => {
+    if (!isSkillsModalOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeSkillsModal();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [closeSkillsModal, isSkillsModalOpen]);
+
   return (
     <>
-      {isSettingsOpen ? <div className="chat-settings-overlay" onClick={closeSettings} /> : null}
-
       <section
         className={`${getChatShellLayoutClassName(lockExpandedForEmbedded ? false : isCollapsed)}${isEmbedded ? ' chat-shell-embedded' : ''}`}
       >
@@ -1761,6 +2258,9 @@ export const AIChat: React.FC<AIChatProps> = ({
                     </button>
                     {historyMenu}
                   </div>
+                  {isGNAgentEmbedded ? (
+                    <GNAgentSkillsEntryButton onClick={() => setIsSkillsModalOpen(true)} />
+                  ) : null}
                   <button
                     className="chat-shell-icon-btn"
                     type="button"
@@ -1803,7 +2303,6 @@ export const AIChat: React.FC<AIChatProps> = ({
             {isEmbedded ? (
                 <>
                   <GNAgentEmbeddedComposer
-                    entrySwitch={isGNAgentEmbedded ? null : <GNAgentModeSwitch compact />}
                     input={input}
                     setInput={setInput}
                     textareaRef={textareaRef}
@@ -1853,6 +2352,25 @@ export const AIChat: React.FC<AIChatProps> = ({
                           {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
                         </span>
                       </div>
+                      <div className="chat-mode-switch" role="group" aria-label="本次聊天模式">
+                        <span className="chat-mode-switch-label">本次聊天模式</span>
+                        <div className="chat-mode-switch-options">
+                          <button
+                            type="button"
+                            className={projectFileOperationMode === 'manual' ? 'active' : ''}
+                            onClick={() => setProjectFileOperationMode('manual')}
+                          >
+                            手动确认
+                          </button>
+                          <button
+                            type="button"
+                            className={projectFileOperationMode === 'auto' ? 'active' : ''}
+                            onClick={() => setProjectFileOperationMode('auto')}
+                          >
+                            自动确认
+                          </button>
+                        </div>
+                      </div>
                       <div className="chat-composer-hints">
                         <span>Enter 发送</span>
                         <span>Shift + Enter 换行</span>
@@ -1869,7 +2387,47 @@ export const AIChat: React.FC<AIChatProps> = ({
         )}
       </section>
 
-      <section className={`chat-settings-drawer ${isSettingsOpen ? 'open' : ''}`}>
+      {isSkillsModalOpen
+        ? createPortal(
+            <div className="chat-skills-modal-backdrop" onClick={closeSkillsModal}>
+              <section
+                className="chat-skills-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="GoodNight 技能页"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="chat-skills-modal-head">
+                  <strong>技能</strong>
+                  <button
+                    type="button"
+                    className="chat-skills-modal-close"
+                    aria-label="关闭技能页"
+                    title="关闭技能页"
+                    onClick={closeSkillsModal}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="chat-skills-modal-body">
+                  <GNAgentSkillsPage />
+                </div>
+              </section>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {isSettingsOpen
+        ? createPortal(
+            <div className="chat-settings-modal-backdrop" onClick={closeSettings}>
+              <section
+                className="chat-settings-drawer open"
+                role="dialog"
+                aria-modal="true"
+                aria-label="AI 设置"
+                onClick={(event) => event.stopPropagation()}
+              >
         <div className="chat-settings-drawer-header">
           <div>
             <div className="chat-settings-eyebrow">Model Settings</div>
@@ -2140,7 +2698,11 @@ export const AIChat: React.FC<AIChatProps> = ({
             {testMessage ? <div className={`chat-settings-test-note ${testState}`}>{testMessage}</div> : null}
           </div>
         </div>
-      </section>
+              </section>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 };

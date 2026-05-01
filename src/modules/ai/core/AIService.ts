@@ -70,6 +70,15 @@ interface ChatMessage {
   content: string;
 }
 
+type RunAgentLoopOptions = {
+  allowedTools?: string[];
+};
+
+type RunAgentLoopResult = {
+  final: string;
+  transcript: string;
+};
+
 export type AITextStreamEvent = {
   kind: 'thinking' | 'text';
   delta: string;
@@ -136,8 +145,8 @@ class AIService {
       handler.onComplete({
         requestId,
         status: 'completed',
-        content,
-        codeBlocks: this.extractCodeBlocks(content),
+        content: content.transcript,
+        codeBlocks: this.extractCodeBlocks(content.transcript),
       });
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
@@ -178,7 +187,36 @@ class AIService {
         : undefined
     );
 
-    return content;
+    return content.transcript;
+  }
+
+  async chatWithTools(options: {
+    prompt: string;
+    systemPrompt: string;
+    allowedTools: string[];
+    onChunk?: (text: string) => void;
+  }): Promise<string> {
+    if (!this.isConfigured()) {
+      throw buildAIConfigurationError();
+    }
+
+    const result = await this.runAgentLoop(
+      [{ role: 'user', content: options.prompt }],
+      options.systemPrompt,
+      undefined,
+      options.onChunk
+        ? {
+            onStart: () => undefined,
+            onChunk: (chunk) => options.onChunk?.(chunk.content),
+            onComplete: () => undefined,
+            onError: () => undefined,
+            onInterrupt: () => undefined,
+          }
+        : undefined,
+      { allowedTools: options.allowedTools }
+    );
+
+    return result.final;
   }
 
   async completeText(options: {
@@ -396,24 +434,34 @@ ${this.buildToolInstructions()}
     inputMessages: ChatMessage[],
     systemPrompt: string,
     signal?: AbortSignal,
-    handler?: AIStreamHandler
-  ): Promise<string> {
+    handler?: AIStreamHandler,
+    options?: RunAgentLoopOptions
+  ): Promise<RunAgentLoopResult> {
     const messages = [...inputMessages];
     let transcript = '';
+    let final = '';
 
     for (let round = 0; round < 4; round += 1) {
       const assistantText = await this.callProvider(messages, systemPrompt, signal);
+      final = assistantText.trim() || final;
       transcript += `${assistantText}\n`;
       this.emitChunkText(assistantText, handler);
 
       const toolCalls = parseToolCalls(assistantText);
       if (toolCalls.length === 0) {
-        return transcript.trim();
+        return { final, transcript: transcript.trim() };
       }
 
       const toolOutputs: string[] = [];
       for (const call of toolCalls) {
-        const result = await this.toolExecutor.execute(call);
+        const result =
+          options?.allowedTools && !options.allowedTools.includes(call.name)
+            ? {
+                type: 'text' as const,
+                content: `Tool ${call.name} is not allowed in this chat mode.`,
+                is_error: true,
+              }
+            : await this.toolExecutor.execute(call);
         const formatted = formatToolResult(result);
         toolOutputs.push(`Tool ${call.name} result:\n${formatted}`);
         transcript += `\n${formatted}\n`;
@@ -427,7 +475,7 @@ ${this.buildToolInstructions()}
       });
     }
 
-    return transcript.trim();
+    return { final, transcript: transcript.trim() };
   }
 
   private emitChunkText(text: string, handler?: AIStreamHandler, type: AIStreamChunk['type'] = 'text') {

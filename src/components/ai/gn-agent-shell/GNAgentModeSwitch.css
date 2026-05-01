@@ -1,0 +1,66 @@
+.gn-agent-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gn-agent-mode-switch-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #a1a1aa;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.gn-agent-mode-switch-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4f4f1;
+}
+
+.gn-agent-mode-switch-btn.active {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: #f4f4f1;
+}
+
+.gn-agent-mode-switch-glyph {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.gn-agent-mode-switch-label,
+.gn-agent-mode-switch-label-inline {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gn-agent-mode-switch-compact .gn-agent-mode-switch-btn {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.gn-agent-mode-switch-compact .gn-agent-mode-switch-btn:not(.active) .gn-agent-mode-switch-label-inline {
+  color: inherit;
+}

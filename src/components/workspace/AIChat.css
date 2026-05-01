@@ -1006,6 +1006,86 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chat-skills-entry-btn {
+  color: #f4f4f1;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-skills-entry-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-skills-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(10px);
+}
+
+.chat-skills-modal {
+  width: min(1040px, 100%);
+  max-height: min(820px, calc(100dvh - 64px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: #171717;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+}
+
+.chat-skills-modal-head {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 14px 0 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1b1b1b;
+  color: #f4f4f1;
+}
+
+.chat-skills-modal-head strong {
+  font-size: 15px;
+}
+
+.chat-skills-modal-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f4f4f1;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.chat-skills-modal-close:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-skills-modal-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-skills-modal .gn-agent-skills-page {
+  height: 100%;
+  overflow: auto;
 }
 
 .chat-composer-embedded-input {
@@ -1245,6 +1325,43 @@
 
 .chat-composer-meta .warning {
   color: color-mix(in srgb, var(--mode-warning, #f59e0b) 78%, white);
+}
+
+.chat-mode-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chat-mode-switch-label {
+  color: var(--mode-muted, rgba(255, 255, 255, 0.58));
+  font-size: 11px;
+}
+
+.chat-mode-switch-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-mode-switch-options button {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--mode-border, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)) 92%, transparent);
+  color: var(--mode-muted, rgba(255, 255, 255, 0.7));
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chat-mode-switch-options button.active,
+.chat-mode-switch-options button:hover {
+  border-color: color-mix(in srgb, var(--mode-accent, #60a5fa) 30%, transparent);
+  background: color-mix(in srgb, var(--mode-accent, #60a5fa) 12%, var(--mode-panel-alt, rgba(255, 255, 255, 0.06)));
+  color: var(--mode-text, #f8fafc);
 }
 
 .chat-composer-hints {
@@ -1743,14 +1860,24 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
-.chat-settings-drawer {
+.chat-settings-modal-backdrop {
   position: fixed;
-  top: 92px;
-  right: 24px;
-  bottom: 24px;
+  inset: 0;
+  z-index: 1001;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 8, 23, 0.42);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.chat-settings-drawer {
+  position: relative;
   z-index: 1002;
-  width: min(880px, calc(100vw - 48px));
+  width: min(920px, calc(100vw - 48px));
   max-width: calc(100vw - 48px);
+  max-height: min(820px, calc(100dvh - 48px));
   display: flex;
   flex-direction: column;
   border-radius: var(--style-radius-lg);
@@ -2142,9 +2269,14 @@
     max-width: 92%;
   }
 
+  .chat-settings-modal-backdrop {
+    padding: 10px;
+  }
+
   .chat-settings-drawer {
-    inset: 10px;
-    width: auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - 20px);
   }
 
   .chat-settings-drawer-body,
@@ -2202,19 +2334,6 @@ body.desktop-workbench-mode .chat-shell {
 body.desktop-workbench-mode .chat-shell.is-sidebar,
 body.desktop-workbench-mode .chat-shell.is-collapsed {
   width: 100%;
-}
-
-body.desktop-workbench-mode .chat-settings-overlay {
-  position: absolute;
-  inset: 0;
-}
-
-body.desktop-workbench-mode .chat-settings-drawer {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  max-width: none;
-  border-radius: 0;
 }
 
 .gn-agent-workspace .chat-shell-embedded {
@@ -2659,6 +2778,84 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 
 .chat-knowledge-proposal-actions button:hover {
   background: rgba(37, 99, 235, 0.14);
+}
+
+.chat-project-file-proposal-card {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  background: linear-gradient(180deg, rgba(15, 118, 110, 0.08), rgba(15, 118, 110, 0.03));
+  display: grid;
+  gap: 10px;
+}
+
+.chat-project-file-proposal-head,
+.chat-project-file-proposal-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chat-project-file-proposal-head strong {
+  font-size: 13px;
+  color: #10213d;
+}
+
+.chat-project-file-proposal-head span,
+.chat-project-file-proposal-meta span,
+.chat-project-file-proposal-note,
+.chat-project-file-proposal-operation span {
+  font-size: 12px;
+  color: #4b6386;
+}
+
+.chat-project-file-proposal-list {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-project-file-proposal-operation {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.chat-project-file-proposal-operation strong {
+  font-size: 13px;
+  color: #10213d;
+  word-break: break-word;
+}
+
+.chat-project-file-proposal-note {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.chat-project-file-proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-project-file-proposal-actions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #10213d;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-project-file-proposal-actions button:hover {
+  background: rgba(15, 118, 110, 0.14);
 }
 
 @media (max-width: 520px) {

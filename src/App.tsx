@@ -5007,7 +5007,7 @@ ${selectedContextPrompt}` : '',
               aria-label="返回知识库"
               title="返回知识库"
             >
-              <span>GN</span>
+              <img src="/branding/goodnight-icon.svg" alt="GoodNight" />
             </MacButton>
 
             <nav className="desktop-primary-nav" aria-label="工作流切换">

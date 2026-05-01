@@ -47,10 +47,18 @@ test('ai chat exposes active AI name in the compact composer meta instead of an 
   assert.match(source, /handleToggleEnabled/);
 });
 
-test('ai settings drawer exposes one explicit save action while keeping model switching hooks', async () => {
+test('ai settings modal exposes one explicit save action while keeping model switching hooks', async () => {
   const source = await readFile(chatPath, 'utf8');
 
   assert.equal((source.match(/onClick=\{handleApplySettings\}/g) || []).length, 1);
+  assert.match(source, /createPortal/);
+  assert.match(source, /document\.body/);
+  assert.match(source, /chat-settings-modal-backdrop/);
+  assert.match(
+    source,
+    /<div className="chat-settings-modal-backdrop" onClick=\{closeSettings\}>\s*<section\s+className="chat-settings-drawer open"[\s\S]*?onClick=\{\(event\) => event\.stopPropagation\(\)\}/
+  );
+  assert.match(source, /role="dialog"/);
   assert.match(source, /value=\{settingsDraft\.model\}/);
   assert.match(source, /model:\s*event\.target\.value/);
   assert.match(source, /settingsModelOptions\.map\(\(candidate\)/);
@@ -70,15 +78,17 @@ test('ai chat exposes direct new-session entry and context budget indicator near
   assert.match(source, /currentContextUsage\.limitLabel/);
 });
 
-test('ai settings drawer CSS keeps dialog narrower and close button above content', async () => {
+test('ai settings modal CSS keeps dialog centered and close button above content', async () => {
   const css = await readFile(cssPath, 'utf8');
   const workspaceCss = await readFile(workspaceCssPath, 'utf8');
 
   assert.match(workspaceCss, /\.floating-ai-workspace\s*\{[^}]*z-index:\s*1000;/s);
-  assert.match(css, /\.chat-settings-drawer\s*\{[^}]*top:\s*92px;/s);
+  assert.match(css, /\.chat-settings-modal-backdrop\s*\{[^}]*place-items:\s*center;/s);
+  assert.match(css, /\.chat-settings-drawer\s*\{[^}]*position:\s*relative;/s);
   assert.match(css, /\.chat-settings-drawer\s*\{[^}]*z-index:\s*1002;/s);
-  assert.match(css, /width:\s*min\(880px, calc\(100vw - 48px\)\);/);
-  assert.match(css, /max-width:\s*calc\(100vw - 48px\);/);
+  assert.match(css, /width:\s*min\(920px, calc\(100vw - 48px\)\);/);
+  assert.match(css, /max-height:\s*min\(820px, calc\(100dvh - 48px\)\);/);
+  assert.doesNotMatch(css, /body\.desktop-workbench-mode \.chat-settings-drawer\s*\{[\s\S]*?position:\s*absolute;/);
   assert.match(css, /\.chat-settings-close\s*\{[^}]*position:\s*relative;/s);
   assert.match(css, /\.chat-settings-close\s*\{[^}]*z-index:\s*2;/s);
   assert.match(css, /\.chat-settings-close\s*\{[^}]*flex-shrink:\s*0;/s);

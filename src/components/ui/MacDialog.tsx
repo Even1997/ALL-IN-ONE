@@ -6,6 +6,7 @@ type MacDialogProps = {
   onOpenChange: (open: boolean) => void;
   title: ReactNode;
   description?: ReactNode;
+  contentClassName?: string;
   children: ReactNode;
   footer?: ReactNode;
 };
@@ -15,13 +16,14 @@ export const MacDialog = ({
   onOpenChange,
   title,
   description,
+  contentClassName,
   children,
   footer,
 }: MacDialogProps) => (
   <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal>
       <Dialog.Overlay className="mac-dialog-overlay" />
-      <Dialog.Content className="mac-dialog-content">
+      <Dialog.Content className={contentClassName ? `mac-dialog-content ${contentClassName}` : 'mac-dialog-content'}>
         <div className="mac-dialog-header">
           <Dialog.Title className="mac-dialog-title">{title}</Dialog.Title>
           {description ? <Dialog.Description className="mac-dialog-description">{description}</Dialog.Description> : null}

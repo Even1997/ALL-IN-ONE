@@ -15,7 +15,8 @@ test('AIChat keeps icon-first shell controls and GN Agent embedded entry support
   const pieces = await readFile(gnAgentPiecesPath, 'utf8');
 
   assert.match(source, /chat-shell-icon-btn/);
-  assert.match(source, /GNAgentModeSwitch/);
+  assert.match(source, /GNAgentSkillsEntryButton/);
+  assert.match(source, /GNAgentSkillsPage/);
   assert.match(source, /@skill/);
   assert.match(pieces, /chat-composer-gn-agent-entry/);
   assert.match(pieces, /chat-composer-embedded-toolbar/);

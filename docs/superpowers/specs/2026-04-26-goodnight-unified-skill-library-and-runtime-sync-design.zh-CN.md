@@ -1,5 +1,18 @@
 # GoodNight 统一技能库与多运行时同步设计
 
+## 状态说明
+
+这份文档是较早期的技能体系草案。当前方向已经收敛为：
+
+- `技能` 只服务 GoodNight，自身真源只放在用户级 `.goodnight` 全局目录
+- `Claude`、`Codex`、`Built-in AI` 不再和技能首页混成同一层产品对象
+- 外部目录如果还被读取，也只作为可导入来源，而不是技能产品形态本身
+
+因此，本文中涉及“多运行时同步”“支持矩阵”“技能页直接暴露 Codex / Claude 控制”的部分，均应视为历史背景而不是当前首页设计目标。当前以以下文档为准：
+
+- `docs/superpowers/specs/2026-04-30-global-skill-library-page-design.zh-CN.md`
+- `docs/superpowers/specs/2026-05-01-goodnight-skills-library-visual-redesign.zh-CN.md`
+
 ## 摘要
 
 本设计为 GoodNight 引入一套本机优先的统一技能层，用来管理三类技能来源：
@@ -8,7 +21,7 @@
 - GitHub 上游技能
 - 用户本地已有技能
 
-系统不直接把 `Codex CLI`、`Claude CLI` 或内置 AI 的技能目录当作权威来源，而是在 GoodNight 自己的目录中维护一份 canonical skill registry，再按目标运行时导出或同步。
+系统不直接把 `Codex CLI`、`Claude CLI` 或内置 AI 的技能目录当作权威来源，而是在 GoodNight 自己的目录中维护一份 canonical skill registry。当前收敛方向里，这份 registry 只首先服务 GoodNight 自己，而不是把多运行时同步当成技能页主目标。
 
 第一版范围明确收敛为：
 

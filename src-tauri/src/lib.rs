@@ -376,6 +376,7 @@ struct DeleteLibrarySkillParams {
 struct SkillDiscoveryEntry {
     id: String,
     name: String,
+    category: String,
     source: String,
     path: String,
     manifest_path: String,
@@ -414,6 +415,7 @@ enum SkillRuntimeTarget {
 struct SkillDescriptor {
     id: String,
     name: String,
+    category: String,
     skill_dir: PathBuf,
     manifest_path: PathBuf,
 }
@@ -822,6 +824,13 @@ fn load_skill_descriptor(skill_dir: &Path, allow_seed_manifest: bool) -> Result<
         .filter(|value| !value.trim().is_empty())
         .or(frontmatter_name)
         .unwrap_or_else(|| humanize_skill_id(&skill_id));
+    let skill_category = existing_manifest
+        .as_ref()
+        .and_then(|manifest| manifest.get("category"))
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "knowledge".to_string());
 
     if allow_seed_manifest && !manifest_path.is_file() {
         let manifest = generate_skill_manifest(&skill_id, &skill_name, "imported");
@@ -839,6 +848,7 @@ fn load_skill_descriptor(skill_dir: &Path, allow_seed_manifest: bool) -> Result<
     Ok(SkillDescriptor {
         id: skill_id,
         name: skill_name,
+        category: skill_category,
         skill_dir: skill_dir.to_path_buf(),
         manifest_path,
     })
@@ -907,9 +917,12 @@ fn list_skill_directories_recursive(root_dir: &Path) -> Result<Vec<PathBuf>, Str
 }
 
 fn is_skill_imported(app_data_dir: &Path, skill_id: &str) -> bool {
-    let builtin_dir = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir).join(skill_id);
     let imported_dir = get_goodnight_imported_skill_root_from_data_dir(app_data_dir).join(skill_id);
-    builtin_dir.is_dir() || imported_dir.is_dir()
+    imported_dir.is_dir()
+}
+
+fn is_system_skill(category: &str) -> bool {
+    category.eq_ignore_ascii_case("system")
 }
 
 fn is_skill_synced_to_codex(home_dir: &Path, skill_id: &str) -> bool {
@@ -951,6 +964,7 @@ fn build_skill_entry(
     Ok(SkillDiscoveryEntry {
         id: descriptor.id.clone(),
         name: descriptor.name,
+        category: descriptor.category,
         source: source.to_string(),
         path: descriptor.skill_dir.to_string_lossy().to_string(),
         manifest_path: descriptor.manifest_path.to_string_lossy().to_string(),
@@ -963,13 +977,17 @@ fn build_skill_entry(
 }
 
 fn find_library_skill_dir(app_data_dir: &Path, skill_id: &str) -> Option<PathBuf> {
-    for root in [
-        get_goodnight_builtin_skill_root_from_data_dir(app_data_dir),
-        get_goodnight_imported_skill_root_from_data_dir(app_data_dir),
-    ] {
-        let candidate = root.join(skill_id);
-        if candidate.is_dir() {
-            return Some(candidate);
+    let imported_candidate = get_goodnight_imported_skill_root_from_data_dir(app_data_dir).join(skill_id);
+    if imported_candidate.is_dir() {
+        return Some(imported_candidate);
+    }
+
+    let builtin_candidate = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir).join(skill_id);
+    if builtin_candidate.is_dir() {
+        if let Ok(descriptor) = load_skill_descriptor(&builtin_candidate, false) {
+            if is_system_skill(&descriptor.category) {
+                return Some(builtin_candidate);
+            }
         }
     }
 
@@ -1070,33 +1088,44 @@ fn collect_skill_discovery_entries(app_data_dir: &Path) -> Result<Vec<SkillDisco
     let home_dir = resolve_home_dir()?;
     let builtin_root = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir);
     let imported_root = get_goodnight_imported_skill_root_from_data_dir(app_data_dir);
-    let codex_root = home_dir.join(".codex").join("skills");
-    let claude_plugins_root = home_dir.join(".claude").join("plugins");
-    let mut seen_paths = HashSet::new();
+    let mut seen_skill_ids = HashSet::new();
     let mut entries = Vec::new();
 
     for skill_dir in list_skill_directories(&builtin_root)? {
-        let path_key = skill_dir.to_string_lossy().to_string();
-        if !seen_paths.insert(path_key) {
+        let descriptor = load_skill_descriptor(&skill_dir, false)?;
+        if !seen_skill_ids.insert(descriptor.id.clone()) {
             continue;
         }
 
-        let entry = build_skill_entry(
-            app_data_dir,
-            &home_dir,
-            &skill_dir,
-            "GoodNight built-in",
-            true,
-            true,
-            false,
-            false,
-        )?;
+        let entry = if is_system_skill(&descriptor.category) {
+            build_skill_entry(
+                app_data_dir,
+                &home_dir,
+                &skill_dir,
+                "GoodNight built-in",
+                true,
+                true,
+                false,
+                false,
+            )?
+        } else {
+            build_skill_entry(
+                app_data_dir,
+                &home_dir,
+                &skill_dir,
+                "GoodNight recommended",
+                is_skill_imported(app_data_dir, &descriptor.id),
+                false,
+                is_skill_imported(app_data_dir, &descriptor.id),
+                false,
+            )?
+        };
         entries.push(entry);
     }
 
     for skill_dir in list_skill_directories(&imported_root)? {
-        let path_key = skill_dir.to_string_lossy().to_string();
-        if !seen_paths.insert(path_key) {
+        let descriptor = load_skill_descriptor(&skill_dir, false)?;
+        if !seen_skill_ids.insert(descriptor.id.clone()) {
             continue;
         }
 
@@ -1109,46 +1138,6 @@ fn collect_skill_discovery_entries(app_data_dir: &Path) -> Result<Vec<SkillDisco
             false,
             true,
             true,
-        )?;
-        entries.push(entry);
-    }
-
-    for skill_dir in list_skill_directories(&codex_root)? {
-        let path_key = skill_dir.to_string_lossy().to_string();
-        if !seen_paths.insert(path_key) {
-            continue;
-        }
-
-        let descriptor = load_skill_descriptor(&skill_dir, false)?;
-        let entry = build_skill_entry(
-            app_data_dir,
-            &home_dir,
-            &skill_dir,
-            "Codex local",
-            is_skill_imported(app_data_dir, &descriptor.id),
-            false,
-            false,
-            false,
-        )?;
-        entries.push(entry);
-    }
-
-    for skill_dir in list_skill_directories_recursive(&claude_plugins_root)? {
-        let path_key = skill_dir.to_string_lossy().to_string();
-        if !seen_paths.insert(path_key) {
-            continue;
-        }
-
-        let descriptor = load_skill_descriptor(&skill_dir, false)?;
-        let entry = build_skill_entry(
-            app_data_dir,
-            &home_dir,
-            &skill_dir,
-            "Claude local",
-            is_skill_imported(app_data_dir, &descriptor.id),
-            false,
-            false,
-            false,
         )?;
         entries.push(entry);
     }
@@ -1610,7 +1599,10 @@ fn delete_library_skill(
 
     let builtin_dir = get_goodnight_builtin_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
     if builtin_dir.is_dir() {
-        return Err("Built-in skills cannot be deleted.".to_string());
+        let descriptor = load_skill_descriptor(&builtin_dir, false)?;
+        if is_system_skill(&descriptor.category) {
+            return Err("Built-in skills cannot be deleted.".to_string());
+        }
     }
 
     let imported_dir = get_goodnight_imported_skill_root_from_data_dir(&app_data_dir).join(&skill_id);

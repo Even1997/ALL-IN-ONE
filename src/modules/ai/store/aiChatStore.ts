@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { ActivityEntry } from '../skills/activityLog';
 import type { KnowledgeProposal } from '../../../features/knowledge/model/knowledgeProposal';
+import type { ProjectFileProposal } from '../chat/projectFileOperations';
 
 export type StoredChatMessage = {
   id: string;
@@ -9,6 +10,7 @@ export type StoredChatMessage = {
   content: string;
   tone?: 'default' | 'error';
   knowledgeProposal?: KnowledgeProposal;
+  projectFileProposal?: ProjectFileProposal;
   createdAt: number;
 };
 

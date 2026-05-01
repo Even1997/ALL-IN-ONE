@@ -72,6 +72,8 @@ test('macOS UI system is wired into the desktop shell and project manager', asyn
   assert.match(appCss, /\.mac-panel\s*\{/);
   assert.match(appCss, /\.mac-field\s*\{/);
   assert.match(appCss, /\.mac-toolbar\s*\{/);
+  assert.match(appCss, /\.mac-dialog-overlay\s*\{[\s\S]*?z-index:\s*1100;/);
+  assert.match(appCss, /\.mac-dialog-content\s*\{[\s\S]*?z-index:\s*1101;/);
   assert.match(appCss, /:root\[data-theme='dark'\]\s*\{[\s\S]*?--macos-window-bg:/);
   assert.match(appCss, /:root\[data-theme='light'\]\s*\{[\s\S]*?--macos-window-bg:/);
 });

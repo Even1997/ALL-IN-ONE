@@ -43,6 +43,7 @@ export const GNAgentMessageList: React.FC<{
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
   renderKnowledgeProposal?: (message: StoredChatMessage) => React.ReactNode;
+  renderProjectFileProposal?: (message: StoredChatMessage) => React.ReactNode;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   leadingContent?: React.ReactNode;
 }> = ({
@@ -52,6 +53,7 @@ export const GNAgentMessageList: React.FC<{
   parseMessageParts,
   renderMessagePart,
   renderKnowledgeProposal,
+  renderProjectFileProposal,
   messagesEndRef,
   leadingContent,
 }) => (
@@ -69,6 +71,7 @@ export const GNAgentMessageList: React.FC<{
             <div className="chat-message-content">
               {parts.map((part, index) => renderMessagePart(message.id, part, index))}
               {renderKnowledgeProposal ? renderKnowledgeProposal(message) : null}
+              {renderProjectFileProposal ? renderProjectFileProposal(message) : null}
             </div>
             <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
           </div>
