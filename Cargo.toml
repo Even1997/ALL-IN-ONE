@@ -2,9 +2,6 @@
 resolver = "2"
 members = [
   "src-tauri",
-  "crates/goodnight-core",
-  "crates/goodnight-server",
-  "crates/goodnight-mcp-bridge",
 ]
 
 [profile.dev]
