@@ -16,6 +16,7 @@ test('AIChat renders structured knowledge-truth cards inside the normal chat flo
 
   assert.match(messageListSource, /renderStructuredCards/);
   assert.match(chatSource, /chat-structured-card/);
+  assert.match(chatSource, /KnowledgeTruthStructuredCards/);
   assert.match(chatSource, /temporary-content/);
   assert.match(chatSource, /setActiveArtifact/);
   assert.match(chatSource, /chat-next-step-action/);

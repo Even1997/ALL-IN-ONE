@@ -23,6 +23,11 @@ test('AIChat exposes knowledge proposal controls in assistant messages', async (
   assert.match(chatSource, /resolveKnowledgeNoteMirrorPath/);
   assert.match(chatSource, /structuredCards/);
   assert.match(chatSource, /renderStructuredCards/);
+  assert.match(chatSource, /handleApproveAllKnowledgeProposal/);
+  assert.match(chatSource, /upsertProposal\(approvedProposal\)/);
+  assert.match(chatSource, /catch\s*\(error\)/);
+  assert.match(chatSource, /setProposalStatus\(currentProject\.id,\s*proposal\.id,\s*'pending'\)/);
+  assert.match(chatSource, /createStoredChatMessage\('system',\s*errorMessage,\s*'error'\)/);
   assert.doesNotMatch(chatSource, /suggestKnowledgeProposalFromAnswer/);
   assert.doesNotMatch(chatSource, /鎴戞暣鐞嗕簡涓€浠藉彲鎵ц鐨勭煡璇嗗簱鎻愭/);
   assert.match(chatSource, /chat-knowledge-proposal-card/);

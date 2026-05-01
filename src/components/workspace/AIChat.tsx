@@ -293,6 +293,74 @@ const buildSessionPreview = (content: string) => {
 
 const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const approveAllKnowledgeProposalOperations = (proposal: KnowledgeProposal): KnowledgeProposal => ({
+  ...proposal,
+  operations: proposal.operations.map((operation) =>
+    operation.selected ? operation : { ...operation, selected: true }
+  ),
+});
+
+const KnowledgeTruthStructuredCards: React.FC<{
+  cards: ChatStructuredCard[];
+  canOpenArtifacts: boolean;
+  onOpenArtifact: (artifactId: string) => void;
+  onSelectNextStep: (prompt: string) => void;
+}> = ({ cards, canOpenArtifacts, onOpenArtifact, onSelectNextStep }) => (
+  <div className="chat-structured-cards">
+    {cards.map((card, index) => {
+      if (card.type === 'summary') {
+        return (
+          <section key={`${card.type}-${index}`} className="chat-structured-card summary">
+            <strong>{card.title}</strong>
+            <p>{card.body}</p>
+          </section>
+        );
+      }
+
+      if (card.type === 'conflict') {
+        return (
+          <section key={card.id} className="chat-structured-card conflict">
+            <strong>{card.title}</strong>
+            <p>{card.previousLabel}</p>
+            <p>{card.nextLabel}</p>
+            <small>{card.sourceTitles.join(' / ')}</small>
+          </section>
+        );
+      }
+
+      if (card.type === 'temporary-content') {
+        return (
+          <section key={card.artifactId} className="chat-structured-card temporary-content">
+            <strong>{card.title}</strong>
+            <p>{card.summary}</p>
+            <button type="button" onClick={() => onOpenArtifact(card.artifactId)} disabled={!canOpenArtifacts}>
+              在中间查看
+            </button>
+          </section>
+        );
+      }
+
+      return (
+        <section key={`${card.type}-${index}`} className="chat-structured-card next-step">
+          <strong>{card.title}</strong>
+          <div className="chat-next-step-actions">
+            {card.actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className="chat-next-step-action"
+                onClick={() => onSelectNextStep(action.prompt)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      );
+    })}
+  </div>
+);
+
 const GN_AGENT_SUGGESTIONS: GNAgentSuggestion[] = [
   {
     label: '@索引',
@@ -762,72 +830,88 @@ export const AIChat: React.FC<AIChatProps> = ({
           : message.knowledgeProposal,
       }));
 
-      await executeKnowledgeProposal(proposal, {
-        createNote: async ({ title, content, tags }) => {
-          const normalizedContent = serializeKnowledgeNoteMarkdown(title, content);
-          const filePath =
-            isTauriRuntimeAvailable() && projectKnowledgeRootDir
-              ? await resolveKnowledgeNoteMirrorPath({
-                  projectKnowledgeRootDir,
-                  title,
-                  content: normalizedContent,
-                })
-              : '';
-          await createProjectNote(currentProject.id, {
-            title,
-            content: normalizedContent,
-            filePath,
-            updatedAt: new Date().toISOString(),
-            tags,
-          });
-        },
-        updateNote: async ({ noteId, title, content, tags }) => {
-          const existingNote = serverNotes.find((note) => note.id === noteId);
-          const nextContent = serializeKnowledgeNoteMarkdown(title, content ?? existingNote?.bodyMarkdown ?? '');
-          const filePath =
-            isTauriRuntimeAvailable() && projectKnowledgeRootDir
-              ? await resolveKnowledgeNoteMirrorPath({
-                  projectKnowledgeRootDir,
-                  title,
-                  content: nextContent,
-                  existingFilePath: existingNote?.sourceUrl || undefined,
-                })
-              : existingNote?.sourceUrl || '';
-          await updateProjectNote(currentProject.id, noteId, {
-            title,
-            content: nextContent,
-            filePath,
-            updatedAt: new Date().toISOString(),
-            tags: Array.from(new Set([...(existingNote?.tags || []), ...tags])),
-          });
-        },
-      });
+      try {
+        await executeKnowledgeProposal(proposal, {
+          createNote: async ({ title, content, tags }) => {
+            const normalizedContent = serializeKnowledgeNoteMarkdown(title, content);
+            const filePath =
+              isTauriRuntimeAvailable() && projectKnowledgeRootDir
+                ? await resolveKnowledgeNoteMirrorPath({
+                    projectKnowledgeRootDir,
+                    title,
+                    content: normalizedContent,
+                  })
+                : '';
+            await createProjectNote(currentProject.id, {
+              title,
+              content: normalizedContent,
+              filePath,
+              updatedAt: new Date().toISOString(),
+              tags,
+            });
+          },
+          updateNote: async ({ noteId, title, content, tags }) => {
+            const existingNote = serverNotes.find((note) => note.id === noteId);
+            const nextContent = serializeKnowledgeNoteMarkdown(title, content ?? existingNote?.bodyMarkdown ?? '');
+            const filePath =
+              isTauriRuntimeAvailable() && projectKnowledgeRootDir
+                ? await resolveKnowledgeNoteMirrorPath({
+                    projectKnowledgeRootDir,
+                    title,
+                    content: nextContent,
+                    existingFilePath: existingNote?.sourceUrl || undefined,
+                  })
+                : existingNote?.sourceUrl || '';
+            await updateProjectNote(currentProject.id, noteId, {
+              title,
+              content: nextContent,
+              filePath,
+              updatedAt: new Date().toISOString(),
+              tags: Array.from(new Set([...(existingNote?.tags || []), ...tags])),
+            });
+          },
+        });
 
-      await loadKnowledgeNotes(currentProject.id);
-      if (proposal.trigger === 'knowledge-organize' && proposal.operations.every((operation) => operation.selected)) {
-        const latestNotes = useKnowledgeStore.getState().notes;
-        setKnowledgeOrganizeState(
-          currentProject.id,
-          buildKnowledgeOrganizeWorkflowState({
-            docs: projectKnowledgeNotesToRequirementDocs(latestNotes),
-            generatedFiles,
-            lastKnowledgeOrganizeAt: new Date().toISOString(),
-          })
-        );
+        await loadKnowledgeNotes(currentProject.id);
+        if (proposal.trigger === 'knowledge-organize' && proposal.operations.every((operation) => operation.selected)) {
+          const latestNotes = useKnowledgeStore.getState().notes;
+          setKnowledgeOrganizeState(
+            currentProject.id,
+            buildKnowledgeOrganizeWorkflowState({
+              docs: projectKnowledgeNotesToRequirementDocs(latestNotes),
+              generatedFiles,
+              lastKnowledgeOrganizeAt: new Date().toISOString(),
+            })
+          );
+        }
+        setProposalStatus(currentProject.id, proposal.id, 'executed');
+        updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+          ...message,
+          knowledgeProposal: message.knowledgeProposal
+            ? {
+                ...message.knowledgeProposal,
+                status: 'executed',
+              }
+            : message.knowledgeProposal,
+        }));
+      } catch (error) {
+        const errorMessage = normalizeErrorMessage(error);
+        setProposalStatus(currentProject.id, proposal.id, 'pending');
+        updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+          ...message,
+          knowledgeProposal: message.knowledgeProposal
+            ? {
+                ...message.knowledgeProposal,
+                status: 'pending',
+              }
+            : message.knowledgeProposal,
+        }));
+        appendMessage(currentProject.id, activeSessionId, createStoredChatMessage('system', errorMessage, 'error'));
       }
-      setProposalStatus(currentProject.id, proposal.id, 'executed');
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        knowledgeProposal: message.knowledgeProposal
-          ? {
-              ...message.knowledgeProposal,
-              status: 'executed',
-            }
-          : message.knowledgeProposal,
-      }));
     },
     [
       activeSessionId,
+      appendMessage,
       createProjectNote,
       currentProject,
       loadKnowledgeNotes,
@@ -838,6 +922,23 @@ export const AIChat: React.FC<AIChatProps> = ({
       updateMessage,
       updateProjectNote,
     ]
+  );
+
+  const handleApproveAllKnowledgeProposal = useCallback(
+    (messageId: string, proposal: KnowledgeProposal) => {
+      if (!currentProject || !activeSessionId) {
+        return;
+      }
+
+      const approvedProposal = approveAllKnowledgeProposalOperations(proposal);
+      upsertProposal(approvedProposal);
+      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+        ...message,
+        knowledgeProposal: approvedProposal,
+      }));
+      void handleExecuteKnowledgeProposal(messageId, approvedProposal);
+    },
+    [activeSessionId, currentProject, handleExecuteKnowledgeProposal, updateMessage, upsertProposal]
   );
 
   const renderKnowledgeProposal = useCallback(
@@ -882,7 +983,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           <div className="chat-knowledge-proposal-actions">
             {proposal.status === 'pending' ? (
               <>
-                <button type="button" onClick={() => void handleExecuteKnowledgeProposal(message.id, proposal)}>
+                <button type="button" onClick={() => handleApproveAllKnowledgeProposal(message.id, proposal)}>
                   全部批准
                 </button>
                 <button type="button" onClick={() => void handleExecuteKnowledgeProposal(message.id, proposal)}>
@@ -906,71 +1007,21 @@ export const AIChat: React.FC<AIChatProps> = ({
         return null;
       }
 
+      const canOpenArtifacts = Boolean(currentProject?.id && activeSessionId);
+
       return (
-        <div className="chat-structured-cards">
-          {message.structuredCards.map((card, index) => {
-            if (card.type === 'summary') {
-              return (
-                <section key={`${card.type}-${index}`} className="chat-structured-card summary">
-                  <strong>{card.title}</strong>
-                  <p>{card.body}</p>
-                </section>
-              );
+        <KnowledgeTruthStructuredCards
+          cards={message.structuredCards}
+          canOpenArtifacts={canOpenArtifacts}
+          onOpenArtifact={(artifactId) => {
+            if (!currentProject?.id || !activeSessionId) {
+              return;
             }
 
-            if (card.type === 'conflict') {
-              return (
-                <section key={card.id} className="chat-structured-card conflict">
-                  <strong>{card.title}</strong>
-                  <p>{card.previousLabel}</p>
-                  <p>{card.nextLabel}</p>
-                  <small>{card.sourceTitles.join(' / ')}</small>
-                </section>
-              );
-            }
-
-            if (card.type === 'temporary-content') {
-              const canOpenArtifact = Boolean(currentProject?.id && activeSessionId);
-              return (
-                <section key={card.artifactId} className="chat-structured-card temporary-content">
-                  <strong>{card.title}</strong>
-                  <p>{card.summary}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!currentProject?.id || !activeSessionId) {
-                        return;
-                      }
-
-                      setActiveArtifact(currentProject.id, activeSessionId, card.artifactId);
-                    }}
-                    disabled={!canOpenArtifact}
-                  >
-                    在中间查看
-                  </button>
-                </section>
-              );
-            }
-
-            return (
-              <section key={`${card.type}-${index}`} className="chat-structured-card next-step">
-                <strong>{card.title}</strong>
-                <div className="chat-next-step-actions">
-                  {card.actions.map((action) => (
-                    <button
-                      key={action.id}
-                      type="button"
-                      className="chat-next-step-action"
-                      onClick={() => setInput(action.prompt)}
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+            setActiveArtifact(currentProject.id, activeSessionId, artifactId);
+          }}
+          onSelectNextStep={setInput}
+        />
       );
     },
     [activeSessionId, currentProject?.id, setActiveArtifact, setInput]
