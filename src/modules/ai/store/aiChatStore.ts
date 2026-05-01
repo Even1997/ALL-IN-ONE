@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { ActivityEntry } from '../skills/activityLog';
+import type { ChatStructuredCard } from '../chat/chatCards';
 import type { KnowledgeProposal } from '../../../features/knowledge/model/knowledgeProposal';
 import type { ProjectFileProposal } from '../chat/projectFileOperations';
 
@@ -9,6 +10,7 @@ export type StoredChatMessage = {
   role: 'user' | 'assistant' | 'system';
   content: string;
   tone?: 'default' | 'error';
+  structuredCards?: ChatStructuredCard[];
   knowledgeProposal?: KnowledgeProposal;
   projectFileProposal?: ProjectFileProposal;
   createdAt: number;

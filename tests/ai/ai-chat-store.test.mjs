@@ -138,3 +138,29 @@ test('ai chat store keeps assistant knowledge proposal metadata intact', async (
   assert.equal(savedMessage.knowledgeProposal.summary, '发现 1 项 wiki 更新建议');
   assert.equal(savedMessage.knowledgeProposal.operations[0].selected, true);
 });
+test('ai chat store keeps assistant structured cards intact', async () => {
+  const { useAIChatStore, createChatSession, createStoredChatMessage } = await loadStore();
+  const store = useAIChatStore.getState();
+
+  const session = createChatSession('project-cards', '知识会话');
+  store.upsertSession('project-cards', session);
+  store.appendMessage('project-cards', session.id, {
+    ...createStoredChatMessage('assistant', '我识别到了 2 条知识变化。'),
+    structuredCards: [
+      {
+        type: 'summary',
+        title: '本轮识别结果',
+        body: '新增 1 条，冲突 1 条。',
+      },
+      {
+        type: 'next-step',
+        title: '下一步建议',
+        actions: [{ id: 'review-conflicts', label: '先确认冲突', prompt: '先确认冲突' }],
+      },
+    ],
+  });
+
+  const savedMessage = useAIChatStore.getState().projects['project-cards'].sessions[0].messages[0];
+  assert.equal(savedMessage.structuredCards[0].type, 'summary');
+  assert.equal(savedMessage.structuredCards[1].actions[0].label, '先确认冲突');
+});
