@@ -1,3 +1,8 @@
+import type {
+  KnowledgeSessionArtifactStatus,
+  KnowledgeSessionArtifactType,
+} from '../../../features/knowledge/model/knowledgeSessionArtifact';
+
 export type ChatCardAction = {
   id: string;
   label: string;
@@ -24,10 +29,10 @@ export type ChatStructuredCard =
       type: 'temporary-content';
       artifactId: string;
       title: string;
-      artifactType: 'impact-analysis' | 'candidate-summary' | 'candidate-structure' | 'prototype-draft' | 'design-draft';
+      artifactType: KnowledgeSessionArtifactType;
       summary: string;
       body: string;
-      status: 'session' | 'promoted' | 'discarded';
+      status: KnowledgeSessionArtifactStatus;
     }
   | {
       type: 'next-step';
