@@ -7,17 +7,11 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::menu::{AboutMetadataBuilder, Menu, MenuBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 
-const KNOWLEDGE_SIDECAR_PORT: u16 = 44380;
-const KNOWLEDGE_HEALTH_POLL_INTERVAL_MS: u64 = 100;
-const KNOWLEDGE_HEALTH_TIMEOUT_MS: u64 = 10_000;
-const KNOWLEDGE_PID_FILE_NAME: &str = "goodnight-knowledge-sidecar.pid";
-const KNOWLEDGE_TOKEN_FILE_NAME: &str = "goodnight_local_server_token";
 const NATIVE_MENU_EVENT_NAME: &str = "native-menu-event";
 const GOODNIGHT_SKILLS_DIR_NAME: &str = "goodnight-skills";
 const GOODNIGHT_BUILTIN_SKILLS_DIR_NAME: &str = "built-in";
@@ -29,9 +23,6 @@ const GOODNIGHT_BUILTIN_SKILL_IDS: &[&str] = &[
     "goodnight-workspace-context",
     "goodnight-sketch-output",
     "goodnight-design-output",
-    "goodnight-m-flow",
-    "goodnight-llmwiki",
-    "goodnight-rag",
 ];
 
 fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
@@ -39,195 +30,10 @@ fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocalKnowledgeServerConfig {
-    pub base_url: String,
-    pub auth_token: String,
-}
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeMenuEventPayload {
     id: String,
-}
-
-struct KnowledgeSidecarChild(tauri_plugin_shell::process::CommandChild);
-
-struct KnowledgeSidecarState {
-    child: Mutex<Option<KnowledgeSidecarChild>>,
-    data_dir: PathBuf,
-}
-
-fn kill_stale_knowledge_sidecar(app_data_dir: &Path) {
-    let pid_file = app_data_dir.join(KNOWLEDGE_PID_FILE_NAME);
-    if let Ok(contents) = fs::read_to_string(&pid_file) {
-        if let Ok(pid) = contents.trim().parse::<u32>() {
-            #[cfg(unix)]
-            {
-                let _ = Command::new("kill").arg(pid.to_string()).output();
-            }
-            #[cfg(windows)]
-            {
-                let _ = Command::new("taskkill")
-                    .args(["/PID", &pid.to_string(), "/F"])
-                    .output();
-            }
-            std::thread::sleep(std::time::Duration::from_millis(500));
-        }
-        let _ = fs::remove_file(pid_file);
-    }
-}
-
-fn write_knowledge_pid_file(app_data_dir: &Path, pid: u32) {
-    let _ = fs::write(app_data_dir.join(KNOWLEDGE_PID_FILE_NAME), pid.to_string());
-}
-
-fn remove_knowledge_pid_file(app_data_dir: &Path) {
-    let _ = fs::remove_file(app_data_dir.join(KNOWLEDGE_PID_FILE_NAME));
-}
-
-fn ensure_local_knowledge_token(app_data_dir: &Path) -> Result<String, String> {
-    let token_file = app_data_dir.join(KNOWLEDGE_TOKEN_FILE_NAME);
-
-    if let Ok(token) = fs::read_to_string(&token_file) {
-        let normalized = token.trim().to_string();
-        if !normalized.is_empty() {
-            return Ok(normalized);
-        }
-    }
-
-    let manager = goodnight_core::DatabaseManager::new(app_data_dir)
-        .map_err(|error| format!("Failed to open knowledge database manager: {}", error))?;
-    let registry = manager
-        .registry()
-        .ok_or_else(|| "No registry database available".to_string())?;
-    let (_, raw_token) = registry
-        .create_api_token("desktop")
-        .map_err(|error| format!("Failed to create knowledge API token: {}", error))?;
-
-    fs::write(&token_file, &raw_token)
-        .map_err(|error| format!("Failed to persist knowledge API token: {}", error))?;
-
-    Ok(raw_token)
-}
-
-fn get_sidecar_binary_name() -> &'static str {
-    "goodnight-server"
-}
-
-fn wait_for_knowledge_sidecar(base_url: &str) {
-    let health_url = format!("{}/health", base_url);
-    let start = std::time::Instant::now();
-
-    loop {
-        if start.elapsed().as_millis() as u64 > KNOWLEDGE_HEALTH_TIMEOUT_MS {
-            tracing::warn!(
-                timeout_ms = KNOWLEDGE_HEALTH_TIMEOUT_MS,
-                "GoodNight knowledge sidecar health check timed out"
-            );
-            break;
-        }
-
-        match reqwest::blocking::Client::new()
-            .get(&health_url)
-            .timeout(std::time::Duration::from_millis(500))
-            .send()
-        {
-            Ok(response) if response.status().is_success() => {
-                tracing::info!(
-                    url = %base_url,
-                    elapsed_ms = start.elapsed().as_millis(),
-                    "GoodNight knowledge sidecar is ready"
-                );
-                break;
-            }
-            _ => {
-                std::thread::sleep(std::time::Duration::from_millis(
-                    KNOWLEDGE_HEALTH_POLL_INTERVAL_MS,
-                ));
-            }
-        }
-    }
-}
-
-fn bootstrap_knowledge_sidecar(
-    app: &tauri::App,
-    app_data_dir: &Path,
-    config: &LocalKnowledgeServerConfig,
-) -> Result<KnowledgeSidecarState, String> {
-    kill_stale_knowledge_sidecar(app_data_dir);
-
-    let health_url = format!("{}/health", config.base_url);
-    let already_running = reqwest::blocking::Client::new()
-        .get(&health_url)
-        .timeout(std::time::Duration::from_millis(500))
-        .send()
-        .is_ok_and(|response| response.status().is_success());
-
-    if already_running {
-        tracing::info!(url = %config.base_url, "Reusing existing GoodNight knowledge sidecar");
-        return Ok(KnowledgeSidecarState {
-            child: Mutex::new(None),
-            data_dir: app_data_dir.to_path_buf(),
-        });
-    }
-
-    let shell = app.shell();
-    let sidecar = shell
-        .sidecar(get_sidecar_binary_name())
-        .map_err(|error| format!("Failed to create knowledge sidecar command: {}", error))?
-        .args([
-            "--data-dir",
-            app_data_dir
-                .to_str()
-                .ok_or_else(|| "Knowledge data directory is not valid UTF-8".to_string())?,
-            "serve",
-            "--port",
-            &KNOWLEDGE_SIDECAR_PORT.to_string(),
-        ]);
-
-    let (mut rx, child) = sidecar
-        .spawn()
-        .map_err(|error| format!("Failed to spawn knowledge sidecar: {}", error))?;
-
-    write_knowledge_pid_file(app_data_dir, child.pid());
-
-    tauri::async_runtime::spawn(async move {
-        use tauri_plugin_shell::process::CommandEvent;
-
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(line) => {
-                    tracing::info!(
-                        output = %String::from_utf8_lossy(&line),
-                        "goodnight knowledge sidecar stdout"
-                    );
-                }
-                CommandEvent::Stderr(line) => {
-                    tracing::warn!(
-                        output = %String::from_utf8_lossy(&line),
-                        "goodnight knowledge sidecar stderr"
-                    );
-                }
-                CommandEvent::Error(error) => {
-                    tracing::warn!(error = %error, "goodnight knowledge sidecar error");
-                }
-                CommandEvent::Terminated(payload) => {
-                    tracing::info!(?payload, "goodnight knowledge sidecar terminated");
-                    break;
-                }
-                _ => {}
-            }
-        }
-    });
-
-    wait_for_knowledge_sidecar(&config.base_url);
-
-    Ok(KnowledgeSidecarState {
-        child: Mutex::new(Some(KnowledgeSidecarChild(child))),
-        data_dir: app_data_dir.to_path_buf(),
-    })
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -2356,13 +2162,6 @@ fn open_path_in_shell(app_handle: tauri::AppHandle, path: String) -> Result<(), 
         .map_err(|error| format!("Failed to open path: {}", error))
 }
 
-#[tauri::command]
-fn get_local_knowledge_server_config(
-    config: tauri::State<'_, LocalKnowledgeServerConfig>,
-) -> LocalKnowledgeServerConfig {
-    config.inner().clone()
-}
-
 fn build_native_app_menu<R: tauri::Runtime>(
     app_handle: &tauri::AppHandle<R>,
 ) -> tauri::Result<Menu<R>> {
@@ -2477,22 +2276,11 @@ pub fn run() {
             fs::create_dir_all(&app_data_dir)
                 .map_err(|error| format!("Failed to create app data directory: {}", error))?;
             ensure_builtin_skills_installed(&app_data_dir)?;
-
-            let auth_token = ensure_local_knowledge_token(&app_data_dir)?;
-            let config = LocalKnowledgeServerConfig {
-                base_url: format!("http://127.0.0.1:{}", KNOWLEDGE_SIDECAR_PORT),
-                auth_token,
-            };
-
-            let sidecar_state = bootstrap_knowledge_sidecar(app, &app_data_dir, &config)?;
             let native_menu = build_native_app_menu(&app.handle())
                 .map_err(|error| format!("Failed to build native app menu: {}", error))?;
 
             app.set_menu(native_menu)
                 .map_err(|error| format!("Failed to install native app menu: {}", error))?;
-
-            app.manage(config);
-            app.manage(sidecar_state);
 
             Ok(())
         })
@@ -2523,22 +2311,10 @@ pub fn run() {
             import_knowledge_assets,
             read_text_file,
             open_path_in_shell,
-            get_local_knowledge_server_config,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
-                if let Some(state) = app.try_state::<KnowledgeSidecarState>() {
-                    if let Ok(mut child) = state.child.lock() {
-                        if let Some(KnowledgeSidecarChild(handle)) = child.take() {
-                            let _ = handle.kill();
-                        }
-                    }
-                    remove_knowledge_pid_file(&state.data_dir);
-                }
-            }
-        });
+        .run(|_, _| {});
 }
 
 #[cfg(test)]

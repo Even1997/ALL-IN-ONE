@@ -19,24 +19,19 @@ Use GoodNight's local vault filesystem as the default working map. Prefer real v
   Style packs, design language docs, and reusable visual direction files.
 - `design/prototypes/`
   HTML prototypes and related prototype manifests.
-- `.goodnight/m-flow/`
-  Native M-Flow state for the current vault.
-- `_goodnight/outputs/<skill>/`
-  User-visible AI outputs produced for a retrieval skill.
 
 ## Write Rules
 
 - Write sketch artifacts to `sketch/pages/*.md`.
 - Write design language or system guidance to `design/styles/*.md`.
 - Write rendered prototype artifacts to `design/prototypes/*`.
-- Keep internal state files under `.goodnight/` as system-owned unless the task is specifically about them.
-- If the user asks for a generated knowledge document, write it to `_goodnight/outputs/<skill>/`.
+- Use real vault-relative paths in explanations.
+- Generated files should be written directly into the user-visible vault tree only when the task calls for file output.
 
 ## Derived And Generated Artifacts
 
-- The vault is the primary context source.
-- The native knowledge state is `.goodnight/m-flow/`, and the readable knowledge artifacts live under `_goodnight/outputs/m-flow/`.
-- Generated outputs should still resolve into visible vault paths the user can inspect.
+- `<vault>/` is the primary context source.
+- Generated outputs should resolve into visible vault paths the user can inspect.
 - When explaining changes, reference the final vault-relative path the user can inspect.
 
 ## Practical Rule
@@ -44,7 +39,6 @@ Use GoodNight's local vault filesystem as the default working map. Prefer real v
 If you are unsure where an output belongs, choose the narrowest valid location:
 
 - knowledge or notes: the user-owned vault path
-- generated knowledge deliverable: `_goodnight/outputs/<skill>/`
 - sketch structure: `sketch/pages/`
 - visual system: `design/styles/`
 - clickable prototype: `design/prototypes/`
