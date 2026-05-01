@@ -1033,7 +1033,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             title: `${artifact.title}.md`,
             summary: artifact.title,
             content: artifact.body,
-            authorRole: '浜у搧',
+            authorRole: '产品',
             updatedAt: new Date().toISOString(),
             status: 'draft',
           },

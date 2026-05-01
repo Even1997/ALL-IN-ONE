@@ -8,13 +8,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
 const noteWorkspacePath = path.resolve(__dirname, '../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx');
+const aiChatPath = path.resolve(__dirname, '../src/components/workspace/AIChat.tsx');
 
 test('product workbench reads active session artifacts and passes a temporary preview into the knowledge workspace', async () => {
   const productSource = await readFile(productPath, 'utf8');
   const noteSource = await readFile(noteWorkspacePath, 'utf8');
+  const aiChatSource = await readFile(aiChatPath, 'utf8');
 
   assert.match(productSource, /useKnowledgeSessionArtifactsStore/);
   assert.match(productSource, /activeTemporaryArtifact/);
   assert.match(noteSource, /temporaryContentPreview\?:/);
   assert.match(noteSource, /gn-note-temporary-preview/);
+  assert.match(aiChatSource, /authorRole: '产品'/);
+  assert.doesNotMatch(aiChatSource, /authorRole: '浜у搧'/);
 });
