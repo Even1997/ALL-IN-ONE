@@ -6,6 +6,7 @@ import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/
 import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
 import type { AITextStreamEvent } from '../../modules/ai/core/AIService';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
+import type { ChatStructuredCard } from '../../modules/ai/chat/chatCards';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
 import {
   CHAT_AGENTS,
@@ -59,6 +60,7 @@ import {
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
 import type { KnowledgeProposal } from '../../features/knowledge/model/knowledgeProposal';
 import { useKnowledgeProposalStore } from '../../features/knowledge/store/knowledgeProposalStore';
+import { useKnowledgeSessionArtifactsStore } from '../../features/knowledge/store/knowledgeSessionArtifactsStore';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
 import { buildKnowledgeNoteRootMirrorPath } from '../../features/knowledge/workspace/knowledgeNoteFilePaths';
 import { serializeKnowledgeNoteMarkdown } from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
@@ -609,6 +611,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const createProjectNote = useKnowledgeStore((state) => state.createProjectNote);
   const loadKnowledgeNotes = useKnowledgeStore((state) => state.loadNotes);
   const updateProjectNote = useKnowledgeStore((state) => state.updateProjectNote);
+  const setActiveArtifact = useKnowledgeSessionArtifactsStore((state) => state.setActiveArtifact);
   const aiContextState = useAIContextStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
   );
@@ -895,6 +898,82 @@ export const AIChat: React.FC<AIChatProps> = ({
       );
     },
     [dismissKnowledgeProposal, handleExecuteKnowledgeProposal, toggleProposalOperation]
+  );
+
+  const renderStructuredCards = useCallback(
+    (message: { structuredCards?: ChatStructuredCard[] }) => {
+      if (!message.structuredCards || message.structuredCards.length === 0) {
+        return null;
+      }
+
+      return (
+        <div className="chat-structured-cards">
+          {message.structuredCards.map((card, index) => {
+            if (card.type === 'summary') {
+              return (
+                <section key={`${card.type}-${index}`} className="chat-structured-card summary">
+                  <strong>{card.title}</strong>
+                  <p>{card.body}</p>
+                </section>
+              );
+            }
+
+            if (card.type === 'conflict') {
+              return (
+                <section key={card.id} className="chat-structured-card conflict">
+                  <strong>{card.title}</strong>
+                  <p>{card.previousLabel}</p>
+                  <p>{card.nextLabel}</p>
+                  <small>{card.sourceTitles.join(' / ')}</small>
+                </section>
+              );
+            }
+
+            if (card.type === 'temporary-content') {
+              const canOpenArtifact = Boolean(currentProject?.id && activeSessionId);
+              return (
+                <section key={card.artifactId} className="chat-structured-card temporary-content">
+                  <strong>{card.title}</strong>
+                  <p>{card.summary}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!currentProject?.id || !activeSessionId) {
+                        return;
+                      }
+
+                      setActiveArtifact(currentProject.id, activeSessionId, card.artifactId);
+                    }}
+                    disabled={!canOpenArtifact}
+                  >
+                    在中间查看
+                  </button>
+                </section>
+              );
+            }
+
+            return (
+              <section key={`${card.type}-${index}`} className="chat-structured-card next-step">
+                <strong>{card.title}</strong>
+                <div className="chat-next-step-actions">
+                  {card.actions.map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      className="chat-next-step-action"
+                      onClick={() => setInput(action.prompt)}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      );
+    },
+    [activeSessionId, currentProject?.id, setActiveArtifact, setInput]
   );
 
   const executeProjectFileOperations = useCallback(
@@ -2166,6 +2245,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseAIChatMessageParts}
       renderMessagePart={renderMessagePart}
+      renderStructuredCards={renderStructuredCards}
       renderKnowledgeProposal={renderKnowledgeProposal}
       renderProjectFileProposal={renderProjectFileProposal}
       messagesEndRef={messagesEndRef}

@@ -42,6 +42,7 @@ export const GNAgentMessageList: React.FC<{
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
+  renderStructuredCards?: (message: StoredChatMessage) => React.ReactNode;
   renderKnowledgeProposal?: (message: StoredChatMessage) => React.ReactNode;
   renderProjectFileProposal?: (message: StoredChatMessage) => React.ReactNode;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
@@ -52,6 +53,7 @@ export const GNAgentMessageList: React.FC<{
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
+  renderStructuredCards,
   renderKnowledgeProposal,
   renderProjectFileProposal,
   messagesEndRef,
@@ -70,6 +72,7 @@ export const GNAgentMessageList: React.FC<{
           <div className="chat-message-bubble">
             <div className="chat-message-content">
               {parts.map((part, index) => renderMessagePart(message.id, part, index))}
+              {renderStructuredCards ? renderStructuredCards(message) : null}
               {renderKnowledgeProposal ? renderKnowledgeProposal(message) : null}
               {renderProjectFileProposal ? renderProjectFileProposal(message) : null}
             </div>
