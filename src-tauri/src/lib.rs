@@ -861,9 +861,12 @@ fn download_github_contents(
         .error_for_status()
         .map_err(|error| format!("GitHub contents API returned an error: {}", error))?;
 
-    let payload = response
-        .json::<serde_json::Value>()
-        .map_err(|error| format!("Failed to parse GitHub contents response: {}", error))?;
+    let payload = serde_json::from_str::<serde_json::Value>(
+        &response
+            .text()
+            .map_err(|error| format!("Failed to read GitHub contents response: {}", error))?,
+    )
+    .map_err(|error| format!("Failed to parse GitHub contents response: {}", error))?;
 
     let entries = payload
         .as_array()

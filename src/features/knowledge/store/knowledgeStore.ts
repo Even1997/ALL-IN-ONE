@@ -1,15 +1,14 @@
 import { create } from 'zustand';
+import { useProjectStore } from '../../../store/projectStore';
+import { joinFileSystemPath } from '../../../utils/fileSystemPaths.ts';
 import {
-  createProjectKnowledgeNote,
-  deleteProjectKnowledgeNote,
-  getKnowledgeNeighborhood,
-  listKnowledgeNotes,
-  listSimilarKnowledgeNotes,
-  searchKnowledgeNotes,
-  syncProjectKnowledgeNotes,
-  updateProjectKnowledgeNote,
-} from '../api/knowledgeClient';
+  isTauriRuntimeAvailable,
+  listProjectDirectory,
+  loadProjectIndexFromDisk,
+  readProjectTextFile,
+} from '../../../utils/projectPersistence.ts';
 import type { KnowledgeNeighborhoodGraph, KnowledgeNote, ProjectKnowledgeSource } from '../model/knowledge';
+import { parseKnowledgeReferenceTitles } from '../workspace/knowledgeNoteMarkdown.ts';
 
 type KnowledgeStoreState = {
   notes: KnowledgeNote[];
@@ -33,7 +32,172 @@ type KnowledgeStoreState = {
   updateProjectNote: (projectId: string, noteId: string, source: ProjectKnowledgeSource) => Promise<void>;
 };
 
-export const useKnowledgeStore = create<KnowledgeStoreState>((set) => ({
+type VaultMarkdownFile = {
+  absolutePath: string;
+  relativePath: string;
+};
+
+const MARKDOWN_FILE_PATTERN = /\.(md|markdown)$/i;
+const IGNORED_DIRECTORY_NAMES = new Set(['.ai', '.git', '.goodnight', 'node_modules']);
+
+const normalizePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '');
+const getFileName = (value: string) => normalizePath(value).split('/').pop() || value;
+const getTitleFallback = (filePath: string) => getFileName(filePath).replace(MARKDOWN_FILE_PATTERN, '') || 'Untitled';
+const summarizeMarkdown = (value: string, fallback: string, maxLength = 120) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 3)}...` : normalized;
+};
+
+const extractTitleFromMarkdown = (filePath: string, markdown: string) => {
+  const matched = markdown.replace(/^\uFEFF/, '').match(/^#\s+(.+?)(?:\r?\n|$)/);
+  return matched?.[1]?.trim() || getTitleFallback(filePath);
+};
+
+const inferNoteKind = (relativePath: string): KnowledgeNote['kind'] => {
+  const normalizedPath = normalizePath(relativePath).toLowerCase();
+  if (normalizedPath.includes('/design/')) {
+    return 'design';
+  }
+
+  if (normalizedPath.includes('/sketch/')) {
+    return 'sketch';
+  }
+
+  return 'note';
+};
+
+const buildKnowledgeNoteFromFile = (file: VaultMarkdownFile, markdown: string): KnowledgeNote => {
+  const title = extractTitleFromMarkdown(file.relativePath, markdown);
+
+  return {
+    id: file.absolutePath,
+    title,
+    bodyMarkdown: markdown,
+    updatedAt: new Date().toISOString(),
+    tags: [],
+    referenceTitles: parseKnowledgeReferenceTitles(markdown),
+    kind: inferNoteKind(file.relativePath),
+    sourceUrl: file.absolutePath,
+    matchSnippet: summarizeMarkdown(markdown, title),
+  };
+};
+
+const buildKnowledgeNoteFromSource = (
+  source: ProjectKnowledgeSource,
+  fallbackId: string,
+  nextPath?: string
+): KnowledgeNote => {
+  const filePath = nextPath || source.filePath || fallbackId;
+  const title = source.title.trim() || extractTitleFromMarkdown(filePath, source.content);
+
+  return {
+    id: fallbackId,
+    title,
+    bodyMarkdown: source.content,
+    updatedAt: source.updatedAt,
+    tags: source.tags.slice(),
+    referenceTitles: parseKnowledgeReferenceTitles(source.content),
+    kind: inferNoteKind(filePath),
+    sourceUrl: filePath || null,
+    matchSnippet: summarizeMarkdown(source.content, title),
+  };
+};
+
+const resolveProjectVaultPath = async (projectId: string) => {
+  const projectState = useProjectStore.getState();
+  const currentProject = projectState.currentProject;
+  if (currentProject?.id === projectId && currentProject.vaultPath) {
+    return currentProject.vaultPath;
+  }
+
+  const matchedProject = projectState.projects.find((project) => project.id === projectId);
+  if (matchedProject?.vaultPath) {
+    return matchedProject.vaultPath;
+  }
+
+  const persistedProjects = await loadProjectIndexFromDisk();
+  return persistedProjects.find((project) => project.id === projectId)?.vaultPath || '';
+};
+
+const collectVaultMarkdownFiles = async (
+  rootPath: string,
+  absolutePath = rootPath,
+  relativeBase = ''
+): Promise<VaultMarkdownFile[]> => {
+  let entries: string[] = [];
+  try {
+    entries = await listProjectDirectory(absolutePath);
+  } catch {
+    return [];
+  }
+
+  const files: VaultMarkdownFile[] = [];
+  for (const rawEntry of entries) {
+    const trimmed = rawEntry.trim();
+    const isDirectory = trimmed.endsWith('/');
+    const entryName = isDirectory ? trimmed.slice(0, -1) : trimmed;
+    if (!entryName) {
+      continue;
+    }
+
+    if (isDirectory && IGNORED_DIRECTORY_NAMES.has(entryName)) {
+      continue;
+    }
+
+    const relativePath = relativeBase ? `${relativeBase}/${entryName}` : entryName;
+    const absoluteEntryPath = joinFileSystemPath(absolutePath, entryName);
+
+    if (isDirectory) {
+      files.push(...(await collectVaultMarkdownFiles(rootPath, absoluteEntryPath, relativePath)));
+      continue;
+    }
+
+    if (!MARKDOWN_FILE_PATTERN.test(entryName)) {
+      continue;
+    }
+
+    files.push({
+      absolutePath: absoluteEntryPath,
+      relativePath: normalizePath(relativePath),
+    });
+  }
+
+  return files;
+};
+
+const sortNotes = (notes: KnowledgeNote[]) =>
+  [...notes].sort((left, right) => {
+    const leftPath = normalizePath(left.sourceUrl || left.id);
+    const rightPath = normalizePath(right.sourceUrl || right.id);
+    return leftPath.localeCompare(rightPath);
+  });
+
+const searchNotesByKeyword = (notes: KnowledgeNote[], keyword: string) => {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  if (!normalizedKeyword) {
+    return [];
+  }
+
+  return notes.filter((note) =>
+    [note.title, note.bodyMarkdown, note.sourceUrl || '', ...(note.tags || []), ...(note.referenceTitles || [])]
+      .join('\n')
+      .toLowerCase()
+      .includes(normalizedKeyword)
+  );
+};
+
+const scoreNoteSimilarity = (sourceNote: KnowledgeNote, candidate: KnowledgeNote) => {
+  const referenceOverlap = sourceNote.referenceTitles.filter((title) => candidate.referenceTitles.includes(title)).length;
+  const tagOverlap = sourceNote.tags.filter((tag) => candidate.tags.includes(tag)).length;
+  const kindBonus = sourceNote.kind && sourceNote.kind === candidate.kind ? 1 : 0;
+  return referenceOverlap * 2 + tagOverlap + kindBonus;
+};
+
+export const useKnowledgeStore = create<KnowledgeStoreState>((set, get) => ({
   notes: [],
   searchResults: [],
   searchQuery: '',
@@ -49,39 +213,68 @@ export const useKnowledgeStore = create<KnowledgeStoreState>((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const notes = await listKnowledgeNotes(projectId);
+      if (!isTauriRuntimeAvailable()) {
+        set({ notes: [], isLoading: false, error: null });
+        return;
+      }
+
+      const vaultPath = await resolveProjectVaultPath(projectId);
+      if (!vaultPath) {
+        set({ notes: [], isLoading: false, error: null });
+        return;
+      }
+
+      const markdownFiles = await collectVaultMarkdownFiles(vaultPath);
+      const notes = sortNotes(
+        (
+          await Promise.all(
+            markdownFiles.map(async (file) => {
+              const markdown = await readProjectTextFile(file.absolutePath);
+              if (typeof markdown !== 'string') {
+                return null;
+              }
+
+              return buildKnowledgeNoteFromFile(file, markdown);
+            })
+          )
+        ).filter((note): note is KnowledgeNote => Boolean(note))
+      );
+
       set({ notes, isLoading: false, error: null });
     } catch (error) {
       set({
         notes: [],
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Knowledge sidecar failed to load.',
+        error: error instanceof Error ? error.message : 'Unable to load vault notes.',
       });
     }
   },
-  createProjectNote: async (projectId, source) => {
-    const note = await createProjectKnowledgeNote(projectId, source);
-    set((state) => ({
-      notes: [note, ...state.notes],
-      searchResults: state.searchQuery ? state.searchResults : state.searchResults,
-    }));
+  createProjectNote: async (_projectId, source) => {
+    const fallbackId = source.filePath || `note:${Date.now()}`;
+    const note = buildKnowledgeNoteFromSource(source, fallbackId);
+
+    set((state) => {
+      const nextNotes = sortNotes([note, ...state.notes.filter((item) => item.id !== note.id)]);
+      return {
+        notes: nextNotes,
+        searchResults: state.searchQuery ? searchNotesByKeyword(nextNotes, state.searchQuery) : state.searchResults,
+      };
+    });
+
     return note;
   },
-  deleteProjectNote: async (projectId, noteId) => {
-    await deleteProjectKnowledgeNote(projectId, noteId);
+  deleteProjectNote: async (_projectId, noteId) => {
     set((state) => ({
       notes: state.notes.filter((item) => item.id !== noteId),
       searchResults: state.searchResults.filter((item) => item.id !== noteId),
       similarNotes: state.similarNotes.filter((item) => item.id !== noteId),
-      neighborhoodGraph:
-        state.neighborhoodGraph?.centerNoteId === noteId ? null : state.neighborhoodGraph,
+      neighborhoodGraph: state.neighborhoodGraph?.centerNoteId === noteId ? null : state.neighborhoodGraph,
       neighborhoodSourceNoteId:
         state.neighborhoodSourceNoteId === noteId ? null : state.neighborhoodSourceNoteId,
-      similarSourceNoteId:
-        state.similarSourceNoteId === noteId ? null : state.similarSourceNoteId,
+      similarSourceNoteId: state.similarSourceNoteId === noteId ? null : state.similarSourceNoteId,
     }));
   },
-  searchNotes: async (projectId, query) => {
+  searchNotes: async (_projectId, query) => {
     const normalizedQuery = query.trim();
     if (!normalizedQuery) {
       set({ searchResults: [], searchQuery: '', isSearching: false });
@@ -89,69 +282,68 @@ export const useKnowledgeStore = create<KnowledgeStoreState>((set) => ({
     }
 
     set({ searchQuery: normalizedQuery, isSearching: true, error: null });
-
-    try {
-      const searchResults = await searchKnowledgeNotes(projectId, normalizedQuery);
-      set({ searchResults, searchQuery: normalizedQuery, isSearching: false, error: null });
-    } catch (error) {
-      set({
-        searchResults: [],
-        searchQuery: '',
-        isSearching: false,
-        error: error instanceof Error ? error.message : 'Knowledge sidecar search failed.',
-      });
-    }
+    const notes = get().notes;
+    set({
+      searchResults: searchNotesByKeyword(notes, normalizedQuery),
+      searchQuery: normalizedQuery,
+      isSearching: false,
+      error: null,
+    });
   },
-  loadSimilarNotes: async (projectId, noteId) => {
+  loadSimilarNotes: async (_projectId, noteId) => {
     if (!noteId) {
       set({ similarNotes: [], similarSourceNoteId: null });
       return;
     }
 
-    set({ similarSourceNoteId: noteId });
-
-    try {
-      const similarNotes = await listSimilarKnowledgeNotes(projectId, noteId);
-      set({ similarNotes, similarSourceNoteId: noteId });
-    } catch {
+    const notes = get().notes;
+    const sourceNote = notes.find((note) => note.id === noteId) || null;
+    if (!sourceNote) {
       set({ similarNotes: [], similarSourceNoteId: noteId });
-    }
-  },
-  loadNeighborhoodGraph: async (projectId, noteId) => {
-    if (!noteId) {
-      set({ neighborhoodGraph: null, neighborhoodSourceNoteId: null });
       return;
     }
 
-    set({ neighborhoodSourceNoteId: noteId });
+    const similarNotes = notes
+      .filter((note) => note.id !== noteId)
+      .map((note) => ({ note, score: scoreNoteSimilarity(sourceNote, note) }))
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score || left.note.title.localeCompare(right.note.title))
+      .slice(0, 8)
+      .map((item) => item.note);
 
-    try {
-      const neighborhoodGraph = await getKnowledgeNeighborhood(projectId, noteId);
-      set({ neighborhoodGraph, neighborhoodSourceNoteId: noteId });
-    } catch {
-      set({ neighborhoodGraph: null, neighborhoodSourceNoteId: noteId });
-    }
+    set({ similarNotes, similarSourceNoteId: noteId });
   },
-  syncProjectNotes: async (projectId, sources) => {
+  loadNeighborhoodGraph: async (_projectId, noteId) => {
+    set({
+      neighborhoodGraph: null,
+      neighborhoodSourceNoteId: noteId,
+    });
+  },
+  syncProjectNotes: async (_projectId, sources) => {
     set({ isSyncing: true, error: null });
 
     try {
-      const notes = await syncProjectKnowledgeNotes(projectId, sources);
-      set({ notes, isSyncing: false, error: null });
-      return notes;
+      const syncedNotes = sortNotes(
+        sources.map((source) => buildKnowledgeNoteFromSource(source, source.filePath || `note:${source.title}`))
+      );
+      set({ notes: syncedNotes, isSyncing: false, error: null });
+      return syncedNotes;
     } catch (error) {
       set({
         isSyncing: false,
-        error: error instanceof Error ? error.message : 'Knowledge sidecar failed to sync.',
+        error: error instanceof Error ? error.message : 'Unable to sync vault notes.',
       });
       throw error;
     }
   },
-  updateProjectNote: async (projectId, noteId, source) => {
-    const note = await updateProjectKnowledgeNote(projectId, noteId, source);
-    set((state) => ({
-      notes: state.notes.map((item) => (item.id === note.id ? note : item)),
-      searchResults: state.searchResults.map((item) => (item.id === note.id ? note : item)),
-    }));
+  updateProjectNote: async (_projectId, noteId, source) => {
+    const note = buildKnowledgeNoteFromSource(source, noteId, source.filePath || noteId);
+    set((state) => {
+      const nextNotes = sortNotes(state.notes.map((item) => (item.id === noteId ? note : item)));
+      return {
+        notes: nextNotes,
+        searchResults: state.searchResults.map((item) => (item.id === noteId ? note : item)),
+      };
+    });
   },
 }));
