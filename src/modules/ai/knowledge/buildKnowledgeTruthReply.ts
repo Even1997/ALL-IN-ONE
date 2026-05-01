@@ -1,3 +1,4 @@
+import type { KnowledgeSessionArtifactType } from '../../../features/knowledge/store/knowledgeSessionArtifactsStore';
 import type { ChatCardAction, ChatStructuredCard } from '../chat/chatCards';
 
 type KnowledgeTruthConflict = {
@@ -11,7 +12,7 @@ type KnowledgeTruthConflict = {
 type KnowledgeTruthTemporaryArtifact = {
   id: string;
   title: string;
-  artifactType: 'impact-analysis' | 'candidate-summary' | 'candidate-structure' | 'prototype-draft' | 'design-draft';
+  artifactType: KnowledgeSessionArtifactType;
   summary: string;
   body: string;
 };

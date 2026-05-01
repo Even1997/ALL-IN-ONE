@@ -14,7 +14,7 @@ export const buildChangeSyncProposal = ({ projectId, docs }: BuildChangeSyncProp
     operations: docs.map((doc) => ({
       type: 'create_note',
       targetTitle: doc.title,
-      reason: 'AI 宸叉牴鎹綋鍓嶄骇鐗╁樊寮傛暣鐞嗗嚭涓€浠藉緟纭鐨勫彉鏇村悓姝ユ潗鏂欍€?',
+      reason: 'AI 已根据当前产品差异整理出一份待确认的变更同步材料。',
       evidence: [doc.summary || doc.title],
       draftContent: doc.content,
       riskLevel: 'low',
