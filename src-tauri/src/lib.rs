@@ -335,33 +335,54 @@ fn resolve_project_storage_root_path(
     }
 }
 
-fn build_project_storage_settings(
+fn resolve_project_storage_paths(
     app_handle: &tauri::AppHandle,
-) -> Result<ProjectStorageSettings, String> {
+) -> Result<(PathBuf, PathBuf, bool), String> {
     let default_path = get_default_projects_root_path(app_handle)?;
     let payload = read_project_storage_settings_payload(app_handle)?;
     let override_path = normalize_saved_project_storage_root_path(payload.root_path)?;
     let (projects_root, is_default) =
         resolve_project_storage_root_path(default_path.clone(), override_path);
 
+    Ok((projects_root, default_path, is_default))
+}
+
+fn display_project_storage_path(path: PathBuf) -> String {
+    let display = path.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    {
+        display
+            .strip_prefix(r"\\?\")
+            .unwrap_or(display.as_str())
+            .to_string()
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        display
+    }
+}
+
+fn build_project_storage_settings(
+    app_handle: &tauri::AppHandle,
+) -> Result<ProjectStorageSettings, String> {
+    let (projects_root, default_path, is_default) = resolve_project_storage_paths(app_handle)?;
+
     fs::create_dir_all(&projects_root)
         .map_err(|e| format!("Failed to create projects directory: {}", e))?;
 
-    let root_path = projects_root
-        .canonicalize()
-        .unwrap_or(projects_root)
-        .to_string_lossy()
-        .to_string();
+    let root_path = display_project_storage_path(projects_root.canonicalize().unwrap_or(projects_root));
 
     Ok(ProjectStorageSettings {
         root_path,
-        default_path: default_path.to_string_lossy().to_string(),
+        default_path: display_project_storage_path(default_path),
         is_default,
     })
 }
 
 fn get_projects_root_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
-    build_project_storage_settings(app_handle).map(|settings| PathBuf::from(settings.root_path))
+    resolve_project_storage_paths(app_handle).map(|(projects_root, _, _)| projects_root)
 }
 
 fn escape_powershell_single_quoted(value: &str) -> String {
@@ -2352,7 +2373,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_project_storage_root_path, normalize_saved_project_storage_root_path,
+        display_project_storage_path, normalize_project_storage_root_path,
+        normalize_saved_project_storage_root_path,
         resolve_project_storage_root_path,
     };
     use std::path::PathBuf;
@@ -2413,6 +2435,24 @@ mod tests {
             ))
             .unwrap(),
             None
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn display_project_storage_path_hides_windows_extended_length_prefix() {
+        assert_eq!(
+            display_project_storage_path(PathBuf::from(r"\\?\C:\Users\test\Documents\GoodNight\projects")),
+            r"C:\Users\test\Documents\GoodNight\projects"
+        );
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn display_project_storage_path_keeps_posix_paths_unchanged() {
+        assert_eq!(
+            display_project_storage_path(PathBuf::from("/Users/test/GoodNight/projects")),
+            "/Users/test/GoodNight/projects"
         );
     }
 }

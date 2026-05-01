@@ -18,6 +18,23 @@ const splitLeadingHeading = (markdown: string) => {
   };
 };
 
+export const splitKnowledgeNoteEditorDocument = (markdown: string, fallbackTitle = '') => {
+  const normalizedMarkdown = markdown.replace(/^\uFEFF/, '');
+  const leadingHeading = splitLeadingHeading(normalizedMarkdown);
+
+  if (!leadingHeading) {
+    return {
+      title: normalizeHeadingText(fallbackTitle),
+      body: normalizedMarkdown,
+    };
+  }
+
+  return {
+    title: normalizeHeadingText(leadingHeading.heading) || normalizeHeadingText(fallbackTitle),
+    body: leadingHeading.remainder,
+  };
+};
+
 const normalizeReferenceTitles = (titles: string[]) =>
   Array.from(
     new Set(
@@ -140,13 +157,9 @@ export const extractKnowledgeNoteEditorBody = (title: string, markdown: string) 
     return '';
   }
 
-  const leadingHeading = splitLeadingHeading(markdown);
-  if (!leadingHeading) {
-    return markdown.replace(/^\uFEFF/, '');
-  }
-
-  return normalizeHeadingText(leadingHeading.heading) === normalizeHeadingText(title)
-    ? leadingHeading.remainder
+  const parsedDocument = splitKnowledgeNoteEditorDocument(markdown, title);
+  return normalizeHeadingText(parsedDocument.title) === normalizeHeadingText(title)
+    ? parsedDocument.body
     : markdown.replace(/^\uFEFF/, '');
 };
 

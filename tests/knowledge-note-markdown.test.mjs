@@ -109,3 +109,27 @@ test('parseKnowledgeReferenceTitles also discovers inline Obsidian wiki links wi
     ['Login flow', 'Terminology']
   );
 });
+
+test('splitKnowledgeNoteEditorDocument reads title and body from a leading H1', async () => {
+  const { splitKnowledgeNoteEditorDocument } = await loadModule();
+
+  assert.deepEqual(
+    splitKnowledgeNoteEditorDocument('# 项目概览\n\n这里是正文。'),
+    {
+      title: '项目概览',
+      body: '这里是正文。',
+    }
+  );
+});
+
+test('splitKnowledgeNoteEditorDocument falls back to the provided title when the document has no H1', async () => {
+  const { splitKnowledgeNoteEditorDocument } = await loadModule();
+
+  assert.deepEqual(
+    splitKnowledgeNoteEditorDocument('这里是正文。', '项目概览'),
+    {
+      title: '项目概览',
+      body: '这里是正文。',
+    }
+  );
+});

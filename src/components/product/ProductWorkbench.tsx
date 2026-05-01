@@ -1613,6 +1613,7 @@ export const ProductWorkbench = ({
           title: nextTitle,
           content: nextContent,
           filePath: nextAbsolutePath,
+          createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           tags: [],
         });
@@ -1638,6 +1639,7 @@ export const ProductWorkbench = ({
               title: note.title,
               content: note.bodyMarkdown,
               filePath: joinDiskPath(projectRootDir, movedRelativePath),
+              createdAt: note.createdAt,
               updatedAt: new Date().toISOString(),
               tags: note.tags,
             });
@@ -1828,6 +1830,7 @@ export const ProductWorkbench = ({
         title: nextTitle,
         content: nextContent,
         filePath: nextFilePath || currentFilePath || '',
+        createdAt: selectedServerNote.createdAt,
         updatedAt: new Date().toISOString(),
         tags: selectedServerNote.tags,
       });

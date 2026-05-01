@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
+import { confirm, open } from '@tauri-apps/plugin-dialog';
 import { AIWorkspace } from './components/ai/AIWorkspace';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
@@ -237,6 +237,33 @@ const removeProjectSnapshot = (projectId: string) => {
   }
 
   window.localStorage.removeItem(getProjectSnapshotStorageKey(projectId));
+};
+
+const normalizeProjectVaultComparablePath = (value: string | null | undefined) =>
+  (value || '')
+    .trim()
+    .replace(/^\\\\\?\\/, '')
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+
+const resolveProjectVaultPathForProjectDir = (
+  vaultPath: string,
+  projectDir: string,
+  projectStorageSettings: Pick<ProjectStorageSettings, 'rootPath' | 'defaultPath'> | null
+) => {
+  const normalizedVaultPath = normalizeProjectVaultComparablePath(vaultPath);
+  const normalizedRootPath = normalizeProjectVaultComparablePath(projectStorageSettings?.rootPath);
+  const normalizedDefaultPath = normalizeProjectVaultComparablePath(projectStorageSettings?.defaultPath);
+
+  if (
+    normalizedVaultPath &&
+    (normalizedVaultPath === normalizedRootPath || normalizedVaultPath === normalizedDefaultPath)
+  ) {
+    return projectDir;
+  }
+
+  return vaultPath.trim();
 };
 
 const THEME_STORAGE_KEY = 'goodnight-theme-mode';
@@ -961,6 +988,7 @@ const App: React.FC = () => {
     testPlan,
     deployPlan,
     createProject,
+    updateProject,
     loadProjectWorkspace,
     switchProject,
     deleteProject,
@@ -1842,6 +1870,24 @@ const App: React.FC = () => {
   }, [currentProjectDir]);
 
   useEffect(() => {
+    if (!currentProject || !currentProjectDir || !projectStorageSettings) {
+      return;
+    }
+
+    const nextVaultPath = resolveProjectVaultPathForProjectDir(
+      currentProject.vaultPath,
+      currentProjectDir,
+      projectStorageSettings
+    );
+
+    if (!nextVaultPath || nextVaultPath === currentProject.vaultPath) {
+      return;
+    }
+
+    updateProject({ vaultPath: nextVaultPath });
+  }, [currentProject, currentProjectDir, projectStorageSettings, updateProject]);
+
+  useEffect(() => {
     if (!currentProject) {
       return;
     }
@@ -2245,10 +2291,28 @@ const App: React.FC = () => {
     setCurrentRole('knowledge');
     setIsProjectManagerOpen(false);
     setProjectVaultDraftOverride(null);
-    void ensureProjectFilesystemStructure(project.id).catch(() => undefined);
-    if (project.vaultPath) {
-      void ensureProjectVaultDirectory(project).catch(() => undefined);
-    }
+    void ensureProjectFilesystemStructure(project.id)
+      .then(async (projectDir) => {
+        const effectiveProjectStorageSettings =
+          projectStorageSettings ||
+          (isTauriRuntimeAvailable() ? await getProjectStorageSettings().catch(() => null) : null);
+        const nextVaultPath = resolveProjectVaultPathForProjectDir(
+          project.vaultPath,
+          projectDir,
+          effectiveProjectStorageSettings
+        );
+
+        if (nextVaultPath && nextVaultPath !== project.vaultPath) {
+          updateProject({ vaultPath: nextVaultPath });
+          await ensureProjectVaultDirectory({ vaultPath: nextVaultPath }).catch(() => undefined);
+          return;
+        }
+
+        if (project.vaultPath) {
+          await ensureProjectVaultDirectory(project).catch(() => undefined);
+        }
+      })
+      .catch(() => undefined);
   };
 
   const handleOpenProject = useCallback(async (projectId: string) => {
@@ -2295,7 +2359,15 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`确定删除项目“${targetProject.name}”吗？`)) {
+    const confirmed = isTauriRuntimeAvailable()
+      ? await confirm(`确定删除项目“${targetProject.name}”吗？`, {
+          kind: 'warning',
+          okLabel: '删除',
+          cancelLabel: '取消',
+        })
+      : window.confirm(`确定删除项目“${targetProject.name}”吗？`);
+
+    if (!confirmed) {
       return;
     }
 

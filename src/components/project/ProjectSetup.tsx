@@ -28,41 +28,28 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
   activeProjectId = null,
   currentProjectName = null,
   projectStorageSettings = null,
-  projectStorageDraftOverride = null,
-  projectStorageState = 'idle',
   projectStorageMessage = null,
   projectVaultDraftOverride = null,
   onCreateProject,
   onOpenProject,
   onDeleteProject,
-  onSaveProjectStoragePath,
-  onPickProjectStoragePath,
-  onResetProjectStoragePath,
   onPickProjectVaultPath,
   onClose,
 }) => {
+  const defaultProjectStoragePath =
+    projectStorageSettings?.rootPath || projectStorageSettings?.defaultPath || '';
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [vaultPath, setVaultPath] = useState('');
-  const [projectStorageDraft, setProjectStorageDraft] = useState(
-    projectStorageSettings?.rootPath || ''
-  );
-
-  useEffect(() => {
-    setProjectStorageDraft(projectStorageSettings?.rootPath || '');
-  }, [projectStorageSettings?.rootPath]);
-
-  useEffect(() => {
-    if (projectStorageDraftOverride !== null) {
-      setProjectStorageDraft(projectStorageDraftOverride);
-    }
-  }, [projectStorageDraftOverride]);
+  const [vaultPath, setVaultPath] = useState(defaultProjectStoragePath);
 
   useEffect(() => {
     if (projectVaultDraftOverride !== null) {
       setVaultPath(projectVaultDraftOverride);
+      return;
     }
-  }, [projectVaultDraftOverride]);
+
+    setVaultPath((currentPath) => (currentPath.trim() ? currentPath : defaultProjectStoragePath));
+  }, [defaultProjectStoragePath, projectVaultDraftOverride]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -82,17 +69,8 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
 
     setName('');
     setDescription('');
-    setVaultPath('');
+    setVaultPath(defaultProjectStoragePath);
   };
-
-  const isProjectStorageBusy =
-    projectStorageState === 'loading' || projectStorageState === 'saving';
-  const canSaveProjectStoragePath = Boolean(
-    projectStorageSettings &&
-      projectStorageDraft.trim() &&
-      projectStorageDraft.trim() !== projectStorageSettings.rootPath &&
-      !isProjectStorageBusy
-  );
 
   return (
     <div className="project-setup-shell project-manager-shell">
@@ -194,13 +172,13 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
           className="project-setup-card project-manager-panel project-manager-form"
           onSubmit={handleSubmit}
         >
-            <div className="project-setup-header">
-              <div>
-                <h2>新建项目</h2>
-                <p>先绑定本地知识库文件夹，后续知识索引会直接走原生 m-flow 路径。</p>
-              </div>
-              <div className="project-setup-status">Create</div>
+          <div className="project-setup-header">
+            <div>
+              <h2>新建项目</h2>
+              <p>先绑定本地知识库文件夹，后续知识索引会直接走原生 m-flow 路径。</p>
             </div>
+            <div className="project-setup-status">Create</div>
+          </div>
 
           <MacField label="项目名称" className="setup-field">
             <MacInput
@@ -237,6 +215,11 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
                 选择文件夹
               </MacButton>
             </div>
+            {defaultProjectStoragePath ? (
+              <p className="setup-helper-text">
+                {projectStorageMessage || `默认目录：${defaultProjectStoragePath}`}
+              </p>
+            ) : null}
           </MacField>
 
           <div className="setup-actions">
@@ -250,75 +233,6 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
             </MacButton>
           </div>
         </MacPanel>
-
-        {projectStorageSettings ? (
-          <MacPanel
-            as="section"
-            className="project-setup-card project-manager-panel project-manager-form"
-            aria-label="项目存储位置"
-          >
-            <div className="project-setup-header">
-              <div>
-                <h2>项目存储位置</h2>
-                <p>
-                  默认使用文档目录下的 `GoodNight/projects`，也可以改成你自己的绝对路径。
-                </p>
-              </div>
-              <div className="project-setup-status">Storage</div>
-            </div>
-
-            <MacField label="项目根目录" className="setup-field">
-              <MacInput
-                value={projectStorageDraft}
-                onChange={(event) => setProjectStorageDraft(event.target.value)}
-                placeholder={projectStorageSettings.defaultPath}
-                disabled={isProjectStorageBusy}
-              />
-            </MacField>
-
-            <div className="project-manager-sidebar-meta">
-              <div className="project-manager-stat">
-                <span>当前生效路径</span>
-                <strong>{projectStorageSettings.rootPath}</strong>
-              </div>
-              <div className="project-manager-stat">
-                <span>默认路径</span>
-                <strong>{projectStorageSettings.defaultPath}</strong>
-              </div>
-            </div>
-
-            <div className="setup-actions">
-              <MacButton
-                className="secondary-action"
-                variant="secondary"
-                disabled={isProjectStorageBusy || !onPickProjectStoragePath}
-                onClick={() => void onPickProjectStoragePath?.()}
-              >
-                选择文件夹
-              </MacButton>
-              <MacButton
-                className="primary-action"
-                variant="primary"
-                disabled={!canSaveProjectStoragePath}
-                onClick={() => void onSaveProjectStoragePath?.(projectStorageDraft)}
-              >
-                保存路径
-              </MacButton>
-              <MacButton
-                className="secondary-action"
-                variant="secondary"
-                disabled={isProjectStorageBusy || projectStorageSettings.isDefault}
-                onClick={() => void onResetProjectStoragePath?.()}
-              >
-                恢复默认
-              </MacButton>
-            </div>
-
-            {projectStorageMessage ? (
-              <p className="setup-helper-text">{projectStorageMessage}</p>
-            ) : null}
-          </MacPanel>
-        ) : null}
       </div>
     </div>
   );

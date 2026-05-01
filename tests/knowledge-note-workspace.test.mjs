@@ -92,6 +92,41 @@ test('knowledge note workspace exposes file-tree management hooks for context me
   assert.match(source, /contextMenuRef\.current\?\.contains\(event\.target\)/);
 });
 
+test('knowledge note tree separates current active note from explicit multi-select state', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /const \[activeTreePath, setActiveTreePath\] = useState<string \| null>\(null\);/);
+  assert.match(source, /const isMultiSelecting = selectedTreePaths\.length > 1;/);
+  assert.match(source, /const isActive = isMultiSelecting && isSelected;/);
+  assert.match(
+    source,
+    /className=\{`gn-note-tree-item folder \$\{isActive \? 'active' : ''\}`\}/
+  );
+  assert.match(source, /setSelectedTreePaths\(\[\]\);\s*setAnchorTreePath\(childFolder\.path\);\s*setActiveTreePath\(null\);/s);
+  assert.match(source, /const isCurrentNote = activeTreePath === file\.path;/);
+  assert.match(source, /const isActive = isCurrentNote \|\| \(isMultiSelecting && isSelected\);/);
+  assert.match(
+    source,
+    /className=\{`gn-note-tree-item file \$\{isActive \? 'active' : ''\}`\}/
+  );
+  assert.match(source, /setSelectedTreePaths\(\[\]\);\s*setAnchorTreePath\(file\.path\);\s*setActiveTreePath\(file\.path\);/s);
+});
+
+test('knowledge note tree does not force ancestor folders open after selection so users can collapse them', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /const selectedAncestorFolderPaths = useMemo\(/);
+  assert.match(source, /setCollapsedFolderPaths\(\(current\) => \{/);
+  assert.match(source, /const next = new Set\(current\);/);
+  assert.match(source, /for \(const ancestorPath of selectedAncestorFolderPaths\) \{/);
+  assert.match(source, /next\.delete\(ancestorPath\);/);
+  assert.match(source, /const isExpanded = !collapsedFolderPaths\.has\(childFolder\.path\);/);
+  assert.doesNotMatch(
+    source,
+    /selectedAncestorFolderPaths\.has\(childFolder\.path\) \|\| !collapsedFolderPaths\.has\(childFolder\.path\)/
+  );
+});
+
 test('knowledge note workspace no longer exposes the activity side panel', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
@@ -130,6 +165,8 @@ test('knowledge note workspace defaults to reading mode and exposes a code toggl
   assert.match(source, /KnowledgeMarkdownViewer/);
   assert.match(source, /GoodNightMarkdownEditor/);
   assert.match(source, /serializeKnowledgeNoteMarkdown/);
+  assert.match(source, /splitKnowledgeNoteEditorDocument/);
+  assert.match(source, /className="gn-note-code-textarea"/);
 });
 
 test('knowledge note workspace previews unmapped markdown files inside the app instead of opening them as attachments', async () => {
@@ -149,4 +186,46 @@ test('knowledge note workspace empty state stays vault-first', async () => {
   assert.match(source, /新建笔记/);
   assert.doesNotMatch(source, /刷新 m-flow/);
   assert.doesNotMatch(source, /知识图谱/);
+});
+
+test('knowledge note workspace adds tree toolbar actions for folder creation, sorting, and expand collapse all', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /type KnowledgeTreeSortMode =/);
+  assert.match(source, /const KNOWLEDGE_TREE_SORT_OPTIONS = \[/);
+  assert.match(source, /useState<KnowledgeTreeSortMode>\('name-asc'\)/);
+  assert.match(source, /onCreateFolderAtPath\(null\)/);
+  assert.match(source, /const allVisibleFolderPaths = useMemo\(/);
+  assert.match(source, /const allFoldersCollapsed =/);
+  assert.match(source, /const handleToggleAllFolders = useCallback\(/);
+  assert.match(source, /className="doc-action-btn gn-note-icon-btn"/);
+  assert.match(source, /gn-note-icon-select/);
+  assert.match(source, /gn-note-icon-select-input/);
+  assert.match(source, /title="知识库排序"/);
+  assert.match(source, /aria-label="知识库排序"/);
+  assert.match(source, /文件名\(A-Z\)/);
+  assert.match(source, /文件名\(Z-A\)/);
+  assert.match(source, /编辑时间\(从新到旧\)/);
+  assert.match(source, /编辑时间\(从旧到新\)/);
+  assert.match(source, /创建时间\(从新到旧\)/);
+  assert.match(source, /创建时间\(从旧到新\)/);
+  assert.match(source, /title="新建文件夹"/);
+  assert.match(source, /aria-label="新建文件夹"/);
+  assert.match(source, /onClick=\{handleToggleAllFolders\}/);
+  assert.match(source, /title=\{allFoldersCollapsed \? '全部展开' : '全部折叠'\}/);
+  assert.match(source, /aria-label=\{allFoldersCollapsed \? '全部展开' : '全部折叠'\}/);
+});
+
+test('knowledge note workspace sorting supports note create and update timestamps with fallback metadata for unmapped files', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /createdAt\?: string;/);
+  assert.match(source, /updatedAt: linkedNote\?\.updatedAt \|\| null,/);
+  assert.match(source, /createdAt: linkedNote\?\.createdAt \|\| linkedNote\?\.updatedAt \|\| null,/);
+  assert.match(source, /const compareKnowledgeTreeItems = \(/);
+  assert.match(source, /case 'updated-desc':/);
+  assert.match(source, /case 'updated-asc':/);
+  assert.match(source, /case 'created-desc':/);
+  assert.match(source, /case 'created-asc':/);
+  assert.match(source, /return compareTimestamps\(rightValue, leftValue\) \|\| compareTreeNames\(left\.name, right\.name\);/);
 });

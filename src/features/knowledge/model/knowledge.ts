@@ -2,6 +2,7 @@ export type KnowledgeNote = {
   id: string;
   title: string;
   bodyMarkdown: string;
+  createdAt?: string;
   updatedAt: string;
   docType?: 'wiki-index' | 'ai-summary';
   tags: string[];
@@ -29,6 +30,7 @@ export type ProjectKnowledgeSource = {
   title: string;
   content: string;
   filePath: string;
+  createdAt?: string;
   updatedAt: string;
   tags: string[];
 };

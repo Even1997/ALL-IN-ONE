@@ -38,20 +38,24 @@ test('project persistence exposes project storage settings commands to the front
   assert.match(source, /invokeTauri<ProjectStorageSettings>\('set_project_storage_root', \{ rootPath: null \}\)/);
 });
 
-test('project setup shows project storage settings with picker and editable path controls', async () => {
+test('project setup prefills the inline storage field with the default directory', async () => {
   const source = await readFile(new URL('../src/components/project/ProjectSetup.tsx', import.meta.url), 'utf8');
 
   assert.match(source, /projectStorageSettings/);
-  assert.match(source, /projectStorageDraftOverride/);
-  assert.match(source, /onSaveProjectStoragePath/);
-  assert.match(source, /onPickProjectStoragePath/);
-  assert.match(source, /onResetProjectStoragePath/);
-  assert.match(source, /项目存储位置/);
-  assert.match(source, /value=\{projectStorageDraft\}/);
-  assert.match(source, /placeholder=\{projectStorageSettings\.defaultPath\}/);
-  assert.match(source, /选择文件夹/);
-  assert.match(source, /保存路径/);
-  assert.match(source, /恢复默认/);
+  assert.match(source, /project-storage-inline/);
+  assert.match(
+    source,
+    /const defaultProjectStoragePath =\s*projectStorageSettings\?\.rootPath \|\| projectStorageSettings\?\.defaultPath \|\| ''/
+  );
+  assert.match(source, /const \[vaultPath, setVaultPath\] = useState\(defaultProjectStoragePath\);/);
+  assert.match(
+    source,
+    /setVaultPath\(\(currentPath\) => \(currentPath\.trim\(\) \? currentPath : defaultProjectStoragePath\)\);/
+  );
+  assert.match(source, /setVaultPath\(defaultProjectStoragePath\);/);
+  assert.match(source, /projectStorageMessage \|\| `默认目录：\$\{defaultProjectStoragePath\}`/);
+  assert.doesNotMatch(source, /aria-label="项目存储位置"/);
+  assert.doesNotMatch(source, /value=\{projectStorageDraft\}/);
 });
 
 test('app loads project storage settings and wires folder picker into the project setup view', async () => {
@@ -73,7 +77,7 @@ test('app loads project storage settings and wires folder picker into the projec
   assert.match(appSource, /onSaveProjectStoragePath=\{handleSaveProjectStoragePath\}/);
   assert.match(appSource, /onPickProjectStoragePath=\{handlePickProjectStoragePath\}/);
   assert.match(appSource, /onResetProjectStoragePath=\{handleResetProjectStoragePath\}/);
-  assert.match(setupSource, /if \(projectStorageDraftOverride !== null\)/);
+  assert.match(setupSource, /const defaultProjectStoragePath =/);
 });
 
 test('windows packaging exposes a single npm entry and a powershell script with toolchain checks', async () => {

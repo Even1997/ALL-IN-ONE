@@ -5,10 +5,17 @@ import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMa
 import { getRelativePathFromRoot, normalizeRelativeFileSystemPath } from '../../../utils/fileSystemPaths';
 import type { KnowledgeDiskItem } from '../../../modules/knowledge/knowledgeTree';
 import type { KnowledgeNote } from '../model/knowledge';
-import { serializeKnowledgeNoteMarkdown } from './knowledgeNoteMarkdown';
+import { serializeKnowledgeNoteMarkdown, splitKnowledgeNoteEditorDocument } from './knowledgeNoteMarkdown';
 import { KnowledgeMarkdownViewer, type KnowledgeInternalLinkTarget } from './KnowledgeMarkdownViewer';
 
 type KnowledgeViewMode = 'read' | 'code';
+type KnowledgeTreeSortMode =
+  | 'name-asc'
+  | 'name-desc'
+  | 'updated-desc'
+  | 'updated-asc'
+  | 'created-desc'
+  | 'created-asc';
 
 type KnowledgeNoteWorkspaceProps = {
   notes: KnowledgeNote[];
@@ -54,6 +61,8 @@ type KnowledgeTreeFileNode = {
   absolutePath: string;
   note: KnowledgeNote | null;
   extension: string;
+  updatedAt: string | null;
+  createdAt: string | null;
 };
 
 type KnowledgeTreeFolderNode = {
@@ -64,6 +73,8 @@ type KnowledgeTreeFolderNode = {
   folders: KnowledgeTreeFolderNode[];
   files: KnowledgeTreeFileNode[];
   fileCount: number;
+  updatedAt: string | null;
+  createdAt: string | null;
 };
 
 type MutableKnowledgeTreeFolderNode = {
@@ -73,6 +84,19 @@ type MutableKnowledgeTreeFolderNode = {
   absolutePath: string | null;
   folders: Map<string, MutableKnowledgeTreeFolderNode>;
   files: KnowledgeTreeFileNode[];
+  updatedAt: string | null;
+  createdAt: string | null;
+};
+
+type KnowledgeTreeSortableItem = {
+  name: string;
+  updatedAt?: string;
+  createdAt?: string;
+};
+
+type KnowledgeTreeSortableValue = Omit<KnowledgeTreeSortableItem, 'updatedAt' | 'createdAt'> & {
+  updatedAt?: string | null;
+  createdAt?: string | null;
 };
 
 type KnowledgeContextMenuState =
@@ -95,6 +119,14 @@ type RawMarkdownPreview = {
 const NOTE_RAIL_WIDTH_BOUNDS = { min: 220, max: 420 };
 const NOTE_RAIL_DEFAULT_WIDTH = 280;
 const PREVIEWABLE_KNOWLEDGE_FILE_EXTENSIONS = new Set(['md', 'markdown']);
+const KNOWLEDGE_TREE_SORT_OPTIONS = [
+  { value: 'name-asc', label: '文件名(A-Z)' },
+  { value: 'name-desc', label: '文件名(Z-A)' },
+  { value: 'updated-desc', label: '编辑时间(从新到旧)' },
+  { value: 'updated-asc', label: '编辑时间(从旧到新)' },
+  { value: 'created-desc', label: '创建时间(从新到旧)' },
+  { value: 'created-asc', label: '创建时间(从旧到新)' },
+] satisfies Array<{ value: KnowledgeTreeSortMode; label: string }>;
 const TEMPORARY_PREVIEW_STYLES = `
 .gn-note-temporary-preview {
   display: grid;
@@ -256,6 +288,66 @@ const FolderIcon = () => (
   </svg>
 );
 
+const SortIcon = () => (
+  <svg viewBox="0 0 20 20" aria-hidden="true">
+    <path
+      d="M6 5.25h8M6 10h5M6 14.75h2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path
+      d="m12.75 12.75 2 2 2-2M14.75 6v8.75"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const CollapseAllIcon = () => (
+  <svg viewBox="0 0 20 20" aria-hidden="true">
+    <path
+      d="M4.75 5.75h10.5M4.75 10h7.5M4.75 14.25h10.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path
+      d="m13 8.25 2-2 2 2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ExpandAllIcon = () => (
+  <svg viewBox="0 0 20 20" aria-hidden="true">
+    <path
+      d="M4.75 5.75h10.5M4.75 10h7.5M4.75 14.25h10.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <path
+      d="m13 6.25 2 2 2-2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const formatUpdatedAt = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -293,6 +385,69 @@ const compareTreeNames = (left: string, right: string) =>
     sensitivity: 'base',
   });
 
+const compareTimestamps = (leftValue?: string | null, rightValue?: string | null) => {
+  const leftTime = leftValue ? new Date(leftValue).getTime() : Number.NaN;
+  const rightTime = rightValue ? new Date(rightValue).getTime() : Number.NaN;
+  const normalizedLeft = Number.isNaN(leftTime) ? Number.NEGATIVE_INFINITY : leftTime;
+  const normalizedRight = Number.isNaN(rightTime) ? Number.NEGATIVE_INFINITY : rightTime;
+  return normalizedLeft - normalizedRight;
+};
+
+const compareKnowledgeTreeItems = (
+  left: KnowledgeTreeSortableValue,
+  right: KnowledgeTreeSortableValue,
+  sortMode: KnowledgeTreeSortMode
+) => {
+  switch (sortMode) {
+    case 'name-desc':
+      return compareTreeNames(right.name, left.name);
+    case 'updated-desc': {
+      const leftValue = left.updatedAt;
+      const rightValue = right.updatedAt;
+      return compareTimestamps(rightValue, leftValue) || compareTreeNames(left.name, right.name);
+    }
+    case 'updated-asc': {
+      const leftValue = left.updatedAt;
+      const rightValue = right.updatedAt;
+      return compareTimestamps(leftValue, rightValue) || compareTreeNames(left.name, right.name);
+    }
+    case 'created-desc': {
+      const leftValue = left.createdAt;
+      const rightValue = right.createdAt;
+      return compareTimestamps(rightValue, leftValue) || compareTreeNames(left.name, right.name);
+    }
+    case 'created-asc': {
+      const leftValue = left.createdAt;
+      const rightValue = right.createdAt;
+      return compareTimestamps(leftValue, rightValue) || compareTreeNames(left.name, right.name);
+    }
+    case 'name-asc':
+    default:
+      return compareTreeNames(left.name, right.name);
+  }
+};
+
+const resolveLatestTreeTimestamp = (values: Array<string | null>) => {
+  let latestValue: string | null = null;
+  let latestTime = Number.NEGATIVE_INFINITY;
+
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+
+    const time = new Date(value).getTime();
+    if (Number.isNaN(time) || time <= latestTime) {
+      continue;
+    }
+
+    latestTime = time;
+    latestValue = value;
+  }
+
+  return latestValue;
+};
+
 const isHiddenKnowledgeTreePath = (value: string) => value.split('/').includes('.goodnight');
 
 const resolveNoteTreeFilePath = (note: KnowledgeNote, projectRootPath?: string | null) => {
@@ -324,6 +479,7 @@ const buildKnowledgeTree = (
   notes: KnowledgeNote[],
   filteredNotes: KnowledgeNote[],
   searchValue: string,
+  sortMode: KnowledgeTreeSortMode,
   projectRootPath?: string | null
 ): KnowledgeTreeFolderNode => {
   const root: MutableKnowledgeTreeFolderNode = {
@@ -333,6 +489,8 @@ const buildKnowledgeTree = (
     absolutePath: projectRootPath || null,
     folders: new Map<string, MutableKnowledgeTreeFolderNode>(),
     files: [],
+    updatedAt: null,
+    createdAt: null,
   };
 
   const noteByRelativePath = new Map<string, KnowledgeNote>();
@@ -374,6 +532,8 @@ const buildKnowledgeTree = (
         absolutePath: item.path,
         folders: new Map<string, MutableKnowledgeTreeFolderNode>(),
         files: [],
+        updatedAt: null,
+        createdAt: null,
       };
       current.folders.set(segment, nextFolder);
       current = nextFolder;
@@ -403,14 +563,20 @@ const buildKnowledgeTree = (
       absolutePath: item.path,
       note: linkedNote,
       extension: getTreeFileExtension(relativePath),
+      updatedAt: linkedNote?.updatedAt || null,
+      createdAt: linkedNote?.createdAt || linkedNote?.updatedAt || null,
     });
   }
 
   const finalizeFolder = (folder: MutableKnowledgeTreeFolderNode): KnowledgeTreeFolderNode => {
     const folders = [...folder.folders.values()]
       .map((child) => finalizeFolder(child))
-      .sort((left, right) => compareTreeNames(left.name, right.name));
-    const files = [...folder.files].sort((left, right) => compareTreeNames(left.name, right.name));
+      .sort((left, right) => compareKnowledgeTreeItems(left, right, sortMode));
+    const files = [...folder.files].sort((left, right) => compareKnowledgeTreeItems(left, right, sortMode));
+    const timestampValues = [
+      ...folders.flatMap((child) => [child.updatedAt, child.createdAt]),
+      ...files.flatMap((file) => [file.updatedAt, file.createdAt]),
+    ];
 
     const finalizedFolder: KnowledgeTreeFolderNode = {
       id: folder.id,
@@ -420,6 +586,10 @@ const buildKnowledgeTree = (
       folders,
       files,
       fileCount: 0,
+      updatedAt: resolveLatestTreeTimestamp(timestampValues),
+      createdAt: resolveLatestTreeTimestamp(
+        [...folders.map((child) => child.createdAt), ...files.map((file) => file.createdAt)]
+      ),
     };
     finalizedFolder.fileCount = countFolderFiles(finalizedFolder);
     return finalizedFolder;
@@ -439,6 +609,19 @@ const collectAncestorFolderPaths = (filePath: string) => {
   }
 
   return ancestors;
+};
+
+const collectAllFolderPaths = (folder: KnowledgeTreeFolderNode) => {
+  const paths = new Set<string>();
+
+  for (const childFolder of folder.folders) {
+    paths.add(childFolder.path);
+    for (const nestedPath of collectAllFolderPaths(childFolder)) {
+      paths.add(nestedPath);
+    }
+  }
+
+  return paths;
 };
 
 export const KnowledgeNoteWorkspace = ({
@@ -475,9 +658,11 @@ export const KnowledgeNoteWorkspace = ({
   const rawMarkdownRequestIdRef = useRef(0);
   const [railWidth, setRailWidth] = useState(NOTE_RAIL_DEFAULT_WIDTH);
   const [isRailResizing, setIsRailResizing] = useState(false);
+  const [treeSortMode, setTreeSortMode] = useState<KnowledgeTreeSortMode>('name-asc');
   const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<Set<string>>(() => new Set());
   const [selectedTreePaths, setSelectedTreePaths] = useState<string[]>([]);
   const [anchorTreePath, setAnchorTreePath] = useState<string | null>(null);
+  const [activeTreePath, setActiveTreePath] = useState<string | null>(null);
   const [contextMenuState, setContextMenuState] = useState<KnowledgeContextMenuState>(null);
   const [viewMode, setViewMode] = useState<KnowledgeViewMode>('read');
   const [rawMarkdownPreview, setRawMarkdownPreview] = useState<RawMarkdownPreview | null>(null);
@@ -485,14 +670,21 @@ export const KnowledgeNoteWorkspace = ({
   const searchActive = searchValue.trim().length > 0;
   const visibleNotes = filteredNotes;
   const visibleKnowledgeTree = useMemo(
-    () => buildKnowledgeTree(diskItems, notes, filteredNotes, searchValue, projectRootPath),
-    [diskItems, filteredNotes, notes, projectRootPath, searchValue]
+    () => buildKnowledgeTree(diskItems, notes, filteredNotes, searchValue, treeSortMode, projectRootPath),
+    [diskItems, filteredNotes, notes, projectRootPath, searchValue, treeSortMode]
   );
   const hasVisibleTreeNodes = visibleKnowledgeTree.folders.length > 0 || visibleKnowledgeTree.files.length > 0;
+  const allVisibleFolderPaths = useMemo(
+    () => collectAllFolderPaths(visibleKnowledgeTree),
+    [visibleKnowledgeTree]
+  );
   const selectedTreeFilePath = useMemo(
     () => (selectedNote ? resolveNoteTreeFilePath(selectedNote, projectRootPath) : ''),
     [projectRootPath, selectedNote]
   );
+  const isMultiSelecting = selectedTreePaths.length > 1;
+  const allFoldersCollapsed =
+    allVisibleFolderPaths.size > 0 && allVisibleFolderPaths.size === collapsedFolderPaths.size;
   const selectedAncestorFolderPaths = useMemo(
     () => collectAncestorFolderPaths(selectedTreeFilePath),
     [selectedTreeFilePath]
@@ -500,6 +692,14 @@ export const KnowledgeNoteWorkspace = ({
   const readingMarkdown = useMemo(
     () => (selectedNote ? serializeKnowledgeNoteMarkdown(titleValue, editorValue) : ''),
     [editorValue, selectedNote, titleValue]
+  );
+  const handleDocumentMarkdownChange = useCallback(
+    (nextMarkdown: string) => {
+      const parsed = splitKnowledgeNoteEditorDocument(nextMarkdown, titleValue);
+      onTitleChange(parsed.title);
+      onEditorChange(parsed.body);
+    },
+    [onEditorChange, onTitleChange, titleValue]
   );
   const noteIdByLookupKey = useMemo(() => {
     const entries = new Map<string, string>();
@@ -537,13 +737,16 @@ export const KnowledgeNoteWorkspace = ({
     });
   }, []);
 
+  const handleToggleAllFolders = useCallback(() => {
+    setCollapsedFolderPaths(allFoldersCollapsed ? new Set() : collectAllFolderPaths(visibleKnowledgeTree));
+  }, [allFoldersCollapsed, visibleKnowledgeTree]);
+
   const flattenVisibleTreePaths = useCallback((folder: KnowledgeTreeFolderNode): string[] => {
     const paths: string[] = [];
 
     for (const childFolder of folder.folders) {
       paths.push(childFolder.path);
-      const isExpanded =
-        selectedAncestorFolderPaths.has(childFolder.path) || !collapsedFolderPaths.has(childFolder.path);
+      const isExpanded = !collapsedFolderPaths.has(childFolder.path);
       if (isExpanded) {
         paths.push(...flattenVisibleTreePaths(childFolder));
       }
@@ -663,6 +866,33 @@ export const KnowledgeNoteWorkspace = ({
   }, [visibleTreePaths]);
 
   useEffect(() => {
+    if (selectedAncestorFolderPaths.size === 0) {
+      return;
+    }
+
+    setCollapsedFolderPaths((current) => {
+      const next = new Set(current);
+      for (const ancestorPath of selectedAncestorFolderPaths) {
+        next.delete(ancestorPath);
+      }
+      return next;
+    });
+  }, [selectedAncestorFolderPaths]);
+
+  useEffect(() => {
+    if (rawMarkdownPreview) {
+      return;
+    }
+
+    if (selectedTreeFilePath) {
+      setActiveTreePath(selectedTreeFilePath);
+      return;
+    }
+
+    setActiveTreePath((current) => (current && visibleTreePaths.includes(current) ? current : null));
+  }, [rawMarkdownPreview, selectedTreeFilePath, visibleTreePaths]);
+
+  useEffect(() => {
     setViewMode('read');
     setRawMarkdownPreview(null);
   }, [selectedNote?.id]);
@@ -733,15 +963,15 @@ export const KnowledgeNoteWorkspace = ({
       const nextNodes: ReactNode[] = [];
 
       for (const childFolder of folder.folders) {
-        const isExpanded =
-          selectedAncestorFolderPaths.has(childFolder.path) || !collapsedFolderPaths.has(childFolder.path);
+        const isExpanded = !collapsedFolderPaths.has(childFolder.path);
         const isSelected = selectedTreePaths.includes(childFolder.path);
+        const isActive = isMultiSelecting && isSelected;
 
         nextNodes.push(
           <div key={childFolder.path} className="gn-note-tree-group">
             <div className="gn-note-tree-row">
               <button
-                className={`gn-note-tree-item folder ${isSelected ? 'active' : ''}`}
+                className={`gn-note-tree-item folder ${isActive ? 'active' : ''}`}
                 type="button"
                 title={childFolder.path}
                 style={{
@@ -749,7 +979,13 @@ export const KnowledgeNoteWorkspace = ({
                   paddingLeft: `${8 + depth * 14}px`,
                 }}
                 onClick={(event) => {
-                  handleTreeSelection(childFolder.path, event.metaKey || event.ctrlKey, event.shiftKey);
+                  if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                    handleTreeSelection(childFolder.path, event.metaKey || event.ctrlKey, event.shiftKey);
+                  } else {
+                    setSelectedTreePaths([]);
+                    setAnchorTreePath(childFolder.path);
+                    setActiveTreePath(null);
+                  }
                   toggleFolderExpanded(childFolder.path);
                 }}
                 onContextMenu={(event) => {
@@ -790,15 +1026,23 @@ export const KnowledgeNoteWorkspace = ({
       for (const file of folder.files) {
         const noteMeta = file.note ? getNoteMeta(file.note) : null;
         const isSelected = selectedTreePaths.includes(file.path);
+        const isCurrentNote = activeTreePath === file.path;
+        const isActive = isCurrentNote || (isMultiSelecting && isSelected);
         nextNodes.push(
           <div key={file.id} className="gn-note-tree-row">
             <button
-              className={`gn-note-tree-item file ${selectedNote?.id === file.note?.id || isSelected ? 'active' : ''}`}
+              className={`gn-note-tree-item file ${isActive ? 'active' : ''}`}
               type="button"
               title={file.path}
               style={{ paddingLeft: `${22 + depth * 14}px` }}
               onClick={(event) => {
-                handleTreeSelection(file.path, event.metaKey || event.ctrlKey, event.shiftKey);
+                if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                  handleTreeSelection(file.path, event.metaKey || event.ctrlKey, event.shiftKey);
+                } else {
+                  setSelectedTreePaths([]);
+                  setAnchorTreePath(file.path);
+                  setActiveTreePath(file.path);
+                }
                 if (file.note) {
                   setRawMarkdownPreview(null);
                   onSelectNote(file.note.id);
@@ -841,11 +1085,12 @@ export const KnowledgeNoteWorkspace = ({
       collapsedFolderPaths,
       handleTreeSelection,
       handleOpenRawMarkdownPreview,
+      isMultiSelecting,
       onOpenAttachment,
       onSelectNote,
       searchActive,
+      activeTreePath,
       selectedAncestorFolderPaths,
-      selectedNote?.id,
       selectedTreePaths,
       setRawMarkdownPreview,
       toggleFolderExpanded,
@@ -879,6 +1124,43 @@ export const KnowledgeNoteWorkspace = ({
             aria-label="新建笔记"
           >
             <NoteAddIcon />
+          </button>
+          <button
+            className="doc-action-btn gn-note-icon-btn"
+            type="button"
+            onClick={() => onCreateFolderAtPath(null)}
+            title="新建文件夹"
+            aria-label="新建文件夹"
+          >
+            <FolderIcon />
+          </button>
+          <label
+            className="doc-action-btn gn-note-icon-btn gn-note-icon-select"
+            title="知识库排序"
+            aria-label="知识库排序"
+          >
+            <SortIcon />
+            <select
+              className="gn-note-icon-select-input"
+              value={treeSortMode}
+              onChange={(event) => setTreeSortMode(event.target.value as KnowledgeTreeSortMode)}
+              aria-label="知识库排序"
+            >
+              {KNOWLEDGE_TREE_SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="doc-action-btn gn-note-icon-btn"
+            type="button"
+            onClick={handleToggleAllFolders}
+            title={allFoldersCollapsed ? '全部展开' : '全部折叠'}
+            aria-label={allFoldersCollapsed ? '全部展开' : '全部折叠'}
+          >
+            {allFoldersCollapsed ? <ExpandAllIcon /> : <CollapseAllIcon />}
           </button>
         </div>
 
@@ -1088,21 +1370,10 @@ export const KnowledgeNoteWorkspace = ({
           <>
             <div className="gn-note-editor-surface">
               <div className="gn-note-editor-title-row">
-                {viewMode === 'code' ? (
-                  <input
-                    className="gn-note-title-input"
-                    type="text"
-                    value={titleValue}
-                    onChange={(event) => onTitleChange(event.target.value)}
-                    aria-label="笔记标题"
-                    disabled={!editable}
-                  />
-                ) : (
-                  <div className="gn-note-reading-title-hint">
-                    <strong>{titleValue || selectedNote.title}</strong>
-                    <span>阅读态会隐藏 Markdown 语法，像文章一样展示。</span>
-                  </div>
-                )}
+                <div className="gn-note-reading-title-hint">
+                  <strong>{viewMode === 'read' ? '第一行直接编辑标题' : '第一行使用 # 标题'}</strong>
+                  <span>{viewMode === 'read' ? '第二行开始是正文，阅读态会按文章排版直接编辑。' : '代码态显示原始 Markdown 源码，标题和正文仍是同一份文档。'}</span>
+                </div>
                 <div className="gn-note-reading-chrome">
                   <div className="gn-note-mode-toggle" role="tablist" aria-label="Markdown 查看模式">
                     <button
@@ -1128,19 +1399,25 @@ export const KnowledgeNoteWorkspace = ({
               </div>
               <div className="gn-note-editor-body">
                 {viewMode === 'read' ? (
-                  <div className="gn-note-reading-surface">
-                    <KnowledgeMarkdownViewer
-                      markdown={readingMarkdown}
-                      onOpenInternalLink={handleOpenInternalMarkdownLink}
+                  <div className="gn-note-reading-surface gn-note-reading-editor-surface">
+                    <GoodNightMarkdownEditor
+                      key={`${selectedNote.id}:read`}
+                      value={readingMarkdown}
+                      onChange={handleDocumentMarkdownChange}
+                      editable={editable}
                     />
                   </div>
                 ) : (
-                  <GoodNightMarkdownEditor
-                    key={selectedNote.id}
-                    value={editorValue}
-                    onChange={onEditorChange}
-                    editable={editable}
-                  />
+                  <div className="gn-note-code-surface">
+                    <textarea
+                      className="gn-note-code-textarea"
+                      value={readingMarkdown}
+                      onChange={(event) => handleDocumentMarkdownChange(event.target.value)}
+                      aria-label="笔记 Markdown 源码"
+                      spellCheck={false}
+                      disabled={!editable}
+                    />
+                  </div>
                 )}
               </div>
             </div>

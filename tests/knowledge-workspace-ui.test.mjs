@@ -61,15 +61,18 @@ test('knowledge note workspace keeps the markdown editor while adding a dedicate
   assert.match(noteSource, /阅读/);
   assert.match(noteSource, /代码/);
   assert.doesNotMatch(noteSource, /AtomicMarkdownEditor/);
-  assert.match(noteSource, /value=\{editorValue\}/);
-  assert.match(noteSource, /onChange=\{onEditorChange\}/);
+  assert.match(noteSource, /value=\{readingMarkdown\}/);
+  assert.match(noteSource, /onChange=\{handleDocumentMarkdownChange\}/);
+  assert.match(noteSource, /className="gn-note-code-textarea"/);
   assert.doesNotMatch(noteSource, /requirement-markdown-preview/);
   assert.match(css, /\.gn-note-mode-toggle/);
   assert.match(css, /\.gn-note-reading-surface/);
+  assert.match(css, /\.gn-note-reading-editor-surface/);
+  assert.match(css, /\.gn-note-code-textarea/);
   assert.match(css, /\.gn-markdown-viewer/);
   assert.match(noteSource, /getNoteMeta/);
-  assert.doesNotMatch(noteSource, /系统索引/);
-  assert.doesNotMatch(noteSource, /AI 摘要/);
+  assert.doesNotMatch(noteSource, /绯荤粺绱㈠紩/);
+  assert.doesNotMatch(noteSource, /AI 鎽樿/);
 });
 
 test('raw markdown preview footer truncates long file paths instead of breaking narrow reader layouts', async () => {
@@ -104,6 +107,6 @@ test('knowledge note workspace keeps lightweight generic classification without 
   assert.match(source, /label: '系统生成'/);
   assert.match(source, /badge: 'SKETCH'/);
   assert.match(source, /badge: 'DESIGN'/);
-  assert.doesNotMatch(source, /系统索引/);
-  assert.doesNotMatch(source, /AI 摘要/);
+  assert.doesNotMatch(source, /绯荤粺绱㈠紩/);
+  assert.doesNotMatch(source, /AI 鎽樿/);
 });

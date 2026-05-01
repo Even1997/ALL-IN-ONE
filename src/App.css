@@ -8268,6 +8268,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 
 .project-manager-form {
   width: min(760px, 100%);
+  margin-inline: auto;
   padding: 28px;
 }
 
@@ -8911,7 +8912,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 }
 
 .gn-note-rail-actions {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: stretch;
 }
 
@@ -8933,6 +8934,25 @@ body.ai-chat-sidebar-collapsed .app-main {
   width: 18px;
   height: 18px;
   overflow: visible;
+}
+
+.gn-note-sort-select {
+  flex: 1 1 180px;
+  min-width: 180px;
+  max-width: 100%;
+}
+
+.gn-note-icon-select {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.gn-note-icon-select-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .gn-note-stats {
@@ -9299,6 +9319,58 @@ body.ai-chat-sidebar-collapsed .app-main {
   height: 100%;
   overflow: auto;
   padding: 10px 22px 24px;
+}
+
+.gn-note-reading-editor-surface {
+  padding: 0;
+}
+
+.gn-note-reading-editor-surface .atomic-cm-editor {
+  --atomic-editor-measure: min(100%, 76ch);
+  --atomic-editor-body-size: 15px;
+  --atomic-editor-body-leading: 1.8;
+  --atomic-editor-fg: var(--mode-text, #0f172a);
+  --atomic-editor-fg-muted: var(--mode-muted, #64748b);
+  --atomic-editor-fg-faint: color-mix(in srgb, var(--mode-muted, #64748b) 75%, transparent);
+  --atomic-editor-bg: transparent;
+  --atomic-editor-bg-panel: transparent;
+  --atomic-editor-bg-surface: transparent;
+  --atomic-editor-border: var(--mode-border, rgba(148, 163, 184, 0.18));
+  --atomic-editor-link: var(--mode-accent, #0f766e);
+  --atomic-editor-link-hover: color-mix(in srgb, var(--mode-accent, #0f766e) 82%, white 18%);
+  --atomic-editor-code-bg: color-mix(in srgb, var(--mode-panel-lite, #f8fafc) 84%, transparent);
+}
+
+.gn-note-reading-editor-surface .cm-scroller {
+  padding: 10px 22px 24px;
+}
+
+.gn-note-code-surface {
+  height: 100%;
+  overflow: auto;
+  padding: 14px 22px 24px;
+}
+
+.gn-note-code-textarea {
+  display: block;
+  width: min(100%, var(--atomic-editor-measure, 76ch));
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 16px 18px;
+  border: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+  border-radius: 16px;
+  background: var(--mode-input, rgba(255, 255, 255, 0.72));
+  color: var(--mode-text, #0f172a);
+  font: 500 14px/1.75 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+  white-space: pre;
+}
+
+.gn-note-code-textarea:focus {
+  border-color: rgba(0, 122, 255, 0.46);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.14);
 }
 
 .gn-markdown-viewer {
