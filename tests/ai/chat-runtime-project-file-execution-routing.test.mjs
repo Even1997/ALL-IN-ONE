@@ -18,7 +18,7 @@ test('chat delegates runtime project-file execution to orchestration helper', as
   assert.match(source, /const executeProjectFileOperations = useCallback\(/);
   assert.match(source, /executeRuntimeProjectFileOperations\(/);
   assert.match(source, /await cancelRuntimeProjectFileProposal\(/);
-  assert.match(source, /await executeRuntimeApprovedProjectFileProposal\(/);
+  assert.match(source, /return executeRuntimeApprovedProjectFileProposal\(/);
   assert.doesNotMatch(source, /const changedPaths: string\[\] = \[\];/);
   assert.doesNotMatch(source, /invoke<TauriToolResponse>\('tool_mkdir'/);
   assert.doesNotMatch(source, /invoke<TauriToolResponse>\('tool_edit'/);

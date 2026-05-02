@@ -53,6 +53,14 @@ const WRITE_INTENT_PATTERN =
 const READ_INTENT_PATTERN =
   /(查看|读取|读一下|打开|列出|看看|搜索|查找|目录|文件内容|read|open|show|list|search|grep)/i;
 
+const TASK_WRITE_VERB_PATTERN =
+  /(修|修复|修改|重写|改写|编辑|更新|完善|整理|优化|补全|同步|改掉|fix|rewrite|refactor|update|edit|organize|sync)/i;
+
+const TASK_WRITE_TARGET_PATTERN =
+  /(文件|文档|代码|配置|项目|页面|组件|模块|README|PRD|docs[\\/]|src[\\/]|package\.json|tsconfig|\.md\b|\.tsx?\b|\.jsx?\b|\.json\b|\.ya?ml\b|\.css\b|\.html\b)/i;
+
+const QUESTION_ONLY_PATTERN = /(^|\s)(为什么|怎么|如何|what|why|how|which)(\s|$)|\?/i;
+
 const trimLeadingSeparators = (value: string) => value.replace(/^[\\/]+/, '');
 
 const trimTrailingSeparators = (value: string) => value.replace(/[\\/]+$/, '');
@@ -149,6 +157,53 @@ export const detectProjectFileWriteIntent = (value: string) => WRITE_INTENT_PATT
 
 export const detectProjectFileReadIntent = (value: string) =>
   READ_INTENT_PATTERN.test(value) && !detectProjectFileWriteIntent(value);
+
+export const detectTaskAuthorizedProjectWriteIntent = (value: string) => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const normalizedLower = normalized.toLowerCase();
+  const hasTaskVerb =
+    TASK_WRITE_VERB_PATTERN.test(normalized) ||
+    normalized.includes('修一下') ||
+    normalized.includes('整理一下') ||
+    normalized.includes('重写');
+  const hasTaskTarget =
+    TASK_WRITE_TARGET_PATTERN.test(normalized) ||
+    normalizedLower.includes('readme') ||
+    normalizedLower.includes('package.json') ||
+    normalizedLower.includes('tsconfig') ||
+    normalizedLower.includes('src/') ||
+    normalizedLower.includes('docs/');
+
+  if (
+    (normalized.includes('整理一下') || normalized.includes('重写') || normalized.includes('修一下')) &&
+    (normalizedLower.includes('readme') ||
+      normalizedLower.includes('package.json') ||
+      normalizedLower.includes('src/') ||
+      normalizedLower.includes('docs/') ||
+      normalized.includes('文档') ||
+      normalized.includes('文件'))
+  ) {
+    return true;
+  }
+
+  if (detectProjectFileWriteIntent(normalized)) {
+    return true;
+  }
+
+  if (detectProjectFileReadIntent(normalized)) {
+    return false;
+  }
+
+  if (QUESTION_ONLY_PATTERN.test(normalized) && !TASK_WRITE_VERB_PATTERN.test(normalized)) {
+    return false;
+  }
+
+  return hasTaskVerb && hasTaskTarget;
+};
 
 export const resolveProjectOperationPath = (projectRoot: string, targetPath: string) => {
   const trimmedTargetPath = targetPath.trim();

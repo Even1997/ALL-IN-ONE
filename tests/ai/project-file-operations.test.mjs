@@ -51,6 +51,16 @@ test('project file operations detect read intent without forcing confirmation fl
   assert.equal(detectProjectFileReadIntent('\u8bf7\u65b0\u5efa docs/prd.md'), false);
 });
 
+test('project file operations detect task-authorized write intent without requiring explicit save wording', async () => {
+  const { detectTaskAuthorizedProjectWriteIntent } = await loadModule();
+
+  assert.equal(detectTaskAuthorizedProjectWriteIntent('\u5e2e\u6211\u4fee\u4e00\u4e0b src/app.tsx \u8fd9\u4e2a bug'), true);
+  assert.equal(detectTaskAuthorizedProjectWriteIntent('\u628a\u8fd9\u7bc7\u6587\u6863\u91cd\u5199\u5f97\u66f4\u6e05\u695a\u4e00\u70b9'), true);
+  assert.equal(detectTaskAuthorizedProjectWriteIntent('\u6574\u7406\u4e00\u4e0b README \u7684\u7ed3\u6784'), true);
+  assert.equal(detectTaskAuthorizedProjectWriteIntent('\u4e3a\u4ec0\u4e48\u8fd9\u4e2a\u6587\u4ef6\u4f1a\u62a5\u9519\uff1f'), false);
+  assert.equal(detectTaskAuthorizedProjectWriteIntent('\u5e2e\u6211\u770b\u770b docs \u76ee\u5f55\u91cc\u6709\u4ec0\u4e48'), false);
+});
+
 test('project file operations reject paths outside the project root', async () => {
   const { resolveProjectOperationPath } = await loadModule();
 

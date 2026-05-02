@@ -11,6 +11,7 @@ import type { AgentContextSnapshot } from './context/agentContextTypes';
 import type { RuntimeToolStep } from './agent-kernel/agentKernelTypes';
 import type { RuntimeSkillDefinition } from './skills/runtimeSkillTypes';
 import { canResumeFromRecovery, type AgentReplayRecoveryState } from './replay/runtimeReplayRecovery.ts';
+import type { AgentTurnSession } from './session/agentSessionTypes';
 
 export type AgentRuntimeBinding = {
   providerId: AgentProviderId;
@@ -47,6 +48,7 @@ type AgentRuntimeState = {
   threadsByProject: Record<string, AgentThreadRecord[]>;
   timelineByThread: Record<string, AgentTimelineEvent[]>;
   turnsByThread: Record<string, AgentTurnRecord[]>;
+  sessionsByThread: Record<string, AgentTurnSession[]>;
   memoryByProject: Record<string, AgentMemoryEntry[]>;
   memoryCandidatesByThread: Record<string, AgentMemoryCandidate[]>;
   replayEventsByThread: Record<string, AgentReplayEvent[]>;
@@ -61,6 +63,12 @@ type AgentRuntimeState = {
   createThread: (projectId: string, thread: AgentThreadRecord) => void;
   appendTimelineEvent: (threadId: string, event: AgentTimelineEvent) => void;
   submitTurn: (threadId: string, turn: AgentTurnRecord) => void;
+  upsertTurnSession: (threadId: string, session: AgentTurnSession) => void;
+  patchTurnSession: (
+    threadId: string,
+    turnId: string,
+    updater: (session: AgentTurnSession) => AgentTurnSession,
+  ) => void;
   setMemoryEntries: (projectId: string, entries: AgentMemoryEntry[]) => void;
   setThreadMemoryCandidates: (threadId: string, candidates: AgentMemoryCandidate[]) => void;
   resolveMemoryCandidate: (
@@ -97,6 +105,9 @@ const sortTimeline = (events: AgentTimelineEvent[]) =>
 const sortTurns = (turns: AgentTurnRecord[]) =>
   [...turns].sort((left, right) => left.createdAt - right.createdAt);
 
+const sortSessions = (sessions: AgentTurnSession[]) =>
+  [...sessions].sort((left, right) => left.createdAt - right.createdAt);
+
 const sortReplayEvents = (events: AgentReplayEvent[]) =>
   [...events].sort((left, right) => left.createdAt - right.createdAt);
 
@@ -110,6 +121,7 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
   threadsByProject: {},
   timelineByThread: {},
   turnsByThread: {},
+  sessionsByThread: {},
   memoryByProject: {},
   memoryCandidatesByThread: {},
   replayEventsByThread: {},
@@ -154,6 +166,31 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
         ]),
       },
     })),
+
+  upsertTurnSession: (threadId, session) =>
+    set((state) => ({
+      sessionsByThread: {
+        ...state.sessionsByThread,
+        [threadId]: sortSessions([
+          session,
+          ...(state.sessionsByThread[threadId] || []).filter((item) => item.id !== session.id),
+        ]),
+      },
+    })),
+
+  patchTurnSession: (threadId, turnId, updater) =>
+    set((state) => {
+      const updatedAt = Date.now();
+
+      return {
+        sessionsByThread: {
+          ...state.sessionsByThread,
+          [threadId]: (state.sessionsByThread[threadId] || []).map((item) =>
+            item.id === turnId ? { ...updater(item), updatedAt } : item
+          ),
+        },
+      };
+    }),
 
   setMemoryEntries: (projectId, entries) =>
     set((state) => ({

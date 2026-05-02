@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const loadTimeline = async () =>
   import(`../../src/modules/ai/runtime/timeline/timelineMappers.ts?test=${Date.now()}`);
@@ -7,12 +10,44 @@ const loadTimeline = async () =>
 const loadTurnRunner = async () =>
   import(`../../src/modules/ai/runtime/orchestration/agentTurnRunner.ts?test=${Date.now()}`);
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const timelinePanelPath = path.resolve(
+  __dirname,
+  '../../src/components/ai/gn-agent-shell/GNAgentTimelinePanel.tsx',
+);
+const toolCallPanelPath = path.resolve(
+  __dirname,
+  '../../src/components/ai/gn-agent-shell/GNAgentToolCallPanel.tsx',
+);
+const statusPanelPath = path.resolve(
+  __dirname,
+  '../../src/components/ai/gn-agent-shell/GNAgentStatusPanel.tsx',
+);
+
 test('timeline mappers normalize thinking, tool, message, and approval events', async () => {
   const { mapTimelineEventSummary } = await loadTimeline();
 
   assert.equal(mapTimelineEventSummary({ kind: 'thinking', payload: 'Plan' }), 'thinking: Plan');
   assert.equal(mapTimelineEventSummary({ kind: 'approval', payload: 'Need approval' }), 'approval: Need approval');
   assert.equal(mapTimelineEventSummary({ kind: 'tool', payload: 'list-skills' }), 'tool: list-skills');
+});
+
+test('GN agent runtime panels prefer latest turn session state for timeline, tool, and status cards', async () => {
+  const [timelinePanelSource, toolCallPanelSource, statusPanelSource] = await Promise.all([
+    readFile(timelinePanelPath, 'utf8'),
+    readFile(toolCallPanelPath, 'utf8'),
+    readFile(statusPanelPath, 'utf8'),
+  ]);
+
+  assert.match(timelinePanelSource, /latestTurnSession/);
+  assert.match(timelinePanelSource, /latestTurnSession\?\.status \|\| 'idle'/);
+  assert.match(toolCallPanelSource, /toolStatusLabels\[toolCall\.status\]/);
+  assert.match(toolCallPanelSource, /toolCalls\.length} calls/);
+  assert.doesNotMatch(toolCallPanelSource, /step-linked/);
+  assert.doesNotMatch(toolCallPanelSource, /executionSteps\[index\]/);
+  assert.match(statusPanelSource, /latestTurnSession/);
+  assert.match(statusPanelSource, /latestTurnSession\?\.status/);
 });
 
 test('agent turn runner builds a queued runtime turn shell', async () => {

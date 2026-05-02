@@ -95,7 +95,7 @@ export const GNAgentRuntimeSummary: React.FC<{
   return (
     <section className={`gn-agent-runtime-summary ${status.ready ? 'ready' : 'missing'}`}>
       <div className="gn-agent-runtime-summary-header">
-        <strong>{providerId === 'claude' ? 'Claude Runtime' : 'Codex Runtime'}</strong>
+        <strong>{providerId === 'claude' ? 'Claude Runtime' : 'Codex Agent Runtime'}</strong>
         <span>{status.source}</span>
       </div>
       <p>{status.summary}</p>

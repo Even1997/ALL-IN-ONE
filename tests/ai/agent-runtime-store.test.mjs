@@ -153,3 +153,36 @@ test('chat sessions can carry runtime provider and external thread metadata', as
   assert.equal(session.providerId, 'claude');
   assert.equal(session.runtimeThreadId, null);
 });
+
+test('agent runtime store upserts and patches turn sessions by thread', async () => {
+  const { useAgentRuntimeStore } = await loadRuntimeStore();
+
+  useAgentRuntimeStore.setState({ sessionsByThread: {} });
+  const state = useAgentRuntimeStore.getState();
+
+  state.upsertTurnSession('thread-1', {
+    id: 'turn-1',
+    threadId: 'thread-1',
+    providerId: 'codex',
+    userPrompt: 'fix it',
+    status: 'planning',
+    mode: 'plan_then_execute',
+    plan: null,
+    executionSteps: [],
+    resumeSnapshot: null,
+    createdAt: 1,
+    updatedAt: 1,
+  });
+
+  const initialUpdatedAt = useAgentRuntimeStore.getState().sessionsByThread['thread-1'][0].updatedAt;
+
+  state.patchTurnSession('thread-1', 'turn-1', (session) => ({
+    ...session,
+    status: 'waiting_approval',
+  }));
+
+  const next = useAgentRuntimeStore.getState().sessionsByThread['thread-1'];
+  assert.equal(next.length, 1);
+  assert.equal(next[0].status, 'waiting_approval');
+  assert.ok(next[0].updatedAt > initialUpdatedAt);
+});

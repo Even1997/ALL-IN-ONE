@@ -13,6 +13,11 @@ test('AI chat wiring uses agent runtime store, client, context assembler, and pr
   const source = await readFile(aiChatPath, 'utf8');
 
   assert.match(source, /useAgentRuntimeStore/);
+  assert.match(source, /createEmptyAgentTurnSession/);
+  assert.match(source, /reduceAgentTurnSession/);
+  assert.match(source, /decideAgentTurnMode/);
+  assert.match(source, /upsertTurnSession/);
+  assert.match(source, /patchTurnSession/);
   assert.match(source, /executeRuntimePrompt/);
   assert.match(source, /persistRuntimeThread/);
   assert.match(source, /buildRuntimeDirectChatRequest/);

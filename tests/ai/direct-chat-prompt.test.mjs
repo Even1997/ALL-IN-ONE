@@ -16,6 +16,8 @@ test('buildDirectChatPrompt keeps default chat free-form when no explicit skill 
   assert.match(result.prompt, /context_window:\s*200000 tokens/);
   assert.doesNotMatch(result.prompt, /mode:/);
   assert.doesNotMatch(result.prompt, /knowledge_context:/);
+  assert.match(result.systemPrompt, /low-risk internal actions/i);
+  assert.match(result.systemPrompt, /do not treat your own reply text as authorization/i);
 });
 
 test('buildDirectChatPrompt adds explicit skill focus without injecting knowledge file bodies', () => {

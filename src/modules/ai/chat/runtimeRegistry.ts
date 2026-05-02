@@ -17,7 +17,7 @@ export const BUILT_IN_CHAT_RUNTIME_PLUGINS: ChatRuntimePlugin[] = [
   {
     id: 'codex',
     label: 'Codex',
-    title: 'Codex CLI',
+    title: 'Codex Agent',
     runtime: 'local',
     pluginType: 'chat-runtime',
     source: 'built-in',

@@ -96,6 +96,10 @@ import {
 import {
   createReplayRecoveryController,
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
+import { decideAgentTurnMode } from '../../modules/ai/runtime/session/agentSessionController';
+import { getLatestTurnSession } from '../../modules/ai/runtime/session/agentSessionSelectors';
+import { reduceAgentTurnSession } from '../../modules/ai/runtime/session/agentSessionStateMachine';
+import { createEmptyAgentTurnSession, type AgentTurnSession } from '../../modules/ai/runtime/session/agentSessionTypes';
 import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
@@ -112,6 +116,7 @@ import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/a
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
   detectProjectFileReadIntent,
+  detectTaskAuthorizedProjectWriteIntent,
   detectProjectFileWriteIntent,
   type ProjectFileOperation,
   type ProjectFileOperationMode,
@@ -743,6 +748,8 @@ export const AIChat: React.FC<AIChatProps> = ({
     startRun: startRuntimeRun,
     finishRun: finishRuntimeRun,
     failRun: failRuntimeRun,
+    upsertTurnSession,
+    patchTurnSession,
   } = useAgentRuntimeStore(
     useShallow((state) => ({
       createThread: state.createThread,
@@ -762,6 +769,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       startRun: state.startRun,
       finishRun: state.finishRun,
       failRun: state.failRun,
+      upsertTurnSession: state.upsertTurnSession,
+      patchTurnSession: state.patchTurnSession,
     }))
   );
   const { runtimeMcpServers, setRuntimeMcpServers, setRuntimeMcpToolCalls, appendRuntimeMcpToolCall } =
@@ -862,6 +871,9 @@ export const AIChat: React.FC<AIChatProps> = ({
   const activeSkills = useMemo(
     () => (activeSessionId ? activeSkillsByThread[activeSessionId] || [] : []),
     [activeSessionId, activeSkillsByThread]
+  );
+  const latestTurnSession = useAgentRuntimeStore((state) =>
+    activeSessionId ? getLatestTurnSession(state.sessionsByThread[activeSessionId]) : null
   );
   const activeReplayResumeRequest = useAgentRuntimeStore((state) =>
     activeSessionId ? state.resumeRequestsByThread[activeSessionId] || null : null
@@ -1143,10 +1155,10 @@ export const AIChat: React.FC<AIChatProps> = ({
   const handleExecuteProjectFileProposal = useCallback(
     async (messageId: string, proposal: ProjectFileProposal) => {
       if (!currentProject || !activeSessionId) {
-        return;
+        return false;
       }
 
-      await executeRuntimeApprovedProjectFileProposal({
+      return executeRuntimeApprovedProjectFileProposal({
         projectId: currentProject.id,
         sessionId: activeSessionId,
         messageId,
@@ -1305,7 +1317,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     },
     codex: {
       ready: Boolean(localAgentSnapshot?.codexHome.exists),
-      title: localAgentSnapshot?.codexHome.exists ? 'Codex CLI 已就绪' : '未检测到本地 Codex 配置，将回退到内置 AI',
+      title: localAgentSnapshot?.codexHome.exists ? 'Codex Agent 已就绪' : '未检测到本地 Codex 配置，将回退到内置 AI',
       fallbackMessage: localAgentSnapshot?.codexHome.exists ? null : '未检测到本地 Codex 配置，已回退到内置 AI。',
     },
     'built-in': {
@@ -1498,8 +1510,21 @@ export const AIChat: React.FC<AIChatProps> = ({
   const isFreshSession = messages.length <= 1;
   const latestActivityEntry = activityEntries[0] || null;
   const pendingApprovalCount = pendingApprovals.length;
+  const latestTurnSessionStatus = latestTurnSession?.status || null;
   const runStateLabel =
-    pendingApprovalCount > 0
+    latestTurnSessionStatus === 'planning'
+      ? 'Planning'
+      : latestTurnSessionStatus === 'waiting_approval'
+        ? 'Approval required'
+        : latestTurnSessionStatus === 'executing'
+          ? 'Executing'
+          : latestTurnSessionStatus === 'resumable'
+            ? 'Resume ready'
+            : latestTurnSessionStatus === 'completed'
+              ? 'Completed'
+              : latestTurnSessionStatus === 'failed'
+                ? 'Failed'
+                : pendingApprovalCount > 0
       ? 'Approval required'
       : isLoading
         ? 'Running'
@@ -1507,7 +1532,13 @@ export const AIChat: React.FC<AIChatProps> = ({
           ? 'Failed'
           : 'Ready';
   const runStateTone =
-    pendingApprovalCount > 0
+    latestTurnSessionStatus === 'waiting_approval' || latestTurnSessionStatus === 'resumable'
+      ? 'warning'
+      : latestTurnSessionStatus === 'failed'
+        ? 'error'
+        : latestTurnSessionStatus === 'completed'
+          ? 'success'
+          : pendingApprovalCount > 0
       ? 'warning'
       : isLoading
         ? 'running'
@@ -1752,6 +1783,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       const cleanedContent = skillIntent?.cleanedInput.trim()
         ? skillIntent.cleanedInput.trim()
         : rawContent;
+      const isTaskAuthorizedWriteRequest = detectTaskAuthorizedProjectWriteIntent(cleanedContent);
+      const isProjectFileWriteRequest = detectProjectFileWriteIntent(cleanedContent) || isTaskAuthorizedWriteRequest;
+      const isProjectFileReadRequest = detectProjectFileReadIntent(cleanedContent);
       const userMessage = createStoredChatMessage('user', rawContent);
 
       appendMessage(currentProject.id, targetSessionId, userMessage);
@@ -1788,6 +1822,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
       let runtimeThreadId = targetSession?.runtimeThreadId || null;
       let runtimeStoreThreadId = targetSessionId;
+      let runtimeTurnSessionId: string | null = null;
       let executionController: ReturnType<typeof createRuntimeReplayExecutionController> | null = null;
 
       try {
@@ -1881,8 +1916,172 @@ export const AIChat: React.FC<AIChatProps> = ({
           throw new Error('Failed to initialize runtime execution controller.');
         }
         const activeExecutionController = executionController;
+        runtimeTurnSessionId = `turn_${runId}`;
+        upsertTurnSession(
+          runtimeStoreThreadId,
+          createEmptyAgentTurnSession({
+            id: runtimeTurnSessionId,
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            userPrompt: cleanedContent,
+          })
+        );
+        const patchCurrentTurnSession = (updater: (session: AgentTurnSession) => AgentTurnSession) => {
+          patchTurnSession(runtimeStoreThreadId, runtimeTurnSessionId!, updater);
+        };
+        const markTurnExecutionStep = (input: {
+          title: string;
+          status: 'running' | 'completed' | 'failed' | 'blocked';
+          userVisibleDetail: string;
+          resultSummary: string;
+          toolName?: string | null;
+        }) => {
+          patchCurrentTurnSession((session) => ({
+            ...session,
+            executionSteps: [
+              {
+                id: `${runtimeTurnSessionId}_primary`,
+                title: input.title,
+                status: input.status,
+                toolName: input.toolName ?? null,
+                resultSummary: input.resultSummary,
+                userVisibleDetail: input.userVisibleDetail,
+                startedAt: session.executionSteps[0]?.startedAt || Date.now(),
+                finishedAt: input.status === 'running' ? null : Date.now(),
+              },
+            ],
+            updatedAt: Date.now(),
+          }));
+        };
+        const markTurnExecuting = (title: string, detail: string, toolName: string | null = null) => {
+          patchCurrentTurnSession((session) => {
+            const nextSession = reduceAgentTurnSession(session, { type: 'approval_granted' });
+            return {
+              ...nextSession,
+              plan:
+                nextSession.plan && nextSession.plan.approvalStatus === 'pending'
+                  ? {
+                      ...nextSession.plan,
+                      approvalStatus: 'approved',
+                    }
+                  : nextSession.plan,
+            };
+          });
+          markTurnExecutionStep({
+            title,
+            status: 'running',
+            userVisibleDetail: detail,
+            resultSummary: detail,
+            toolName,
+          });
+        };
+        const completeTurnSession = async (finalContent: string) => {
+          markTurnExecutionStep({
+            title: 'Completed turn',
+            status: 'completed',
+            userVisibleDetail: finalContent,
+            resultSummary: finalContent,
+          });
+          patchCurrentTurnSession((session) => reduceAgentTurnSession(session, { type: 'execution_completed' }));
+          await activeExecutionController.completeWithReplay(finalContent);
+        };
+        const failTurnSession = async (message: string) => {
+          markTurnExecutionStep({
+            title: 'Failed turn',
+            status: 'failed',
+            userVisibleDetail: message,
+            resultSummary: message,
+          });
+          patchCurrentTurnSession((session) =>
+            reduceAgentTurnSession(session, { type: 'execution_failed', reason: message })
+          );
+          await activeExecutionController.failWithReplay(message);
+        };
+        const blockTurnSession = async (reason: string, replaySummary: string, actionLabel: string | null = null) => {
+          markTurnExecutionStep({
+            title: 'Blocked turn',
+            status: 'blocked',
+            userVisibleDetail: reason,
+            resultSummary: reason,
+          });
+          patchCurrentTurnSession((session) => ({
+            ...reduceAgentTurnSession(session, {
+              type: 'execution_blocked',
+              reason,
+              actionLabel,
+            }),
+            plan:
+              session.plan && session.plan.approvalStatus === 'pending'
+                ? {
+                    ...session.plan,
+                    approvalStatus: 'denied',
+                  }
+                : session.plan,
+          }));
+          await activeExecutionController.completeWithReplay(replaySummary);
+        };
+        patchCurrentTurnSession((session) => reduceAgentTurnSession(session, { type: 'start_classifying' }));
+        const turnModeDecision = decideAgentTurnMode({
+          prompt: cleanedContent,
+          suggestedPlanMode: Boolean(skillIntent),
+          riskyWriteDetected: isProjectFileWriteRequest || effectiveChatAgentId !== 'built-in',
+          bashDetected: Boolean(mcpCommand),
+          multiStepDetected: Boolean(mcpCommand || isProjectFileWriteRequest || effectiveChatAgentId !== 'built-in'),
+        });
+        if (turnModeDecision.mode === 'plan_then_execute') {
+          patchCurrentTurnSession((session) => ({
+            ...reduceAgentTurnSession(session, { type: 'enter_planning' }),
+            plan: {
+              summary:
+                effectiveChatAgentId !== 'built-in'
+                  ? `Review and run ${effectiveChatAgentId === 'codex' ? 'the Codex agent' : 'the local agent'} request`
+                  : isProjectFileWriteRequest
+                    ? 'Plan project file changes before execution'
+                    : mcpCommand
+                      ? `Review MCP tool call: ${mcpCommand.toolName}`
+                      : 'Plan the current request before execution',
+              reason: turnModeDecision.reason,
+              riskLevel:
+                effectiveChatAgentId !== 'built-in' || isProjectFileWriteRequest
+                  ? 'high'
+                  : mcpCommand
+                    ? 'medium'
+                    : 'low',
+              approvalStatus: 'not-required',
+              affectedPaths: [],
+              steps: [
+                {
+                  id: `${runtimeTurnSessionId}_review`,
+                  title: 'Review request',
+                  kind: 'analysis',
+                  summary: 'Inspect the requested work and confirm the execution path.',
+                  needsApproval: false,
+                  expectedResult: 'A clear execution plan.',
+                },
+                {
+                  id: `${runtimeTurnSessionId}_execute`,
+                  title: 'Execute request',
+                  kind:
+                    effectiveChatAgentId !== 'built-in'
+                      ? 'tool'
+                      : isProjectFileWriteRequest
+                        ? 'file'
+                        : 'reply',
+                  summary: 'Run the chosen path and report the result back in chat.',
+                  needsApproval: effectiveChatAgentId !== 'built-in' || isProjectFileWriteRequest,
+                  expectedResult: 'A completed turn or a resumable block.',
+                },
+              ],
+            },
+          }));
+        }
 
         if (mcpCommand) {
+          markTurnExecuting(
+            `Run MCP tool: ${mcpCommand.toolName}`,
+            `Preparing ${mcpCommand.serverId}/${mcpCommand.toolName}`,
+            mcpCommand.toolName
+          );
           appendRuntimeTimelineEvent(runtimeStoreThreadId, {
             id: createRuntimeEventId('mcp-start'),
             threadId: runtimeStoreThreadId,
@@ -1906,7 +2105,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               tone: 'error',
               content: message,
             }));
-            await activeExecutionController.failWithReplay(message);
+            await failTurnSession(message);
             appendRuntimeTimelineEvent(runtimeStoreThreadId, {
               id: createRuntimeEventId('mcp-error'),
               threadId: runtimeStoreThreadId,
@@ -1946,9 +2145,9 @@ export const AIChat: React.FC<AIChatProps> = ({
             payload: buildRuntimeMcpReplayPayload(toolCall),
           });
           if (toolCall.error) {
-            await activeExecutionController.failWithReplay(toolCall.error);
+            await failTurnSession(toolCall.error);
           } else {
-            await activeExecutionController.completeWithReplay(formatRuntimeMcpToolCallResult(toolCall));
+            await completeTurnSession(formatRuntimeMcpToolCallResult(toolCall));
           }
           return;
         }
@@ -2017,12 +2216,9 @@ export const AIChat: React.FC<AIChatProps> = ({
             summary: workflowCompletion.timelineSummary,
             createdAt: Date.now(),
           });
-          await activeExecutionController.completeWithReplay(workflowCompletion.finalContent);
+          await completeTurnSession(workflowCompletion.finalContent);
           return;
         }
-
-        const isProjectFileWriteRequest = detectProjectFileWriteIntent(cleanedContent);
-        const isProjectFileReadRequest = detectProjectFileReadIntent(cleanedContent);
 
         if (effectiveChatAgentId === 'built-in' && (isProjectFileWriteRequest || isProjectFileReadRequest)) {
           const projectRoot = await getProjectDir(currentProject.id);
@@ -2032,6 +2228,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           }
 
           if (isProjectFileReadRequest && !isProjectFileWriteRequest) {
+            markTurnExecuting('Read project files', 'Loading requested project files for the current turn.');
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
               content: '正在读取项目文件...',
@@ -2056,9 +2253,38 @@ export const AIChat: React.FC<AIChatProps> = ({
               summary: `Read project files: ${buildSessionPreview(cleanedContent)}`,
               createdAt: Date.now(),
             });
-            await activeExecutionController.completeWithReplay(finalContent);
+            await completeTurnSession(finalContent);
             return;
           }
+
+          patchCurrentTurnSession((session) => ({
+            ...reduceAgentTurnSession(session, { type: 'enter_planning' }),
+            plan: {
+              summary: buildSessionPreview(cleanedContent) || 'Plan project file changes',
+              reason: 'project-file-flow',
+              riskLevel: projectFileOperationMode === 'auto' ? 'high' : 'medium',
+              approvalStatus: projectFileOperationMode === 'auto' ? 'approved' : 'pending',
+              affectedPaths: [],
+              steps: [
+                {
+                  id: `${runtimeTurnSessionId}_file-plan`,
+                  title: 'Plan file changes',
+                  kind: 'file',
+                  summary: 'Generate a structured file-change proposal before writing files.',
+                  needsApproval: false,
+                  expectedResult: 'A safe file operation proposal.',
+                },
+                {
+                  id: `${runtimeTurnSessionId}_file-apply`,
+                  title: 'Apply file changes',
+                  kind: 'approval',
+                  summary: 'Wait for approval when required, then apply the planned changes.',
+                  needsApproval: projectFileOperationMode !== 'auto',
+                  expectedResult: 'Updated project files or a resumable block.',
+                },
+              ],
+            },
+          }));
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
@@ -2087,7 +2313,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               summary: 'File operation plan needs clarification',
               createdAt: Date.now(),
             });
-            await activeExecutionController.completeWithReplay(
+            await completeTurnSession(
               plan.assistantMessage.trim() || plan.summary.trim() || '文件操作计划需要补充信息。'
             );
             return;
@@ -2105,6 +2331,24 @@ export const AIChat: React.FC<AIChatProps> = ({
             plan,
             sandboxPolicy,
           });
+          patchCurrentTurnSession((session) => ({
+            ...session,
+            plan: session.plan
+              ? {
+                  ...session.plan,
+                  summary: nextProposal.summary,
+                  riskLevel,
+                  approvalStatus:
+                    decision === 'approval-required'
+                      ? 'pending'
+                      : decision === 'blocked'
+                        ? 'denied'
+                        : session.plan.approvalStatus,
+                  affectedPaths: nextProposal.operations.map((operation) => operation.targetPath),
+                }
+              : session.plan,
+            updatedAt: Date.now(),
+          }));
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
@@ -2134,7 +2378,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               summary: blockedFeedback.timelineSummary,
               createdAt: Date.now(),
             });
-            await activeExecutionController.completeWithReplay(blockedFeedback.replaySummary);
+            await blockTurnSession(nextProposal.summary, blockedFeedback.replaySummary, 'Revise file changes');
             return;
           }
 
@@ -2143,6 +2387,15 @@ export const AIChat: React.FC<AIChatProps> = ({
               decision,
               summary: nextProposal.summary,
             });
+            patchCurrentTurnSession((session) => ({
+              ...reduceAgentTurnSession(session, { type: 'plan_waiting_approval' }),
+              plan: session.plan
+                ? {
+                    ...session.plan,
+                    approvalStatus: 'pending',
+                  }
+                : session.plan,
+            }));
             await requestRuntimeApproval({
               threadId: approvalThreadId,
               actionType: approvalActionType,
@@ -2150,10 +2403,32 @@ export const AIChat: React.FC<AIChatProps> = ({
               summary: nextProposal.summary,
               messageId: assistantMessage.id,
               onApprove: async () => {
-                await handleExecuteProjectFileProposal(assistantMessage.id, nextProposal);
+                markTurnExecuting('Apply approved file changes', nextProposal.summary);
+                const didExecute = await handleExecuteProjectFileProposal(assistantMessage.id, nextProposal);
+                patchCurrentTurnSession((session) =>
+                  didExecute
+                    ? reduceAgentTurnSession(session, { type: 'execution_completed' })
+                    : reduceAgentTurnSession(session, {
+                        type: 'execution_failed',
+                        reason: 'Approved file changes failed.',
+                      })
+                );
               },
               onDeny: async () => {
                 await handleCancelProjectFileProposal(assistantMessage.id);
+                patchCurrentTurnSession((session) => ({
+                  ...reduceAgentTurnSession(session, {
+                    type: 'execution_blocked',
+                    reason: 'Project file changes were denied.',
+                    actionLabel: 'Revise file changes',
+                  }),
+                  plan: session.plan
+                    ? {
+                        ...session.plan,
+                        approvalStatus: 'denied',
+                      }
+                    : session.plan,
+                }));
               },
             });
             appendRuntimeTimelineEvent(runtimeStoreThreadId, {
@@ -2167,6 +2442,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             return;
           }
 
+          markTurnExecuting('Apply project file changes', nextProposal.summary);
           try {
             const result = await executeProjectFileOperations(projectRoot, nextProposal.operations);
             const successOutcome = buildRuntimeProjectFileAutoExecuteSuccess({
@@ -2206,6 +2482,8 @@ export const AIChat: React.FC<AIChatProps> = ({
                 : currentMessage.projectFileProposal,
             }));
             appendActivityEntry(currentProject.id, failureOutcome.activityEntry);
+            await failTurnSession(message);
+            return;
           }
 
           const autoExecuteSummary = `File operation flow completed: ${buildSessionPreview(cleanedContent)}`;
@@ -2216,7 +2494,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             summary: autoExecuteSummary,
             createdAt: Date.now(),
           });
-          await activeExecutionController.completeWithReplay(autoExecuteSummary);
+          await completeTurnSession(autoExecuteSummary);
           return;
         }
 
@@ -2226,8 +2504,45 @@ export const AIChat: React.FC<AIChatProps> = ({
             agentId: effectiveChatAgentId,
             sandboxPolicy,
           });
-          const executeLocalAgentFlow = async () => {
+          patchCurrentTurnSession((session) => ({
+            ...reduceAgentTurnSession(session, { type: 'enter_planning' }),
+            plan: {
+              summary: localAgentFlow.summary,
+              reason: 'local-agent-flow',
+              riskLevel: localAgentFlow.riskLevel,
+              approvalStatus:
+                localAgentFlow.decision === 'approval-required'
+                  ? 'pending'
+                  : localAgentFlow.decision === 'blocked'
+                    ? 'denied'
+                    : 'approved',
+              affectedPaths: [],
+              steps: [
+                {
+                  id: `${runtimeTurnSessionId}_local-review`,
+                  title: 'Review local agent request',
+                  kind: 'analysis',
+                  summary: 'Validate the request before launching the desktop agent.',
+                  needsApproval: false,
+                  expectedResult: 'A safe local-agent execution plan.',
+                },
+                {
+                  id: `${runtimeTurnSessionId}_local-run`,
+                  title: 'Run local agent',
+                  kind: 'tool',
+                  summary: 'Start the local agent and stream the result back into chat.',
+                  needsApproval: localAgentFlow.decision === 'approval-required',
+                  expectedResult: 'A completed local-agent run or a resumable block.',
+                },
+              ],
+            },
+          }));
+          const executeLocalAgentFlow = async (finalizeReplay = true) => {
             try {
+              markTurnExecuting(
+                effectiveChatAgentId === 'codex' ? 'Run Codex agent' : 'Run local agent',
+                localAgentFlow.summary
+              );
               const directChat = buildDirectChatRequest();
               const projectRoot = await getProjectDir(currentProject.id);
               const finalContent = await executeRuntimeLocalAgentPrompt({
@@ -2266,7 +2581,19 @@ export const AIChat: React.FC<AIChatProps> = ({
                 summary: successOutcome.timelineSummary,
                 createdAt: Date.now(),
               });
-              await activeExecutionController.completeWithReplay(successOutcome.replaySummary);
+              if (finalizeReplay) {
+                await completeTurnSession(successOutcome.replaySummary);
+              } else {
+                markTurnExecutionStep({
+                  title: 'Completed turn',
+                  status: 'completed',
+                  userVisibleDetail: successOutcome.replaySummary,
+                  resultSummary: successOutcome.replaySummary,
+                });
+                patchCurrentTurnSession((session) =>
+                  reduceAgentTurnSession(session, { type: 'execution_completed' })
+                );
+              }
             } catch (error) {
               const message = normalizeErrorMessage(error);
               const failureOutcome = buildRuntimeLocalAgentFailureOutcome({
@@ -2284,7 +2611,22 @@ export const AIChat: React.FC<AIChatProps> = ({
                 content: message,
               }));
               appendActivityEntry(currentProject.id, failureOutcome.activityEntry);
-              await activeExecutionController.failWithReplay(failureOutcome.replaySummary);
+              if (finalizeReplay) {
+                await failTurnSession(failureOutcome.replaySummary);
+              } else {
+                markTurnExecutionStep({
+                  title: 'Failed turn',
+                  status: 'failed',
+                  userVisibleDetail: failureOutcome.replaySummary,
+                  resultSummary: failureOutcome.replaySummary,
+                });
+                patchCurrentTurnSession((session) =>
+                  reduceAgentTurnSession(session, {
+                    type: 'execution_failed',
+                    reason: failureOutcome.replaySummary,
+                  })
+                );
+              }
               appendRuntimeTimelineEvent(runtimeStoreThreadId, {
                 id: createRuntimeEventId('local-agent-error'),
                 threadId: runtimeStoreThreadId,
@@ -2323,7 +2665,7 @@ export const AIChat: React.FC<AIChatProps> = ({
               summary: blockedFeedback.timelineSummary,
               createdAt: Date.now(),
             });
-            await activeExecutionController.completeWithReplay(blockedFeedback.replaySummary);
+            await blockTurnSession(localAgentFlow.summary, blockedFeedback.replaySummary, 'Adjust local agent request');
             return;
           }
 
@@ -2332,6 +2674,15 @@ export const AIChat: React.FC<AIChatProps> = ({
               decision: localAgentFlow.decision,
               summary: localAgentFlow.summary,
             });
+            patchCurrentTurnSession((session) => ({
+              ...reduceAgentTurnSession(session, { type: 'plan_waiting_approval' }),
+              plan: session.plan
+                ? {
+                    ...session.plan,
+                    approvalStatus: 'pending',
+                  }
+                : session.plan,
+            }));
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
               content: localAgentFlow.pendingMessage || '需要审批后才能启动本地 Agent。',
@@ -2342,13 +2693,28 @@ export const AIChat: React.FC<AIChatProps> = ({
               riskLevel: localAgentFlow.riskLevel,
               summary: localAgentFlow.summary,
               messageId: assistantMessage.id,
-              onApprove: executeLocalAgentFlow,
+              onApprove: async () => {
+                await executeLocalAgentFlow(false);
+              },
               onDeny: async () => {
                 updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
                   ...message,
                   role: 'system',
                   tone: 'error',
                   content: '已拒绝本地 Agent 执行请求。',
+                }));
+                patchCurrentTurnSession((session) => ({
+                  ...reduceAgentTurnSession(session, {
+                    type: 'execution_blocked',
+                    reason: 'Local agent execution was denied.',
+                    actionLabel: 'Retry with a safer request',
+                  }),
+                  plan: session.plan
+                    ? {
+                        ...session.plan,
+                        approvalStatus: 'denied',
+                      }
+                    : session.plan,
                 }));
               },
             });
@@ -2367,6 +2733,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           return;
         }
 
+        markTurnExecuting('Run built-in agent turn', buildSessionPreview(cleanedContent));
         const directChat = buildDirectChatRequest();
         const projectRoot = await getProjectDir(currentProject.id);
         const toolExecutor = new ToolExecutor(projectRoot);
@@ -2438,7 +2805,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           summary: `Assistant: ${buildSessionPreview(normalizedFinalContent)}`,
           createdAt: Date.now(),
         });
-        await activeExecutionController.completeWithReplay(normalizedFinalContent);
+        await completeTurnSession(normalizedFinalContent);
       } catch (error) {
         const message = normalizeErrorMessage(error);
         clearStreamingDraft(assistantMessage.id);
@@ -2459,6 +2826,11 @@ export const AIChat: React.FC<AIChatProps> = ({
           createdAt: Date.now(),
         });
         if (executionController) {
+          if (runtimeTurnSessionId) {
+            patchTurnSession(runtimeStoreThreadId, runtimeTurnSessionId, (session) =>
+              reduceAgentTurnSession(session, { type: 'execution_failed', reason: message })
+            );
+          }
           await executionController.failWithReplay(message);
         } else {
           failRuntimeRun(runtimeStoreThreadId, message);

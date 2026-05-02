@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
 import { useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
 import { canResumeFromRecovery } from '../../../modules/ai/runtime/replay/runtimeReplayRecovery';
+import type { AgentTurnSession } from '../../../modules/ai/runtime/session/agentSessionTypes';
 import { useProjectStore } from '../../../store/projectStore';
 
 const formatTimelineTime = (value: number) =>
@@ -10,7 +11,9 @@ const formatTimelineTime = (value: number) =>
     minute: '2-digit',
   });
 
-export const GNAgentTimelinePanel: React.FC = () => {
+export const GNAgentTimelinePanel: React.FC<{
+  latestTurnSession?: AgentTurnSession | null;
+}> = ({ latestTurnSession = null }) => {
   const currentProject = useProjectStore((state) => state.currentProject);
   const projectSessions = useAIChatStore((state) =>
     currentProject ? state.projects[currentProject.id]?.sessions || [] : []
@@ -39,16 +42,21 @@ export const GNAgentTimelinePanel: React.FC = () => {
     <section className="gn-agent-runtime-panel">
       <div className="gn-agent-runtime-panel-head">
         <strong>Timeline</strong>
-        <span>
-          {timeline.length} events / {replayEvents.length} replay
-        </span>
+        <span>{latestTurnSession?.status || 'idle'}</span>
       </div>
       {timeline.length === 0 ? (
         <p className="gn-agent-runtime-panel-empty">
-          这里会显示当前 thread 的 thinking、tool、approval、reply 轨迹，以及可用于恢复的 replay 记录。
+          Timeline events, approvals, tool activity, and replay recovery will appear here for the current thread.
         </p>
       ) : (
         <div className="gn-agent-runtime-panel-list">
+          <article className="gn-agent-runtime-card">
+            <strong>Session</strong>
+            <span>
+              {timeline.length} events / {replayEvents.length} replay
+            </span>
+            <code>{latestTurnSession?.mode || 'direct'}</code>
+          </article>
           {canResumeFromRecovery(recoveryState) ? (
             <article className="gn-agent-runtime-card">
               <strong>Recovery</strong>
@@ -58,7 +66,7 @@ export const GNAgentTimelinePanel: React.FC = () => {
                 className="gn-agent-runtime-inline-btn"
                 onClick={() => requestReplayResumeFromRecovery(activeThreadId || '', recoveryState)}
               >
-                {recoveryState?.resumeActionLabel || '恢复最近一次输入'}
+                {recoveryState?.resumeActionLabel || 'Resume latest input'}
               </button>
             </article>
           ) : null}

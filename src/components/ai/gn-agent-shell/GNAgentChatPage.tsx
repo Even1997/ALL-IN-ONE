@@ -4,6 +4,8 @@ import { useGNAgentShellStore } from '../../../modules/ai/gn-agent/gnAgentShellS
 import { listProjectMemoryEntries, saveProjectMemoryEntry } from '../../../modules/ai/runtime/agentRuntimeClient';
 import type { AgentMemoryEntry } from '../../../modules/ai/runtime/agentRuntimeTypes';
 import { type AgentMemoryCandidate, useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
+import { getLatestTurnSession } from '../../../modules/ai/runtime/session/agentSessionSelectors';
+import { AI_CHAT_COMMAND_EVENT } from '../../../modules/ai/chat/chatCommands';
 import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
 import { useGlobalAIStore } from '../../../modules/ai/store/globalAIStore';
 import { hasUsableAIConfigEntry } from '../../../modules/ai/store/aiConfigState';
@@ -15,10 +17,12 @@ import { AIChat } from '../../workspace/AIChat';
 import { GNAgentContextPanel } from './GNAgentContextPanel';
 import { GNAgentMemoryInbox } from './GNAgentMemoryInbox';
 import { GNAgentMemoryPanel } from './GNAgentMemoryPanel';
+import { GNAgentPlanPanel } from './GNAgentPlanPanel';
 import { GNAgentStatusPanel } from './GNAgentStatusPanel';
 import { GNAgentThreadList } from './GNAgentThreadList';
 import { GNAgentTimelinePanel } from './GNAgentTimelinePanel';
 import { GNAgentToolCallPanel } from './GNAgentToolCallPanel';
+import { GNAgentTurnSummaryCards } from './GNAgentTurnSummaryCards';
 import { buildAutoRenamedMemoryTitle, findMemoryEntryByTitle } from './memorySaveConflict';
 
 const claudeRuntime = new ClaudeRuntime();
@@ -43,6 +47,9 @@ export const GNAgentChatPage: React.FC<{
     currentProject ? state.projects[currentProject.id] || null : null
   );
   const activeSessionId = projectChatState?.activeSessionId || projectChatState?.sessions[0]?.id || null;
+  const latestTurnSession = useAgentRuntimeStore((state) =>
+    activeSessionId ? getLatestTurnSession(state.sessionsByThread[activeSessionId]) : null
+  );
   const contextSnapshot = useAgentRuntimeStore((state) =>
     activeSessionId ? state.contextByThread[activeSessionId] || null : null
   );
@@ -96,6 +103,26 @@ export const GNAgentChatPage: React.FC<{
       : providerId === 'classic'
         ? 'default'
         : 'provider-embedded';
+  const dispatchChatPrompt = useCallback((prompt: string) => {
+    window.dispatchEvent(
+      new CustomEvent(AI_CHAT_COMMAND_EVENT, {
+        detail: {
+          prompt,
+          autoSubmit: true,
+        },
+      })
+    );
+  }, []);
+  const dispatchChatGuidance = useCallback((prompt: string, guidance: string) => {
+    const nextPrompt = `${prompt}\n\nAdditional guidance:\n${guidance}`;
+    dispatchChatPrompt(nextPrompt);
+  }, [dispatchChatPrompt]);
+  const dispatchPauseRequest = useCallback((prompt: string) => {
+    dispatchChatGuidance(
+      prompt,
+      'Pause after the current step and wait for more instructions before continuing.',
+    );
+  }, [dispatchChatGuidance]);
 
   const persistMemoryCandidate = useCallback(
     async (candidate: AgentMemoryCandidate, overrides?: { id?: string; title?: string }) => {
@@ -205,10 +232,17 @@ export const GNAgentChatPage: React.FC<{
       <section className="gn-agent-runtime-layout">
         <aside className="gn-agent-runtime-sidebar">
           <GNAgentThreadList />
-          <GNAgentTimelinePanel />
+          <GNAgentTimelinePanel latestTurnSession={latestTurnSession} />
         </aside>
         <div className="gn-agent-runtime-main gn-agent-shell-chat-stack">
-          <GNAgentStatusPanel />
+          <GNAgentStatusPanel latestTurnSession={latestTurnSession} />
+          <GNAgentTurnSummaryCards
+            session={latestTurnSession}
+            onRetryTurn={dispatchChatPrompt}
+            onResumeTurn={dispatchChatPrompt}
+            onFeedTurn={dispatchChatGuidance}
+            onPauseTurn={dispatchPauseRequest}
+          />
           <AIChat
             variant={variant}
             runtimeConfigIdOverride={runtimeConfigIdOverride}
@@ -216,6 +250,7 @@ export const GNAgentChatPage: React.FC<{
           />
         </div>
         <aside className="gn-agent-runtime-sidebar">
+          <GNAgentPlanPanel session={latestTurnSession} />
           <GNAgentContextPanel context={contextSnapshot} />
           <GNAgentToolCallPanel toolCalls={toolCalls} />
           <GNAgentMemoryInbox

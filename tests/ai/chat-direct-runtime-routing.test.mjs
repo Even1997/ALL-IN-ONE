@@ -13,6 +13,11 @@ test('chat delegates runtime direct-chat request building and response normaliza
 
   assert.match(source, /buildRuntimeDirectChatRequest/);
   assert.match(source, /normalizeRuntimeDirectChatResponse/);
+  assert.match(source, /createEmptyAgentTurnSession/);
+  assert.match(source, /reduceAgentTurnSession/);
+  assert.match(source, /decideAgentTurnMode/);
+  assert.match(source, /upsertTurnSession/);
+  assert.match(source, /patchTurnSession/);
   assert.match(source, /const buildDirectChatRequest = \(\) =>\s*buildRuntimeDirectChatRequest\(/);
   assert.match(source, /const normalizedFinalContent = normalizeRuntimeDirectChatResponse\(/);
   assert.doesNotMatch(source, /const buildPromptReferenceContext =/);

@@ -246,7 +246,7 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
   ) => Promise<RuntimeProjectFileExecutionResult>;
   appendActivityEntry: (projectId: string, entry: ActivityEntry) => void;
   normalizeErrorMessage: (error: unknown) => string;
-}) => {
+}): Promise<boolean> => {
   const pendingApproval = findPendingApprovalByMessageId({
     activeApprovalThreadId: input.activeApprovalThreadId,
     approvalsByThread: input.approvalsByThread,
@@ -294,6 +294,7 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
         : message.projectFileProposal,
     }));
     input.appendActivityEntry(input.projectId, successOutcome.activityEntry);
+    return true;
   } catch (error) {
     const message = input.normalizeErrorMessage(error);
     const failureOutcome = buildRuntimeProjectFileAutoExecuteFailure({
@@ -315,5 +316,6 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
         : currentMessage.projectFileProposal,
     }));
     input.appendActivityEntry(input.projectId, failureOutcome.activityEntry);
+    return false;
   }
 };
