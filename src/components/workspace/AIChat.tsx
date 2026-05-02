@@ -625,7 +625,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [localAgentSnapshot, setLocalAgentSnapshot] = useState<LocalAgentConfigSnapshot | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
   const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, string>>({});
-  const [projectFileOperationMode, setProjectFileOperationMode] = useState<ProjectFileOperationMode>('manual');
+  const [projectFileOperationMode, setProjectFileOperationMode] = useState<ProjectFileOperationMode>('auto');
   const isControlledCollapse = typeof collapsed === 'boolean';
   const isCollapsed = isControlledCollapse ? Boolean(collapsed) : internalIsCollapsed;
   const showExpandedShell = !isCollapsed || lockExpandedForEmbedded;

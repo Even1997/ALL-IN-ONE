@@ -17,9 +17,11 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
   const helperSource = await readFile(helperPath, 'utf8');
   const cssSource = await readFile(cssPath, 'utf8');
 
-  assert.match(chatSource, /本次聊天模式/);
-  assert.match(chatSource, /手动确认/);
-  assert.match(chatSource, /自动确认/);
+  assert.match(chatSource, /type ProjectFileOperationMode/);
+  assert.match(chatSource, /modeLabelMap/);
+  assert.match(chatSource, /manual: '手动确认'/);
+  assert.match(chatSource, /auto: '自动确认'/);
+  assert.match(chatSource, /useState<ProjectFileOperationMode>\('auto'\)/);
   assert.match(chatSource, /projectFileProposal/);
   assert.match(chatSource, /renderProjectFileProposal/);
   assert.match(chatSource, /renderRuntimeApproval/);
@@ -29,7 +31,8 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
   assert.match(chatSource, /buildProjectFilePlanningPrompt\(\{/);
   assert.match(chatSource, /conversationHistory/);
   assert.match(chatSource, /executeProjectFileOperations/);
-  assert.match(chatSource, /确认执行|取消/);
+  assert.match(chatSource, /setProjectFileOperationMode\('manual'\)/);
+  assert.match(chatSource, /setProjectFileOperationMode\('auto'\)/);
 
   assert.match(messageListSource, /renderProjectFileProposal/);
   assert.match(messageListSource, /renderRuntimeApproval/);

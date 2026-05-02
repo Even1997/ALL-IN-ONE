@@ -1,8 +1,56 @@
 # CLAUDE.md
 
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+## Build & Test Commands
+
+```bash
+npm run dev          # Start Vite dev server (port 1420)
+npm run build        # TypeScript compile + Vite production build
+npm run tauri dev    # Start Tauri desktop app
+npm run package:win  # Build Windows .exe via PowerShell script
+```
+
+Tests run against pre-compiled output in `dist-test/`. To run tests:
+```bash
+node --test tests/<path>/<file>.test.mjs
+```
+
+## Architecture
+
+### AI Runtime System
+The AI runtime is built around several coordinated flows in `src/modules/ai/runtime/`:
+- **Orchestration layer** (`runtimeWorkflowFlow.ts`, `runtimeDirectChatFlow.ts`, `runtimeLocalAgentFlow.ts`) — routes user intent to appropriate execution path
+- **Turn execution** (`agentTurnRunner.ts`) — manages queued/running/completed turn lifecycle
+- **Context assembly** (`buildAgentContext.ts`) — aggregates project memory, thread history, and skill prompts into a single context budget
+- **Approval coordination** (`runtimeApprovalCoordinator.ts`) — gates risky operations behind human confirmation
+
+### GN-Agent System
+The gn-agent lives in `src/modules/ai/gn-agent/` and bridges AI providers (Claude, Codex) to the shell environment. Key files:
+- `runtime/claude/ClaudeRuntime.ts` and `runtime/codex/CodexRuntime.ts` — provider-specific execution
+- `providers/claudeRegistration.ts` / `codexRegistration.ts` — provider plugin registration
+- `gnAgentShellStore.ts` — global shell state management
+
+### Rust Backend (`src-tauri/`)
+Desktop commands are implemented in Rust:
+- `agent_shell/` — shell-level context, session, and settings
+- `agent_runtime/` — runtime-level context, memory, thread, replay, and MCP stores
+- All Rust modules communicate via Tauri commands exposed to the frontend.
+
+### Knowledge System
+The knowledge graph is in `src/features/knowledge/` with workspace UI in `src/modules/ai/knowledge/`. Proposal flow: `buildKnowledgeProposal.ts` → `executeKnowledgeProposal.ts` → `runKnowledgeOrganizeLane.ts`.
+
+## Design System
+
+Read `DESIGN.md` before making visual or UI decisions. Key tokens:
+- Typography: 13px base, `SF Pro Text` / `SF Mono` for code
+- Radius: 6px (tiny) → 16px (dialog), 10px for buttons/inputs
+- Spacing: 4px base unit, workbench gutters 10-12px
+- Role accents: Knowledge `#007aff`, Wiki `#0891b2`, Page `#4f46e5`, Design `#c026d3`, Develop `#059669`, Test `#ea580c`
+
+---
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
 ## 1. Think Before Coding
 
