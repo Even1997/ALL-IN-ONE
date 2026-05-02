@@ -6,7 +6,7 @@ import { AIWorkspace } from './components/ai/AIWorkspace';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
 import { ProductWorkbench } from './components/product/ProductWorkbench';
-import { WorkbenchIcon, type WorkbenchIconName } from './components/ui/WorkbenchIcon';
+import { WorkbenchIcon } from './components/ui/WorkbenchIcon';
 import { MacButton, MacIconButton, MacInput, MacPanel, MacSelectField } from './components/ui';
 import { UiFeedbackMode } from './components/ui/UiFeedbackMode';
 import { usePreviewStore } from './store/previewStore';
@@ -23,7 +23,13 @@ import { useAIWorkflowStore } from './modules/ai/store/workflowStore';
 import { createDefaultStyleProfiles, runAIWorkflowPackage } from './modules/ai/workflow/AIWorkflowService';
 import { useProjectStore } from './store/projectStore';
 import { APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appTheme';
-import type { RoleView } from './appNavigation';
+import {
+  DESKTOP_PRIMARY_ROLES,
+  DESKTOP_WORKBENCH_ROLES,
+  ROLE_TAB_ICONS,
+  roleShowsLegacyAiWorkspace,
+  type RoleView,
+} from './appNavigation';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type {
   AIWorkflowPackage,
@@ -530,32 +536,6 @@ const buildEdgePath = (start: { x: number; y: number }, end: { x: number; y: num
 };
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-const ROLE_TAB_ICONS: Record<RoleView, WorkbenchIconName> = {
-  product: 'product',
-  knowledge: 'knowledge',
-  wiki: 'gitBranch',
-  page: 'page',
-  design: 'design',
-  develop: 'files',
-  test: 'bug',
-  operations: 'settings',
-};
-
-const DESKTOP_WORKBENCH_ROLES: Array<{
-  id: RoleView;
-  label: string;
-  summary: string;
-}> = [
-  { id: 'knowledge', label: '知识库', summary: '笔记与资料' },
-  { id: 'page', label: '页面', summary: '结构与草图' },
-  { id: 'design', label: '设计', summary: '页面与画布' },
-  { id: 'develop', label: '开发', summary: '文件与任务' },
-  { id: 'test', label: '测试', summary: '计划与缺陷' },
-  { id: 'operations', label: '发布', summary: '部署与流程' },
-];
-const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'page', 'design'];
-
 
 const getSketchPreviewMetrics = (
   elements: Array<{ x: number; y: number; width: number; height: number }>,
@@ -1178,6 +1158,7 @@ const App: React.FC = () => {
     [currentRole]
   );
   const isDesktopWorkbenchMode = Boolean(currentProject);
+  const canShowLegacyAiWorkspace = roleShowsLegacyAiWorkspace(currentRole);
 
   useEffect(() => {
     document.body.classList.toggle('desktop-workbench-mode', isDesktopWorkbenchMode);
@@ -1203,7 +1184,7 @@ const App: React.FC = () => {
   );
 
   useEffect(() => {
-    if (currentRole === 'design') {
+    if (!canShowLegacyAiWorkspace) {
       if (desktopAiTransitionTimerRef.current !== null) {
         window.clearTimeout(desktopAiTransitionTimerRef.current);
         desktopAiTransitionTimerRef.current = null;
@@ -1273,7 +1254,7 @@ const App: React.FC = () => {
       setIsDesktopAiPaneMounted(false);
       desktopAiTransitionTimerRef.current = null;
     }, DESKTOP_AI_PANE_TRANSITION_MS);
-  }, [currentRole, isDesktopAiCollapsed]);
+  }, [canShowLegacyAiWorkspace, isDesktopAiCollapsed]);
 
   useEffect(() => {
     writeLayoutSize(
@@ -1284,7 +1265,7 @@ const App: React.FC = () => {
   }, [desktopAiPaneWidth]);
 
   const handleDesktopAiResizePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (currentRole === 'design' || !isDesktopAiPaneVisible) {
+    if (!canShowLegacyAiWorkspace || !isDesktopAiPaneVisible) {
       return;
     }
 
@@ -1308,7 +1289,7 @@ const App: React.FC = () => {
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
-  }, [currentRole, desktopAiPaneWidth, isDesktopAiPaneVisible]);
+  }, [canShowLegacyAiWorkspace, desktopAiPaneWidth, isDesktopAiPaneVisible]);
 
   const handleDesktopAiResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
@@ -5168,7 +5149,7 @@ ${selectedContextPrompt}` : '',
                 <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
                   项目
                 </MacButton>
-                {currentRole !== 'design' ? (
+                {canShowLegacyAiWorkspace ? (
                   <MacIconButton
                     className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
                     onClick={() => setIsDesktopAiCollapsed((current) => !current)}
@@ -5185,7 +5166,7 @@ ${selectedContextPrompt}` : '',
               <div className="app-workbench-pane app-workbench-main-shell">
                 <main className="app-main app-main-desktop">{appDesktopContent}</main>
               </div>
-              {currentRole !== 'design' && isDesktopAiPaneMounted ? (
+              {canShowLegacyAiWorkspace && isDesktopAiPaneMounted ? (
                 <>
                   {isDesktopAiPaneVisible ? (
                     <div
@@ -5287,36 +5268,40 @@ ${selectedContextPrompt}` : '',
             <div className="app-workbench-pane app-workbench-main-shell">
               <main className="app-main app-main-desktop">{appDesktopContent}</main>
             </div>
-            <div
-              className="desktop-ai-resize-handle"
-              role="separator"
-              aria-label="调整 AI 栏宽度"
-              aria-orientation="vertical"
-              aria-valuemin={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
-              aria-valuemax={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
-              aria-valuenow={desktopAiPaneWidth}
-              tabIndex={0}
-              onPointerDown={handleDesktopAiResizePointerDown}
-              onKeyDown={handleDesktopAiResizeKeyDown}
-            />
-            <div
-              className="app-workbench-pane app-workbench-ai-shell"
-              style={{
-                flex: `0 0 ${desktopAiPaneWidth}px`,
-                width: desktopAiPaneWidth,
-                minWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.min,
-                maxWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.max,
-              }}
-            >
-              <aside className="app-ai-activity-pane">
-                <AIWorkspace />
-              </aside>
-            </div>
+            {canShowLegacyAiWorkspace ? (
+              <>
+                <div
+                  className="desktop-ai-resize-handle"
+                  role="separator"
+                  aria-label="调整 AI 栏宽度"
+                  aria-orientation="vertical"
+                  aria-valuemin={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
+                  aria-valuemax={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
+                  aria-valuenow={desktopAiPaneWidth}
+                  tabIndex={0}
+                  onPointerDown={handleDesktopAiResizePointerDown}
+                  onKeyDown={handleDesktopAiResizeKeyDown}
+                />
+                <div
+                  className="app-workbench-pane app-workbench-ai-shell"
+                  style={{
+                    flex: `0 0 ${desktopAiPaneWidth}px`,
+                    width: desktopAiPaneWidth,
+                    minWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.min,
+                    maxWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.max,
+                  }}
+                >
+                  <aside className="app-ai-activity-pane">
+                    <AIWorkspace />
+                  </aside>
+                </div>
+              </>
+            ) : null}
           </div>
         ) : (
           <>
             <main className="app-main app-main-desktop">{appMainContent}</main>
-            {currentRole !== 'design' ? <AIWorkspace /> : null}
+            {canShowLegacyAiWorkspace ? <AIWorkspace /> : null}
           </>
         )}
       </div>

@@ -7,6 +7,8 @@ import type {
   AgentTimelineEvent,
   AgentTurnRecord,
 } from './agentRuntimeTypes';
+import type { AgentContextSnapshot } from './context/agentContextTypes';
+import type { RuntimeToolStep } from './agent-kernel/agentKernelTypes';
 import type { RuntimeSkillDefinition } from './skills/runtimeSkillTypes';
 import { canResumeFromRecovery, type AgentReplayRecoveryState } from './replay/runtimeReplayRecovery.ts';
 
@@ -30,15 +32,29 @@ export type AgentRuntimeResumeRequest = {
   requestedAt: number;
 };
 
+export type AgentMemoryCandidate = {
+  id: string;
+  threadId: string;
+  title: string;
+  summary: string;
+  content: string;
+  kind: 'projectFact' | 'userPreference';
+  status: 'pending' | 'saved' | 'dismissed';
+  createdAt: number;
+};
+
 type AgentRuntimeState = {
   threadsByProject: Record<string, AgentThreadRecord[]>;
   timelineByThread: Record<string, AgentTimelineEvent[]>;
   turnsByThread: Record<string, AgentTurnRecord[]>;
   memoryByProject: Record<string, AgentMemoryEntry[]>;
+  memoryCandidatesByThread: Record<string, AgentMemoryCandidate[]>;
   replayEventsByThread: Record<string, AgentReplayEvent[]>;
   recoveryByThread: Record<string, AgentReplayRecoveryState>;
   resumeRequestsByThread: Record<string, AgentRuntimeResumeRequest>;
   activeSkillsByThread: Record<string, RuntimeSkillDefinition[]>;
+  contextByThread: Record<string, AgentContextSnapshot>;
+  toolCallsByThread: Record<string, RuntimeToolStep[]>;
   bindingByThread: Record<string, AgentRuntimeBinding>;
   runStateByThread: Record<string, AgentRuntimeRunState>;
   isHydrating: boolean;
@@ -46,6 +62,12 @@ type AgentRuntimeState = {
   appendTimelineEvent: (threadId: string, event: AgentTimelineEvent) => void;
   submitTurn: (threadId: string, turn: AgentTurnRecord) => void;
   setMemoryEntries: (projectId: string, entries: AgentMemoryEntry[]) => void;
+  setThreadMemoryCandidates: (threadId: string, candidates: AgentMemoryCandidate[]) => void;
+  resolveMemoryCandidate: (
+    threadId: string,
+    candidateId: string,
+    status: AgentMemoryCandidate['status'],
+  ) => void;
   setReplayEvents: (threadId: string, events: AgentReplayEvent[]) => void;
   appendReplayEvent: (threadId: string, event: AgentReplayEvent) => void;
   setRecoveryState: (threadId: string, recoveryState: AgentReplayRecoveryState) => void;
@@ -56,6 +78,8 @@ type AgentRuntimeState = {
   ) => void;
   clearReplayResumeRequest: (threadId: string) => void;
   setActiveSkills: (threadId: string, skills: RuntimeSkillDefinition[]) => void;
+  setThreadContext: (threadId: string, context: AgentContextSnapshot) => void;
+  setThreadToolCalls: (threadId: string, toolCalls: RuntimeToolStep[]) => void;
   setRuntimeBinding: (threadId: string, binding: AgentRuntimeBinding) => void;
   startRun: (threadId: string) => void;
   appendStreamDelta: (threadId: string, delta: string) => void;
@@ -87,10 +111,13 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
   timelineByThread: {},
   turnsByThread: {},
   memoryByProject: {},
+  memoryCandidatesByThread: {},
   replayEventsByThread: {},
   recoveryByThread: {},
   resumeRequestsByThread: {},
   activeSkillsByThread: {},
+  contextByThread: {},
+  toolCallsByThread: {},
   bindingByThread: {},
   runStateByThread: {},
   isHydrating: false,
@@ -133,6 +160,38 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
       memoryByProject: {
         ...state.memoryByProject,
         [projectId]: [...entries],
+      },
+    })),
+
+  setThreadMemoryCandidates: (threadId, candidates) =>
+    set((state) => {
+      const candidatesById = new Map(
+        (state.memoryCandidatesByThread[threadId] || []).map((candidate) => [candidate.id, candidate])
+      );
+
+      for (const candidate of candidates) {
+        const existingCandidate = candidatesById.get(candidate.id);
+        candidatesById.set(candidate.id, {
+          ...candidate,
+          status: existingCandidate?.status || candidate.status,
+        });
+      }
+
+      return {
+        memoryCandidatesByThread: {
+          ...state.memoryCandidatesByThread,
+          [threadId]: Array.from(candidatesById.values()),
+        },
+      };
+    }),
+
+  resolveMemoryCandidate: (threadId, candidateId, status) =>
+    set((state) => ({
+      memoryCandidatesByThread: {
+        ...state.memoryCandidatesByThread,
+        [threadId]: (state.memoryCandidatesByThread[threadId] || []).map((candidate) =>
+          candidate.id === candidateId ? { ...candidate, status } : candidate
+        ),
       },
     })),
 
@@ -217,6 +276,22 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
       activeSkillsByThread: {
         ...state.activeSkillsByThread,
         [threadId]: [...skills],
+      },
+    })),
+
+  setThreadContext: (threadId, context) =>
+    set((state) => ({
+      contextByThread: {
+        ...state.contextByThread,
+        [threadId]: context,
+      },
+    })),
+
+  setThreadToolCalls: (threadId, toolCalls) =>
+    set((state) => ({
+      toolCallsByThread: {
+        ...state.toolCallsByThread,
+        [threadId]: [...toolCalls],
       },
     })),
 

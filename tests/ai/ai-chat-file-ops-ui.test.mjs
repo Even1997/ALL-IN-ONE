@@ -22,6 +22,7 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
   assert.match(chatSource, /自动确认/);
   assert.match(chatSource, /projectFileProposal/);
   assert.match(chatSource, /renderProjectFileProposal/);
+  assert.match(chatSource, /renderRuntimeApproval/);
   assert.match(chatSource, /detectProjectFileWriteIntent/);
   assert.match(chatSource, /detectProjectFileReadIntent/);
   assert.match(chatSource, /parseProjectFileOperationsPlan/);
@@ -31,6 +32,7 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
   assert.match(chatSource, /确认执行|取消/);
 
   assert.match(messageListSource, /renderProjectFileProposal/);
+  assert.match(messageListSource, /renderRuntimeApproval/);
 
   assert.match(helperSource, /resolveProjectOperationPath/);
   assert.match(helperSource, /isSupportedProjectTextFilePath/);
@@ -38,6 +40,7 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
   assert.match(cssSource, /\.chat-mode-switch/);
   assert.match(cssSource, /\.chat-project-file-proposal-card/);
   assert.match(cssSource, /\.chat-project-file-proposal-actions/);
+  assert.match(cssSource, /\.chat-runtime-approval-card/);
 });
 
 test('AI service exposes a read-tools chat path for project file queries', async () => {

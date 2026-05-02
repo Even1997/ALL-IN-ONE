@@ -45,6 +45,7 @@ export const GNAgentMessageList: React.FC<{
   renderStructuredCards?: (message: StoredChatMessage) => React.ReactNode;
   renderKnowledgeProposal?: (message: StoredChatMessage) => React.ReactNode;
   renderProjectFileProposal?: (message: StoredChatMessage) => React.ReactNode;
+  renderRuntimeApproval?: (message: StoredChatMessage) => React.ReactNode;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   leadingContent?: React.ReactNode;
 }> = ({
@@ -56,6 +57,7 @@ export const GNAgentMessageList: React.FC<{
   renderStructuredCards,
   renderKnowledgeProposal,
   renderProjectFileProposal,
+  renderRuntimeApproval,
   messagesEndRef,
   leadingContent,
 }) => (
@@ -75,6 +77,7 @@ export const GNAgentMessageList: React.FC<{
               {renderStructuredCards ? renderStructuredCards(message) : null}
               {renderKnowledgeProposal ? renderKnowledgeProposal(message) : null}
               {renderProjectFileProposal ? renderProjectFileProposal(message) : null}
+              {renderRuntimeApproval ? renderRuntimeApproval(message) : null}
             </div>
             <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
           </div>

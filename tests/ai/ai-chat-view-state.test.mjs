@@ -36,7 +36,8 @@ test('getChatShellLayoutClassName uses right sidebar layout', () => {
 test('chat shell starts expanded as a fixed right sidebar', async () => {
   const source = await readFile(aiChatPath, 'utf8');
 
-  assert.match(source, /const \[isCollapsed, setIsCollapsed\] = useState\(false\)/);
+  assert.match(source, /const \[internalIsCollapsed, setInternalIsCollapsed\] = useState\(false\)/);
+  assert.match(source, /const isCollapsed = isControlledCollapse \? Boolean\(collapsed\) : internalIsCollapsed/);
   assert.equal(getChatShellLayoutClassName(false), 'chat-shell is-sidebar');
 });
 
@@ -45,7 +46,7 @@ test('AIChat source keeps a compact icon-first header and composer shell', async
 
   assert.match(source, /chat-shell-icon-btn/);
   assert.match(source, /chat-composer-meta/);
-  assert.match(source, /chat-selected-reference-chips/);
+  assert.match(source, /GNAgentEmbeddedComposer/);
 });
 
 test('getChatViewportClassName maps collapse state to occupancy classes', () => {

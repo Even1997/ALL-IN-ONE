@@ -13,7 +13,7 @@ const tabBadgesPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-
 test('gnAgent chat page includes a status panel above the chat shell', async () => {
   const source = await readFile(chatPagePath, 'utf8');
   assert.match(source, /GNAgentStatusPanel/);
-  assert.match(source, /className="gn-agent-shell-chat-stack"/);
+  assert.match(source, /className="[^"]*gn-agent-shell-chat-stack/);
 });
 
 test('gnAgent status panel reads recent activity from ai chat store', async () => {

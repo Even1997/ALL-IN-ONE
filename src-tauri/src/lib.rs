@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agent_runtime;
+mod agent_shell;
 
 use agent_runtime::commands::{
     append_agent_timeline_event, append_runtime_replay_event, create_agent_thread, enqueue_agent_approval,
@@ -11,6 +12,10 @@ use agent_runtime::commands::{
     list_runtime_mcp_servers, list_runtime_mcp_tool_calls, resolve_agent_approval, save_project_memory_entry,
     set_agent_sandbox_policy, update_agent_runtime_settings,
     upsert_runtime_mcp_server,
+};
+use agent_shell::commands::{
+    create_agent_shell_session, get_agent_shell_settings, list_agent_shell_sessions,
+    update_agent_shell_settings,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -2233,6 +2238,7 @@ fn build_native_app_menu<R: tauri::Runtime>(
         .text("view.wiki", "Wiki \u{56fe}\u{8c31}")
         .text("view.page", "\u{9875}\u{9762}")
         .text("view.design", "\u{8bbe}\u{8ba1}")
+        .text("view.agent", "Agent")
         .text("view.develop", "\u{5f00}\u{53d1}")
         .text("view.test", "\u{6d4b}\u{8bd5}")
         .text("view.operations", "\u{53d1}\u{5e03}")
@@ -2297,6 +2303,7 @@ pub fn run() {
             | "view.wiki"
             | "view.page"
             | "view.design"
+            | "view.agent"
             | "view.develop"
             | "view.test"
             | "view.operations"
@@ -2349,6 +2356,10 @@ pub fn run() {
             import_github_skill,
             sync_skill_to_runtime,
             delete_library_skill,
+            create_agent_shell_session,
+            list_agent_shell_sessions,
+            get_agent_shell_settings,
+            update_agent_shell_settings,
             create_agent_thread,
             list_agent_threads,
             append_agent_timeline_event,

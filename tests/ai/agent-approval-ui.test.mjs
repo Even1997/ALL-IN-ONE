@@ -8,10 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const riskPolicyPath = path.resolve(__dirname, '../../src/modules/ai/runtime/approval/riskPolicy.ts');
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
-const approvalPanelPath = path.resolve(
-  __dirname,
-  '../../src/components/ai/gn-agent-shell/GNAgentApprovalPanel.tsx',
-);
 const runtimeSummaryPath = path.resolve(
   __dirname,
   '../../src/components/ai/gn-agent-shell/GNAgentRuntimeSummary.tsx',
@@ -38,23 +34,25 @@ test('risk policy classifies destructive runtime actions', async () => {
   assert.equal(shouldAutoApproveRuntimeAction({ riskLevel: 'medium', sandboxPolicy: 'allow' }), true);
 });
 
-test('AIChat wires approval gating and approval panel into the existing shell', async () => {
+test('AIChat wires approval gating and inline approval cards into the existing shell', async () => {
   const source = await readFile(aiChatPath, 'utf8');
 
   assert.match(source, /useApprovalStore/);
   assert.match(source, /enqueueAgentApproval/);
   assert.match(source, /sandboxPolicy/);
-  assert.match(source, /GNAgentApprovalPanel/);
+  assert.match(source, /renderRuntimeApprovalCard/);
+  assert.match(source, /renderRuntimeApproval/);
+  assert.doesNotMatch(source, /GNAgentApprovalPanel/);
   assert.match(source, /run_local_agent_prompt/);
 });
 
-test('approval panel and runtime summary expose pending approval state', async () => {
-  const panel = await readFile(approvalPanelPath, 'utf8');
+test('AIChat and runtime summary expose approval state with approval-policy wording', async () => {
+  const chat = await readFile(aiChatPath, 'utf8');
   const summary = await readFile(runtimeSummaryPath, 'utf8');
 
-  assert.match(panel, /Pending approvals/i);
-  assert.match(panel, /Approve/i);
-  assert.match(panel, /Deny/i);
+  assert.match(chat, /审批策略/);
+  assert.match(chat, /批准执行|确认执行/);
+  assert.match(chat, /拒绝|取消/);
   assert.match(summary, /approval/i);
-  assert.match(summary, /sandbox/i);
+  assert.match(summary, /approval policy/i);
 });

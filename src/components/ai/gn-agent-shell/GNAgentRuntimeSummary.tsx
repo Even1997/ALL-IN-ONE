@@ -101,7 +101,7 @@ export const GNAgentRuntimeSummary: React.FC<{
       <p>{status.summary}</p>
       <div className="gn-agent-runtime-summary-details">
         <code>approval: {pendingApprovalCount} pending</code>
-        <code>sandbox: {sandboxPolicy}</code>
+        <code>approval policy: {sandboxPolicy}</code>
         <code>skills: {activeSkillCount}</code>
         <code>mcp: {runtimeMcpServers.length}</code>
         <code>mcp calls: {mcpCalls}</code>

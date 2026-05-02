@@ -15,7 +15,7 @@ test('global ai settings store persists config lists and selected config state',
   const source = await readFile(storePath, 'utf8');
 
   assert.match(source, /persist\s*\(/);
-  assert.match(source, /name:\s*'devflow-ai-store'/);
+  assert.match(source, /name:\s*'goodnight-ai-store'/);
   assert.match(source, /storage:\s*createJSONStorage\(\(\) => localStorage\)/);
   assert.match(source, /aiConfigs:\s*buildDefaultAIConfigEntries\(\)/);
   assert.match(source, /mergePresetAIConfigEntries\(/);

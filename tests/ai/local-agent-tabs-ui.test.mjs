@@ -33,6 +33,8 @@ test('built-in AI remains the default execution path', async () => {
   assert.match(source, /effectiveChatAgentId === 'built-in'/);
   assert.match(source, /effectiveChatAgentId !== 'built-in'/);
   assert.match(source, /const runtimeProviderId = \(providerExecutionMode \|\| 'built-in'\) as AgentProviderId;/);
-  assert.match(source, /const response = await executeRuntimePrompt\(/);
+  assert.match(source, /runAgentTurn/);
+  assert.match(source, /executeRuntimePrompt\(\{/);
+  assert.match(source, /allowedTools:\s*READ_ONLY_CHAT_TOOLS/);
   assert.match(runtimeClient, /return await aiService\.completeText\(/);
 });

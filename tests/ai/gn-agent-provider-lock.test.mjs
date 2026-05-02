@@ -36,7 +36,9 @@ test('ai chat routes claude and codex pages through provider runtimes', async ()
   assert.match(source, /const isEmbedded = isProviderEmbedded \|\| isGNAgentEmbedded;/);
   assert.match(source, /const lockExpandedForEmbedded = isProviderEmbedded;/);
   assert.match(source, /const runtimeProviderId = \(providerExecutionMode \|\| 'built-in'\) as AgentProviderId;/);
-  assert.match(source, /const response = await executeRuntimePrompt\(/);
+  assert.match(source, /runAgentTurn/);
+  assert.match(source, /executeModel:\s*\(prompt\)\s*=>/);
+  assert.match(source, /executeRuntimePrompt\(\{/);
   assert.match(source, /providerId: runtimeProviderId/);
   assert.match(runtimeClient, /if \(providerId === 'claude' && config\)/);
   assert.match(runtimeClient, /claudeRuntime\.executePrompt/);

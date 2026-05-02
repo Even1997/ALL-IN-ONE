@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
 import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
 import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
+import { ToolExecutor } from './tools';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import type { ChatStructuredCard } from '../../modules/ai/chat/chatCards';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
@@ -33,19 +34,20 @@ import {
   getAgentSandboxPolicy,
   listAgentApprovals,
   resolveAgentApproval,
-  setAgentSandboxPolicy as persistAgentSandboxPolicy,
 } from '../../modules/ai/runtime/agentRuntimeClient';
 import { useApprovalStore } from '../../modules/ai/runtime/approval/approvalStore';
-import type { SandboxPolicy } from '../../modules/ai/runtime/approval/approvalTypes';
+import type { ApprovalRecord } from '../../modules/ai/runtime/approval/approvalTypes';
+import { extractMemoryCandidates } from '../../modules/ai/runtime/memory/extractMemoryCandidates';
 import { buildProjectMemoryEntry } from '../../modules/ai/runtime/memory/projectMemoryRuntime';
 import {
   createRuntimeReplayExecutionController,
-  createRuntimeStreamingMessageAssembler,
 } from '../../modules/ai/runtime/orchestration/agentTurnRunner';
 import {
   buildRuntimeDirectChatRequest,
   normalizeRuntimeDirectChatResponse,
 } from '../../modules/ai/runtime/orchestration/runtimeDirectChatFlow';
+import { runAgentTurn } from '../../modules/ai/runtime/agent-kernel/runAgentTurn';
+import { buildAgentContext } from '../../modules/ai/runtime/context/buildAgentContext';
 import {
   buildRuntimeLocalAgentDecisionFeedback,
   buildRuntimeLocalAgentPrompt,
@@ -135,7 +137,6 @@ import {
   GNAgentHistoryMenu,
   GNAgentMessageList,
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
-import { GNAgentApprovalPanel } from '../ai/gn-agent-shell/GNAgentApprovalPanel';
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import {
   buildWelcomeMessage,
@@ -237,6 +238,25 @@ const createProjectFileProposalId = () => `file-proposal_${Date.now()}_${Math.ra
 const modeLabelMap: Record<ProjectFileOperationMode, string> = {
   manual: '手动确认',
   auto: '自动确认',
+};
+
+const approvalStatusLabelMap: Record<ApprovalRecord['status'], string> = {
+  pending: '待确认',
+  approved: '已批准',
+  denied: '已拒绝',
+};
+
+const approvalRiskLabelMap: Record<ApprovalRecord['riskLevel'], string> = {
+  low: '低风险',
+  medium: '中风险',
+  high: '高风险',
+};
+
+const approvalActionLabelMap: Record<string, string> = {
+  run_local_agent_prompt: '本地 Agent',
+  tool_bash: '命令执行',
+  tool_remove: '删除操作',
+  tool_write: '写入操作',
 };
 
 const buildProjectFilePlanningSystemPrompt = (projectName: string, projectRoot: string) => `你是 ${projectName} 的项目文件助手。
@@ -717,8 +737,10 @@ export const AIChat: React.FC<AIChatProps> = ({
     clearReplayResumeRequest,
     activeSkillsByThread,
     setActiveSkills,
+    setThreadContext,
+    setThreadToolCalls,
+    setThreadMemoryCandidates,
     startRun: startRuntimeRun,
-    appendStreamDelta: appendRuntimeStreamDelta,
     finishRun: finishRuntimeRun,
     failRun: failRuntimeRun,
   } = useAgentRuntimeStore(
@@ -734,8 +756,10 @@ export const AIChat: React.FC<AIChatProps> = ({
       clearReplayResumeRequest: state.clearReplayResumeRequest,
       activeSkillsByThread: state.activeSkillsByThread,
       setActiveSkills: state.setActiveSkills,
+      setThreadContext: state.setThreadContext,
+      setThreadToolCalls: state.setThreadToolCalls,
+      setThreadMemoryCandidates: state.setThreadMemoryCandidates,
       startRun: state.startRun,
-      appendStreamDelta: state.appendStreamDelta,
       finishRun: state.finishRun,
       failRun: state.failRun,
     }))
@@ -932,13 +956,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       alive = false;
     };
   }, [activeSession?.id, activeSession?.runtimeThreadId, replayRecoveryController, setRuntimeReplayEvents]);
-  const handleSandboxPolicyChange = useCallback(
-    async (policy: SandboxPolicy) => {
-      const nextPolicy = await persistAgentSandboxPolicy(policy);
-      setSandboxPolicy(nextPolicy);
-    },
-    [setSandboxPolicy]
-  );
   const requestRuntimeApproval = useCallback(
     async ({
       threadId,
@@ -1002,6 +1019,51 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
     },
     [resolveAgentApproval, resolveStoredApproval]
+  );
+  const renderRuntimeApprovalCard = useCallback(
+    (message: { id: string; role: StoredChatMessage['role']; projectFileProposal?: ProjectFileProposal }) => {
+      if (!activeApprovalThreadId || message.role !== 'assistant' || message.projectFileProposal) {
+        return null;
+      }
+
+      const messageApprovals = (approvalsByThread[activeApprovalThreadId] || []).filter(
+        (approval) => approval.messageId === message.id
+      );
+      if (messageApprovals.length === 0) {
+        return null;
+      }
+
+      return (
+        <div className="chat-runtime-approval-list">
+          {messageApprovals.map((approval) => {
+            const actionLabel = approvalActionLabelMap[approval.actionType] || approval.actionType;
+            return (
+              <section key={approval.id} className={`chat-runtime-approval-card ${approval.riskLevel}`}>
+                <div className="chat-runtime-approval-head">
+                  <strong>{approval.summary}</strong>
+                  <span>{approvalStatusLabelMap[approval.status]}</span>
+                </div>
+                <div className="chat-runtime-approval-meta">
+                  <span>{actionLabel}</span>
+                  <span>{approvalRiskLabelMap[approval.riskLevel]}</span>
+                </div>
+                {approval.status === 'pending' ? (
+                  <div className="chat-runtime-approval-actions">
+                    <button type="button" onClick={() => void handleApproveRuntimeApproval(approval.id)}>
+                      批准执行
+                    </button>
+                    <button type="button" onClick={() => void handleDenyRuntimeApproval(approval.id)}>
+                      拒绝
+                    </button>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+        </div>
+      );
+    },
+    [activeApprovalThreadId, approvalsByThread, handleApproveRuntimeApproval, handleDenyRuntimeApproval]
   );
   const renderStructuredCards = useCallback(
     (message: { structuredCards?: ChatStructuredCard[] }) => {
@@ -1452,26 +1514,6 @@ export const AIChat: React.FC<AIChatProps> = ({
         : latestActivityEntry?.type === 'failed'
           ? 'error'
           : 'success';
-  const flushStreamingDrafts = useCallback(() => {
-    streamingFlushFrameRef.current = null;
-    setStreamingDraftContents({ ...streamingDraftBufferRef.current });
-  }, []);
-  const scheduleStreamingDraftFlush = useCallback(() => {
-    if (streamingFlushFrameRef.current !== null) {
-      return;
-    }
-
-    streamingFlushFrameRef.current = requestAnimationFrame(() => {
-      flushStreamingDrafts();
-    });
-  }, [flushStreamingDrafts]);
-  const updateStreamingDraft = useCallback(
-    (messageId: string, content: string) => {
-      streamingDraftBufferRef.current[messageId] = content;
-      scheduleStreamingDraftFlush();
-    },
-    [scheduleStreamingDraftFlush]
-  );
   const clearStreamingDraft = useCallback((messageId: string) => {
     if (!(messageId in streamingDraftBufferRef.current)) {
       return;
@@ -1805,6 +1847,35 @@ export const AIChat: React.FC<AIChatProps> = ({
           activeSkillsForTurn = runtimeSkillRegistryRef.current.listActiveSkills(runtimeSkillThreadId);
           setActiveSkills(runtimeSkillThreadId, activeSkillsForTurn);
         }
+        const conversationHistory = targetSession?.messages || activeSession?.messages || [];
+        const agentInstructions = [
+          contextSnapshot.primaryLabel,
+          contextSnapshot.secondaryLabel,
+          contextSnapshot.currentFileLabel,
+          contextSnapshot.vaultLabel,
+          ...explicitReferenceLabels,
+        ].filter((item): item is string => Boolean(item));
+        const contextLabels = [
+          selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
+          ...agentInstructions,
+        ].filter((item): item is string => Boolean(item));
+        const agentContextSnapshot = buildAgentContext({
+          projectId: currentProject.id,
+          projectName: currentProject.name,
+          threadId: targetSessionId,
+          userInput: cleanedContent,
+          contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
+          conversationHistory,
+          instructions: agentInstructions,
+          referenceFiles: resolvedReferenceContextFiles.map((file) => ({
+            path: file.path,
+            summary: file.summary,
+            content: file.content || file.summary || file.title,
+          })),
+          memoryEntries: projectMemoryEntries,
+          activeSkills: activeSkillsForTurn,
+        });
+        setThreadContext(targetSessionId, agentContextSnapshot);
         await executionController.start();
         if (!executionController) {
           throw new Error('Failed to initialize runtime execution controller.');
@@ -1882,20 +1953,13 @@ export const AIChat: React.FC<AIChatProps> = ({
           return;
         }
 
-        const conversationHistory = targetSession?.messages || activeSession?.messages || [];
         const buildDirectChatRequest = () =>
           buildRuntimeDirectChatRequest({
             projectId: currentProject.id,
             projectName: currentProject.name,
             threadId: targetSessionId,
             userInput: cleanedContent,
-            agentsInstructions: [
-              contextSnapshot.primaryLabel,
-              contextSnapshot.secondaryLabel,
-              contextSnapshot.currentFileLabel,
-              contextSnapshot.vaultLabel,
-              ...explicitReferenceLabels,
-            ].filter((item): item is string => Boolean(item)),
+            agentsInstructions: agentInstructions,
             referenceFiles: resolvedReferenceContextFiles,
             memoryEntries: projectMemoryEntries,
             activeSkills: activeSkillsForTurn,
@@ -1903,14 +1967,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
             skillIntent,
             conversationHistory,
-            contextLabels: [
-              selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
-              contextSnapshot.primaryLabel,
-              contextSnapshot.secondaryLabel,
-              contextSnapshot.currentFileLabel,
-              contextSnapshot.vaultLabel,
-              ...explicitReferenceLabels,
-            ].filter((item): item is string => Boolean(item)),
+            contextLabels,
           });
 
         if (skillIntent?.skill === 'requirements') {
@@ -2311,34 +2368,59 @@ export const AIChat: React.FC<AIChatProps> = ({
         }
 
         const directChat = buildDirectChatRequest();
-        const streamAssembler = createRuntimeStreamingMessageAssembler();
-        const handleEvent = (event: Parameters<typeof streamAssembler.append>[0]) => {
-          appendRuntimeStreamDelta(targetSessionId, event.delta);
-          updateStreamingDraft(assistantMessage.id, streamAssembler.append(event));
-        };
-        const response = await executeRuntimePrompt({
-          providerId: runtimeProviderId,
-          sessionId: targetSessionId,
-          config: selectedRuntimeConfig,
-          systemPrompt: directChat.systemPrompt,
-          prompt: directChat.prompt,
-          onEvent: handleEvent,
+        const projectRoot = await getProjectDir(currentProject.id);
+        const toolExecutor = new ToolExecutor(projectRoot);
+        setThreadToolCalls(targetSessionId, []);
+        const agentTurn = await runAgentTurn({
+          projectId: currentProject.id,
+          projectName: currentProject.name,
+          threadId: targetSessionId,
+          userInput: cleanedContent,
+          contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
+          conversationHistory,
+          instructions: agentInstructions,
+          referenceFiles: resolvedReferenceContextFiles.map((file) => ({
+            path: file.path,
+            summary: file.summary,
+            content: file.content || file.summary || file.title,
+          })),
+          memoryEntries: projectMemoryEntries,
+          activeSkills: activeSkillsForTurn,
+          allowedTools: READ_ONLY_CHAT_TOOLS,
+          onToolCallsChange: (toolCalls) => {
+            setThreadToolCalls(targetSessionId, toolCalls);
+          },
+          executeModel: (prompt) =>
+            executeRuntimePrompt({
+              providerId: runtimeProviderId,
+              sessionId: targetSessionId,
+              config: selectedRuntimeConfig,
+              systemPrompt: directChat.systemPrompt,
+              prompt,
+            }),
+          executeTool: (call) => toolExecutor.execute(call),
         });
 
-        const finalContent = streamAssembler.buildFinal(response);
         clearStreamingDraft(assistantMessage.id);
         const normalizedFinalContent = normalizeRuntimeDirectChatResponse({
-          response,
-          streamedContent: finalContent,
+          response: agentTurn.finalContent,
+          streamedContent: agentTurn.finalContent,
         });
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
           content: normalizedFinalContent,
         }));
+        const candidates = extractMemoryCandidates({
+          threadId: targetSessionId,
+          userInput: rawContent,
+          assistantContent: normalizedFinalContent,
+          createdAt: Date.now(),
+        });
+        setThreadMemoryCandidates(targetSessionId, candidates);
         const activityEntry = buildRuntimeChangedPathActivityEntry({
           createId: createActivityEntryId,
           runId,
-          content: finalContent,
+          content: normalizedFinalContent,
           skill: resolvedSkill,
         });
         if (activityEntry) {
@@ -2400,7 +2482,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       appendActivityEntry,
       appendMessage,
       appendRuntimeMcpToolCall,
-      appendRuntimeStreamDelta,
       appendRuntimeTimelineEvent,
       bindRuntimeThread,
       clearStreamingDraft,
@@ -2427,6 +2508,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       selectedRuntimeConfig,
       setActiveSkills,
       setRuntimeBinding,
+      setThreadContext,
+      setThreadMemoryCandidates,
       setRuntimeMemoryEntries,
       setRuntimeReplayEvents,
       startRuntimeRun,
@@ -2444,7 +2527,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       setSelectedChatAgentId,
       submitRuntimeTurn,
       updateMessage,
-      updateStreamingDraft,
       upsertSession,
     ]
   );
@@ -2544,12 +2626,11 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderMessagePart={renderMessagePart}
       renderStructuredCards={renderStructuredCards}
       renderProjectFileProposal={renderProjectFileProposal}
+      renderRuntimeApproval={renderRuntimeApprovalCard}
       messagesEndRef={messagesEndRef}
       leadingContent={launchpad}
     />
   );
-  const shouldShowApprovalPanel =
-    Boolean(activeApprovalThreadId) && (isGNAgentEmbedded || pendingApprovalCount > 0);
   useEffect(() => {
     if (selectedChatAgentId !== 'built-in' && !agentAvailability[selectedChatAgentId].ready) {
       setSelectedChatAgentId('built-in');
@@ -2590,7 +2671,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                 <span className="chat-shell-status-pill">{selectedRuntimeConfig?.model || '未启用模型'}</span>
                 <span className="chat-shell-status-pill">Skills / {activeSkills.length}</span>
                 <span className="chat-shell-status-pill">MCP / {runtimeMcpServers.length}</span>
-                <span className="chat-shell-status-pill">Sandbox / {sandboxPolicy}</span>
+                <span className="chat-shell-status-pill">审批策略 / {sandboxPolicy}</span>
                 <span className={`chat-shell-status-pill ${pendingApprovalCount > 0 ? 'warning' : ''}`}>
                   Approvals / {pendingApprovalCount}
                 </span>
@@ -2659,21 +2740,6 @@ export const AIChat: React.FC<AIChatProps> = ({
 
           {showExpandedShell ? (
             <>
-            {shouldShowApprovalPanel ? (
-              <GNAgentApprovalPanel
-                approvals={pendingApprovals}
-                sandboxPolicy={sandboxPolicy}
-                onSandboxPolicyChange={(policy) => {
-                  void handleSandboxPolicyChange(policy);
-                }}
-                onApprove={(approvalId) => {
-                  void handleApproveRuntimeApproval(approvalId);
-                }}
-                onDeny={(approvalId) => {
-                  void handleDenyRuntimeApproval(approvalId);
-                }}
-              />
-            ) : null}
             {agentChatContent}
             {isEmbedded ? (
                 <>

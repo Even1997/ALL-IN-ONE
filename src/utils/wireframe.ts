@@ -1,4 +1,4 @@
-import { AppType, CanvasElement, FeatureTree, PageStructureNode, WireframeDocument } from '../types';
+import type { AppType, CanvasElement, FeatureTree, PageStructureNode, WireframeDocument } from '../types/index.ts';
 
 export interface CanvasPreset {
   width: number;
