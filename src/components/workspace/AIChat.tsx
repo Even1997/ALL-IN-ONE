@@ -118,6 +118,7 @@ import {
   resolveProjectOperationPath,
   isSupportedProjectTextFilePath,
 } from '../../modules/ai/chat/projectFileOperations';
+import { buildProjectFilePlanningPrompt } from '../../modules/ai/chat/projectFilePlanningPrompt';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
 import { emitKnowledgeFilesystemChanged } from '../../features/knowledge/workspace/knowledgeFilesystemEvents';
 import { useProjectStore } from '../../store/projectStore';
@@ -266,15 +267,6 @@ const buildProjectFilePlanningSystemPrompt = (projectName: string, projectRoot: 
 4. 不要规划二进制文件写改删。
 5. create_file 不能把已存在文件静默当作新建覆盖。
 6. 只返回 JSON，不要返回 Markdown。`;
-
-const buildProjectFilePlanningPrompt = (userInput: string) => `请根据用户请求规划项目文件写操作。
-
-用户请求：
-${userInput}
-
-如果这是新建、编辑或删除文件的请求，请返回 JSON 计划。
-如果用户请求不明确，返回 needs_clarification。
-如果请求不应该执行，返回 reject。`;
 
 const buildProjectFileReadSystemPrompt = (projectName: string, projectRoot: string) => `你是 ${projectName} 的项目文件阅读助手。
 当前项目根目录是 ${projectRoot}。
@@ -1890,6 +1882,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           return;
         }
 
+        const conversationHistory = targetSession?.messages || activeSession?.messages || [];
         const buildDirectChatRequest = () =>
           buildRuntimeDirectChatRequest({
             projectId: currentProject.id,
@@ -1909,7 +1902,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             currentProjectName: currentProject.name,
             contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
             skillIntent,
-            conversationHistory: targetSession?.messages || activeSession?.messages || [],
+            conversationHistory,
             contextLabels: [
               selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
               contextSnapshot.primaryLabel,
@@ -2016,7 +2009,10 @@ export const AIChat: React.FC<AIChatProps> = ({
           }));
 
           const planResponse = await aiService.chatWithTools({
-            prompt: buildProjectFilePlanningPrompt(cleanedContent),
+            prompt: buildProjectFilePlanningPrompt({
+              userInput: cleanedContent,
+              conversationHistory,
+            }),
             systemPrompt: buildProjectFilePlanningSystemPrompt(currentProject.name || '当前项目', projectRoot),
             allowedTools: READ_ONLY_CHAT_TOOLS,
           });

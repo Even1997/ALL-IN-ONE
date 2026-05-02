@@ -25,6 +25,8 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
   assert.match(chatSource, /detectProjectFileWriteIntent/);
   assert.match(chatSource, /detectProjectFileReadIntent/);
   assert.match(chatSource, /parseProjectFileOperationsPlan/);
+  assert.match(chatSource, /buildProjectFilePlanningPrompt\(\{/);
+  assert.match(chatSource, /conversationHistory/);
   assert.match(chatSource, /executeProjectFileOperations/);
   assert.match(chatSource, /确认执行|取消/);
 
