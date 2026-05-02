@@ -4,7 +4,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
 import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
 import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
-import type { AITextStreamEvent } from '../../modules/ai/core/AIService';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import type { ChatStructuredCard } from '../../modules/ai/chat/chatCards';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
@@ -22,11 +21,82 @@ import {
 } from '../../modules/ai/chat/chatContext';
 import { PROVIDER_PRESETS, type ProviderPreset } from '../../modules/ai/providerPresets';
 import type { ActivityEntry } from '../../modules/ai/skills/activityLog';
+import { getDefaultRuntimeSkillDefinitions } from '../../modules/ai/skills/skillLibrary';
 import { type AIConfigEntry, hasUsableAIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { toRuntimeAIConfig } from '../../modules/ai/store/aiConfigState';
 import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../../modules/ai/gn-agent/localConfig';
-import { ClaudeRuntime } from '../../modules/ai/gn-agent/runtime/claude/ClaudeRuntime';
-import { CodexRuntime } from '../../modules/ai/gn-agent/runtime/codex/CodexRuntime';
+import {
+  appendAgentTimelineEvent as persistRuntimeTimelineEvent,
+  createAgentThread as persistRuntimeThread,
+  executePrompt as executeRuntimePrompt,
+  enqueueAgentApproval,
+  getAgentSandboxPolicy,
+  listAgentApprovals,
+  resolveAgentApproval,
+  setAgentSandboxPolicy as persistAgentSandboxPolicy,
+} from '../../modules/ai/runtime/agentRuntimeClient';
+import { useApprovalStore } from '../../modules/ai/runtime/approval/approvalStore';
+import type { SandboxPolicy } from '../../modules/ai/runtime/approval/approvalTypes';
+import { buildProjectMemoryEntry } from '../../modules/ai/runtime/memory/projectMemoryRuntime';
+import {
+  createRuntimeReplayExecutionController,
+  createRuntimeStreamingMessageAssembler,
+} from '../../modules/ai/runtime/orchestration/agentTurnRunner';
+import {
+  buildRuntimeDirectChatRequest,
+  normalizeRuntimeDirectChatResponse,
+} from '../../modules/ai/runtime/orchestration/runtimeDirectChatFlow';
+import {
+  buildRuntimeLocalAgentDecisionFeedback,
+  buildRuntimeLocalAgentPrompt,
+  executeRuntimeLocalAgentPrompt,
+  prepareRuntimeLocalAgentFlow,
+} from '../../modules/ai/runtime/orchestration/runtimeLocalAgentFlow';
+import {
+  buildProjectFileDecisionFeedback,
+  prepareProjectFileProposalFlow,
+} from '../../modules/ai/runtime/orchestration/runtimeProjectFileFlow';
+import {
+  resolveRuntimeApproval,
+  requestRuntimeApproval as requestRuntimeApprovalFlow,
+  type RuntimePendingApprovalAction,
+} from '../../modules/ai/runtime/orchestration/runtimeApprovalCoordinator';
+import {
+  cancelRuntimeProjectFileProposal,
+  executeRuntimeApprovedProjectFileProposal,
+  executeRuntimeProjectFileOperations,
+  type RuntimeProjectFileToolResponse,
+} from '../../modules/ai/runtime/orchestration/runtimeProjectFileExecutionFlow';
+import {
+  buildRuntimeChangedPathActivityEntry,
+  buildRuntimeLocalAgentFailureOutcome,
+  buildRuntimeLocalAgentSuccessOutcome,
+  buildRuntimeProjectFileAutoExecuteFailure,
+  buildRuntimeProjectFileAutoExecuteSuccess,
+} from '../../modules/ai/runtime/orchestration/runtimeTurnOutcomeFlow';
+import { buildRuntimeWorkflowCompletion } from '../../modules/ai/runtime/orchestration/runtimeWorkflowFlow';
+import type { AgentProviderId } from '../../modules/ai/runtime/agentRuntimeTypes';
+import {
+  invokeRuntimeMcpTool,
+  listRuntimeMcpServers,
+  listRuntimeMcpToolCalls,
+} from '../../modules/ai/runtime/mcp/runtimeMcpClient';
+import {
+  buildRuntimeMcpReplayPayload,
+  executeRuntimeMcpCommand,
+  formatRuntimeMcpToolCallResult,
+  parseRuntimeMcpCommand,
+} from '../../modules/ai/runtime/mcp/runtimeMcpFlow';
+import {
+  appendRuntimeReplayEvent,
+  listRuntimeReplayEvents,
+} from '../../modules/ai/runtime/replay/runtimeReplayClient';
+import {
+  createReplayRecoveryController,
+} from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
+import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
+import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
+import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
 import {
   createChatSession,
   createStoredChatMessage,
@@ -49,6 +119,7 @@ import {
   isSupportedProjectTextFilePath,
 } from '../../modules/ai/chat/projectFileOperations';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
+import { emitKnowledgeFilesystemChanged } from '../../features/knowledge/workspace/knowledgeFilesystemEvents';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import {
@@ -63,6 +134,7 @@ import {
   GNAgentHistoryMenu,
   GNAgentMessageList,
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
+import { GNAgentApprovalPanel } from '../ai/gn-agent-shell/GNAgentApprovalPanel';
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import {
   buildWelcomeMessage,
@@ -110,18 +182,6 @@ type GNAgentSuggestion = {
   label: string;
   description: string;
   prompt: string;
-};
-
-type ProjectFileExecutionResult = {
-  ok: boolean;
-  changedPaths: string[];
-  message: string;
-};
-
-type TauriToolResponse = {
-  success: boolean;
-  content: string;
-  error: string | null;
 };
 
 const EMPTY_MESSAGES: StoredChatMessage[] = [];
@@ -236,8 +296,12 @@ const projectFileProposalStatusLabel: Record<ProjectFileProposal['status'], stri
   failed: '执行失败',
 };
 
-const createWelcomeSession = (projectId: string, projectName?: string | null) => {
-  const session = createChatSession(projectId, '新对话');
+const createWelcomeSession = (
+  projectId: string,
+  projectName?: string | null,
+  providerId: AgentProviderId = 'built-in'
+) => {
+  const session = createChatSession(projectId, '新对话', providerId);
   return {
     ...session,
     messages: [buildWelcomeMessage(projectName)],
@@ -260,7 +324,6 @@ const buildSessionPreview = (content: string) => {
 
 const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
 const KnowledgeTruthStructuredCards: React.FC<{
   cards: ChatStructuredCard[];
   onSelectNextStep: (prompt: string) => void;
@@ -345,35 +408,6 @@ const GN_AGENT_SUGGESTIONS: GNAgentSuggestion[] = [
     prompt: '@变更同步 请检查当前原型和项目文档的差异，列出需要同步的变更',
   },
 ];
-
-const extractChangedPaths = (content: string) =>
-  Array.from(content.matchAll(/`([^`]+\.(?:md|json|html|tsx|ts|css))`/g)).map((match) => match[1]);
-
-const buildRunSummaryEntry = ({
-  runId,
-  content,
-  skill,
-}: {
-  runId: string;
-  content: string;
-  skill: string | null;
-}): ActivityEntry | null => {
-  const changedPaths = extractChangedPaths(content);
-  if (changedPaths.length === 0) {
-    return null;
-  }
-
-  return {
-    id: createActivityEntryId(),
-    runId,
-    type: 'run-summary',
-    summary: `更新了 ${changedPaths.join('、')}`,
-    changedPaths,
-    runtime: 'built-in',
-    skill,
-    createdAt: Date.now(),
-  };
-};
 
 const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
   id: 'custom',
@@ -543,8 +577,8 @@ const buildSettingsDraft = (config: AIConfigEntry | null): AISettingsDraft => ({
   enabled: config?.enabled || false,
 });
 
-const claudeRuntimeExecutor = new ClaudeRuntime();
-const codexRuntimeExecutor = new CodexRuntime();
+const createRuntimeEventId = (prefix: string) =>
+  `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 export const AIChat: React.FC<AIChatProps> = ({
   variant = 'default',
@@ -583,6 +617,10 @@ export const AIChat: React.FC<AIChatProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamingDraftBufferRef = useRef<Record<string, string>>({});
   const streamingFlushFrameRef = useRef<number | null>(null);
+  const pendingApprovalActionsRef = useRef<Record<string, RuntimePendingApprovalAction>>({});
+  const runtimeSkillRegistryRef = useRef(
+    createRuntimeSkillRegistry(getDefaultRuntimeSkillDefinitions())
+  );
 
   const setCollapsedState = (nextValue: boolean) => {
     if (!isControlledCollapse) {
@@ -609,6 +647,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const {
     currentProject,
+    memory,
     requirementDocs,
     activeKnowledgeFileId,
     generatedFiles,
@@ -617,6 +656,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   } = useProjectStore(
     useShallow((state) => ({
       currentProject: state.currentProject,
+      memory: state.memory,
       requirementDocs: state.requirementDocs,
       activeKnowledgeFileId: state.activeKnowledgeFileId,
       generatedFiles: state.generatedFiles,
@@ -655,6 +695,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const {
     ensureProjectState,
     upsertSession,
+    bindRuntimeThread,
     setActiveSession,
     appendMessage,
     appendActivityEntry,
@@ -664,6 +705,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     useShallow((state) => ({
       ensureProjectState: state.ensureProjectState,
       upsertSession: state.upsertSession,
+      bindRuntimeThread: state.bindRuntimeThread,
       setActiveSession: state.setActiveSession,
       appendMessage: state.appendMessage,
       appendActivityEntry: state.appendActivityEntry,
@@ -671,6 +713,68 @@ export const AIChat: React.FC<AIChatProps> = ({
       renameSession: state.renameSession,
     }))
   );
+  const {
+    createThread: recordRuntimeThread,
+    setRuntimeBinding,
+    submitTurn: submitRuntimeTurn,
+    appendTimelineEvent: appendRuntimeTimelineEvent,
+    setMemoryEntries: setRuntimeMemoryEntries,
+    setReplayEvents: setRuntimeReplayEvents,
+    appendReplayEvent: appendRuntimeReplayEventToStore,
+    setRecoveryState: setRuntimeRecoveryState,
+    clearReplayResumeRequest,
+    activeSkillsByThread,
+    setActiveSkills,
+    startRun: startRuntimeRun,
+    appendStreamDelta: appendRuntimeStreamDelta,
+    finishRun: finishRuntimeRun,
+    failRun: failRuntimeRun,
+  } = useAgentRuntimeStore(
+    useShallow((state) => ({
+      createThread: state.createThread,
+      setRuntimeBinding: state.setRuntimeBinding,
+      submitTurn: state.submitTurn,
+      appendTimelineEvent: state.appendTimelineEvent,
+      setMemoryEntries: state.setMemoryEntries,
+      setReplayEvents: state.setReplayEvents,
+      appendReplayEvent: state.appendReplayEvent,
+      setRecoveryState: state.setRecoveryState,
+      clearReplayResumeRequest: state.clearReplayResumeRequest,
+      activeSkillsByThread: state.activeSkillsByThread,
+      setActiveSkills: state.setActiveSkills,
+      startRun: state.startRun,
+      appendStreamDelta: state.appendStreamDelta,
+      finishRun: state.finishRun,
+      failRun: state.failRun,
+    }))
+  );
+  const { runtimeMcpServers, setRuntimeMcpServers, setRuntimeMcpToolCalls, appendRuntimeMcpToolCall } =
+    useRuntimeMcpStore(
+    useShallow((state) => ({
+      runtimeMcpServers: state.servers,
+      setRuntimeMcpServers: state.setServers,
+      setRuntimeMcpToolCalls: state.setToolCalls,
+      appendRuntimeMcpToolCall: state.appendToolCall,
+    }))
+    );
+  const {
+    approvalsByThread,
+    sandboxPolicy,
+    setThreadApprovals,
+    enqueueApproval,
+    resolveApproval: resolveStoredApproval,
+    setSandboxPolicy,
+  } = useApprovalStore(
+    useShallow((state) => ({
+      approvalsByThread: state.approvalsByThread,
+      sandboxPolicy: state.sandboxPolicy,
+      setThreadApprovals: state.setThreadApprovals,
+      enqueueApproval: state.enqueueApproval,
+      resolveApproval: state.resolveApproval,
+      setSandboxPolicy: state.setSandboxPolicy,
+    }))
+  );
+  const runtimeProviderId = (providerExecutionMode || 'built-in') as AgentProviderId;
 
   useEffect(() => {
     if (!currentProject) {
@@ -681,11 +785,45 @@ export const AIChat: React.FC<AIChatProps> = ({
 
     const projectState = useAIChatStore.getState().projects[currentProject.id];
     if (!projectState || projectState.sessions.length === 0) {
-      const session = createWelcomeSession(currentProject.id, currentProject.name);
+      const session = createWelcomeSession(currentProject.id, currentProject.name, runtimeProviderId);
       upsertSession(currentProject.id, session);
       setActiveSession(currentProject.id, session.id);
     }
-  }, [currentProject, ensureProjectState, setActiveSession, upsertSession]);
+  }, [currentProject, ensureProjectState, runtimeProviderId, setActiveSession, upsertSession]);
+
+  useEffect(() => {
+    let alive = true;
+
+    void (async () => {
+      const policy = await getAgentSandboxPolicy();
+      if (!alive) {
+        return;
+      }
+
+      setSandboxPolicy(policy);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [setSandboxPolicy]);
+
+  useEffect(() => {
+    let alive = true;
+
+    void (async () => {
+      const servers = await listRuntimeMcpServers();
+      if (!alive) {
+        return;
+      }
+
+      setRuntimeMcpServers(servers);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [setRuntimeMcpServers]);
 
   const sessions = projectChatState?.sessions || [];
   const activeSessionId = projectChatState?.activeSessionId || sessions[0]?.id || null;
@@ -693,8 +831,186 @@ export const AIChat: React.FC<AIChatProps> = ({
     () => sessions.find((session) => session.id === activeSessionId) || null,
     [activeSessionId, sessions]
   );
+  const activeApprovalThreadId = activeSession?.runtimeThreadId || activeSessionId || null;
   const messages = activeSession?.messages || EMPTY_MESSAGES;
   const activityEntries = projectChatState?.activityEntries || EMPTY_ACTIVITY_ENTRIES;
+  const pendingApprovals = useMemo(
+    () =>
+      activeApprovalThreadId
+        ? (approvalsByThread[activeApprovalThreadId] || []).filter(
+            (approval) => approval.status === 'pending',
+          )
+        : [],
+    [activeApprovalThreadId, approvalsByThread]
+  );
+  const activeSkills = useMemo(
+    () => (activeSessionId ? activeSkillsByThread[activeSessionId] || [] : []),
+    [activeSessionId, activeSkillsByThread]
+  );
+  const activeReplayResumeRequest = useAgentRuntimeStore((state) =>
+    activeSessionId ? state.resumeRequestsByThread[activeSessionId] || null : null
+  );
+  const replayRecoveryController = useMemo(
+    () =>
+      createReplayRecoveryController({
+        appendReplayEvent: appendRuntimeReplayEvent,
+        appendReplayEventToStore: appendRuntimeReplayEventToStore,
+        getReplayEvents: (threadId) => useAgentRuntimeStore.getState().replayEventsByThread[threadId] || [],
+        setRecoveryState: setRuntimeRecoveryState,
+      }),
+    [appendRuntimeReplayEventToStore, setRuntimeRecoveryState]
+  );
+
+  useEffect(() => {
+    if (!activeReplayResumeRequest) {
+      return;
+    }
+
+    setInput(activeReplayResumeRequest.prompt);
+    clearReplayResumeRequest(activeReplayResumeRequest.threadId);
+  }, [activeReplayResumeRequest, clearReplayResumeRequest]);
+
+  useEffect(() => {
+    if (!activeApprovalThreadId) {
+      return;
+    }
+
+    let alive = true;
+
+    void (async () => {
+      const approvals = await listAgentApprovals(activeApprovalThreadId);
+      if (!alive) {
+        return;
+      }
+
+      setThreadApprovals(activeApprovalThreadId, approvals);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [activeApprovalThreadId, setThreadApprovals]);
+
+  useEffect(() => {
+    const runtimeThreadId = activeSession?.runtimeThreadId;
+    if (!runtimeThreadId) {
+      return;
+    }
+
+    let alive = true;
+
+    void (async () => {
+      const toolCalls = await listRuntimeMcpToolCalls(runtimeThreadId);
+      if (!alive) {
+        return;
+      }
+
+      setRuntimeMcpToolCalls(runtimeThreadId, toolCalls);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [activeSession?.runtimeThreadId, setRuntimeMcpToolCalls]);
+  useEffect(() => {
+    const runtimeThreadId = activeSession?.runtimeThreadId;
+    if (!runtimeThreadId) {
+      return;
+    }
+
+    let alive = true;
+
+    void (async () => {
+      const replayEvents = await listRuntimeReplayEvents(runtimeThreadId);
+      if (!alive) {
+        return;
+      }
+
+      setRuntimeReplayEvents(runtimeThreadId, replayEvents);
+      if (activeSession?.id) {
+        replayRecoveryController.syncFromEvents(
+          activeSession.id,
+          runtimeThreadId,
+          replayEvents,
+        );
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [activeSession?.id, activeSession?.runtimeThreadId, replayRecoveryController, setRuntimeReplayEvents]);
+  const handleSandboxPolicyChange = useCallback(
+    async (policy: SandboxPolicy) => {
+      const nextPolicy = await persistAgentSandboxPolicy(policy);
+      setSandboxPolicy(nextPolicy);
+    },
+    [setSandboxPolicy]
+  );
+  const requestRuntimeApproval = useCallback(
+    async ({
+      threadId,
+      actionType,
+      riskLevel,
+      summary,
+      messageId,
+      onApprove,
+      onDeny,
+    }: {
+      threadId: string;
+      actionType: string;
+      riskLevel: 'low' | 'medium' | 'high';
+      summary: string;
+      messageId?: string | null;
+      onApprove: () => Promise<void>;
+      onDeny?: () => void | Promise<void>;
+    }) => {
+      const approval = await requestRuntimeApprovalFlow({
+        threadId,
+        actionType,
+        riskLevel,
+        summary,
+        messageId,
+        onApprove,
+        onDeny,
+        enqueueAgentApproval,
+        enqueueApproval,
+        pendingApprovalActions: pendingApprovalActionsRef.current,
+      });
+      return approval;
+    },
+    [enqueueAgentApproval, enqueueApproval]
+  );
+  const handleApproveRuntimeApproval = useCallback(
+    async (approvalId: string) => {
+      const pendingAction = await resolveRuntimeApproval({
+        approvalId,
+        status: 'approved',
+        pendingApprovalActions: pendingApprovalActionsRef.current,
+        resolveStoredApproval,
+        resolveAgentApproval,
+      });
+      if (pendingAction) {
+        await pendingAction.onApprove();
+      }
+    },
+    [resolveAgentApproval, resolveStoredApproval]
+  );
+  const handleDenyRuntimeApproval = useCallback(
+    async (approvalId: string) => {
+      const pendingAction = await resolveRuntimeApproval({
+        approvalId,
+        status: 'denied',
+        pendingApprovalActions: pendingApprovalActionsRef.current,
+        resolveStoredApproval,
+        resolveAgentApproval,
+      });
+      if (pendingAction?.onDeny) {
+        await pendingAction.onDeny();
+      }
+    },
+    [resolveAgentApproval, resolveStoredApproval]
+  );
   const renderStructuredCards = useCallback(
     (message: { structuredCards?: ChatStructuredCard[] }) => {
       if (!message.structuredCards || message.structuredCards.length === 0) {
@@ -712,125 +1028,62 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
 
   const executeProjectFileOperations = useCallback(
-    async (projectRoot: string, operations: ProjectFileOperation[]): Promise<ProjectFileExecutionResult> => {
-      const changedPaths: string[] = [];
+    async (projectRoot: string, operations: ProjectFileOperation[]) => {
+      const result = await executeRuntimeProjectFileOperations({
+        projectRoot,
+        operations,
+        resolveProjectOperationPath,
+        isSupportedProjectTextFilePath,
+        readProjectTextFile,
+        writeProjectTextFile,
+        getDirectoryPath,
+        invokeTool: async (command, params) =>
+          invoke<RuntimeProjectFileToolResponse>(command, {
+            params,
+          }),
+      });
 
-      for (const operation of operations) {
-        const absolutePath = resolveProjectOperationPath(projectRoot, operation.targetPath);
-
-        if (!isSupportedProjectTextFilePath(absolutePath)) {
-          throw new Error(`当前版本只支持文本文件操作：${operation.targetPath}`);
-        }
-
-        if (operation.type === 'create_file') {
-          if (typeof operation.content !== 'string') {
-            throw new Error(`新建文件缺少内容：${operation.targetPath}`);
-          }
-
-          const existingContent = await readProjectTextFile(absolutePath);
-          if (existingContent !== null) {
-            throw new Error(`文件已存在，不能按“新建”覆盖：${operation.targetPath}`);
-          }
-
-          const parentDirectory = getDirectoryPath(absolutePath);
-          if (parentDirectory) {
-            const mkdirResult = await invoke<TauriToolResponse>('tool_mkdir', {
-              params: {
-                file_path: parentDirectory,
-              },
-            });
-
-            if (!mkdirResult.success) {
-              throw new Error(mkdirResult.error || `无法创建目录：${parentDirectory}`);
-            }
-          }
-
-          await writeProjectTextFile(absolutePath, operation.content);
-          changedPaths.push(operation.targetPath);
-          continue;
-        }
-
-        if (operation.type === 'edit_file') {
-          const existingContent = await readProjectTextFile(absolutePath);
-          if (existingContent === null) {
-            throw new Error(`找不到要编辑的文件：${operation.targetPath}`);
-          }
-
-          if (typeof operation.oldString === 'string') {
-            const editResult = await invoke<TauriToolResponse>('tool_edit', {
-              params: {
-                file_path: absolutePath,
-                old_string: operation.oldString,
-                new_string: operation.newString ?? '',
-              },
-            });
-
-            if (!editResult.success) {
-              throw new Error(editResult.error || `编辑文件失败：${operation.targetPath}`);
-            }
-          } else if (typeof operation.content === 'string') {
-            await writeProjectTextFile(absolutePath, operation.content);
-          } else {
-            throw new Error(`编辑文件缺少可执行内容：${operation.targetPath}`);
-          }
-
-          changedPaths.push(operation.targetPath);
-          continue;
-        }
-
-        const viewResult = await invoke<TauriToolResponse>('tool_view', {
-          params: {
-            file_path: absolutePath,
-            offset: 0,
-            limit: 1,
-          },
+      if (currentProject && result.ok && result.changedPaths.length > 0) {
+        emitKnowledgeFilesystemChanged({
+          projectId: currentProject.id,
+          changedPaths: result.changedPaths,
         });
-        if (!viewResult.success) {
-          throw new Error(viewResult.error || `只能删除已存在的文本文件：${operation.targetPath}`);
-        }
-
-        const removeResult = await invoke<TauriToolResponse>('tool_remove', {
-          params: {
-            file_path: absolutePath,
-          },
-        });
-        if (!removeResult.success) {
-          throw new Error(removeResult.error || `删除文件失败：${operation.targetPath}`);
-        }
-
-        changedPaths.push(operation.targetPath);
       }
 
-      return {
-        ok: true,
-        changedPaths,
-        message:
-          changedPaths.length > 0
-            ? `已执行 ${changedPaths.length} 项文件操作：${changedPaths.join('、')}`
-            : '没有执行任何文件操作。',
-      };
+      return result;
     },
-    []
+    [currentProject]
   );
 
   const handleCancelProjectFileProposal = useCallback(
-    (messageId: string) => {
+    async (messageId: string) => {
       if (!currentProject || !activeSessionId) {
         return;
       }
 
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        projectFileProposal: message.projectFileProposal
-          ? {
-              ...message.projectFileProposal,
-              status: 'cancelled',
-              executionMessage: '已取消本次文件操作。',
-            }
-          : message.projectFileProposal,
-      }));
+      await cancelRuntimeProjectFileProposal({
+        projectId: currentProject.id,
+        sessionId: activeSessionId,
+        messageId,
+        activeApprovalThreadId,
+        approvalsByThread,
+        updateMessage,
+        resolveStoredApproval,
+        clearPendingApprovalAction: (approvalId) => {
+          delete pendingApprovalActionsRef.current[approvalId];
+        },
+        resolveAgentApproval,
+      });
     },
-    [activeSessionId, currentProject, updateMessage]
+    [
+      activeApprovalThreadId,
+      activeSessionId,
+      approvalsByThread,
+      currentProject,
+      resolveAgentApproval,
+      resolveStoredApproval,
+      updateMessage,
+    ]
   );
 
   const handleExecuteProjectFileProposal = useCallback(
@@ -839,72 +1092,38 @@ export const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        projectFileProposal: message.projectFileProposal
-          ? {
-              ...message.projectFileProposal,
-              status: 'executing',
-              executionMessage: '正在执行文件操作...',
-            }
-          : message.projectFileProposal,
-      }));
-
-      const runId = createRunId();
-
-      try {
-        const projectRoot = await getProjectDir(currentProject.id);
-        const result = await executeProjectFileOperations(projectRoot, proposal.operations);
-
-        updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-          ...message,
-          content: proposal.assistantMessage,
-          projectFileProposal: message.projectFileProposal
-            ? {
-                ...message.projectFileProposal,
-                status: 'executed',
-                executionMessage: result.message,
-              }
-            : message.projectFileProposal,
-        }));
-
-        appendActivityEntry(currentProject.id, {
-          id: createActivityEntryId(),
-          runId,
-          type: 'run-summary',
-          summary: result.message,
-          changedPaths: result.changedPaths,
-          runtime: 'built-in',
-          skill: 'project-file-ops',
-          createdAt: Date.now(),
-        });
-      } catch (error) {
-        const message = normalizeErrorMessage(error);
-
-        updateMessage(currentProject.id, activeSessionId, messageId, (currentMessage) => ({
-          ...currentMessage,
-          projectFileProposal: currentMessage.projectFileProposal
-            ? {
-                ...currentMessage.projectFileProposal,
-                status: 'failed',
-                executionMessage: message,
-              }
-            : currentMessage.projectFileProposal,
-        }));
-
-        appendActivityEntry(currentProject.id, {
-          id: createActivityEntryId(),
-          runId,
-          type: 'failed',
-          summary: message,
-          changedPaths: proposal.operations.map((operation) => operation.targetPath),
-          runtime: 'built-in',
-          skill: 'project-file-ops',
-          createdAt: Date.now(),
-        });
-      }
+      await executeRuntimeApprovedProjectFileProposal({
+        projectId: currentProject.id,
+        sessionId: activeSessionId,
+        messageId,
+        proposal,
+        activeApprovalThreadId,
+        approvalsByThread,
+        updateMessage,
+        resolveStoredApproval,
+        clearPendingApprovalAction: (approvalId) => {
+          delete pendingApprovalActionsRef.current[approvalId];
+        },
+        resolveAgentApproval,
+        createRunId,
+        createActivityEntryId,
+        getProjectDir,
+        executeProjectFileOperations,
+        appendActivityEntry,
+        normalizeErrorMessage,
+      });
     },
-    [activeSessionId, appendActivityEntry, currentProject, executeProjectFileOperations, updateMessage]
+    [
+      activeApprovalThreadId,
+      activeSessionId,
+      appendActivityEntry,
+      approvalsByThread,
+      currentProject,
+      executeProjectFileOperations,
+      resolveAgentApproval,
+      resolveStoredApproval,
+      updateMessage,
+    ]
   );
 
   const renderProjectFileProposal = useCallback(
@@ -941,7 +1160,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                 <button type="button" onClick={() => void handleExecuteProjectFileProposal(message.id, proposal)}>
                   确认执行
                 </button>
-                <button type="button" onClick={() => handleCancelProjectFileProposal(message.id)}>
+                <button type="button" onClick={() => void handleCancelProjectFileProposal(message.id)}>
                   取消
                 </button>
               </>
@@ -1224,8 +1443,23 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const isFreshSession = messages.length <= 1;
   const latestActivityEntry = activityEntries[0] || null;
-  const runStateLabel = isLoading ? 'Running' : latestActivityEntry?.type === 'failed' ? 'Failed' : 'Ready';
-  const runStateTone = isLoading ? 'running' : latestActivityEntry?.type === 'failed' ? 'error' : 'success';
+  const pendingApprovalCount = pendingApprovals.length;
+  const runStateLabel =
+    pendingApprovalCount > 0
+      ? 'Approval required'
+      : isLoading
+        ? 'Running'
+        : latestActivityEntry?.type === 'failed'
+          ? 'Failed'
+          : 'Ready';
+  const runStateTone =
+    pendingApprovalCount > 0
+      ? 'warning'
+      : isLoading
+        ? 'running'
+        : latestActivityEntry?.type === 'failed'
+          ? 'error'
+          : 'success';
   const flushStreamingDrafts = useCallback(() => {
     streamingFlushFrameRef.current = null;
     setStreamingDraftContents({ ...streamingDraftBufferRef.current });
@@ -1448,12 +1682,12 @@ export const AIChat: React.FC<AIChatProps> = ({
       return;
     }
 
-    const session = createWelcomeSession(currentProject.id, currentProject.name);
+    const session = createWelcomeSession(currentProject.id, currentProject.name, runtimeProviderId);
     upsertSession(currentProject.id, session);
     setActiveSession(currentProject.id, session.id);
     setInput('');
     setShowHistoryMenu(false);
-  }, [currentProject, setActiveSession, upsertSession]);
+  }, [currentProject, runtimeProviderId, setActiveSession, upsertSession]);
 
   const submitPrompt = useCallback(
     async (promptValue: string) => {
@@ -1462,16 +1696,19 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       let targetSessionId = activeSessionId;
+      let targetSession = activeSession;
       if (!targetSessionId) {
-        const session = createWelcomeSession(currentProject.id, currentProject.name);
+        const session = createWelcomeSession(currentProject.id, currentProject.name, runtimeProviderId);
         upsertSession(currentProject.id, session);
         setActiveSession(currentProject.id, session.id);
         targetSessionId = session.id;
+        targetSession = session;
       }
 
       const rawContent = promptValue.trim();
       const skillIntent: SkillIntent | null = resolveSkillIntent(rawContent);
       const resolvedSkill = skillIntent?.skill || null;
+      const mcpCommand = parseRuntimeMcpCommand(rawContent, runtimeMcpServers);
       const effectiveChatAgentId =
         selectedChatAgentId !== 'built-in' && !agentAvailability[selectedChatAgentId].ready
           ? 'built-in'
@@ -1493,7 +1730,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         );
       }
 
-      if (!activeSession || activeSession.title === '新对话') {
+      if (!targetSession || targetSession.title === '新对话') {
         renameSession(currentProject.id, targetSessionId, summarizeSessionTitle(rawContent));
       }
 
@@ -1515,22 +1752,164 @@ export const AIChat: React.FC<AIChatProps> = ({
         aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
       }
 
+      let runtimeThreadId = targetSession?.runtimeThreadId || null;
+      let runtimeStoreThreadId = targetSessionId;
+      let executionController: ReturnType<typeof createRuntimeReplayExecutionController> | null = null;
+
       try {
-        const buildPromptReferenceContext = (userInput: string) =>
-          resolvedReferenceContextFiles.length > 0
-            ? buildReferencePromptContext({
-                userInput,
-                selectedFiles: resolvedReferenceContextFiles,
-              })
-            : null;
-        const buildDirectChatRequest = () => {
-          return buildDirectChatPrompt({
+        const projectMemoryEntries = (memory?.memoryEntries || []).map((entry) =>
+          buildProjectMemoryEntry(entry)
+        );
+        setRuntimeMemoryEntries(currentProject.id, projectMemoryEntries);
+
+        if (!runtimeThreadId) {
+          const persistedThread = await persistRuntimeThread({
+            projectId: currentProject.id,
+            title: targetSession?.title || '新对话',
+            providerId: runtimeProviderId,
+          });
+          runtimeThreadId = persistedThread.id;
+          bindRuntimeThread(currentProject.id, targetSessionId, runtimeProviderId, runtimeThreadId);
+        }
+
+        recordRuntimeThread(currentProject.id, {
+          id: targetSessionId,
+          providerId: runtimeProviderId,
+          title: targetSession?.title || summarizeSessionTitle(rawContent),
+          createdAt: targetSession?.createdAt || Date.now(),
+          updatedAt: Date.now(),
+        });
+        setRuntimeBinding(runtimeStoreThreadId, {
+          providerId: runtimeProviderId,
+          configId: selectedRuntimeConfig?.id || null,
+          externalThreadId: runtimeThreadId,
+        });
+        const replayThreadId = runtimeThreadId || targetSessionId;
+        executionController = createRuntimeReplayExecutionController({
+          turnId: `turn_${runId}`,
+          threadId: runtimeStoreThreadId,
+          providerId: runtimeProviderId,
+          prompt: cleanedContent,
+          createdAt: Date.now(),
+          submitTurn: submitRuntimeTurn,
+          startRun: startRuntimeRun,
+          finishRun: finishRuntimeRun,
+          failRun: failRuntimeRun,
+          runtimeStoreThreadId,
+          replayThreadId,
+          appendAndSyncReplayEvent: replayRecoveryController.appendAndSync,
+        });
+        appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+          id: createRuntimeEventId('user'),
+          threadId: runtimeStoreThreadId,
+          providerId: runtimeProviderId,
+          summary: `User: ${buildSessionPreview(cleanedContent)}`,
+          createdAt: Date.now(),
+        });
+        const runtimeSkillThreadId = runtimeStoreThreadId;
+        let activeSkillsForTurn = activeSkillsByThread[runtimeSkillThreadId] || [];
+        if (resolvedSkill) {
+          runtimeSkillRegistryRef.current.activateSkill(runtimeSkillThreadId, resolvedSkill);
+          activeSkillsForTurn = runtimeSkillRegistryRef.current.listActiveSkills(runtimeSkillThreadId);
+          setActiveSkills(runtimeSkillThreadId, activeSkillsForTurn);
+        }
+        await executionController.start();
+        if (!executionController) {
+          throw new Error('Failed to initialize runtime execution controller.');
+        }
+        const activeExecutionController = executionController;
+
+        if (mcpCommand) {
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId('mcp-start'),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: `MCP started: ${mcpCommand.serverId}/${mcpCommand.toolName}`,
+            createdAt: Date.now(),
+          });
+
+          const mcpResult = await executeRuntimeMcpCommand({
+            command: mcpCommand,
+            servers: runtimeMcpServers,
+            threadId: runtimeThreadId || targetSessionId,
+            invokeTool: invokeRuntimeMcpTool,
+          });
+
+          if (mcpResult.status === 'failed') {
+            const message = mcpResult.message;
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
+              ...currentMessage,
+              role: 'system',
+              tone: 'error',
+              content: message,
+            }));
+            await activeExecutionController.failWithReplay(message);
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('mcp-error'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: `Error: ${message}`,
+              createdAt: Date.now(),
+            });
+            return;
+          }
+
+          const { toolCall } = mcpResult;
+          appendRuntimeMcpToolCall(toolCall.threadId, toolCall);
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
+            ...currentMessage,
+            role: toolCall.error ? 'system' : currentMessage.role,
+            tone: toolCall.error ? 'error' : currentMessage.tone,
+            content: formatRuntimeMcpToolCallResult(toolCall),
+          }));
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId(toolCall.error ? 'mcp-error' : 'mcp-complete'),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: toolCall.error
+              ? `MCP failed: ${toolCall.serverId}/${toolCall.toolName}`
+              : `MCP completed: ${toolCall.serverId}/${toolCall.toolName}`,
+            createdAt: Date.now(),
+          });
+          await persistRuntimeTimelineEvent({
+            threadId: replayThreadId,
+            providerId: runtimeProviderId,
+            summary: `MCP: ${toolCall.serverId}/${toolCall.toolName} - ${toolCall.summary}`,
+          });
+          await replayRecoveryController.appendAndSync({
+            runtimeStoreThreadId,
+            replayThreadId,
+            eventType: toolCall.error ? 'mcp_failed' : 'mcp_completed',
+            payload: buildRuntimeMcpReplayPayload(toolCall),
+          });
+          if (toolCall.error) {
+            await activeExecutionController.failWithReplay(toolCall.error);
+          } else {
+            await activeExecutionController.completeWithReplay(formatRuntimeMcpToolCallResult(toolCall));
+          }
+          return;
+        }
+
+        const buildDirectChatRequest = () =>
+          buildRuntimeDirectChatRequest({
+            projectId: currentProject.id,
+            projectName: currentProject.name,
+            threadId: targetSessionId,
             userInput: cleanedContent,
+            agentsInstructions: [
+              contextSnapshot.primaryLabel,
+              contextSnapshot.secondaryLabel,
+              contextSnapshot.currentFileLabel,
+              contextSnapshot.vaultLabel,
+              ...explicitReferenceLabels,
+            ].filter((item): item is string => Boolean(item)),
+            referenceFiles: resolvedReferenceContextFiles,
+            memoryEntries: projectMemoryEntries,
+            activeSkills: activeSkillsForTurn,
             currentProjectName: currentProject.name,
             contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
             skillIntent,
-            conversationHistory: activeSession?.messages || [],
-            referenceContext: buildPromptReferenceContext(cleanedContent),
+            conversationHistory: targetSession?.messages || activeSession?.messages || [],
             contextLabels: [
               selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
               contextSnapshot.primaryLabel,
@@ -1540,7 +1919,6 @@ export const AIChat: React.FC<AIChatProps> = ({
               ...explicitReferenceLabels,
             ].filter((item): item is string => Boolean(item)),
           });
-        };
 
         if (skillIntent?.skill === 'requirements') {
           setRawRequirementInput(cleanedContent);
@@ -1562,34 +1940,34 @@ export const AIChat: React.FC<AIChatProps> = ({
 
           const latestWorkflowRun =
             useAIWorkflowStore.getState().projects[currentProject.id]?.runs[0] || null;
-          const currentStageSummary = latestWorkflowRun?.currentStage
-            ? latestWorkflowRun.stageSummaries[latestWorkflowRun.currentStage]
-            : '';
-          const finalContent = [
-            `已在当前对话中执行 ${targetWorkflowPackage} 能力链。`,
-            latestWorkflowRun?.status === 'awaiting_confirmation'
-              ? '当前结果已生成，正在等待你确认后再继续下一段。'
-              : null,
-            currentStageSummary || null,
-          ]
-            .filter((item): item is string => Boolean(item))
-            .join('\n');
+          const workflowCompletion = buildRuntimeWorkflowCompletion({
+            targetPackage: targetWorkflowPackage,
+            latestRun: latestWorkflowRun,
+          });
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: finalContent || '已在当前对话中开始执行对应能力链。',
+            content: workflowCompletion.finalContent,
           }));
 
           appendActivityEntry(currentProject.id, {
             id: createActivityEntryId(),
             runId,
             type: 'run-summary',
-            summary: `AI 执行了 ${targetWorkflowPackage} 能力链`,
+            summary: workflowCompletion.activitySummary,
             changedPaths: [],
             runtime: 'built-in',
             skill: resolvedSkill,
             createdAt: Date.now(),
           });
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId('workflow'),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: workflowCompletion.timelineSummary,
+            createdAt: Date.now(),
+          });
+          await activeExecutionController.completeWithReplay(workflowCompletion.finalContent);
           return;
         }
 
@@ -1621,6 +1999,14 @@ export const AIChat: React.FC<AIChatProps> = ({
               content: finalContent,
             }));
 
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('read'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: `Read project files: ${buildSessionPreview(cleanedContent)}`,
+              createdAt: Date.now(),
+            });
+            await activeExecutionController.completeWithReplay(finalContent);
             return;
           }
 
@@ -1641,173 +2027,320 @@ export const AIChat: React.FC<AIChatProps> = ({
               ...message,
               content: plan.assistantMessage.trim() || plan.summary.trim() || '这次还不能安全执行文件操作，请补充更明确的路径和内容。',
             }));
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('file-plan'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: 'File operation plan needs clarification',
+              createdAt: Date.now(),
+            });
+            await activeExecutionController.completeWithReplay(
+              plan.assistantMessage.trim() || plan.summary.trim() || '文件操作计划需要补充信息。'
+            );
             return;
           }
 
-          const proposal: ProjectFileProposal = {
-            id: createProjectFileProposalId(),
+          const approvalThreadId = runtimeThreadId || targetSessionId;
+          const {
+            proposal: nextProposal,
+            approvalActionType,
+            riskLevel,
+            decision,
+          } = prepareProjectFileProposalFlow({
+            proposalId: createProjectFileProposalId(),
             mode: projectFileOperationMode,
-            status: projectFileOperationMode === 'auto' ? 'executing' : 'pending',
-            summary: plan.summary.trim() || `计划执行 ${plan.operations.length} 项文件操作`,
-            assistantMessage: plan.assistantMessage.trim() || plan.summary.trim() || '我已经整理好本次文件操作计划。',
-            operations: plan.operations,
-            executionMessage: projectFileOperationMode === 'auto' ? '系统已自动确认，正在执行。' : '请确认后执行。',
-          };
+            plan,
+            sandboxPolicy,
+          });
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: proposal.assistantMessage,
-            projectFileProposal: proposal,
+            content: nextProposal.assistantMessage,
+            projectFileProposal: nextProposal,
           }));
 
-          if (projectFileOperationMode === 'manual') {
+          if (decision === 'blocked') {
+            const blockedFeedback = buildProjectFileDecisionFeedback({
+              decision,
+              summary: nextProposal.summary,
+            });
+            const deniedApproval = await enqueueAgentApproval({
+              threadId: approvalThreadId,
+              actionType: approvalActionType,
+              riskLevel,
+              summary: nextProposal.summary,
+              messageId: assistantMessage.id,
+            });
+            enqueueApproval(deniedApproval);
+            resolveStoredApproval(deniedApproval.id, 'denied');
+            await resolveAgentApproval({ approvalId: deniedApproval.id, status: 'denied' });
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('file-blocked'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: blockedFeedback.timelineSummary,
+              createdAt: Date.now(),
+            });
+            await activeExecutionController.completeWithReplay(blockedFeedback.replaySummary);
+            return;
+          }
+
+          if (decision === 'approval-required') {
+            const approvalRequiredFeedback = buildProjectFileDecisionFeedback({
+              decision,
+              summary: nextProposal.summary,
+            });
+            await requestRuntimeApproval({
+              threadId: approvalThreadId,
+              actionType: approvalActionType,
+              riskLevel,
+              summary: nextProposal.summary,
+              messageId: assistantMessage.id,
+              onApprove: async () => {
+                await handleExecuteProjectFileProposal(assistantMessage.id, nextProposal);
+              },
+              onDeny: async () => {
+                await handleCancelProjectFileProposal(assistantMessage.id);
+              },
+            });
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('file-manual'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: approvalRequiredFeedback.timelineSummary,
+              createdAt: Date.now(),
+            });
+            await activeExecutionController.completeWithReplay(approvalRequiredFeedback.replaySummary);
             return;
           }
 
           try {
-            const result = await executeProjectFileOperations(projectRoot, proposal.operations);
+            const result = await executeProjectFileOperations(projectRoot, nextProposal.operations);
+            const successOutcome = buildRuntimeProjectFileAutoExecuteSuccess({
+              createId: createActivityEntryId,
+              runId,
+              result,
+              preview: buildSessionPreview(cleanedContent),
+            });
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
               projectFileProposal: message.projectFileProposal
                 ? {
                     ...message.projectFileProposal,
-                    status: 'executed',
-                    executionMessage: result.message,
+                    status: successOutcome.proposalStatus,
+                    executionMessage: successOutcome.executionMessage,
                   }
                 : message.projectFileProposal,
             }));
-            appendActivityEntry(currentProject.id, {
-              id: createActivityEntryId(),
-              runId,
-              type: 'run-summary',
-              summary: result.message,
-              changedPaths: result.changedPaths,
-              runtime: 'built-in',
-              skill: 'project-file-ops',
-              createdAt: Date.now(),
-            });
+            appendActivityEntry(currentProject.id, successOutcome.activityEntry);
           } catch (error) {
             const message = normalizeErrorMessage(error);
+            const failureOutcome = buildRuntimeProjectFileAutoExecuteFailure({
+              createId: createActivityEntryId,
+              runId,
+              message,
+              operationPaths: nextProposal.operations.map((operation) => operation.targetPath),
+              preview: buildSessionPreview(cleanedContent),
+            });
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
               ...currentMessage,
               projectFileProposal: currentMessage.projectFileProposal
                 ? {
                     ...currentMessage.projectFileProposal,
-                    status: 'failed',
-                    executionMessage: message,
+                    status: failureOutcome.proposalStatus,
+                    executionMessage: failureOutcome.executionMessage,
                   }
                 : currentMessage.projectFileProposal,
             }));
-            appendActivityEntry(currentProject.id, {
-              id: createActivityEntryId(),
-              runId,
-              type: 'failed',
-              summary: message,
-              changedPaths: proposal.operations.map((operation) => operation.targetPath),
-              runtime: 'built-in',
-              skill: 'project-file-ops',
-              createdAt: Date.now(),
-            });
+            appendActivityEntry(currentProject.id, failureOutcome.activityEntry);
           }
 
+          const autoExecuteSummary = `File operation flow completed: ${buildSessionPreview(cleanedContent)}`;
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId('file-auto'),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: autoExecuteSummary,
+            createdAt: Date.now(),
+          });
+          await activeExecutionController.completeWithReplay(autoExecuteSummary);
           return;
         }
 
         if (effectiveChatAgentId !== 'built-in') {
-          const directChat = buildDirectChatRequest();
-          const projectRoot = await getProjectDir(currentProject.id);
-          const localAgentPrompt = [
-            directChat.systemPrompt ? `<system>\n${directChat.systemPrompt}\n</system>` : null,
-            directChat.prompt,
-          ].filter((item): item is string => Boolean(item)).join('\n\n');
-          const result = await invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
-            params: {
-              agent: effectiveChatAgentId,
-              projectRoot,
-              prompt: localAgentPrompt,
-            },
+          const approvalThreadId = runtimeThreadId || targetSessionId;
+          const localAgentFlow = prepareRuntimeLocalAgentFlow({
+            agentId: effectiveChatAgentId,
+            sandboxPolicy,
           });
+          const executeLocalAgentFlow = async () => {
+            try {
+              const directChat = buildDirectChatRequest();
+              const projectRoot = await getProjectDir(currentProject.id);
+              const finalContent = await executeRuntimeLocalAgentPrompt({
+                agentId: effectiveChatAgentId,
+                projectRoot,
+                prompt: buildRuntimeLocalAgentPrompt({
+                  systemPrompt: directChat.systemPrompt,
+                  prompt: directChat.prompt,
+                }),
+                runPrompt: async ({ agent, projectRoot, prompt }) => invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
+                  params: {
+                    agent,
+                    projectRoot,
+                    prompt,
+                  },
+                }),
+              });
+              const successOutcome = buildRuntimeLocalAgentSuccessOutcome({
+                createId: createActivityEntryId,
+                runId,
+                content: finalContent,
+                skill: resolvedSkill,
+                agentId: effectiveChatAgentId,
+              });
+              updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+                ...message,
+                content: finalContent,
+              }));
+              if (successOutcome.activityEntry) {
+                appendActivityEntry(currentProject.id, successOutcome.activityEntry);
+              }
+              appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+                id: createRuntimeEventId('local-agent'),
+                threadId: runtimeStoreThreadId,
+                providerId: runtimeProviderId,
+                summary: successOutcome.timelineSummary,
+                createdAt: Date.now(),
+              });
+              await activeExecutionController.completeWithReplay(successOutcome.replaySummary);
+            } catch (error) {
+              const message = normalizeErrorMessage(error);
+              const failureOutcome = buildRuntimeLocalAgentFailureOutcome({
+                createId: createActivityEntryId,
+                runId,
+                message,
+                skill: resolvedSkill,
+                preview: buildSessionPreview(message),
+              });
 
-          if (!result.success) {
-            throw new Error(result.error || 'Local agent execution failed.');
+              updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
+                ...currentMessage,
+                role: 'system',
+                tone: 'error',
+                content: message,
+              }));
+              appendActivityEntry(currentProject.id, failureOutcome.activityEntry);
+              await activeExecutionController.failWithReplay(failureOutcome.replaySummary);
+              appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+                id: createRuntimeEventId('local-agent-error'),
+                threadId: runtimeStoreThreadId,
+                providerId: runtimeProviderId,
+                summary: failureOutcome.timelineSummary,
+                createdAt: Date.now(),
+              });
+            }
+          };
+
+          if (localAgentFlow.decision === 'blocked') {
+            const blockedFeedback = buildRuntimeLocalAgentDecisionFeedback({
+              decision: localAgentFlow.decision,
+              summary: localAgentFlow.summary,
+            });
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              role: 'system',
+              tone: 'error',
+              content: localAgentFlow.denialMessage || '已阻止本地 Agent 执行。',
+            }));
+            const deniedApproval = await enqueueAgentApproval({
+              threadId: approvalThreadId,
+              actionType: localAgentFlow.actionType,
+              riskLevel: localAgentFlow.riskLevel,
+              summary: localAgentFlow.summary,
+              messageId: assistantMessage.id,
+            });
+            enqueueApproval(deniedApproval);
+            resolveStoredApproval(deniedApproval.id, 'denied');
+            await resolveAgentApproval({ approvalId: deniedApproval.id, status: 'denied' });
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('local-agent-blocked'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: blockedFeedback.timelineSummary,
+              createdAt: Date.now(),
+            });
+            await activeExecutionController.completeWithReplay(blockedFeedback.replaySummary);
+            return;
           }
 
-          const finalContent = result.content.trim() || '本地 Agent 已执行，但没有返回内容。';
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            content: finalContent,
-          }));
-          const activityEntry = buildRunSummaryEntry({
-            runId,
-            content: finalContent,
-            skill: resolvedSkill,
-          });
-          if (activityEntry) {
-            appendActivityEntry(currentProject.id, activityEntry);
+          if (localAgentFlow.decision === 'approval-required') {
+            const approvalRequiredFeedback = buildRuntimeLocalAgentDecisionFeedback({
+              decision: localAgentFlow.decision,
+              summary: localAgentFlow.summary,
+            });
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              content: localAgentFlow.pendingMessage || '需要审批后才能启动本地 Agent。',
+            }));
+            await requestRuntimeApproval({
+              threadId: approvalThreadId,
+              actionType: localAgentFlow.actionType,
+              riskLevel: localAgentFlow.riskLevel,
+              summary: localAgentFlow.summary,
+              messageId: assistantMessage.id,
+              onApprove: executeLocalAgentFlow,
+              onDeny: async () => {
+                updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+                  ...message,
+                  role: 'system',
+                  tone: 'error',
+                  content: '已拒绝本地 Agent 执行请求。',
+                }));
+              },
+            });
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('local-agent-approval'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: approvalRequiredFeedback.timelineSummary,
+              createdAt: Date.now(),
+            });
+            await activeExecutionController.completeWithReplay(approvalRequiredFeedback.replaySummary);
+            return;
           }
+
+          await executeLocalAgentFlow();
           return;
         }
 
-        let thinkingContent = '';
-        let answerContent = '';
         const directChat = buildDirectChatRequest();
-        const buildStreamingMessage = (completeThinking: boolean) => {
-          const sections: string[] = [];
-          if (thinkingContent.trim()) {
-            sections.push(
-              completeThinking
-                ? `<think>${thinkingContent}</think>`
-                : `<think>${thinkingContent}`
-            );
-          }
-          if (answerContent.trim()) {
-            sections.push(answerContent);
-          }
-          return sections.join('\n\n').trim() || '正在思考...';
+        const streamAssembler = createRuntimeStreamingMessageAssembler();
+        const handleEvent = (event: Parameters<typeof streamAssembler.append>[0]) => {
+          appendRuntimeStreamDelta(targetSessionId, event.delta);
+          updateStreamingDraft(assistantMessage.id, streamAssembler.append(event));
         };
-        const handleEvent = (event: AITextStreamEvent) => {
-          if (event.kind === 'thinking') {
-            thinkingContent += event.delta;
-          } else {
-            answerContent += event.delta;
-          }
-          updateStreamingDraft(assistantMessage.id, buildStreamingMessage(false));
-        };
-        const response =
-          providerExecutionMode === 'claude' && selectedRuntimeConfig
-            ? await claudeRuntimeExecutor.executePrompt({
-                sessionId: targetSessionId,
-                config: selectedRuntimeConfig,
-                systemPrompt: directChat.systemPrompt,
-                prompt: directChat.prompt,
-                onEvent: handleEvent,
-              })
-            : providerExecutionMode === 'codex' && selectedRuntimeConfig
-              ? await codexRuntimeExecutor.executePrompt({
-                  sessionId: targetSessionId,
-                  config: selectedRuntimeConfig,
-                  systemPrompt: directChat.systemPrompt,
-                  prompt: directChat.prompt,
-                  onEvent: handleEvent,
-                })
-              : await aiService.completeText({
-                  systemPrompt: directChat.systemPrompt,
-                  prompt: directChat.prompt,
-                  onEvent: handleEvent,
-                });
+        const response = await executeRuntimePrompt({
+          providerId: runtimeProviderId,
+          sessionId: targetSessionId,
+          config: selectedRuntimeConfig,
+          systemPrompt: directChat.systemPrompt,
+          prompt: directChat.prompt,
+          onEvent: handleEvent,
+        });
 
-        const streamedContent = buildStreamingMessage(true);
-        const finalContent =
-          streamedContent !== '正在思考...'
-            ? streamedContent
-            : response.trim() || '已收到请求，但这次没有返回内容。';
+        const finalContent = streamAssembler.buildFinal(response);
         clearStreamingDraft(assistantMessage.id);
-        const normalizedFinalContent = finalContent.trim() || response.trim() || '已收到请求，但这次没有返回内容。';
+        const normalizedFinalContent = normalizeRuntimeDirectChatResponse({
+          response,
+          streamedContent: finalContent,
+        });
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
           content: normalizedFinalContent,
         }));
-        const activityEntry = buildRunSummaryEntry({
+        const activityEntry = buildRuntimeChangedPathActivityEntry({
+          createId: createActivityEntryId,
           runId,
           content: finalContent,
           skill: resolvedSkill,
@@ -1815,6 +2348,19 @@ export const AIChat: React.FC<AIChatProps> = ({
         if (activityEntry) {
           appendActivityEntry(currentProject.id, activityEntry);
         }
+        await persistRuntimeTimelineEvent({
+          threadId: replayThreadId,
+          providerId: runtimeProviderId,
+          summary: `Assistant: ${buildSessionPreview(normalizedFinalContent)}`,
+        });
+        appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+          id: createRuntimeEventId('assistant'),
+          threadId: runtimeStoreThreadId,
+          providerId: runtimeProviderId,
+          summary: `Assistant: ${buildSessionPreview(normalizedFinalContent)}`,
+          createdAt: Date.now(),
+        });
+        await activeExecutionController.completeWithReplay(normalizedFinalContent);
       } catch (error) {
         const message = normalizeErrorMessage(error);
         clearStreamingDraft(assistantMessage.id);
@@ -1834,6 +2380,18 @@ export const AIChat: React.FC<AIChatProps> = ({
           skill: resolvedSkill,
           createdAt: Date.now(),
         });
+        if (executionController) {
+          await executionController.failWithReplay(message);
+        } else {
+          failRuntimeRun(runtimeStoreThreadId, message);
+        }
+        appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+          id: createRuntimeEventId('error'),
+          threadId: runtimeStoreThreadId,
+          providerId: runtimeProviderId,
+          summary: `Error: ${buildSessionPreview(message)}`,
+          createdAt: Date.now(),
+        });
       } finally {
         setIsLoading(false);
       }
@@ -1841,28 +2399,54 @@ export const AIChat: React.FC<AIChatProps> = ({
     [
       activeSession,
       activeSessionId,
+      activeSkillsByThread,
       agentAvailability,
       appendActivityEntry,
       appendMessage,
+      appendRuntimeMcpToolCall,
+      appendRuntimeStreamDelta,
+      appendRuntimeTimelineEvent,
+      bindRuntimeThread,
       clearStreamingDraft,
       contextSnapshot.currentFileLabel,
       contextSnapshot.primaryLabel,
       contextSnapshot.secondaryLabel,
       contextSnapshot.vaultLabel,
       currentProject,
+      executeRuntimePrompt,
+      failRuntimeRun,
       explicitReferenceLabels,
+      finishRuntimeRun,
       isLoading,
       isRuntimeConfigured,
+      memory,
+      persistRuntimeThread,
+      persistRuntimeTimelineEvent,
       providerExecutionMode,
+      replayRecoveryController,
+      recordRuntimeThread,
       resolvedReferenceContextFiles,
       renameSession,
       selectedChatAgentId,
       selectedRuntimeConfig,
+      setActiveSkills,
+      setRuntimeBinding,
+      setRuntimeMemoryEntries,
+      setRuntimeReplayEvents,
+      startRuntimeRun,
       setActiveSession,
       executeProjectFileOperations,
+      handleCancelProjectFileProposal,
+      handleExecuteProjectFileProposal,
       projectFileOperationMode,
+      requestRuntimeApproval,
+      resolveStoredApproval,
+      runtimeMcpServers,
+      runtimeProviderId,
+      sandboxPolicy,
       setRawRequirementInput,
       setSelectedChatAgentId,
+      submitRuntimeTurn,
       updateMessage,
       updateStreamingDraft,
       upsertSession,
@@ -1968,6 +2552,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       leadingContent={launchpad}
     />
   );
+  const shouldShowApprovalPanel =
+    Boolean(activeApprovalThreadId) && (isGNAgentEmbedded || pendingApprovalCount > 0);
   useEffect(() => {
     if (selectedChatAgentId !== 'built-in' && !agentAvailability[selectedChatAgentId].ready) {
       setSelectedChatAgentId('built-in');
@@ -2006,6 +2592,12 @@ export const AIChat: React.FC<AIChatProps> = ({
               <div className="chat-shell-status-strip">
                 <span className="chat-shell-status-pill">{selectedAgent.label}</span>
                 <span className="chat-shell-status-pill">{selectedRuntimeConfig?.model || '未启用模型'}</span>
+                <span className="chat-shell-status-pill">Skills / {activeSkills.length}</span>
+                <span className="chat-shell-status-pill">MCP / {runtimeMcpServers.length}</span>
+                <span className="chat-shell-status-pill">Sandbox / {sandboxPolicy}</span>
+                <span className={`chat-shell-status-pill ${pendingApprovalCount > 0 ? 'warning' : ''}`}>
+                  Approvals / {pendingApprovalCount}
+                </span>
                 <span className={`chat-shell-status-pill ${currentContextUsage.ratio >= 0.8 ? 'warning' : ''}`}>
                   {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
                 </span>
@@ -2071,6 +2663,21 @@ export const AIChat: React.FC<AIChatProps> = ({
 
           {showExpandedShell ? (
             <>
+            {shouldShowApprovalPanel ? (
+              <GNAgentApprovalPanel
+                approvals={pendingApprovals}
+                sandboxPolicy={sandboxPolicy}
+                onSandboxPolicyChange={(policy) => {
+                  void handleSandboxPolicyChange(policy);
+                }}
+                onApprove={(approvalId) => {
+                  void handleApproveRuntimeApproval(approvalId);
+                }}
+                onDeny={(approvalId) => {
+                  void handleDenyRuntimeApproval(approvalId);
+                }}
+              />
+            ) : null}
             {agentChatContent}
             {isEmbedded ? (
                 <>

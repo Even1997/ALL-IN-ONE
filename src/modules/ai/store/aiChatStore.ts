@@ -4,6 +4,7 @@ import type { ActivityEntry } from '../skills/activityLog';
 import type { ChatStructuredCard } from '../chat/chatCards';
 import type { KnowledgeProposal } from '../../../features/knowledge/model/knowledgeProposal';
 import type { ProjectFileProposal } from '../chat/projectFileOperations';
+import type { AgentProviderId } from '../runtime/agentRuntimeTypes';
 
 export type StoredChatMessage = {
   id: string;
@@ -20,6 +21,8 @@ export type ChatSession = {
   id: string;
   projectId: string;
   title: string;
+  providerId: AgentProviderId;
+  runtimeThreadId: string | null;
   messages: StoredChatMessage[];
   createdAt: number;
   updatedAt: number;
@@ -35,6 +38,12 @@ type AIChatStoreState = {
   projects: Record<string, ChatProjectState>;
   ensureProjectState: (projectId: string) => void;
   upsertSession: (projectId: string, session: ChatSession) => void;
+  bindRuntimeThread: (
+    projectId: string,
+    sessionId: string,
+    providerId: AgentProviderId,
+    runtimeThreadId: string
+  ) => void;
   setActiveSession: (projectId: string, sessionId: string) => void;
   appendMessage: (projectId: string, sessionId: string, message: StoredChatMessage) => void;
   appendActivityEntry: (projectId: string, entry: ActivityEntry) => void;
@@ -73,12 +82,18 @@ export const createStoredChatMessage = (
   createdAt: Date.now(),
 });
 
-export const createChatSession = (projectId: string, title = '新对话'): ChatSession => {
+export const createChatSession = (
+  projectId: string,
+  title = '新对话',
+  providerId: AgentProviderId = 'built-in'
+): ChatSession => {
   const now = Date.now();
   return {
     id: createSessionId(),
     projectId,
     title,
+    providerId,
+    runtimeThreadId: null,
     messages: [],
     createdAt: now,
     updatedAt: now,
@@ -109,6 +124,32 @@ export const useAIChatStore = create<AIChatStoreState>()(
                 ...project,
                 activeSessionId: project.activeSessionId || session.id,
                 sessions,
+              },
+            },
+          };
+        }),
+
+      bindRuntimeThread: (projectId, sessionId, providerId, runtimeThreadId) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  providerId,
+                  runtimeThreadId,
+                  updatedAt: Date.now(),
+                }
+              : session
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                ...project,
+                activeSessionId: project.activeSessionId || sessionId,
+                sessions: sortSessions(sessions),
               },
             },
           };

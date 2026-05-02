@@ -6,6 +6,9 @@ import { hasUsableAIConfigEntry } from '../../../modules/ai/store/aiConfigState'
 import { ClaudeRuntime } from '../../../modules/ai/gn-agent/runtime/claude/ClaudeRuntime';
 import { CodexRuntime } from '../../../modules/ai/gn-agent/runtime/codex/CodexRuntime';
 import { AIChat } from '../../workspace/AIChat';
+import { GNAgentMemoryPanel } from './GNAgentMemoryPanel';
+import { GNAgentThreadList } from './GNAgentThreadList';
+import { GNAgentTimelinePanel } from './GNAgentTimelinePanel';
 
 const claudeRuntime = new ClaudeRuntime();
 const codexRuntime = new CodexRuntime();
@@ -56,11 +59,22 @@ export const GNAgentChatPage: React.FC<{
         : 'provider-embedded';
 
   return (
-    <AIChat
-      variant={variant}
-      runtimeConfigIdOverride={runtimeConfigIdOverride}
-      providerExecutionMode={providerId === 'classic' ? null : providerId}
-    />
+    <section className="gn-agent-runtime-layout">
+      <aside className="gn-agent-runtime-sidebar">
+        <GNAgentThreadList />
+        <GNAgentTimelinePanel />
+      </aside>
+      <div className="gn-agent-runtime-main">
+        <AIChat
+          variant={variant}
+          runtimeConfigIdOverride={runtimeConfigIdOverride}
+          providerExecutionMode={providerId === 'classic' ? null : providerId}
+        />
+      </div>
+      <aside className="gn-agent-runtime-sidebar">
+        <GNAgentMemoryPanel />
+      </aside>
+    </section>
   );
 };
 

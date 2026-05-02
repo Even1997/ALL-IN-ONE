@@ -48,7 +48,7 @@ const SUPPORTED_TEXT_FILE_EXTENSIONS = new Set([
 ]);
 
 const WRITE_INTENT_PATTERN =
-  /(新建|创建|生成.*文件|写入|保存到.*文件|编辑|修改|更新|重写|替换|删除|删掉|remove|delete|create|write|edit|update)/i;
+  /(新建|创建|生成(?:一个)?文件|生成文档|写入|写到|保存|另存为|保存为|保存成|落盘|编辑|修改|更新|重写|替换|删除|移除|remove|delete|create|write|edit|update|save)/i;
 
 const READ_INTENT_PATTERN =
   /(查看|读取|读一下|打开|列出|看看|搜索|查找|目录|文件内容|read|open|show|list|search|grep)/i;

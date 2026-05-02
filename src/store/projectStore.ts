@@ -419,6 +419,7 @@ const buildProjectMemory = (_project: ProjectConfig): ProjectMemory => ({
     frontendRoot: 'src',
     generatedRoot: 'src/generated',
   },
+  memoryEntries: [],
 });
 
 const buildStarterRawRequirementInput = (projectName: string, projectDescription = '') =>
@@ -1861,6 +1862,19 @@ const normalizeProjectMemory = (value: unknown): ProjectMemory | null => {
   return {
     designSystem: memory.designSystem && typeof memory.designSystem === 'object' ? memory.designSystem as Record<string, unknown> : {},
     codeStructure: memory.codeStructure && typeof memory.codeStructure === 'object' ? memory.codeStructure as Record<string, unknown> : {},
+    memoryEntries: Array.isArray(memory.memoryEntries)
+      ? memory.memoryEntries
+          .filter((item) => Boolean(item) && typeof item === 'object')
+          .map((item) => ({
+            id: typeof item.id === 'string' ? item.id : '',
+            threadId: typeof item.threadId === 'string' ? item.threadId : null,
+            title: typeof item.title === 'string' ? item.title : '',
+            summary: typeof item.summary === 'string' ? item.summary : '',
+            content: typeof item.content === 'string' ? item.content : '',
+            kind: item.kind === 'userPreference' ? 'userPreference' : 'projectFact',
+            updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : Date.now(),
+          }))
+      : [],
   };
 };
 

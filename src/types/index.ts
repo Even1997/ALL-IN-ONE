@@ -48,6 +48,15 @@ export interface ProjectGraph {
 export interface ProjectMemory {
   designSystem: Record<string, unknown>;
   codeStructure: Record<string, unknown>;
+  memoryEntries: Array<{
+    id: string;
+    threadId: string | null;
+    title: string;
+    summary: string;
+    content: string;
+    kind: 'projectFact' | 'userPreference';
+    updatedAt: number;
+  }>;
 }
 
 export interface RequirementDoc {

@@ -53,6 +53,10 @@ import {
 import { PageWorkspace } from './PageWorkspace';
 import { KnowledgeNoteWorkspace } from '../../features/knowledge/workspace/KnowledgeNoteWorkspace';
 import {
+  KNOWLEDGE_FILESYSTEM_CHANGED_EVENT,
+  type KnowledgeFilesystemChangedDetail,
+} from '../../features/knowledge/workspace/knowledgeFilesystemEvents';
+import {
   extractKnowledgeNoteEditorBody,
   serializeKnowledgeNoteMarkdown,
 } from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
@@ -1694,6 +1698,27 @@ export const ProductWorkbench = ({
       isMounted = false;
     };
   }, [currentProject, projectRootDir, refreshKnowledgeFilesystem]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      return;
+    }
+
+    const handleKnowledgeFilesystemChanged = (event: Event) => {
+      const detail = (event as CustomEvent<KnowledgeFilesystemChangedDetail>).detail;
+      if (!detail || detail.projectId !== currentProject.id) {
+        return;
+      }
+
+      void refreshKnowledgeFilesystem();
+      void loadServerNotes(currentProject.id);
+    };
+
+    window.addEventListener(KNOWLEDGE_FILESYSTEM_CHANGED_EVENT, handleKnowledgeFilesystemChanged);
+    return () => {
+      window.removeEventListener(KNOWLEDGE_FILESYSTEM_CHANGED_EVENT, handleKnowledgeFilesystemChanged);
+    };
+  }, [currentProject, loadServerNotes, refreshKnowledgeFilesystem]);
 
   useEffect(() => {
     if (designPages.length === 0) {

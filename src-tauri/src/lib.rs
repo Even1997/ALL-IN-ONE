@@ -1,6 +1,17 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent_runtime;
+
+use agent_runtime::commands::{
+    append_agent_timeline_event, append_runtime_replay_event, create_agent_thread, enqueue_agent_approval,
+    get_agent_runtime_settings, get_agent_sandbox_policy,
+    invoke_runtime_mcp_tool,
+    list_agent_approvals, list_agent_threads, list_project_memory_entries, list_runtime_replay_events,
+    list_runtime_mcp_servers, list_runtime_mcp_tool_calls, resolve_agent_approval, save_project_memory_entry,
+    set_agent_sandbox_policy, update_agent_runtime_settings,
+    upsert_runtime_mcp_server,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
@@ -179,18 +190,18 @@ struct DeleteLibrarySkillParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SkillDiscoveryEntry {
-    id: String,
-    name: String,
-    category: String,
-    source: String,
-    path: String,
-    manifest_path: String,
-    imported: bool,
-    builtin: bool,
-    deletable: bool,
-    synced_to_codex: bool,
-    synced_to_claude: bool,
+pub(crate) struct SkillDiscoveryEntry {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) category: String,
+    pub(crate) source: String,
+    pub(crate) path: String,
+    pub(crate) manifest_path: String,
+    pub(crate) imported: bool,
+    pub(crate) builtin: bool,
+    pub(crate) deletable: bool,
+    pub(crate) synced_to_codex: bool,
+    pub(crate) synced_to_claude: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -710,31 +721,6 @@ fn load_skill_descriptor(skill_dir: &Path, allow_seed_manifest: bool) -> Result<
     })
 }
 
-fn list_skill_directories(root_dir: &Path) -> Result<Vec<PathBuf>, String> {
-    if !root_dir.is_dir() {
-        return Ok(Vec::new());
-    }
-
-    let mut directories = Vec::new();
-    for entry in fs::read_dir(root_dir)
-        .map_err(|error| format!("Failed to read skills directory {}: {}", root_dir.display(), error))?
-    {
-        let entry = entry.map_err(|error| {
-            format!(
-                "Failed to read skills directory entry in {}: {}",
-                root_dir.display(),
-                error
-            )
-        })?;
-        let candidate = entry.path();
-        if candidate.is_dir() && candidate.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME).is_file() {
-            directories.push(candidate);
-        }
-    }
-
-    Ok(directories)
-}
-
 fn list_skill_directories_recursive(root_dir: &Path) -> Result<Vec<PathBuf>, String> {
     if !root_dir.is_dir() {
         return Ok(Vec::new());
@@ -941,7 +927,9 @@ fn download_github_contents(
     Ok(())
 }
 
-fn collect_skill_discovery_entries(app_data_dir: &Path) -> Result<Vec<SkillDiscoveryEntry>, String> {
+pub(crate) fn collect_skill_discovery_entries(
+    app_data_dir: &Path,
+) -> Result<Vec<SkillDiscoveryEntry>, String> {
     ensure_builtin_skills_installed(app_data_dir)?;
 
     let home_dir = resolve_home_dir()?;
@@ -950,7 +938,7 @@ fn collect_skill_discovery_entries(app_data_dir: &Path) -> Result<Vec<SkillDisco
     let mut seen_skill_ids = HashSet::new();
     let mut entries = Vec::new();
 
-    for skill_dir in list_skill_directories(&builtin_root)? {
+    for skill_dir in list_skill_directories_recursive(&builtin_root)? {
         let descriptor = load_skill_descriptor(&skill_dir, false)?;
         if !seen_skill_ids.insert(descriptor.id.clone()) {
             continue;
@@ -982,7 +970,7 @@ fn collect_skill_discovery_entries(app_data_dir: &Path) -> Result<Vec<SkillDisco
         entries.push(entry);
     }
 
-    for skill_dir in list_skill_directories(&imported_root)? {
+    for skill_dir in list_skill_directories_recursive(&imported_root)? {
         let descriptor = load_skill_descriptor(&skill_dir, false)?;
         if !seen_skill_ids.insert(descriptor.id.clone()) {
             continue;
@@ -2361,6 +2349,24 @@ pub fn run() {
             import_github_skill,
             sync_skill_to_runtime,
             delete_library_skill,
+            create_agent_thread,
+            list_agent_threads,
+            append_agent_timeline_event,
+            enqueue_agent_approval,
+            resolve_agent_approval,
+            list_agent_approvals,
+            get_agent_sandbox_policy,
+            set_agent_sandbox_policy,
+            get_agent_runtime_settings,
+            update_agent_runtime_settings,
+            list_runtime_mcp_servers,
+            upsert_runtime_mcp_server,
+            list_runtime_mcp_tool_calls,
+            invoke_runtime_mcp_tool,
+            append_runtime_replay_event,
+            list_runtime_replay_events,
+            save_project_memory_entry,
+            list_project_memory_entries,
             import_knowledge_assets,
             read_text_file,
             open_path_in_shell,

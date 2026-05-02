@@ -18,7 +18,9 @@ test('ai chat builds direct chat context from visible vault state only', async (
   assert.match(source, /Reference dir \/ /);
   assert.match(source, /buildReferencePromptContext/);
   assert.match(source, /referenceContext: previewReferenceContext/);
-  assert.match(source, /referenceContext: buildPromptReferenceContext\(cleanedContent\)/);
+  assert.match(source, /buildRuntimeDirectChatRequest\(\{/);
+  assert.match(source, /referenceFiles: resolvedReferenceContextFiles/);
+  assert.match(source, /contextLabels: \[/);
   assert.doesNotMatch(source, /const knowledgeSourceDocs = useMemo/);
   assert.doesNotMatch(source, /buildKnowledgeEntries/);
   assert.doesNotMatch(source, /projectKnowledgeNotesToRequirementDocs/);

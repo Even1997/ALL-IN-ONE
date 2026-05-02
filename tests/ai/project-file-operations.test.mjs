@@ -34,19 +34,21 @@ test('project file operations only allow supported text files for write flows', 
 test('project file operations detect write intent from natural language prompts', async () => {
   const { detectProjectFileWriteIntent } = await loadModule();
 
-  assert.equal(detectProjectFileWriteIntent('帮我新建一个 docs/prd.md'), true);
-  assert.equal(detectProjectFileWriteIntent('请编辑 src/config.ts 里的标题'), true);
-  assert.equal(detectProjectFileWriteIntent('把 obsolete.md 删除掉'), true);
-  assert.equal(detectProjectFileWriteIntent('看看 docs 目录里有哪些文件'), false);
+  assert.equal(detectProjectFileWriteIntent('\u8bf7\u65b0\u5efa docs/prd.md'), true);
+  assert.equal(detectProjectFileWriteIntent('\u628a src/config.ts \u4fee\u6539\u4e00\u4e0b'), true);
+  assert.equal(detectProjectFileWriteIntent('\u628a obsolete.md \u5220\u9664\u6389'), true);
+  assert.equal(detectProjectFileWriteIntent('\u8bf7\u628a\u9700\u6c42\u6587\u6863\u4fdd\u5b58\u6210 docs/prd.md'), true);
+  assert.equal(detectProjectFileWriteIntent('\u628a\u5185\u5bb9\u5199\u5230 C:\\repo\\demo\\docs\\prd.md'), true);
+  assert.equal(detectProjectFileWriteIntent('\u5e2e\u6211\u770b\u770b docs \u76ee\u5f55\u91cc\u6709\u4ec0\u4e48'), false);
 });
 
 test('project file operations detect read intent without forcing confirmation flows', async () => {
   const { detectProjectFileReadIntent } = await loadModule();
 
-  assert.equal(detectProjectFileReadIntent('列出 docs 目录下有哪些文件'), true);
-  assert.equal(detectProjectFileReadIntent('读取 docs/prd.md 的内容'), true);
-  assert.equal(detectProjectFileReadIntent('搜索项目里有没有 login 这个词'), true);
-  assert.equal(detectProjectFileReadIntent('帮我新建一个 docs/prd.md'), false);
+  assert.equal(detectProjectFileReadIntent('\u5e2e\u6211\u770b\u770b docs \u76ee\u5f55\u91cc\u6709\u4ec0\u4e48'), true);
+  assert.equal(detectProjectFileReadIntent('\u8bfb\u53d6 docs/prd.md \u5185\u5bb9'), true);
+  assert.equal(detectProjectFileReadIntent('\u5e2e\u6211\u641c\u7d22 login \u76f8\u5173\u5185\u5bb9'), true);
+  assert.equal(detectProjectFileReadIntent('\u8bf7\u65b0\u5efa docs/prd.md'), false);
 });
 
 test('project file operations reject paths outside the project root', async () => {
@@ -76,7 +78,7 @@ test('project file operations parse structured plans from raw JSON or fenced JSO
 
   assert.equal(
     parseProjectFileOperationsPlan(
-      '```json\n{"status":"needs_clarification","assistantMessage":"请提供路径","summary":"","operations":[]}\n```'
+      '```json\n{"status":"needs_clarification","assistantMessage":"\u8bf7\u786e\u8ba4\u5177\u4f53\u8def\u5f84","summary":"","operations":[]}\n```'
     ).status,
     'needs_clarification'
   );
