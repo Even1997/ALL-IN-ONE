@@ -1067,6 +1067,8 @@ export const ProductWorkbench = ({
   const [frameEditorDraft, setFrameEditorDraft] = useState('');
   const knowledgeRefreshRequestIdRef = useRef(0);
   const hydratedKnowledgeNoteSignatureRef = useRef('');
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAutoSavedDraftRef = useRef('');
   const lastPersistedSketchSnapshotRef = useRef('');
 
   const {
@@ -1521,15 +1523,43 @@ export const ProductWorkbench = ({
     });
   }, [projectRootDir, serverNotes]);
 
-  const handleCreateKnowledgeNoteAtPath = useCallback((relativeDirectory: string | null) => {
-    setKnowledgePathDialog({
-      mode: 'create-note',
-      targetDirectory: normalizeRelativePath(relativeDirectory || ''),
-      relativePath: null,
-      isFolder: false,
-      inputValue: '未命名笔记',
-    });
-  }, []);
+  const handleCreateKnowledgeNoteAtPath = useCallback(async (relativeDirectory: string | null) => {
+    if (!currentProject || !projectRootDir) {
+      return;
+    }
+
+    const normalizedName = normalizeRequirementFilename('未命名笔记');
+    if (!normalizedName) {
+      return;
+    }
+
+    const baseRelativePath = normalizeRelativePath(relativeDirectory || '');
+    const nextRelativePath = normalizeRelativePath(
+      baseRelativePath ? `${baseRelativePath}/${normalizedName}` : normalizedName
+    );
+    const nextAbsolutePath = joinDiskPath(projectRootDir, nextRelativePath);
+    const nextTitle = normalizedName.replace(/\.(md|markdown)$/i, '');
+    const nextContent = `# ${nextTitle}\n`;
+
+    try {
+      await writeRequirementFile(nextAbsolutePath, nextContent);
+      const note = await createServerNote(currentProject.id, {
+        title: nextTitle,
+        content: nextContent,
+        filePath: nextAbsolutePath,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        tags: [],
+      });
+      await refreshKnowledgeFilesystem();
+      setSelectedKnowledgeNoteId(note.id);
+      setRequirementDraftTitle(nextTitle);
+      setRequirementDraftContent('');
+      setRequirementSaveMessage(`已创建 ${nextTitle}。`);
+    } catch {
+      setRequirementSaveMessage('创建失败。');
+    }
+  }, [createServerNote, currentProject, projectRootDir, refreshKnowledgeFilesystem, writeRequirementFile]);
 
   const handleCreateKnowledgeFolderAtPath = useCallback((relativeDirectory: string | null) => {
     setKnowledgePathDialog({
@@ -1806,7 +1836,7 @@ export const ProductWorkbench = ({
   }, [currentProject, selectedServerNote]);
 
   const handleCreateKnowledgeNote = useCallback(async () => {
-    handleCreateKnowledgeNoteAtPath(null);
+    await handleCreateKnowledgeNoteAtPath(null);
   }, [handleCreateKnowledgeNoteAtPath]);
 
   const handleSaveKnowledgeNote = useCallback(async () => {
@@ -1915,6 +1945,33 @@ export const ProductWorkbench = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canSaveRequirement, handleSaveKnowledgeNote, selectedServerNote]);
+
+  // Auto-save: debounce draft changes to disk
+  useEffect(() => {
+    if (!selectedServerNote || !canSaveRequirement) {
+      return;
+    }
+
+    const currentDraftSignature = `${requirementDraftTitle}|${requirementDraftContent}`;
+    if (currentDraftSignature === lastAutoSavedDraftRef.current) {
+      return;
+    }
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      lastAutoSavedDraftRef.current = `${requirementDraftTitle}|${requirementDraftContent}`;
+      void handleSaveKnowledgeNote();
+    }, 500);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [requirementDraftTitle, requirementDraftContent, selectedServerNote, canSaveRequirement, handleSaveKnowledgeNote]);
 
   const handleCreateSketchPage = useCallback(async () => {
     if (!currentProject) {

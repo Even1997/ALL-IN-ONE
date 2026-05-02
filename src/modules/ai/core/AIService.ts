@@ -93,7 +93,7 @@ class AIService {
     apiKey: '',
     baseURL: DEFAULT_BASE_URL,
     model: 'gpt-4o-mini',
-    contextWindowTokens: 200000,
+    contextWindowTokens: 258000,
     maxTokens: 4096,
     temperature: 0.4,
     customHeaders: '',

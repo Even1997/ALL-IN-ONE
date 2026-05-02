@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './FileExplorer.css';
 import { GeneratedFile } from '../../types';
@@ -146,6 +146,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const [fileTree, setFileTree] = useState<FileNode[]>(buildTreeFromFiles(files));
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setFileTree(buildTreeFromFiles(files));
@@ -233,6 +234,16 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
+
+  useLayoutEffect(() => {
+    const menu = contextMenuRef.current;
+    if (!menu) return;
+
+    const rect = menu.getBoundingClientRect();
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = `${Math.max(0, window.innerHeight - rect.height - 4)}px`;
+    }
+  }, [contextMenu]);
 
   const handleRefresh = useCallback(async (targetPath?: string) => {
     if (files.length > 0) {
@@ -376,6 +387,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
 
       {contextMenu && (
         <div
+          ref={contextMenuRef}
           className="context-menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}

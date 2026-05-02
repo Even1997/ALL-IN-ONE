@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMarkdownEditor';
 import { getRelativePathFromRoot, normalizeRelativeFileSystemPath } from '../../../utils/fileSystemPaths';
@@ -916,6 +916,16 @@ export const KnowledgeNoteWorkspace = ({
     };
   }, [contextMenuState]);
 
+  useLayoutEffect(() => {
+    const menu = contextMenuRef.current;
+    if (!menu) return;
+
+    const rect = menu.getBoundingClientRect();
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = `${Math.max(0, window.innerHeight - rect.height - 4)}px`;
+    }
+  }, [contextMenuState]);
+
   const handleRailResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
 
@@ -1329,24 +1339,6 @@ export const KnowledgeNoteWorkspace = ({
         {rawMarkdownPreview ? (
           <>
             <div className="gn-note-editor-surface">
-              <div className="gn-note-editor-title-row">
-                <div className="gn-note-reading-title-hint">
-                  <strong>{rawMarkdownPreview.title}</strong>
-                  <span>从项目文件只读预览，当前不会写回知识库。</span>
-                </div>
-                <div className="gn-note-reading-chrome">
-                  <div className="gn-note-storage-state" aria-label="Markdown 文件预览状态">
-                    <span>只读预览</span>
-                    <span>
-                      {rawMarkdownPreview.state === 'loading'
-                        ? '读取中'
-                        : rawMarkdownPreview.state === 'error'
-                          ? '读取失败'
-                          : '项目 Markdown'}
-                    </span>
-                  </div>
-                </div>
-              </div>
               <div className="gn-note-editor-body">
                 <div className="gn-note-reading-surface">
                   <KnowledgeMarkdownViewer
@@ -1356,24 +1348,11 @@ export const KnowledgeNoteWorkspace = ({
                 </div>
               </div>
             </div>
-
-            <footer className="gn-note-editor-footer">
-              <span>从项目文件只读预览</span>
-              <div className="gn-note-editor-footer-actions">
-                <span className="gn-note-editor-footer-path" title={rawMarkdownPreview.path}>
-                  {rawMarkdownPreview.path}
-                </span>
-              </div>
-            </footer>
           </>
         ) : selectedNote ? (
           <>
             <div className="gn-note-editor-surface">
               <div className="gn-note-editor-title-row">
-                <div className="gn-note-reading-title-hint">
-                  <strong>{viewMode === 'read' ? '第一行直接编辑标题' : '第一行使用 # 标题'}</strong>
-                  <span>{viewMode === 'read' ? '第二行开始是正文，阅读态会按文章排版直接编辑。' : '代码态显示原始 Markdown 源码，标题和正文仍是同一份文档。'}</span>
-                </div>
                 <div className="gn-note-reading-chrome">
                   <div className="gn-note-mode-toggle" role="tablist" aria-label="Markdown 查看模式">
                     <button
@@ -1390,10 +1369,6 @@ export const KnowledgeNoteWorkspace = ({
                     >
                       代码
                     </button>
-                  </div>
-                  <div className="gn-note-storage-state" aria-label="笔记存储状态">
-                    <span>{getNoteMeta(selectedNote).label}</span>
-                    <span>{mirrorSourcePath ? 'Markdown 镜像' : '未绑定 Markdown'}</span>
                   </div>
                 </div>
               </div>
@@ -1421,25 +1396,6 @@ export const KnowledgeNoteWorkspace = ({
                 )}
               </div>
             </div>
-
-            <footer className="gn-note-editor-footer">
-              <span>
-                {saveMessage || (editable ? '笔记保存到知识库；已绑定 Markdown 时会同步镜像。' : '当前是只读兼容投影。')}
-              </span>
-              <div className="gn-note-editor-footer-actions">
-                <span>更新于 {formatUpdatedAt(selectedNote.updatedAt)}</span>
-                {editable ? (
-                  <>
-                    <button className="doc-action-btn secondary" type="button" onClick={onDelete}>
-                      删除笔记
-                    </button>
-                    <button className="doc-action-btn" type="button" onClick={onSave} disabled={!canSave}>
-                      {isSaving ? '保存中...' : '保存到知识库'}
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </footer>
           </>
         ) : (
           <div className="gn-note-empty-main">

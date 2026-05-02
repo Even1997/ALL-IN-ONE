@@ -57,6 +57,7 @@ interface GlobalAIState {
   addConfig: (seed?: Partial<AIConfigEntry>) => string;
   updateConfig: (configId: string, updates: Partial<Omit<AIConfigEntry, 'id'>>) => void;
   setConfigEnabled: (configId: string, enabled: boolean) => boolean;
+  deleteConfig: (configId: string) => void;
   selectConfig: (configId: string | null) => void;
   applyConfiguration: (config: Partial<Pick<AIConfig, 'provider' | 'apiKey' | 'baseURL' | 'model' | 'contextWindowTokens' | 'customHeaders'>>) => void;
 
@@ -100,7 +101,7 @@ const DEFAULT_RUNTIME_STATE = {
   apiKey: '',
   baseURL: DEFAULT_BASE_URL,
   model: '',
-  contextWindowTokens: 200000,
+  contextWindowTokens: 258000,
   customHeaders: '',
   isConfigured: false,
 };
@@ -263,6 +264,14 @@ export const useGlobalAIStore = create<GlobalAIState>()(
             : item
         );
         const nextState = syncStateFromConfigs(nextConfigs, state.selectedConfigId);
+        applyRuntimeConfig(nextState);
+        set(nextState);
+      },
+
+      deleteConfig: (configId) => {
+        const state = get();
+        const nextConfigs = state.aiConfigs.filter((item) => item.id !== configId);
+        const nextState = syncStateFromConfigs(nextConfigs, configId === state.selectedConfigId ? null : state.selectedConfigId);
         applyRuntimeConfig(nextState);
         set(nextState);
       },

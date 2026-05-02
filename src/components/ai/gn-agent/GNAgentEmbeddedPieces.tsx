@@ -11,25 +11,45 @@ export const GNAgentHistoryMenu: React.FC<{
   activeSessionId: string | null;
   onCreateSession: () => void;
   onSelectSession: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string) => void;
   buildSessionPreview: (content: string) => string;
-}> = ({ sessions, activeSessionId, onCreateSession, onSelectSession, buildSessionPreview }) => (
+}> = ({ sessions, activeSessionId, onCreateSession, onSelectSession, onDeleteSession, buildSessionPreview }) => (
   <div className="chat-history-menu">
     <button className="chat-history-new-btn" type="button" onClick={onCreateSession}>
       {'\u65b0\u5efa\u5bf9\u8bdd'}
     </button>
     <div className="chat-history-menu-list">
       {sessions.map((session) => {
-        const lastMessage = session.messages[session.messages.length - 1];
+        const lastMessage = session.messages?.[session.messages.length - 1];
         return (
-          <button
+          <div
             key={session.id}
-            type="button"
             className={`chat-history-item ${session.id === activeSessionId ? 'active' : ''}`}
-            onClick={() => onSelectSession(session.id)}
           >
-            <strong>{session.title}</strong>
-            <span>{lastMessage ? buildSessionPreview(lastMessage.content) : '\u7a7a\u4f1a\u8bdd'}</span>
-          </button>
+            <button
+              type="button"
+              className="chat-history-item-main"
+              onClick={() => onSelectSession(session.id)}
+            >
+              <strong>{session.title}</strong>
+              <span>{lastMessage ? buildSessionPreview(lastMessage.content) : '\u7a7a\u4f1a\u8bdd'}</span>
+            </button>
+            {onDeleteSession && (
+              <button
+                type="button"
+                className="chat-history-item-delete"
+                title="\u5220\u9664\u5bf9\u8bdd"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteSession(session.id);
+                }}
+              >
+                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+          </div>
         );
       })}
     </div>

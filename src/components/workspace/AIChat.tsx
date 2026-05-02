@@ -185,12 +185,6 @@ type ChatAgentAvailability = {
   fallbackMessage: string | null;
 };
 
-type GNAgentSuggestion = {
-  label: string;
-  description: string;
-  prompt: string;
-};
-
 const EMPTY_MESSAGES: StoredChatMessage[] = [];
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
 
@@ -398,34 +392,6 @@ const KnowledgeTruthStructuredCards: React.FC<{
   </div>
 );
 
-const GN_AGENT_SUGGESTIONS: GNAgentSuggestion[] = [
-  {
-    label: '@索引',
-    description: '刷新系统索引并准备文档上下文',
-    prompt: '@索引 请刷新当前项目的系统索引，并为后续需求文档和功能文档准备上下文',
-  },
-  {
-    label: '@需求',
-    description: '从目标倒推出功能清单和页面范围',
-    prompt: '@需求 我想做一个新功能，请先帮我拆成功能清单、用户流程和页面范围',
-  },
-  {
-    label: '@草图',
-    description: '根据当前需求生成线框草图方向',
-    prompt: '@草图 请基于当前需求给我一版可编辑的低保真线框方案',
-  },
-  {
-    label: '@UI',
-    description: '结合原型和风格生成设计页面',
-    prompt: '@UI 请基于当前原型和设计标准生成对应的页面设计方案',
-  },
-  {
-    label: '@变更同步',
-    description: '把原型改动同步成可复用项目事实',
-    prompt: '@变更同步 请检查当前原型和项目文档的差异，列出需要同步的变更',
-  },
-];
-
 const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
   id: 'custom',
   label: '自定义 Provider',
@@ -589,7 +555,7 @@ const buildSettingsDraft = (config: AIConfigEntry | null): AISettingsDraft => ({
   apiKey: config?.apiKey || '',
   baseURL: config?.baseURL || PROVIDER_PRESETS[0]?.baseURL || '',
   model: config?.model || PROVIDER_PRESETS[0]?.models[0] || '',
-  contextWindowTokens: config?.contextWindowTokens || 200000,
+  contextWindowTokens: config?.contextWindowTokens || 258000,
   customHeaders: config?.customHeaders || '',
   enabled: config?.enabled || false,
 });
@@ -624,6 +590,8 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [selectedChatAgentId, setSelectedChatAgentId] = useState<ChatAgentId>('built-in');
   const [localAgentSnapshot, setLocalAgentSnapshot] = useState<LocalAgentConfigSnapshot | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
+  const [jsonImportText, setJsonImportText] = useState('');
+  const [showJsonImport, setShowJsonImport] = useState(false);
   const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, string>>({});
   const [projectFileOperationMode, setProjectFileOperationMode] = useState<ProjectFileOperationMode>('auto');
   const isControlledCollapse = typeof collapsed === 'boolean';
@@ -651,14 +619,18 @@ export const AIChat: React.FC<AIChatProps> = ({
     selectedConfigId,
     addConfig,
     updateConfig,
+    deleteConfig,
     setConfigEnabled,
+    selectConfig,
   } = useGlobalAIStore(
     useShallow((state) => ({
       aiConfigs: state.aiConfigs,
       selectedConfigId: state.selectedConfigId,
       addConfig: state.addConfig,
       updateConfig: state.updateConfig,
+      deleteConfig: state.deleteConfig,
       setConfigEnabled: state.setConfigEnabled,
+      selectConfig: state.selectConfig,
     }))
   );
 
@@ -718,6 +690,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     appendActivityEntry,
     updateMessage,
     renameSession,
+    removeSession,
   } = useAIChatStore(
     useShallow((state) => ({
       ensureProjectState: state.ensureProjectState,
@@ -728,6 +701,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       appendActivityEntry: state.appendActivityEntry,
       updateMessage: state.updateMessage,
       renameSession: state.renameSession,
+      removeSession: state.removeSession,
     }))
   );
   const {
@@ -1473,7 +1447,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     const previewPrompt = buildDirectChatPrompt({
       userInput: input.trim() || '继续当前对话',
       currentProjectName: currentProject?.name,
-      contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
+      contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
       skillIntent: null,
       conversationHistory: activeSession?.messages || [],
       referenceContext: previewReferenceContext,
@@ -1489,7 +1463,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
     return buildContextUsageSummary(
       [previewPrompt.systemPrompt, previewPrompt.prompt],
-      selectedRuntimeConfig?.contextWindowTokens || 200000
+      selectedRuntimeConfig?.contextWindowTokens || 258000
     );
   }, [
     contextSnapshot.currentFileLabel,
@@ -1507,7 +1481,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     () => CHAT_AGENTS.find((agent) => agent.id === selectedChatAgentId) || CHAT_AGENTS[0],
     [selectedChatAgentId]
   );
-  const isFreshSession = messages.length <= 1;
   const latestActivityEntry = activityEntries[0] || null;
   const pendingApprovalCount = pendingApprovals.length;
   const latestTurnSessionStatus = latestTurnSession?.status || null;
@@ -1559,12 +1532,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     }
     setStreamingDraftContents(nextDrafts);
   }, []);
-  const handleApplySuggestion = useCallback((prompt: string) => {
-    setInput(prompt);
-    setShowHistoryMenu(false);
-    textareaRef.current?.focus();
-  }, []);
-
   const syncModelCatalog = useCallback((nextProvider: AIProviderType, nextBaseURL: string, models: string[]) => {
     const key = buildProviderKey(nextProvider, nextBaseURL);
     setModelCatalog((current) => {
@@ -1627,6 +1594,8 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const isSettingsDraftComplete = hasUsableAIConfigEntry(settingsDraft);
   const isSettingsDraftSelected = settingsDraft.id === selectedConfigId;
+  const customHeadersJsonValid = !settingsDraft.customHeaders.trim()
+    || (() => { try { JSON.parse(settingsDraft.customHeaders); return true; } catch { return false; } })();
 
   const handleTestConnection = useCallback(async () => {
     setTestState('testing');
@@ -1722,7 +1691,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const handleCreateConfig = useCallback(() => {
     const nextId = addConfig({
-      name: `AI 閰嶇疆 ${aiConfigs.length + 1}`,
+      name: `AI 配置 ${aiConfigs.length + 1}`,
       provider: settingsDraft.provider,
       baseURL: settingsDraft.baseURL || getSuggestedBaseURL(settingsDraft.provider, selectedSettingsPreset),
       model: settingsDraft.model,
@@ -1733,9 +1702,93 @@ export const AIChat: React.FC<AIChatProps> = ({
     setTestMessage('');
   }, [addConfig, aiConfigs.length, selectedSettingsPreset, settingsDraft.baseURL, settingsDraft.model, settingsDraft.provider]);
 
+  const handleDeleteConfig = useCallback(() => {
+    if (!settingsDraft.id || aiConfigs.length <= 1) {
+      setTestState('error');
+      setTestMessage(aiConfigs.length <= 1 ? '至少保留一个 AI 配置。' : '');
+      return;
+    }
+
+    deleteConfig(settingsDraft.id);
+    setTestState('success');
+    setTestMessage('已删除当前 AI 配置。');
+  }, [aiConfigs.length, deleteConfig, settingsDraft.id]);
+
+  const handleSelectConfig = useCallback(() => {
+    if (!settingsDraft.id) {
+      return;
+    }
+
+    selectConfig(settingsDraft.id);
+    setTestState('success');
+    setTestMessage(`已切换到 "${settingsDraft.name || '当前 AI 配置'}"。`);
+  }, [selectConfig, settingsDraft.id, settingsDraft.name]);
+
+  const handleExportConfigs = useCallback(async () => {
+    try {
+      const exportData = {
+        version: 2,
+        configs: aiConfigs.map(({ id, ...rest }) => rest),
+      };
+      const json = JSON.stringify(exportData, null, 2);
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(json);
+      } else {
+        throw new Error('剪贴板不可用');
+      }
+      setTestState('success');
+      setTestMessage('已复制 JSON 到剪贴板。');
+    } catch {
+      setTestState('error');
+      setTestMessage('导出失败：无法访问剪贴板。');
+    }
+  }, [aiConfigs]);
+
+  const handleImportConfigs = useCallback(() => {
+    try {
+      const parsed = JSON.parse(jsonImportText);
+      const importEntries = Array.isArray(parsed)
+        ? parsed
+        : parsed.configs;
+      if (!Array.isArray(importEntries) || importEntries.length === 0) {
+        setTestState('error');
+        setTestMessage('JSON 格式无效：缺少 configs 数组。');
+        return;
+      }
+
+      let importedCount = 0;
+      for (const entry of importEntries) {
+        if (entry.provider && entry.apiKey) {
+          addConfig({
+            name: entry.name || `导入 ${entry.provider}`,
+            provider: entry.provider,
+            apiKey: entry.apiKey,
+            baseURL: entry.baseURL,
+            model: entry.model,
+            contextWindowTokens: entry.contextWindowTokens,
+            customHeaders: entry.customHeaders || '',
+            enabled: false,
+          });
+          importedCount++;
+        }
+      }
+
+      setShowJsonImport(false);
+      setJsonImportText('');
+      setTestState('success');
+      setTestMessage(`成功导入 ${importedCount} 个 AI 配置。`);
+    } catch (err) {
+      console.warn('AI config import failed:', err);
+      setTestState('error');
+      setTestMessage('JSON 格式无效，请检查后重试。');
+    }
+  }, [addConfig, jsonImportText]);
+
   const closeSettings = useCallback(() => {
     setIsSettingsOpen(false);
     setShowApiKey(false);
+    setShowJsonImport(false);
+    setJsonImportText('');
   }, []);
 
   const closeSkillsModal = useCallback(() => {
@@ -1899,7 +1952,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           projectName: currentProject.name,
           threadId: targetSessionId,
           userInput: cleanedContent,
-          contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
+          contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
           conversationHistory,
           instructions: agentInstructions,
           referenceFiles: resolvedReferenceContextFiles.map((file) => ({
@@ -2163,7 +2216,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             memoryEntries: projectMemoryEntries,
             activeSkills: activeSkillsForTurn,
             currentProjectName: currentProject.name,
-            contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
+            contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
             skillIntent,
             conversationHistory,
             contextLabels,
@@ -2743,7 +2796,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           projectName: currentProject.name,
           threadId: targetSessionId,
           userInput: cleanedContent,
-          contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 200000,
+          contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
           conversationHistory,
           instructions: agentInstructions,
           referenceFiles: resolvedReferenceContextFiles.map((file) => ({
@@ -2959,35 +3012,15 @@ export const AIChat: React.FC<AIChatProps> = ({
         setActiveSession(currentProject.id, sessionId);
         setShowHistoryMenu(false);
       }}
+      onDeleteSession={(sessionId) => {
+        if (!currentProject) {
+          return;
+        }
+
+        removeSession(currentProject.id, sessionId);
+      }}
       buildSessionPreview={buildSessionPreview}
     />
-  ) : null;
-  const launchpad = isFreshSession ? (
-    <section className="chat-launchpad" aria-label="GN Agent quick actions">
-      <div className="chat-launchpad-hero">
-        <h2>让 GN Agent 直接开始推进项目</h2>
-      </div>
-
-      <div className="chat-launchpad-status">
-        <span className="chat-shell-status-pill">{selectedAgent.label}</span>
-        <span className="chat-shell-status-pill">{selectedRuntimeConfig?.name || '未启用 AI 配置'}</span>
-        <span className="chat-shell-status-pill">按需搜索项目内容</span>
-      </div>
-
-      <div className="chat-launchpad-grid">
-        {GN_AGENT_SUGGESTIONS.map((suggestion) => (
-          <button
-            key={suggestion.label}
-            type="button"
-            className="chat-launchpad-card"
-            onClick={() => handleApplySuggestion(suggestion.prompt)}
-          >
-            <strong>{suggestion.label}</strong>
-            <span>{suggestion.description}</span>
-          </button>
-        ))}
-      </div>
-    </section>
   ) : null;
   const agentChatContent = (
     <GNAgentMessageList
@@ -3000,7 +3033,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderProjectFileProposal={renderProjectFileProposal}
       renderRuntimeApproval={renderRuntimeApprovalCard}
       messagesEndRef={messagesEndRef}
-      leadingContent={launchpad}
     />
   );
   useEffect(() => {
@@ -3432,27 +3464,37 @@ export const AIChat: React.FC<AIChatProps> = ({
               </label>
 
               <label className="chat-settings-field">
-                <span>上下文长度 (tokens)</span>
-                <input
-                  type="number"
-                  min={1000}
-                  step={1000}
-                  value={settingsDraft.contextWindowTokens}
-                  onChange={(event) =>
-                    setSettingsDraft((current) => {
-                      const nextValue = Number(event.target.value);
-                      return {
-                        ...current,
-                        contextWindowTokens: Math.max(1000, Number.isFinite(nextValue) ? nextValue : 200000),
-                      };
-                    })
-                  }
-                />
-                <small>默认 200k，用于提示当前上下文占用，并作为后续引用预算。</small>
+                <span>上下文长度</span>
+                <div className="chat-settings-input-unit">
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={Math.round(settingsDraft.contextWindowTokens / 1000)}
+                    onChange={(event) =>
+                      setSettingsDraft((current) => {
+                        const nextValue = Number(event.target.value) * 1000;
+                        return {
+                          ...current,
+                          contextWindowTokens: Math.max(1000, Number.isFinite(nextValue) ? nextValue : 258000),
+                        };
+                      })
+                    }
+                  />
+                  <span className="chat-settings-unit">k</span>
+                </div>
+                <small>默认 258k，用于提示当前上下文占用，并作为后续引用预算。</small>
               </label>
 
               <label className="chat-settings-field chat-settings-field-full">
-                <span>Custom Headers</span>
+                <span>
+                  Custom Headers
+                  {settingsDraft.customHeaders.trim() ? (
+                    <small className={`chat-settings-json-status ${customHeadersJsonValid ? 'valid' : 'invalid'}`}>
+                      {customHeadersJsonValid ? 'JSON 有效' : 'JSON 无效'}
+                    </small>
+                  ) : null}
+                </span>
                 <textarea
                   value={settingsDraft.customHeaders}
                   onChange={(event) =>
@@ -3498,10 +3540,50 @@ export const AIChat: React.FC<AIChatProps> = ({
               <button className="chat-settings-apply-btn" type="button" onClick={() => void handleTestConnection()}>
                 {testState === 'testing' ? '测试中…' : '测试连接'}
               </button>
+              {settingsDraft.id && (
+                <button
+                  className={`chat-settings-apply-btn ${settingsDraft.id === selectedConfigId ? 'secondary' : ''}`}
+                  type="button"
+                  onClick={handleSelectConfig}
+                >
+                  {settingsDraft.id === selectedConfigId ? '当前聊天中' : '选择使用'}
+                </button>
+              )}
+              <button className="chat-settings-apply-btn" type="button" onClick={handleExportConfigs}>
+                导出 JSON
+              </button>
+              <button className="chat-settings-apply-btn" type="button" onClick={() => { setShowJsonImport(true); setTestState('idle'); setTestMessage(''); }}>
+                导入 JSON
+              </button>
+              {aiConfigs.length > 1 ? (
+                <button className="chat-settings-apply-btn danger" type="button" onClick={handleDeleteConfig}>
+                  删除
+                </button>
+              ) : null}
               <a className="chat-settings-doc-link" href={selectedSettingsPreset.docsUrl} target="_blank" rel="noreferrer">
                 查看文档
               </a>
             </div>
+
+            {showJsonImport ? (
+              <div className="chat-settings-import-json">
+                <span>导入 AI 配置 (JSON)</span>
+                <textarea
+                  value={jsonImportText}
+                  onChange={(event) => setJsonImportText(event.target.value)}
+                  placeholder='[{"provider":"openai-compatible","apiKey":"sk-...","baseURL":"https://api.openai.com/v1","model":"gpt-4o-mini"}]'
+                  rows={6}
+                />
+                <div className="chat-settings-import-actions">
+                  <button className="chat-settings-apply-btn" type="button" onClick={handleImportConfigs}>
+                    导入
+                  </button>
+                  <button className="chat-settings-apply-btn secondary" type="button" onClick={() => { setShowJsonImport(false); setJsonImportText(''); }}>
+                    取消
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {testMessage ? <div className={`chat-settings-test-note ${testState}`}>{testMessage}</div> : null}
           </div>

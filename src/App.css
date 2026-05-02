@@ -5,7 +5,7 @@
 }
 
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: #1d1d1f;
@@ -299,6 +299,7 @@ body :where(*) {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  min-width: 0;
   padding: 12px;
   container-type: inline-size;
   background:
@@ -1495,6 +1496,7 @@ body :where(*) {
   flex: 1;
   display: flex;
   overflow: hidden;
+  min-width: 0;
 }
 
 /* ========== PRODUCT VIEW ========== */
@@ -3307,7 +3309,7 @@ body :where(*) {
   --space-md: 14px;
   --space-lg: 20px;
   --space-xl: 28px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: var(--on-background);
@@ -3346,7 +3348,7 @@ textarea {
 .project-setup-header h2,
 .design-system-header h2,
 .ops-header h2 {
-  font-family: 'Manrope', 'Inter', sans-serif;
+  font-family: 'Manrope', 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   letter-spacing: -0.04em;
   color: var(--on-surface);
 }
@@ -3469,7 +3471,7 @@ textarea {
 }
 
 .app-title {
-  font-family: 'Manrope', 'Inter', sans-serif;
+  font-family: 'Manrope', 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -3622,6 +3624,7 @@ textarea {
 .app-main {
   padding: 0;
   min-height: 0;
+  min-width: 0;
 }
 
 .product-workbench-shell {
@@ -3644,7 +3647,7 @@ textarea {
 }
 
 .pm-nav-header strong {
-  font-family: 'Manrope', 'Inter', sans-serif;
+  font-family: 'Manrope', 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 18px;
   color: var(--on-surface);
 }
@@ -3712,7 +3715,7 @@ textarea {
 .deploy-history h3,
 .target-name,
 .case-name {
-  font-family: 'Manrope', 'Inter', sans-serif;
+  font-family: 'Manrope', 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   letter-spacing: -0.03em;
 }
 
@@ -4312,7 +4315,7 @@ body,
   --mode-button: rgba(255, 255, 255, 0.92);
   --mode-button-text: #111318;
   --mode-accent: #8be9d6;
-  --style-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  --style-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
   --style-radius-sm: 12px;
   --style-radius-md: 18px;
   --style-radius-lg: 28px;
@@ -4357,7 +4360,7 @@ body,
   --mode-button: #111318;
   --mode-button-text: #ffffff;
   --mode-accent: #0f766e;
-  --style-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  --style-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
   --style-radius-sm: 12px;
   --style-radius-md: 18px;
   --style-radius-lg: 28px;
@@ -4399,7 +4402,7 @@ body,
   --mode-button: #ffd166;
   --mode-button-text: #24111d;
   --mode-accent: #ff8fab;
-  --style-font-ui: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --style-font-ui: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --style-radius-sm: 18px;
   --style-radius-md: 26px;
   --style-radius-lg: 34px;
@@ -4429,7 +4432,7 @@ body,
   --mode-button: #704cb6;
   --mode-button-text: #ffffff;
   --mode-accent: #ff6f91;
-  --style-font-ui: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --style-font-ui: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --style-radius-sm: 18px;
   --style-radius-md: 26px;
   --style-radius-lg: 34px;
@@ -4468,7 +4471,7 @@ body,
   --mode-danger: #fb7185;
   --mode-shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.16);
   --mode-shadow-strong: 0 18px 40px rgba(0, 0, 0, 0.28);
-  --style-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --style-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --style-radius-sm: 8px;
   --style-radius-md: 10px;
   --style-radius-lg: 12px;
@@ -4524,7 +4527,7 @@ body,
   --mode-danger: #dc2626;
   --mode-shadow-soft: 0 10px 24px rgba(28, 25, 23, 0.08);
   --mode-shadow-strong: 0 18px 40px rgba(28, 25, 23, 0.14);
-  --style-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --style-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --style-radius-sm: 8px;
   --style-radius-md: 10px;
   --style-radius-lg: 12px;
@@ -5448,9 +5451,10 @@ body,
   min-width: 260px;
   padding: 14px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+  border: 1px solid var(--mode-border);
+  background: color-mix(in srgb, var(--mode-panel-alt) 96%, transparent);
+  color: var(--mode-text);
+  box-shadow: var(--mode-shadow-strong);
   backdrop-filter: blur(20px);
 }
 
@@ -5463,7 +5467,7 @@ body,
 .pm-canvas-frame-editor-field span {
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: var(--mode-text);
 }
 
 .pm-canvas-frame-editor-actions {
@@ -7545,6 +7549,7 @@ body::before {
 .app-main {
   position: relative;
   min-height: calc(100vh - 76px);
+  min-width: 0;
   padding-left: 20px;
   padding-right: 20px;
   padding-bottom: 20px;
@@ -7645,6 +7650,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   }
 
   .app-main {
+    min-width: 0;
     padding-left: 24px;
     padding-right: 24px;
     padding-bottom: 24px;
@@ -7667,6 +7673,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 
   .app-main {
     min-height: auto;
+    min-width: 0;
     padding-right: 14px;
     padding-left: 14px;
     padding-bottom: 14px;
@@ -7696,6 +7703,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 
 @media (max-width: 640px) {
   .app-main {
+    min-width: 0;
     padding-right: 10px;
     padding-left: 10px;
     padding-bottom: 10px;
@@ -9176,6 +9184,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   flex-direction: column;
   overflow: hidden;
   border-radius: 24px;
+  min-width: 0 !important;
 }
 
 .gn-note-editor-surface {
@@ -9248,22 +9257,6 @@ body.ai-chat-sidebar-collapsed .app-main {
   gap: 8px;
 }
 
-.gn-note-reading-title-hint {
-  display: grid;
-  gap: 4px;
-}
-
-.gn-note-reading-title-hint strong {
-  color: var(--mode-text, #0f172a);
-  font-size: 14px;
-  letter-spacing: -0.01em;
-}
-
-.gn-note-reading-title-hint span {
-  color: var(--mode-muted, #64748b);
-  font-size: 11px;
-}
-
 .gn-note-mode-toggle {
   display: inline-flex;
   align-items: center;
@@ -9290,24 +9283,6 @@ body.ai-chat-sidebar-collapsed .app-main {
   color: var(--mode-text, #0f172a);
 }
 
-.gn-note-storage-state {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
-}
-
-.gn-note-storage-state span {
-  border: 1px solid rgba(0, 122, 255, 0.18);
-  border-radius: 999px;
-  background: rgba(0, 122, 255, 0.08);
-  color: var(--mode-muted);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1;
-  padding: 5px 8px;
-  white-space: nowrap;
-}
 
 .gn-note-editor-body {
   flex: 1 1 auto;
@@ -9524,47 +9499,6 @@ body.ai-chat-sidebar-collapsed .app-main {
   background: #ffffff;
 }
 
-.gn-note-editor-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
-  color: var(--mode-muted, #64748b);
-  font-size: 11px;
-}
-
-.gn-note-editor-footer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 0;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-}
-
-.gn-note-editor-footer-path {
-  display: block;
-  min-width: 0;
-  max-width: min(100%, 56ch);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.gn-note-editor-footer-actions .gn-note-header-toolbar {
-  margin-top: 0;
-}
-
-.gn-note-editor-footer-actions .gn-note-toolbar-btn,
-.gn-note-editor-footer-actions .doc-action-btn {
-  min-height: 28px;
-  padding: 0 10px;
-  font-size: 11px;
-}
 
 .gn-note-empty,
 .gn-note-empty-main {
@@ -10436,7 +10370,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   min-width: 1280px;
   min-height: 100vh;
   min-height: 100dvh;
-  overflow: hidden;
+  overflow: visible;
   background: var(--mode-surface, #0f1115);
 }
 
@@ -10567,6 +10501,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   background: rgba(28, 28, 31, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 18px 38px rgba(0, 0, 0, 0.26);
+  color-scheme: dark;
 }
 
 .desktop-sidebar-heading {
@@ -10818,13 +10753,6 @@ body.ai-chat-sidebar-collapsed .app-main {
   min-width: 0;
 }
 
-.desktop-workflow-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .desktop-workbench-title div {
   min-width: 0;
 }
@@ -10886,7 +10814,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   gap: 0;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .desktop-ai-resize-handle {
@@ -11053,6 +10981,8 @@ body.ai-chat-sidebar-collapsed .app-main {
 }
 
 .gn-note-empty-main h2 {
+  overflow: hidden;
+  max-width: 100%;
   font-size: 18px;
   letter-spacing: -0.02em;
 }
@@ -11066,6 +10996,10 @@ body.ai-chat-sidebar-collapsed .app-main {
   display: flex;
   justify-content: center;
   gap: 8px;
+}
+
+.gn-note-empty-actions .doc-action-btn {
+  white-space: nowrap;
 }
 
 .gn-note-side {
@@ -11141,7 +11075,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   height: calc(100dvh - var(--desktop-topbar-height));
   width: 100%;
   padding: 0 var(--desktop-workbench-gutter) var(--desktop-workbench-gutter);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .app-workbench-desktop-layout {
@@ -11169,12 +11103,14 @@ body.ai-chat-sidebar-collapsed .app-main {
 .app-workbench-main-shell {
   flex: 1 1 auto;
   min-width: 0;
+  overflow: auto;
 }
 
 .app-workbench-ai-shell {
   position: relative;
   flex: 0 0 auto;
   opacity: 1;
+  overflow: visible;
   transform: translateX(0);
   margin-left: 0;
   pointer-events: auto;
@@ -11214,7 +11150,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   width: 100%;
   min-height: 0;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
 }
 
@@ -11356,6 +11292,12 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   }
 }
 
+@media (max-width: 1600px) {
+  .desktop-ai-shell {
+    max-width: 410px !important;
+  }
+}
+
 .desktop-active .product-workbench-shell,
 .desktop-active .develop-view,
 .desktop-active .test-view,
@@ -11392,6 +11334,11 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
 .desktop-active .gn-note-workspace {
   min-width: 0;
+  overflow-x: auto;
+}
+
+.desktop-active .gn-note-editor-column {
+  min-width: 320px;
 }
 
 .desktop-active .pm-left-nav {

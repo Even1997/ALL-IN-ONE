@@ -1,4 +1,4 @@
-export const DEFAULT_CONTEXT_WINDOW_TOKENS = 200000;
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 258000;
 
 export const estimateTextTokens = (text: string) => {
   const normalized = text.trim();

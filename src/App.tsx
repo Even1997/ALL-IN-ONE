@@ -5108,32 +5108,6 @@ ${selectedContextPrompt}` : '',
 
               <div className="desktop-workbench-tools">
                 {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
-                <div className="desktop-workflow-actions">
-                  <button
-                    className="doc-action-btn secondary"
-                    onClick={() => void handleRunWorkflowAction('requirements')}
-                    type="button"
-                    disabled={activeWorkflowAction !== null}
-                  >
-                    {activeWorkflowAction === 'requirements' ? '整理需求中...' : 'AI 整理需求'}
-                  </button>
-                  <button
-                    className="doc-action-btn secondary"
-                    onClick={() => void handleRunWorkflowAction('prototype')}
-                    type="button"
-                    disabled={activeWorkflowAction !== null}
-                  >
-                    {activeWorkflowAction === 'prototype' ? '生成草图中...' : 'AI 页面草图'}
-                  </button>
-                  <button
-                    className="doc-action-btn secondary"
-                    onClick={() => void handleRunWorkflowAction('page')}
-                    type="button"
-                    disabled={activeWorkflowAction !== null}
-                  >
-                    {activeWorkflowAction === 'page' ? '生成原型中...' : 'AI HTML 原型'}
-                  </button>
-                </div>
                 <MacSelectField
                   className="desktop-project-switcher"
                   label="项目"

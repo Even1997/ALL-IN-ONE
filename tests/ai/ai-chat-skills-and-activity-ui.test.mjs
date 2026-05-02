@@ -19,7 +19,6 @@ test('AIChat keeps GN Agent embedded chat focused and opens skills through the i
   assert.match(source, /renderRuntimeApproval/);
   assert.match(source, /GNAgentSkillsEntryButton/);
   assert.match(source, /chat-skills-entry-btn/);
-  assert.match(source, /GN_AGENT_SUGGESTIONS/);
   assert.match(source, /resolveSkillIntent/);
   assert.doesNotMatch(source, /id:\s*'skills'/);
   assert.doesNotMatch(source, /activeAgentLane === 'skills'/);
@@ -34,7 +33,6 @@ test('AIChat keeps GN Agent embedded chat focused and opens skills through the i
   assert.match(css, /\.chat-skills-entry-btn/);
   assert.match(css, /\.chat-shell-status-pill/);
   assert.match(css, /\.chat-shell-drawer-panel/);
-  assert.match(css, /\.chat-launchpad/);
   assert.match(css, /\.chat-composer-hints/);
   assert.match(css, /\.gn-agent-runtime-panel/);
 });

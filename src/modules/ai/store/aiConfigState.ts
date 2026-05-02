@@ -24,7 +24,7 @@ export type AIConfigEntry = {
 };
 
 const createDefaultName = () => `AI 配置 ${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-export const DEFAULT_CONTEXT_WINDOW_TOKENS = 200000;
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 258000;
 
 export const createAIConfigEntry = (overrides: Partial<AIConfigEntry> = {}): AIConfigEntry => ({
   id: overrides.id || `ai-config-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
