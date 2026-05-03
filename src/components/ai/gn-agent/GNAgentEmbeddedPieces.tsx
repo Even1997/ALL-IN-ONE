@@ -65,6 +65,8 @@ export const GNAgentMessageList: React.FC<{
   renderStructuredCards?: (message: StoredChatMessage) => React.ReactNode;
   renderKnowledgeProposal?: (message: StoredChatMessage) => React.ReactNode;
   renderProjectFileProposal?: (message: StoredChatMessage) => React.ReactNode;
+  renderToolExecutionCard?: (message: StoredChatMessage) => React.ReactNode;
+  renderRunSummaryCard?: (message: StoredChatMessage) => React.ReactNode;
   renderRuntimeApproval?: (message: StoredChatMessage) => React.ReactNode;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   leadingContent?: React.ReactNode;
@@ -77,6 +79,8 @@ export const GNAgentMessageList: React.FC<{
   renderStructuredCards,
   renderKnowledgeProposal,
   renderProjectFileProposal,
+  renderToolExecutionCard,
+  renderRunSummaryCard,
   renderRuntimeApproval,
   messagesEndRef,
   leadingContent,
@@ -97,6 +101,8 @@ export const GNAgentMessageList: React.FC<{
               {renderStructuredCards ? renderStructuredCards(message) : null}
               {renderKnowledgeProposal ? renderKnowledgeProposal(message) : null}
               {renderProjectFileProposal ? renderProjectFileProposal(message) : null}
+              {renderToolExecutionCard ? renderToolExecutionCard(message) : null}
+              {renderRunSummaryCard ? renderRunSummaryCard(message) : null}
               {renderRuntimeApproval ? renderRuntimeApproval(message) : null}
             </div>
             <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
@@ -110,8 +116,10 @@ export const GNAgentMessageList: React.FC<{
 
 export const GNAgentEmbeddedComposer: React.FC<{
   entrySwitch?: React.ReactNode;
+  topContent?: React.ReactNode;
   input: string;
   setInput: (value: string) => void;
+  onInputChange?: (value: string, cursorPos: number) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   placeholder: string;
@@ -127,8 +135,10 @@ export const GNAgentEmbeddedComposer: React.FC<{
   SendIcon: React.ComponentType;
 }> = ({
   entrySwitch,
+  topContent,
   input,
   setInput,
+  onInputChange,
   textareaRef,
   onKeyDown,
   placeholder,
@@ -147,6 +157,7 @@ export const GNAgentEmbeddedComposer: React.FC<{
     <div className="chat-composer-shell">
       {entrySwitch ? <div className="chat-composer-gn-agent-entry">{entrySwitch}</div> : null}
       <div className="chat-composer-embedded-input">
+        {topContent}
         {agentStatusLabel ? (
           <div className="chat-composer-runtime-strip" aria-label="GN Agent status">
             <span>{agentStatusLabel}</span>
@@ -158,7 +169,14 @@ export const GNAgentEmbeddedComposer: React.FC<{
         <textarea
           ref={textareaRef}
           value={input}
-          onChange={(event) => setInput(event.target.value)}
+          onChange={(event) => {
+            if (onInputChange) {
+              onInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length);
+              return;
+            }
+
+            setInput(event.target.value);
+          }}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
           className="chat-composer-input chat-composer-input-embedded"
@@ -194,7 +212,8 @@ export const GNAgentEmbeddedComposer: React.FC<{
 export const GNAgentActivityPanel: React.FC<{
   activityEntries: ActivityEntry[];
   formatTimestamp: (value: number) => string;
-}> = ({ activityEntries, formatTimestamp }) => (
+  onOpenChangedPath?: (path: string) => void;
+}> = ({ activityEntries, formatTimestamp, onOpenChangedPath }) => (
   <div className="chat-activity-log">
     <div className="chat-panel-header">
       <strong>Activity Log</strong>
@@ -214,7 +233,19 @@ export const GNAgentActivityPanel: React.FC<{
           {entry.changedPaths.length > 0 ? (
             <div className="chat-activity-entry-paths">
               {entry.changedPaths.map((changedPath) => (
-                <code key={changedPath}>{changedPath}</code>
+                onOpenChangedPath ? (
+                  <button
+                    key={changedPath}
+                    type="button"
+                    className="chat-activity-entry-path-btn"
+                    onClick={() => onOpenChangedPath(changedPath)}
+                    title={changedPath}
+                  >
+                    {changedPath}
+                  </button>
+                ) : (
+                  <code key={changedPath}>{changedPath}</code>
+                )
               ))}
             </div>
           ) : null}

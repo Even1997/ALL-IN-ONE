@@ -9,6 +9,9 @@ import { isTauriRuntimeAvailable } from '../../../utils/projectPersistence';
 import type {
   AgentMemoryEntry,
   AgentProviderId,
+  AgentTurnCheckpointDiff,
+  AgentTurnCheckpointRecord,
+  AgentTurnRewindResult,
   AgentThreadRecord,
   AgentTimelineEvent,
 } from './agentRuntimeTypes';
@@ -59,6 +62,24 @@ type EnqueueAgentApprovalInput = {
 type ResolveAgentApprovalInput = {
   approvalId: string;
   status: ApprovalRecord['status'];
+};
+
+type SaveAgentTurnCheckpointInput = {
+  threadId: string;
+  runId: string;
+  messageId?: string | null;
+  summary: string;
+  files: Array<{
+    path: string;
+    beforeContent?: string | null;
+    afterContent?: string | null;
+  }>;
+};
+
+type RewindAgentTurnInput = {
+  threadId: string;
+  runId: string;
+  projectRoot: string;
 };
 
 const createLocalId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -244,6 +265,38 @@ export const updateAgentRuntimeSettings = async (
 
   return invoke<AgentRuntimeSettings>('update_agent_runtime_settings', { input });
 };
+
+export const saveAgentTurnCheckpoint = async (
+  input: SaveAgentTurnCheckpointInput
+): Promise<AgentTurnCheckpointRecord | null> => {
+  if (!isTauriRuntimeAvailable() || input.files.length === 0) {
+    return null;
+  }
+
+  return invoke<AgentTurnCheckpointRecord>('save_agent_turn_checkpoint', { input });
+};
+
+export const listAgentTurnCheckpoints = async (
+  threadId: string
+): Promise<AgentTurnCheckpointRecord[]> => {
+  if (!isTauriRuntimeAvailable()) {
+    return [];
+  }
+
+  return invoke<AgentTurnCheckpointRecord[]>('list_agent_turn_checkpoints', { threadId });
+};
+
+export const getAgentTurnCheckpointDiff = async (input: {
+  threadId: string;
+  runId: string;
+  path: string;
+}): Promise<AgentTurnCheckpointDiff> => {
+  return invoke<AgentTurnCheckpointDiff>('get_agent_turn_checkpoint_diff', input);
+};
+
+export const rewindAgentTurn = async (
+  input: RewindAgentTurnInput
+): Promise<AgentTurnRewindResult> => invoke<AgentTurnRewindResult>('rewind_agent_turn', { input });
 
 export const executePrompt = async (options: {
   providerId: AgentProviderId;

@@ -1,6 +1,6 @@
 import { getChatAgents } from './runtimeRegistry.ts';
 
-export type ChatAgentId = 'claude' | 'codex' | 'built-in';
+export type ChatAgentId = 'claude' | 'codex' | 'team' | 'built-in';
 
 export type ChatAgentRuntime = 'local' | 'built-in';
 

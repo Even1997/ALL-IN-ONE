@@ -23,6 +23,14 @@ export const BUILT_IN_CHAT_RUNTIME_PLUGINS: ChatRuntimePlugin[] = [
     source: 'built-in',
   },
   {
+    id: 'team',
+    label: 'Team',
+    title: 'Multi-Agent Team',
+    runtime: 'local',
+    pluginType: 'chat-runtime',
+    source: 'built-in',
+  },
+  {
     id: 'built-in',
     label: 'AI',
     title: 'Built-in AI',

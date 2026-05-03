@@ -4,13 +4,15 @@ use super::memory_store;
 use super::replay_store;
 use super::settings_store;
 use super::thread_store;
+use super::turn_checkpoint_store;
 use super::types::{
-    AgentThreadRecord, AgentTimelineEvent, AppendAgentTimelineEventInput,
-    AppendRuntimeReplayEventInput, ApprovalRecord, CreateAgentThreadInput,
-    EnqueueAgentApprovalInput, InvokeRuntimeMcpToolInput, ProjectMemoryEntry,
-    ResolveAgentApprovalInput, RuntimeMcpServerRecord, RuntimeMcpToolCallRecord,
-    RuntimeReplayEventRecord, RuntimeSettingsRecord, SaveProjectMemoryEntryInput,
-    UpdateRuntimeSettingsInput, UpsertRuntimeMcpServerInput,
+    AgentThreadRecord, AgentTimelineEvent, AgentTurnCheckpointDiffRecord,
+    AgentTurnCheckpointRecord, AgentTurnRewindResult, AppendAgentTimelineEventInput,
+    AppendRuntimeReplayEventInput, ApprovalRecord, CreateAgentThreadInput, EnqueueAgentApprovalInput,
+    InvokeRuntimeMcpToolInput, ProjectMemoryEntry, ResolveAgentApprovalInput,
+    RewindAgentTurnInput, RuntimeMcpServerRecord, RuntimeMcpToolCallRecord,
+    RuntimeReplayEventRecord, RuntimeSettingsRecord, SaveAgentTurnCheckpointInput,
+    SaveProjectMemoryEntryInput, UpdateRuntimeSettingsInput, UpsertRuntimeMcpServerInput,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -256,6 +258,49 @@ pub fn list_runtime_replay_events(
 ) -> Result<Vec<RuntimeReplayEventRecord>, String> {
     let app_data_dir = resolve_app_data_dir(&app_handle)?;
     replay_store::list_events(&app_data_dir, &thread_id)
+}
+
+#[tauri::command]
+pub fn save_agent_turn_checkpoint(
+    app_handle: tauri::AppHandle,
+    input: SaveAgentTurnCheckpointInput,
+) -> Result<AgentTurnCheckpointRecord, String> {
+    let app_data_dir = resolve_app_data_dir(&app_handle)?;
+    turn_checkpoint_store::save_turn_checkpoint(
+        &app_data_dir,
+        build_record_id("checkpoint"),
+        input,
+        current_time_millis(),
+    )
+}
+
+#[tauri::command]
+pub fn list_agent_turn_checkpoints(
+    app_handle: tauri::AppHandle,
+    thread_id: String,
+) -> Result<Vec<AgentTurnCheckpointRecord>, String> {
+    let app_data_dir = resolve_app_data_dir(&app_handle)?;
+    turn_checkpoint_store::list_turn_checkpoints(&app_data_dir, &thread_id)
+}
+
+#[tauri::command]
+pub fn get_agent_turn_checkpoint_diff(
+    app_handle: tauri::AppHandle,
+    thread_id: String,
+    run_id: String,
+    path: String,
+) -> Result<AgentTurnCheckpointDiffRecord, String> {
+    let app_data_dir = resolve_app_data_dir(&app_handle)?;
+    turn_checkpoint_store::get_turn_checkpoint_diff(&app_data_dir, &thread_id, &run_id, &path)
+}
+
+#[tauri::command]
+pub fn rewind_agent_turn(
+    app_handle: tauri::AppHandle,
+    input: RewindAgentTurnInput,
+) -> Result<AgentTurnRewindResult, String> {
+    let app_data_dir = resolve_app_data_dir(&app_handle)?;
+    turn_checkpoint_store::rewind_turn(&app_data_dir, input, current_time_millis())
 }
 
 #[cfg(test)]

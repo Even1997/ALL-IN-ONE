@@ -13,6 +13,7 @@ import type { RuntimeSkillDefinition } from './skills/runtimeSkillTypes';
 import { canResumeFromRecovery, type AgentReplayRecoveryState } from './replay/runtimeReplayRecovery.ts';
 import type { RuntimeReplayTurnStartPayload } from './replay/runtimeReplayPayload.ts';
 import type { AgentTurnSession } from './session/agentSessionTypes';
+import type { AgentTeamRunRecord } from './teams/teamTypes.ts';
 
 export type AgentRuntimeBinding = {
   providerId: AgentProviderId;
@@ -61,6 +62,7 @@ type AgentRuntimeState = {
   toolCallsByThread: Record<string, RuntimeToolStep[]>;
   bindingByThread: Record<string, AgentRuntimeBinding>;
   runStateByThread: Record<string, AgentRuntimeRunState>;
+  teamRunsByThread: Record<string, AgentTeamRunRecord[]>;
   isHydrating: boolean;
   createThread: (projectId: string, thread: AgentThreadRecord) => void;
   appendTimelineEvent: (threadId: string, event: AgentTimelineEvent) => void;
@@ -91,6 +93,8 @@ type AgentRuntimeState = {
   setThreadContext: (threadId: string, context: AgentContextSnapshot) => void;
   setThreadToolCalls: (threadId: string, toolCalls: RuntimeToolStep[]) => void;
   setRuntimeBinding: (threadId: string, binding: AgentRuntimeBinding) => void;
+  upsertTeamRun: (threadId: string, teamRun: AgentTeamRunRecord) => void;
+  pruneThreadHistorySince: (threadId: string, createdAt: number) => void;
   startRun: (threadId: string) => void;
   appendStreamDelta: (threadId: string, delta: string) => void;
   finishRun: (threadId: string) => void;
@@ -113,6 +117,9 @@ const sortSessions = (sessions: AgentTurnSession[]) =>
 const sortReplayEvents = (events: AgentReplayEvent[]) =>
   [...events].sort((left, right) => left.createdAt - right.createdAt);
 
+const sortTeamRuns = (teamRuns: AgentTeamRunRecord[]) =>
+  [...teamRuns].sort((left, right) => right.updatedAt - left.updatedAt);
+
 const createIdleRunState = (): AgentRuntimeRunState => ({
   status: 'idle',
   draft: '',
@@ -134,6 +141,7 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
   toolCallsByThread: {},
   bindingByThread: {},
   runStateByThread: {},
+  teamRunsByThread: {},
   isHydrating: false,
 
   createThread: (projectId, thread) =>
@@ -342,6 +350,59 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
         [threadId]: binding,
       },
     })),
+
+  upsertTeamRun: (threadId, teamRun) =>
+    set((state) => ({
+      teamRunsByThread: {
+        ...state.teamRunsByThread,
+        [threadId]: sortTeamRuns([
+          teamRun,
+          ...(state.teamRunsByThread[threadId] || []).filter((item) => item.id !== teamRun.id),
+        ]),
+      },
+    })),
+
+  pruneThreadHistorySince: (threadId, createdAt) =>
+    set((state) => {
+      const nextReplayEvents = (state.replayEventsByThread[threadId] || []).filter(
+        (event) => event.createdAt < createdAt,
+      );
+
+      return {
+        timelineByThread: {
+          ...state.timelineByThread,
+          [threadId]: (state.timelineByThread[threadId] || []).filter((event) => event.createdAt < createdAt),
+        },
+        turnsByThread: {
+          ...state.turnsByThread,
+          [threadId]: (state.turnsByThread[threadId] || []).filter((turn) => turn.createdAt < createdAt),
+        },
+        sessionsByThread: {
+          ...state.sessionsByThread,
+          [threadId]: (state.sessionsByThread[threadId] || []).filter((session) => session.createdAt < createdAt),
+        },
+        replayEventsByThread: {
+          ...state.replayEventsByThread,
+          [threadId]: nextReplayEvents,
+        },
+        teamRunsByThread: {
+          ...state.teamRunsByThread,
+          [threadId]: (state.teamRunsByThread[threadId] || []).filter((teamRun) => teamRun.updatedAt < createdAt),
+        },
+        toolCallsByThread: {
+          ...state.toolCallsByThread,
+          [threadId]: [],
+        },
+        recoveryByThread: nextReplayEvents.length
+          ? state.recoveryByThread
+          : Object.fromEntries(
+              Object.entries(state.recoveryByThread).filter(([key]) => key !== threadId),
+            ),
+        resumeRequestsByThread: Object.fromEntries(
+          Object.entries(state.resumeRequestsByThread).filter(([key]) => key !== threadId),
+        ),
+      };
+    }),
 
   startRun: (threadId) =>
     set((state) => ({

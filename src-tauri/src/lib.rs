@@ -6,10 +6,14 @@ mod agent_shell;
 
 use agent_runtime::commands::{
     append_agent_timeline_event, append_runtime_replay_event, create_agent_thread, enqueue_agent_approval,
+    get_agent_turn_checkpoint_diff,
     get_agent_runtime_settings, get_agent_sandbox_policy,
     invoke_runtime_mcp_tool,
     list_agent_approvals, list_agent_threads, list_project_memory_entries, list_runtime_replay_events,
+    list_agent_turn_checkpoints,
+    rewind_agent_turn,
     list_runtime_mcp_servers, list_runtime_mcp_tool_calls, resolve_agent_approval, save_project_memory_entry,
+    save_agent_turn_checkpoint,
     set_agent_sandbox_policy, update_agent_runtime_settings,
     upsert_runtime_mcp_server,
 };
@@ -2428,6 +2432,10 @@ pub fn run() {
             list_runtime_replay_events,
             save_project_memory_entry,
             list_project_memory_entries,
+            save_agent_turn_checkpoint,
+            list_agent_turn_checkpoints,
+            get_agent_turn_checkpoint_diff,
+            rewind_agent_turn,
             import_knowledge_assets,
             read_text_file,
             open_path_in_shell,

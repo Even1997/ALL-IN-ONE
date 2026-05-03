@@ -2,6 +2,7 @@ import {
   formatToolResult,
   parseToolCalls,
   type ToolResult,
+  type ToolResultFileChange,
 } from '../../../../components/workspace/tools.ts';
 import type {
   RuntimeToolLoopOptions,
@@ -13,6 +14,42 @@ import type {
 const createStepId = (index: number) => `tool_${index + 1}`;
 
 const previewResult = (result: ToolResult) => result.content.slice(0, 1000);
+
+const extractResultFileChanges = (result: ToolResult): ToolResultFileChange[] => {
+  const candidates = result.metadata?.fileChanges;
+  if (!Array.isArray(candidates)) {
+    return [];
+  }
+
+  return candidates.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== 'object') {
+      return [];
+    }
+
+    const path = 'path' in candidate && typeof candidate.path === 'string' ? candidate.path : '';
+    if (!path.trim()) {
+      return [];
+    }
+
+    return [
+      {
+        path,
+        beforeContent:
+          'beforeContent' in candidate && typeof candidate.beforeContent === 'string'
+            ? candidate.beforeContent
+            : candidate.beforeContent === null
+              ? null
+              : null,
+        afterContent:
+          'afterContent' in candidate && typeof candidate.afterContent === 'string'
+            ? candidate.afterContent
+            : candidate.afterContent === null
+              ? null
+              : null,
+      } satisfies ToolResultFileChange,
+    ];
+  });
+};
 
 const createToolResultMessage = (
   step: RuntimeToolStep,
@@ -43,7 +80,11 @@ export async function runRuntimeToolLoop(
   let finalContent = '';
 
   for (let round = 0; round < options.maxRounds; round += 1) {
-    const assistantContent = await options.callModel([...messages], options.systemPrompt);
+    const assistantContent = await options.callModel(
+      [...messages],
+      options.systemPrompt,
+      options.onModelEvent
+    );
     finalContent = assistantContent;
     messages.push({
       role: 'assistant',
@@ -102,6 +143,7 @@ export async function runRuntimeToolLoop(
         const result = await options.executeTool(call);
         step.status = result.is_error ? 'failed' : 'completed';
         step.resultPreview = previewResult(result);
+        step.fileChanges = result.is_error ? [] : extractResultFileChanges(result);
         emitToolCallsChange(options, toolCalls);
         await options.afterToolCall?.(call);
         messages.push(createToolResultMessage(step, result));

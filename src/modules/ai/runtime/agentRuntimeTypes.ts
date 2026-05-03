@@ -1,6 +1,6 @@
 import type { RuntimeSkillDefinition } from './skills/runtimeSkillTypes';
 
-export type AgentProviderId = 'built-in' | 'claude' | 'codex';
+export type AgentProviderId = 'built-in' | 'claude' | 'codex' | 'team';
 
 export type AgentTimelineEvent = {
   id: string;
@@ -67,4 +67,47 @@ export type AgentReplayEvent = {
   eventType: string;
   payload: string;
   createdAt: number;
+};
+
+export type AgentTurnCheckpointFile = {
+  path: string;
+  changeType: 'created' | 'updated' | 'deleted';
+  insertions: number;
+  deletions: number;
+};
+
+export type AgentTurnCheckpointRecord = {
+  id: string;
+  threadId: string;
+  runId: string;
+  messageId: string | null;
+  summary: string;
+  filesChanged: AgentTurnCheckpointFile[];
+  insertions: number;
+  deletions: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type AgentTurnCheckpointDiff = {
+  checkpointId: string;
+  threadId: string;
+  runId: string;
+  path: string;
+  changeType: 'created' | 'updated' | 'deleted';
+  beforeContent: string | null;
+  afterContent: string | null;
+  diff: string;
+  insertions: number;
+  deletions: number;
+  createdAt: number;
+};
+
+export type AgentTurnRewindResult = {
+  threadId: string;
+  runId: string;
+  restoredPaths: string[];
+  removedRunIds: string[];
+  checkpointCount: number;
+  rewoundAt: number;
 };

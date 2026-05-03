@@ -5,12 +5,17 @@ import type { ChatStructuredCard } from '../chat/chatCards';
 import type { KnowledgeProposal } from '../../../features/knowledge/model/knowledgeProposal';
 import type { ProjectFileProposal } from '../chat/projectFileOperations';
 import type { AgentProviderId } from '../runtime/agentRuntimeTypes';
+import type { RuntimeToolStep } from '../runtime/agent-kernel/agentKernelTypes';
+import type { AgentTeamRunRecord } from '../runtime/teams/teamTypes';
 
 export type StoredChatMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   tone?: 'default' | 'error';
+  runId?: string;
+  toolCalls?: RuntimeToolStep[];
+  teamRun?: AgentTeamRunRecord | null;
   structuredCards?: ChatStructuredCard[];
   knowledgeProposal?: KnowledgeProposal;
   projectFileProposal?: ProjectFileProposal;
@@ -47,12 +52,14 @@ type AIChatStoreState = {
   setActiveSession: (projectId: string, sessionId: string) => void;
   appendMessage: (projectId: string, sessionId: string, message: StoredChatMessage) => void;
   appendActivityEntry: (projectId: string, entry: ActivityEntry) => void;
+  setActivityEntries: (projectId: string, entries: ActivityEntry[]) => void;
   updateMessage: (
     projectId: string,
     sessionId: string,
     messageId: string,
     updater: (message: StoredChatMessage) => StoredChatMessage
   ) => void;
+  replaceSessionMessages: (projectId: string, sessionId: string, messages: StoredChatMessage[]) => void;
   renameSession: (projectId: string, sessionId: string, title: string) => void;
   removeSession: (projectId: string, sessionId: string) => void;
 };
@@ -73,12 +80,14 @@ const sortSessions = (sessions: ChatSession[]) =>
 export const createStoredChatMessage = (
   role: StoredChatMessage['role'],
   content: string,
-  tone: StoredChatMessage['tone'] = 'default'
+  tone: StoredChatMessage['tone'] = 'default',
+  options?: Pick<StoredChatMessage, 'runId'>
 ): StoredChatMessage => ({
   id: createMessageId(role),
   role,
   content,
   tone,
+  ...(options?.runId ? { runId: options.runId } : {}),
   createdAt: Date.now(),
 });
 
@@ -209,6 +218,22 @@ export const useAIChatStore = create<AIChatStoreState>()(
           };
         }),
 
+      setActivityEntries: (projectId, entries) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const activityEntries = [...entries].sort((left, right) => right.createdAt - left.createdAt);
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                ...project,
+                activityEntries,
+              },
+            },
+          };
+        }),
+
       updateMessage: (projectId, sessionId, messageId, updater) =>
         set((state) => {
           const project = state.projects[projectId] || createProjectState();
@@ -219,6 +244,31 @@ export const useAIChatStore = create<AIChatStoreState>()(
                   messages: session.messages.map((message) =>
                     message.id === messageId ? updater(message) : message
                   ),
+                  updatedAt: Date.now(),
+                }
+              : session
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                ...project,
+                activeSessionId: project.activeSessionId || sessionId,
+                sessions: sortSessions(sessions),
+              },
+            },
+          };
+        }),
+
+      replaceSessionMessages: (projectId, sessionId, messages) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  messages: [...messages],
                   updatedAt: Date.now(),
                 }
               : session

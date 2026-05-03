@@ -2,6 +2,7 @@
 // Based on OpenCode's tool definitions
 
 import { invoke } from '@tauri-apps/api/core';
+import { readProjectTextFile } from '../../utils/projectPersistence';
 
 export interface Tool {
   name: string;
@@ -27,6 +28,12 @@ export interface ToolResult {
   content: string;
   is_error?: boolean;
   metadata?: Record<string, unknown>;
+}
+
+export interface ToolResultFileChange {
+  path: string;
+  beforeContent: string | null;
+  afterContent: string | null;
 }
 
 export interface RustToolResult {
@@ -214,6 +221,29 @@ export class ToolExecutor {
     this.projectRoot = root;
   }
 
+  private normalizePath(value: string) {
+    return value.replace(/\\/g, '/');
+  }
+
+  private toProjectRelativePath(filePath: string) {
+    const normalizedPath = this.normalizePath(filePath);
+    const normalizedRoot = this.normalizePath(this.projectRoot).replace(/\/+$/, '');
+
+    if (!normalizedRoot || !normalizedPath.startsWith(normalizedRoot)) {
+      return normalizedPath;
+    }
+
+    return normalizedPath.slice(normalizedRoot.length).replace(/^\/+/, '') || normalizedPath;
+  }
+
+  private async readTextFileSnapshot(filePath: string) {
+    try {
+      return await readProjectTextFile(filePath);
+    } catch {
+      return null;
+    }
+  }
+
   async execute(call: ToolCall): Promise<ToolResult> {
     const { name, input } = call;
 
@@ -342,6 +372,7 @@ export class ToolExecutor {
 
   private async write(params: WriteParams): Promise<ToolResult> {
     try {
+      const beforeContent = await this.readTextFileSnapshot(params.file_path);
       const result = await invoke<RustToolResult>('tool_write', {
         params: {
           file_path: params.file_path,
@@ -353,6 +384,17 @@ export class ToolExecutor {
         type: 'text',
         content: result.content,
         is_error: !result.success,
+        metadata: result.success
+          ? {
+              fileChanges: [
+                {
+                  path: this.toProjectRelativePath(params.file_path),
+                  beforeContent,
+                  afterContent: params.content,
+                } satisfies ToolResultFileChange,
+              ],
+            }
+          : undefined,
       };
     } catch (e) {
       return {
@@ -365,6 +407,7 @@ export class ToolExecutor {
 
   private async edit(params: EditParams): Promise<ToolResult> {
     try {
+      const beforeContent = await this.readTextFileSnapshot(params.file_path);
       const result = await invoke<RustToolResult>('tool_edit', {
         params: {
           file_path: params.file_path,
@@ -373,10 +416,25 @@ export class ToolExecutor {
         },
       });
 
+      const afterContent = result.success
+        ? await this.readTextFileSnapshot(params.file_path)
+        : null;
+
       return {
         type: 'text',
         content: result.content,
         is_error: !result.success,
+        metadata: result.success
+          ? {
+              fileChanges: [
+                {
+                  path: this.toProjectRelativePath(params.file_path),
+                  beforeContent,
+                  afterContent,
+                } satisfies ToolResultFileChange,
+              ],
+            }
+          : undefined,
       };
     } catch (e) {
       return {

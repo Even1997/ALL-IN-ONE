@@ -183,3 +183,80 @@ pub struct UpdateRuntimeSettingsInput {
     pub auto_resume_on_launch: Option<bool>,
     pub persist_resume_drafts: Option<bool>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnCheckpointFileRecord {
+    pub path: String,
+    pub change_type: String,
+    pub insertions: u64,
+    pub deletions: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnCheckpointRecord {
+    pub id: String,
+    pub thread_id: String,
+    pub run_id: String,
+    pub message_id: Option<String>,
+    pub summary: String,
+    pub files_changed: Vec<AgentTurnCheckpointFileRecord>,
+    pub insertions: u64,
+    pub deletions: u64,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnCheckpointDiffRecord {
+    pub checkpoint_id: String,
+    pub thread_id: String,
+    pub run_id: String,
+    pub path: String,
+    pub change_type: String,
+    pub before_content: Option<String>,
+    pub after_content: Option<String>,
+    pub diff: String,
+    pub insertions: u64,
+    pub deletions: u64,
+    pub created_at: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveAgentTurnCheckpointFileInput {
+    pub path: String,
+    pub before_content: Option<String>,
+    pub after_content: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveAgentTurnCheckpointInput {
+    pub thread_id: String,
+    pub run_id: String,
+    pub message_id: Option<String>,
+    pub summary: String,
+    pub files: Vec<SaveAgentTurnCheckpointFileInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnRewindResult {
+    pub thread_id: String,
+    pub run_id: String,
+    pub restored_paths: Vec<String>,
+    pub removed_run_ids: Vec<String>,
+    pub checkpoint_count: u64,
+    pub rewound_at: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewindAgentTurnInput {
+    pub thread_id: String,
+    pub run_id: String,
+    pub project_root: String,
+}

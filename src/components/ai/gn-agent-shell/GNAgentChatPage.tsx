@@ -19,6 +19,7 @@ import { GNAgentMemoryInbox } from './GNAgentMemoryInbox';
 import { GNAgentMemoryPanel } from './GNAgentMemoryPanel';
 import { GNAgentPlanPanel } from './GNAgentPlanPanel';
 import { GNAgentStatusPanel } from './GNAgentStatusPanel';
+import { GNAgentTeamPanel } from './GNAgentTeamPanel';
 import { GNAgentThreadList } from './GNAgentThreadList';
 import { GNAgentTimelinePanel } from './GNAgentTimelinePanel';
 import { GNAgentToolCallPanel } from './GNAgentToolCallPanel';
@@ -250,6 +251,7 @@ export const GNAgentChatPage: React.FC<{
           />
         </div>
         <aside className="gn-agent-runtime-sidebar">
+          <GNAgentTeamPanel />
           <GNAgentPlanPanel session={latestTurnSession} />
           <GNAgentContextPanel context={contextSnapshot} />
           <GNAgentToolCallPanel toolCalls={toolCalls} />

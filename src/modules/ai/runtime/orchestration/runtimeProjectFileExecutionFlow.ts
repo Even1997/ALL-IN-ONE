@@ -9,6 +9,11 @@ import {
 export type RuntimeProjectFileExecutionResult = {
   ok: boolean;
   changedPaths: string[];
+  fileChanges: Array<{
+    path: string;
+    beforeContent: string | null;
+    afterContent: string | null;
+  }>;
   message: string;
 };
 
@@ -61,6 +66,7 @@ export const executeRuntimeProjectFileOperations = async (input: {
   ) => Promise<RuntimeProjectFileToolResponse>;
 }): Promise<RuntimeProjectFileExecutionResult> => {
   const changedPaths: string[] = [];
+  const fileChanges: RuntimeProjectFileExecutionResult['fileChanges'] = [];
 
   for (const operation of input.operations) {
     const absolutePath = input.resolveProjectOperationPath(input.projectRoot, operation.targetPath);
@@ -98,6 +104,11 @@ export const executeRuntimeProjectFileOperations = async (input: {
         operationLabel: '新建文件',
       });
       changedPaths.push(operation.targetPath);
+      fileChanges.push({
+        path: operation.targetPath,
+        beforeContent: null,
+        afterContent: operation.content,
+      });
       continue;
     }
 
@@ -144,6 +155,11 @@ export const executeRuntimeProjectFileOperations = async (input: {
       }
 
       changedPaths.push(operation.targetPath);
+      fileChanges.push({
+        path: operation.targetPath,
+        beforeContent: existingContent,
+        afterContent: await input.readProjectTextFile(absolutePath),
+      });
       continue;
     }
 
@@ -155,6 +171,7 @@ export const executeRuntimeProjectFileOperations = async (input: {
     if (!viewResult.success) {
       throw new Error(viewResult.error || `只能删除已存在的文本文件：${operation.targetPath}`);
     }
+    const existingContent = await input.readProjectTextFile(absolutePath);
 
     const removeResult = await input.invokeTool('tool_remove', {
       file_path: absolutePath,
@@ -169,11 +186,17 @@ export const executeRuntimeProjectFileOperations = async (input: {
     }
 
     changedPaths.push(operation.targetPath);
+    fileChanges.push({
+      path: operation.targetPath,
+      beforeContent: existingContent,
+      afterContent: null,
+    });
   }
 
   return {
     ok: true,
     changedPaths,
+    fileChanges,
     message:
       changedPaths.length > 0
         ? `已执行 ${changedPaths.length} 项文件操作：${changedPaths.join('、')}`
@@ -237,7 +260,7 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
   resolveStoredApproval: (approvalId: string, status: ApprovalStatus) => void;
   clearPendingApprovalAction: (approvalId: string) => void;
   resolveAgentApproval: (payload: { approvalId: string; status: ApprovalStatus }) => Promise<unknown>;
-  createRunId: () => string;
+  runId: string;
   createActivityEntryId: () => string;
   getProjectDir: (projectId: string) => Promise<string>;
   executeProjectFileOperations: (
@@ -246,6 +269,12 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
   ) => Promise<RuntimeProjectFileExecutionResult>;
   appendActivityEntry: (projectId: string, entry: ActivityEntry) => void;
   normalizeErrorMessage: (error: unknown) => string;
+  onExecutionSuccess?: (payload: {
+    runId: string;
+    messageId: string;
+    summary: string;
+    fileChanges: RuntimeProjectFileExecutionResult['fileChanges'];
+  }) => Promise<void> | void;
 }): Promise<boolean> => {
   const pendingApproval = findPendingApprovalByMessageId({
     activeApprovalThreadId: input.activeApprovalThreadId,
@@ -270,14 +299,12 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
     await input.resolveAgentApproval({ approvalId: pendingApproval.id, status: 'approved' });
   }
 
-  const runId = input.createRunId();
-
   try {
     const projectRoot = await input.getProjectDir(input.projectId);
     const result = await input.executeProjectFileOperations(projectRoot, input.proposal.operations);
     const successOutcome = buildRuntimeProjectFileAutoExecuteSuccess({
       createId: input.createActivityEntryId,
-      runId,
+      runId: input.runId,
       result,
       preview: input.proposal.summary,
     });
@@ -294,12 +321,18 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
         : message.projectFileProposal,
     }));
     input.appendActivityEntry(input.projectId, successOutcome.activityEntry);
+    await input.onExecutionSuccess?.({
+      runId: input.runId,
+      messageId: input.messageId,
+      summary: result.message,
+      fileChanges: result.fileChanges,
+    });
     return true;
   } catch (error) {
     const message = input.normalizeErrorMessage(error);
     const failureOutcome = buildRuntimeProjectFileAutoExecuteFailure({
       createId: input.createActivityEntryId,
-      runId,
+      runId: input.runId,
       message,
       operationPaths: input.proposal.operations.map((operation) => operation.targetPath),
       preview: input.proposal.summary,

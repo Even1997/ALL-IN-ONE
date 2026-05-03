@@ -7,11 +7,14 @@ export const buildRuntimeChangedPathActivityEntry = (input: {
   createId: () => string;
   runId: string;
   content: string;
+  changedPaths?: string[];
   runtime?: 'built-in' | 'local';
   skill: string | null;
   createdAt?: number;
 }): ActivityEntry | null => {
-  const changedPaths = extractRuntimeChangedPaths(input.content);
+  const changedPaths = Array.from(
+    new Set((input.changedPaths && input.changedPaths.length > 0 ? input.changedPaths : extractRuntimeChangedPaths(input.content)))
+  );
   if (changedPaths.length === 0) {
     return null;
   }

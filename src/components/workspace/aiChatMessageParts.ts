@@ -7,10 +7,11 @@ export type AIChatMessagePart =
       title: string;
       status: 'running' | 'success' | 'error';
       command?: string;
+      input?: string;
       output?: string;
     };
 
-const THINKING_PLACEHOLDERS = new Set(['正在思考...', '正在思考…', 'Thinking...', 'Thinking…']);
+const THINKING_PLACEHOLDERS = new Set(['Thinking...', 'Thinking…', '正在思考...', '正在思考…']);
 
 const TOOL_LABELS: Record<string, string> = {
   bash: '运行终端命令',
@@ -45,6 +46,11 @@ const extractToolCommand = (name: string, rawParams: string) => {
   }
 };
 
+const normalizeToolInput = (rawParams: string) => {
+  const normalized = rawParams.trim();
+  return normalized || undefined;
+};
+
 export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] => {
   const trimmed = content.trim();
   if (!trimmed) {
@@ -67,7 +73,7 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
 
   const parts: AIChatMessagePart[] = [];
   const pattern =
-    /<think>[\s\S]*?<\/think>|<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool_result name="[^"]+"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>/g;
+    /<think>[\s\S]*?<\/think>|<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -90,15 +96,17 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
         name,
         title: getToolTitle(name),
         command: extractToolCommand(name, rawParams),
+        input: normalizeToolInput(rawParams),
         status: 'running',
       });
-    } else if (match[3]) {
+    } else if (match[4]) {
+      const toolName = match[3] || 'tool';
       parts.push({
         type: 'tool',
-        name: 'terminal',
-        title: '终端输出',
-        output: match[4].trim(),
-        status: match[3] === 'error' ? 'error' : 'success',
+        name: toolName,
+        title: getToolTitle(toolName),
+        output: match[5].trim(),
+        status: match[4] === 'error' ? 'error' : 'success',
       });
     }
 

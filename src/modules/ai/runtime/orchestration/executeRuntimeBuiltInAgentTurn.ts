@@ -1,5 +1,6 @@
 import type { ToolCall, ToolResult } from '../../../../components/workspace/tools.ts';
 import type { ReferenceFile } from '../../../knowledge/referenceFiles.ts';
+import type { AITextStreamEvent } from '../../core/AIService.ts';
 import type { SkillIntent } from '../../workflow/skillRouting.ts';
 import { runAgentTurn } from '../agent-kernel/runAgentTurn.ts';
 import type { RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
@@ -32,7 +33,12 @@ export type ExecuteRuntimeBuiltInAgentTurnInput = {
   skillIntent: SkillIntent | null;
   contextLabels: string[];
   allowedTools: string[];
-  executeModel: (prompt: string, systemPrompt: string) => Promise<string>;
+  onModelEvent?: (event: AITextStreamEvent) => void;
+  executeModel: (
+    prompt: string,
+    systemPrompt: string,
+    onEvent?: (event: AITextStreamEvent) => void
+  ) => Promise<string>;
   executeTool: (call: ToolCall) => Promise<ToolResult>;
   onToolCallsChange?: (toolCalls: RuntimeToolStep[]) => void;
 };
@@ -98,7 +104,9 @@ export async function executeRuntimeBuiltInAgentTurn(
     beforeToolCall: (call: ToolCall) => hookRunner.beforeToolCall(call.name),
     afterToolCall: (call: ToolCall) => hookRunner.afterToolCall(call.name),
     onToolCallsChange: input.onToolCallsChange,
-    executeModel: (prompt) => input.executeModel(prompt, directChat.systemPrompt),
+    onModelEvent: input.onModelEvent,
+    executeModel: (prompt, _systemPrompt, onEvent) =>
+      input.executeModel(prompt, directChat.systemPrompt, onEvent),
     executeTool: input.executeTool,
   });
 

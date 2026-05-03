@@ -1,4 +1,5 @@
 import type { ToolCall, ToolResult } from '../../../../components/workspace/tools.ts';
+import type { AITextStreamEvent } from '../../core/AIService.ts';
 import { buildAgentContext } from '../context/buildAgentContext.ts';
 import type { AgentContextBuildInput, AgentContextSnapshot } from '../context/agentContextTypes.ts';
 import { runRuntimeToolLoop } from '../tools/runtimeToolLoop.ts';
@@ -14,7 +15,12 @@ export type RunAgentTurnInput = AgentContextBuildInput & {
   beforeToolCall?: RuntimeToolLoopOptions['beforeToolCall'];
   afterToolCall?: RuntimeToolLoopOptions['afterToolCall'];
   onToolCallsChange?: (toolCalls: RuntimeToolStep[]) => void;
-  executeModel(prompt: string, systemPrompt: string): Promise<string>;
+  onModelEvent?: (event: AITextStreamEvent) => void;
+  executeModel(
+    prompt: string,
+    systemPrompt: string,
+    onEvent?: (event: AITextStreamEvent) => void
+  ): Promise<string>;
   executeTool(call: ToolCall): Promise<ToolResult>;
 };
 
@@ -38,7 +44,9 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
     beforeToolCall: input.beforeToolCall,
     afterToolCall: input.afterToolCall,
     onToolCallsChange: input.onToolCallsChange,
-    callModel: (messages, systemPrompt) => input.executeModel(renderModelPrompt(messages), systemPrompt),
+    onModelEvent: input.onModelEvent,
+    callModel: (messages, systemPrompt, onEvent) =>
+      input.executeModel(renderModelPrompt(messages), systemPrompt, onEvent),
     executeTool: input.executeTool,
   });
 

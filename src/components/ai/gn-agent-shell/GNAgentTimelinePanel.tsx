@@ -11,6 +11,15 @@ const formatTimelineTime = (value: number) =>
     minute: '2-digit',
   });
 
+const formatPreview = (value: string | null | undefined, fallback: string) => {
+  const normalized = value?.replace(/\s+/g, ' ').trim() || '';
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized.length > 180 ? `${normalized.slice(0, 177)}...` : normalized;
+};
+
 export const GNAgentTimelinePanel: React.FC<{
   latestTurnSession?: AgentTurnSession | null;
 }> = ({ latestTurnSession = null }) => {
@@ -37,6 +46,9 @@ export const GNAgentTimelinePanel: React.FC<{
     activeThreadId ? state.recoveryByThread[activeThreadId] || null : null
   );
   const requestReplayResumeFromRecovery = useAgentRuntimeStore((state) => state.requestReplayResumeFromRecovery);
+  const latestTeamRun = useAgentRuntimeStore((state) =>
+    activeThreadId ? state.teamRunsByThread[activeThreadId]?.[0] || null : null
+  );
 
   return (
     <section className="gn-agent-runtime-panel">
@@ -70,6 +82,38 @@ export const GNAgentTimelinePanel: React.FC<{
               </button>
             </article>
           ) : null}
+          {latestTeamRun ? (
+            <article className="gn-agent-runtime-card">
+              <strong>Multi-Agent Team</strong>
+              <span>{latestTeamRun.strategy}</span>
+              <code>{latestTeamRun.phases.length} phases</code>
+            </article>
+          ) : null}
+          {latestTeamRun?.phases.map((phase) => (
+            <details key={phase.id} className="gn-agent-runtime-card gn-agent-runtime-details">
+              <summary className="gn-agent-runtime-details-summary">
+                <strong>{phase.title}</strong>
+                <span>{phase.status}</span>
+              </summary>
+              <span>{phase.goal}</span>
+              {latestTeamRun.members
+                .filter((member) => member.phaseId === phase.id)
+                .map((member) => (
+                  <details key={member.id} className="gn-agent-runtime-subcard gn-agent-runtime-details">
+                    <summary className="gn-agent-runtime-details-summary">
+                      <strong>{member.title}</strong>
+                      <span>
+                        {member.agentId} / {member.status}
+                      </span>
+                    </summary>
+                    <span>{formatPreview(member.error || member.result, 'No member output yet.')}</span>
+                    {member.error || member.result ? (
+                      <pre className="gn-agent-runtime-pre">{member.error || member.result}</pre>
+                    ) : null}
+                  </details>
+                ))}
+            </details>
+          ))}
           {timeline.slice(-8).reverse().map((event) => (
             <article key={event.id} className="gn-agent-runtime-card">
               <strong>{event.summary}</strong>

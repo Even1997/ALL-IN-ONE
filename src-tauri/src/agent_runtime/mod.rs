@@ -6,4 +6,5 @@ pub mod memory_store;
 pub mod replay_store;
 pub mod settings_store;
 pub mod thread_store;
+pub mod turn_checkpoint_store;
 pub mod types;

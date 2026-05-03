@@ -33,17 +33,23 @@ import {
   appendAgentTimelineEvent as persistRuntimeTimelineEvent,
   createAgentThread as persistRuntimeThread,
   executePrompt as executeRuntimePrompt,
+  getAgentTurnCheckpointDiff,
   enqueueAgentApproval,
   getAgentSandboxPolicy,
+  listAgentTurnCheckpoints,
   listAgentApprovals,
+  rewindAgentTurn,
   resolveAgentApproval,
+  saveAgentTurnCheckpoint,
 } from '../../modules/ai/runtime/agentRuntimeClient';
 import { useApprovalStore } from '../../modules/ai/runtime/approval/approvalStore';
 import type { ApprovalRecord } from '../../modules/ai/runtime/approval/approvalTypes';
 import { buildProjectMemoryEntry } from '../../modules/ai/runtime/memory/projectMemoryRuntime';
 import {
+  createRuntimeStreamingMessageAssembler,
   createRuntimeReplayExecutionController,
 } from '../../modules/ai/runtime/orchestration/agentTurnRunner';
+import type { RuntimeToolStep } from '../../modules/ai/runtime/agent-kernel/agentKernelTypes';
 import { executeRuntimeBuiltInAgentTurn } from '../../modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn';
 import { executeRuntimeMcpTurn } from '../../modules/ai/runtime/orchestration/executeRuntimeMcpTurn';
 import { runRuntimeLocalAgentExecution } from '../../modules/ai/runtime/orchestration/runRuntimeLocalAgentExecution';
@@ -95,7 +101,11 @@ import {
   buildRuntimeTurnReviewPlan,
 } from '../../modules/ai/runtime/orchestration/runtimeTurnSessionFlow';
 import { executeRuntimeWorkflowPackage } from '../../modules/ai/runtime/orchestration/runtimeWorkflowFlow';
-import type { AgentProviderId } from '../../modules/ai/runtime/agentRuntimeTypes';
+import type {
+  AgentProviderId,
+  AgentTurnCheckpointDiff,
+  AgentTurnCheckpointRecord,
+} from '../../modules/ai/runtime/agentRuntimeTypes';
 import {
   invokeRuntimeMcpTool,
   listRuntimeMcpServers,
@@ -109,6 +119,7 @@ import {
   listRuntimeReplayEvents,
 } from '../../modules/ai/runtime/replay/runtimeReplayClient';
 import {
+  buildReplayRecoveryState,
   createReplayRecoveryController,
   getLatestReplaySkillSnapshot,
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
@@ -120,6 +131,7 @@ import { createEmptyAgentTurnSession, type AgentTurnSession } from '../../module
 import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
+import { runAgentTeamTurn } from '../../modules/ai/runtime/teams/teamOrchestrator';
 import {
   createChatSession,
   createStoredChatMessage,
@@ -159,6 +171,7 @@ import {
   GNAgentMessageList,
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
+import { AIChatReferenceSearchMenu } from './AIChatReferenceSearchMenu';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -199,6 +212,12 @@ type ChatAgentAvailability = {
   ready: boolean;
   title: string;
   fallbackMessage: string | null;
+};
+
+type RunDiffState = {
+  loading: boolean;
+  diff?: AgentTurnCheckpointDiff | null;
+  error?: string;
 };
 
 const EMPTY_MESSAGES: StoredChatMessage[] = [];
@@ -287,6 +306,167 @@ const projectFileProposalStatusLabel: Record<ProjectFileProposal['status'], stri
   cancelled: '已取消',
   failed: '执行失败',
 };
+
+const buildProjectFilePlanningStatusMessage = (mode: ProjectFileOperationMode) =>
+  mode === 'auto' ? '正在分析需要改动的文件，确认范围后会直接写入...' : '正在分析需要改动的文件，并生成可确认的改动方案...';
+
+const buildProjectFileClarificationCards = (message: string): ChatStructuredCard[] => [
+  {
+    type: 'summary',
+    title: '还需要补充一点信息',
+    body: message,
+  },
+  {
+    type: 'next-step',
+    title: '你可以这样继续',
+    actions: [
+      {
+        id: 'file-path',
+        label: '补充文件路径',
+        prompt: '我想改的文件是 ',
+      },
+      {
+        id: 'file-content',
+        label: '说明要改什么',
+        prompt: '请把这个文件改成：',
+      },
+    ],
+  },
+];
+
+const summarizeProjectFileOperationPreview = (operation: ProjectFileOperation, maxLength = 220) => {
+  const raw =
+    operation.type === 'delete_file'
+      ? ''
+      : operation.newString || operation.content || operation.summary || '';
+  const normalized = raw.replace(/\s+/g, ' ').trim();
+
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 3)}...` : normalized;
+};
+
+const summarizeProjectFilePath = (value: string) => {
+  const normalized = value.replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+
+  if (parts.length <= 3) {
+    return normalized;
+  }
+
+  return `.../${parts.slice(-3).join('/')}`;
+};
+
+const buildRunDiffKey = (runId: string, path: string) => `${runId}::${path}`;
+
+const extractCheckpointFilesFromToolCalls = (toolCalls: RuntimeToolStep[] | null | undefined) => {
+  const fileChangesByPath = new Map<
+    string,
+    {
+      path: string;
+      beforeContent: string | null;
+      afterContent: string | null;
+    }
+  >();
+
+  for (const toolCall of toolCalls || []) {
+    for (const change of toolCall.fileChanges || []) {
+      if (!change.path.trim()) {
+        continue;
+      }
+
+      const existing = fileChangesByPath.get(change.path);
+      fileChangesByPath.set(change.path, {
+        path: change.path,
+        beforeContent: existing ? existing.beforeContent : change.beforeContent ?? null,
+        afterContent: change.afterContent ?? existing?.afterContent ?? null,
+      });
+    }
+  }
+
+  return Array.from(fileChangesByPath.values());
+};
+
+const resolveProjectFileProposalPresentation = (
+  proposal: ProjectFileProposal,
+  decision: 'blocked' | 'approval-required' | 'auto-execute'
+): ProjectFileProposal => {
+  if (decision === 'blocked') {
+    return {
+      ...proposal,
+      assistantMessage: '改动方案已生成，但当前权限策略不允许直接执行。',
+      executionMessage: '当前策略拦截了这次文件改动。你可以调整需求后重试。',
+    };
+  }
+
+  if (decision === 'approval-required') {
+    return {
+      ...proposal,
+      assistantMessage: '改动方案已准备好，确认后我就会写入文件。',
+      executionMessage: '请先确认这次改动范围。',
+    };
+  }
+
+  return {
+    ...proposal,
+    assistantMessage: '改动范围已确认，正在写入文件并校验结果...',
+    executionMessage: '正在写入文件并校验结果...',
+  };
+};
+
+const buildProjectFileStageItems = (proposal: ProjectFileProposal) => {
+  const analysisState: 'done' | 'current' | 'pending' = 'done';
+  const reviewState: 'done' | 'current' | 'pending' =
+    proposal.status === 'pending'
+      ? 'current'
+      : proposal.status === 'executing' || proposal.status === 'executed' || proposal.status === 'cancelled' || proposal.status === 'failed'
+        ? 'done'
+        : 'pending';
+  const applyState: 'done' | 'current' | 'pending' =
+    proposal.status === 'executing'
+      ? 'current'
+      : proposal.status === 'executed'
+        ? 'done'
+        : 'pending';
+
+  return [
+    { key: 'analysis', label: '分析文件', state: analysisState },
+    { key: 'review', label: proposal.mode === 'auto' ? '确认范围' : '等待确认', state: reviewState },
+    { key: 'apply', label: proposal.status === 'executed' ? '写入完成' : '写入文件', state: applyState },
+  ];
+};
+
+const resolveProjectFileProposalNote = (proposal: ProjectFileProposal) => {
+  if (proposal.status === 'executing') {
+    return '正在写入文件并校验结果...';
+  }
+
+  if (proposal.status === 'cancelled') {
+    return '这次文件改动已取消，没有写入任何内容。';
+  }
+
+  return proposal.executionMessage || '';
+};
+
+const groupActivityEntriesByRunId = (entries: ActivityEntry[]) =>
+  entries.reduce<Record<string, ActivityEntry[]>>((accumulator, entry) => {
+    if (!accumulator[entry.runId]) {
+      accumulator[entry.runId] = [];
+    }
+    accumulator[entry.runId]?.push(entry);
+    return accumulator;
+  }, {});
+
+const groupTurnCheckpointsByRunId = (entries: AgentTurnCheckpointRecord[]) =>
+  entries.reduce<Record<string, AgentTurnCheckpointRecord>>((accumulator, entry) => {
+    const existing = accumulator[entry.runId];
+    if (!existing || entry.updatedAt >= existing.updatedAt) {
+      accumulator[entry.runId] = entry;
+    }
+    return accumulator;
+  }, {});
 
 const createWelcomeSession = (
   projectId: string,
@@ -470,8 +650,28 @@ const SendIcon = () => (
   </svg>
 );
 
+const normalizeSearchToken = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
+const summarizeReferencePath = (value: string) => {
+  const normalized = value.replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+
+  if (parts.length <= 2) {
+    return normalized;
+  }
+
+  return `.../${parts.slice(-2).join('/')}`;
+};
+
 const renderMessagePart = (messageId: string, part: AIChatMessagePart, index: number) => {
   if (part.type === 'thinking') {
+    const previewLine =
+      part.content
+        .split('\n')
+        .map((line) => line.replace(/\s+/g, ' ').trim())
+        .find(Boolean) || '';
+    const preview =
+      previewLine.length > 88 ? `${previewLine.slice(0, 88)}...` : previewLine;
+
     return (
       <details
         className={`chat-thinking-block ${part.collapsed ? 'collapsed' : 'expanded'}`}
@@ -487,6 +687,8 @@ const renderMessagePart = (messageId: string, part: AIChatMessagePart, index: nu
               <span />
               <span />
             </span>
+          ) : preview ? (
+            <span className="chat-thinking-preview">{preview}</span>
           ) : null}
         </summary>
         {part.content ? <pre>{part.content}</pre> : <div className="chat-thinking-empty">等待模型输出思考内容...</div>}
@@ -496,17 +698,33 @@ const renderMessagePart = (messageId: string, part: AIChatMessagePart, index: nu
 
   if (part.type === 'tool') {
     return (
-      <div className={`chat-tool-card ${part.status}`} key={`${messageId}-tool-${index}`}>
-        <div className="chat-tool-card-header">
+      <details className={`chat-tool-card ${part.status}`} key={`${messageId}-tool-${index}`}>
+        <summary className="chat-tool-card-header chat-tool-card-summary">
           <span className="chat-tool-icon" aria-hidden="true" />
           <div>
             <strong>{part.title}</strong>
             <span>{part.status === 'running' ? '正在执行' : part.status === 'error' ? '执行失败' : '已完成'}</span>
           </div>
-        </div>
-        {part.command ? <pre className="chat-tool-command">{part.command}</pre> : null}
-        {part.output ? <pre className="chat-tool-output">{part.output}</pre> : null}
-      </div>
+        </summary>
+        {part.command ? (
+          <div className="chat-tool-section">
+            <span className="chat-tool-section-label">Command</span>
+            <pre className="chat-tool-command">{part.command}</pre>
+          </div>
+        ) : null}
+        {part.input && part.input !== part.command ? (
+          <div className="chat-tool-section">
+            <span className="chat-tool-section-label">Input</span>
+            <pre className="chat-tool-command">{part.input}</pre>
+          </div>
+        ) : null}
+        {part.output ? (
+          <div className="chat-tool-section">
+            <span className="chat-tool-section-label">Output</span>
+            <pre className="chat-tool-output">{part.output}</pre>
+          </div>
+        ) : null}
+      </details>
     );
   }
 
@@ -575,6 +793,16 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [showJsonImport, setShowJsonImport] = useState(false);
   const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, string>>({});
   const [projectFileOperationMode, setProjectFileOperationMode] = useState<ProjectFileOperationMode>('auto');
+  const [referenceSearchOpen, setReferenceSearchOpen] = useState(false);
+  const [referenceSearchQuery, setReferenceSearchQuery] = useState('');
+  const [referenceTriggerIndex, setReferenceTriggerIndex] = useState(-1);
+  const [referenceSearchIndex, setReferenceSearchIndex] = useState(0);
+  const [turnCheckpoints, setTurnCheckpoints] = useState<AgentTurnCheckpointRecord[]>([]);
+  const [expandedRunDiffKey, setExpandedRunDiffKey] = useState<string | null>(null);
+  const [runDiffsByKey, setRunDiffsByKey] = useState<Record<string, RunDiffState>>({});
+  const [rewindTargetRunId, setRewindTargetRunId] = useState<string | null>(null);
+  const [isRewindingRunId, setIsRewindingRunId] = useState<string | null>(null);
+  const [rewindError, setRewindError] = useState('');
   const isControlledCollapse = typeof collapsed === 'boolean';
   const isCollapsed = isControlledCollapse ? Boolean(collapsed) : internalIsCollapsed;
   const showExpandedShell = !isCollapsed || lockExpandedForEmbedded;
@@ -641,6 +869,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const aiContextState = useAIContextStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
   );
+  const setSelectedReferenceFileIds = useAIContextStore((state) => state.setSelectedReferenceFileIds);
 
   useEffect(() => {
     let alive = true;
@@ -669,7 +898,9 @@ export const AIChat: React.FC<AIChatProps> = ({
     setActiveSession,
     appendMessage,
     appendActivityEntry,
+    setActivityEntries,
     updateMessage,
+    replaceSessionMessages,
     renameSession,
     removeSession,
   } = useAIChatStore(
@@ -680,7 +911,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       setActiveSession: state.setActiveSession,
       appendMessage: state.appendMessage,
       appendActivityEntry: state.appendActivityEntry,
+      setActivityEntries: state.setActivityEntries,
       updateMessage: state.updateMessage,
+      replaceSessionMessages: state.replaceSessionMessages,
       renameSession: state.renameSession,
       removeSession: state.removeSession,
     }))
@@ -700,6 +933,8 @@ export const AIChat: React.FC<AIChatProps> = ({
     setThreadContext,
     setThreadToolCalls,
     setThreadMemoryCandidates,
+    upsertTeamRun,
+    pruneThreadHistorySince,
     startRun: startRuntimeRun,
     finishRun: finishRuntimeRun,
     failRun: failRuntimeRun,
@@ -721,6 +956,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       setThreadContext: state.setThreadContext,
       setThreadToolCalls: state.setThreadToolCalls,
       setThreadMemoryCandidates: state.setThreadMemoryCandidates,
+      upsertTeamRun: state.upsertTeamRun,
+      pruneThreadHistorySince: state.pruneThreadHistorySince,
       startRun: state.startRun,
       finishRun: state.finishRun,
       failRun: state.failRun,
@@ -812,6 +1049,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     [activeSessionId, sessions]
   );
   const activeApprovalThreadId = activeSession?.runtimeThreadId || activeSessionId || null;
+  const activeCheckpointThreadId = activeSession?.runtimeThreadId || activeSession?.id || null;
   const messages = activeSession?.messages || EMPTY_MESSAGES;
   const activityEntries = projectChatState?.activityEntries || EMPTY_ACTIVITY_ENTRIES;
   const pendingApprovals = useMemo(
@@ -941,6 +1179,27 @@ export const AIChat: React.FC<AIChatProps> = ({
       alive = false;
     };
   }, [activeSession?.id, activeSession?.runtimeThreadId, replayRecoveryController, setActiveSkills, setRuntimeReplayEvents]);
+  useEffect(() => {
+    if (!activeCheckpointThreadId) {
+      setTurnCheckpoints([]);
+      return;
+    }
+
+    let alive = true;
+
+    void (async () => {
+      const checkpoints = await listAgentTurnCheckpoints(activeCheckpointThreadId);
+      if (!alive) {
+        return;
+      }
+
+      setTurnCheckpoints(checkpoints);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [activeCheckpointThreadId]);
   const requestRuntimeApproval = useCallback(
     async ({
       threadId,
@@ -1101,6 +1360,77 @@ export const AIChat: React.FC<AIChatProps> = ({
     },
     [activeSessionId, currentProject, setActiveSkills]
   );
+  const persistTurnCheckpointForRun = useCallback(
+    async (input: {
+      threadId: string;
+      runId: string;
+      messageId?: string | null;
+      summary: string;
+      files: Array<{
+        path: string;
+        beforeContent?: string | null;
+        afterContent?: string | null;
+      }>;
+    }) => {
+      const normalizedFiles = input.files.filter((file) => file.path.trim().length > 0);
+      if (normalizedFiles.length === 0) {
+        return null;
+      }
+
+      const checkpoint = await saveAgentTurnCheckpoint({
+        threadId: input.threadId,
+        runId: input.runId,
+        messageId: input.messageId || null,
+        summary: input.summary,
+        files: normalizedFiles,
+      });
+
+      if (!checkpoint) {
+        return null;
+      }
+
+      setTurnCheckpoints((current) => {
+        const next = [checkpoint, ...current.filter((entry) => entry.id !== checkpoint.id && entry.runId !== checkpoint.runId)];
+        next.sort((left, right) => right.updatedAt - left.updatedAt);
+        return next;
+      });
+
+      return checkpoint;
+    },
+    []
+  );
+  const captureCheckpointFilesFromPaths = useCallback(
+    async (projectId: string, changedPaths: string[]) => {
+      if (changedPaths.length === 0) {
+        return [];
+      }
+
+      const uniquePaths = Array.from(new Set(changedPaths));
+      const projectRoot = await getProjectDir(projectId);
+      const results = await Promise.all(
+        uniquePaths.map(async (relativePath) => {
+          try {
+            const absolutePath = resolveProjectOperationPath(projectRoot, relativePath);
+            const content = await readProjectTextFile(absolutePath);
+            return {
+              path: relativePath,
+              beforeContent: null,
+              afterContent: content,
+            };
+          } catch {
+            return {
+              path: relativePath,
+              beforeContent: null,
+              afterContent: null,
+            };
+          }
+        })
+      );
+
+      return results;
+    },
+    []
+  );
 
   const handleCancelProjectFileProposal = useCallback(
     async (messageId: string) => {
@@ -1138,6 +1468,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       if (!currentProject || !activeSessionId) {
         return false;
       }
+      const targetMessage = activeSession?.messages.find((message) => message.id === messageId) || null;
+      const proposalRunId = targetMessage?.runId || createRunId();
+      const approvalThreadId = activeSession?.runtimeThreadId || activeSessionId;
 
       return executeRuntimeApprovedProjectFileProposal({
         projectId: currentProject.id,
@@ -1152,21 +1485,32 @@ export const AIChat: React.FC<AIChatProps> = ({
           delete pendingApprovalActionsRef.current[approvalId];
         },
         resolveAgentApproval,
-        createRunId,
+        runId: proposalRunId,
         createActivityEntryId,
         getProjectDir,
         executeProjectFileOperations,
         appendActivityEntry,
         normalizeErrorMessage,
+        onExecutionSuccess: async ({ runId, messageId: executedMessageId, summary, fileChanges }) => {
+          await persistTurnCheckpointForRun({
+            threadId: approvalThreadId,
+            runId,
+            messageId: executedMessageId,
+            summary,
+            files: fileChanges,
+          });
+        },
       });
     },
     [
+      activeSession,
       activeApprovalThreadId,
       activeSessionId,
       appendActivityEntry,
       approvalsByThread,
       currentProject,
       executeProjectFileOperations,
+      persistTurnCheckpointForRun,
       resolveAgentApproval,
       resolveStoredApproval,
       updateMessage,
@@ -1180,35 +1524,53 @@ export const AIChat: React.FC<AIChatProps> = ({
         return null;
       }
 
+      const stageItems = buildProjectFileStageItems(proposal);
+
       return (
-        <section className="chat-project-file-proposal-card">
+        <section className={`chat-project-file-proposal-card ${proposal.status}`}>
           <div className="chat-project-file-proposal-head">
             <strong>{proposal.summary}</strong>
-            <span>{projectFileProposalStatusLabel[proposal.status]}</span>
+            <span className={`chat-project-file-proposal-badge ${proposal.status}`}>
+              {projectFileProposalStatusLabel[proposal.status]}
+            </span>
           </div>
           <div className="chat-project-file-proposal-meta">
             <span>模式：{modeLabelMap[proposal.mode]}</span>
             <span>{proposal.operations.length} 项操作</span>
           </div>
+          <div className="chat-project-file-proposal-stages" aria-label="文件操作进度">
+            {stageItems.map((stage) => (
+              <div key={stage.key} className={`chat-project-file-proposal-stage ${stage.state}`}>
+                <span />
+                <strong>{stage.label}</strong>
+              </div>
+            ))}
+          </div>
           <div className="chat-project-file-proposal-list">
             {proposal.operations.map((operation) => (
               <div className="chat-project-file-proposal-operation" key={operation.id}>
                 <strong>
-                  {projectFileOperationTypeLabel[operation.type]} <code>{operation.targetPath}</code>
+                  {projectFileOperationTypeLabel[operation.type]}{' '}
+                  <code title={operation.targetPath}>{summarizeProjectFilePath(operation.targetPath)}</code>
                 </strong>
                 <span>{operation.summary || '等待执行'}</span>
+                {summarizeProjectFileOperationPreview(operation) ? (
+                  <pre>{summarizeProjectFileOperationPreview(operation)}</pre>
+                ) : null}
               </div>
             ))}
           </div>
-          {proposal.executionMessage ? <div className="chat-project-file-proposal-note">{proposal.executionMessage}</div> : null}
+          {resolveProjectFileProposalNote(proposal) ? (
+            <div className="chat-project-file-proposal-note">{resolveProjectFileProposalNote(proposal)}</div>
+          ) : null}
           <div className="chat-project-file-proposal-actions">
             {proposal.status === 'pending' ? (
               <>
                 <button type="button" onClick={() => void handleExecuteProjectFileProposal(message.id, proposal)}>
-                  确认执行
+                  确认写入
                 </button>
                 <button type="button" onClick={() => void handleCancelProjectFileProposal(message.id)}>
-                  取消
+                  取消这次改动
                 </button>
               </>
             ) : null}
@@ -1218,7 +1580,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     },
     [handleCancelProjectFileProposal, handleExecuteProjectFileProposal]
   );
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: isLoading ? 'auto' : 'smooth', block: 'end' });
   }, [messages, isLoading, streamingDraftContents]);
@@ -1318,6 +1679,25 @@ export const AIChat: React.FC<AIChatProps> = ({
       ready: Boolean(localAgentSnapshot?.codexHome.exists),
       title: localAgentSnapshot?.codexHome.exists ? 'Codex Agent 已就绪' : '未检测到本地 Codex 配置，将回退到内置 AI',
       fallbackMessage: localAgentSnapshot?.codexHome.exists ? null : '未检测到本地 Codex 配置，已回退到内置 AI。',
+    },
+    team: {
+      ready: Boolean(
+        localAgentSnapshot?.codexHome.exists ||
+          localAgentSnapshot?.claudeHome.exists ||
+          localAgentSnapshot?.claudeSettings.exists
+      ),
+      title:
+        localAgentSnapshot?.codexHome.exists ||
+        localAgentSnapshot?.claudeHome.exists ||
+        localAgentSnapshot?.claudeSettings.exists
+          ? 'Multi-Agent Team 已就绪'
+          : '未检测到可用的本地 Claude/Codex Agent，无法启动 Team',
+      fallbackMessage:
+        localAgentSnapshot?.codexHome.exists ||
+        localAgentSnapshot?.claudeHome.exists ||
+        localAgentSnapshot?.claudeSettings.exists
+          ? null
+          : '未检测到可用的本地 Claude/Codex Agent，已回退到内置 AI。',
     },
     'built-in': {
       ready: true,
@@ -1457,6 +1837,45 @@ export const AIChat: React.FC<AIChatProps> = ({
     visibleContextFileId,
     visibleContextFiles,
   ]);
+  const explicitSelectedReferenceFiles = useMemo(() => {
+    const selectedReferenceIds = aiContextState?.selectedReferenceFileIds || [];
+    const visibleFileById = new Map(visibleContextFiles.map((file) => [file.id, file]));
+
+    return selectedReferenceIds
+      .map((referenceId) => visibleFileById.get(referenceId) || null)
+      .filter((file): file is NonNullable<typeof file> => Boolean(file));
+  }, [aiContextState?.selectedReferenceFileIds, visibleContextFiles]);
+  const filteredReferenceSearchFiles = useMemo(() => {
+    if (!referenceSearchOpen) {
+      return [];
+    }
+
+    const normalizedQuery = normalizeSearchToken(referenceSearchQuery);
+    const selectedReferenceIds = new Set(aiContextState?.selectedReferenceFileIds || []);
+    const candidates = visibleContextFiles.filter(
+      (file) => file.readableByAI && !selectedReferenceIds.has(file.id)
+    );
+
+    if (!normalizedQuery) {
+      return candidates.slice(0, 8);
+    }
+
+    return candidates
+      .filter((file) => {
+        const haystack = normalizeSearchToken(`${file.title} ${file.path} ${file.summary || ''}`);
+        return haystack.includes(normalizedQuery);
+      })
+      .slice(0, 8);
+  }, [
+    aiContextState?.selectedReferenceFileIds,
+    referenceSearchOpen,
+    referenceSearchQuery,
+    visibleContextFiles,
+  ]);
+  const visibleContextFileById = useMemo(
+    () => new Map(visibleContextFiles.map((file) => [file.id, file])),
+    [visibleContextFiles]
+  );
   const previewReferenceContext = useMemo(
     () =>
       resolvedReferenceContextFiles.length > 0
@@ -1506,8 +1925,11 @@ export const AIChat: React.FC<AIChatProps> = ({
     () => CHAT_AGENTS.find((agent) => agent.id === selectedChatAgentId) || CHAT_AGENTS[0],
     [selectedChatAgentId]
   );
-  const preferredForkAgentId = useMemo<ChatAgentId | null>(() => {
-    if (selectedChatAgentId !== 'built-in' && agentAvailability[selectedChatAgentId].ready) {
+  const preferredForkAgentId = useMemo<Extract<ChatAgentId, 'claude' | 'codex'> | null>(() => {
+    if (
+      (selectedChatAgentId === 'claude' || selectedChatAgentId === 'codex') &&
+      agentAvailability[selectedChatAgentId].ready
+    ) {
       return selectedChatAgentId;
     }
 
@@ -1522,6 +1944,33 @@ export const AIChat: React.FC<AIChatProps> = ({
     return null;
   }, [agentAvailability, selectedChatAgentId]);
   const latestActivityEntry = activityEntries[0] || null;
+  const activityEntriesByRunId = useMemo(() => groupActivityEntriesByRunId(activityEntries), [activityEntries]);
+  const turnCheckpointsByRunId = useMemo(() => groupTurnCheckpointsByRunId(turnCheckpoints), [turnCheckpoints]);
+  const latestCheckpointRunId = turnCheckpoints[0]?.runId || null;
+  const expandedDiffTarget = useMemo(() => {
+    if (!expandedRunDiffKey) {
+      return null;
+    }
+
+    const separatorIndex = expandedRunDiffKey.indexOf('::');
+    if (separatorIndex === -1) {
+      return null;
+    }
+
+    return {
+      runId: expandedRunDiffKey.slice(0, separatorIndex),
+      path: expandedRunDiffKey.slice(separatorIndex + 2),
+    };
+  }, [expandedRunDiffKey]);
+  const selectedChangedPathHistory = useMemo(
+    () =>
+      expandedDiffTarget
+        ? turnCheckpoints.filter((entry) =>
+            entry.filesChanged.some((file) => file.path === expandedDiffTarget.path)
+          )
+        : [],
+    [expandedDiffTarget, turnCheckpoints]
+  );
   const pendingApprovalCount = pendingApprovals.length;
   const latestTurnSessionStatus = latestTurnSession?.status || null;
   const runStateLabel =
@@ -1571,6 +2020,385 @@ export const AIChat: React.FC<AIChatProps> = ({
       streamingFlushFrameRef.current = null;
     }
     setStreamingDraftContents(nextDrafts);
+  }, []);
+  const pushStreamingDraft = useCallback((messageId: string, content: string) => {
+    streamingDraftBufferRef.current = {
+      ...streamingDraftBufferRef.current,
+      [messageId]: content,
+    };
+
+    if (streamingFlushFrameRef.current !== null) {
+      return;
+    }
+
+    streamingFlushFrameRef.current = requestAnimationFrame(() => {
+      streamingFlushFrameRef.current = null;
+      setStreamingDraftContents({ ...streamingDraftBufferRef.current });
+    });
+  }, []);
+  const loadCheckpointDiff = useCallback(
+    async (runId: string, relativePath: string) => {
+      if (!activeCheckpointThreadId) {
+        return;
+      }
+      const diffKey = buildRunDiffKey(runId, relativePath);
+      const existingDiffState = runDiffsByKey[diffKey];
+
+      if (expandedRunDiffKey === diffKey) {
+        setExpandedRunDiffKey(null);
+        return;
+      }
+
+      setExpandedRunDiffKey(diffKey);
+      if (existingDiffState?.loading || existingDiffState?.diff || existingDiffState?.error) {
+        return;
+      }
+
+      setRunDiffsByKey((current) => ({
+        ...current,
+        [diffKey]: {
+          loading: true,
+        },
+      }));
+
+      try {
+        const diff = await getAgentTurnCheckpointDiff({
+          threadId: activeCheckpointThreadId,
+          runId,
+          path: relativePath,
+        });
+        setRunDiffsByKey((current) => ({
+          ...current,
+          [diffKey]: {
+            loading: false,
+            diff,
+          },
+        }));
+      } catch (error) {
+        setRunDiffsByKey((current) => ({
+          ...current,
+          [diffKey]: {
+            loading: false,
+            error: normalizeErrorMessage(error),
+          },
+        }));
+      }
+    },
+    [activeCheckpointThreadId, expandedRunDiffKey, runDiffsByKey]
+  );
+  const handleRewindRun = useCallback(
+    async (checkpoint: AgentTurnCheckpointRecord) => {
+      if (!currentProject || !activeSessionId || !activeCheckpointThreadId || isRewindingRunId) {
+        return;
+      }
+
+      setIsRewindingRunId(checkpoint.runId);
+      setRewindError('');
+
+      try {
+        const projectRoot = await getProjectDir(currentProject.id);
+        const result = await rewindAgentTurn({
+          threadId: activeCheckpointThreadId,
+          runId: checkpoint.runId,
+          projectRoot,
+        });
+        const removedRunIds = new Set(result.removedRunIds);
+        const activeMessages = activeSession?.messages || [];
+        const nextMessages = activeMessages.filter((message) => !message.runId || !removedRunIds.has(message.runId));
+        replaceSessionMessages(currentProject.id, activeSessionId, nextMessages);
+        setActivityEntries(
+          currentProject.id,
+          activityEntries.filter((entry) => !removedRunIds.has(entry.runId))
+        );
+        setTurnCheckpoints((current) => current.filter((entry) => !removedRunIds.has(entry.runId)));
+        setRunDiffsByKey((current) =>
+          Object.fromEntries(
+            Object.entries(current).filter(([key]) => !Array.from(removedRunIds).some((runId) => key.startsWith(`${runId}::`)))
+          )
+        );
+        pruneThreadHistorySince(activeSessionId, checkpoint.createdAt);
+        setRuntimeRecoveryState(
+          activeSessionId,
+          buildReplayRecoveryState(
+            activeCheckpointThreadId,
+            useAgentRuntimeStore.getState().replayEventsByThread[activeSessionId] || []
+          )
+        );
+        if (expandedDiffTarget && removedRunIds.has(expandedDiffTarget.runId)) {
+          setExpandedRunDiffKey(null);
+        }
+        if (result.restoredPaths.length > 0) {
+          emitKnowledgeFilesystemChanged({
+            projectId: currentProject.id,
+            changedPaths: result.restoredPaths,
+          });
+        }
+        setRewindTargetRunId(null);
+      } catch (error) {
+        setRewindError(normalizeErrorMessage(error));
+      } finally {
+        setIsRewindingRunId(null);
+      }
+    },
+    [
+      activeCheckpointThreadId,
+      activeSession?.messages,
+      activeSessionId,
+      activityEntries,
+      currentProject,
+      expandedDiffTarget,
+      isRewindingRunId,
+      pruneThreadHistorySince,
+      replaceSessionMessages,
+      setActivityEntries,
+      setRuntimeRecoveryState,
+    ]
+  );
+  const renderRunSummaryCard = useCallback(
+    (message: StoredChatMessage) => {
+      if (message.role !== 'assistant' || !message.runId) {
+        return null;
+      }
+
+      const checkpoint = turnCheckpointsByRunId[message.runId];
+      if (checkpoint) {
+        const isLatestCheckpoint = checkpoint.runId === latestCheckpointRunId;
+        return (
+          <section className="chat-run-summary-card">
+            <div className="chat-run-summary-head">
+              <div className="chat-run-summary-title">
+                <strong>{checkpoint.filesChanged.length} 个文件已变更</strong>
+                <span>
+                  {isLatestCheckpoint ? '当前轮改动' : '历史轮改动'}
+                  {' · '}+{checkpoint.insertions} / -{checkpoint.deletions}
+                </span>
+              </div>
+              <div className="chat-run-summary-actions">
+                <button
+                  type="button"
+                  className="chat-run-summary-action"
+                  onClick={() => {
+                    setRewindError('');
+                    setRewindTargetRunId(checkpoint.runId);
+                  }}
+                  disabled={Boolean(isRewindingRunId)}
+                >
+                  {isRewindingRunId === checkpoint.runId
+                    ? '回退中...'
+                    : isLatestCheckpoint
+                      ? '撤销本轮改动'
+                      : '回到这轮之前'}
+                </button>
+              </div>
+            </div>
+            <div className="chat-run-summary-list">
+              {checkpoint.filesChanged.map((file) => {
+                const diffKey = buildRunDiffKey(checkpoint.runId, file.path);
+                const diffState = runDiffsByKey[diffKey];
+                const isExpanded = expandedRunDiffKey === diffKey;
+
+                return (
+                  <div key={`${checkpoint.runId}:${file.path}`} className="chat-run-summary-file">
+                    <button
+                      type="button"
+                      className="chat-run-summary-item"
+                      onClick={() => void loadCheckpointDiff(checkpoint.runId, file.path)}
+                    >
+                      <strong title={file.path}>{summarizeProjectFilePath(file.path)}</strong>
+                      <span>
+                        {file.changeType === 'created'
+                          ? '新建'
+                          : file.changeType === 'deleted'
+                            ? '删除'
+                            : '修改'}
+                        {' · '}+{file.insertions} / -{file.deletions}
+                      </span>
+                    </button>
+                    {isExpanded ? (
+                      <div className="chat-run-summary-diff">
+                        <div className="chat-run-summary-diff-head">
+                          <strong>Diff</strong>
+                          <span>
+                            {diffState?.loading
+                              ? '加载中'
+                              : diffState?.error
+                                ? '读取失败'
+                                : diffState?.diff
+                                  ? `${diffState.diff.changeType} · +${diffState.diff.insertions} / -${diffState.diff.deletions}`
+                                  : '暂无数据'}
+                          </span>
+                        </div>
+                        {diffState?.loading ? (
+                          <div className="chat-run-summary-empty">正在读取这次改动的 diff...</div>
+                        ) : diffState?.error ? (
+                          <div className="chat-run-summary-empty">{diffState.error}</div>
+                        ) : (
+                          <pre className="chat-run-summary-diff-content">
+                            {diffState?.diff?.diff || '这次改动没有可展示的 diff。'}
+                          </pre>
+                        )}
+                        <div className="chat-run-summary-history">
+                          <div className="chat-run-summary-diff-head">
+                            <strong>该文件历史</strong>
+                            <span>{selectedChangedPathHistory.length} 条</span>
+                          </div>
+                          <div className="chat-run-summary-history-list">
+                            {selectedChangedPathHistory
+                              .filter((entry) => entry.filesChanged.some((changedFile) => changedFile.path === file.path))
+                              .map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  className={`chat-file-preview-history-item ${entry.runId === checkpoint.runId ? 'active' : ''}`}
+                                  onClick={() => void loadCheckpointDiff(entry.runId, file.path)}
+                                >
+                                  <strong>{entry.summary}</strong>
+                                  <span>
+                                    {formatTimestamp(entry.createdAt)}
+                                    {' · '}+{entry.insertions} / -{entry.deletions}
+                                  </span>
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            {rewindError && rewindTargetRunId === checkpoint.runId ? (
+              <div className="chat-run-summary-error">{rewindError}</div>
+            ) : null}
+          </section>
+        );
+      }
+
+      const relatedEntries = activityEntriesByRunId[message.runId] || EMPTY_ACTIVITY_ENTRIES;
+      const changedPaths = Array.from(new Set(relatedEntries.flatMap((entry) => entry.changedPaths)));
+
+      if (changedPaths.length === 0) {
+        return null;
+      }
+
+      return (
+        <section className="chat-run-summary-card">
+          <div className="chat-run-summary-head">
+            <strong>{changedPaths.length} 个文件已变更</strong>
+            <span>
+              {relatedEntries.some((entry) => entry.type === 'failed') ? '包含失败记录' : '可查看文件与记录'}
+            </span>
+          </div>
+          <div className="chat-run-summary-list">
+            {changedPaths.map((changedPath) => {
+              const latestForPath = relatedEntries.find((entry) => entry.changedPaths.includes(changedPath)) || null;
+              return (
+                <button
+                  key={changedPath}
+                  type="button"
+                  className="chat-run-summary-item"
+                  onClick={() => void loadCheckpointDiff(message.runId!, changedPath)}
+                >
+                  <strong title={changedPath}>{summarizeProjectFilePath(changedPath)}</strong>
+                  <span>{latestForPath?.summary || '查看当前内容与更改记录'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      );
+    },
+    [
+      activityEntriesByRunId,
+      expandedRunDiffKey,
+      isRewindingRunId,
+      latestCheckpointRunId,
+      loadCheckpointDiff,
+      rewindError,
+      rewindTargetRunId,
+      runDiffsByKey,
+      selectedChangedPathHistory,
+      turnCheckpointsByRunId,
+    ]
+  );
+  const renderToolExecutionCard = useCallback((message: StoredChatMessage) => {
+    const toolCalls = message.toolCalls || [];
+    const teamRun = message.teamRun || null;
+
+    if (toolCalls.length === 0 && !teamRun) {
+      return null;
+    }
+
+    if (teamRun) {
+      return (
+        <section className="chat-tool-trace-card">
+          <div className="chat-tool-trace-head">
+            <strong>多 Agent 执行轨迹</strong>
+            <span>{teamRun.phases.length} phases / {teamRun.members.length} agents</span>
+          </div>
+          <div className="chat-tool-trace-list">
+            {teamRun.phases.map((phase) => {
+              const phaseMembers = teamRun.members.filter((member) => member.phaseId === phase.id);
+              return (
+                <details key={phase.id} className="chat-tool-trace-phase" open={phase.status === 'running'}>
+                  <summary>
+                    <strong>{phase.title}</strong>
+                    <span>{phase.status}</span>
+                  </summary>
+                  <div className="chat-tool-trace-members">
+                    {phaseMembers.map((member) => (
+                      <details key={member.id} className="chat-tool-trace-member">
+                        <summary>
+                          <strong>{member.title}</strong>
+                          <span>{member.agentId} / {member.status}</span>
+                        </summary>
+                        <pre>{member.error || member.result || 'No output yet.'}</pre>
+                      </details>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </section>
+      );
+    }
+
+    const completedCount = toolCalls.filter((toolCall) => toolCall.status === 'completed').length;
+    const failedCount = toolCalls.filter((toolCall) => toolCall.status === 'failed').length;
+    const blockedCount = toolCalls.filter((toolCall) => toolCall.status === 'blocked').length;
+
+    return (
+      <section className="chat-tool-trace-card">
+        <div className="chat-tool-trace-head">
+          <strong>工具执行轨迹</strong>
+          <span>
+            {toolCalls.length} steps
+            {' · '}完成 {completedCount}
+            {failedCount > 0 ? ` · 失败 ${failedCount}` : ''}
+            {blockedCount > 0 ? ` · 阻止 ${blockedCount}` : ''}
+          </span>
+        </div>
+        <div className="chat-tool-trace-list">
+          {toolCalls.map((toolCall, index) => (
+            <details
+              key={toolCall.id}
+              className={`chat-tool-trace-step ${toolCall.status}`}
+              open={toolCall.status === 'running' || toolCall.status === 'failed'}
+            >
+              <summary>
+                <strong>{index + 1}. {toolCall.name}</strong>
+                <span>{toolCall.status === 'completed' ? '已完成' : toolCall.status === 'failed' ? '失败' : toolCall.status === 'blocked' ? '已阻止' : '执行中'}</span>
+              </summary>
+              <pre>{JSON.stringify(toolCall.input, null, 2)}</pre>
+              {toolCall.resultPreview ? (
+                <pre className="chat-tool-trace-result">{toolCall.resultPreview}</pre>
+              ) : null}
+            </details>
+          ))}
+        </div>
+      </section>
+    );
   }, []);
   const syncModelCatalog = useCallback((nextProvider: AIProviderType, nextBaseURL: string, models: string[]) => {
     const key = buildProviderKey(nextProvider, nextBaseURL);
@@ -1882,7 +2710,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       const isTaskAuthorizedWriteRequest = detectTaskAuthorizedProjectWriteIntent(cleanedContent);
       const isProjectFileWriteRequest = detectProjectFileWriteIntent(cleanedContent) || isTaskAuthorizedWriteRequest;
       const isProjectFileReadRequest = detectProjectFileReadIntent(cleanedContent);
-      const userMessage = createStoredChatMessage('user', rawContent);
+      const runId = createRunId();
+      const userMessage = createStoredChatMessage('user', rawContent, 'default', { runId });
 
       appendMessage(currentProject.id, targetSessionId, userMessage);
       if (fallbackToBuiltInMessage) {
@@ -1898,10 +2727,9 @@ export const AIChat: React.FC<AIChatProps> = ({
         renameSession(currentProject.id, targetSessionId, summarizeSessionTitle(rawContent));
       }
 
-      const assistantMessage = createStoredChatMessage('assistant', '正在思考...');
+      const assistantMessage = createStoredChatMessage('assistant', '正在思考...', 'default', { runId });
       appendMessage(currentProject.id, targetSessionId, assistantMessage);
       setIsLoading(true);
-      const runId = createRunId();
 
       if (selectedRuntimeConfig && !providerExecutionMode) {
         aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
@@ -2372,7 +3200,9 @@ export const AIChat: React.FC<AIChatProps> = ({
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
-            content: projectFileOperationMode === 'auto' ? '正在规划并执行文件操作...' : '正在生成文件操作提案...',
+            content: buildProjectFilePlanningStatusMessage(projectFileOperationMode),
+            structuredCards: undefined,
+            projectFileProposal: undefined,
           }));
 
           const planningResult = await executeRuntimeProjectFilePlanning({
@@ -2389,7 +3219,9 @@ export const AIChat: React.FC<AIChatProps> = ({
           if (planningResult.status !== 'ready') {
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
-              content: planningResult.message,
+              content: '还需要你补充一点信息，才能继续这次文件操作。',
+              structuredCards: buildProjectFileClarificationCards(planningResult.message),
+              projectFileProposal: undefined,
             }));
             appendRuntimeTimelineEvent(runtimeStoreThreadId, {
               id: createRuntimeEventId('file-plan'),
@@ -2405,7 +3237,7 @@ export const AIChat: React.FC<AIChatProps> = ({
 
           const approvalThreadId = runtimeThreadId || targetSessionId;
           const {
-            proposal: nextProposal,
+            proposal: rawProposal,
             approvalActionType,
             riskLevel,
             decision,
@@ -2415,6 +3247,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             plan,
             sandboxPolicy,
           });
+          const nextProposal = resolveProjectFileProposalPresentation(rawProposal, decision);
           const projectFileDecisionState = buildProjectFileDecisionState({
             decision,
             summary: nextProposal.summary,
@@ -2437,6 +3270,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
             content: nextProposal.assistantMessage,
+            structuredCards: undefined,
             projectFileProposal: nextProposal,
           }));
 
@@ -2532,12 +3366,21 @@ export const AIChat: React.FC<AIChatProps> = ({
                   delete pendingApprovalActionsRef.current[approvalId];
                 },
                 resolveAgentApproval,
-                createRunId,
+                runId,
                 createActivityEntryId,
                 getProjectDir,
                 executeProjectFileOperations,
                 appendActivityEntry,
                 normalizeErrorMessage,
+                onExecutionSuccess: async ({ runId: executedRunId, messageId, summary, fileChanges }) => {
+                  await persistTurnCheckpointForRun({
+                    threadId: approvalThreadId,
+                    runId: executedRunId,
+                    messageId,
+                    summary,
+                    files: fileChanges,
+                  });
+                },
               });
 
               if (!didExecute) {
@@ -2563,6 +3406,12 @@ export const AIChat: React.FC<AIChatProps> = ({
 
         if (runtimeExecutionAgentId !== 'built-in') {
           const localExecutionAgentId = runtimeExecutionAgentId;
+          const preferredTeamAgent =
+            preferredForkAgentId === 'claude' || preferredForkAgentId === 'codex'
+              ? preferredForkAgentId
+              : agentAvailability.codex.ready
+                ? 'codex'
+                : 'claude';
           const localAgentConversationHistory = shouldRunForkSkill ? [] : conversationHistory;
           const localAgentSkillsForTurn = shouldRunForkSkill ? forkSkillsForTurn : runtimeVisibleSkillsForTurn;
           const approvalThreadId = runtimeThreadId || targetSessionId;
@@ -2585,7 +3434,9 @@ export const AIChat: React.FC<AIChatProps> = ({
           }));
           const executeLocalAgentFlow = async (finalizeReplay = true) => {
             markTurnExecuting(
-              shouldRunForkSkill
+              localExecutionAgentId === 'team'
+                ? 'Run multi-agent team'
+                : shouldRunForkSkill
                 ? `Run forked skill with ${localExecutionAgentId === 'codex' ? 'Codex' : 'local'} agent`
                 : localExecutionAgentId === 'codex'
                   ? 'Run Codex agent'
@@ -2593,42 +3444,113 @@ export const AIChat: React.FC<AIChatProps> = ({
               localAgentFlow.summary
             );
             const projectRoot = await getProjectDir(currentProject.id);
-            const executionResult = await runRuntimeLocalAgentExecution({
-              projectId: currentProject.id,
-              projectName: currentProject.name,
-              threadId: targetSessionId,
-              userInput: cleanedContent,
-              contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
-              conversationHistory: localAgentConversationHistory,
-              agentInstructions,
-              referenceFiles: resolvedReferenceContextFiles,
-              memoryEntries: projectMemoryEntries,
-              activeSkills: localAgentSkillsForTurn,
-              skillIntent,
-              contextLabels,
-              agentId: localExecutionAgentId,
+            const runPrompt = async ({
+              agent,
               projectRoot,
-              runPrompt: async ({ agent, projectRoot, prompt }) => invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
+              prompt,
+            }: {
+              agent: string;
+              projectRoot: string;
+              prompt: string;
+            }) =>
+              invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
                 params: {
                   agent,
                   projectRoot,
                   prompt,
                 },
-              }),
-              createActivityId: createActivityEntryId,
-              runId,
-              skill: resolvedSkill,
-              normalizeErrorMessage,
-              buildErrorPreview: buildSessionPreview,
-            });
+              });
+            const executionResult =
+              localExecutionAgentId === 'team'
+                ? await (async () => {
+                    const teamResult = await runAgentTeamTurn({
+                      projectId: currentProject.id,
+                      projectName: currentProject.name,
+                      threadId: targetSessionId,
+                      turnId: runtimeTurnSessionId || `turn_${runId}`,
+                      userInput: cleanedContent,
+                      projectRoot,
+                      preferredAgent: preferredTeamAgent,
+                      contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
+                      conversationHistory: localAgentConversationHistory,
+                      agentInstructions,
+                      referenceFiles: resolvedReferenceContextFiles.map((file) => ({
+                        path: file.path,
+                        summary: file.summary,
+                        content: file.content || file.summary || file.title,
+                      })),
+                      memoryEntries: projectMemoryEntries,
+                      onTeamRunUpdate: (teamRun) => {
+                        upsertTeamRun(targetSessionId, teamRun);
+                      },
+                      runPrompt,
+                    });
+
+                    return {
+                      status: 'completed' as const,
+                      finalContent: teamResult.finalContent,
+                      teamRun: teamResult.teamRun,
+                      successOutcome: {
+                        activityEntry: buildRuntimeChangedPathActivityEntry({
+                          createId: createActivityEntryId,
+                          runId,
+                          content: teamResult.finalContent,
+                          runtime: 'local',
+                          skill: resolvedSkill,
+                        }),
+                        timelineSummary: `Team completed: ${teamResult.teamRun.phases.length} phases / ${teamResult.teamRun.members.length} agents`,
+                        replaySummary: teamResult.finalContent,
+                      },
+                      completedStep: {
+                        title: 'Completed team turn',
+                        status: 'completed' as const,
+                        userVisibleDetail: teamResult.finalContent,
+                        resultSummary: teamResult.finalContent,
+                      },
+                    };
+                  })()
+                : await runRuntimeLocalAgentExecution({
+                    projectId: currentProject.id,
+                    projectName: currentProject.name,
+                    threadId: targetSessionId,
+                    userInput: cleanedContent,
+                    contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
+                    conversationHistory: localAgentConversationHistory,
+                    agentInstructions,
+                    referenceFiles: resolvedReferenceContextFiles,
+                    memoryEntries: projectMemoryEntries,
+                    activeSkills: localAgentSkillsForTurn,
+                    skillIntent,
+                    contextLabels,
+                    agentId: localExecutionAgentId,
+                    projectRoot,
+                    runPrompt,
+                    createActivityId: createActivityEntryId,
+                    runId,
+                    skill: resolvedSkill,
+                    normalizeErrorMessage,
+                    buildErrorPreview: buildSessionPreview,
+                  });
 
             if (executionResult.status === 'completed') {
               updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
                 ...message,
                 content: executionResult.finalContent,
+                teamRun: ('teamRun' in executionResult ? executionResult.teamRun : null) as StoredChatMessage['teamRun'],
               }));
               if (executionResult.successOutcome.activityEntry) {
                 appendActivityEntry(currentProject.id, executionResult.successOutcome.activityEntry);
+                const checkpointFiles = await captureCheckpointFilesFromPaths(
+                  currentProject.id,
+                  executionResult.successOutcome.activityEntry.changedPaths
+                );
+                await persistTurnCheckpointForRun({
+                  threadId: approvalThreadId,
+                  runId: executionResult.successOutcome.activityEntry.runId,
+                  messageId: assistantMessage.id,
+                  summary: executionResult.successOutcome.activityEntry.summary,
+                  files: checkpointFiles,
+                });
               }
               appendRuntimeTimelineEvent(runtimeStoreThreadId, {
                 id: createRuntimeEventId('local-agent'),
@@ -2756,6 +3678,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         const projectRoot = await getProjectDir(currentProject.id);
         const toolExecutor = new ToolExecutor(projectRoot);
         setThreadToolCalls(targetSessionId, []);
+        const streamingAssembler = createRuntimeStreamingMessageAssembler();
         const agentTurn = await executeRuntimeBuiltInAgentTurn({
           projectId: currentProject.id,
           projectName: currentProject.name,
@@ -2775,7 +3698,10 @@ export const AIChat: React.FC<AIChatProps> = ({
           onToolCallsChange: (toolCalls) => {
             setThreadToolCalls(targetSessionId, toolCalls);
           },
-          executeModel: (prompt, systemPrompt) =>
+          onModelEvent: (event) => {
+            pushStreamingDraft(assistantMessage.id, streamingAssembler.append(event));
+          },
+          executeModel: (prompt, systemPrompt, onEvent) =>
             executeRuntimePrompt({
               providerId: runtimeProviderId,
               sessionId: targetSessionId,
@@ -2788,25 +3714,47 @@ export const AIChat: React.FC<AIChatProps> = ({
                   : selectedRuntimeConfig,
               systemPrompt,
               prompt,
+              onEvent,
             }),
           executeTool: (call) => toolExecutor.execute(call),
         });
 
-        clearStreamingDraft(assistantMessage.id);
         const normalizedFinalContent = agentTurn.finalContent;
+        clearStreamingDraft(assistantMessage.id);
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
           content: normalizedFinalContent,
+          toolCalls: agentTurn.toolCalls,
         }));
         setThreadMemoryCandidates(targetSessionId, agentTurn.memoryCandidates);
+        const checkpointFilesFromToolCalls = extractCheckpointFilesFromToolCalls(agentTurn.toolCalls);
         const activityEntry = buildRuntimeChangedPathActivityEntry({
           createId: createActivityEntryId,
           runId,
           content: normalizedFinalContent,
+          changedPaths: checkpointFilesFromToolCalls.map((file) => file.path),
           skill: resolvedSkill,
         });
         if (activityEntry) {
           appendActivityEntry(currentProject.id, activityEntry);
+          await persistTurnCheckpointForRun({
+            threadId: replayThreadId,
+            runId: activityEntry.runId,
+            messageId: assistantMessage.id,
+            summary: activityEntry.summary,
+            files:
+              checkpointFilesFromToolCalls.length > 0
+                ? checkpointFilesFromToolCalls
+                : await captureCheckpointFilesFromPaths(currentProject.id, activityEntry.changedPaths),
+          });
+        } else if (checkpointFilesFromToolCalls.length > 0) {
+          await persistTurnCheckpointForRun({
+            threadId: replayThreadId,
+            runId,
+            messageId: assistantMessage.id,
+            summary: `更新了 ${checkpointFilesFromToolCalls.map((file) => file.path).join('、')}`,
+            files: checkpointFilesFromToolCalls,
+          });
         }
         await persistRuntimeTimelineEvent({
           threadId: replayThreadId,
@@ -2872,6 +3820,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       appendRuntimeTimelineEvent,
       bindRuntimeThread,
       clearStreamingDraft,
+      pushStreamingDraft,
       contextSnapshot.currentFileLabel,
       contextSnapshot.primaryLabel,
       contextSnapshot.secondaryLabel,
@@ -2914,6 +3863,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       setSelectedChatAgentId,
       submitRuntimeTurn,
       updateMessage,
+      upsertTeamRun,
       upsertSession,
     ]
   );
@@ -2926,6 +3876,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       const nextInput = input;
+      setReferenceSearchOpen(false);
+      setReferenceSearchQuery('');
+      setReferenceTriggerIndex(-1);
       setInput('');
       await submitPrompt(nextInput);
     },
@@ -2954,7 +3907,122 @@ export const AIChat: React.FC<AIChatProps> = ({
     };
   }, [submitPrompt]);
 
+  useEffect(() => {
+    setReferenceSearchIndex(0);
+  }, [referenceSearchQuery, referenceSearchOpen]);
+
+  const handleReferenceSearchSelect = useCallback(
+    (entry: { id: string }) => {
+      if (!currentProject) {
+        return;
+      }
+      const file = visibleContextFileById.get(entry.id);
+      if (!file) {
+        return;
+      }
+
+      const selectedIds = aiContextState?.selectedReferenceFileIds || [];
+      setSelectedReferenceFileIds(currentProject.id, [...selectedIds, file.id]);
+
+      if (referenceTriggerIndex >= 0) {
+        const tokenEnd = referenceTriggerIndex + 1 + referenceSearchQuery.length;
+        const beforeToken = input.slice(0, referenceTriggerIndex);
+        const afterToken = input.slice(tokenEnd).replace(/^\s+/, '');
+        const spacer = beforeToken && afterToken && !/\s$/.test(beforeToken) ? ' ' : '';
+        const nextInput = `${beforeToken}${spacer}${afterToken}`;
+        setInput(nextInput);
+        requestAnimationFrame(() => {
+          const nextCursorPos = referenceTriggerIndex + spacer.length;
+          textareaRef.current?.focus();
+          textareaRef.current?.setSelectionRange(nextCursorPos, nextCursorPos);
+        });
+      }
+
+      setReferenceSearchOpen(false);
+      setReferenceSearchQuery('');
+      setReferenceTriggerIndex(-1);
+    },
+    [
+      aiContextState?.selectedReferenceFileIds,
+      currentProject,
+      input,
+      referenceSearchQuery,
+      referenceTriggerIndex,
+      setSelectedReferenceFileIds,
+      visibleContextFileById,
+    ]
+  );
+
+  const handleInputChange = useCallback(
+    (value: string, cursorPos: number) => {
+      setInput(value);
+
+      let triggerIndex = -1;
+      for (let index = cursorPos - 1; index >= 0; index -= 1) {
+        const character = value[index];
+        if (character === '@') {
+          if (index === 0 || /\s/.test(value[index - 1] || '')) {
+            triggerIndex = index;
+          }
+          break;
+        }
+        if (/\s/.test(character || '')) {
+          break;
+        }
+      }
+
+      if (triggerIndex < 0) {
+        setReferenceSearchOpen(false);
+        setReferenceSearchQuery('');
+        setReferenceTriggerIndex(-1);
+        return;
+      }
+
+      setReferenceTriggerIndex(triggerIndex);
+      setReferenceSearchQuery(value.slice(triggerIndex + 1, cursorPos));
+      setReferenceSearchOpen(true);
+    },
+    []
+  );
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (referenceSearchOpen) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setReferenceSearchIndex((current) =>
+          filteredReferenceSearchFiles.length === 0 ? 0 : (current + 1) % filteredReferenceSearchFiles.length
+        );
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setReferenceSearchIndex((current) =>
+          filteredReferenceSearchFiles.length === 0
+            ? 0
+            : (current - 1 + filteredReferenceSearchFiles.length) % filteredReferenceSearchFiles.length
+        );
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setReferenceSearchOpen(false);
+        setReferenceSearchQuery('');
+        setReferenceTriggerIndex(-1);
+        return;
+      }
+
+      if ((event.key === 'Enter' || event.key === 'Tab') && filteredReferenceSearchFiles.length > 0) {
+        event.preventDefault();
+        const selectedFile = filteredReferenceSearchFiles[referenceSearchIndex];
+        if (selectedFile) {
+          handleReferenceSearchSelect(selectedFile);
+        }
+        return;
+      }
+    }
+
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       void handleSubmit();
@@ -2993,6 +4061,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderMessagePart={renderMessagePart}
       renderStructuredCards={renderStructuredCards}
       renderProjectFileProposal={renderProjectFileProposal}
+      renderToolExecutionCard={renderToolExecutionCard}
+      renderRunSummaryCard={renderRunSummaryCard}
       renderRuntimeApproval={renderRuntimeApprovalCard}
       messagesEndRef={messagesEndRef}
     />
@@ -3110,8 +4180,43 @@ export const AIChat: React.FC<AIChatProps> = ({
             {isEmbedded ? (
                 <>
                   <GNAgentEmbeddedComposer
+                    topContent={
+                      <>
+                        {explicitSelectedReferenceFiles.length > 0 ? (
+                          <div className="chat-selected-reference-chips chat-selected-reference-chips-embedded">
+                            {explicitSelectedReferenceFiles.map((file) => (
+                              <button
+                                key={file.id}
+                                type="button"
+                                className="chat-reference-chip compact"
+                                onClick={() =>
+                                  currentProject
+                                    ? setSelectedReferenceFileIds(
+                                        currentProject.id,
+                                        (aiContextState?.selectedReferenceFileIds || []).filter((id) => id !== file.id)
+                                      )
+                                    : undefined
+                                }
+                              >
+                                <strong>@{file.title}</strong>
+                                <span title={file.path}>{summarizeReferencePath(file.path)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                        {referenceSearchOpen ? (
+                          <AIChatReferenceSearchMenu
+                            entries={filteredReferenceSearchFiles}
+                            selectedIndex={referenceSearchIndex}
+                            onHover={setReferenceSearchIndex}
+                            onSelect={handleReferenceSearchSelect}
+                          />
+                        ) : null}
+                      </>
+                    }
                     input={input}
                     setInput={setInput}
+                    onInputChange={handleInputChange}
                     textareaRef={textareaRef}
                     onKeyDown={handleKeyDown}
                     placeholder={getComposerPlaceholder(isRuntimeConfigured)}
@@ -3132,11 +4237,43 @@ export const AIChat: React.FC<AIChatProps> = ({
               ) : (
                 <form className="chat-composer" onSubmit={handleSubmit}>
                   <div className="chat-composer-shell">
+                      {explicitSelectedReferenceFiles.length > 0 ? (
+                        <div className="chat-selected-reference-chips">
+                          {explicitSelectedReferenceFiles.map((file) => (
+                            <button
+                              key={file.id}
+                              type="button"
+                              className="chat-reference-chip compact"
+                              onClick={() =>
+                                currentProject
+                                  ? setSelectedReferenceFileIds(
+                                      currentProject.id,
+                                      (aiContextState?.selectedReferenceFileIds || []).filter((id) => id !== file.id)
+                                    )
+                                  : undefined
+                              }
+                            >
+                              <strong>@{file.title}</strong>
+                              <span title={file.path}>{summarizeReferencePath(file.path)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="chat-composer-main">
+                        {referenceSearchOpen ? (
+                          <AIChatReferenceSearchMenu
+                            entries={filteredReferenceSearchFiles}
+                            selectedIndex={referenceSearchIndex}
+                            onHover={setReferenceSearchIndex}
+                            onSelect={handleReferenceSearchSelect}
+                          />
+                        ) : null}
                         <textarea
                           ref={textareaRef}
                           value={input}
-                          onChange={(event) => setInput(event.target.value)}
+                          onChange={(event) =>
+                            handleInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length)
+                          }
                           onKeyDown={handleKeyDown}
                           placeholder={getComposerPlaceholder(isRuntimeConfigured)}
                           className="chat-composer-input"
@@ -3213,6 +4350,118 @@ export const AIChat: React.FC<AIChatProps> = ({
                 </div>
                 <div className="chat-skills-modal-body">
                   <GNAgentSkillsPage />
+                </div>
+              </section>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {rewindTargetRunId
+        ? createPortal(
+            <div className="chat-file-preview-backdrop" onClick={() => {
+              if (!isRewindingRunId) {
+                setRewindTargetRunId(null);
+                setRewindError('');
+              }
+            }}>
+              <section
+                className="chat-file-preview-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="回退本轮改动"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="chat-file-preview-head">
+                  <div>
+                    <strong>
+                      {rewindTargetRunId === latestCheckpointRunId ? '撤销本轮改动' : '回到这轮之前'}
+                    </strong>
+                    <span>
+                      这会恢复该轮及其之后轮次写入过的文件，并裁掉对应聊天记录。
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="chat-file-preview-close"
+                    aria-label="关闭回退确认"
+                    title="关闭回退确认"
+                    onClick={() => {
+                      if (!isRewindingRunId) {
+                        setRewindTargetRunId(null);
+                        setRewindError('');
+                      }
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="chat-file-preview-body">
+                  <section className="chat-file-preview-panel">
+                    <div className="chat-file-preview-panel-head">
+                      <strong>回退说明</strong>
+                      <span>将同步恢复文件与对话</span>
+                    </div>
+                    <div className="chat-file-preview-empty">
+                      {rewindTargetRunId === latestCheckpointRunId
+                        ? '会撤销当前轮的文件改动，并删除这轮聊天记录。'
+                        : '会回退到这轮开始前的状态，并删除这轮以及之后的聊天记录。'}
+                    </div>
+                    {rewindError ? <div className="chat-run-summary-error">{rewindError}</div> : null}
+                    <div className="chat-run-summary-confirm-actions">
+                      <button
+                        type="button"
+                        className="chat-run-summary-action"
+                        onClick={() => setRewindTargetRunId(null)}
+                        disabled={Boolean(isRewindingRunId)}
+                      >
+                        取消
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-run-summary-action danger"
+                        onClick={() => {
+                          const checkpoint = turnCheckpointsByRunId[rewindTargetRunId];
+                          if (checkpoint) {
+                            void handleRewindRun(checkpoint);
+                          }
+                        }}
+                        disabled={Boolean(isRewindingRunId)}
+                      >
+                        {isRewindingRunId ? '回退中...' : rewindTargetRunId === latestCheckpointRunId ? '确认撤销本轮' : '确认回到这轮之前'}
+                      </button>
+                    </div>
+                  </section>
+                  <section className="chat-file-preview-panel history">
+                    <div className="chat-file-preview-panel-head">
+                      <strong>将被移除的轮次</strong>
+                      <span>
+                        {turnCheckpoints.filter((entry) => {
+                          const target = turnCheckpointsByRunId[rewindTargetRunId];
+                          return target ? entry.createdAt >= target.createdAt : false;
+                        }).length} 条
+                      </span>
+                    </div>
+                    <div className="chat-file-preview-history-list">
+                      {turnCheckpoints
+                        .filter((entry) => {
+                          const target = turnCheckpointsByRunId[rewindTargetRunId];
+                          return target ? entry.createdAt >= target.createdAt : false;
+                        })
+                        .map((entry) => (
+                          <div key={entry.id} className="chat-file-preview-history-item active">
+                            <strong>{entry.summary}</strong>
+                            <span>
+                              {formatTimestamp(entry.createdAt)}
+                              {' · '}+{entry.insertions} / -{entry.deletions}
+                            </span>
+                          </div>
+                        ))}
+                      {turnCheckpoints.length === 0 ? (
+                        <div className="chat-file-preview-empty">还没有可回退的变更记录。</div>
+                      ) : null}
+                    </div>
+                  </section>
                 </div>
               </section>
             </div>,
