@@ -348,20 +348,6 @@ const ExpandAllIcon = () => (
   </svg>
 );
 
-const formatUpdatedAt = (value: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
 const NOTE_KIND_META: Record<NonNullable<KnowledgeNote['kind']>, { badge: string; label: string }> = {
   note: { badge: 'NOTE', label: '项目笔记' },
   sketch: { badge: 'SKETCH', label: '草图笔记' },
@@ -632,12 +618,8 @@ export const KnowledgeNoteWorkspace = ({
   projectRootPath = null,
   temporaryContentPreview = null,
   titleValue,
-  mirrorSourcePath = null,
   editorValue,
   editable,
-  isSaving,
-  saveMessage,
-  canSave,
   searchValue,
   isSearching,
   error,
@@ -645,8 +627,6 @@ export const KnowledgeNoteWorkspace = ({
   onSelectNote,
   onTitleChange,
   onEditorChange,
-  onSave,
-  onDelete,
   onCreateNote,
   onCreateNoteAtPath,
   onCreateFolderAtPath,

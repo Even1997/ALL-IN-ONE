@@ -1,4 +1,8 @@
 import type { AgentReplayEvent } from '../agentRuntimeTypes';
+import {
+  parseRuntimeReplayTurnStartPayload,
+  type RuntimeReplayTurnStartPayload,
+} from './runtimeReplayPayload.ts';
 
 export type AgentReplayRecoveryState = {
   threadId: string;
@@ -11,6 +15,8 @@ export type AgentReplayRecoveryState = {
   resumeKind: 'none' | 'resume-latest-prompt' | 'retry-last-failed';
   resumeActionLabel: string | null;
   resumePrompt: string | null;
+  resumeSkillSnapshot: RuntimeReplayTurnStartPayload | null;
+  latestSkillSnapshot: RuntimeReplayTurnStartPayload | null;
   summary: string;
 };
 
@@ -29,12 +35,15 @@ export const buildReplayRecoveryState = (
   const lastEvent = sortedEvents.length > 0 ? sortedEvents[sortedEvents.length - 1] : null;
   const lastStartedEvent =
     [...sortedEvents].reverse().find((event) => event.eventType === 'turn_started') || null;
+  const lastStartedPayload = lastStartedEvent
+    ? parseRuntimeReplayTurnStartPayload(lastStartedEvent.payload)
+    : null;
   const resumePrompt =
     lastStartedEvent &&
     lastEvent &&
     !isCompletionEvent(lastEvent.eventType) &&
-    lastStartedEvent.payload.trim()
-      ? lastStartedEvent.payload.trim()
+    (lastStartedPayload?.rawPrompt || lastStartedEvent.payload).trim()
+      ? (lastStartedPayload?.rawPrompt || lastStartedEvent.payload).trim()
       : null;
 
   let lastOutcome: AgentReplayRecoveryState['lastOutcome'] = 'empty';
@@ -74,9 +83,14 @@ export const buildReplayRecoveryState = (
     resumeKind,
     resumeActionLabel,
     resumePrompt,
+    resumeSkillSnapshot: resumePrompt ? lastStartedPayload : null,
+    latestSkillSnapshot: lastStartedPayload,
     summary,
   };
 };
+
+export const getLatestReplaySkillSnapshot = (state: AgentReplayRecoveryState | null | undefined) =>
+  state?.latestSkillSnapshot || null;
 
 export const canResumeFromRecovery = (state: AgentReplayRecoveryState | null | undefined) =>
   Boolean(state && state.resumeState === 'ready' && state.resumePrompt);

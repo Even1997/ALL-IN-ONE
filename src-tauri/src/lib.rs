@@ -101,6 +101,8 @@ pub struct GlobParams {
 pub struct BashParams {
     pub command: String,
     pub timeout: Option<u64>,
+    pub cwd: Option<String>,
+    pub shell: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1999,7 +2001,55 @@ fn tool_bash(params: BashParams) -> ToolResult {
         }
     }
 
-    let output = Command::new("sh").arg("-c").arg(command).output();
+    let mut process = if cfg!(target_os = "windows") {
+        let shell = params
+            .shell
+            .as_deref()
+            .unwrap_or("powershell")
+            .to_lowercase();
+        if shell == "powershell" {
+            let mut command_process = Command::new("powershell");
+            command_process
+                .arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-Command")
+                .arg(command);
+            command_process
+        } else {
+            let mut command_process = Command::new("cmd");
+            command_process.arg("/C").arg(command);
+            command_process
+        }
+    } else {
+        let shell = params
+            .shell
+            .as_deref()
+            .unwrap_or("bash")
+            .to_lowercase();
+        if shell == "powershell" {
+            let mut command_process = Command::new("pwsh");
+            command_process
+                .arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-Command")
+                .arg(command);
+            command_process
+        } else if shell == "sh" {
+            let mut command_process = Command::new("sh");
+            command_process.arg("-c").arg(command);
+            command_process
+        } else {
+            let mut command_process = Command::new("bash");
+            command_process.arg("-lc").arg(command);
+            command_process
+        }
+    };
+
+    if let Some(cwd) = params.cwd.as_ref() {
+        process.current_dir(cwd);
+    }
+
+    let output = process.output();
 
     match output {
         Ok(out) => {

@@ -3,7 +3,9 @@ import {
   shouldAutoApproveRuntimeAction,
   shouldDenyRuntimeAction,
 } from '../approval/riskPolicy.ts';
-import type { ApprovalRiskLevel, SandboxPolicy } from '../approval/approvalTypes.ts';
+import type { ApprovalRecord, ApprovalRiskLevel, SandboxPolicy } from '../approval/approvalTypes.ts';
+import type { AgentTurnPlan } from '../session/agentSessionTypes.ts';
+import { requestRuntimeApproval, type RuntimePendingApprovalAction } from './runtimeApprovalCoordinator.ts';
 
 export type RuntimeLocalAgentDecision = 'blocked' | 'approval-required' | 'auto-execute';
 
@@ -27,11 +29,186 @@ export const buildRuntimeLocalAgentDecisionFeedback = (input: {
   replaySummary: `${input.decision === 'blocked' ? 'Sandbox denied' : 'Approval required'}: ${input.summary}`,
 });
 
+export const buildRuntimeLocalAgentDecisionState = (flow: PreparedRuntimeLocalAgentFlow) => {
+  if (flow.decision === 'blocked') {
+    return {
+      messageContent: flow.denialMessage || '已阻止本地 Agent 执行。',
+      approvalStatus: 'denied' as const,
+      feedback: buildRuntimeLocalAgentDecisionFeedback({
+        decision: 'blocked',
+        summary: flow.summary,
+      }),
+      blockedReason: flow.summary,
+      blockedActionLabel: 'Adjust local agent request',
+    };
+  }
+
+  return {
+    messageContent: flow.pendingMessage || '需要审批后才能启动本地 Agent。',
+    approvalStatus: 'pending' as const,
+    feedback: buildRuntimeLocalAgentDecisionFeedback({
+      decision: 'approval-required',
+      summary: flow.summary,
+    }),
+    deniedMessageContent: '已拒绝本地 Agent 执行请求。',
+    deniedReason: 'Local agent execution was denied.',
+    deniedActionLabel: 'Retry with a safer request',
+  };
+};
+
+type RuntimeLocalAgentDecisionState = ReturnType<typeof buildRuntimeLocalAgentDecisionState> | null;
+
+export const resolveRuntimeLocalAgentDecisionFeedback = (input: {
+  decisionState: RuntimeLocalAgentDecisionState;
+  summary: string;
+}) => ({
+  messageContent: input.decisionState?.messageContent || '需要审批后才能启动本地 Agent。',
+  timelineSummary: input.decisionState?.feedback.timelineSummary || input.summary,
+  replaySummary: input.decisionState?.feedback.replaySummary || input.summary,
+  blockedReason: input.decisionState?.blockedReason || input.summary,
+  blockedActionLabel: input.decisionState?.blockedActionLabel || 'Adjust local agent request',
+  deniedMessageContent: input.decisionState?.deniedMessageContent || '已拒绝本地 Agent 执行请求。',
+  deniedReason: input.decisionState?.deniedReason || 'Local agent execution was denied.',
+  deniedActionLabel: input.decisionState?.deniedActionLabel || 'Retry with a safer request',
+  approvalStatus: input.decisionState?.approvalStatus || 'pending',
+});
+
+export const updateRuntimeLocalAgentPlanApprovalStatus = (
+  plan: AgentTurnPlan | null,
+  approvalStatus: AgentTurnPlan['approvalStatus']
+) =>
+  plan
+    ? {
+        ...plan,
+        approvalStatus,
+      }
+    : plan;
+
+export const denyRuntimeLocalAgentApproval = async (input: {
+  flow: PreparedRuntimeLocalAgentFlow;
+  threadId: string;
+  messageId?: string | null;
+  enqueueAgentApproval: (payload: {
+    threadId: string;
+    actionType: string;
+    riskLevel: ApprovalRiskLevel;
+    summary: string;
+    messageId: string | null;
+  }) => Promise<ApprovalRecord>;
+  enqueueApproval: (approval: ApprovalRecord) => void;
+  resolveStoredApproval: (approvalId: string, status: ApprovalRecord['status']) => void;
+  resolveAgentApproval: (payload: { approvalId: string; status: ApprovalRecord['status'] }) => Promise<unknown>;
+}) => {
+  const approval = await input.enqueueAgentApproval({
+    threadId: input.threadId,
+    actionType: input.flow.actionType,
+    riskLevel: input.flow.riskLevel,
+    summary: input.flow.summary,
+    messageId: input.messageId || null,
+  });
+
+  input.enqueueApproval(approval);
+  input.resolveStoredApproval(approval.id, 'denied');
+  await input.resolveAgentApproval({ approvalId: approval.id, status: 'denied' });
+
+  return approval;
+};
+
+export const requestRuntimeLocalAgentApproval = async (input: {
+  flow: PreparedRuntimeLocalAgentFlow;
+  threadId: string;
+  messageId?: string | null;
+  onApprove: () => Promise<void>;
+  onDeny?: () => void | Promise<void>;
+  enqueueAgentApproval: (payload: {
+    threadId: string;
+    actionType: string;
+    riskLevel: ApprovalRiskLevel;
+    summary: string;
+    messageId: string | null;
+  }) => Promise<ApprovalRecord>;
+  enqueueApproval: (approval: ApprovalRecord) => void;
+  pendingApprovalActions: Record<string, RuntimePendingApprovalAction>;
+}) =>
+  requestRuntimeApproval({
+    threadId: input.threadId,
+    actionType: input.flow.actionType,
+    riskLevel: input.flow.riskLevel,
+    summary: input.flow.summary,
+    messageId: input.messageId,
+    onApprove: input.onApprove,
+    onDeny: input.onDeny,
+    enqueueAgentApproval: input.enqueueAgentApproval,
+    enqueueApproval: input.enqueueApproval,
+    pendingApprovalActions: input.pendingApprovalActions,
+  });
+
+export const handleRuntimeLocalAgentDecision = async (input: {
+  flow: PreparedRuntimeLocalAgentFlow;
+  onBlocked: () => Promise<void>;
+  onApprovalRequired: () => Promise<void>;
+  onAutoExecute: () => Promise<void>;
+}) => {
+  if (input.flow.decision === 'blocked') {
+    await input.onBlocked();
+    return 'blocked' as const;
+  }
+
+  if (input.flow.decision === 'approval-required') {
+    await input.onApprovalRequired();
+    return 'approval-required' as const;
+  }
+
+  await input.onAutoExecute();
+  return 'auto-execute' as const;
+};
+
+export const buildRuntimeLocalAgentPlan = (input: {
+  turnId: string | null;
+  flow: PreparedRuntimeLocalAgentFlow;
+}): AgentTurnPlan => ({
+  summary: input.flow.summary,
+  reason: 'local-agent-flow',
+  riskLevel: input.flow.riskLevel,
+  approvalStatus:
+    input.flow.decision === 'approval-required'
+      ? 'pending'
+      : input.flow.decision === 'blocked'
+        ? 'denied'
+        : 'approved',
+  affectedPaths: [],
+  steps: [
+    {
+      id: `${input.turnId || 'local-agent'}_local-review`,
+      title: 'Review local agent request',
+      kind: 'analysis',
+      summary: 'Validate the request before launching the desktop agent.',
+      needsApproval: false,
+      expectedResult: 'A safe local-agent execution plan.',
+    },
+    {
+      id: `${input.turnId || 'local-agent'}_local-run`,
+      title: 'Run local agent',
+      kind: 'tool',
+      summary: 'Start the local agent and stream the result back into chat.',
+      needsApproval: input.flow.decision === 'approval-required',
+      expectedResult: 'A completed local-agent run or a resumable block.',
+    },
+  ],
+});
+
 export const buildRuntimeLocalAgentPrompt = (input: {
   systemPrompt?: string | null;
   prompt: string;
+  allowedTools?: string[] | null;
 }) =>
-  [input.systemPrompt ? `<system>\n${input.systemPrompt}\n</system>` : null, input.prompt]
+  [
+    input.systemPrompt ? `<system>\n${input.systemPrompt}\n</system>` : null,
+    input.allowedTools && input.allowedTools.length > 0
+      ? `<tool_constraints>\nOnly use these tools if tool use is needed: ${input.allowedTools.join(', ')}.\nDo not use any other tools.\n</tool_constraints>`
+      : null,
+    input.prompt,
+  ]
     .filter((item): item is string => Boolean(item))
     .join('\n\n');
 

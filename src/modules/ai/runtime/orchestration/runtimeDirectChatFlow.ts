@@ -68,6 +68,7 @@ export const buildRuntimeDirectChatRequest = (input: {
     currentProjectName: input.currentProjectName,
     contextWindowTokens: input.contextWindowTokens,
     skillIntent: input.skillIntent,
+    availableSkills: input.activeSkills,
     conversationHistory: input.conversationHistory,
     referenceContext,
     contextLabels: input.contextLabels,

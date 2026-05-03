@@ -11,6 +11,7 @@ import type { AgentContextSnapshot } from './context/agentContextTypes';
 import type { RuntimeToolStep } from './agent-kernel/agentKernelTypes';
 import type { RuntimeSkillDefinition } from './skills/runtimeSkillTypes';
 import { canResumeFromRecovery, type AgentReplayRecoveryState } from './replay/runtimeReplayRecovery.ts';
+import type { RuntimeReplayTurnStartPayload } from './replay/runtimeReplayPayload.ts';
 import type { AgentTurnSession } from './session/agentSessionTypes';
 
 export type AgentRuntimeBinding = {
@@ -30,6 +31,7 @@ export type AgentRuntimeResumeRequest = {
   prompt: string;
   resumeKind: AgentReplayRecoveryState['resumeKind'];
   actionLabel: string | null;
+  skillSnapshot?: RuntimeReplayTurnStartPayload | null;
   requestedAt: number;
 };
 
@@ -294,6 +296,7 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
             prompt: readyRecoveryState.resumePrompt || '',
             resumeKind: readyRecoveryState.resumeKind,
             actionLabel: readyRecoveryState.resumeActionLabel,
+            skillSnapshot: readyRecoveryState.resumeSkillSnapshot,
             requestedAt: Date.now(),
           },
         },

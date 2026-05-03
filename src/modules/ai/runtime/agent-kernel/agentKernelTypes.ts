@@ -24,6 +24,8 @@ export type RuntimeToolLoopOptions = {
   initialPrompt: string;
   systemPrompt: string;
   allowedTools: string[];
+  beforeToolCall?: (call: ToolCall) => Promise<void>;
+  afterToolCall?: (call: ToolCall) => Promise<void>;
   onToolCallsChange?: (toolCalls: RuntimeToolStep[]) => void;
   callModel: (
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,

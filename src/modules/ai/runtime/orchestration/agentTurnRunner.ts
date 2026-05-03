@@ -207,6 +207,7 @@ export const createRuntimeReplayExecutionController = (input: {
   threadId: string;
   providerId: AgentProviderId;
   prompt: string;
+  replayStartPayload?: string;
   createdAt?: number;
   submitTurn: (threadId: string, turn: AgentTurnRecord) => void;
   startRun: (threadId: string) => void;
@@ -236,7 +237,7 @@ export const createRuntimeReplayExecutionController = (input: {
         runtimeStoreThreadId: input.runtimeStoreThreadId,
         replayThreadId: input.replayThreadId,
         eventType: 'turn_started',
-        payload: prompt,
+        payload: input.replayStartPayload || prompt,
       });
     },
     appendReplayOutcome: async (eventType, payload) => {

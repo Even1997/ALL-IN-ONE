@@ -393,6 +393,8 @@ export class ToolExecutor {
         params: {
           command: params.command,
           timeout: params.timeout || 60000,
+          cwd: params.cwd,
+          shell: params.shell,
         },
       });
 
@@ -509,6 +511,8 @@ interface EditParams {
 interface BashParams {
   command: string;
   timeout?: number;
+  cwd?: string;
+  shell?: 'bash' | 'powershell';
 }
 
 interface FetchParams {

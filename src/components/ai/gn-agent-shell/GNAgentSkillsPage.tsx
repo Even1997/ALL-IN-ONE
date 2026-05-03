@@ -7,6 +7,7 @@ import {
   readSkillFile,
   type SkillDiscoveryEntry,
 } from '../../../modules/ai/skills/skillLibrary';
+import { AI_CHAT_COMMAND_EVENT } from '../../../modules/ai/chat/chatCommands';
 import { MacDialog } from '../../ui/MacDialog';
 import './GNAgentSkillsPage.css';
 
@@ -89,9 +90,10 @@ const SkillCard: React.FC<{
   skill: SkillDiscoveryEntry;
   isWorking: boolean;
   onImport: (skill: SkillDiscoveryEntry) => void;
+  onUse: (skill: SkillDiscoveryEntry) => void;
   onView: (skill: SkillDiscoveryEntry) => void;
   onDelete: (skill: SkillDiscoveryEntry) => void;
-}> = ({ skill, isWorking, onImport, onView, onDelete }) => {
+}> = ({ skill, isWorking, onImport, onUse, onView, onDelete }) => {
   const isInstalled = skill.category === 'system' || skill.imported;
 
   return (
@@ -121,6 +123,11 @@ const SkillCard: React.FC<{
       </div>
 
       <div className="gn-agent-skills-actions">
+        {isInstalled ? (
+          <button type="button" className="gn-agent-skills-card-btn" disabled={isWorking} onClick={() => void onUse(skill)}>
+            使用
+          </button>
+        ) : null}
         <button type="button" className="gn-agent-skills-card-btn" disabled={isWorking} onClick={() => void onView(skill)}>
           查看
         </button>
@@ -246,6 +253,19 @@ export const GNAgentSkillsPage: React.FC = () => {
     }
   };
 
+  const handleUseSkill = (skill: SkillDiscoveryEntry) => {
+    window.dispatchEvent(
+      new CustomEvent(AI_CHAT_COMMAND_EVENT, {
+        detail: {
+          prompt: `/${skill.id} `,
+          autoSubmit: false,
+        },
+      })
+    );
+    setStatusMessage(`已将 /${skill.id} 填入聊天框。`);
+    setErrorMessage(null);
+  };
+
   const handlePreviewOpenChange = (open: boolean) => {
     if (open) {
       return;
@@ -356,6 +376,7 @@ export const GNAgentSkillsPage: React.FC = () => {
                       skill={skill}
                       isWorking={isWorking}
                       onImport={handleQuickImport}
+                      onUse={handleUseSkill}
                       onView={handleViewSkill}
                       onDelete={handleDeleteSkill}
                     />
@@ -377,6 +398,7 @@ export const GNAgentSkillsPage: React.FC = () => {
                       skill={skill}
                       isWorking={isWorking}
                       onImport={handleQuickImport}
+                      onUse={handleUseSkill}
                       onView={handleViewSkill}
                       onDelete={handleDeleteSkill}
                     />
@@ -398,6 +420,7 @@ export const GNAgentSkillsPage: React.FC = () => {
                       skill={skill}
                       isWorking={isWorking}
                       onImport={handleQuickImport}
+                      onUse={handleUseSkill}
                       onView={handleViewSkill}
                       onDelete={handleDeleteSkill}
                     />

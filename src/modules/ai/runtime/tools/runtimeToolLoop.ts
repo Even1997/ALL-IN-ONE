@@ -70,6 +70,21 @@ export async function runRuntimeToolLoop(
       toolCalls.push(step);
       emitToolCallsChange(options, toolCalls);
 
+      try {
+        await options.beforeToolCall?.(call);
+      } catch (error) {
+        const result: ToolResult = {
+          type: 'text',
+          content: error instanceof Error ? error.message : String(error),
+          is_error: true,
+        };
+        step.status = 'blocked';
+        step.resultPreview = previewResult(result);
+        emitToolCallsChange(options, toolCalls);
+        messages.push(createToolResultMessage(step, result));
+        continue;
+      }
+
       if (!allowedTools.has(call.name)) {
         const result: ToolResult = {
           type: 'text',
@@ -88,6 +103,7 @@ export async function runRuntimeToolLoop(
         step.status = result.is_error ? 'failed' : 'completed';
         step.resultPreview = previewResult(result);
         emitToolCallsChange(options, toolCalls);
+        await options.afterToolCall?.(call);
         messages.push(createToolResultMessage(step, result));
       } catch (error) {
         const result: ToolResult = {

@@ -91,7 +91,7 @@ export const buildAgentContext = (input: AgentContextBuildInput): AgentContextSn
     createContextSection({
       id: 'skills',
       kind: 'skills',
-      title: 'Active Skills',
+      title: 'Available Skills',
       sourceLabel: 'runtime skills',
       content: buildRuntimeSkillPrompt(input.activeSkills),
     }),

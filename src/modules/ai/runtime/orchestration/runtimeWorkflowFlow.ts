@@ -26,3 +26,16 @@ export const buildRuntimeWorkflowCompletion = (input: {
     timelineSummary: `Workflow completed: ${input.targetPackage}`,
   };
 };
+
+export const executeRuntimeWorkflowPackage = async (input: {
+  targetPackage: AIWorkflowPackage;
+  runWorkflowPackage: (targetPackage: AIWorkflowPackage) => Promise<unknown>;
+  getLatestRun: () => RuntimeWorkflowSnapshot;
+}) => {
+  await input.runWorkflowPackage(input.targetPackage);
+
+  return buildRuntimeWorkflowCompletion({
+    targetPackage: input.targetPackage,
+    latestRun: input.getLatestRun(),
+  });
+};

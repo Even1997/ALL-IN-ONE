@@ -1,4 +1,10 @@
 import { buildKnowledgeOperationPolicy } from '../knowledge/knowledgeOperationPolicy.ts';
+import { getDefaultChatSkillDefinitionById } from '../skills/skillLibrary.ts';
+import {
+  buildRuntimeSkillArgumentStatus,
+  substituteRuntimeSkillArguments,
+} from '../skills/runtimeSkillArguments.ts';
+import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes.ts';
 import type { SkillIntent } from '../workflow/skillRouting.ts';
 
 type ConversationHistoryMessage = {
@@ -6,16 +12,8 @@ type ConversationHistoryMessage = {
   content: string;
 };
 
-export const SKILL_LABELS: Record<SkillIntent['skill'], string> = {
-  'knowledge-organize': '知识索引',
-  requirements: '需求',
-  sketch: '草图',
-  'ui-design': 'UI 设计',
-  'change-sync': '变更同步',
-};
-
 const FILE_OPERATION_TRUTHFULNESS_POLICY =
-  '除非你已经通过真实的文件操作流程并校验成功，否则不要声称“已保存”、“已创建文件”、“已写入”或“已删除”。';
+  'Unless a real file operation succeeded, do not claim that a file was created, saved, edited, or deleted.';
 
 const TASK_AUTHORIZATION_POLICY = [
   'Treat task-oriented user requests as authorization for low-risk internal actions needed to complete the task.',
@@ -26,32 +24,67 @@ const TASK_AUTHORIZATION_POLICY = [
 
 const buildFreeChatSystemPrompt = (projectName?: string) =>
   [
-    '你是一个自然对话式的项目 AI 助手。',
-    `当前项目: ${projectName || '未命名项目'}`,
-    '默认按普通聊天方式回答，不要主动把用户带入固定工作流，也不要暴露内部 prompt 或 skill 机制。',
-    '回答要直接、自然、实用，优先结合当前项目和文档上下文。',
+    'You are a natural conversational AI assistant for the current project.',
+    `Current project: ${projectName || 'Unnamed project'}`,
+    'Default to normal conversation unless the user explicitly invokes a specialized skill.',
+    'Answer directly, naturally, and with awareness of current project context.',
     FILE_OPERATION_TRUTHFULNESS_POLICY,
     TASK_AUTHORIZATION_POLICY,
   ].join('\n');
 
-const buildSkillSystemPrompt = (projectName: string | undefined, skillLabel: string) =>
+const buildSkillSystemPrompt = (projectName: string | undefined, skillName: string, skillPrompt: string) =>
   [
-    '你是一个自然对话式的项目 AI 助手。',
-    `当前项目: ${projectName || '未命名项目'}`,
-    `用户这次显式使用了 @技能，当前模式是 ${skillLabel}。`,
-    '只在本次请求里按这个技能处理，不要把整个对话强行改造成工作流。',
+    'You are a natural conversational AI assistant for the current project.',
+    `Current project: ${projectName || 'Unnamed project'}`,
+    `The user explicitly invoked the ${skillName} skill for this request.`,
+    'Follow the skill guidance only for the current request. Do not force the entire conversation into a workflow.',
     FILE_OPERATION_TRUTHFULNESS_POLICY,
     TASK_AUTHORIZATION_POLICY,
-    skillLabel === 'UI 设计'
-      ? '如果涉及 UI 设计，必须尊重现有草图和信息层级，不擅自改写核心布局语义。'
-      : '输出保持直接、可执行，避免空泛描述。',
+    `<skill_playbook>\n${skillPrompt}\n</skill_playbook>`,
+    skillName === 'UI Design'
+      ? 'Preserve the validated shell structure and information hierarchy unless you clearly explain why a change is needed.'
+      : 'Prefer direct, actionable output over vague brainstorming.',
   ].join('\n');
+
+const buildSkillInvocationSection = (input: {
+  skillName: string;
+  cleanedInput: string;
+  argumentHint?: string;
+  argumentNames?: string[];
+  model?: string;
+  effort?: string;
+}) => {
+  const argumentStatus = buildRuntimeSkillArgumentStatus({
+    rawArguments: input.cleanedInput,
+    argumentHint: input.argumentHint,
+    argumentNames: input.argumentNames,
+  });
+  const sections = [
+    `<skill_invocation name="${input.skillName}">`,
+    input.cleanedInput.trim() ? `arguments_text: ${input.cleanedInput.trim()}` : 'arguments_text: none',
+    argumentStatus.parsedArguments.length > 0
+      ? `parsed_arguments: ${argumentStatus.parsedArguments.join(' | ')}`
+      : null,
+    argumentStatus.argumentHint ? `argument_hint: ${argumentStatus.argumentHint}` : null,
+    input.argumentNames && input.argumentNames.length > 0
+      ? `argument_names: ${input.argumentNames.join(', ')}`
+      : null,
+    argumentStatus.missingArgumentNames.length > 0
+      ? `missing_arguments: ${argumentStatus.missingArgumentNames.join(', ')}`
+      : null,
+    input.model ? `model_override: ${input.model}` : null,
+    input.effort ? `effort: ${input.effort}` : null,
+    '</skill_invocation>',
+  ];
+
+  return sections.filter((item): item is string => Boolean(item)).join('\n');
+};
 
 const buildIndexedKnowledgePolicy = () =>
   [
-    '当 reference_index 和 expanded_files 出现时，把它们当作本次回答的首要事实来源。',
-    '优先根据索引命中的文件作答，并尽量引用具体文件路径或标题。',
-    '如果需要补全推断，请明确标注“推测”或“Inferred”，不要把推测伪装成事实。',
+    'When reference_index or expanded_files are present, treat them as the primary fact sources for this answer.',
+    'Prefer citing concrete files or artifact names when relying on indexed context.',
+    'If you need to infer something beyond the sources, label it clearly as an inference.',
   ].join('\n');
 
 const stripInternalThinking = (content: string) =>
@@ -65,7 +98,7 @@ const truncateHistoryContent = (content: string, maxChars = 1200) =>
 
 export const buildConversationHistorySection = (
   messages: ConversationHistoryMessage[] = [],
-  maxMessages = 8
+  maxMessages = 8,
 ) => {
   const visibleMessages = messages
     .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -88,6 +121,7 @@ export const buildDirectChatPrompt = (options: {
   currentProjectName?: string;
   contextWindowTokens?: number;
   skillIntent: SkillIntent | null;
+  availableSkills?: RuntimeSkillDefinition[];
   conversationHistory?: ConversationHistoryMessage[];
   contextLabels?: string[];
   referenceContext?: {
@@ -102,17 +136,42 @@ export const buildDirectChatPrompt = (options: {
     currentProjectName,
     contextWindowTokens,
     skillIntent,
+    availableSkills = [],
     conversationHistory = [],
     contextLabels = [],
     referenceContext = null,
   } = options;
-  const skillLabel = skillIntent ? SKILL_LABELS[skillIntent.skill] : null;
-  const conversationHistorySection = buildConversationHistorySection(conversationHistory);
 
+  const activeSkill =
+    (skillIntent ? availableSkills.find((skill) => skill.id === skillIntent.skill) : null) ||
+    (skillIntent ? getDefaultChatSkillDefinitionById(skillIntent.skill) : null);
+  const skillLabel = activeSkill?.name || null;
+  const resolvedSkillPrompt =
+    activeSkill && skillIntent
+      ? substituteRuntimeSkillArguments(
+          activeSkill.prompt,
+          skillIntent.cleanedInput,
+          activeSkill.argumentNames || []
+        )
+      : activeSkill?.prompt || '';
+  const conversationHistorySection = buildConversationHistorySection(conversationHistory);
   const promptSections = [`user_request:\n${userInput.trim()}`];
 
   if (skillLabel) {
     promptSections.unshift(`mode: ${skillLabel}`);
+  }
+
+  if (skillLabel && activeSkill && skillIntent) {
+    promptSections.unshift(
+      buildSkillInvocationSection({
+        skillName: activeSkill.name,
+        cleanedInput: skillIntent.cleanedInput,
+        argumentHint: activeSkill.argumentHint,
+        argumentNames: activeSkill.argumentNames,
+        model: activeSkill.model,
+        effort: activeSkill.effort,
+      })
+    );
   }
 
   if (conversationHistorySection) {
@@ -137,7 +196,9 @@ export const buildDirectChatPrompt = (options: {
 
   return {
     systemPrompt: [
-      skillLabel ? buildSkillSystemPrompt(currentProjectName, skillLabel) : buildFreeChatSystemPrompt(currentProjectName),
+      skillLabel && activeSkill
+        ? buildSkillSystemPrompt(currentProjectName, activeSkill.name, resolvedSkillPrompt)
+        : buildFreeChatSystemPrompt(currentProjectName),
       referenceContext?.indexSection ? buildIndexedKnowledgePolicy() : null,
       referenceContext?.policySection || null,
       buildKnowledgeOperationPolicy(),

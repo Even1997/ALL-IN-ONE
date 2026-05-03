@@ -119,3 +119,31 @@ export const buildRuntimeLocalAgentFailureOutcome = (input: {
   timelineSummary: `Error: ${input.preview}`,
   replaySummary: input.message,
 });
+
+export const buildRuntimeLocalAgentExecutionCompletedStep = (
+  replaySummary: string
+): {
+  title: string;
+  status: 'completed';
+  userVisibleDetail: string;
+  resultSummary: string;
+} => ({
+  title: 'Completed turn',
+  status: 'completed',
+  userVisibleDetail: replaySummary,
+  resultSummary: replaySummary,
+});
+
+export const buildRuntimeLocalAgentExecutionFailedStep = (
+  replaySummary: string
+): {
+  title: string;
+  status: 'failed';
+  userVisibleDetail: string;
+  resultSummary: string;
+} => ({
+  title: 'Failed turn',
+  status: 'failed',
+  userVisibleDetail: replaySummary,
+  resultSummary: replaySummary,
+});
