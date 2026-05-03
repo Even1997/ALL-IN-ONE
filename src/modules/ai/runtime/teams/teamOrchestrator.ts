@@ -96,7 +96,12 @@ const emitUpdate = (
   onTeamRunUpdate?.({
     ...teamRun,
     phases: teamRun.phases.map((phase) => ({ ...phase, taskIds: [...phase.taskIds] })),
-    members: teamRun.members.map((member) => ({ ...member, dependsOn: [...member.dependsOn] })),
+    members: teamRun.members.map((member) => ({
+      ...member,
+      dependsOn: [...member.dependsOn],
+      changedPaths: [...member.changedPaths],
+    })),
+    changedPaths: [...teamRun.changedPaths],
   });
 };
 
@@ -144,6 +149,7 @@ export type RunAgentTeamTurnInput = {
 export type RunAgentTeamTurnResult = {
   teamRun: AgentTeamRunRecord;
   finalContent: string;
+  changedPaths: string[];
 };
 
 export async function runAgentTeamTurn(
@@ -191,9 +197,11 @@ export async function runAgentTeamTurn(
         result: '',
         error: null,
         dependsOn: [...task.dependsOn],
+        changedPaths: [],
       })),
     ),
     finalSummary: '',
+    changedPaths: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -232,6 +240,9 @@ export async function runAgentTeamTurn(
       member.completedAt = Date.now();
       member.result = result.content.trim();
       member.error = null;
+      member.changedPaths = Array.isArray(result.changedPaths)
+        ? result.changedPaths.filter((value) => value.trim().length > 0)
+        : [];
       teamRun.updatedAt = Date.now();
       emitUpdate(teamRun, input.onTeamRunUpdate);
     } catch (error) {
@@ -327,6 +338,9 @@ export async function runAgentTeamTurn(
       ].join('\n\n');
 
   teamRun.finalSummary = finalContent;
+  teamRun.changedPaths = Array.from(
+    new Set(teamRun.members.flatMap((member) => member.changedPaths).filter((value) => value.trim().length > 0))
+  );
   teamRun.status =
     teamRun.members.some((member) => member.status === 'failed') &&
     !teamRun.members.some((member) => member.status === 'completed')
@@ -340,5 +354,6 @@ export async function runAgentTeamTurn(
   return {
     teamRun,
     finalContent,
+    changedPaths: teamRun.changedPaths,
   };
 }

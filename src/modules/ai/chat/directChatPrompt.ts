@@ -22,6 +22,18 @@ const TASK_AUTHORIZATION_POLICY = [
   'Ask for confirmation before irreversible, high-risk, external, or out-of-scope actions.',
 ].join(' ');
 
+const INTERNAL_CONTEXT_DISCLOSURE_POLICY = [
+  'Do not surface internal workspace plumbing unless the user explicitly asks for it.',
+  'Treat directories or files such as .goodnight, _goodnight, .ai, GOODNIGHT.md, and CLAUDE.md as internal operating context, not user-facing project content.',
+  'Do not mention internal framework names, hidden folders, or assistant-operating documents in summaries unless they are directly relevant to the user request.',
+].join(' ');
+
+const RESPONSE_STYLE_POLICY = [
+  'Prefer a direct answer over a project audit.',
+  'Do not turn simple questions into multi-section reports unless the user asks for a full inventory or analysis.',
+  'When summarizing project content, focus on user-facing product files, features, pages, and deliverables first.',
+].join(' ');
+
 const buildFreeChatSystemPrompt = (projectName?: string) =>
   [
     'You are a natural conversational AI assistant for the current project.',
@@ -30,6 +42,8 @@ const buildFreeChatSystemPrompt = (projectName?: string) =>
     'Answer directly, naturally, and with awareness of current project context.',
     FILE_OPERATION_TRUTHFULNESS_POLICY,
     TASK_AUTHORIZATION_POLICY,
+    INTERNAL_CONTEXT_DISCLOSURE_POLICY,
+    RESPONSE_STYLE_POLICY,
   ].join('\n');
 
 const buildSkillSystemPrompt = (projectName: string | undefined, skillName: string, skillPrompt: string) =>
@@ -40,6 +54,8 @@ const buildSkillSystemPrompt = (projectName: string | undefined, skillName: stri
     'Follow the skill guidance only for the current request. Do not force the entire conversation into a workflow.',
     FILE_OPERATION_TRUTHFULNESS_POLICY,
     TASK_AUTHORIZATION_POLICY,
+    INTERNAL_CONTEXT_DISCLOSURE_POLICY,
+    RESPONSE_STYLE_POLICY,
     `<skill_playbook>\n${skillPrompt}\n</skill_playbook>`,
     skillName === 'UI Design'
       ? 'Preserve the validated shell structure and information hierarchy unless you clearly explain why a change is needed.'

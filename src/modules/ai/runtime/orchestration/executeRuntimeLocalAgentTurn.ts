@@ -38,9 +38,14 @@ export type ExecuteRuntimeLocalAgentTurnInput = {
   }) => Promise<RuntimeLocalAgentCommandResult>;
 };
 
+export type ExecuteRuntimeLocalAgentTurnResult = {
+  finalContent: string;
+  changedPaths: string[];
+};
+
 export async function executeRuntimeLocalAgentTurn(
   input: ExecuteRuntimeLocalAgentTurnInput
-): Promise<string> {
+): Promise<ExecuteRuntimeLocalAgentTurnResult> {
   const preparedSkills = await prepareRuntimeSkillsForTurn({
     skills: input.activeSkills,
     explicitSkillId: input.skillIntent?.skill || null,
@@ -69,7 +74,7 @@ export async function executeRuntimeLocalAgentTurn(
     contextLabels: input.contextLabels,
   });
 
-  return executeRuntimeLocalAgentPrompt({
+  const result = await executeRuntimeLocalAgentPrompt({
     agentId: input.agentId,
     projectRoot: input.projectRoot,
     prompt: buildRuntimeLocalAgentPrompt({
@@ -79,4 +84,11 @@ export async function executeRuntimeLocalAgentTurn(
     }),
     runPrompt: input.runPrompt,
   });
+
+  return {
+    finalContent: result.content,
+    changedPaths: Array.isArray(result.changedPaths)
+      ? result.changedPaths.filter((value) => value.trim().length > 0)
+      : [],
+  };
 }

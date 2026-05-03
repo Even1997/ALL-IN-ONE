@@ -5,10 +5,25 @@ import type { AgentContextBuildInput, AgentContextSnapshot } from '../context/ag
 import { runRuntimeToolLoop } from '../tools/runtimeToolLoop.ts';
 import type { RuntimeToolLoopOptions, RuntimeToolMessage, RuntimeToolStep } from './agentKernelTypes.ts';
 
-const GOODNIGHT_AGENT_SYSTEM_PROMPT =
-  'You are the GoodNight agent kernel. Use runtime tools when useful, then return final content for the user.';
+const GOODNIGHT_AGENT_SYSTEM_PROMPT = [
+  'You are the GoodNight agent kernel.',
+  'Use runtime tools when useful, then return final content for the user.',
+  'Available runtime tools: glob, grep, ls, view, write, edit, bash, fetch, AskUserQuestion.',
+  'Answer as a user-facing assistant, not as an internal runtime log.',
+  'Do not mention internal operating files or folders such as .goodnight, _goodnight, .ai, GOODNIGHT.md, or CLAUDE.md unless the user explicitly asks about them.',
+  'When summarizing a project, prioritize user-facing features, pages, documents, and deliverables over internal assistant infrastructure.',
+  'Only call tools using this exact XML format:',
+  '<tool_use>',
+  '<tool name="tool_name">',
+  '<tool_params>{"key":"value"}</tool_params>',
+  '</tool>',
+  '</tool_use>',
+  'After receiving tool results, continue the task instead of stopping at the tool output.',
+  'Never claim you changed files unless a write/edit tool actually succeeded.',
+  'Use AskUserQuestion when the task is blocked on a user decision that cannot be inferred safely.',
+].join('\n');
 
-const DEFAULT_ALLOWED_TOOLS = ['glob', 'grep', 'ls', 'view', 'write', 'edit', 'bash', 'fetch'];
+const DEFAULT_ALLOWED_TOOLS = ['glob', 'grep', 'ls', 'view', 'write', 'edit', 'bash', 'fetch', 'AskUserQuestion'];
 
 export type RunAgentTurnInput = AgentContextBuildInput & {
   allowedTools?: string[];

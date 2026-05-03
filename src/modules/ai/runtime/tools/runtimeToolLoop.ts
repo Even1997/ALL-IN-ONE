@@ -11,8 +11,6 @@ import type {
   RuntimeToolStep,
 } from '../agent-kernel/agentKernelTypes.ts';
 
-const createStepId = (index: number) => `tool_${index + 1}`;
-
 const previewResult = (result: ToolResult) => result.content.slice(0, 1000);
 
 const extractResultFileChanges = (result: ToolResult): ToolResultFileChange[] => {
@@ -102,7 +100,7 @@ export async function runRuntimeToolLoop(
 
     for (const call of parsedCalls) {
       const step: RuntimeToolStep = {
-        id: createStepId(toolCalls.length),
+        id: call.id,
         name: call.name,
         input: call.input,
         status: 'running',
@@ -121,6 +119,7 @@ export async function runRuntimeToolLoop(
         };
         step.status = 'blocked';
         step.resultPreview = previewResult(result);
+        step.resultContent = result.content;
         emitToolCallsChange(options, toolCalls);
         messages.push(createToolResultMessage(step, result));
         continue;
@@ -134,6 +133,7 @@ export async function runRuntimeToolLoop(
         };
         step.status = 'blocked';
         step.resultPreview = previewResult(result);
+        step.resultContent = result.content;
         emitToolCallsChange(options, toolCalls);
         messages.push(createToolResultMessage(step, result));
         continue;
@@ -143,6 +143,7 @@ export async function runRuntimeToolLoop(
         const result = await options.executeTool(call);
         step.status = result.is_error ? 'failed' : 'completed';
         step.resultPreview = previewResult(result);
+        step.resultContent = result.content;
         step.fileChanges = result.is_error ? [] : extractResultFileChanges(result);
         emitToolCallsChange(options, toolCalls);
         await options.afterToolCall?.(call);
@@ -155,6 +156,7 @@ export async function runRuntimeToolLoop(
         };
         step.status = 'failed';
         step.resultPreview = previewResult(result);
+        step.resultContent = result.content;
         emitToolCallsChange(options, toolCalls);
         messages.push(createToolResultMessage(step, result));
       }

@@ -8,10 +8,12 @@ export type RuntimeToolMessage = {
 
 export type RuntimeToolStep = {
   id: string;
+  parentToolCallId?: string | null;
   name: string;
   input: Record<string, unknown>;
   status: 'running' | 'completed' | 'failed' | 'blocked';
   resultPreview: string;
+  resultContent?: string;
   fileChanges?: Array<{
     path: string;
     beforeContent: string | null;

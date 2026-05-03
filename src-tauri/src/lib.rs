@@ -50,6 +50,45 @@ fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+fn parse_git_status_paths(output: &str) -> HashSet<String> {
+    output
+        .lines()
+        .filter_map(|line| {
+            if line.len() < 4 {
+                return None;
+            }
+
+            let mut path = line[3..].trim().to_string();
+            if let Some((_, renamed_to)) = path.rsplit_once(" -> ") {
+                path = renamed_to.trim().to_string();
+            }
+
+            let normalized = path.trim_matches('"').replace('\\', "/");
+            if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            }
+        })
+        .collect()
+}
+
+fn collect_git_status_paths(project_root: &Path) -> Option<HashSet<String>> {
+    let output = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(project_root)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    Some(parse_git_status_paths(
+        String::from_utf8_lossy(&output.stdout).as_ref(),
+    ))
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeMenuEventPayload {
@@ -142,6 +181,7 @@ pub struct LocalAgentResult {
     pub content: String,
     pub error: Option<String>,
     pub exit_code: Option<i32>,
+    pub changed_paths: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1057,6 +1097,7 @@ fn open_local_agent_interface(params: LocalAgentParams) -> LocalAgentResult {
             content: String::new(),
             error: Some("Project root does not exist or is not a directory.".to_string()),
             exit_code: None,
+            changed_paths: Vec::new(),
         };
     }
 
@@ -1070,6 +1111,7 @@ fn open_local_agent_interface(params: LocalAgentParams) -> LocalAgentResult {
                     content: String::new(),
                     error: Some(error),
                     exit_code: None,
+                    changed_paths: Vec::new(),
                 }
             }
         };
@@ -1106,12 +1148,14 @@ fn open_local_agent_interface(params: LocalAgentParams) -> LocalAgentResult {
             content: format!("Opened {} CLI in the project directory.", agent_label),
             error: None,
             exit_code: None,
+            changed_paths: Vec::new(),
         },
         Err(error) => LocalAgentResult {
             success: false,
             content: String::new(),
             error: Some(format!("Failed to open {} CLI: {}", agent_label, error)),
             exit_code: None,
+            changed_paths: Vec::new(),
         },
     }
 }
@@ -1125,6 +1169,7 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
             content: String::new(),
             error: Some("Project root does not exist or is not a directory.".to_string()),
             exit_code: None,
+            changed_paths: Vec::new(),
         };
     }
 
@@ -1135,6 +1180,7 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
             content: String::new(),
             error: Some("Prompt cannot be empty.".to_string()),
             exit_code: None,
+            changed_paths: Vec::new(),
         };
     }
 
@@ -1147,10 +1193,12 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
                     content: String::new(),
                     error: Some(error),
                     exit_code: None,
+                    changed_paths: Vec::new(),
                 }
             }
         };
 
+    let before_changed_paths = collect_git_status_paths(&project_root);
     let output = Command::new(executable)
         .args(&args)
         .current_dir(&project_root)
@@ -1158,12 +1206,24 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
 
     match output {
         Ok(result) => {
+            let after_changed_paths = collect_git_status_paths(&project_root);
             let stdout = String::from_utf8_lossy(&result.stdout).trim().to_string();
             let stderr = String::from_utf8_lossy(&result.stderr).trim().to_string();
             let content = if stdout.is_empty() {
                 stderr.clone()
             } else {
                 stdout
+            };
+            let changed_paths = match (before_changed_paths, after_changed_paths) {
+                (Some(before), Some(after)) => {
+                    let mut paths = after
+                        .difference(&before)
+                        .cloned()
+                        .collect::<Vec<String>>();
+                    paths.sort();
+                    paths
+                }
+                _ => Vec::new(),
             };
 
             if result.status.success() {
@@ -1172,6 +1232,7 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
                     content,
                     error: None,
                     exit_code: result.status.code(),
+                    changed_paths,
                 }
             } else {
                 LocalAgentResult {
@@ -1183,6 +1244,7 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
                         stderr
                     }),
                     exit_code: result.status.code(),
+                    changed_paths: Vec::new(),
                 }
             }
         }
@@ -1194,6 +1256,7 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
                 agent_label, error
             )),
             exit_code: None,
+            changed_paths: Vec::new(),
         },
     }
 }

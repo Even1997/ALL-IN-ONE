@@ -1,8 +1,18 @@
 import type { ApprovalRecord, ApprovalRiskLevel, ApprovalStatus } from '../approval/approvalTypes.ts';
 
 export type RuntimePendingApprovalAction = {
+  messageId?: string | null;
   onApprove: () => Promise<void>;
   onDeny?: () => void | Promise<void>;
+  display?: {
+    toolName?: string | null;
+    command?: string | null;
+    filePath?: string | null;
+    oldString?: string | null;
+    newString?: string | null;
+    content?: string | null;
+    inputJson?: string | null;
+  };
 };
 
 export const requestRuntimeApproval = async (input: {
@@ -13,6 +23,7 @@ export const requestRuntimeApproval = async (input: {
   messageId?: string | null;
   onApprove: () => Promise<void>;
   onDeny?: () => void | Promise<void>;
+  display?: RuntimePendingApprovalAction['display'];
   enqueueAgentApproval: (payload: {
     threadId: string;
     actionType: string;
@@ -33,8 +44,10 @@ export const requestRuntimeApproval = async (input: {
 
   input.enqueueApproval(approval);
   input.pendingApprovalActions[approval.id] = {
+    messageId: input.messageId || null,
     onApprove: input.onApprove,
     onDeny: input.onDeny,
+    display: input.display,
   };
 
   return approval;

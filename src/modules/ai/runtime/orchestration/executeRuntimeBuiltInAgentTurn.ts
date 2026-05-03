@@ -33,6 +33,8 @@ export type ExecuteRuntimeBuiltInAgentTurnInput = {
   skillIntent: SkillIntent | null;
   contextLabels: string[];
   allowedTools: string[];
+  beforeToolCall?: (call: ToolCall) => Promise<void>;
+  afterToolCall?: (call: ToolCall) => Promise<void>;
   onModelEvent?: (event: AITextStreamEvent) => void;
   executeModel: (
     prompt: string,
@@ -101,8 +103,14 @@ export async function executeRuntimeBuiltInAgentTurn(
     memoryEntries: input.memoryEntries,
     activeSkills: preparedSkills,
     allowedTools,
-    beforeToolCall: (call: ToolCall) => hookRunner.beforeToolCall(call.name),
-    afterToolCall: (call: ToolCall) => hookRunner.afterToolCall(call.name),
+    beforeToolCall: async (call: ToolCall) => {
+      await hookRunner.beforeToolCall(call.name);
+      await input.beforeToolCall?.(call);
+    },
+    afterToolCall: async (call: ToolCall) => {
+      await hookRunner.afterToolCall(call.name);
+      await input.afterToolCall?.(call);
+    },
     onToolCallsChange: input.onToolCallsChange,
     onModelEvent: input.onModelEvent,
     executeModel: (prompt, _systemPrompt, onEvent) =>

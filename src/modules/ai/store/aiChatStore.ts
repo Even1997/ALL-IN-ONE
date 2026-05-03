@@ -8,17 +8,113 @@ import type { AgentProviderId } from '../runtime/agentRuntimeTypes';
 import type { RuntimeToolStep } from '../runtime/agent-kernel/agentKernelTypes';
 import type { AgentTeamRunRecord } from '../runtime/teams/teamTypes';
 
+export type RuntimeQuestionOption = {
+  label: string;
+  description?: string;
+};
+
+export type RuntimeQuestionItem = {
+  question: string;
+  header?: string;
+  options?: RuntimeQuestionOption[];
+};
+
+export type RuntimeQuestionPayload = {
+  id: string;
+  toolCallId?: string | null;
+  status: 'pending' | 'answered';
+  questions: RuntimeQuestionItem[];
+  answers?: Record<string, string>;
+  createdAt: number;
+};
+
+export type StoredChatRuntimeFileChange = {
+  path: string;
+  beforeContent: string | null;
+  afterContent: string | null;
+};
+
+export type StoredChatRuntimeApprovalDisplay = {
+  toolName?: string | null;
+  command?: string | null;
+  filePath?: string | null;
+  oldString?: string | null;
+  newString?: string | null;
+  content?: string | null;
+  inputJson?: string | null;
+};
+
+export type StoredChatRuntimeEvent =
+  | {
+      id: string;
+      kind: 'tool_use';
+      toolCallId: string;
+      parentToolCallId?: string | null;
+      toolName: string;
+      input: Record<string, unknown>;
+      status: RuntimeToolStep['status'];
+      createdAt: number;
+    }
+  | {
+      id: string;
+      kind: 'tool_result';
+      toolCallId: string;
+      parentToolCallId?: string | null;
+      toolName: string;
+      status: RuntimeToolStep['status'];
+      output: string;
+      fileChanges?: StoredChatRuntimeFileChange[];
+      createdAt: number;
+    }
+  | {
+      id: string;
+      kind: 'approval';
+      approvalId: string;
+      toolCallId?: string | null;
+      actionType: string;
+      summary: string;
+      riskLevel: 'low' | 'medium' | 'high';
+      status: 'pending' | 'approved' | 'denied';
+      display?: StoredChatRuntimeApprovalDisplay;
+      createdAt: number;
+    }
+  | {
+      id: string;
+      kind: 'question';
+      questionId: string;
+      payload: RuntimeQuestionPayload;
+      createdAt: number;
+    };
+
+export type StoredChatAssistantPart =
+  | { type: 'text'; content: string }
+  | { type: 'thinking'; content: string; collapsed: boolean }
+  | {
+      type: 'tool';
+      name: string;
+      title: string;
+      status: 'running' | 'success' | 'error';
+      command?: string;
+      input?: string;
+      output?: string;
+    };
+
 export type StoredChatMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  thinkingContent?: string;
+  answerContent?: string;
+  assistantParts?: StoredChatAssistantPart[];
   tone?: 'default' | 'error';
   runId?: string;
   toolCalls?: RuntimeToolStep[];
+  runtimeEvents?: StoredChatRuntimeEvent[];
   teamRun?: AgentTeamRunRecord | null;
   structuredCards?: ChatStructuredCard[];
   knowledgeProposal?: KnowledgeProposal;
   projectFileProposal?: ProjectFileProposal;
+  runtimeQuestion?: RuntimeQuestionPayload;
   createdAt: number;
 };
 
@@ -81,11 +177,14 @@ export const createStoredChatMessage = (
   role: StoredChatMessage['role'],
   content: string,
   tone: StoredChatMessage['tone'] = 'default',
-  options?: Pick<StoredChatMessage, 'runId'>
+  options?: Pick<StoredChatMessage, 'runId' | 'thinkingContent' | 'answerContent' | 'assistantParts'>
 ): StoredChatMessage => ({
   id: createMessageId(role),
   role,
   content,
+  ...(typeof options?.thinkingContent === 'string' ? { thinkingContent: options.thinkingContent } : {}),
+  ...(typeof options?.answerContent === 'string' ? { answerContent: options.answerContent } : {}),
+  ...(Array.isArray(options?.assistantParts) ? { assistantParts: options.assistantParts } : {}),
   tone,
   ...(options?.runId ? { runId: options.runId } : {}),
   createdAt: Date.now(),

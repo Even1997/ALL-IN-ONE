@@ -12,8 +12,10 @@ export const buildRuntimeChangedPathActivityEntry = (input: {
   skill: string | null;
   createdAt?: number;
 }): ActivityEntry | null => {
+  const sourceChangedPaths =
+    input.changedPaths !== undefined ? input.changedPaths : extractRuntimeChangedPaths(input.content);
   const changedPaths = Array.from(
-    new Set((input.changedPaths && input.changedPaths.length > 0 ? input.changedPaths : extractRuntimeChangedPaths(input.content)))
+    new Set(sourceChangedPaths)
   );
   if (changedPaths.length === 0) {
     return null;
@@ -85,6 +87,7 @@ export const buildRuntimeLocalAgentSuccessOutcome = (input: {
   createId: () => string;
   runId: string;
   content: string;
+  changedPaths: string[];
   skill: string | null;
   agentId: string;
   createdAt?: number;
@@ -93,6 +96,7 @@ export const buildRuntimeLocalAgentSuccessOutcome = (input: {
     createId: input.createId,
     runId: input.runId,
     content: input.content,
+    changedPaths: input.changedPaths,
     runtime: 'local',
     skill: input.skill,
     createdAt: input.createdAt,

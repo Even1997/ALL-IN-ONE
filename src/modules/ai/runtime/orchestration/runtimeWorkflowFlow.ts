@@ -29,10 +29,14 @@ export const buildRuntimeWorkflowCompletion = (input: {
 
 export const executeRuntimeWorkflowPackage = async (input: {
   targetPackage: AIWorkflowPackage;
-  runWorkflowPackage: (targetPackage: AIWorkflowPackage) => Promise<unknown>;
+  runWorkflowPackage: (
+    targetPackage: AIWorkflowPackage,
+    onRunUpdate?: (payload: { targetPackage: AIWorkflowPackage; run: AIWorkflowRun }) => void
+  ) => Promise<unknown>;
   getLatestRun: () => RuntimeWorkflowSnapshot;
+  onRunUpdate?: (payload: { targetPackage: AIWorkflowPackage; run: AIWorkflowRun }) => void;
 }) => {
-  await input.runWorkflowPackage(input.targetPackage);
+  await input.runWorkflowPackage(input.targetPackage, input.onRunUpdate);
 
   return buildRuntimeWorkflowCompletion({
     targetPackage: input.targetPackage,

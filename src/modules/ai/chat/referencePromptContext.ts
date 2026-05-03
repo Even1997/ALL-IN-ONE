@@ -1,5 +1,28 @@
 import type { ReferenceFile } from '../../knowledge/referenceFiles.ts';
 
+const INTERNAL_REFERENCE_PATTERNS = [
+  '/.goodnight/',
+  '/_goodnight/',
+  '/.ai/',
+  '/docs/references/upstream/m-flow/',
+  '/docs/superpowers/',
+];
+
+const INTERNAL_REFERENCE_FILE_NAMES = new Set(['GOODNIGHT.MD', 'CLAUDE.MD']);
+
+const normalizeReferencePath = (value: string) => value.replace(/\\/g, '/');
+
+export const isInternalAssistantReferencePath = (value: string) => {
+  const normalized = normalizeReferencePath(value);
+  const upperName = normalized.split('/').pop()?.toUpperCase() || '';
+
+  if (INTERNAL_REFERENCE_FILE_NAMES.has(upperName)) {
+    return true;
+  }
+
+  return INTERNAL_REFERENCE_PATTERNS.some((pattern) => normalized.includes(pattern));
+};
+
 const tokenize = (value: string) =>
   value
     .toLowerCase()
@@ -25,7 +48,9 @@ export const buildReferencePromptContext = (options: {
   maxExpandedFiles?: number;
   maxExpandedChars?: number;
 }) => {
-  const visibleFiles = options.selectedFiles.filter((file) => file.readableByAI);
+  const visibleFiles = options.selectedFiles.filter(
+    (file) => file.readableByAI && !isInternalAssistantReferencePath(file.path)
+  );
   if (visibleFiles.length === 0) {
     return {
       labels: [],

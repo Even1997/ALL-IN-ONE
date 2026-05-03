@@ -29,6 +29,11 @@ import {
 } from '../../../types';
 import { useAIWorkflowStore } from '../store/workflowStore';
 
+type WorkflowRunUpdateListener = (payload: {
+  targetPackage: AIWorkflowPackage;
+  run: AIWorkflowRun;
+}) => void;
+
 type RequirementSection = {
   title: string;
   content: string;
@@ -1297,7 +1302,10 @@ export const canRunTargetPackage = (projectId: string, targetPackage: AIWorkflow
   return true;
 };
 
-export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => {
+export const runAIWorkflowPackage = async (
+  targetPackage: AIWorkflowPackage,
+  onRunUpdate?: WorkflowRunUpdateListener
+) => {
   void buildRequirementsFallback;
   void buildFeatureFallback;
   void buildPageStructureFallback;
@@ -1316,7 +1324,7 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
   }
 
   if (targetPackage === 'prototype' && !featureTreeStore.tree) {
-    await runAIWorkflowPackage('requirements');
+    await runAIWorkflowPackage('requirements', onRunUpdate);
     projectStore = useProjectStore.getState();
     featureTreeStore = useFeatureTreeStore.getState();
     project = projectStore.currentProject;
@@ -1324,14 +1332,14 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
 
   if (targetPackage === 'page') {
     if (!featureTreeStore.tree) {
-      await runAIWorkflowPackage('requirements');
+      await runAIWorkflowPackage('requirements', onRunUpdate);
       projectStore = useProjectStore.getState();
       featureTreeStore = useFeatureTreeStore.getState();
       project = projectStore.currentProject;
     }
 
     if (projectStore.pageStructure.length === 0 || Object.keys(projectStore.wireframes).length === 0) {
-      await runAIWorkflowPackage('prototype');
+      await runAIWorkflowPackage('prototype', onRunUpdate);
       projectStore = useProjectStore.getState();
       featureTreeStore = useFeatureTreeStore.getState();
       project = projectStore.currentProject;
@@ -1355,10 +1363,12 @@ export const runAIWorkflowPackage = async (targetPackage: AIWorkflowPackage) => 
   const inputSummary = summarize(projectStore.rawRequirementInput, 180) || `${project.name} workflow run`;
   let run = buildRun(project.id, targetPackage, mode, inputSummary);
   workflowStore.upsertRun(project.id, run);
+  onRunUpdate?.({ targetPackage, run });
 
   const applyRunUpdate = (nextRun: AIWorkflowRun) => {
     run = nextRun;
     workflowStore.upsertRun(project.id, nextRun);
+    onRunUpdate?.({ targetPackage, run: nextRun });
   };
 
   try {
@@ -1677,6 +1687,7 @@ ${buildWireframePageContext(nextPageStructure, currentFeatureTree)}`
       updatedAt: new Date().toISOString(),
     };
     workflowStore.upsertRun(project.id, failedRun);
+    onRunUpdate?.({ targetPackage, run: failedRun });
     throw error;
   }
 };

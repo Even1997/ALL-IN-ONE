@@ -259,9 +259,7 @@ const buildRuntimeStreamingMessage = (input: {
 
   if (input.thinkingContent.trim()) {
     sections.push(
-      input.completeThinking
-        ? `<think>${input.thinkingContent}</think>`
-        : `<think>${input.thinkingContent}`,
+      input.completeThinking ? `<think>${input.thinkingContent}</think>` : `<think>${input.thinkingContent}`,
     );
   }
 
@@ -272,34 +270,121 @@ const buildRuntimeStreamingMessage = (input: {
   return sections.join('\n\n').trim() || '正在思考...';
 };
 
+export type RuntimeStreamingAssistantDraft = {
+  content: string;
+  thinkingContent: string;
+  answerContent: string;
+};
+
+const STREAM_EXECUTION_MARKER_PATTERN =
+  /<tool_use>|<\/tool_use>|<tool_result|<\/tool_result>|<apply_skill\b|<\s*\|\s*DSML\b|tool_calls>/i;
+const STREAM_PROTOCOL_LINE_PATTERN =
+  /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false").*$/gim;
+const STREAM_DSML_BLOCK_PATTERN = /<\s*\|\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
+const STREAM_PLANNING_PATTERN =
+  /(?:^|[。！？\n])\s*(?:好的[,，]?\s*)?(?:我先|让我先|我需要先|我会接下来先|先去)(?:查看|看一下|看看|检查|读取|搜索|查找|分析|确认|了解|总结|扫描|定位)/;
+const STREAM_ANSWER_SIGNAL_PATTERN =
+  /(总结如下|结果如下|可以确认|我找到了|当前项目|项目中|结论|包含|如下|建议|答案|可以直接|已经)/;
+
+const sanitizeStreamingVisibleText = (value: string) =>
+  value
+    .replace(STREAM_DSML_BLOCK_PATTERN, '')
+    .replace(STREAM_PROTOCOL_LINE_PATTERN, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const normalizeStreamingClassifierText = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+const looksLikeStreamingPlanningText = (value: string) => {
+  const normalized = normalizeStreamingClassifierText(value);
+  if (!normalized) {
+    return false;
+  }
+
+  if (STREAM_EXECUTION_MARKER_PATTERN.test(normalized)) {
+    return true;
+  }
+
+  if (!STREAM_PLANNING_PATTERN.test(normalized)) {
+    return false;
+  }
+
+  return !STREAM_ANSWER_SIGNAL_PATTERN.test(normalized);
+};
+
+const looksLikeStreamingAnswerText = (value: string) => {
+  const normalized = normalizeStreamingClassifierText(value);
+  if (!normalized || STREAM_EXECUTION_MARKER_PATTERN.test(normalized)) {
+    return false;
+  }
+
+  return STREAM_ANSWER_SIGNAL_PATTERN.test(normalized) || normalized.length >= 220;
+};
+
 export const createRuntimeStreamingMessageAssembler = () => {
   let thinkingContent = '';
-  let answerContent = '';
+  let answerContentRaw = '';
+  let pendingText = '';
+
+  const flushPendingText = (mode: 'thinking' | 'answer') => {
+    if (!pendingText) {
+      return;
+    }
+
+    if (mode === 'thinking') {
+      thinkingContent += pendingText;
+    } else {
+      answerContentRaw += pendingText;
+    }
+
+    pendingText = '';
+  };
 
   return {
     append: (event: { kind: string; delta: string }) => {
       if (event.kind === 'thinking') {
+        flushPendingText(looksLikeStreamingPlanningText(pendingText) ? 'thinking' : 'answer');
         thinkingContent += event.delta;
+      } else if (answerContentRaw) {
+        answerContentRaw += event.delta;
       } else {
-        answerContent += event.delta;
+        pendingText += event.delta;
+
+        if (looksLikeStreamingPlanningText(pendingText)) {
+          flushPendingText('thinking');
+        } else if (looksLikeStreamingAnswerText(pendingText)) {
+          flushPendingText('answer');
+        }
       }
 
-      return buildRuntimeStreamingMessage({
+      const visibleAnswerContent = sanitizeStreamingVisibleText(
+        answerContentRaw || (looksLikeStreamingPlanningText(pendingText) ? '' : pendingText),
+      );
+
+      return {
+        content: buildRuntimeStreamingMessage({
+          thinkingContent,
+          answerContent: visibleAnswerContent,
+          completeThinking: false,
+        }),
         thinkingContent,
-        answerContent,
-        completeThinking: false,
-      });
+        answerContent: visibleAnswerContent,
+      };
     },
-    buildFinal: (response: string) => {
-      const streamedContent = buildRuntimeStreamingMessage({
+    buildFinal: (response: string): RuntimeStreamingAssistantDraft => {
+      flushPendingText(looksLikeStreamingPlanningText(pendingText) ? 'thinking' : 'answer');
+      const answerContent = sanitizeStreamingVisibleText(answerContentRaw);
+      const content = buildRuntimeStreamingMessage({
         thinkingContent,
         answerContent,
         completeThinking: true,
       });
 
-      return streamedContent !== '正在思考...'
-        ? streamedContent
-        : response.trim() || EMPTY_RUNTIME_RESPONSE_MESSAGE;
+      return {
+        content: content !== '正在思考...' ? content : response.trim() || EMPTY_RUNTIME_RESPONSE_MESSAGE,
+        thinkingContent,
+        answerContent,
+      };
     },
   };
 };

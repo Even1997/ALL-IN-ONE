@@ -51,6 +51,7 @@ export type AgentTeamMemberRecord = {
   result: string;
   error: string | null;
   dependsOn: string[];
+  changedPaths: string[];
 };
 
 export type AgentTeamPhaseRecord = {
@@ -77,6 +78,7 @@ export type AgentTeamRunRecord = {
   phases: AgentTeamPhaseRecord[];
   members: AgentTeamMemberRecord[];
   finalSummary: string;
+  changedPaths: string[];
   createdAt: number;
   updatedAt: number;
 };

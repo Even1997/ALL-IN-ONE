@@ -38,6 +38,7 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
 }) => {
   const defaultProjectStoragePath =
     projectStorageSettings?.rootPath || projectStorageSettings?.defaultPath || '';
+  const requiresVaultPath = Boolean(onPickProjectVaultPath);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [vaultPath, setVaultPath] = useState(defaultProjectStoragePath);
@@ -57,7 +58,7 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
     const trimmedDescription = description.trim();
     const trimmedVaultPath = vaultPath.trim();
 
-    if (!trimmedName || !trimmedVaultPath) {
+    if (!trimmedName || (requiresVaultPath && !trimmedVaultPath)) {
       return;
     }
 
@@ -147,12 +148,12 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
           <div className="project-setup-badge">Projects</div>
           <h1>多项目工作区</h1>
           <p>
-            左侧固定项目列表，右侧专注于创建和设置，让切换项目和管理本地文件都更顺手。
+            左侧固定项目列表，右侧专注创建和设置，让切换项目和管理知识库都更顺手。
           </p>
           <div className="project-setup-points project-manager-points">
             <span>左侧快速切换项目</span>
             <span>右侧直接新建项目</span>
-            <span>知识库独立绑定本地文件夹</span>
+            <span>知识库可独立绑定本地文件夹</span>
           </div>
           {onClose ? (
             <div className="project-manager-hero-actions">
@@ -175,7 +176,11 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
           <div className="project-setup-header">
             <div>
               <h2>新建项目</h2>
-              <p>先绑定本地知识库文件夹，后续知识索引会直接走原生 m-flow 路径。</p>
+              <p>
+                {requiresVaultPath
+                  ? '先绑定本地知识库目录，后续知识笔记和 Markdown 镜像都会落到真实文件系统。'
+                  : '浏览器模式下可以先不绑定本地路径，直接进入产品流程。'}
+              </p>
             </div>
             <div className="project-setup-status">Create</div>
           </div>
@@ -199,17 +204,21 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
             />
           </MacField>
 
-          <MacField label="本地知识库文件夹" className="setup-field">
+          <MacField label="本地知识库目录" className="setup-field">
             <div className="project-storage-inline">
               <MacInput
                 value={vaultPath}
                 onChange={(event) => setVaultPath(event.target.value)}
-                placeholder="选择或填写一个本地文件夹，作为知识库 vault"
+                placeholder={
+                  requiresVaultPath
+                    ? '选择或填写一个本地文件夹，作为知识库 vault'
+                    : '5173 浏览器模式可先留空，之后再在桌面版绑定本地目录'
+                }
               />
               <MacButton
                 type="button"
                 variant="secondary"
-                disabled={!onPickProjectVaultPath}
+                disabled={!requiresVaultPath}
                 onClick={() => void onPickProjectVaultPath?.()}
               >
                 选择文件夹
@@ -219,6 +228,10 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
               <p className="setup-helper-text">
                 {projectStorageMessage || `默认目录：${defaultProjectStoragePath}`}
               </p>
+            ) : !requiresVaultPath ? (
+              <p className="setup-helper-text">
+                浏览器模式先走内置知识库与会话数据，不要求真实本地路径。
+              </p>
             ) : null}
           </MacField>
 
@@ -227,7 +240,7 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
               type="submit"
               className="primary-action"
               variant="primary"
-              disabled={!name.trim() || !vaultPath.trim()}
+              disabled={!name.trim() || (requiresVaultPath && !vaultPath.trim())}
             >
               创建项目
             </MacButton>

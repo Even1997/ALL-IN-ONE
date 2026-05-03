@@ -19,7 +19,7 @@ export type PreparedRuntimeLocalAgentFlow = {
 };
 
 export const buildRuntimeLocalAgentSummary = (agentId: string) =>
-  `允许 ${agentId} 本地 Agent 在当前项目内执行任务`;
+  `Allow ${agentId} local agent execution inside the current project`;
 
 export const buildRuntimeLocalAgentDecisionFeedback = (input: {
   decision: Extract<RuntimeLocalAgentDecision, 'blocked' | 'approval-required'>;
@@ -32,7 +32,7 @@ export const buildRuntimeLocalAgentDecisionFeedback = (input: {
 export const buildRuntimeLocalAgentDecisionState = (flow: PreparedRuntimeLocalAgentFlow) => {
   if (flow.decision === 'blocked') {
     return {
-      messageContent: flow.denialMessage || '已阻止本地 Agent 执行。',
+      messageContent: flow.denialMessage || 'The local agent run was blocked.',
       approvalStatus: 'denied' as const,
       feedback: buildRuntimeLocalAgentDecisionFeedback({
         decision: 'blocked',
@@ -44,13 +44,13 @@ export const buildRuntimeLocalAgentDecisionState = (flow: PreparedRuntimeLocalAg
   }
 
   return {
-    messageContent: flow.pendingMessage || '需要审批后才能启动本地 Agent。',
+    messageContent: flow.pendingMessage || 'Approval is required before the local agent can run.',
     approvalStatus: 'pending' as const,
     feedback: buildRuntimeLocalAgentDecisionFeedback({
       decision: 'approval-required',
       summary: flow.summary,
     }),
-    deniedMessageContent: '已拒绝本地 Agent 执行请求。',
+    deniedMessageContent: 'The local agent request was denied.',
     deniedReason: 'Local agent execution was denied.',
     deniedActionLabel: 'Retry with a safer request',
   };
@@ -62,12 +62,12 @@ export const resolveRuntimeLocalAgentDecisionFeedback = (input: {
   decisionState: RuntimeLocalAgentDecisionState;
   summary: string;
 }) => ({
-  messageContent: input.decisionState?.messageContent || '需要审批后才能启动本地 Agent。',
+  messageContent: input.decisionState?.messageContent || 'Approval is required before the local agent can run.',
   timelineSummary: input.decisionState?.feedback.timelineSummary || input.summary,
   replaySummary: input.decisionState?.feedback.replaySummary || input.summary,
   blockedReason: input.decisionState?.blockedReason || input.summary,
   blockedActionLabel: input.decisionState?.blockedActionLabel || 'Adjust local agent request',
-  deniedMessageContent: input.decisionState?.deniedMessageContent || '已拒绝本地 Agent 执行请求。',
+  deniedMessageContent: input.decisionState?.deniedMessageContent || 'The local agent request was denied.',
   deniedReason: input.decisionState?.deniedReason || 'Local agent execution was denied.',
   deniedActionLabel: input.decisionState?.deniedActionLabel || 'Retry with a safer request',
   approvalStatus: input.decisionState?.approvalStatus || 'pending',
@@ -120,6 +120,7 @@ export const requestRuntimeLocalAgentApproval = async (input: {
   messageId?: string | null;
   onApprove: () => Promise<void>;
   onDeny?: () => void | Promise<void>;
+  display?: RuntimePendingApprovalAction['display'];
   enqueueAgentApproval: (payload: {
     threadId: string;
     actionType: string;
@@ -138,6 +139,7 @@ export const requestRuntimeLocalAgentApproval = async (input: {
     messageId: input.messageId,
     onApprove: input.onApprove,
     onDeny: input.onDeny,
+    display: input.display,
     enqueueAgentApproval: input.enqueueAgentApproval,
     enqueueApproval: input.enqueueApproval,
     pendingApprovalActions: input.pendingApprovalActions,
@@ -226,7 +228,7 @@ export const prepareRuntimeLocalAgentFlow = (input: {
       riskLevel,
       summary,
       decision: 'blocked',
-      denialMessage: `当前 sandbox policy 为 ${input.sandboxPolicy}，已阻止本地 Agent 执行。`,
+      denialMessage: `The current sandbox policy (${input.sandboxPolicy}) blocks local agent execution.`,
       pendingMessage: null,
     };
   }
@@ -238,7 +240,7 @@ export const prepareRuntimeLocalAgentFlow = (input: {
       summary,
       decision: 'approval-required',
       denialMessage: null,
-      pendingMessage: '需要审批后才能启动本地 Agent。',
+      pendingMessage: 'Approval is required before the local agent can run.',
     };
   }
 
@@ -256,6 +258,7 @@ export type RuntimeLocalAgentCommandResult = {
   success: boolean;
   content: string;
   error?: string | null;
+  changedPaths?: string[] | null;
 };
 
 export const executeRuntimeLocalAgentPrompt = async (input: {
@@ -278,5 +281,8 @@ export const executeRuntimeLocalAgentPrompt = async (input: {
     throw new Error(result.error || 'Local agent execution failed.');
   }
 
-  return result.content.trim() || '本地 Agent 已执行，但没有返回内容。';
+  return {
+    content: result.content.trim() || 'Local agent completed, but no content was returned.',
+    changedPaths: Array.isArray(result.changedPaths) ? result.changedPaths : [],
+  };
 };

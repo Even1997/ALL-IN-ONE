@@ -5000,7 +5000,7 @@ ${selectedContextPrompt}` : '',
           onDeleteProject={handleDeleteProject}
           onSaveProjectStoragePath={handleSaveProjectStoragePath}
           onPickProjectStoragePath={handlePickProjectStoragePath}
-          onPickProjectVaultPath={handlePickProjectVaultPath}
+          onPickProjectVaultPath={canUseProjectFilesystem ? handlePickProjectVaultPath : undefined}
           onResetProjectStoragePath={handleResetProjectStoragePath}
         />
         <UiFeedbackMode />
@@ -5038,7 +5038,7 @@ ${selectedContextPrompt}` : '',
       onDeleteProject={handleDeleteProject}
       onSaveProjectStoragePath={handleSaveProjectStoragePath}
       onPickProjectStoragePath={handlePickProjectStoragePath}
-      onPickProjectVaultPath={handlePickProjectVaultPath}
+      onPickProjectVaultPath={canUseProjectFilesystem ? handlePickProjectVaultPath : undefined}
       onResetProjectStoragePath={handleResetProjectStoragePath}
       onClose={() => setIsProjectManagerOpen(false)}
     />

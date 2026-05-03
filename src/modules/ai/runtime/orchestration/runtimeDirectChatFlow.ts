@@ -1,5 +1,5 @@
 import { buildDirectChatPrompt } from '../../chat/directChatPrompt.ts';
-import { buildReferencePromptContext } from '../../chat/referencePromptContext.ts';
+import { buildReferencePromptContext, isInternalAssistantReferencePath } from '../../chat/referencePromptContext.ts';
 import type { ReferenceFile } from '../../../knowledge/referenceFiles.ts';
 import { assembleAgentContext } from '../context/assembleAgentContext.ts';
 import { buildThreadPrompt } from '../context/buildThreadPrompt.ts';
@@ -25,6 +25,52 @@ const summarizeRuntimeReferenceContent = (value: string, fallback = '', maxLengt
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 3)}...` : normalized;
 };
 
+const INTERNAL_RESPONSE_PATTERNS = [
+  /m-flow/i,
+  /(^|[/\\])_goodnight([/\\]|$)/i,
+  /(^|[/\\])\.goodnight([/\\]|$)/i,
+  /(^|[/\\])\.ai([/\\]|$)/i,
+  /\bGOODNIGHT\.md\b/i,
+  /\bCLAUDE\.md\b/i,
+];
+
+const INTERNAL_RESPONSE_BLOCK_PATTERNS = [
+  /<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>/gi,
+  /<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi,
+];
+
+const INTERNAL_RESPONSE_LINE_PATTERNS = [/^(?:让我先用|我先用)\s+[`'"]?[\w-]+[`'"]?\s+技能[:：]?\s*$/i];
+
+const INTERNAL_RESPONSE_PROTOCOL_LINE_PATTERNS = [
+  /(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false")/i,
+];
+
+export const sanitizeInternalWorkspaceMentions = (value: string) => {
+  const normalized = INTERNAL_RESPONSE_BLOCK_PATTERNS.reduce(
+    (current, pattern) => current.replace(pattern, ''),
+    value.replace(/\r/g, '')
+  );
+  const lines = normalized.split('\n');
+  const filtered = lines.filter((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return true;
+    }
+
+    if (INTERNAL_RESPONSE_LINE_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+      return false;
+    }
+
+    if (INTERNAL_RESPONSE_PROTOCOL_LINE_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+      return false;
+    }
+
+    return !INTERNAL_RESPONSE_PATTERNS.some((pattern) => pattern.test(trimmed));
+  });
+
+  return filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+};
+
 export const buildRuntimeDirectChatRequest = (input: {
   projectId: string;
   projectName: string;
@@ -40,11 +86,12 @@ export const buildRuntimeDirectChatRequest = (input: {
   conversationHistory: RuntimeDirectChatConversationMessage[];
   contextLabels: string[];
 }) => {
+  const visibleReferenceFiles = input.referenceFiles.filter((file) => !isInternalAssistantReferencePath(file.path));
   const referenceContext =
-    input.referenceFiles.length > 0
+    visibleReferenceFiles.length > 0
       ? buildReferencePromptContext({
           userInput: input.userInput,
-          selectedFiles: input.referenceFiles,
+          selectedFiles: visibleReferenceFiles,
         })
       : null;
 
@@ -53,7 +100,7 @@ export const buildRuntimeDirectChatRequest = (input: {
     projectName: input.projectName,
     threadId: input.threadId,
     agentsInstructions: input.agentsInstructions,
-    referenceFiles: input.referenceFiles.map((file) => ({
+    referenceFiles: visibleReferenceFiles.map((file) => ({
       path: file.path,
       summary: file.summary,
       content: file.summary || summarizeRuntimeReferenceContent(file.content, file.title, 240),
@@ -79,4 +126,7 @@ export const normalizeRuntimeDirectChatResponse = (input: {
   response: string;
   streamedContent: string;
   emptyResponseMessage?: string;
-}) => input.streamedContent.trim() || input.response.trim() || input.emptyResponseMessage || EMPTY_RUNTIME_RESPONSE_MESSAGE;
+}) =>
+  sanitizeInternalWorkspaceMentions(
+    input.streamedContent.trim() || input.response.trim() || input.emptyResponseMessage || EMPTY_RUNTIME_RESPONSE_MESSAGE
+  );

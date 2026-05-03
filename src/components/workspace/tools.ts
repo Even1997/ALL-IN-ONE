@@ -207,6 +207,29 @@ PARAMETERS:
     },
     required: ['url', 'format'],
   },
+  {
+    name: 'AskUserQuestion',
+    description: `Pause execution and ask the user a direct question when the next step depends on a user decision that cannot be inferred safely.
+
+PARAMETERS:
+- question: single question string
+- options: optional list of answer choices with labels/descriptions
+- or questions: an array of question objects with the same shape`,
+    parameters: {
+      question: { type: 'string', description: 'A single question for the user' },
+      options: {
+        type: 'array',
+        description: 'Optional answer choices',
+        items: { type: 'object', description: 'Choice object with label and optional description' },
+      },
+      questions: {
+        type: 'array',
+        description: 'Optional multi-question payload',
+        items: { type: 'object', description: 'Question object' },
+      },
+    },
+    required: [],
+  },
 ];
 
 // Tool Executor - executes tools via Tauri commands
@@ -223,6 +246,41 @@ export class ToolExecutor {
 
   private normalizePath(value: string) {
     return value.replace(/\\/g, '/');
+  }
+
+  private normalizeProjectRoot() {
+    return this.normalizePath(this.projectRoot).replace(/\/+$/, '');
+  }
+
+  private isAbsolutePath(value: string) {
+    return /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value);
+  }
+
+  private ensureProjectPath(pathValue?: string, kind: 'file' | 'directory' = 'file') {
+    const normalizedRoot = this.normalizeProjectRoot();
+    if (!normalizedRoot) {
+      throw new Error('Current project root is unavailable.');
+    }
+
+    const rawPath = (pathValue || this.projectRoot).trim();
+    const candidatePath = rawPath || this.projectRoot;
+    const normalizedCandidate = this.normalizePath(candidatePath);
+    const resolvedPath = this.isAbsolutePath(candidatePath)
+      ? normalizedCandidate
+      : `${normalizedRoot}/${normalizedCandidate.replace(/^\/+/, '')}`.replace(/\/+/g, '/');
+    const comparableResolved = resolvedPath.toLowerCase();
+    const comparableRoot = normalizedRoot.toLowerCase();
+
+    if (
+      comparableResolved !== comparableRoot &&
+      !comparableResolved.startsWith(`${comparableRoot}/`)
+    ) {
+      throw new Error(
+        `Cannot access ${kind} outside the current project. Stay under ${this.projectRoot}.`
+      );
+    }
+
+    return resolvedPath;
   }
 
   private toProjectRelativePath(filePath: string) {
@@ -279,10 +337,11 @@ export class ToolExecutor {
 
   private async glob(params: GlobParams): Promise<ToolResult> {
     try {
+      const searchPath = this.ensureProjectPath(params.path, 'directory');
       const result = await invoke<RustToolResult>('tool_glob', {
         params: {
           pattern: params.pattern,
-          path: params.path || this.projectRoot,
+          path: searchPath,
         },
       });
 
@@ -302,10 +361,11 @@ export class ToolExecutor {
 
   private async grep(params: GrepParams): Promise<ToolResult> {
     try {
+      const searchPath = this.ensureProjectPath(params.path, 'directory');
       const result = await invoke<RustToolResult>('tool_grep', {
         params: {
           pattern: params.pattern,
-          path: params.path || this.projectRoot,
+          path: searchPath,
           include: params.include,
         },
       });
@@ -326,9 +386,10 @@ export class ToolExecutor {
 
   private async ls(params: LSParams): Promise<ToolResult> {
     try {
+      const searchPath = this.ensureProjectPath(params.path, 'directory');
       const result = await invoke<RustToolResult>('tool_ls', {
         params: {
-          path: params.path || this.projectRoot,
+          path: searchPath,
         },
       });
 
@@ -348,9 +409,10 @@ export class ToolExecutor {
 
   private async view(params: ViewParams): Promise<ToolResult> {
     try {
+      const filePath = this.ensureProjectPath(params.file_path, 'file');
       const result = await invoke<RustToolResult>('tool_view', {
         params: {
-          file_path: params.file_path,
+          file_path: filePath,
           offset: params.offset || 0,
           limit: params.limit || 2000,
         },
@@ -372,10 +434,11 @@ export class ToolExecutor {
 
   private async write(params: WriteParams): Promise<ToolResult> {
     try {
-      const beforeContent = await this.readTextFileSnapshot(params.file_path);
+      const filePath = this.ensureProjectPath(params.file_path, 'file');
+      const beforeContent = await this.readTextFileSnapshot(filePath);
       const result = await invoke<RustToolResult>('tool_write', {
         params: {
-          file_path: params.file_path,
+          file_path: filePath,
           content: params.content,
         },
       });
@@ -388,7 +451,7 @@ export class ToolExecutor {
           ? {
               fileChanges: [
                 {
-                  path: this.toProjectRelativePath(params.file_path),
+                  path: this.toProjectRelativePath(filePath),
                   beforeContent,
                   afterContent: params.content,
                 } satisfies ToolResultFileChange,
@@ -407,17 +470,18 @@ export class ToolExecutor {
 
   private async edit(params: EditParams): Promise<ToolResult> {
     try {
-      const beforeContent = await this.readTextFileSnapshot(params.file_path);
+      const filePath = this.ensureProjectPath(params.file_path, 'file');
+      const beforeContent = await this.readTextFileSnapshot(filePath);
       const result = await invoke<RustToolResult>('tool_edit', {
         params: {
-          file_path: params.file_path,
+          file_path: filePath,
           old_string: params.old_string,
           new_string: params.new_string,
         },
       });
 
       const afterContent = result.success
-        ? await this.readTextFileSnapshot(params.file_path)
+        ? await this.readTextFileSnapshot(filePath)
         : null;
 
       return {
@@ -428,7 +492,7 @@ export class ToolExecutor {
           ? {
               fileChanges: [
                 {
-                  path: this.toProjectRelativePath(params.file_path),
+                  path: this.toProjectRelativePath(filePath),
                   beforeContent,
                   afterContent,
                 } satisfies ToolResultFileChange,
@@ -447,11 +511,12 @@ export class ToolExecutor {
 
   private async bash(params: BashParams): Promise<ToolResult> {
     try {
+      const cwd = this.ensureProjectPath(params.cwd, 'directory');
       const result = await invoke<RustToolResult>('tool_bash', {
         params: {
           command: params.command,
           timeout: params.timeout || 60000,
-          cwd: params.cwd,
+          cwd,
           shell: params.shell,
         },
       });

@@ -14,6 +14,7 @@ import {
 import type { ApprovalRiskLevel, SandboxPolicy } from '../approval/approvalTypes.ts';
 import type { ApprovalRecord } from '../approval/approvalTypes.ts';
 import { requestRuntimeApproval, type RuntimePendingApprovalAction } from './runtimeApprovalCoordinator.ts';
+import { sanitizeInternalWorkspaceMentions } from './runtimeDirectChatFlow.ts';
 
 export const buildProjectFileApprovalActionType = (operations: ProjectFileOperation[]) => {
   if (operations.some((operation) => operation.type === 'delete_file')) {
@@ -38,17 +39,20 @@ export const executeRuntimeProjectFileRead = async (input: {
   projectName: string;
   projectRoot: string;
   allowedTools: string[];
+  onChunk?: (content: string) => void;
   readFiles: (payload: {
     prompt: string;
     systemPrompt: string;
     allowedTools: string[];
+    onChunk?: (text: string) => void;
   }) => Promise<string>;
 }) => {
-  const response = await input.readFiles({
+  const response = sanitizeInternalWorkspaceMentions(await input.readFiles({
     prompt: input.userInput,
     systemPrompt: buildRuntimeProjectFileReadSystemPrompt(input.projectName, input.projectRoot),
     allowedTools: input.allowedTools,
-  });
+    onChunk: input.onChunk,
+  })).trim();
 
   return response.trim() || '已读取相关文件，但这次没有返回内容。';
 };
@@ -220,6 +224,7 @@ export const requestRuntimeProjectFileApproval = async (input: {
   messageId?: string | null;
   onApprove: () => Promise<void>;
   onDeny?: () => void | Promise<void>;
+  display?: RuntimePendingApprovalAction['display'];
   enqueueAgentApproval: (payload: {
     threadId: string;
     actionType: string;
@@ -238,6 +243,7 @@ export const requestRuntimeProjectFileApproval = async (input: {
     messageId: input.messageId,
     onApprove: input.onApprove,
     onDeny: input.onDeny,
+    display: input.display,
     enqueueAgentApproval: input.enqueueAgentApproval,
     enqueueApproval: input.enqueueApproval,
     pendingApprovalActions: input.pendingApprovalActions,

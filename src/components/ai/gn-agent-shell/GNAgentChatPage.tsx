@@ -4,6 +4,7 @@ import { useGNAgentShellStore } from '../../../modules/ai/gn-agent/gnAgentShellS
 import { listProjectMemoryEntries, saveProjectMemoryEntry } from '../../../modules/ai/runtime/agentRuntimeClient';
 import type { AgentMemoryEntry } from '../../../modules/ai/runtime/agentRuntimeTypes';
 import { type AgentMemoryCandidate, useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
+import { useRuntimeMcpStore } from '../../../modules/ai/runtime/mcp/runtimeMcpStore';
 import { getLatestTurnSession } from '../../../modules/ai/runtime/session/agentSessionSelectors';
 import { AI_CHAT_COMMAND_EVENT } from '../../../modules/ai/chat/chatCommands';
 import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
@@ -55,6 +56,9 @@ export const GNAgentChatPage: React.FC<{
     activeSessionId ? state.contextByThread[activeSessionId] || null : null
   );
   const toolCalls = useAgentRuntimeStore((state) =>
+    activeSessionId ? state.toolCallsByThread[activeSessionId] || [] : []
+  );
+  const mcpToolCalls = useRuntimeMcpStore((state) =>
     activeSessionId ? state.toolCallsByThread[activeSessionId] || [] : []
   );
   const memoryCandidates = useAgentRuntimeStore((state) =>
@@ -254,7 +258,7 @@ export const GNAgentChatPage: React.FC<{
           <GNAgentTeamPanel />
           <GNAgentPlanPanel session={latestTurnSession} />
           <GNAgentContextPanel context={contextSnapshot} />
-          <GNAgentToolCallPanel toolCalls={toolCalls} />
+          <GNAgentToolCallPanel toolCalls={toolCalls} mcpToolCalls={mcpToolCalls} />
           <GNAgentMemoryInbox
             candidates={memoryCandidates}
             onSave={handleSaveMemoryCandidate}

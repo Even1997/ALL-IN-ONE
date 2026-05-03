@@ -61,6 +61,9 @@ const TASK_WRITE_TARGET_PATTERN =
 
 const QUESTION_ONLY_PATTERN = /(^|\s)(为什么|怎么|如何|what|why|how|which)(\s|$)|\?/i;
 
+const ANALYSIS_ONLY_PATTERN =
+  /(鎬荤粨|姒傝|鍒嗘瀽|瑙ｉ噴|璇存槑|瀵规瘮|姣旇緝|妫€鏌?|review|summary|summarize|analyze|analysis|compare|explain|inspect)/i;
+
 const trimLeadingSeparators = (value: string) => value.replace(/^[\\/]+/, '');
 
 const trimTrailingSeparators = (value: string) => value.replace(/[\\/]+$/, '');
@@ -192,6 +195,10 @@ export const detectTaskAuthorizedProjectWriteIntent = (value: string) => {
 
   if (detectProjectFileWriteIntent(normalized)) {
     return true;
+  }
+
+  if (ANALYSIS_ONLY_PATTERN.test(normalized) && !hasTaskVerb) {
+    return false;
   }
 
   if (detectProjectFileReadIntent(normalized)) {

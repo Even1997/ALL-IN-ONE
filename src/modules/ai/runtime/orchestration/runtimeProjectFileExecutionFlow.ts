@@ -269,11 +269,17 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
   ) => Promise<RuntimeProjectFileExecutionResult>;
   appendActivityEntry: (projectId: string, entry: ActivityEntry) => void;
   normalizeErrorMessage: (error: unknown) => string;
+  onExecutionStart?: () => Promise<void> | void;
   onExecutionSuccess?: (payload: {
     runId: string;
     messageId: string;
     summary: string;
     fileChanges: RuntimeProjectFileExecutionResult['fileChanges'];
+  }) => Promise<void> | void;
+  onExecutionFailed?: (payload: {
+    runId: string;
+    messageId: string;
+    message: string;
   }) => Promise<void> | void;
 }): Promise<boolean> => {
   const pendingApproval = findPendingApprovalByMessageId({
@@ -300,6 +306,7 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
   }
 
   try {
+    await input.onExecutionStart?.();
     const projectRoot = await input.getProjectDir(input.projectId);
     const result = await input.executeProjectFileOperations(projectRoot, input.proposal.operations);
     const successOutcome = buildRuntimeProjectFileAutoExecuteSuccess({
@@ -349,6 +356,11 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
         : currentMessage.projectFileProposal,
     }));
     input.appendActivityEntry(input.projectId, failureOutcome.activityEntry);
+    await input.onExecutionFailed?.({
+      runId: input.runId,
+      messageId: input.messageId,
+      message,
+    });
     return false;
   }
 };

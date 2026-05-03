@@ -16,6 +16,7 @@ export type LocalAgentCommandResult = {
   content: string;
   error: string | null;
   exitCode: number | null;
+  changedPaths?: string[] | null;
 };
 
 export const CHAT_AGENTS: ChatAgentDefinition[] = getChatAgents();

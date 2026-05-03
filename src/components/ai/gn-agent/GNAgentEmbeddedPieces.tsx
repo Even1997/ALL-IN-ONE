@@ -1,10 +1,78 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ChatSession, StoredChatMessage } from '../../../modules/ai/store/aiChatStore';
 import type { ActivityEntry } from '../../../modules/ai/skills/activityLog';
-import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
+import { buildAssistantMessageParts, type AIChatMessagePart } from '../../workspace/aiChatMessageParts';
 
-type MessagePartRenderer = (messageId: string, part: AIChatMessagePart, index: number) => React.ReactNode;
+type MessagePartRenderer = (
+  message: StoredChatMessage,
+  messageId: string,
+  part: AIChatMessagePart,
+  index: number,
+  options?: {
+    content: string;
+    isStreaming: boolean;
+    thinkingExpanded?: boolean;
+    onToggleThinking?: () => void;
+  }
+) => React.ReactNode;
 type MessagePartsParser = (content: string) => AIChatMessagePart[];
+type MessageRenderItem =
+  | { kind: 'thinking_lane'; key: string; node: React.ReactNode; sourcePart?: AIChatMessagePart }
+  | { kind: 'bubble_part'; key: string; node: React.ReactNode; sourcePart?: AIChatMessagePart }
+  | { kind: 'bubble_card'; key: string; node: React.ReactNode };
+
+const normalizeAssistantCopy = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+const shouldSuppressAssistantTextPart = (message: StoredChatMessage, part: AIChatMessagePart, cardCount: number) => {
+  if (message.role !== 'assistant' || part.type !== 'text' || cardCount === 0) {
+    return false;
+  }
+
+  if (message.projectFileProposal || message.runtimeQuestion) {
+    return true;
+  }
+
+  const hasRuntimeCards = Boolean(message.toolCalls?.length || message.runtimeEvents?.length);
+  if (!hasRuntimeCards) {
+    return false;
+  }
+
+  const normalized = normalizeAssistantCopy(part.content);
+  if (!normalized) {
+    return true;
+  }
+
+  return normalized.length <= 120;
+};
+
+const AssistantMessageActionBar: React.FC<{
+  copyText?: string;
+}> = ({ copyText }) => {
+  const [copied, setCopied] = useState(false);
+
+  if (!copyText?.trim()) {
+    return null;
+  }
+
+  return (
+    <div className="chat-message-actions" data-align="start">
+      <button
+        type="button"
+        className="chat-message-action-btn"
+        onClick={async () => {
+          if (!navigator.clipboard) {
+            return;
+          }
+          await navigator.clipboard.writeText(copyText);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        }}
+      >
+        {copied ? '已复制' : '复制'}
+      </button>
+    </div>
+  );
+};
 
 export const GNAgentHistoryMenu: React.FC<{
   sessions: ChatSession[];
@@ -58,7 +126,7 @@ export const GNAgentHistoryMenu: React.FC<{
 
 export const GNAgentMessageList: React.FC<{
   messages: StoredChatMessage[];
-  draftContents?: Record<string, string>;
+  draftContents?: Record<string, { content: string; thinkingContent: string; answerContent: string; assistantParts: AIChatMessagePart[] }>;
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
@@ -68,6 +136,8 @@ export const GNAgentMessageList: React.FC<{
   renderToolExecutionCard?: (message: StoredChatMessage) => React.ReactNode;
   renderRunSummaryCard?: (message: StoredChatMessage) => React.ReactNode;
   renderRuntimeApproval?: (message: StoredChatMessage) => React.ReactNode;
+  renderRuntimeQuestion?: (message: StoredChatMessage) => React.ReactNode;
+  listRef?: React.RefObject<HTMLDivElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   leadingContent?: React.ReactNode;
 }> = ({
@@ -82,41 +152,132 @@ export const GNAgentMessageList: React.FC<{
   renderToolExecutionCard,
   renderRunSummaryCard,
   renderRuntimeApproval,
+  renderRuntimeQuestion,
+  listRef,
   messagesEndRef,
   leadingContent,
-}) => (
-  <div className="chat-message-list">
-    {leadingContent}
-    {messages.map((message) => {
-      const content = draftContents?.[message.id] ?? message.content;
-      const parts = parseMessageParts(content);
+}) => {
+  const [expandedThinkingKeys, setExpandedThinkingKeys] = useState<Record<string, boolean>>({});
+
+  return (
+    <div ref={listRef} className="chat-message-list">
+      {leadingContent}
+      {messages.map((message) => {
+      const draftState = draftContents?.[message.id];
+      const content = draftState?.content ?? message.content;
+      const isStreaming = Boolean(draftState);
+      const parts =
+        message.role === 'assistant'
+          ? buildAssistantMessageParts({
+              content,
+              assistantParts: draftState?.assistantParts ?? (message.assistantParts as AIChatMessagePart[] | undefined),
+              thinkingContent: draftState?.thinkingContent ?? message.thinkingContent,
+              answerContent: draftState?.answerContent ?? message.answerContent,
+              thinkingCollapsed: isStreaming ? false : undefined,
+            })
+          : parseMessageParts(content);
+      const assistantCopyText =
+        message.role === 'assistant'
+          ? (draftState?.answerContent ?? message.answerContent ?? content).trim()
+          : undefined;
+      const renderItems: MessageRenderItem[] = [];
+
+      parts.forEach((part, index) => {
+        const thinkingKey = `${message.id}-thinking-${index}`;
+        const thinkingExpanded =
+          part.type === 'thinking' ? (isStreaming ? true : expandedThinkingKeys[thinkingKey] ?? false) : undefined;
+        const renderOptions = {
+          content,
+          isStreaming,
+          thinkingExpanded,
+          onToggleThinking:
+            part.type === 'thinking' && !isStreaming
+              ? () =>
+                  setExpandedThinkingKeys((current) => ({
+                    ...current,
+                    [thinkingKey]: !(current[thinkingKey] ?? false),
+                  }))
+              : undefined,
+        };
+        renderItems.push({
+          kind: message.role === 'assistant' && part.type === 'thinking' ? 'thinking_lane' : 'bubble_part',
+          key: `${message.id}-part-${index}`,
+          node: renderMessagePart(message, message.id, part, index, renderOptions),
+          sourcePart: part,
+        });
+      });
+
+      [
+        renderStructuredCards?.(message),
+        renderKnowledgeProposal?.(message),
+        renderProjectFileProposal?.(message),
+        renderToolExecutionCard?.(message),
+        renderRunSummaryCard?.(message),
+        renderRuntimeApproval?.(message),
+        renderRuntimeQuestion?.(message),
+      ].forEach((node, index) => {
+        if (!node) {
+          return;
+        }
+
+        renderItems.push({
+          kind: 'bubble_card',
+          key: `${message.id}-card-${index}`,
+          node,
+        });
+      });
+
+      const bubbleCardCount = renderItems.filter((item) => item.kind === 'bubble_card').length;
+      const filteredRenderItems = renderItems.filter((item) => {
+        if (item.kind !== 'bubble_part') {
+          return true;
+        }
+
+        const part = item.sourcePart;
+        return part ? !shouldSuppressAssistantTextPart(message, part, bubbleCardCount) : true;
+      });
+
+      const thinkingItems = filteredRenderItems.filter((item) => item.kind === 'thinking_lane');
+      const bubbleItems = filteredRenderItems.filter((item) => item.kind !== 'thinking_lane');
       return (
         <article
           key={message.id}
           className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}
         >
-          <div className="chat-message-bubble">
-            <div className="chat-message-content">
-              {parts.map((part, index) => renderMessagePart(message.id, part, index))}
-              {renderStructuredCards ? renderStructuredCards(message) : null}
-              {renderKnowledgeProposal ? renderKnowledgeProposal(message) : null}
-              {renderProjectFileProposal ? renderProjectFileProposal(message) : null}
-              {renderToolExecutionCard ? renderToolExecutionCard(message) : null}
-              {renderRunSummaryCard ? renderRunSummaryCard(message) : null}
-              {renderRuntimeApproval ? renderRuntimeApproval(message) : null}
+          {thinkingItems.length > 0 ? (
+            <div className="chat-message-thinking-lane">
+              {thinkingItems.map((item) => (
+                <React.Fragment key={item.key}>{item.node}</React.Fragment>
+              ))}
             </div>
-            <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
-          </div>
+          ) : null}
+          {bubbleItems.length > 0 ? (
+            <div className="chat-message-bubble">
+              <div className="chat-message-content">
+                {bubbleItems.map((item) => (
+                  <React.Fragment key={item.key}>{item.node}</React.Fragment>
+                ))}
+              </div>
+              {message.role === 'assistant' ? (
+                <AssistantMessageActionBar copyText={isStreaming ? undefined : assistantCopyText} />
+              ) : null}
+              <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
+            </div>
+          ) : (
+            <div className="chat-message-meta chat-message-meta-standalone">{formatTimestamp(message.createdAt)}</div>
+          )}
         </article>
       );
     })}
-    <div ref={messagesEndRef} />
-  </div>
-);
+      <div ref={messagesEndRef} />
+    </div>
+  );
+};
 
 export const GNAgentEmbeddedComposer: React.FC<{
   entrySwitch?: React.ReactNode;
   topContent?: React.ReactNode;
+  toolbarStartContent?: React.ReactNode;
   input: string;
   setInput: (value: string) => void;
   onInputChange?: (value: string, cursorPos: number) => void;
@@ -136,6 +297,7 @@ export const GNAgentEmbeddedComposer: React.FC<{
 }> = ({
   entrySwitch,
   topContent,
+  toolbarStartContent,
   input,
   setInput,
   onInputChange,
@@ -185,6 +347,7 @@ export const GNAgentEmbeddedComposer: React.FC<{
 
         <div className="chat-composer-embedded-toolbar">
           <div className="chat-composer-embedded-toolbar-start">
+            {toolbarStartContent}
             {!agentStatusLabel ? (
               <div className="chat-composer-meta chat-composer-meta-embedded">
                 <span>{selectedRuntimeLabel}</span>

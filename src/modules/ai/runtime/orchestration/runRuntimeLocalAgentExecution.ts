@@ -32,19 +32,20 @@ export async function runRuntimeLocalAgentExecution(
   input: RunRuntimeLocalAgentExecutionInput
 ): Promise<RunRuntimeLocalAgentExecutionResult> {
   try {
-    const finalContent = await executeRuntimeLocalAgentTurn(input);
+    const executionResult = await executeRuntimeLocalAgentTurn(input);
 
     return {
       status: 'completed',
-      finalContent,
+      finalContent: executionResult.finalContent,
       successOutcome: buildRuntimeLocalAgentSuccessOutcome({
         createId: input.createActivityId,
         runId: input.runId,
-        content: finalContent,
+        content: executionResult.finalContent,
+        changedPaths: executionResult.changedPaths,
         skill: input.skill,
         agentId: input.agentId,
       }),
-      completedStep: buildRuntimeLocalAgentExecutionCompletedStep(finalContent),
+      completedStep: buildRuntimeLocalAgentExecutionCompletedStep(executionResult.finalContent),
     };
   } catch (error) {
     const message = input.normalizeErrorMessage(error);
