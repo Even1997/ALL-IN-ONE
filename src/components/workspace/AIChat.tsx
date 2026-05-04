@@ -76,19 +76,6 @@ import {
   updateRuntimeLocalAgentPlanApprovalStatus,
 } from '../../modules/ai/runtime/orchestration/runtimeLocalAgentFlow';
 import {
-  applyRuntimeProjectFileProposalToPlan,
-  buildRuntimeProjectFileAutoExecuteSummary,
-  buildRuntimeProjectFilePlan,
-  buildProjectFileDecisionState,
-  denyRuntimeProjectFileApproval,
-  executeRuntimeProjectFileRead,
-  executeRuntimeProjectFilePlanning,
-  handleRuntimeProjectFileDecision,
-  prepareProjectFileProposalFlow,
-  resolveRuntimeProjectFileDecisionFeedback,
-  updateRuntimeProjectFilePlanApprovalStatus,
-} from '../../modules/ai/runtime/orchestration/runtimeProjectFileFlow';
-import {
   resolveRuntimeApproval,
   requestRuntimeApproval as requestRuntimeApprovalFlow,
   type RuntimePendingApprovalAction,
@@ -111,7 +98,6 @@ import {
   buildRuntimeTurnReviewPlan,
 } from '../../modules/ai/runtime/orchestration/runtimeTurnSessionFlow';
 import { executeRuntimeWorkflowPackage } from '../../modules/ai/runtime/orchestration/runtimeWorkflowFlow';
-import { sanitizeInternalWorkspaceMentions } from '../../modules/ai/runtime/orchestration/runtimeDirectChatFlow';
 import type {
   AgentBackgroundTaskRecord,
   AgentProviderId,
@@ -162,16 +148,11 @@ import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
-  detectProjectFileReadIntent,
-  detectTaskAuthorizedProjectWriteIntent,
-  detectProjectFileWriteIntent,
   findLatestPendingProjectFileProposalAction,
   isShortPendingActionAffirmation,
   isShortPendingActionRejection,
   type ProjectFileOperation,
-  type ProjectFileOperationMode,
   type ProjectFileProposal,
-  parseProjectFileOperationsPlan,
   resolveProjectOperationPath,
   isSupportedProjectTextFilePath,
 } from '../../modules/ai/chat/projectFileOperations';
@@ -691,13 +672,6 @@ const summarizeReferenceContent = (value: string, fallback = '', maxLength = 120
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 3)}...` : normalized;
 };
 
-const createProjectFileProposalId = () => `file-proposal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-const modeLabelMap: Record<ProjectFileOperationMode, string> = {
-  manual: '手动确认',
-  auto: '自动确认',
-};
-
 const approvalStatusLabelMap: Record<ApprovalRecord['status'], string> = {
   pending: '待确认',
   approved: '已批准',
@@ -954,29 +928,6 @@ const findRuntimeMcpToolDefinition = (
   toolName: string
 ) => servers.find((server) => server.id === serverId)?.tools?.find((tool) => tool.name === toolName) || null;
 
-const buildProjectFileClarificationCards = (message: string): ChatStructuredCard[] => [
-  {
-    type: 'summary',
-    title: '还需要补充一点信息',
-    body: message,
-  },
-  {
-    type: 'next-step',
-    title: '你可以这样继续',
-    actions: [
-      {
-        id: 'file-path',
-        label: '补充文件路径',
-        prompt: '我想改的文件是 ',
-      },
-      {
-        id: 'file-content',
-        label: '说明要改什么',
-        prompt: '请把这个文件改成：',
-      },
-    ],
-  },
-];
 
 const summarizeProjectFileOperationPreview = (operation: ProjectFileOperation, maxLength = 220) => {
   const raw =
@@ -1535,32 +1486,7 @@ const extractCheckpointFilesFromToolCalls = (toolCalls: RuntimeToolStep[] | null
   return Array.from(fileChangesByPath.values());
 };
 
-const resolveProjectFileProposalPresentation = (
-  proposal: ProjectFileProposal,
-  decision: 'blocked' | 'approval-required' | 'auto-execute'
-): ProjectFileProposal => {
-  if (decision === 'blocked') {
-    return {
-      ...proposal,
-      assistantMessage: '改动方案已生成，但当前权限策略不允许直接执行。',
-      executionMessage: '当前策略拦截了这次文件改动。你可以调整需求后重试。',
-    };
-  }
 
-  if (decision === 'approval-required') {
-    return {
-      ...proposal,
-      assistantMessage: '改动方案已准备好，确认后我就会写入文件。',
-      executionMessage: '请先确认这次改动范围。',
-    };
-  }
-
-  return {
-    ...proposal,
-    assistantMessage: '改动范围已确认，正在写入文件并校验结果...',
-    executionMessage: '正在写入文件并校验结果...',
-  };
-};
 
 const buildProjectFileStageItems = (proposal: ProjectFileProposal) => {
   const analysisState: 'done' | 'current' | 'pending' = 'done';
@@ -1997,7 +1923,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [jsonImportText, setJsonImportText] = useState('');
   const [showJsonImport, setShowJsonImport] = useState(false);
   const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, StreamingDraftState>>({});
-  const [projectFileOperationMode, setProjectFileOperationMode] = useState<ProjectFileOperationMode>('auto');
+
   const [referenceSearchOpen, setReferenceSearchOpen] = useState(false);
   const [referenceSearchQuery, setReferenceSearchQuery] = useState('');
   const [referenceTriggerIndex, setReferenceTriggerIndex] = useState(-1);
@@ -3258,7 +3184,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             </span>
           </div>
           <div className="chat-project-file-proposal-meta">
-            <span>模式：{modeLabelMap[proposal.mode]}</span>
             <span>{proposal.operations.length} 项操作</span>
           </div>
           <div className="chat-project-file-proposal-stages" aria-label="文件操作进度">
@@ -4604,9 +4529,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       const cleanedContent = skillIntent?.cleanedInput.trim()
         ? skillIntent.cleanedInput.trim()
         : rawContent;
-      const isTaskAuthorizedWriteRequest = detectTaskAuthorizedProjectWriteIntent(cleanedContent);
-      const isProjectFileWriteRequest = detectProjectFileWriteIntent(cleanedContent) || isTaskAuthorizedWriteRequest;
-      const isProjectFileReadRequest = detectProjectFileReadIntent(cleanedContent);
       const runId = createRunId();
       const userMessage = createStoredChatMessage('user', rawContent, 'default', { runId });
 
@@ -4920,9 +4842,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         const turnModeDecision = decideAgentTurnMode({
           prompt: cleanedContent,
           suggestedPlanMode: Boolean(skillIntent),
-          riskyWriteDetected: isProjectFileWriteRequest || runtimeExecutionAgentId !== 'built-in',
+          riskyWriteDetected: runtimeExecutionAgentId !== 'built-in',
           bashDetected: Boolean(mcpCommand),
-          multiStepDetected: Boolean(mcpCommand || isProjectFileWriteRequest || runtimeExecutionAgentId !== 'built-in'),
+          multiStepDetected: Boolean(mcpCommand || runtimeExecutionAgentId !== 'built-in'),
         });
         if (turnModeDecision.mode === 'plan_then_execute') {
           patchCurrentTurnSession((session) => ({
@@ -4932,14 +4854,12 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               summary:
                 runtimeExecutionAgentId !== 'built-in'
                   ? `Review and run ${runtimeExecutionAgentId === 'codex' ? 'the Codex agent' : 'the local agent'} request`
-                  : isProjectFileWriteRequest
-                    ? 'Plan project file changes before execution'
-                    : mcpCommand
-                      ? `Review MCP tool call: ${mcpCommand.toolName}`
-                      : 'Plan the current request before execution',
+                  : mcpCommand
+                    ? `Review MCP tool call: ${mcpCommand.toolName}`
+                    : 'Plan the current request before execution',
               reason: turnModeDecision.reason,
               riskLevel:
-                runtimeExecutionAgentId !== 'built-in' || isProjectFileWriteRequest
+                runtimeExecutionAgentId !== 'built-in'
                   ? 'high'
                   : mcpCommand
                     ? 'medium'
@@ -4947,10 +4867,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               executeKind:
                 runtimeExecutionAgentId !== 'built-in'
                   ? 'tool'
-                  : isProjectFileWriteRequest
-                    ? 'file'
-                    : 'reply',
-              needsApproval: runtimeExecutionAgentId !== 'built-in' || isProjectFileWriteRequest,
+                  : 'reply',
+              needsApproval: runtimeExecutionAgentId !== 'built-in',
             }),
           }));
         }
@@ -5259,436 +5177,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           return;
         }
 
-        if (runtimeExecutionAgentId === 'built-in' && (isProjectFileWriteRequest || isProjectFileReadRequest)) {
-          const projectRoot = await getProjectDir(currentProject.id);
-
-          if (selectedRuntimeConfig) {
-            aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
-          }
-
-          if (isProjectFileReadRequest && !isProjectFileWriteRequest) {
-            markTurnExecuting('Read project files', 'Loading requested project files for the current turn.');
-            const projectFileReadToolCallId = buildSyntheticRuntimeToolCallId('project-file-read', assistantMessage.id);
-            upsertRuntimeToolUseInMessage(assistantMessage.id, {
-              toolCallId: projectFileReadToolCallId,
-              toolName: 'project_file_read',
-              toolInput: {
-                request: buildSessionPreview(cleanedContent) || cleanedContent,
-              },
-              status: 'running',
-            });
-            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-              ...message,
-              content: '',
-              ...clearAssistantContentState(),
-            }));
-            let finalContent: string;
-            let streamedReadContent = '';
-            try {
-              finalContent = await executeRuntimeProjectFileRead({
-                userInput: cleanedContent,
-                projectName: currentProject.name || '当前项目',
-                projectRoot,
-                allowedTools: READ_ONLY_CHAT_TOOLS,
-                onChunk: (chunk) => {
-                  streamedReadContent += chunk;
-                  const sanitizedDraft = sanitizeInternalWorkspaceMentions(streamedReadContent).trim();
-                  updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-                    ...message,
-                    ...buildAssistantContentState(sanitizedDraft),
-                  }));
-                },
-                readFiles: (payload) => aiService.chatWithTools(payload),
-              });
-            } catch (error) {
-              const message = normalizeErrorMessage(error);
-              upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                toolCallId: projectFileReadToolCallId,
-                toolName: 'project_file_read',
-                status: 'failed',
-                output: message,
-              });
-              throw error;
-            }
-            upsertRuntimeToolResultInMessage(assistantMessage.id, {
-              toolCallId: projectFileReadToolCallId,
-              toolName: 'project_file_read',
-              status: 'completed',
-              output: finalContent,
-            });
-
-            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-              ...message,
-              ...buildAssistantContentState(finalContent),
-            }));
-
-            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-              id: createRuntimeEventId('read'),
-              threadId: runtimeStoreThreadId,
-              providerId: runtimeProviderId,
-              summary: `Read project files: ${buildSessionPreview(cleanedContent)}`,
-              createdAt: Date.now(),
-            });
-            await completeTurnSession(finalContent);
-            return;
-          }
-
-          patchCurrentTurnSession((session) => ({
-            ...reduceAgentTurnSession(session, { type: 'enter_planning' }),
-            plan: buildRuntimeProjectFilePlan({
-              turnId: runtimeTurnSessionId || targetSessionId,
-              operationMode: projectFileOperationMode,
-              summary: buildSessionPreview(cleanedContent) || 'Plan project file changes',
-            }),
-          }));
-          const projectFileFlowToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id);
-          const projectFilePlanToolCallId = buildSyntheticRuntimeToolCallId(
-            'project-file',
-            assistantMessage.id,
-            'plan'
-          );
-          const projectFileApplyToolCallId = buildSyntheticRuntimeToolCallId(
-            'project-file',
-            assistantMessage.id,
-            'apply'
-          );
-
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_flow',
-            toolInput: {
-              mode: projectFileOperationMode,
-              summary: buildSessionPreview(cleanedContent) || cleanedContent,
-            },
-            status: 'running',
-          });
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: projectFilePlanToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_plan',
-            toolInput: {
-              mode: projectFileOperationMode,
-              request: buildSessionPreview(cleanedContent) || cleanedContent,
-            },
-            status: 'running',
-          });
-
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            content: '',
-            ...clearAssistantContentState(),
-            structuredCards: undefined,
-            projectFileProposal: undefined,
-          }));
-
-          const planningResult = await executeRuntimeProjectFilePlanning({
-            userInput: cleanedContent,
-            conversationHistory,
-            projectName: currentProject.name || '当前项目',
-            projectRoot,
-            allowedTools: READ_ONLY_CHAT_TOOLS,
-            executePlanning: ({ prompt, systemPrompt, allowedTools }) =>
-              aiService.chatWithTools({ prompt, systemPrompt, allowedTools }),
-            parsePlan: parseProjectFileOperationsPlan,
-          });
-
-          if (planningResult.status !== 'ready') {
-            upsertRuntimeToolResultInMessage(assistantMessage.id, {
-              toolCallId: projectFilePlanToolCallId,
-              parentToolCallId: projectFileFlowToolCallId,
-              toolName: 'project_file_plan',
-              status: 'completed',
-              output: planningResult.message || '需要补充更多信息后才能继续文件操作。',
-            });
-            upsertRuntimeToolResultInMessage(assistantMessage.id, {
-              toolCallId: projectFileFlowToolCallId,
-              toolName: 'project_file_flow',
-              status: 'completed',
-              output: planningResult.message || '文件改动规划已暂停，等待补充信息。',
-            });
-            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-              ...message,
-              ...buildAssistantContentState('还需要你补充一点信息，才能继续这次文件操作。'),
-              structuredCards: buildProjectFileClarificationCards(planningResult.message),
-              projectFileProposal: undefined,
-            }));
-            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-              id: createRuntimeEventId('file-plan'),
-              threadId: runtimeStoreThreadId,
-              providerId: runtimeProviderId,
-              summary: 'File operation plan needs clarification',
-              createdAt: Date.now(),
-            });
-            await completeTurnSession(planningResult.message || '文件操作计划需要补充信息。');
-            return;
-          }
-          const plan = planningResult.plan;
-
-          const approvalThreadId = runtimeThreadId || targetSessionId;
-          const {
-            proposal: rawProposal,
-            approvalActionType,
-            riskLevel,
-            decision,
-          } = prepareProjectFileProposalFlow({
-            proposalId: createProjectFileProposalId(),
-            mode: projectFileOperationMode,
-            plan,
-            sandboxPolicy,
-          });
-          const nextProposal = resolveProjectFileProposalPresentation(rawProposal, decision);
-          const projectFileDecisionState = buildProjectFileDecisionState({
-            decision,
-            summary: nextProposal.summary,
-          });
-          const projectFileDecisionFeedback = resolveRuntimeProjectFileDecisionFeedback({
-            decisionState: projectFileDecisionState,
-            summary: nextProposal.summary,
-          });
-          upsertRuntimeToolResultInMessage(assistantMessage.id, {
-            toolCallId: projectFilePlanToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_plan',
-            status: 'completed',
-            output: nextProposal.summary,
-          });
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: projectFileApplyToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_apply',
-            toolInput: {
-              mode: projectFileOperationMode,
-              summary: nextProposal.summary,
-              paths: nextProposal.operations.map((operation) => operation.targetPath),
-            },
-            status: decision === 'blocked' ? 'blocked' : 'running',
-          });
-          patchCurrentTurnSession((session) => ({
-            ...session,
-            plan: applyRuntimeProjectFileProposalToPlan({
-              plan: session.plan,
-              proposal: nextProposal,
-              riskLevel,
-              approvalStatus: projectFileDecisionState?.approvalStatus,
-            }),
-            updatedAt: Date.now(),
-          }));
-
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            ...buildAssistantContentState(nextProposal.assistantMessage),
-            structuredCards: undefined,
-            projectFileProposal: nextProposal,
-          }));
-
-          await handleRuntimeProjectFileDecision({
-            decision,
-            onBlocked: async () => {
-              await denyRuntimeProjectFileApproval({
-                threadId: approvalThreadId,
-                actionType: approvalActionType,
-                riskLevel,
-                summary: nextProposal.summary,
-                messageId: assistantMessage.id,
-                enqueueAgentApproval,
-                enqueueApproval,
-                resolveStoredApproval,
-                resolveAgentApproval,
-              });
-              appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-                id: createRuntimeEventId('file-blocked'),
-                threadId: runtimeStoreThreadId,
-                providerId: runtimeProviderId,
-                summary: projectFileDecisionFeedback.timelineSummary,
-                createdAt: Date.now(),
-              });
-              upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                toolCallId: projectFileApplyToolCallId,
-                parentToolCallId: projectFileFlowToolCallId,
-                toolName: 'project_file_apply',
-                status: 'blocked',
-                output: projectFileDecisionFeedback.blockedReason,
-              });
-              upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                toolCallId: projectFileFlowToolCallId,
-                toolName: 'project_file_flow',
-                status: 'blocked',
-                output: projectFileDecisionFeedback.blockedReason,
-              });
-              await blockTurnSession(
-                projectFileDecisionFeedback.blockedReason,
-                projectFileDecisionFeedback.replaySummary,
-                projectFileDecisionFeedback.blockedActionLabel
-              );
-            },
-            onApprovalRequired: async () => {
-              patchCurrentTurnSession((session) => ({
-                ...reduceAgentTurnSession(session, { type: 'plan_waiting_approval' }),
-                plan: updateRuntimeProjectFilePlanApprovalStatus(
-                  session.plan,
-                  projectFileDecisionState?.approvalStatus || 'pending'
-                ),
-              }));
-              await requestRuntimeApproval({
-                threadId: approvalThreadId,
-                actionType: approvalActionType,
-                riskLevel,
-                summary: nextProposal.summary,
-                messageId: assistantMessage.id,
-                toolCallId: projectFileApplyToolCallId,
-                display: {
-                  toolName: 'project_file_apply',
-                  inputJson: JSON.stringify(
-                    {
-                      mode: projectFileOperationMode,
-                      summary: nextProposal.summary,
-                      paths: nextProposal.operations.map((operation) => operation.targetPath),
-                    },
-                    null,
-                    2
-                  ),
-                },
-                onApprove: async () => {
-                  markTurnExecuting('Apply approved file changes', nextProposal.summary);
-                  const didExecute = await handleExecuteProjectFileProposal(assistantMessage.id, nextProposal);
-                  patchCurrentTurnSession((session) =>
-                    didExecute
-                      ? reduceAgentTurnSession(session, { type: 'execution_completed' })
-                      : reduceAgentTurnSession(session, {
-                          type: 'execution_failed',
-                          reason: 'Approved file changes failed.',
-                        })
-                  );
-                },
-                onDeny: async () => {
-                  upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                    toolCallId: projectFileApplyToolCallId,
-                    parentToolCallId: projectFileFlowToolCallId,
-                    toolName: 'project_file_apply',
-                    status: 'blocked',
-                    output: projectFileDecisionFeedback.deniedReason,
-                  });
-                  upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                    toolCallId: projectFileFlowToolCallId,
-                    toolName: 'project_file_flow',
-                    status: 'blocked',
-                    output: projectFileDecisionFeedback.deniedReason,
-                  });
-                  await handleCancelProjectFileProposal(assistantMessage.id);
-                  patchCurrentTurnSession((session) => ({
-                    ...reduceAgentTurnSession(session, {
-                      type: 'execution_blocked',
-                      reason: projectFileDecisionFeedback.deniedReason,
-                      actionLabel: projectFileDecisionFeedback.deniedActionLabel,
-                    }),
-                    plan: updateRuntimeProjectFilePlanApprovalStatus(session.plan, 'denied'),
-                  }));
-                },
-              });
-              appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-                id: createRuntimeEventId('file-manual'),
-                threadId: runtimeStoreThreadId,
-                providerId: runtimeProviderId,
-                summary: projectFileDecisionFeedback.timelineSummary,
-                createdAt: Date.now(),
-              });
-              await activeExecutionController.completeWithReplay(projectFileDecisionFeedback.replaySummary);
-            },
-            onAutoExecute: async () => {
-              markTurnExecuting('Apply project file changes', nextProposal.summary);
-              const didExecute = await executeRuntimeApprovedProjectFileProposal({
-                projectId: currentProject.id,
-                sessionId: targetSessionId,
-                messageId: assistantMessage.id,
-                proposal: nextProposal,
-                activeApprovalThreadId,
-                approvalsByThread,
-                updateMessage,
-                resolveStoredApproval,
-                clearPendingApprovalAction: (approvalId) => {
-                  delete pendingApprovalActionsRef.current[approvalId];
-                },
-                resolveAgentApproval,
-                runId,
-                createActivityEntryId,
-                getProjectDir,
-                executeProjectFileOperations,
-                appendActivityEntry,
-                normalizeErrorMessage,
-                onExecutionStart: () => {
-                  upsertRuntimeToolUseInMessage(assistantMessage.id, {
-                    toolCallId: projectFileApplyToolCallId,
-                    parentToolCallId: projectFileFlowToolCallId,
-                    toolName: 'project_file_apply',
-                    toolInput: {
-                      mode: projectFileOperationMode,
-                      summary: nextProposal.summary,
-                      paths: nextProposal.operations.map((operation) => operation.targetPath),
-                    },
-                    status: 'running',
-                  });
-                },
-                onExecutionSuccess: async ({ runId: executedRunId, messageId, summary, fileChanges }) => {
-                  upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                    toolCallId: projectFileApplyToolCallId,
-                    parentToolCallId: projectFileFlowToolCallId,
-                    toolName: 'project_file_apply',
-                    status: 'completed',
-                    output: summary,
-                    fileChanges,
-                  });
-                  upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                    toolCallId: projectFileFlowToolCallId,
-                    toolName: 'project_file_flow',
-                    status: 'completed',
-                    output: summary,
-                  });
-                  await persistTurnCheckpointForRun({
-                    threadId: approvalThreadId,
-                    runId: executedRunId,
-                    messageId,
-                    summary,
-                    files: fileChanges,
-                  });
-                },
-                onExecutionFailed: ({ message }) => {
-                  upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                    toolCallId: projectFileApplyToolCallId,
-                    parentToolCallId: projectFileFlowToolCallId,
-                    toolName: 'project_file_apply',
-                    status: 'failed',
-                    output: message,
-                  });
-                  upsertRuntimeToolResultInMessage(assistantMessage.id, {
-                    toolCallId: projectFileFlowToolCallId,
-                    toolName: 'project_file_flow',
-                    status: 'failed',
-                    output: message,
-                  });
-                },
-              });
-
-              if (!didExecute) {
-                await failTurnSession('Project file changes failed.');
-                return;
-              }
-
-              const autoExecuteSummary = buildRuntimeProjectFileAutoExecuteSummary(
-                buildSessionPreview(cleanedContent) || cleanedContent
-              );
-              appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-                id: createRuntimeEventId('file-auto'),
-                threadId: runtimeStoreThreadId,
-                providerId: runtimeProviderId,
-                summary: autoExecuteSummary,
-                createdAt: Date.now(),
-              });
-              await completeTurnSession(autoExecuteSummary);
-            },
-          });
-          return;
-        }
-
         if (runtimeExecutionAgentId !== 'built-in') {
           const localExecutionAgentId = runtimeExecutionAgentId;
           const preferredTeamAgent =
@@ -5861,6 +5349,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                     activeSkills: localAgentSkillsForTurn,
                     skillIntent,
                     contextLabels,
+                    allowedTools: sandboxPolicy === 'deny' ? READ_ONLY_CHAT_TOOLS : BUILT_IN_EXECUTION_TOOLS,
                     agentId: localExecutionAgentId,
                     projectRoot,
                     runPrompt,
@@ -6260,6 +5749,12 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           },
           beforeToolCall: async (call) => {
             const boundaryDraft = streamingAssembler.markToolBoundary();
+            pushStreamingDraft(assistantMessage.id, {
+              content: boundaryDraft.content,
+              thinkingContent: boundaryDraft.thinkingContent,
+              answerContent: boundaryDraft.answerContent,
+              assistantParts: boundaryDraft.assistantParts as AIChatMessagePart[],
+            });
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
               content: boundaryDraft.content,
@@ -6447,7 +5942,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       executeProjectFileOperations,
       handleCancelProjectFileProposal,
       handleExecuteProjectFileProposal,
-      projectFileOperationMode,
       requestRuntimeApproval,
       resolveStoredApproval,
       runtimeMcpServers,
@@ -7101,25 +6595,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                           <span className={currentContextUsage.ratio >= 0.8 ? 'warning' : ''}>
                             {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
                           </span>
-                        </div>
-                      </div>
-                      <div className="chat-mode-switch" role="group" aria-label="本次聊天模式">
-                        <span className="chat-mode-switch-label">本次聊天模式</span>
-                        <div className="chat-mode-switch-options">
-                          <button
-                            type="button"
-                            className={projectFileOperationMode === 'manual' ? 'active' : ''}
-                            onClick={() => setProjectFileOperationMode('manual')}
-                          >
-                            手动确认
-                          </button>
-                          <button
-                            type="button"
-                            className={projectFileOperationMode === 'auto' ? 'active' : ''}
-                            onClick={() => setProjectFileOperationMode('auto')}
-                          >
-                            自动确认
-                          </button>
                         </div>
                       </div>
                   </div>

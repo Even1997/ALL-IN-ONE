@@ -280,20 +280,19 @@ export type RuntimeStreamingAssistantDraft = {
   >;
 };
 
-const STREAM_EXECUTION_MARKER_PATTERN =
-  /<tool_use>|<\/tool_use>|<tool name=|<\/tool>|<tool_params>|<\/tool_params>|<tool_result|<\/tool_result>|<apply_skill\b|<\s*\|\s*DSML\b|tool_calls>/i;
 const STREAM_PROTOCOL_LINE_PATTERN =
   /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=|<\/tool>|<tool_params>|<\/tool_params>).*\s*$/gim;
 const STREAM_DSML_BLOCK_PATTERN = /<\s*\|\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
 const STREAM_BARE_TOOL_BLOCK_PATTERN = /<tool name="(\w+)">[\s\S]*?<\/tool>/gi;
-const STREAM_PLANNING_PATTERN =
-  /(?:^|[。！？\n])\s*(?:好的[,，]?\s*)?(?:我先|让我先|我需要先|我会接下来先|先去)(?:查看|看一下|看看|检查|读取|搜索|查找|分析|确认|了解|总结|扫描|定位)/;
-const STREAM_ANSWER_SIGNAL_PATTERN =
-  /(总结如下|结果如下|可以确认|我找到了|当前项目|项目中|结论|包含|如下|建议|答案|可以直接|已经)/;
-
+const STREAM_TOOL_USE_BLOCK_PATTERN =
+  /<tool_use>\s*<tool name="(\w+)">[\s\S]*?<\/tool>\s*<\/tool_use>/gi;
+const STREAM_TOOL_RESULT_BLOCK_PATTERN =
+  /<tool_result name="([^"]+)"\s+status="(?:success|error)">[\s\S]*?<\/tool_result>/gi;
 const sanitizeStreamingVisibleText = (value: string) =>
   value
     .replace(STREAM_DSML_BLOCK_PATTERN, '')
+    .replace(STREAM_TOOL_USE_BLOCK_PATTERN, '')
+    .replace(STREAM_TOOL_RESULT_BLOCK_PATTERN, '')
     .replace(STREAM_BARE_TOOL_BLOCK_PATTERN, '')
     .replace(STREAM_PROTOCOL_LINE_PATTERN, '')
     .replace(/\n{3,}/g, '\n\n')
@@ -302,38 +301,12 @@ const sanitizeStreamingVisibleText = (value: string) =>
 const sanitizeStreamingThinkingText = (value: string) =>
   value
     .replace(STREAM_DSML_BLOCK_PATTERN, '')
+    .replace(STREAM_TOOL_USE_BLOCK_PATTERN, '')
+    .replace(STREAM_TOOL_RESULT_BLOCK_PATTERN, '')
     .replace(STREAM_BARE_TOOL_BLOCK_PATTERN, '')
     .replace(STREAM_PROTOCOL_LINE_PATTERN, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-
-const normalizeStreamingClassifierText = (value: string) => value.replace(/\s+/g, ' ').trim();
-
-const looksLikeStreamingPlanningText = (value: string) => {
-  const normalized = normalizeStreamingClassifierText(value);
-  if (!normalized) {
-    return false;
-  }
-
-  if (STREAM_EXECUTION_MARKER_PATTERN.test(normalized)) {
-    return true;
-  }
-
-  if (!STREAM_PLANNING_PATTERN.test(normalized)) {
-    return false;
-  }
-
-  return !STREAM_ANSWER_SIGNAL_PATTERN.test(normalized);
-};
-
-const looksLikeStreamingAnswerText = (value: string) => {
-  const normalized = normalizeStreamingClassifierText(value);
-  if (!normalized || STREAM_EXECUTION_MARKER_PATTERN.test(normalized)) {
-    return false;
-  }
-
-  return STREAM_ANSWER_SIGNAL_PATTERN.test(normalized) || normalized.length >= 220;
-};
 
 export const createRuntimeStreamingMessageAssembler = () => {
   let state: 'initial' | 'thinking' | 'answer' = 'initial';
@@ -379,12 +352,11 @@ export const createRuntimeStreamingMessageAssembler = () => {
   };
 
   const buildDraft = (completeThinking: boolean): RuntimeStreamingAssistantDraft => {
+    // Streaming 态（completeThinking=false）下，pendingText 在 initial/thinking 态都展示为
+    // 可见 answer 内容，让用户在模型生成 pre-tool reasoning 时也能看到文字流。
+    // 若后续触发 tool 边界，markToolBoundary 会将 pendingText 移至 thinking 块。
     const visibleAnswerContent = sanitizeStreamingVisibleText(
-      state === 'initial'
-        ? (looksLikeStreamingPlanningText(pendingText) ? '' : pendingText)
-        : state === 'thinking'
-          ? ''
-          : answerContentRaw,
+      state === 'answer' ? answerContentRaw : pendingText,
     );
     const visibleThinkingContent = sanitizeStreamingThinkingText(thinkingContent);
     const visibleParts = assistantParts
@@ -403,6 +375,18 @@ export const createRuntimeStreamingMessageAssembler = () => {
       })
       .filter((part): part is RuntimeStreamingAssistantDraft['assistantParts'][number] => Boolean(part));
 
+    // Streaming 态下 pendingText 尚未归入 assistantParts，追加为可见 text part
+    if (!completeThinking && pendingText && state !== 'answer') {
+      const sanitizedPending = sanitizeStreamingVisibleText(pendingText);
+      if (sanitizedPending) {
+        visibleParts.push({
+          type: 'text',
+          content: sanitizedPending,
+          createdAt: Date.now(),
+        });
+      }
+    }
+
     return {
       content: buildRuntimeStreamingMessage({
         thinkingContent: visibleThinkingContent,
@@ -418,40 +402,45 @@ export const createRuntimeStreamingMessageAssembler = () => {
   return {
     append: (event: { kind: string; delta: string }) => {
       if (event.kind === 'thinking') {
-        flushPendingText(state === 'initial' && looksLikeStreamingPlanningText(pendingText) ? 'thinking' : 'answer');
+        // 模型的 native reasoning → 始终作为 thinking 内容
+        flushPendingText('thinking');
+        state = 'thinking';
         thinkingContent += event.delta;
         appendAssistantPartContent('thinking', event.delta, false);
-        state = 'thinking';
-      } else if (state === 'initial') {
-        pendingText += event.delta;
-
-        if (looksLikeStreamingPlanningText(pendingText)) {
-          flushPendingText('thinking');
-          state = 'thinking';
-        } else if (looksLikeStreamingAnswerText(pendingText)) {
-          flushPendingText('answer');
-          state = 'answer';
-        }
+      } else if (state === 'thinking') {
+        // 已有 native thinking → text 是正文，直接送入 answer
+        answerContentRaw += event.delta;
+        appendAssistantPartContent('answer', event.delta, false);
+        state = 'answer';
+      } else if (state === 'answer') {
+        // 已过 tool 边界或正文段 → text 直接送入 answer
+        answerContentRaw += event.delta;
+        appendAssistantPartContent('answer', event.delta, false);
       } else {
-        if (state === 'thinking') {
-          state = 'answer';
-          answerContentRaw += event.delta;
-          appendAssistantPartContent('answer', event.delta, false);
-        } else {
-          answerContentRaw += event.delta;
-          appendAssistantPartContent('answer', event.delta, false);
-        }
+        // initial 态 → 尚未收到 native thinking，缓冲等待 tool 边界或流结束
+        pendingText += event.delta;
       }
 
       return buildDraft(false);
     },
     markToolBoundary: (): RuntimeStreamingAssistantDraft => {
-      flushPendingText(looksLikeStreamingPlanningText(pendingText) ? 'thinking' : 'answer');
+      // 没有 native thinking 时，tool 前的 text 是 pre-tool reasoning → 归入 thinking
+      // 有 native thinking 时，text 已在 append 中直接进入 answer，pendingText 为空
+      if (!thinkingContent.trim()) {
+        flushPendingText('thinking');
+      }
+      state = 'answer';
       forceNewPart = true;
       return buildDraft(false);
     },
     buildFinal: (response: string): RuntimeStreamingAssistantDraft => {
-      flushPendingText(looksLikeStreamingPlanningText(pendingText) ? 'thinking' : 'answer');
+      if (state === 'initial') {
+        // 全程没有 native thinking 也没有 tool 调用 → pendingText 就是最终答案
+        flushPendingText('answer');
+        state = 'answer'; // buildDraft 依赖 state === 'answer' 来展示 answerContentRaw
+      }
+      // 其他情况：text 已在 append/markToolBoundary 中正确归位，无需处理
+
       const draft = buildDraft(true);
 
       const sanitizedResponse = sanitizeStreamingVisibleText(response);

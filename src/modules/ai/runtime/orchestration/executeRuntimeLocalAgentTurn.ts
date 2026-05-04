@@ -29,6 +29,7 @@ export type ExecuteRuntimeLocalAgentTurnInput = {
   activeSkills: RuntimeSkillDefinition[];
   skillIntent: SkillIntent | null;
   contextLabels: string[];
+  allowedTools?: string[];
   agentId: string;
   projectRoot: string;
   runPrompt: (payload: {
@@ -54,7 +55,7 @@ export async function executeRuntimeLocalAgentTurn(
     projectRoot: input.projectRoot,
   });
   const allowedTools = resolveRuntimeSkillAllowedTools({
-    defaultAllowedTools: [],
+    defaultAllowedTools: input.allowedTools || [],
     skills: preparedSkills,
     explicitSkillId: input.skillIntent?.skill || null,
   });

@@ -1,6 +1,7 @@
 ---
 name: goodnight-boundary
 description: Use when the AI is operating inside GoodNight and must respect GoodNight product boundaries, zone behavior, storage discipline, and change-first activity log rules.
+allowed-tools: []
 ---
 
 # GoodNight Boundary

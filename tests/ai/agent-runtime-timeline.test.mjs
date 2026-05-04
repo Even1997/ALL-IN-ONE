@@ -257,16 +257,28 @@ test('agent turn runner builds a queued runtime turn shell', async () => {
   ]);
 
   const streamAssembler = createRuntimeStreamingMessageAssembler();
-  assert.equal(streamAssembler.append({ kind: 'thinking', delta: 'Plan first' }), '<think>Plan first');
+  assert.equal(streamAssembler.append({ kind: 'thinking', delta: 'Plan first' }).content, '<think>Plan first');
   assert.equal(
-    streamAssembler.append({ kind: 'output', delta: 'Then answer' }),
+    streamAssembler.append({ kind: 'text', delta: 'Then answer' }).content,
     '<think>Plan first\n\nThen answer',
   );
-  assert.equal(streamAssembler.buildFinal(''), '<think>Plan first</think>\n\nThen answer');
+  assert.equal(streamAssembler.buildFinal('').content, '<think>Plan first</think>\n\nThen answer');
+
+  const toolUseAssembler = createRuntimeStreamingMessageAssembler();
+  assert.equal(
+    toolUseAssembler.append({ kind: 'text', delta: 'Before\n<tool_use><tool name="ls">\n<tool_params>\n<parameter name="path">.</parameter>\n</tool_params>\n</tool>\n</tool_use>\nAfter' }).content,
+    'Before\n\nAfter',
+  );
+
+  const toolResultAssembler = createRuntimeStreamingMessageAssembler();
+  assert.equal(
+    toolResultAssembler.append({ kind: 'text', delta: 'Done\n<tool_result name="ls" status="success">\nfile1.ts\nfile2.ts\n</tool_result>\nEnd' }).content,
+    'Done\n\nEnd',
+  );
 
   const responseOnlyAssembler = createRuntimeStreamingMessageAssembler();
-  assert.equal(responseOnlyAssembler.buildFinal('Fallback response'), 'Fallback response');
+  assert.equal(responseOnlyAssembler.buildFinal('Fallback response').content, 'Fallback response');
 
   const emptyAssembler = createRuntimeStreamingMessageAssembler();
-  assert.equal(emptyAssembler.buildFinal(''), '已收到请求，但这次没有返回内容。');
+  assert.equal(emptyAssembler.buildFinal('').content, '已收到请求，但这次没有返回内容。');
 });

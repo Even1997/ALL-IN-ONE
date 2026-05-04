@@ -1,6 +1,7 @@
 ---
 name: goodnight-workspace-context
 description: Use when the AI needs GoodNight project directory conventions, artifact locations, and where sketch, design, and project files should be read or written.
+allowed-tools: []
 ---
 
 # GoodNight Workspace Context

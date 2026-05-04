@@ -1,6 +1,7 @@
 ---
 name: goodnight-sketch-output
 description: Use when the user is working in Sketch Zone and the AI must turn page ideas into structured sketch or wireframe-ready outputs that fit GoodNight files.
+allowed-tools: []
 ---
 
 # GoodNight Sketch Output

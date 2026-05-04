@@ -1,6 +1,7 @@
 ---
 name: goodnight-design-output
 description: Use when the user is working in Design Zone and the AI must produce concrete design-system or prototype outputs that map to GoodNight design files.
+allowed-tools: []
 ---
 
 # GoodNight Design Output
