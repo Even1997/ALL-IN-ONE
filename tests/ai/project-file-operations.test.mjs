@@ -80,6 +80,13 @@ test('project file operations resolve request kind and explicit review-first pro
   );
   assert.equal(
     resolveProjectFileRequestKind({
+      rawInput: '\u4fee\u6539 src/App.tsx \u652f\u6301\u62d6\u62fd\u4e0a\u4f20',
+      cleanedInput: '\u4fee\u6539 src/App.tsx \u652f\u6301\u62d6\u62fd\u4e0a\u4f20',
+    }),
+    'none'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
       rawInput: '\u4e3a\u4ec0\u4e48 login \u9875\u9762\u4f1a\u62a5\u9519\uff1f',
       cleanedInput: '\u4e3a\u4ec0\u4e48 login \u9875\u9762\u4f1a\u62a5\u9519\uff1f',
     }),

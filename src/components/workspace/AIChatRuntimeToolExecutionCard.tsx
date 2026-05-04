@@ -23,7 +23,7 @@ export const AIChatRuntimeToolExecutionCard: React.FC<{
     const renderModel = buildRuntimeToolStreamModel(runtimeEvents);
 
     return (
-      <div className="chat-tool-trace-stream">
+      <div className="chat-tool-trace-stream compact" data-runtime-trace="compact">
         {renderModel.items.map((item, index) => {
           if (item.kind === 'tool_group') {
             return (
@@ -79,7 +79,8 @@ export const AIChatRuntimeToolExecutionCard: React.FC<{
 
   return (
     <div
-      className="chat-tool-trace-stream"
+      className="chat-tool-trace-stream compact"
+      data-runtime-trace="compact"
       aria-label={`${helpers.getRuntimeCommandCountLabel(toolCalls.length)}: ${'\u5b8c\u6210'} ${completedCount}${failedCount > 0 ? `, \u5931\u8d25 ${failedCount}` : ''}${blockedCount > 0 ? `, \u5df2\u62e6\u622a ${blockedCount}` : ''}`}
     >
       {rootToolCalls.map((toolCall, index) => (

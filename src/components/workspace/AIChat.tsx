@@ -161,8 +161,6 @@ import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
-  detectProjectFileReadIntent,
-  detectProjectFileWriteIntent,
   findLatestPendingProjectFileProposalAction,
   isShortPendingActionAffirmation,
   isShortPendingActionRejection,
@@ -1147,7 +1145,7 @@ const shouldOpenRuntimeToolStep = ({
   approvalCount: number;
   questionCount: number;
 }) => {
-  if (status === 'running' || status === 'failed' || status === 'blocked') {
+  if (status === 'failed' || status === 'blocked') {
     return true;
   }
 
@@ -1213,6 +1211,70 @@ const getRuntimeCommandCountLabel = (count: number) => {
 };
 
 const getRuntimeToolHeadline = (toolName: string, input: Record<string, unknown>) => {
+  if (toolName === ASK_USER_TOOL_NAME) {
+    return '等待输入';
+  }
+
+  if (toolName === 'view') {
+    return '读取文件';
+  }
+
+  if (toolName === 'grep' || toolName === 'glob') {
+    return '搜索代码';
+  }
+
+  if (toolName === 'ls') {
+    return '浏览目录';
+  }
+
+  if (toolName === 'write' || toolName === 'edit') {
+    return '修改文件';
+  }
+
+  if (toolName === 'bash') {
+    return '运行命令';
+  }
+
+  if (toolName === 'fetch') {
+    return '请求网页';
+  }
+
+  if (toolName === 'project_file_read') {
+    return '读取项目文件';
+  }
+
+  if (toolName === 'project_file_plan') {
+    return '规划修改';
+  }
+
+  if (toolName === 'project_file_apply' || toolName === 'project_file_flow') {
+    return '应用修改';
+  }
+
+  if (toolName === 'run_local_agent' || toolName === 'run_agent_team') {
+    return '分派执行';
+  }
+
+  if (toolName === 'team_phase') {
+    return '执行阶段';
+  }
+
+  if (toolName === 'team_member_task') {
+    return '成员任务';
+  }
+
+  if (toolName === 'workflow_package' || toolName === 'workflow_package_stage') {
+    return '工作流包';
+  }
+
+  if (toolName === 'workflow_stage') {
+    return '工作流阶段';
+  }
+
+  if (toolName === 'workflow_skill') {
+    return '运行技能';
+  }
+
   const summary = summarizeRuntimeToolCall(toolName, input).trim();
   if (summary) {
     return summary;
@@ -5390,15 +5452,10 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         }
 
         const projectRoot = await resolveProjectRootById(currentProject.id);
-        const projectFileRequestKind =
-          detectProjectFileWriteIntent(rawContent) || detectProjectFileWriteIntent(cleanedContent)
-            ? 'write'
-            : detectProjectFileReadIntent(rawContent) || detectProjectFileReadIntent(cleanedContent)
-              ? 'read'
-              : resolveProjectFileRequestKind({
-                  rawInput: rawContent,
-                  cleanedInput: cleanedContent,
-                });
+        const projectFileRequestKind = resolveProjectFileRequestKind({
+          rawInput: rawContent,
+          cleanedInput: cleanedContent,
+        });
 
         if (projectFileRequestKind === 'read') {
           const projectFileFlowToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id);
@@ -5425,6 +5482,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
 
           const readContent = await executeRuntimeProjectFileRead({
             userInput: cleanedContent,
+            conversationHistory,
             projectName: currentProject.name,
             projectRoot,
             allowedTools: PROJECT_FILE_READ_ONLY_TOOLS,

@@ -1,20 +1,20 @@
 import type {
   ProjectFileOperation,
-  ProjectFileOperationPlan,
   ProjectFileOperationMode,
+  ProjectFileOperationPlan,
   ProjectFileProposal,
 } from '../../chat/projectFileOperations.ts';
-import type { AgentTurnPlan } from '../session/agentSessionTypes.ts';
+import { buildConversationHistorySection } from '../../chat/conversationHistoryPrompt.ts';
 import { buildProjectFilePlanningPrompt } from '../../chat/projectFilePlanningPrompt.ts';
+import type { ApprovalRecord, ApprovalRiskLevel, SandboxPolicy } from '../approval/approvalTypes.ts';
 import {
   classifyProjectFileOperationsRisk,
   shouldAutoApproveRuntimeAction,
   shouldDenyRuntimeAction,
 } from '../approval/riskPolicy.ts';
-import type { ApprovalRiskLevel, SandboxPolicy } from '../approval/approvalTypes.ts';
-import type { ApprovalRecord } from '../approval/approvalTypes.ts';
-import { requestRuntimeApproval, type RuntimePendingApprovalAction } from './runtimeApprovalCoordinator.ts';
+import type { AgentTurnPlan } from '../session/agentSessionTypes.ts';
 import { sanitizeInternalWorkspaceMentions } from './runtimeResponseSanitizer.ts';
+import { requestRuntimeApproval, type RuntimePendingApprovalAction } from './runtimeApprovalCoordinator.ts';
 
 export const buildProjectFileApprovalActionType = (operations: ProjectFileOperation[]) => {
   if (operations.some((operation) => operation.type === 'delete_file')) {
@@ -28,14 +28,33 @@ export const buildProjectFileApprovalActionType = (operations: ProjectFileOperat
   return 'tool_write';
 };
 
-export const buildRuntimeProjectFileReadSystemPrompt = (projectName: string, projectRoot: string) => `你是 ${projectName} 的项目文件阅读助手。
-当前项目根目录是 ${projectRoot}。
-你可以使用 glob、grep、ls、view 这四个只读工具来帮助回答用户关于项目文件的问题。
-不要尝试 write、edit、remove 之类的写工具。
-先查看必要文件，再用简洁中文回答。`;
+export const buildRuntimeProjectFileReadSystemPrompt = (projectName: string, projectRoot: string) => `You are the project file reading assistant for ${projectName}.
+The current project root is ${projectRoot}.
+You may use only read-only tools: glob, grep, ls, and view.
+Do not use write, edit, or remove style tools.
+Inspect only the files needed to answer the request, then reply in concise Chinese.`;
+
+export const buildRuntimeProjectFileReadPrompt = (input: {
+  userInput: string;
+  conversationHistory: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+}) => {
+  const historySection = buildConversationHistorySection(input.conversationHistory);
+  const trimmedInput = input.userInput.trim();
+
+  if (!historySection) {
+    return trimmedInput;
+  }
+
+  return `recent_conversation:
+${historySection}
+
+current_request:
+${trimmedInput}`;
+};
 
 export const executeRuntimeProjectFileRead = async (input: {
   userInput: string;
+  conversationHistory: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   projectName: string;
   projectRoot: string;
   allowedTools: string[];
@@ -47,21 +66,26 @@ export const executeRuntimeProjectFileRead = async (input: {
     onChunk?: (text: string) => void;
   }) => Promise<string>;
 }) => {
-  const response = sanitizeInternalWorkspaceMentions(await input.readFiles({
-    prompt: input.userInput,
-    systemPrompt: buildRuntimeProjectFileReadSystemPrompt(input.projectName, input.projectRoot),
-    allowedTools: input.allowedTools,
-    onChunk: input.onChunk,
-  })).trim();
+  const response = sanitizeInternalWorkspaceMentions(
+    await input.readFiles({
+      prompt: buildRuntimeProjectFileReadPrompt({
+        userInput: input.userInput,
+        conversationHistory: input.conversationHistory,
+      }),
+      systemPrompt: buildRuntimeProjectFileReadSystemPrompt(input.projectName, input.projectRoot),
+      allowedTools: input.allowedTools,
+      onChunk: input.onChunk,
+    })
+  ).trim();
 
-  return response.trim() || '已读取相关文件，但这次没有返回内容。';
+  return response || '已读取相关文件，但这次没有返回内容。';
 };
 
-export const buildRuntimeProjectFilePlanningSystemPrompt = (projectName: string, projectRoot: string) => `你是 ${projectName} 的项目文件助手。
-你只能规划当前项目根目录内的文本文件操作，根目录是 ${projectRoot}。
-你可以使用只读工具 glob、grep、ls、view 来查看目录和文件，但绝不能尝试 write、edit、remove。
+export const buildRuntimeProjectFilePlanningSystemPrompt = (projectName: string, projectRoot: string) => `You are the project file planning assistant for ${projectName}.
+The current project root is ${projectRoot}.
+You may inspect files with glob, grep, ls, and view, but you must not write files.
 
-你必须只返回合法 JSON，对象结构如下：
+Return valid JSON only, with this shape:
 {
   "status": "ready" | "needs_clarification" | "reject",
   "assistantMessage": "string",
@@ -69,22 +93,22 @@ export const buildRuntimeProjectFilePlanningSystemPrompt = (projectName: string,
   "operations": [
     {
       "type": "create_file" | "edit_file" | "delete_file",
-      "targetPath": "相对路径，优先使用相对项目根目录的路径",
-      "summary": "本次操作摘要",
-      "content": "create_file 或全量 edit_file 时需要",
-      "oldString": "局部替换 edit_file 时需要",
-      "newString": "局部替换 edit_file 时需要"
+      "targetPath": "project-relative path",
+      "summary": "string",
+      "content": "required for create_file or full rewrite edit_file",
+      "oldString": "required for targeted edit_file replacements",
+      "newString": "required for targeted edit_file replacements"
     }
   ]
 }
 
-规则：
-1. 查询和读取不属于这个 JSON 规划范围，只有写操作才返回 operations。
-2. 如果信息不足，返回 status = "needs_clarification"。
-3. 不要规划目录删除。
-4. 不要规划二进制文件写改删。
-5. create_file 不能把已存在文件静默当作新建覆盖。
-6. 只返回 JSON，不要返回 Markdown。`;
+Rules:
+1. Only write operations belong in operations.
+2. Use "needs_clarification" when the request is not specific enough.
+3. Do not plan directory deletion.
+4. Do not plan binary file edits.
+5. Do not silently overwrite an existing file with create_file.
+6. Return JSON only, not Markdown.`;
 
 export const buildProjectFileDecisionFeedback = (input: {
   decision: 'blocked' | 'approval-required';
@@ -134,8 +158,7 @@ export const executeRuntimeProjectFilePlanning = async (input: {
   if (plan.status !== 'ready' || plan.operations.length === 0) {
     return {
       status: 'needs_clarification' as const,
-      message:
-        plan.assistantMessage.trim() || plan.summary.trim() || '这次还不能安全执行文件操作，请补充更明确的路径和内容。',
+      message: plan.assistantMessage.trim() || plan.summary.trim() || '这次还不能安全执行文件操作，请补充更明确的路径和内容。',
       plan,
     };
   }
@@ -339,8 +362,8 @@ export const prepareProjectFileProposalFlow = (input: {
     id: input.proposalId,
     mode: input.mode,
     status: 'pending',
-    summary: input.plan.summary.trim() || `计划执行 ${input.plan.operations.length} 项文件操作`,
-    assistantMessage: input.plan.assistantMessage.trim() || input.plan.summary.trim() || '我已经整理好本次文件操作计划。',
+    summary: input.plan.summary.trim() || `Planned ${input.plan.operations.length} file operation(s)`,
+    assistantMessage: input.plan.assistantMessage.trim() || input.plan.summary.trim() || '我已经整理好这次文件操作计划。',
     operations: input.plan.operations,
     executionMessage: '请确认后执行。',
   };
@@ -349,6 +372,7 @@ export const prepareProjectFileProposalFlow = (input: {
   const blockedBySandbox = shouldDenyRuntimeAction({ riskLevel, sandboxPolicy: input.sandboxPolicy });
   const canAutoExecute =
     input.mode === 'auto' &&
+    riskLevel === 'low' &&
     shouldAutoApproveRuntimeAction({ riskLevel, sandboxPolicy: input.sandboxPolicy });
 
   if (blockedBySandbox) {
@@ -356,7 +380,7 @@ export const prepareProjectFileProposalFlow = (input: {
       proposal: {
         ...proposal,
         status: 'cancelled',
-        executionMessage: `当前 sandbox policy 为 ${input.sandboxPolicy}，已拦截这次高风险操作。`,
+        executionMessage: `Current sandbox policy is ${input.sandboxPolicy}, so this higher-risk file operation was blocked.`,
       },
       approvalActionType,
       riskLevel,

@@ -33,6 +33,28 @@ export type RuntimeEventRenderModel = {
 };
 
 const READ_TOOL_NAMES = new Set(['view', 'glob', 'grep', 'ls']);
+const SEARCH_TOOL_NAMES = new Set(['glob', 'grep']);
+const WRITE_TOOL_NAMES = new Set(['write', 'edit']);
+
+const buildToolGroupLabel = (toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>) => {
+  if (toolUses.length <= 1) {
+    return undefined;
+  }
+
+  if (toolUses.every((toolUse) => READ_TOOL_NAMES.has(toolUse.toolName))) {
+    return '\u8bfb\u53d6 ' + toolUses.length + ' \u4e2a\u6b65\u9aa4';
+  }
+
+  if (toolUses.every((toolUse) => SEARCH_TOOL_NAMES.has(toolUse.toolName))) {
+    return '\u641c\u7d22\u4ee3\u7801 ' + toolUses.length + ' \u6b21';
+  }
+
+  if (toolUses.every((toolUse) => WRITE_TOOL_NAMES.has(toolUse.toolName))) {
+    return '\u7f16\u8f91 ' + toolUses.length + ' \u4e2a\u6587\u4ef6';
+  }
+
+  return '\u6267\u884c ' + toolUses.length + ' \u4e2a\u6b65\u9aa4';
+};
 
 export const buildRuntimeEventRenderModel = (
   runtimeEvents: StoredChatRuntimeEvent[]
@@ -50,17 +72,11 @@ export const buildRuntimeEventRenderModel = (
       return;
     }
 
-    const isReadBatch = pendingToolUses.length >= 3 && pendingToolUses.every((t) => READ_TOOL_NAMES.has(t.toolName));
-    const groupLabel =
-      pendingToolUses.length > 1
-        ? `${isReadBatch ? '已读取' : '已运行'} ${pendingToolUses.length} 条命令`
-        : undefined;
-
     items.push({
       kind: 'tool_group',
       id: `runtime-tool-group-${pendingToolUses[0]!.id}`,
       toolUses: [...pendingToolUses],
-      groupLabel,
+      groupLabel: buildToolGroupLabel(pendingToolUses),
     });
     pendingToolUses = [];
   };
@@ -100,9 +116,12 @@ export const buildRuntimeEventRenderModel = (
       if (event.parentToolCallId && toolUseIds.has(event.parentToolCallId)) {
         continue;
       }
+
       pendingToolUses.push(event);
       continue;
     }
+
+    flushToolGroup();
 
     if (event.kind === 'tool_result' && toolUseIds.has(event.toolCallId)) {
       continue;
@@ -114,8 +133,6 @@ export const buildRuntimeEventRenderModel = (
     ) {
       continue;
     }
-
-    flushToolGroup();
 
     if (event.kind === 'tool_result') {
       items.push({

@@ -8,6 +8,7 @@ test('runtime project file flow prepares proposal and approval decision from pla
   const {
     buildProjectFileApprovalActionType,
     buildProjectFileDecisionFeedback,
+    executeRuntimeProjectFileRead,
     prepareProjectFileProposalFlow,
   } = await loadProjectFileFlow();
 
@@ -68,6 +69,20 @@ test('runtime project file flow prepares proposal and approval decision from pla
   assert.equal(autoExecute.decision, 'auto-execute');
   assert.equal(autoExecute.proposal.status, 'executing');
 
+  const stillNeedsReview = prepareProjectFileProposalFlow({
+    proposalId: 'proposal-2b',
+    mode: 'auto',
+    plan: {
+      status: 'ready',
+      assistantMessage: 'edit app',
+      summary: 'Edit src/app.ts',
+      operations: [{ id: '2', type: 'edit_file', targetPath: 'src/app.ts', summary: 'edit app' }],
+    },
+    sandboxPolicy: 'allow',
+  });
+  assert.equal(stillNeedsReview.decision, 'approval-required');
+  assert.equal(stillNeedsReview.proposal.status, 'pending');
+
   const blocked = prepareProjectFileProposalFlow({
     proposalId: 'proposal-3',
     mode: 'auto',
@@ -94,4 +109,28 @@ test('runtime project file flow prepares proposal and approval decision from pla
       replaySummary: `Sandbox denied: ${blocked.proposal.summary}`,
     },
   );
+});
+
+test('runtime project file read carries conversation history into the prompt', async () => {
+  const { executeRuntimeProjectFileRead } = await loadProjectFileFlow();
+
+  let capturedPrompt = '';
+  const result = await executeRuntimeProjectFileRead({
+    userInput: '\u518d\u770b\u4e00\u4e0b\u521a\u624d\u90a3\u4e2a\u6587\u4ef6',
+    conversationHistory: [
+      { role: 'user', content: '\u8bfb\u4e00\u4e0b docs/prd.md' },
+      { role: 'assistant', content: '\u6211\u521a\u770b\u4e86 docs/prd.md\uff0c\u4e3b\u8981\u662f\u767b\u5f55\u6d41\u7a0b\u89c4\u5212\u3002' },
+    ],
+    projectName: 'Demo',
+    projectRoot: 'C:\\repo\\demo',
+    allowedTools: ['glob', 'grep', 'ls', 'view'],
+    readFiles: async ({ prompt }) => {
+      capturedPrompt = prompt;
+      return 'ok';
+    },
+  });
+
+  assert.equal(result, 'ok');
+  assert.match(capturedPrompt, /recent_conversation:/);
+  assert.match(capturedPrompt, /docs\/prd\.md/);
 });

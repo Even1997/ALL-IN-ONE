@@ -20,8 +20,6 @@ test('AI chat routes project file requests through read/planning helpers and pro
   assert.match(chatSource, /projectFileProposal/);
   assert.match(chatSource, /renderProjectFileProposal/);
   assert.match(chatSource, /renderRuntimeApproval/);
-  assert.match(chatSource, /detectProjectFileWriteIntent/);
-  assert.match(chatSource, /detectProjectFileReadIntent/);
   assert.match(chatSource, /resolveProjectFileRequestKind/);
   assert.match(chatSource, /shouldForceProjectFileProposal/);
   assert.match(chatSource, /findLatestPendingProjectFileProposalAction/);
@@ -33,6 +31,7 @@ test('AI chat routes project file requests through read/planning helpers and pro
   assert.match(chatSource, /executeRuntimeProjectFilePlanning/);
   assert.match(chatSource, /prepareProjectFileProposalFlow/);
   assert.match(chatSource, /conversationHistory/);
+  assert.match(chatSource, /conversationHistory,\s*projectName: currentProject\.name/);
   assert.match(chatSource, /executeProjectFileOperations/);
   assert.match(chatSource, /projectFileRequestKind === 'read'/);
   assert.match(chatSource, /projectFileRequestKind === 'write'/);
