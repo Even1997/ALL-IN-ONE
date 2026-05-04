@@ -1,10 +1,12 @@
 import type { ReferenceFile } from '../../knowledge/referenceFiles.ts';
 
 const INTERNAL_REFERENCE_PATTERNS = [
+  '/.superpowers/',
+  '/.tmp/',
   '/.goodnight/',
   '/_goodnight/',
   '/.ai/',
-  '/docs/references/upstream/m-flow/',
+  '/docs/references/upstream/',
   '/docs/superpowers/',
 ];
 
@@ -13,7 +15,7 @@ const INTERNAL_REFERENCE_FILE_NAMES = new Set(['GOODNIGHT.MD', 'CLAUDE.MD']);
 const normalizeReferencePath = (value: string) => value.replace(/\\/g, '/');
 
 export const isInternalAssistantReferencePath = (value: string) => {
-  const normalized = normalizeReferencePath(value);
+  const normalized = `/${normalizeReferencePath(value).replace(/^\/+/, '')}`;
   const upperName = normalized.split('/').pop()?.toUpperCase() || '';
 
   if (INTERNAL_REFERENCE_FILE_NAMES.has(upperName)) {

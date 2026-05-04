@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ApprovalRecord, ApprovalStatus, SandboxPolicy } from './approvalTypes';
+import type { ApprovalRecord, ApprovalStatus, PermissionMode, SandboxPolicy } from './approvalTypes';
 
 const sortApprovals = (approvals: ApprovalRecord[]) =>
   [...approvals].sort((left, right) => right.createdAt - left.createdAt);
@@ -7,15 +7,18 @@ const sortApprovals = (approvals: ApprovalRecord[]) =>
 type ApprovalStoreState = {
   approvalsByThread: Record<string, ApprovalRecord[]>;
   sandboxPolicy: SandboxPolicy;
+  permissionMode: PermissionMode;
   setThreadApprovals: (threadId: string, approvals: ApprovalRecord[]) => void;
   enqueueApproval: (approval: ApprovalRecord) => void;
   resolveApproval: (approvalId: string, status: ApprovalStatus) => void;
   setSandboxPolicy: (policy: SandboxPolicy) => void;
+  setPermissionMode: (mode: PermissionMode) => void;
 };
 
 export const useApprovalStore = create<ApprovalStoreState>((set) => ({
   approvalsByThread: {},
   sandboxPolicy: 'ask',
+  permissionMode: 'ask',
 
   setThreadApprovals: (threadId, approvals) =>
     set((state) => ({
@@ -51,4 +54,5 @@ export const useApprovalStore = create<ApprovalStoreState>((set) => ({
     })),
 
   setSandboxPolicy: (policy) => set({ sandboxPolicy: policy }),
+  setPermissionMode: (mode) => set({ permissionMode: mode }),
 }));

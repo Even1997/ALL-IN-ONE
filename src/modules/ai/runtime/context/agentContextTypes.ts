@@ -24,6 +24,7 @@ export type AgentContextBudget = {
   limitTokens: number;
   usedTokens: number;
   remainingTokens: number;
+  overflow?: boolean;
 };
 
 export type AgentContextConversationMessage = {

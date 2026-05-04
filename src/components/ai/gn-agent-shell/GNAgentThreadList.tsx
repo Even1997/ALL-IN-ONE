@@ -1,8 +1,11 @@
 import React from 'react';
 import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
 import { useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
+import type { AgentThreadRecord } from '../../../modules/ai/runtime/agentRuntimeTypes';
 import { canResumeFromRecovery } from '../../../modules/ai/runtime/replay/runtimeReplayRecovery';
 import { useProjectStore } from '../../../store/projectStore';
+
+const EMPTY_THREADS: AgentThreadRecord[] = [];
 
 const formatThreadTime = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
@@ -14,7 +17,7 @@ export const GNAgentThreadList: React.FC = () => {
   const currentProject = useProjectStore((state) => state.currentProject);
   const setActiveSession = useAIChatStore((state) => state.setActiveSession);
   const threads = useAgentRuntimeStore((state) =>
-    currentProject ? state.threadsByProject[currentProject.id] || [] : []
+    currentProject ? state.threadsByProject[currentProject.id] || EMPTY_THREADS : EMPTY_THREADS
   );
   const recoveryByThread = useAgentRuntimeStore((state) => state.recoveryByThread);
   const requestReplayResumeFromRecovery = useAgentRuntimeStore((state) => state.requestReplayResumeFromRecovery);
@@ -67,7 +70,7 @@ export const GNAgentThreadList: React.FC = () => {
                       requestReplayResumeFromRecovery(thread.id, recoveryState);
                     }}
                   >
-                    {recoveryState?.resumeActionLabel || '恢复草稿'}
+                    {recoveryState?.resumeActionLabel || '恢复继续'}
                   </button>
                 ) : null}
               </article>

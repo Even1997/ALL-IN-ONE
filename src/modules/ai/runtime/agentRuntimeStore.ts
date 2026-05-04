@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type {
+  AgentBackgroundTaskRecord,
   AgentMemoryEntry,
   AgentProviderId,
   AgentReplayEvent,
@@ -25,6 +26,32 @@ export type AgentRuntimeRunState = {
   status: 'idle' | 'running' | 'error';
   draft: string;
   error: string | null;
+};
+
+export type AgentRuntimeConnectionState =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting';
+
+export type AgentRuntimeTokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export type AgentRuntimeLiveState = {
+  connectionState: AgentRuntimeConnectionState;
+  statusVerb: string;
+  elapsedSeconds: number;
+  startedAt: number | null;
+  activeToolName: string | null;
+  streamingToolInput: string;
+  pendingApprovalSummary: string | null;
+  pendingQuestionSummary: string | null;
+  activeThinking: boolean;
+  streamingText: string;
+  pendingPermissionCount: number;
+  tokenUsage: AgentRuntimeTokenUsage;
 };
 
 export type AgentRuntimeResumeRequest = {
@@ -62,6 +89,8 @@ type AgentRuntimeState = {
   toolCallsByThread: Record<string, RuntimeToolStep[]>;
   bindingByThread: Record<string, AgentRuntimeBinding>;
   runStateByThread: Record<string, AgentRuntimeRunState>;
+  liveStateByThread: Record<string, AgentRuntimeLiveState>;
+  backgroundTasksByThread: Record<string, AgentBackgroundTaskRecord[]>;
   teamRunsByThread: Record<string, AgentTeamRunRecord[]>;
   isHydrating: boolean;
   createThread: (projectId: string, thread: AgentThreadRecord) => void;
@@ -93,12 +122,19 @@ type AgentRuntimeState = {
   setThreadContext: (threadId: string, context: AgentContextSnapshot) => void;
   setThreadToolCalls: (threadId: string, toolCalls: RuntimeToolStep[]) => void;
   setRuntimeBinding: (threadId: string, binding: AgentRuntimeBinding) => void;
+  setThreadBackgroundTasks: (threadId: string, tasks: AgentBackgroundTaskRecord[]) => void;
+  upsertBackgroundTask: (threadId: string, task: AgentBackgroundTaskRecord) => void;
   upsertTeamRun: (threadId: string, teamRun: AgentTeamRunRecord) => void;
   pruneThreadHistorySince: (threadId: string, createdAt: number) => void;
   startRun: (threadId: string) => void;
   appendStreamDelta: (threadId: string, delta: string) => void;
   finishRun: (threadId: string) => void;
   failRun: (threadId: string, error: string) => void;
+  patchLiveState: (
+    threadId: string,
+    updater: Partial<AgentRuntimeLiveState> | ((state: AgentRuntimeLiveState) => AgentRuntimeLiveState),
+  ) => void;
+  resetLiveState: (threadId: string) => void;
   setHydrating: (value: boolean) => void;
 };
 
@@ -120,10 +156,31 @@ const sortReplayEvents = (events: AgentReplayEvent[]) =>
 const sortTeamRuns = (teamRuns: AgentTeamRunRecord[]) =>
   [...teamRuns].sort((left, right) => right.updatedAt - left.updatedAt);
 
+const sortBackgroundTasks = (tasks: AgentBackgroundTaskRecord[]) =>
+  [...tasks].sort((left, right) => right.updatedAt - left.updatedAt);
+
 const createIdleRunState = (): AgentRuntimeRunState => ({
   status: 'idle',
   draft: '',
   error: null,
+});
+
+const createIdleLiveState = (): AgentRuntimeLiveState => ({
+  connectionState: 'disconnected',
+  statusVerb: '',
+  elapsedSeconds: 0,
+  startedAt: null,
+  activeToolName: null,
+  streamingToolInput: '',
+  pendingApprovalSummary: null,
+  pendingQuestionSummary: null,
+  activeThinking: false,
+  streamingText: '',
+  pendingPermissionCount: 0,
+  tokenUsage: {
+    inputTokens: 0,
+    outputTokens: 0,
+  },
 });
 
 export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
@@ -141,6 +198,8 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
   toolCallsByThread: {},
   bindingByThread: {},
   runStateByThread: {},
+  liveStateByThread: {},
+  backgroundTasksByThread: {},
   teamRunsByThread: {},
   isHydrating: false,
 
@@ -351,6 +410,25 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
       },
     })),
 
+  setThreadBackgroundTasks: (threadId, tasks) =>
+    set((state) => ({
+      backgroundTasksByThread: {
+        ...state.backgroundTasksByThread,
+        [threadId]: sortBackgroundTasks([...tasks]),
+      },
+    })),
+
+  upsertBackgroundTask: (threadId, task) =>
+    set((state) => ({
+      backgroundTasksByThread: {
+        ...state.backgroundTasksByThread,
+        [threadId]: sortBackgroundTasks([
+          task,
+          ...(state.backgroundTasksByThread[threadId] || []).filter((item) => item.id !== task.id),
+        ]),
+      },
+    })),
+
   upsertTeamRun: (threadId, teamRun) =>
     set((state) => ({
       teamRunsByThread: {
@@ -392,6 +470,10 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
         toolCallsByThread: {
           ...state.toolCallsByThread,
           [threadId]: [],
+        },
+        backgroundTasksByThread: {
+          ...state.backgroundTasksByThread,
+          [threadId]: (state.backgroundTasksByThread[threadId] || []).filter((task) => task.updatedAt < createdAt),
         },
         recoveryByThread: nextReplayEvents.length
           ? state.recoveryByThread
@@ -449,6 +531,36 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
           status: 'error',
           error,
         },
+      },
+    })),
+
+  patchLiveState: (threadId, updater) =>
+    set((state) => {
+      const current = state.liveStateByThread[threadId] || createIdleLiveState();
+      const next =
+        typeof updater === 'function'
+          ? updater(current)
+          : {
+              ...current,
+              ...updater,
+              tokenUsage: updater.tokenUsage
+                ? { ...current.tokenUsage, ...updater.tokenUsage }
+                : current.tokenUsage,
+            };
+
+      return {
+        liveStateByThread: {
+          ...state.liveStateByThread,
+          [threadId]: next,
+        },
+      };
+    }),
+
+  resetLiveState: (threadId) =>
+    set((state) => ({
+      liveStateByThread: {
+        ...state.liveStateByThread,
+        [threadId]: createIdleLiveState(),
       },
     })),
 

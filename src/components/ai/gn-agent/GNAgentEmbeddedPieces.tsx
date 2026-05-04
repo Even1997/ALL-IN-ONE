@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { ChatSession, StoredChatMessage } from '../../../modules/ai/store/aiChatStore';
 import type { ActivityEntry } from '../../../modules/ai/skills/activityLog';
-import { buildAssistantMessageParts, type AIChatMessagePart } from '../../workspace/aiChatMessageParts';
+import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
+import { GNAgentMessageItem } from './GNAgentMessageItem';
 
 type MessagePartRenderer = (
   message: StoredChatMessage,
@@ -15,64 +16,8 @@ type MessagePartRenderer = (
     onToggleThinking?: () => void;
   }
 ) => React.ReactNode;
+
 type MessagePartsParser = (content: string) => AIChatMessagePart[];
-type MessageRenderItem =
-  | { kind: 'thinking_lane'; key: string; node: React.ReactNode; sourcePart?: AIChatMessagePart }
-  | { kind: 'bubble_part'; key: string; node: React.ReactNode; sourcePart?: AIChatMessagePart }
-  | { kind: 'bubble_card'; key: string; node: React.ReactNode };
-
-const normalizeAssistantCopy = (value: string) => value.replace(/\s+/g, ' ').trim();
-
-const shouldSuppressAssistantTextPart = (message: StoredChatMessage, part: AIChatMessagePart, cardCount: number) => {
-  if (message.role !== 'assistant' || part.type !== 'text' || cardCount === 0) {
-    return false;
-  }
-
-  if (message.projectFileProposal || message.runtimeQuestion) {
-    return true;
-  }
-
-  const hasRuntimeCards = Boolean(message.toolCalls?.length || message.runtimeEvents?.length);
-  if (!hasRuntimeCards) {
-    return false;
-  }
-
-  const normalized = normalizeAssistantCopy(part.content);
-  if (!normalized) {
-    return true;
-  }
-
-  return normalized.length <= 120;
-};
-
-const AssistantMessageActionBar: React.FC<{
-  copyText?: string;
-}> = ({ copyText }) => {
-  const [copied, setCopied] = useState(false);
-
-  if (!copyText?.trim()) {
-    return null;
-  }
-
-  return (
-    <div className="chat-message-actions" data-align="start">
-      <button
-        type="button"
-        className="chat-message-action-btn"
-        onClick={async () => {
-          if (!navigator.clipboard) {
-            return;
-          }
-          await navigator.clipboard.writeText(copyText);
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1200);
-        }}
-      >
-        {copied ? '已复制' : '复制'}
-      </button>
-    </div>
-  );
-};
 
 export const GNAgentHistoryMenu: React.FC<{
   sessions: ChatSession[];
@@ -89,6 +34,10 @@ export const GNAgentHistoryMenu: React.FC<{
     <div className="chat-history-menu-list">
       {sessions.map((session) => {
         const lastMessage = session.messages?.[session.messages.length - 1];
+        const lastPreviewSource =
+          lastMessage?.role === 'assistant'
+            ? lastMessage.answerContent || lastMessage.thinkingContent || lastMessage.content
+            : lastMessage?.content || '';
         return (
           <div
             key={session.id}
@@ -100,15 +49,15 @@ export const GNAgentHistoryMenu: React.FC<{
               onClick={() => onSelectSession(session.id)}
             >
               <strong>{session.title}</strong>
-              <span>{lastMessage ? buildSessionPreview(lastMessage.content) : '\u7a7a\u4f1a\u8bdd'}</span>
+              <span>{lastMessage ? buildSessionPreview(lastPreviewSource) : '\u7a7a\u4f1a\u8bdd'}</span>
             </button>
             {onDeleteSession && (
               <button
                 type="button"
                 className="chat-history-item-delete"
                 title="\u5220\u9664\u5bf9\u8bdd"
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.stopPropagation();
                   onDeleteSession(session.id);
                 }}
               >
@@ -124,7 +73,7 @@ export const GNAgentHistoryMenu: React.FC<{
   </div>
 );
 
-export const GNAgentMessageList: React.FC<{
+type GNAgentMessageListProps = {
   messages: StoredChatMessage[];
   draftContents?: Record<string, { content: string; thinkingContent: string; answerContent: string; assistantParts: AIChatMessagePart[] }>;
   formatTimestamp: (value: number) => string;
@@ -140,7 +89,33 @@ export const GNAgentMessageList: React.FC<{
   listRef?: React.RefObject<HTMLDivElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   leadingContent?: React.ReactNode;
-}> = ({
+};
+
+const areMessageListPropsEqual = (
+  prev: GNAgentMessageListProps,
+  next: GNAgentMessageListProps
+) => {
+  const prevLen = prev.messages.length;
+  const nextLen = next.messages.length;
+  if (prevLen !== nextLen) return false;
+  if (prevLen > 0 && prev.messages[0].id !== next.messages[0].id) return false;
+  if (prevLen > 0 && prev.messages[prevLen - 1].id !== next.messages[nextLen - 1].id) return false;
+  if (prev.draftContents !== next.draftContents) return false;
+  if (prev.renderMessagePart !== next.renderMessagePart) return false;
+  if (prev.renderStructuredCards !== next.renderStructuredCards) return false;
+  if (prev.renderKnowledgeProposal !== next.renderKnowledgeProposal) return false;
+  if (prev.renderProjectFileProposal !== next.renderProjectFileProposal) return false;
+  if (prev.renderToolExecutionCard !== next.renderToolExecutionCard) return false;
+  if (prev.renderRunSummaryCard !== next.renderRunSummaryCard) return false;
+  if (prev.renderRuntimeApproval !== next.renderRuntimeApproval) return false;
+  if (prev.renderRuntimeQuestion !== next.renderRuntimeQuestion) return false;
+  if (prev.formatTimestamp !== next.formatTimestamp) return false;
+  if (prev.parseMessageParts !== next.parseMessageParts) return false;
+  if (prev.leadingContent !== next.leadingContent) return false;
+  return true;
+};
+
+export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   messages,
   draftContents,
   formatTimestamp,
@@ -156,58 +131,11 @@ export const GNAgentMessageList: React.FC<{
   listRef,
   messagesEndRef,
   leadingContent,
-}) => {
-  const [expandedThinkingKeys, setExpandedThinkingKeys] = useState<Record<string, boolean>>({});
-
-  return (
-    <div ref={listRef} className="chat-message-list">
-      {leadingContent}
-      {messages.map((message) => {
-      const draftState = draftContents?.[message.id];
-      const content = draftState?.content ?? message.content;
-      const isStreaming = Boolean(draftState);
-      const parts =
-        message.role === 'assistant'
-          ? buildAssistantMessageParts({
-              content,
-              assistantParts: draftState?.assistantParts ?? (message.assistantParts as AIChatMessagePart[] | undefined),
-              thinkingContent: draftState?.thinkingContent ?? message.thinkingContent,
-              answerContent: draftState?.answerContent ?? message.answerContent,
-              thinkingCollapsed: isStreaming ? false : undefined,
-            })
-          : parseMessageParts(content);
-      const assistantCopyText =
-        message.role === 'assistant'
-          ? (draftState?.answerContent ?? message.answerContent ?? content).trim()
-          : undefined;
-      const renderItems: MessageRenderItem[] = [];
-
-      parts.forEach((part, index) => {
-        const thinkingKey = `${message.id}-thinking-${index}`;
-        const thinkingExpanded =
-          part.type === 'thinking' ? (isStreaming ? true : expandedThinkingKeys[thinkingKey] ?? false) : undefined;
-        const renderOptions = {
-          content,
-          isStreaming,
-          thinkingExpanded,
-          onToggleThinking:
-            part.type === 'thinking' && !isStreaming
-              ? () =>
-                  setExpandedThinkingKeys((current) => ({
-                    ...current,
-                    [thinkingKey]: !(current[thinkingKey] ?? false),
-                  }))
-              : undefined,
-        };
-        renderItems.push({
-          kind: message.role === 'assistant' && part.type === 'thinking' ? 'thinking_lane' : 'bubble_part',
-          key: `${message.id}-part-${index}`,
-          node: renderMessagePart(message, message.id, part, index, renderOptions),
-          sourcePart: part,
-        });
-      });
-
-      [
+}: GNAgentMessageListProps) {
+  const bubbleCardsByMessage = React.useMemo(() => {
+    const map: Record<string, React.ReactNode[]> = {};
+    for (const message of messages) {
+      map[message.id] = [
         renderStructuredCards?.(message),
         renderKnowledgeProposal?.(message),
         renderProjectFileProposal?.(message),
@@ -215,64 +143,51 @@ export const GNAgentMessageList: React.FC<{
         renderRunSummaryCard?.(message),
         renderRuntimeApproval?.(message),
         renderRuntimeQuestion?.(message),
-      ].forEach((node, index) => {
-        if (!node) {
-          return;
-        }
+      ].filter((node): node is React.ReactNode => Boolean(node));
+    }
+    return map;
+  }, [
+    messages,
+    renderStructuredCards,
+    renderKnowledgeProposal,
+    renderProjectFileProposal,
+    renderToolExecutionCard,
+    renderRunSummaryCard,
+    renderRuntimeApproval,
+    renderRuntimeQuestion,
+  ]);
 
-        renderItems.push({
-          kind: 'bubble_card',
-          key: `${message.id}-card-${index}`,
-          node,
-        });
-      });
+  const FOLD_THRESHOLD = 30;
+  const KEEP_VISIBLE = 10;
+  const shouldFold = messages.length > FOLD_THRESHOLD;
+  const foldCount = shouldFold ? messages.length - KEEP_VISIBLE : 0;
 
-      const bubbleCardCount = renderItems.filter((item) => item.kind === 'bubble_card').length;
-      const filteredRenderItems = renderItems.filter((item) => {
-        if (item.kind !== 'bubble_part') {
-          return true;
-        }
+  const renderMessageItem = (message: StoredChatMessage) => (
+    <GNAgentMessageItem
+      key={message.id}
+      message={message}
+      draftState={draftContents?.[message.id]}
+      formatTimestamp={formatTimestamp}
+      parseMessageParts={parseMessageParts}
+      renderMessagePart={renderMessagePart}
+      bubbleCards={bubbleCardsByMessage[message.id] ?? []}
+    />
+  );
 
-        const part = item.sourcePart;
-        return part ? !shouldSuppressAssistantTextPart(message, part, bubbleCardCount) : true;
-      });
-
-      const thinkingItems = filteredRenderItems.filter((item) => item.kind === 'thinking_lane');
-      const bubbleItems = filteredRenderItems.filter((item) => item.kind !== 'thinking_lane');
-      return (
-        <article
-          key={message.id}
-          className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}
-        >
-          {thinkingItems.length > 0 ? (
-            <div className="chat-message-thinking-lane">
-              {thinkingItems.map((item) => (
-                <React.Fragment key={item.key}>{item.node}</React.Fragment>
-              ))}
-            </div>
-          ) : null}
-          {bubbleItems.length > 0 ? (
-            <div className="chat-message-bubble">
-              <div className="chat-message-content">
-                {bubbleItems.map((item) => (
-                  <React.Fragment key={item.key}>{item.node}</React.Fragment>
-                ))}
-              </div>
-              {message.role === 'assistant' ? (
-                <AssistantMessageActionBar copyText={isStreaming ? undefined : assistantCopyText} />
-              ) : null}
-              <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
-            </div>
-          ) : (
-            <div className="chat-message-meta chat-message-meta-standalone">{formatTimestamp(message.createdAt)}</div>
-          )}
-        </article>
-      );
-    })}
+  return (
+    <div ref={listRef} className="chat-message-list">
+      {leadingContent}
+      {shouldFold ? (
+        <details className="chat-message-list-fold">
+          <summary>{`Show earlier ${foldCount} messages`}</summary>
+          {messages.slice(0, foldCount).map(renderMessageItem)}
+        </details>
+      ) : null}
+      {messages.slice(foldCount).map(renderMessageItem)}
       <div ref={messagesEndRef} />
     </div>
   );
-};
+}, areMessageListPropsEqual);
 
 export const GNAgentEmbeddedComposer: React.FC<{
   entrySwitch?: React.ReactNode;
@@ -366,7 +281,6 @@ export const GNAgentEmbeddedComposer: React.FC<{
             <SendIcon />
           </button>
         </div>
-
       </div>
     </div>
   </div>
@@ -380,7 +294,7 @@ export const GNAgentActivityPanel: React.FC<{
   <div className="chat-activity-log">
     <div className="chat-panel-header">
       <strong>Activity Log</strong>
-      <span>只记录真实改动、产物落地和失败节点。</span>
+      <span>{'\u53ea\u8bb0\u5f55\u771f\u5b9e\u6539\u52a8\u3001\u4ea7\u7269\u843d\u5730\u548c\u5931\u8d25\u8282\u70b9\u3002'}</span>
     </div>
     <div className="chat-activity-list">
       {activityEntries.map((entry) => (
@@ -395,7 +309,7 @@ export const GNAgentActivityPanel: React.FC<{
           </div>
           {entry.changedPaths.length > 0 ? (
             <div className="chat-activity-entry-paths">
-              {entry.changedPaths.map((changedPath) => (
+              {entry.changedPaths.map((changedPath) =>
                 onOpenChangedPath ? (
                   <button
                     key={changedPath}
@@ -409,12 +323,12 @@ export const GNAgentActivityPanel: React.FC<{
                 ) : (
                   <code key={changedPath}>{changedPath}</code>
                 )
-              ))}
+              )}
             </div>
           ) : null}
         </article>
       ))}
-      {activityEntries.length === 0 ? <div className="chat-panel-note">还没有可记录的操作日志。</div> : null}
+      {activityEntries.length === 0 ? <div className="chat-panel-note">{'\u8fd8\u6ca1\u6709\u53ef\u8bb0\u5f55\u7684\u64cd\u4f5c\u65e5\u5fd7\u3002'}</div> : null}
     </div>
   </div>
 );

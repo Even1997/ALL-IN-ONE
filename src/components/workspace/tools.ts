@@ -42,6 +42,9 @@ export interface RustToolResult {
   error: string | null;
 }
 
+const TOOL_PROTOCOL_MARKER_PATTERN =
+  /<tool_use>|<\/tool_use>|<tool_result|<\/tool_result>|<apply_skill\b|<\s*\|\s*DSML\b|tool_calls>|"tool_calls"\s*:/i;
+
 // Tool Definitions based on OpenCode
 export const TOOLS: Tool[] = [
   {
@@ -553,31 +556,278 @@ export class ToolExecutor {
   }
 }
 
-// Tool call parser - extracts tool calls from LLM responses
-export function parseToolCalls(text: string): ToolCall[] {
-  const calls: ToolCall[] = [];
-  const regex = /<tool_use>\s*<tool name="(\w+)">(.*?)<\/tool>/gs;
-  let match;
+const normalizeParsedToolInput = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
 
-  while ((match = regex.exec(text)) !== null) {
-    const name = match[1];
-    const paramsMatch = match[2].match(/<tool_params>(.*?)<\/tool_params>/s);
-    if (paramsMatch) {
-      try {
-        const input = JSON.parse(paramsMatch[1]);
-        calls.push({
-          id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          name,
-          input,
-        });
-      } catch {
-        // Skip malformed params
+  return value as Record<string, unknown>;
+};
+
+const createParsedToolCall = (name: string, input: Record<string, unknown>): ToolCall => ({
+  id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  name,
+  input,
+});
+
+const parseToolArguments = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value === 'string') {
+    try {
+      return parseToolArguments(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+
+  return normalizeParsedToolInput(value);
+};
+
+const parseJsonFunctionToolCall = (value: unknown): ToolCall | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const functionValue = record.function;
+  if (!functionValue || typeof functionValue !== 'object' || Array.isArray(functionValue)) {
+    return null;
+  }
+
+  const functionRecord = functionValue as Record<string, unknown>;
+  const name = typeof functionRecord.name === 'string' ? functionRecord.name.trim() : '';
+  if (!name) {
+    return null;
+  }
+
+  const input = parseToolArguments(functionRecord.arguments);
+  if (!input) {
+    return null;
+  }
+
+  return createParsedToolCall(name, input);
+};
+
+const parseToolCallsFromJsonValue = (value: unknown): ToolCall[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => parseToolCallsFromJsonValue(entry));
+  }
+
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  const record = value as Record<string, unknown>;
+  if (Array.isArray(record.tool_calls)) {
+    return record.tool_calls.flatMap((entry) => {
+      const parsed = parseJsonFunctionToolCall(entry);
+      return parsed ? [parsed] : [];
+    });
+  }
+
+  const parsed = parseJsonFunctionToolCall(record);
+  return parsed ? [parsed] : [];
+};
+
+const extractBalancedJsonSegment = (text: string, startIndex: number): string | null => {
+  const opening = text[startIndex];
+  const closing = opening === '{' ? '}' : opening === '[' ? ']' : '';
+  if (!closing) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = startIndex; index < text.length; index += 1) {
+    const character = text[index];
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+
+      if (character === '\\') {
+        escaping = true;
+        continue;
+      }
+
+      if (character === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (character === opening) {
+      depth += 1;
+      continue;
+    }
+
+    if (character === closing) {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(startIndex, index + 1);
       }
     }
   }
 
+  return null;
+};
+
+const collectJsonProtocolCandidates = (text: string): string[] => {
+  const candidates = new Set<string>();
+  const trimmed = text.trim();
+
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    candidates.add(trimmed);
+  }
+
+  const fencedBlockPattern = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let fencedMatch: RegExpExecArray | null;
+  while ((fencedMatch = fencedBlockPattern.exec(text)) !== null) {
+    const candidate = fencedMatch[1]?.trim();
+    if (candidate) {
+      candidates.add(candidate);
+    }
+  }
+
+  const markerPattern = /"tool_calls"|"function"/g;
+  let markerMatch: RegExpExecArray | null;
+  while ((markerMatch = markerPattern.exec(text)) !== null) {
+    for (let index = markerMatch.index; index >= 0; index -= 1) {
+      const character = text[index];
+      if (character !== '{' && character !== '[') {
+        continue;
+      }
+
+      const candidate = extractBalancedJsonSegment(text, index);
+      if (candidate && candidate.includes(markerMatch[0])) {
+        candidates.add(candidate.trim());
+        break;
+      }
+    }
+  }
+
+  return [...candidates];
+};
+
+const parseXmlToolCalls = (text: string): ToolCall[] => {
+  const calls: ToolCall[] = [];
+  const regex = /<tool_use>\s*<tool name="(\w+)">(.*?)<\/tool>/gs;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const name = match[1];
+    const paramsMatch = match[2].match(/<tool_params>(.*?)<\/tool_params>/s);
+    if (!paramsMatch) {
+      continue;
+    }
+
+    try {
+      const input = JSON.parse(paramsMatch[1]);
+      const normalizedInput = normalizeParsedToolInput(input);
+      if (!normalizedInput) {
+        continue;
+      }
+
+      calls.push({
+        id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name,
+        input: normalizedInput,
+      });
+    } catch {
+      // Skip malformed params
+    }
+  }
+
   return calls;
+};
+
+const parseJsonToolCalls = (text: string): ToolCall[] => {
+  for (const candidate of collectJsonProtocolCandidates(text)) {
+    try {
+      const calls = parseToolCallsFromJsonValue(JSON.parse(candidate));
+      if (calls.length > 0) {
+        return calls;
+      }
+    } catch {
+      // Skip malformed JSON candidates
+    }
+  }
+
+  return [];
+};
+
+// Tool call parser - extracts tool calls from LLM responses
+export function parseToolCalls(text: string): ToolCall[] {
+  const xmlCalls = parseXmlToolCalls(text);
+  if (xmlCalls.length > 0) {
+    return xmlCalls;
+  }
+
+  return parseJsonToolCalls(text);
 }
+
+export function containsToolProtocolMarkers(text: string): boolean {
+  return TOOL_PROTOCOL_MARKER_PATTERN.test(text);
+}
+
+// Streaming tool call detector — incrementally parses XML tool calls from a stream.
+// Returns newly detected complete tool calls each time feed() is called.
+export type StreamingToolDetector = {
+  feed: (delta: string) => ToolCall[];
+  reset: () => void;
+};
+
+export const createStreamingToolDetector = (): StreamingToolDetector => {
+  let buffer = '';
+  let processedEnd = 0;
+
+  return {
+    feed: (delta: string) => {
+      buffer += delta;
+      const detected: ToolCall[] = [];
+      const regex = /<tool_use>\s*<tool name="(\w+)">(.*?)<\/tool>\s*<\/tool_use>/gs;
+
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(buffer)) !== null) {
+        if (match.index < processedEnd) continue;
+
+        const name = match[1];
+        const paramsMatch = match[2]!.match(/<tool_params>(.*?)<\/tool_params>/s);
+        if (!paramsMatch) continue;
+
+        try {
+          const input = JSON.parse(paramsMatch[1]!);
+          const normalizedInput = normalizeParsedToolInput(input);
+          if (!normalizedInput) continue;
+
+          detected.push({
+            id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name,
+            input: normalizedInput,
+          });
+        } catch {
+          // Skip malformed params
+        }
+
+        processedEnd = regex.lastIndex;
+      }
+
+      return detected;
+    },
+    reset: () => {
+      buffer = '';
+      processedEnd = 0;
+    },
+  };
+};
 
 // Format tool call for LLM
 export function formatToolCall(call: ToolCall): string {

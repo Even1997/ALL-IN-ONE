@@ -1,8 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
 import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
 import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
@@ -30,6 +28,7 @@ import {
   getDefaultRuntimeSkillDefinitions,
   loadRuntimeSkillDefinitions,
 } from '../../modules/ai/skills/skillLibrary';
+import type { RuntimeSkillDefinition } from '../../modules/ai/runtime/skills/runtimeSkillTypes';
 import { type AIConfigEntry, hasUsableAIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { toRuntimeAIConfig } from '../../modules/ai/store/aiConfigState';
 import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../../modules/ai/gn-agent/localConfig';
@@ -37,18 +36,26 @@ import {
   appendAgentTimelineEvent as persistRuntimeTimelineEvent,
   createAgentThread as persistRuntimeThread,
   executePrompt as executeRuntimePrompt,
+  getAgentRuntimeSettings,
   getAgentTurnCheckpointDiff,
   enqueueAgentApproval,
-  getAgentSandboxPolicy,
+  listAgentBackgroundTasks,
+  listAgentThreads,
   listAgentTurnCheckpoints,
   listAgentApprovals,
   rewindAgentTurn,
   resolveAgentApproval,
   saveAgentTurnCheckpoint,
-  setAgentSandboxPolicy,
+  setAgentPermissionMode,
+  upsertAgentBackgroundTask,
 } from '../../modules/ai/runtime/agentRuntimeClient';
 import { useApprovalStore } from '../../modules/ai/runtime/approval/approvalStore';
-import type { ApprovalRecord, SandboxPolicy } from '../../modules/ai/runtime/approval/approvalTypes';
+import type { ApprovalRecord, PermissionMode } from '../../modules/ai/runtime/approval/approvalTypes';
+import {
+  PERMISSION_MODE_LABELS,
+  permissionModeToSandboxPolicy,
+  sandboxPolicyToPermissionMode,
+} from '../../modules/ai/runtime/approval/permissionMode';
 import { buildProjectMemoryEntry } from '../../modules/ai/runtime/memory/projectMemoryRuntime';
 import {
   createRuntimeStreamingMessageAssembler,
@@ -106,6 +113,7 @@ import {
 import { executeRuntimeWorkflowPackage } from '../../modules/ai/runtime/orchestration/runtimeWorkflowFlow';
 import { sanitizeInternalWorkspaceMentions } from '../../modules/ai/runtime/orchestration/runtimeDirectChatFlow';
 import type {
+  AgentBackgroundTaskRecord,
   AgentProviderId,
   AgentTurnCheckpointDiff,
   AgentTurnCheckpointRecord,
@@ -139,6 +147,7 @@ import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore
 import { runAgentTeamTurn } from '../../modules/ai/runtime/teams/teamOrchestrator';
 import type { AgentTeamRunRecord } from '../../modules/ai/runtime/teams/teamTypes';
 import {
+  type ChatSession,
   createChatSession,
   createStoredChatMessage,
   type RuntimeQuestionItem,
@@ -156,6 +165,9 @@ import {
   detectProjectFileReadIntent,
   detectTaskAuthorizedProjectWriteIntent,
   detectProjectFileWriteIntent,
+  findLatestPendingProjectFileProposalAction,
+  isShortPendingActionAffirmation,
+  isShortPendingActionRejection,
   type ProjectFileOperation,
   type ProjectFileOperationMode,
   type ProjectFileProposal,
@@ -182,6 +194,7 @@ import {
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import { AIChatReferenceSearchMenu } from './AIChatReferenceSearchMenu';
+import { AIChatSlashCommandMenu, type SlashCommandEntry } from './AIChatSlashCommandMenu';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -189,12 +202,13 @@ import {
   getComposerPlaceholder,
 } from './aiChatViewState';
 import {
-  extractStoredAssistantPartsFromContent,
   buildAssistantStructuredContentState,
-  buildStoredAssistantParts,
   parseAIChatMessageParts,
   type AIChatMessagePart,
 } from './aiChatMessageParts';
+import { AssistantTextBlock, AssistantThinkingBlock } from './AIChatAssistantParts';
+import { AIChatRuntimeToolExecutionCard } from './AIChatRuntimeToolExecutionCard';
+import type { RuntimeEventRenderModel } from './runtimeEventRenderModel';
 import './AIChat.css';
 
 type AISettingsDraft = {
@@ -245,6 +259,10 @@ type StreamingDraftState = {
 
 const EMPTY_MESSAGES: StoredChatMessage[] = [];
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
+const EMPTY_SESSIONS: ChatSession[] = [];
+const EMPTY_PENDING_APPROVALS: ApprovalRecord[] = [];
+const EMPTY_RUNTIME_SKILLS: RuntimeSkillDefinition[] = [];
+const EMPTY_BACKGROUND_TASKS: AgentBackgroundTaskRecord[] = [];
 
 const GNAgentSkillsEntryButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <button
@@ -285,12 +303,6 @@ const BUILT_IN_EXECUTION_TOOLS = ['glob', 'grep', 'ls', 'view', 'write', 'edit',
 const PROJECT_INSTRUCTION_FILE_NAMES = ['GOODNIGHT.md', 'CLAUDE.md'];
 const RISKY_BUILT_IN_TOOLS = new Set(['write', 'edit', 'bash', 'fetch']);
 
-const SANDBOX_POLICY_LABELS: Record<SandboxPolicy, string> = {
-  ask: '默认权限',
-  deny: '自动审查',
-  allow: '完全访问权限',
-};
-
 const WORKFLOW_STAGE_LABELS: Record<string, string> = {
   project_brief: 'Project Brief',
   requirements_spec: 'Requirements Spec',
@@ -314,8 +326,43 @@ const WORKFLOW_SKILL_LABELS: Record<string, string> = {
   html_prototype_skill: 'HTML Prototype Skill',
 };
 
-const SANDBOX_POLICY_OPTIONS: Array<{
-  value: SandboxPolicy | 'custom';
+const estimateTokenCount = (value: string) => Math.max(0, Math.ceil(value.trim().length / 4));
+
+const summarizeLiveToolInput = (input: Record<string, unknown> | null | undefined) => {
+  if (!input || Object.keys(input).length === 0) {
+    return '';
+  }
+
+  try {
+    const formatted = JSON.stringify(input, null, 2)?.trim() || '';
+    return formatted.length > 240 ? `${formatted.slice(0, 237)}...` : formatted;
+  } catch {
+    return '';
+  }
+};
+
+const findSlashTrigger = (value: string, cursorPos: number) => {
+  for (let index = cursorPos - 1; index >= 0; index -= 1) {
+    const character = value[index];
+    if (character === '/') {
+      if (index === 0 || /\s/.test(value[index - 1] || '')) {
+        return {
+          triggerIndex: index,
+          filter: value.slice(index + 1, cursorPos),
+        };
+      }
+      break;
+    }
+    if (/\s/.test(character || '')) {
+      break;
+    }
+  }
+
+  return null;
+};
+
+const PERMISSION_MODE_OPTIONS: Array<{
+  value: PermissionMode | 'custom';
   label: string;
   description: string;
   icon: string;
@@ -328,16 +375,22 @@ const SANDBOX_POLICY_OPTIONS: Array<{
     icon: '◌',
   },
   {
-    value: 'deny',
-    label: '自动审查',
-    description: '系统自动拦截高风险动作，只放行低风险步骤。',
+    value: 'plan',
+    label: '规划优先',
+    description: '优先做分析和计划，高风险动作默认不直接执行。',
     icon: '◔',
   },
   {
-    value: 'allow',
-    label: '完全访问权限',
-    description: '允许直接执行写入、命令和网络操作。',
+    value: 'auto',
+    label: '自动执行',
+    description: '允许直接执行常见写入和命令动作，尽量减少中断。',
     icon: '●',
+  },
+  {
+    value: 'bypass',
+    label: '完全放行',
+    description: '沿用全自动策略，但明确按最少拦截来执行。',
+    icon: '◆',
   },
   {
     value: 'custom',
@@ -349,8 +402,8 @@ const SANDBOX_POLICY_OPTIONS: Array<{
 ];
 
 const ChatSandboxPolicySelector: React.FC<{
-  value: SandboxPolicy;
-  onChange: (policy: SandboxPolicy) => Promise<void> | void;
+  value: PermissionMode;
+  onChange: (mode: PermissionMode) => Promise<void> | void;
 }> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -395,13 +448,13 @@ const ChatSandboxPolicySelector: React.FC<{
         }}
       >
         <span className="chat-sandbox-selector-trigger-icon">⚙</span>
-        <span className="chat-sandbox-selector-trigger-label">{SANDBOX_POLICY_LABELS[value]}</span>
+        <span className="chat-sandbox-selector-trigger-label">{PERMISSION_MODE_LABELS[value]}</span>
         <span className="chat-sandbox-selector-trigger-caret">▾</span>
       </button>
 
       {open ? (
         <div className="chat-sandbox-selector-menu" role="menu" aria-label="权限选择">
-          {SANDBOX_POLICY_OPTIONS.map((option) => {
+          {PERMISSION_MODE_OPTIONS.map((option) => {
             const isActive = option.value === value;
             const isDisabled = Boolean(option.disabled || isSaving || option.value === 'custom');
             return (
@@ -1295,37 +1348,6 @@ const syncRuntimeEventsWithToolCalls = (
   return nextEvents;
 };
 
-type RuntimeEventToolGroupRenderItem = {
-  kind: 'tool_group';
-  id: string;
-  toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>;
-};
-
-type RuntimeEventMessageRenderItem = {
-  kind: 'message';
-  id: string;
-  event: Exclude<StoredChatRuntimeEvent, { kind: 'tool_use' | 'tool_result' }>;
-};
-
-type RuntimeEventStandaloneResultRenderItem = {
-  kind: 'standalone_result';
-  id: string;
-  event: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>;
-};
-
-type RuntimeEventRenderItem =
-  | RuntimeEventToolGroupRenderItem
-  | RuntimeEventMessageRenderItem
-  | RuntimeEventStandaloneResultRenderItem;
-
-type RuntimeEventRenderModel = {
-  items: RuntimeEventRenderItem[];
-  resultMap: Map<string, Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>>;
-  approvalsByToolCallId: Map<string, Array<Extract<StoredChatRuntimeEvent, { kind: 'approval' }>>>;
-  questionsByToolCallId: Map<string, Array<Extract<StoredChatRuntimeEvent, { kind: 'question' }>>>;
-  childToolUsesByParent: Map<string, Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>>;
-};
-
 const getFileChangeTypeLabel = (change: { beforeContent: string | null; afterContent: string | null }) => {
   if (change.beforeContent === null && change.afterContent !== null) {
     return '新建';
@@ -1338,102 +1360,6 @@ const getFileChangeTypeLabel = (change: { beforeContent: string | null; afterCon
 
 const getCheckpointChangeTypeLabel = (changeType: 'created' | 'updated' | 'deleted') =>
   changeType === 'created' ? '新建' : changeType === 'deleted' ? '删除' : '修改';
-
-const buildRuntimeEventRenderModel = (
-  runtimeEvents: StoredChatRuntimeEvent[]
-): RuntimeEventRenderModel => {
-  const items: RuntimeEventRenderItem[] = [];
-  const resultMap = new Map<string, Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>>();
-  const approvalsByToolCallId = new Map<string, Array<Extract<StoredChatRuntimeEvent, { kind: 'approval' }>>>();
-  const questionsByToolCallId = new Map<string, Array<Extract<StoredChatRuntimeEvent, { kind: 'question' }>>>();
-  const childToolUsesByParent = new Map<string, Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>>();
-  const toolUseIds = new Set<string>();
-  let pendingToolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>> = [];
-
-  const flushToolGroup = () => {
-    if (pendingToolUses.length === 0) {
-      return;
-    }
-
-    items.push({
-      kind: 'tool_group',
-      id: `runtime-tool-group-${pendingToolUses[0]!.id}`,
-      toolUses: [...pendingToolUses],
-    });
-    pendingToolUses = [];
-  };
-
-  for (const event of runtimeEvents) {
-    if (event.kind === 'tool_use') {
-      toolUseIds.add(event.toolCallId);
-      if (event.parentToolCallId) {
-        const bucket = childToolUsesByParent.get(event.parentToolCallId) || [];
-        bucket.push(event);
-        childToolUsesByParent.set(event.parentToolCallId, bucket);
-      }
-      continue;
-    }
-
-    if (event.kind === 'tool_result') {
-      resultMap.set(event.toolCallId, event);
-      continue;
-    }
-
-    if (event.kind === 'approval' && event.toolCallId) {
-      const bucket = approvalsByToolCallId.get(event.toolCallId) || [];
-      bucket.push(event);
-      approvalsByToolCallId.set(event.toolCallId, bucket);
-      continue;
-    }
-
-    if (event.kind === 'question' && event.payload.toolCallId) {
-      const bucket = questionsByToolCallId.get(event.payload.toolCallId) || [];
-      bucket.push(event);
-      questionsByToolCallId.set(event.payload.toolCallId, bucket);
-    }
-  }
-
-  for (const event of runtimeEvents) {
-    if (event.kind === 'tool_use') {
-      if (event.parentToolCallId && toolUseIds.has(event.parentToolCallId)) {
-        continue;
-      }
-      pendingToolUses.push(event);
-      continue;
-    }
-
-    if (event.kind === 'tool_result' && toolUseIds.has(event.toolCallId)) {
-      continue;
-    }
-
-    if (
-      (event.kind === 'approval' && event.toolCallId && toolUseIds.has(event.toolCallId)) ||
-      (event.kind === 'question' && event.payload.toolCallId && toolUseIds.has(event.payload.toolCallId))
-    ) {
-      continue;
-    }
-
-    flushToolGroup();
-
-    if (event.kind === 'tool_result') {
-      items.push({
-        kind: 'standalone_result',
-        id: event.id,
-        event,
-      });
-      continue;
-    }
-
-    items.push({
-      kind: 'message',
-      id: event.id,
-      event,
-    });
-  }
-
-  flushToolGroup();
-  return { items, resultMap, approvalsByToolCallId, questionsByToolCallId, childToolUsesByParent };
-};
 
 const buildRuntimeEventGroupSummary = (
   toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>,
@@ -1882,47 +1808,6 @@ const summarizeReferencePath = (value: string) => {
   return `.../${parts.slice(-2).join('/')}`;
 };
 
-const shouldUseAssistantDocumentLayout = (content: string) => {
-  const normalized = content.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  if (/```/.test(normalized)) {
-    return true;
-  }
-
-  if (/^\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|\|.+\|)/m.test(normalized)) {
-    return true;
-  }
-
-  const paragraphs = normalized
-    .split(/\n\s*\n/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean);
-
-  return paragraphs.length >= 2 || normalized.split('\n').filter((line) => line.trim()).length >= 8;
-};
-
-const IMAGE_PATH_PATTERN = /(?:^|[\s`"'(])((?:[A-Za-z]:[\\/]|\/)[^\s`"')<>]+\.(?:png|jpe?g|gif|webp|svg|bmp|avif|ico))/gim;
-
-const extractInlineImagePaths = (content: string) => {
-  const paths: string[] = [];
-  const seen = new Set<string>();
-  let match: RegExpExecArray | null;
-
-  while ((match = IMAGE_PATH_PATTERN.exec(content)) !== null) {
-    const candidate = match[1]?.trim();
-    if (!candidate || seen.has(candidate)) {
-      continue;
-    }
-    seen.add(candidate);
-    paths.push(candidate);
-  }
-
-  return paths;
-};
-
 const renderMessagePart = (
   message: StoredChatMessage,
   messageId: string,
@@ -1936,44 +1821,14 @@ const renderMessagePart = (
   }
 ) => {
   if (part.type === 'thinking') {
-    const isExpanded = options?.thinkingExpanded ?? !part.collapsed;
-    const isStreaming = options?.isStreaming ?? false;
-    const previewLine =
-      part.content
-        .split('\n')
-        .map((line) => line.replace(/\s+/g, ' ').trim())
-        .find(Boolean) || '';
-    const preview =
-      previewLine.length > 88 ? `${previewLine.slice(0, 88)}...` : previewLine;
-
     return (
-      <div
-        className={`chat-thinking-block ${isExpanded ? 'expanded' : 'collapsed'}`}
+      <AssistantThinkingBlock
         key={`${messageId}-thinking-${index}`}
-      >
-        <button
-          type="button"
-          className="chat-thinking-toggle"
-          onClick={options?.onToggleThinking}
-          disabled={isStreaming || !options?.onToggleThinking}
-          aria-expanded={isExpanded}
-        >
-          <span className="chat-thinking-pulse" aria-hidden="true" />
-          <span>{isStreaming ? '正在思考' : '思考过程'}</span>
-          {isStreaming ? (
-            <span className="chat-thinking-dots" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-          ) : !isExpanded && preview ? (
-            <span className="chat-thinking-preview">{preview}</span>
-          ) : null}
-        </button>
-        {isExpanded ? (
-          part.content ? <pre>{part.content}</pre> : <div className="chat-thinking-empty">等待模型输出思考内容...</div>
-        ) : null}
-      </div>
+        part={part}
+        isStreaming={options?.isStreaming ?? false}
+        thinkingExpanded={options?.thinkingExpanded}
+        onToggleThinking={options?.onToggleThinking}
+      />
     );
   }
 
@@ -2012,38 +1867,12 @@ const renderMessagePart = (
     );
   }
 
-  const isStreamingTextPart = Boolean(options?.isStreaming && message.role === 'assistant' && part.type === 'text');
-  const inlineImagePaths =
-    message.role === 'assistant' && part.type === 'text' ? extractInlineImagePaths(part.content) : [];
-
   return (
-    <div
-      className={`chat-answer-text ${shouldUseAssistantDocumentLayout(part.content) ? 'document' : 'bubble'}`}
+    <AssistantTextBlock
       key={`${messageId}-text-${index}`}
-    >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.content}</ReactMarkdown>
-      {inlineImagePaths.length > 0 ? (
-        <div className="chat-inline-image-gallery">
-          {inlineImagePaths.map((imagePath) => {
-            const imageName = imagePath.replace(/\\/g, '/').split('/').pop() || imagePath;
-            return (
-              <a
-                key={imagePath}
-                className="chat-inline-image-card"
-                href={convertFileSrc(imagePath)}
-                target="_blank"
-                rel="noreferrer"
-                title={imagePath}
-              >
-                <img src={convertFileSrc(imagePath)} alt={imageName} loading="lazy" />
-                <span>{imageName}</span>
-              </a>
-            );
-          })}
-        </div>
-      ) : null}
-      {isStreamingTextPart ? <span className="chat-answer-stream-cursor" aria-hidden="true" /> : null}
-    </div>
+      content={part.content}
+      isStreaming={Boolean(options?.isStreaming && message.role === 'assistant' && part.type === 'text')}
+    />
   );
 };
 
@@ -2089,10 +1918,10 @@ const buildAssistantContentState = (
   }
 
   return {
-    content,
+    content: structured.content,
     thinkingContent: structured.thinkingContent,
     answerContent: structured.answerContent,
-    assistantParts: extractStoredAssistantPartsFromContent(content, true),
+    assistantParts: structured.assistantParts,
   };
 };
 
@@ -2101,6 +1930,41 @@ const clearAssistantContentState = () => ({
   answerContent: undefined,
   assistantParts: undefined,
 });
+
+function useStallDetector(isRunning: boolean, activityFingerprint: unknown, thresholdMs = 10000) {
+  const [stalled, setStalled] = useState(false);
+  const [stallDuration, setStallDuration] = useState(0);
+  const lastActivityRef = useRef(performance.now());
+
+  useEffect(() => {
+    if (!isRunning) {
+      setStalled(false);
+      setStallDuration(0);
+      return;
+    }
+    lastActivityRef.current = performance.now();
+    setStalled(false);
+    setStallDuration(0);
+  }, [isRunning, activityFingerprint]);
+
+  useEffect(() => {
+    if (!isRunning) {
+      return;
+    }
+
+    const id = setInterval(() => {
+      const elapsed = performance.now() - lastActivityRef.current;
+      if (elapsed >= thresholdMs) {
+        setStalled(true);
+        setStallDuration(elapsed);
+      }
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, [isRunning, thresholdMs]);
+
+  return { stalled, stallDuration };
+}
 
 export const AIChat: React.FC<AIChatProps> = ({
   variant = 'default',
@@ -2115,6 +1979,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const lockExpandedForEmbedded = isProviderEmbedded;
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [stallFP, setStallFP] = useState(0);
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
@@ -2137,6 +2002,11 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [referenceSearchQuery, setReferenceSearchQuery] = useState('');
   const [referenceTriggerIndex, setReferenceTriggerIndex] = useState(-1);
   const [referenceSearchIndex, setReferenceSearchIndex] = useState(0);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashFilter, setSlashFilter] = useState('');
+  const [slashTriggerIndex, setSlashTriggerIndex] = useState(-1);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const [availableSlashCommands, setAvailableSlashCommands] = useState<SlashCommandEntry[]>([]);
   const [turnCheckpoints, setTurnCheckpoints] = useState<AgentTurnCheckpointRecord[]>([]);
   const [expandedRunDiffKey, setExpandedRunDiffKey] = useState<string | null>(null);
   const [runDiffsByKey, setRunDiffsByKey] = useState<Record<string, RunDiffState>>({});
@@ -2243,6 +2113,8 @@ export const AIChat: React.FC<AIChatProps> = ({
     appendActivityEntry,
     setActivityEntries,
     updateMessage,
+    queueComposerPrefill,
+    clearComposerPrefill,
     replaceSessionMessages,
     renameSession,
     removeSession,
@@ -2256,6 +2128,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       appendActivityEntry: state.appendActivityEntry,
       setActivityEntries: state.setActivityEntries,
       updateMessage: state.updateMessage,
+      queueComposerPrefill: state.queueComposerPrefill,
+      clearComposerPrefill: state.clearComposerPrefill,
       replaceSessionMessages: state.replaceSessionMessages,
       renameSession: state.renameSession,
       removeSession: state.removeSession,
@@ -2276,11 +2150,14 @@ export const AIChat: React.FC<AIChatProps> = ({
     setThreadContext,
     setThreadToolCalls,
     setThreadMemoryCandidates,
+    setThreadBackgroundTasks,
+    upsertBackgroundTask,
     upsertTeamRun,
     pruneThreadHistorySince,
     startRun: startRuntimeRun,
     finishRun: finishRuntimeRun,
     failRun: failRuntimeRun,
+    patchLiveState,
     upsertTurnSession,
     patchTurnSession,
   } = useAgentRuntimeStore(
@@ -2299,11 +2176,14 @@ export const AIChat: React.FC<AIChatProps> = ({
       setThreadContext: state.setThreadContext,
       setThreadToolCalls: state.setThreadToolCalls,
       setThreadMemoryCandidates: state.setThreadMemoryCandidates,
+      setThreadBackgroundTasks: state.setThreadBackgroundTasks,
+      upsertBackgroundTask: state.upsertBackgroundTask,
       upsertTeamRun: state.upsertTeamRun,
       pruneThreadHistorySince: state.pruneThreadHistorySince,
       startRun: state.startRun,
       finishRun: state.finishRun,
       failRun: state.failRun,
+      patchLiveState: state.patchLiveState,
       upsertTurnSession: state.upsertTurnSession,
       patchTurnSession: state.patchTurnSession,
     }))
@@ -2319,54 +2199,122 @@ export const AIChat: React.FC<AIChatProps> = ({
     );
   const {
     approvalsByThread,
+    permissionMode,
     sandboxPolicy,
     setThreadApprovals,
     enqueueApproval,
     resolveApproval: resolveStoredApproval,
+    setPermissionMode,
     setSandboxPolicy,
   } = useApprovalStore(
     useShallow((state) => ({
       approvalsByThread: state.approvalsByThread,
+      permissionMode: state.permissionMode,
       sandboxPolicy: state.sandboxPolicy,
       setThreadApprovals: state.setThreadApprovals,
       enqueueApproval: state.enqueueApproval,
       resolveApproval: state.resolveApproval,
+      setPermissionMode: state.setPermissionMode,
       setSandboxPolicy: state.setSandboxPolicy,
     }))
   );
   const runtimeProviderId = (providerExecutionMode || 'built-in') as AgentProviderId;
 
   useEffect(() => {
-    if (!currentProject) {
-      return;
-    }
-
-    ensureProjectState(currentProject.id);
-
-    const projectState = useAIChatStore.getState().projects[currentProject.id];
-    if (!projectState || projectState.sessions.length === 0) {
-      const session = createWelcomeSession(currentProject.id, currentProject.name, runtimeProviderId);
-      upsertSession(currentProject.id, session);
-      setActiveSession(currentProject.id, session.id);
-    }
-  }, [currentProject, ensureProjectState, runtimeProviderId, setActiveSession, upsertSession]);
-
-  useEffect(() => {
     let alive = true;
 
     void (async () => {
-      const policy = await getAgentSandboxPolicy();
+      const settings = await getAgentRuntimeSettings();
       if (!alive) {
         return;
       }
 
-      setSandboxPolicy(policy);
+      setSandboxPolicy(settings.sandboxPolicy);
+      setPermissionMode(settings.permissionMode || sandboxPolicyToPermissionMode(settings.sandboxPolicy));
     })();
 
     return () => {
       alive = false;
     };
-  }, [setSandboxPolicy]);
+  }, [setPermissionMode, setSandboxPolicy]);
+
+  useEffect(() => {
+    if (!currentProject) {
+      return;
+    }
+
+    let alive = true;
+    const projectId = currentProject.id;
+    const projectName = currentProject.name;
+
+    void (async () => {
+      ensureProjectState(projectId);
+
+      let persistedThreads: Awaited<ReturnType<typeof listAgentThreads>> = [];
+      try {
+        persistedThreads = await listAgentThreads(projectId);
+      } catch (error) {
+        console.warn('Failed to load agent threads:', error);
+      }
+      if (!alive) {
+        return;
+      }
+
+      let projectState = useAIChatStore.getState().projects[projectId];
+      let existingSessions = projectState?.sessions || [];
+
+      persistedThreads.forEach((thread) => {
+        const existingSession = existingSessions.find((session) => session.runtimeThreadId === thread.id) || null;
+        const session =
+          existingSession ||
+          createChatSession(projectId, thread.title || '新对话', thread.providerId as AgentProviderId);
+
+        const syncedSession = {
+          ...session,
+          title: thread.title || session.title,
+          providerId: thread.providerId as AgentProviderId,
+          runtimeThreadId: thread.id,
+          createdAt: existingSession?.createdAt || thread.createdAt,
+          updatedAt: Math.max(thread.updatedAt, existingSession?.updatedAt || 0),
+        };
+
+        upsertSession(projectId, syncedSession);
+        existingSessions = [
+          syncedSession,
+          ...existingSessions.filter((item) => item.id !== syncedSession.id),
+        ];
+
+        recordRuntimeThread(projectId, {
+          id: session.id,
+          providerId: thread.providerId as AgentProviderId,
+          title: thread.title,
+          createdAt: thread.createdAt,
+          updatedAt: thread.updatedAt,
+        });
+      });
+
+      projectState = useAIChatStore.getState().projects[projectId];
+      const sessions = projectState?.sessions || [];
+      if (sessions.length === 0 && persistedThreads.length === 0) {
+        const session = createWelcomeSession(projectId, projectName, runtimeProviderId);
+        upsertSession(projectId, session);
+        setActiveSession(projectId, session.id);
+      } else if (!projectState?.activeSessionId && sessions[0]) {
+        setActiveSession(projectId, sessions[0].id);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    currentProject,
+    ensureProjectState,
+    recordRuntimeThread,
+    runtimeProviderId,
+    setActiveSession,
+    upsertSession,
+  ]);
 
   useEffect(() => {
     let alive = true;
@@ -2385,7 +2333,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     };
   }, [setRuntimeMcpServers]);
 
-  const sessions = projectChatState?.sessions || [];
+  const sessions = projectChatState?.sessions || EMPTY_SESSIONS;
   const activeSessionId = projectChatState?.activeSessionId || sessions[0]?.id || null;
   const activeSession = useMemo(
     () => sessions.find((session) => session.id === activeSessionId) || null,
@@ -2393,6 +2341,8 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const activeApprovalThreadId = activeSession?.runtimeThreadId || activeSessionId || null;
   const activeCheckpointThreadId = activeSession?.runtimeThreadId || activeSession?.id || null;
+  const activeTaskThreadId = activeSession?.runtimeThreadId || null;
+  const activeLiveThreadId = activeSessionId;
   const messages = activeSession?.messages || EMPTY_MESSAGES;
   const activityEntries = projectChatState?.activityEntries || EMPTY_ACTIVITY_ENTRIES;
   const pendingApprovals = useMemo(
@@ -2401,11 +2351,31 @@ export const AIChat: React.FC<AIChatProps> = ({
         ? (approvalsByThread[activeApprovalThreadId] || []).filter(
             (approval) => approval.status === 'pending',
           )
-        : [],
+        : EMPTY_PENDING_APPROVALS,
     [activeApprovalThreadId, approvalsByThread]
   );
+  useEffect(() => {
+    if (!activeApprovalThreadId) {
+      return;
+    }
+
+    patchLiveState(activeApprovalThreadId, (state) => ({
+      ...state,
+      pendingPermissionCount: pendingApprovals.length,
+      pendingApprovalSummary: pendingApprovals[0]?.summary || null,
+      statusVerb:
+        pendingApprovals.length > 0
+          ? 'Waiting for approval'
+          : state.pendingPermissionCount > 0
+            ? ''
+            : state.statusVerb,
+    }));
+  }, [activeApprovalThreadId, patchLiveState, pendingApprovals]);
   const activeSkills = useMemo(
-    () => (activeSessionId ? activeSkillsByThread[activeSessionId] || [] : []),
+    () =>
+      activeSessionId
+        ? activeSkillsByThread[activeSessionId] || EMPTY_RUNTIME_SKILLS
+        : EMPTY_RUNTIME_SKILLS,
     [activeSessionId, activeSkillsByThread]
   );
   const latestTurnSession = useAgentRuntimeStore((state) =>
@@ -2413,6 +2383,14 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const activeReplayResumeRequest = useAgentRuntimeStore((state) =>
     activeSessionId ? state.resumeRequestsByThread[activeSessionId] || null : null
+  );
+  const activeRuntimeLiveState = useAgentRuntimeStore((state) =>
+    activeLiveThreadId ? state.liveStateByThread[activeLiveThreadId] || null : null
+  );
+  const activeBackgroundTasks = useAgentRuntimeStore((state) =>
+    activeLiveThreadId
+      ? state.backgroundTasksByThread[activeLiveThreadId] || EMPTY_BACKGROUND_TASKS
+      : EMPTY_BACKGROUND_TASKS
   );
   const replayRecoveryController = useMemo(
     () =>
@@ -2424,6 +2402,40 @@ export const AIChat: React.FC<AIChatProps> = ({
       }),
     [appendRuntimeReplayEventToStore, setRuntimeRecoveryState]
   );
+
+  useEffect(() => {
+    if (!activeLiveThreadId) {
+      return;
+    }
+
+    patchLiveState(activeLiveThreadId, (state) => ({
+      ...state,
+      connectionState: activeSession?.runtimeThreadId
+        ? state.connectionState === 'disconnected'
+          ? 'reconnecting'
+          : 'connected'
+        : 'disconnected',
+    }));
+  }, [activeLiveThreadId, activeSession?.runtimeThreadId, patchLiveState]);
+
+  useEffect(() => {
+    if (!activeLiveThreadId || !activeRuntimeLiveState?.startedAt) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      patchLiveState(activeLiveThreadId, (state) => ({
+        ...state,
+        elapsedSeconds: state.startedAt
+          ? Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000))
+          : state.elapsedSeconds,
+      }));
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeLiveThreadId, activeRuntimeLiveState?.startedAt, patchLiveState]);
 
   useEffect(() => {
     if (!activeReplayResumeRequest) {
@@ -2543,6 +2555,37 @@ export const AIChat: React.FC<AIChatProps> = ({
       alive = false;
     };
   }, [activeCheckpointThreadId]);
+
+  useEffect(() => {
+    if (!activeTaskThreadId || !activeSessionId) {
+      return;
+    }
+
+    let alive = true;
+
+    void (async () => {
+      const tasks = await listAgentBackgroundTasks(activeTaskThreadId);
+      if (!alive) {
+        return;
+      }
+
+      setThreadBackgroundTasks(activeSessionId, tasks);
+      tasks
+        .filter((task) => task.runKind === 'team')
+        .forEach((task) => {
+          try {
+            const teamRun = JSON.parse(task.payloadJson) as AgentTeamRunRecord;
+            upsertTeamRun(activeSessionId, teamRun);
+          } catch {
+            return;
+          }
+        });
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [activeSessionId, activeTaskThreadId, setThreadBackgroundTasks, upsertTeamRun]);
   const appendRuntimeEventToMessage = useCallback(
     (messageId: string, runtimeEvent: StoredChatRuntimeEvent) => {
       if (!currentProject || !activeSessionId) {
@@ -2640,6 +2683,13 @@ export const AIChat: React.FC<AIChatProps> = ({
       onDeny?: () => void | Promise<void>;
       display?: RuntimePendingApprovalAction['display'];
     }) => {
+      patchLiveState(threadId, (state) => ({
+        ...state,
+        connectionState: 'connected',
+        statusVerb: 'Waiting for approval',
+        pendingApprovalSummary: summary,
+        pendingPermissionCount: state.pendingPermissionCount + 1,
+      }));
       const approval = await requestRuntimeApprovalFlow({
         threadId,
         actionType,
@@ -2669,7 +2719,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
       return approval;
     },
-    [appendRuntimeEventToMessage, enqueueAgentApproval, enqueueApproval]
+    [appendRuntimeEventToMessage, enqueueAgentApproval, enqueueApproval, patchLiveState]
   );
   const handleApproveRuntimeApproval = useCallback(
     async (approvalId: string) => {
@@ -2743,6 +2793,13 @@ export const AIChat: React.FC<AIChatProps> = ({
             : event
         ),
       }));
+      patchLiveState(activeSessionId, (state) => ({
+        ...state,
+        pendingQuestionSummary: null,
+        statusVerb: state.pendingPermissionCount > 0 ? 'Waiting for approval' : '',
+        activeToolName: state.pendingPermissionCount > 0 ? state.activeToolName : null,
+        streamingToolInput: state.pendingPermissionCount > 0 ? state.streamingToolInput : '',
+      }));
 
       const pendingAction = pendingQuestionActionsRef.current[question.id];
       if (pendingAction) {
@@ -2750,8 +2807,55 @@ export const AIChat: React.FC<AIChatProps> = ({
         pendingAction.resolve(answers);
       }
     },
-    [activeSessionId, currentProject, updateMessage]
+    [activeSessionId, currentProject, patchLiveState, updateMessage]
   );
+const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
+    const oldLines = oldStr.split('\n');
+    const newLines = newStr.split('\n');
+
+    // Find common prefix
+    let prefixEnd = 0;
+    while (prefixEnd < oldLines.length && prefixEnd < newLines.length && oldLines[prefixEnd] === newLines[prefixEnd]) {
+      prefixEnd += 1;
+    }
+
+    // Find common suffix
+    let suffixStartOld = oldLines.length;
+    let suffixStartNew = newLines.length;
+    while (
+      suffixStartOld > prefixEnd &&
+      suffixStartNew > prefixEnd &&
+      oldLines[suffixStartOld - 1] === newLines[suffixStartNew - 1]
+    ) {
+      suffixStartOld -= 1;
+      suffixStartNew -= 1;
+    }
+
+    const result: string[] = [];
+
+    // Context before
+    for (let i = Math.max(0, prefixEnd - 2); i < prefixEnd; i += 1) {
+      result.push(` ${oldLines[i]}`);
+    }
+
+    // Removed lines
+    for (let i = prefixEnd; i < suffixStartOld; i += 1) {
+      result.push(`-${oldLines[i]}`);
+    }
+
+    // Added lines
+    for (let i = prefixEnd; i < suffixStartNew; i += 1) {
+      result.push(`+${newLines[i]}`);
+    }
+
+    // Context after
+    for (let i = suffixStartNew; i < Math.min(suffixStartNew + 2, newLines.length); i += 1) {
+      result.push(` ${newLines[i]}`);
+    }
+
+    return result;
+  };
+
   const renderRuntimeApprovalCard = useCallback(
     (message: { id: string; role: StoredChatMessage['role']; projectFileProposal?: ProjectFileProposal; runtimeEvents?: StoredChatRuntimeEvent[] }) => {
       if ((message.runtimeEvents || []).some((event) => event.kind === 'approval')) {
@@ -2773,6 +2877,15 @@ export const AIChat: React.FC<AIChatProps> = ({
           {messageApprovals.map((approval) => {
             const actionLabel = approvalActionLabelMap[approval.actionType] || approval.actionType;
             const pendingDisplay = pendingApprovalActionsRef.current[approval.id]?.display;
+            const showEditDiff =
+              pendingDisplay?.toolName === 'edit' &&
+              typeof pendingDisplay.oldString === 'string' &&
+              typeof pendingDisplay.newString === 'string';
+            const showWritePreview =
+              pendingDisplay?.toolName === 'write' && typeof pendingDisplay.content === 'string';
+            const showCommand =
+              pendingDisplay?.toolName === 'bash' && typeof pendingDisplay.command === 'string';
+            const showFilePath = !!pendingDisplay?.filePath;
             return (
               <section key={approval.id} className={`chat-runtime-approval-card ${approval.riskLevel}`}>
                 <div className="chat-runtime-approval-head">
@@ -2783,21 +2896,32 @@ export const AIChat: React.FC<AIChatProps> = ({
                   <span>{actionLabel}</span>
                   <span>{approvalRiskLabelMap[approval.riskLevel]}</span>
                 </div>
-                {pendingDisplay?.filePath ? (
-                  <div className="chat-runtime-approval-preview">
-                    <code>{summarizeProjectFilePath(pendingDisplay.filePath)}</code>
+                {showFilePath ? (
+                  <div className="chat-runtime-approval-file">
+                    <code>{summarizeProjectFilePath(pendingDisplay.filePath!)}</code>
                   </div>
                 ) : null}
-                {pendingDisplay?.command ? (
-                  <pre className="chat-runtime-approval-pre">{pendingDisplay.command}</pre>
-                ) : null}
-                {pendingDisplay?.content && pendingDisplay.toolName === 'write' ? (
-                  <pre className="chat-runtime-approval-pre">{pendingDisplay.content}</pre>
-                ) : null}
-                {pendingDisplay?.newString && pendingDisplay.toolName === 'edit' ? (
-                  <pre className="chat-runtime-approval-pre">{pendingDisplay.newString}</pre>
-                ) : null}
-                {!pendingDisplay?.command && !pendingDisplay?.content && !pendingDisplay?.newString && pendingDisplay?.inputJson ? (
+                {showEditDiff ? (
+                  <pre className="chat-runtime-approval-diff">
+                    {buildInlineDiff(pendingDisplay.oldString!, pendingDisplay.newString!).map((line, i) => (
+                      <span
+                        key={i}
+                        className={
+                          line.startsWith('-') ? 'diff-removed' : line.startsWith('+') ? 'diff-added' : 'diff-context'
+                        }
+                      >
+                        {line}{'\n'}
+                      </span>
+                    ))}
+                  </pre>
+                ) : showWritePreview ? (
+                  <pre className="chat-runtime-approval-write-preview">
+                    {pendingDisplay.content!.slice(0, 800)}
+                    {pendingDisplay.content!.length > 800 ? '\n...' : ''}
+                  </pre>
+                ) : showCommand ? (
+                  <pre className="chat-runtime-approval-command">{pendingDisplay.command}</pre>
+                ) : pendingDisplay?.inputJson ? (
                   <pre className="chat-runtime-approval-pre">{pendingDisplay.inputJson}</pre>
                 ) : null}
                 {approval.status === 'pending' ? (
@@ -3249,6 +3373,16 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       runtimeSkillRegistryRef.current = createRuntimeSkillRegistry(skills);
+      setAvailableSlashCommands(
+        skills
+          .filter((skill) => skill.userInvocable)
+          .map((skill) => ({
+            id: skill.id,
+            name: skill.id,
+            description: skill.description || skill.whenToUse || skill.name,
+          }))
+          .sort((left, right) => left.name.localeCompare(right.name))
+      );
     });
 
     return () => {
@@ -3584,13 +3718,28 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const pendingApprovalCount = pendingApprovals.length;
   const latestTurnSessionStatus = latestTurnSession?.status || null;
+  const runtimeConnectionLabel =
+    activeRuntimeLiveState?.connectionState === 'connecting'
+      ? 'Connecting'
+      : activeRuntimeLiveState?.connectionState === 'reconnecting'
+        ? 'Reconnecting'
+        : activeRuntimeLiveState?.connectionState === 'connected'
+          ? 'Connected'
+          : 'Disconnected';
+  const { stalled, stallDuration: currentStallDuration } = useStallDetector(
+    isLoading,
+    stallFP,
+    10000,
+  );
   const runStateLabel =
     latestTurnSessionStatus === 'planning'
       ? 'Planning'
       : latestTurnSessionStatus === 'waiting_approval'
         ? 'Approval required'
+        : activeRuntimeLiveState?.pendingQuestionSummary
+          ? 'Input required'
         : latestTurnSessionStatus === 'executing'
-          ? 'Executing'
+          ? stalled ? `Executing (stalled ${(currentStallDuration / 1000).toFixed(0)}s)` : 'Executing'
           : latestTurnSessionStatus === 'resumable'
             ? 'Resume ready'
             : latestTurnSessionStatus === 'completed'
@@ -3599,6 +3748,8 @@ export const AIChat: React.FC<AIChatProps> = ({
                 ? 'Failed'
                 : pendingApprovalCount > 0
       ? 'Approval required'
+      : activeRuntimeLiveState?.statusVerb
+        ? activeRuntimeLiveState.statusVerb
       : isLoading
         ? 'Running'
         : latestActivityEntry?.type === 'failed'
@@ -3607,6 +3758,8 @@ export const AIChat: React.FC<AIChatProps> = ({
   const runStateTone =
     latestTurnSessionStatus === 'waiting_approval' || latestTurnSessionStatus === 'resumable'
       ? 'warning'
+      : activeRuntimeLiveState?.pendingQuestionSummary
+        ? 'warning'
       : latestTurnSessionStatus === 'failed'
         ? 'error'
         : latestTurnSessionStatus === 'completed'
@@ -3614,7 +3767,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           : pendingApprovalCount > 0
       ? 'warning'
       : isLoading
-        ? 'running'
+        ? stalled ? 'stalled' : 'running'
         : latestActivityEntry?.type === 'failed'
           ? 'error'
           : 'success';
@@ -3983,359 +4136,131 @@ export const AIChat: React.FC<AIChatProps> = ({
       );
     }
 
-    if (runtimeEvents.length > 0) {
-      const renderModel = buildRuntimeEventRenderModel(runtimeEvents);
-      const totalToolSteps = runtimeEvents.filter((event) => event.kind === 'tool_use').length;
-      const renderApprovalEvent = (event: Extract<StoredChatRuntimeEvent, { kind: 'approval' }>) => (
-        <section key={event.id} className={`chat-runtime-approval-card ${event.riskLevel}`}>
-          <div className="chat-runtime-approval-head">
-            <strong>继续前想和你确认一下</strong>
-            <span>{approvalStatusLabelMap[event.status]}</span>
+    const renderApprovalEvent = (event: Extract<StoredChatRuntimeEvent, { kind: 'approval' }>) => (
+      <section key={event.id} className={`chat-runtime-approval-card ${event.riskLevel}`}>
+        <div className="chat-runtime-approval-head">
+          <strong>继续前想和你确认一下</strong>
+          <span>{approvalStatusLabelMap[event.status]}</span>
+        </div>
+        <div className="chat-runtime-approval-summary">{event.summary}</div>
+        <div className="chat-runtime-approval-meta">
+          <span>{approvalActionLabelMap[event.actionType] || event.actionType}</span>
+          <span>{approvalRiskLabelMap[event.riskLevel]}</span>
+        </div>
+        {event.display?.filePath ? (
+          <div className="chat-runtime-approval-preview">
+            <code>{summarizeProjectFilePath(event.display.filePath)}</code>
           </div>
-          <div className="chat-runtime-approval-summary">{event.summary}</div>
-          <div className="chat-runtime-approval-meta">
-            <span>{approvalActionLabelMap[event.actionType] || event.actionType}</span>
-            <span>{approvalRiskLabelMap[event.riskLevel]}</span>
+        ) : null}
+        {event.display?.command ? <pre className="chat-runtime-approval-pre">{event.display.command}</pre> : null}
+        {event.display?.content && event.display.toolName === 'write' ? (
+          <pre className="chat-runtime-approval-pre">{event.display.content}</pre>
+        ) : null}
+        {event.display?.newString && event.display.toolName === 'edit' ? (
+          <pre className="chat-runtime-approval-pre">{event.display.newString}</pre>
+        ) : null}
+        {!event.display?.command && !event.display?.content && !event.display?.newString && event.display?.inputJson ? (
+          <pre className="chat-runtime-approval-pre">{event.display.inputJson}</pre>
+        ) : null}
+        {event.status === 'pending' ? (
+          <div className="chat-runtime-approval-actions">
+            <button type="button" onClick={() => void handleApproveRuntimeApproval(event.approvalId)}>
+              批准执行
+            </button>
+            <button type="button" onClick={() => void handleDenyRuntimeApproval(event.approvalId)}>
+              拒绝
+            </button>
           </div>
-          {event.display?.filePath ? (
-            <div className="chat-runtime-approval-preview">
-              <code>{summarizeProjectFilePath(event.display.filePath)}</code>
-            </div>
-          ) : null}
-          {event.display?.command ? <pre className="chat-runtime-approval-pre">{event.display.command}</pre> : null}
-          {event.display?.content && event.display.toolName === 'write' ? (
-            <pre className="chat-runtime-approval-pre">{event.display.content}</pre>
-          ) : null}
-          {event.display?.newString && event.display.toolName === 'edit' ? (
-            <pre className="chat-runtime-approval-pre">{event.display.newString}</pre>
-          ) : null}
-          {!event.display?.command && !event.display?.content && !event.display?.newString && event.display?.inputJson ? (
-            <pre className="chat-runtime-approval-pre">{event.display.inputJson}</pre>
-          ) : null}
-          {event.status === 'pending' ? (
-            <div className="chat-runtime-approval-actions">
-              <button type="button" onClick={() => void handleApproveRuntimeApproval(event.approvalId)}>
-                批准执行
-              </button>
-              <button type="button" onClick={() => void handleDenyRuntimeApproval(event.approvalId)}>
-                拒绝
-              </button>
-            </div>
-          ) : null}
+        ) : null}
+      </section>
+    );
+    const renderQuestionEvent = (event: Extract<StoredChatRuntimeEvent, { kind: 'question' }>) => {
+      const question = event.payload;
+      const isAnswered = question.status === 'answered';
+      const answers = question.answers || {};
+      return (
+        <section key={event.id} className={`chat-runtime-question-card ${isAnswered ? 'answered' : 'pending'}`}>
+          <div className="chat-runtime-question-head">
+            <strong>还需要你补充一点信息</strong>
+            <span>{isAnswered ? '已回答' : '等待输入'}</span>
+          </div>
+          <div className="chat-runtime-question-list">
+            {question.questions.map((item, questionIndex) => {
+              const answerKey = item.question;
+              const answeredValue = answers[answerKey] || '';
+              return (
+                <RuntimeQuestionBlock
+                  key={`${event.questionId}-${questionIndex}`}
+                  item={item}
+                  answered={isAnswered}
+                  answeredValue={answeredValue}
+                  onSubmit={(value) =>
+                    handleAnswerRuntimeQuestion(message.id, question, {
+                      ...answers,
+                      [answerKey]: value,
+                    })
+                  }
+                />
+              );
+            })}
+          </div>
         </section>
       );
-      const renderQuestionEvent = (event: Extract<StoredChatRuntimeEvent, { kind: 'question' }>) => {
-        const question = event.payload;
-        const isAnswered = question.status === 'answered';
-        const answers = question.answers || {};
-        return (
-          <section key={event.id} className={`chat-runtime-question-card ${isAnswered ? 'answered' : 'pending'}`}>
-            <div className="chat-runtime-question-head">
-              <strong>还需要你补充一点信息</strong>
-              <span>{isAnswered ? '已回答' : '等待输入'}</span>
-            </div>
-            <div className="chat-runtime-question-list">
-              {question.questions.map((item, questionIndex) => {
-                const answerKey = item.question;
-                const answeredValue = answers[answerKey] || '';
-                return (
-                  <RuntimeQuestionBlock
-                    key={`${event.questionId}-${questionIndex}`}
-                    item={item}
-                    answered={isAnswered}
-                    answeredValue={answeredValue}
-                    onSubmit={(value) =>
-                      handleAnswerRuntimeQuestion(message.id, question, {
-                        ...answers,
-                        [answerKey]: value,
-                      })
-                    }
-                  />
-                );
-              })}
-            </div>
-          </section>
-        );
-      };
-      const renderRuntimeFileChanges = (
-        fileChanges: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']>
-      ) => (
-        <div className="chat-tool-trace-file-list">
-          {fileChanges.map((change) => {
-            const isActiveDiff = message.runId ? isRunDiffActive(expandedRunDiffKey, message.runId, change.path) : false;
-
-            return (
-              <div key={`${message.id}-${change.path}`} className="chat-tool-trace-file-row">
-                {message.runId ? (
-                  <button
-                    type="button"
-                    className={`chat-tool-trace-file-item chat-tool-trace-file-item-button ${isActiveDiff ? 'active' : ''}`}
-                    onClick={() => void loadCheckpointDiff(message.runId!, change.path)}
-                  >
-                    <strong title={change.path}>{summarizeProjectFilePath(change.path)}</strong>
-                    <span>{getFileChangeTypeLabel(change)} · 查看更改</span>
-                  </button>
-                ) : (
-                  <div className="chat-tool-trace-file-item">
-                    <strong title={change.path}>{summarizeProjectFilePath(change.path)}</strong>
-                    <span>{getFileChangeTypeLabel(change)}</span>
-                  </div>
-                )}
-                {message.runId ? renderCheckpointDiffPanel(message.runId, change.path) : null}
-              </div>
-            );
-          })}
-        </div>
-      );
-
-      const renderRuntimeToolStep = (
-        toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>,
-        indexLabel?: string,
-        compact = false
-      ) => {
-        const resultEvent = renderModel.resultMap.get(toolUse.toolCallId);
-        const approvalEvents = renderModel.approvalsByToolCallId.get(toolUse.toolCallId) || [];
-        const questionEvents = renderModel.questionsByToolCallId.get(toolUse.toolCallId) || [];
-        const childToolUses = renderModel.childToolUsesByParent.get(toolUse.toolCallId) || [];
-        const effectiveStatus = resultEvent?.status || toolUse.status;
-        const requestSummary = summarizeRuntimeToolCall(toolUse.toolName, toolUse.input);
-        const headline = getRuntimeToolHeadline(toolUse.toolName, toolUse.input);
-        const previewText = buildRuntimeToolStepPreview({
-          status: effectiveStatus,
-          summary: requestSummary,
-          output: resultEvent?.output,
-          fileChanges: resultEvent?.fileChanges,
-          approvalCount: approvalEvents.length,
-          questionCount: questionEvents.length,
-          childCount: childToolUses.length,
-        });
-
-        return (
-          <details
-            key={toolUse.id}
-            className={`chat-tool-trace-step ${effectiveStatus}`}
-            open={shouldOpenRuntimeToolStep({
-              status: effectiveStatus,
-              approvalCount: approvalEvents.length,
-              questionCount: questionEvents.length,
-            })}
-          >
-            <summary>
-              <div className="chat-tool-trace-summary-copy">
-                <strong>{indexLabel ? `${indexLabel}. ` : ''}{headline}</strong>
-                <span>{getRuntimeStatusLabel(effectiveStatus)}</span>
-                {previewText && previewText !== requestSummary ? (
-                  <div className="chat-tool-trace-preview">{previewText}</div>
-                ) : null}
-              </div>
-              <span className={`chat-tool-trace-status ${effectiveStatus}`}>{getRuntimeStatusLabel(effectiveStatus)}</span>
-            </summary>
-            {shouldShowRuntimeToolBrief(toolUse.toolName, requestSummary, headline) ? (
-              <div className="chat-tool-trace-brief">
-                <span>{requestSummary}</span>
-              </div>
-            ) : null}
-            {approvalEvents.length > 0 ? (
-              <div className="chat-tool-trace-attached-list">
-                {approvalEvents.map((event) => renderApprovalEvent(event))}
-              </div>
-            ) : null}
-            {questionEvents.length > 0 ? (
-              <div className="chat-tool-trace-attached-list">
-                {questionEvents.map((event) => renderQuestionEvent(event))}
-              </div>
-            ) : null}
-            {childToolUses.length > 0 ? (
-              <div className={`chat-tool-trace-children ${compact ? 'compact' : ''}`}>
-                {childToolUses.map((childToolUse) => renderRuntimeToolStep(childToolUse, undefined, true))}
-              </div>
-            ) : null}
-            {resultEvent?.fileChanges?.length ? renderRuntimeFileChanges(resultEvent.fileChanges) : null}
-            {shouldShowRuntimeToolTechnicalDetails({
-              toolName: toolUse.toolName,
-              status: effectiveStatus,
-              toolInput: toolUse.input,
-              output: resultEvent?.output,
-            }) ? (
-              <details className="chat-tool-trace-detail-toggle">
-                <summary>技术细节</summary>
-                {Object.keys(toolUse.input).length > 0 ? <pre>{JSON.stringify(toolUse.input, null, 2)}</pre> : null}
-                {resultEvent?.output?.trim() ? <pre className="chat-tool-trace-result">{resultEvent.output}</pre> : null}
-              </details>
-            ) : null}
-          </details>
-        );
-      };
-
-      const defaultOpen =
-        renderModel.items.some((item) => {
-          if (item.kind === 'standalone_result') {
-            return item.event.status === 'failed' || item.event.status === 'blocked';
-          }
-
-          if (item.kind === 'message') {
-            return item.event.kind === 'approval' || item.event.kind === 'question';
-          }
-
-          return shouldOpenRuntimeToolGroup(item.toolUses, renderModel);
-        });
-
-      return (
-        <details className="chat-tool-trace-card chat-tool-trace-card-inline" open={defaultOpen}>
-          <summary className="chat-tool-trace-inline-summary">
-            <span className="chat-tool-trace-inline-copy">
-              <strong>{getRuntimeCommandCountLabel(totalToolSteps)}</strong>
-              <span>{renderModel.items.length} 组活动</span>
-            </span>
-            <span className="chat-tool-trace-inline-caret" aria-hidden="true">⌄</span>
-          </summary>
-          <div className="chat-tool-trace-list">
-            {renderModel.items.map((item, index) => {
-              if (item.kind === 'tool_group') {
-                if (item.toolUses.length === 1) {
-                  return renderRuntimeToolStep(item.toolUses[0]!, String(index + 1));
-                }
-
-                const groupSummary = buildRuntimeEventGroupSummary(item.toolUses, renderModel.resultMap);
-
-                return (
-                  <details key={item.id} className="chat-tool-trace-phase" open={shouldOpenRuntimeToolGroup(item.toolUses, renderModel)}>
-                    <summary>
-                      <strong>{index + 1}. 执行步骤</strong>
-                      <span>{groupSummary}</span>
-                    </summary>
-                    <div className="chat-tool-trace-members">
-                      {item.toolUses.map((toolUse) => renderRuntimeToolStep(toolUse))}
-                    </div>
-                  </details>
-                );
-              }
-
-              if (item.kind === 'standalone_result') {
-                const event = item.event;
-                return (
-                  <details
-                    key={event.id}
-                    className={`chat-tool-trace-step ${event.status}`}
-                    open={event.status === 'failed' || event.status === 'blocked'}
-                  >
-                    <summary>
-                      <div className="chat-tool-trace-summary-copy">
-                        <strong>{index + 1}. {getRuntimeStatusLabel(event.status)}</strong>
-                        <span>{summarizeRuntimeFileChanges(event.fileChanges) || summarizeRuntimeOutput(event.output) || getRuntimeStatusLabel(event.status)}</span>
-                      </div>
-                      <span className={`chat-tool-trace-status ${event.status}`}>{getRuntimeStatusLabel(event.status)}</span>
-                    </summary>
-                    {event.fileChanges?.length ? renderRuntimeFileChanges(event.fileChanges) : null}
-                    {event.output?.trim() ? (
-                      <details className="chat-tool-trace-detail-toggle">
-                        <summary>技术细节</summary>
-                        <pre className="chat-tool-trace-result">{event.output}</pre>
-                      </details>
-                    ) : null}
-                  </details>
-                );
-              }
-
-              const event = item.event;
-              if (event.kind === 'approval') {
-                return renderApprovalEvent(event);
-              }
-
-              return renderQuestionEvent(event);
-            })}
-          </div>
-        </details>
-      );
-    }
-
-    const completedCount = toolCalls.filter((toolCall) => toolCall.status === 'completed').length;
-    const failedCount = toolCalls.filter((toolCall) => toolCall.status === 'failed').length;
-    const blockedCount = toolCalls.filter((toolCall) => toolCall.status === 'blocked').length;
-    const childToolCallsByParent = toolCalls.reduce<Map<string, RuntimeToolStep[]>>((accumulator, toolCall) => {
-      if (!toolCall.parentToolCallId) {
-        return accumulator;
-      }
-      const bucket = accumulator.get(toolCall.parentToolCallId) || [];
-      bucket.push(toolCall);
-      accumulator.set(toolCall.parentToolCallId, bucket);
-      return accumulator;
-    }, new Map<string, RuntimeToolStep[]>());
-    const rootToolCalls = toolCalls.filter(
-      (toolCall) => !toolCall.parentToolCallId || !toolCalls.some((candidate) => candidate.id === toolCall.parentToolCallId)
-    );
-    const renderFallbackToolStep = (toolCall: RuntimeToolStep, indexLabel?: string, compact = false): React.ReactNode => {
-      const childToolCalls = childToolCallsByParent.get(toolCall.id) || [];
-
-      return (
-        <details
-          key={toolCall.id}
-          className={`chat-tool-trace-step ${toolCall.status}`}
-          open={toolCall.status === 'running' || toolCall.status === 'failed'}
-        >
-          <summary>
-            <strong>{indexLabel ? `${indexLabel}. ` : ''}{toolCall.name}</strong>
-            <span>
-              {summarizeRuntimeToolCall(toolCall.name, toolCall.input) || (
-                toolCall.status === 'completed'
-                  ? '已完成'
-                  : toolCall.status === 'failed'
-                    ? '失败'
-                    : toolCall.status === 'blocked'
-                      ? '已阻止'
-                      : '执行中'
-              )}
-            </span>
-          </summary>
-          <pre>{JSON.stringify(toolCall.input, null, 2)}</pre>
-          {childToolCalls.length > 0 ? (
-            <div className={`chat-tool-trace-children ${compact ? 'compact' : ''}`}>
-              {childToolCalls.map((childToolCall) => renderFallbackToolStep(childToolCall, undefined, true))}
-            </div>
-          ) : null}
-          {toolCall.fileChanges && toolCall.fileChanges.length > 0 ? (
-            <div className="chat-tool-trace-file-list">
-              {toolCall.fileChanges.map((change) => (
-                <div key={`${toolCall.id}-${change.path}`} className="chat-tool-trace-file-item">
-                  <strong>{summarizeProjectFilePath(change.path)}</strong>
-                  <span>
-                    {change.beforeContent === null && change.afterContent !== null
-                      ? '新建'
-                      : change.beforeContent !== null && change.afterContent === null
-                        ? '删除'
-                        : '修改'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {toolCall.resultContent || toolCall.resultPreview ? (
-            <pre className="chat-tool-trace-result">{toolCall.resultContent || toolCall.resultPreview}</pre>
-          ) : null}
-        </details>
-      );
     };
+    const renderRuntimeFileChanges = (
+      fileChanges: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']>
+    ) => (
+      <div className="chat-tool-trace-file-list">
+        {fileChanges.map((change) => {
+          const isActiveDiff = message.runId ? isRunDiffActive(expandedRunDiffKey, message.runId, change.path) : false;
+
+          return (
+            <div key={`${message.id}-${change.path}`} className="chat-tool-trace-file-row">
+              {message.runId ? (
+                <button
+                  type="button"
+                  className={`chat-tool-trace-file-item chat-tool-trace-file-item-button ${isActiveDiff ? 'active' : ''}`}
+                  onClick={() => void loadCheckpointDiff(message.runId!, change.path)}
+                >
+                  <strong title={change.path}>{summarizeProjectFilePath(change.path)}</strong>
+                  <span>{getFileChangeTypeLabel(change)} · 查看更改</span>
+                </button>
+              ) : (
+                <div className="chat-tool-trace-file-item">
+                  <strong title={change.path}>{summarizeProjectFilePath(change.path)}</strong>
+                  <span>{getFileChangeTypeLabel(change)}</span>
+                </div>
+              )}
+              {message.runId ? renderCheckpointDiffPanel(message.runId, change.path) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
 
     return (
-      <details
-        className="chat-tool-trace-card chat-tool-trace-card-inline"
-        open={toolCalls.some((toolCall) => toolCall.status === 'running') || failedCount > 0 || blockedCount > 0}
-      >
-        <summary className="chat-tool-trace-inline-summary">
-          <span className="chat-tool-trace-inline-copy">
-            <strong>{getRuntimeCommandCountLabel(toolCalls.length)}</strong>
-            <span>
-              完成 {completedCount}
-              {failedCount > 0 ? ` · 失败 ${failedCount}` : ''}
-              {blockedCount > 0 ? ` · 已拦截 ${blockedCount}` : ''}
-            </span>
-          </span>
-          <span className="chat-tool-trace-inline-caret" aria-hidden="true">⌄</span>
-        </summary>
-        <div className="chat-tool-trace-list">
-          {rootToolCalls.map((toolCall, index) => renderFallbackToolStep(toolCall, String(index + 1)))}
-        </div>
-      </details>
+      <AIChatRuntimeToolExecutionCard
+        toolCalls={toolCalls}
+        runtimeEvents={runtimeEvents}
+        renderApprovalEvent={renderApprovalEvent}
+        renderQuestionEvent={renderQuestionEvent}
+        renderRuntimeFileChanges={renderRuntimeFileChanges}
+        helpers={{
+          summarizeRuntimeToolCall,
+          getRuntimeToolHeadline,
+          buildRuntimeToolStepPreview,
+          shouldOpenRuntimeToolStep,
+          shouldOpenRuntimeToolGroup,
+          shouldShowRuntimeToolBrief,
+          shouldShowRuntimeToolTechnicalDetails,
+          summarizeRuntimeFileChanges,
+          summarizeRuntimeOutput,
+          getRuntimeStatusLabel,
+          getRuntimeCommandCountLabel,
+          buildRuntimeEventGroupSummary,
+          summarizeProjectFilePath,
+        }}
+      />
     );
   }, [
     handleAnswerRuntimeQuestion,
@@ -4636,6 +4561,34 @@ export const AIChat: React.FC<AIChatProps> = ({
       }
 
       const rawContent = promptValue.trim();
+      const pendingProjectFileAction = findLatestPendingProjectFileProposalAction(targetSession?.messages || []);
+      if (
+        pendingProjectFileAction &&
+        (isShortPendingActionAffirmation(rawContent) || isShortPendingActionRejection(rawContent))
+      ) {
+        const runId = createRunId();
+        appendMessage(currentProject.id, targetSessionId, createStoredChatMessage('user', rawContent, 'default', { runId }));
+
+        if (!targetSession || targetSession.title === '新对话') {
+          renameSession(currentProject.id, targetSessionId, summarizeSessionTitle(rawContent));
+        }
+
+        setIsLoading(true);
+        try {
+          if (isShortPendingActionAffirmation(rawContent)) {
+            await handleExecuteProjectFileProposal(
+              pendingProjectFileAction.messageId,
+              pendingProjectFileAction.proposal
+            );
+          } else {
+            await handleCancelProjectFileProposal(pendingProjectFileAction.messageId);
+          }
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
+
       const routeableSkills = runtimeSkillRegistryRef.current
         .listAllSkills()
         .filter((skill) => skill.userInvocable);
@@ -4851,6 +4804,23 @@ export const AIChat: React.FC<AIChatProps> = ({
           activeSkills: runtimeVisibleSkillsForTurn,
         });
         setThreadContext(targetSessionId, agentContextSnapshot);
+        patchLiveState(runtimeStoreThreadId, (state) => ({
+          ...state,
+          connectionState: 'connected',
+          statusVerb: 'Thinking',
+          elapsedSeconds: 0,
+          startedAt: Date.now(),
+          activeThinking: true,
+          activeToolName: null,
+          streamingToolInput: '',
+          streamingText: '',
+          tokenUsage: {
+            inputTokens: estimateTokenCount(
+              `${cleanedContent}\n${agentInstructions.join('\n')}\n${agentContextSnapshot.prompt}`
+            ),
+            outputTokens: 0,
+          },
+        }));
         await executionController.start();
         if (!executionController) {
           throw new Error('Failed to initialize runtime execution controller.');
@@ -5791,7 +5761,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                     const teamResult = await runAgentTeamTurn({
                       projectId: currentProject.id,
                       projectName: currentProject.name,
-                      threadId: targetSessionId,
+                      threadId: runtimeStoreThreadId,
                       turnId: runtimeTurnSessionId || `turn_${runId}`,
                       userInput: cleanedContent,
                       projectRoot,
@@ -5806,7 +5776,41 @@ export const AIChat: React.FC<AIChatProps> = ({
                       })),
                       memoryEntries: projectMemoryEntries,
                       onTeamRunUpdate: (teamRun) => {
-                        upsertTeamRun(targetSessionId, teamRun);
+                        patchLiveState(runtimeStoreThreadId, (state) => ({
+                          ...state,
+                          connectionState: 'connected',
+                          statusVerb:
+                            teamRun.status === 'running'
+                              ? 'Running team tasks'
+                              : teamRun.status === 'failed'
+                                ? 'Team run failed'
+                                : '',
+                          activeThinking: false,
+                          activeToolName: 'team',
+                          streamingToolInput: '',
+                        }));
+                        upsertTeamRun(runtimeStoreThreadId, teamRun);
+                        upsertBackgroundTask(runtimeStoreThreadId, {
+                          id: teamRun.id,
+                          threadId: runtimeStoreThreadId,
+                          runKind: 'team',
+                          title: teamRun.summary,
+                          status: teamRun.status,
+                          summary: teamRun.finalSummary || teamRun.strategy,
+                          payloadJson: JSON.stringify(teamRun),
+                          createdAt: teamRun.createdAt,
+                          updatedAt: teamRun.updatedAt,
+                        });
+                        void upsertAgentBackgroundTask({
+                          id: teamRun.id,
+                          threadId: runtimeStoreThreadId,
+                          runKind: 'team',
+                          title: teamRun.summary,
+                          status: teamRun.status,
+                          summary: teamRun.finalSummary || teamRun.strategy,
+                          payloadJson: JSON.stringify(teamRun),
+                          createdAt: teamRun.createdAt,
+                        });
                         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
                           ...message,
                           teamRun,
@@ -5868,6 +5872,19 @@ export const AIChat: React.FC<AIChatProps> = ({
                   });
 
             if (executionResult.status === 'completed') {
+              patchLiveState(runtimeStoreThreadId, (state) => ({
+                ...state,
+                connectionState: 'connected',
+                statusVerb: '',
+                activeThinking: false,
+                activeToolName: null,
+                streamingToolInput: '',
+                streamingText: '',
+                tokenUsage: {
+                  ...state.tokenUsage,
+                  outputTokens: state.tokenUsage.outputTokens + estimateTokenCount(executionResult.finalContent),
+                },
+              }));
               upsertRuntimeToolResultInMessage(assistantMessage.id, {
                 toolCallId: localAgentToolCallId,
                 toolName: localExecutionAgentId === 'team' ? 'run_agent_team' : 'run_local_agent',
@@ -5908,6 +5925,15 @@ export const AIChat: React.FC<AIChatProps> = ({
               return;
             }
 
+            patchLiveState(runtimeStoreThreadId, (state) => ({
+              ...state,
+              connectionState: 'connected',
+              statusVerb: 'Failed',
+              activeThinking: false,
+              activeToolName: null,
+              streamingToolInput: '',
+              streamingText: '',
+            }));
             upsertRuntimeToolResultInMessage(assistantMessage.id, {
               toolCallId: localAgentToolCallId,
               toolName: localExecutionAgentId === 'team' ? 'run_agent_team' : 'run_local_agent',
@@ -5939,6 +5965,14 @@ export const AIChat: React.FC<AIChatProps> = ({
           await handleRuntimeLocalAgentDecision({
             flow: localAgentFlow,
             onBlocked: async () => {
+              patchLiveState(runtimeStoreThreadId, (state) => ({
+                ...state,
+                connectionState: 'connected',
+                statusVerb: 'Blocked',
+                activeThinking: false,
+                activeToolName: null,
+                streamingToolInput: '',
+              }));
               updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
                 ...message,
                 role: 'system',
@@ -6086,6 +6120,14 @@ export const AIChat: React.FC<AIChatProps> = ({
               },
             ],
           }));
+          patchLiveState(runtimeStoreThreadId, (state) => ({
+            ...state,
+            connectionState: 'connected',
+            statusVerb: 'Waiting for input',
+            activeThinking: false,
+            activeToolName: call.name,
+            pendingQuestionSummary: questions[0]?.question || null,
+          }));
 
           const answers = await new Promise<Record<string, string>>((resolve, reject) => {
             pendingQuestionActionsRef.current[questionId] = {
@@ -6129,6 +6171,8 @@ export const AIChat: React.FC<AIChatProps> = ({
           }
         };
         setThreadToolCalls(targetSessionId, []);
+        let toolStartTime = 0;
+        let toolTimerInterval: ReturnType<typeof setInterval> | null = null;
         const streamingAssembler = createRuntimeStreamingMessageAssembler();
         const agentTurn = await executeRuntimeBuiltInAgentTurn({
           projectId: currentProject.id,
@@ -6147,24 +6191,64 @@ export const AIChat: React.FC<AIChatProps> = ({
           contextLabels,
           allowedTools: builtInAllowedTools,
           onToolCallsChange: (toolCalls) => {
+            setStallFP((n) => n + 1);
             setThreadToolCalls(targetSessionId, toolCalls);
+            const runningToolCall = [...toolCalls].reverse().find((toolCall) => toolCall.status === 'running') || null;
+
+            if (runningToolCall && toolStartTime === 0) {
+              toolStartTime = Date.now();
+              toolTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - toolStartTime) / 1000);
+                if (elapsed >= 3) {
+                  patchLiveState(runtimeStoreThreadId, (state) => ({
+                    ...state,
+                    statusVerb: state.activeToolName ? `Running ${state.activeToolName} (${elapsed}s)` : state.statusVerb,
+                  }));
+                }
+              }, 1000);
+            } else if (!runningToolCall) {
+              toolStartTime = 0;
+              if (toolTimerInterval) {
+                clearInterval(toolTimerInterval);
+                toolTimerInterval = null;
+              }
+            }
+
+            patchLiveState(runtimeStoreThreadId, (state) => ({
+              ...state,
+              activeToolName: runningToolCall?.name || null,
+              streamingToolInput: summarizeLiveToolInput(runningToolCall?.input),
+              statusVerb: runningToolCall?.name
+                ? `Running ${runningToolCall.name}${toolStartTime && Date.now() - toolStartTime > 3000 ? ` (${Math.floor((Date.now() - toolStartTime) / 1000)}s)` : ''}`
+                : state.statusVerb,
+            }));
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
               runtimeEvents: syncRuntimeEventsWithToolCalls(message.runtimeEvents, toolCalls),
             }));
           },
           onModelEvent: (event) => {
+            setStallFP((n) => n + 1);
             const draftState = streamingAssembler.append(event);
             const draft = {
               content: draftState.content,
               thinkingContent: draftState.thinkingContent,
               answerContent: draftState.answerContent,
-              assistantParts: buildStoredAssistantParts({
-                thinkingContent: draftState.thinkingContent,
-                answerContent: draftState.answerContent,
-                thinkingCollapsed: false,
-              }),
+              assistantParts: draftState.assistantParts,
             };
+            patchLiveState(runtimeStoreThreadId, (state) => ({
+              ...state,
+              connectionState: 'connected',
+              statusVerb: event.kind === 'thinking' ? 'Reasoning' : 'Streaming response',
+              activeThinking: event.kind === 'thinking',
+              streamingToolInput: event.kind === 'thinking' ? state.streamingToolInput : '',
+              streamingText:
+                event.kind === 'text' ? `${state.streamingText}${event.delta}` : state.streamingText,
+              tokenUsage: {
+                ...state.tokenUsage,
+                outputTokens: state.tokenUsage.outputTokens + estimateTokenCount(event.delta),
+              },
+            }));
             pushStreamingDraft(assistantMessage.id, draft);
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
@@ -6174,7 +6258,17 @@ export const AIChat: React.FC<AIChatProps> = ({
               assistantParts: draft.assistantParts,
             }));
           },
-          beforeToolCall: requestBuiltInToolApproval,
+          beforeToolCall: async (call) => {
+            const boundaryDraft = streamingAssembler.markToolBoundary();
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              content: boundaryDraft.content,
+              thinkingContent: boundaryDraft.thinkingContent,
+              answerContent: boundaryDraft.answerContent,
+              assistantParts: boundaryDraft.assistantParts,
+            }));
+            await requestBuiltInToolApproval(call);
+          },
           executeModel: (prompt, systemPrompt, onEvent) =>
             executeRuntimePrompt({
               providerId: runtimeProviderId,
@@ -6196,17 +6290,24 @@ export const AIChat: React.FC<AIChatProps> = ({
 
         const finalDraft = streamingAssembler.buildFinal(agentTurn.finalContent);
         const normalizedFinalContent = finalDraft.content;
+        if (toolTimerInterval) clearInterval(toolTimerInterval);
         clearStreamingDraft(assistantMessage.id);
+        patchLiveState(runtimeStoreThreadId, (state) => ({
+          ...state,
+          connectionState: 'connected',
+          statusVerb: '',
+          activeThinking: false,
+          activeToolName: null,
+          streamingToolInput: '',
+          streamingText: '',
+        }));
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
-          ...buildAssistantContentState(normalizedFinalContent, message.thinkingContent, [
-            ...(finalDraft.thinkingContent.trim()
-              ? [{ type: 'thinking', content: finalDraft.thinkingContent, collapsed: true } as AIChatMessagePart]
-              : []),
-            ...(finalDraft.answerContent.trim()
-              ? [{ type: 'text', content: finalDraft.answerContent } as AIChatMessagePart]
-              : []),
-          ]),
+          ...buildAssistantContentState(
+            normalizedFinalContent,
+            message.thinkingContent,
+            finalDraft.assistantParts as AIChatMessagePart[]
+          ),
           toolCalls: agentTurn.toolCalls,
         }));
         setThreadMemoryCandidates(targetSessionId, agentTurn.memoryCandidates);
@@ -6255,6 +6356,15 @@ export const AIChat: React.FC<AIChatProps> = ({
       } catch (error) {
         const message = normalizeErrorMessage(error);
         clearStreamingDraft(assistantMessage.id);
+        patchLiveState(runtimeStoreThreadId, (state) => ({
+          ...state,
+          connectionState: 'connected',
+          statusVerb: 'Failed',
+          activeThinking: false,
+          activeToolName: null,
+          streamingToolInput: '',
+          streamingText: '',
+        }));
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
           ...currentMessage,
           role: 'system',
@@ -6365,6 +6475,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       setReferenceSearchOpen(false);
       setReferenceSearchQuery('');
       setReferenceTriggerIndex(-1);
+      setSlashMenuOpen(false);
+      setSlashFilter('');
+      setSlashTriggerIndex(-1);
       setInput('');
       await submitPrompt(nextInput);
     },
@@ -6384,6 +6497,11 @@ export const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
+      if (currentProject && activeSessionId) {
+        queueComposerPrefill(currentProject.id, activeSessionId, detail.prompt);
+        return;
+      }
+
       setInput(detail.prompt);
     };
 
@@ -6391,11 +6509,48 @@ export const AIChat: React.FC<AIChatProps> = ({
     return () => {
       window.removeEventListener(AI_CHAT_COMMAND_EVENT, handleExternalCommand as EventListener);
     };
-  }, [submitPrompt]);
+  }, [activeSessionId, currentProject, queueComposerPrefill, submitPrompt]);
+
+  useEffect(() => {
+    const composerPrefill = activeSession?.composerPrefill;
+    if (!currentProject || !activeSessionId || !composerPrefill?.prompt) {
+      return;
+    }
+
+    setInput(composerPrefill.prompt);
+    setReferenceSearchOpen(false);
+    setReferenceSearchQuery('');
+    setReferenceTriggerIndex(-1);
+    setSlashMenuOpen(false);
+    setSlashFilter('');
+    setSlashTriggerIndex(-1);
+    clearComposerPrefill(currentProject.id, activeSessionId);
+
+    requestAnimationFrame(() => {
+      const cursor = composerPrefill.prompt.length;
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(cursor, cursor);
+    });
+  }, [activeSession?.composerPrefill, activeSessionId, clearComposerPrefill, currentProject]);
 
   useEffect(() => {
     setReferenceSearchIndex(0);
   }, [referenceSearchQuery, referenceSearchOpen]);
+
+  useEffect(() => {
+    setSlashSelectedIndex(0);
+  }, [slashFilter, slashMenuOpen]);
+
+  const filteredSlashCommands = useMemo(() => {
+    const normalized = slashFilter.trim().toLowerCase();
+    if (!normalized) {
+      return availableSlashCommands;
+    }
+
+    return availableSlashCommands.filter((command) =>
+      command.name.toLowerCase().includes(normalized) || command.description.toLowerCase().includes(normalized)
+    );
+  }, [availableSlashCommands, slashFilter]);
 
   const handleReferenceSearchSelect = useCallback(
     (entry: { id: string }) => {
@@ -6443,6 +6598,21 @@ export const AIChat: React.FC<AIChatProps> = ({
     (value: string, cursorPos: number) => {
       setInput(value);
 
+      const slashTrigger = findSlashTrigger(value, cursorPos);
+      if (slashTrigger) {
+        setSlashTriggerIndex(slashTrigger.triggerIndex);
+        setSlashFilter(slashTrigger.filter);
+        setSlashMenuOpen(true);
+        setReferenceSearchOpen(false);
+        setReferenceSearchQuery('');
+        setReferenceTriggerIndex(-1);
+        return;
+      }
+
+      setSlashMenuOpen(false);
+      setSlashFilter('');
+      setSlashTriggerIndex(-1);
+
       let triggerIndex = -1;
       for (let index = cursorPos - 1; index >= 0; index -= 1) {
         const character = value[index];
@@ -6471,7 +6641,65 @@ export const AIChat: React.FC<AIChatProps> = ({
     []
   );
 
+  const handleSlashCommandSelect = useCallback(
+    (entry: SlashCommandEntry) => {
+      if (slashTriggerIndex < 0) {
+        return;
+      }
+
+      const cursorPos = textareaRef.current?.selectionStart ?? input.length;
+      const tokenEnd = Math.max(cursorPos, slashTriggerIndex + 1 + slashFilter.length);
+      const nextValue = `${input.slice(0, slashTriggerIndex)}/${entry.name} ${input.slice(tokenEnd)}`;
+      const nextCursorPos = slashTriggerIndex + entry.name.length + 2;
+      setInput(nextValue);
+      setSlashMenuOpen(false);
+      setSlashFilter('');
+      setSlashTriggerIndex(-1);
+
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(nextCursorPos, nextCursorPos);
+      });
+    },
+    [input, slashFilter.length, slashTriggerIndex]
+  );
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (slashMenuOpen) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSlashSelectedIndex((current) =>
+          filteredSlashCommands.length === 0 ? 0 : (current + 1) % filteredSlashCommands.length
+        );
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSlashSelectedIndex((current) =>
+          filteredSlashCommands.length === 0 ? 0 : (current - 1 + filteredSlashCommands.length) % filteredSlashCommands.length
+        );
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSlashMenuOpen(false);
+        setSlashFilter('');
+        setSlashTriggerIndex(-1);
+        return;
+      }
+
+      if ((event.key === 'Enter' || event.key === 'Tab') && filteredSlashCommands.length > 0) {
+        event.preventDefault();
+        const selectedCommand = filteredSlashCommands[slashSelectedIndex];
+        if (selectedCommand) {
+          handleSlashCommandSelect(selectedCommand);
+        }
+        return;
+      }
+    }
+
     if (referenceSearchOpen) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -6538,6 +6766,43 @@ export const AIChat: React.FC<AIChatProps> = ({
       buildSessionPreview={buildSessionPreview}
     />
   ) : null;
+  const runtimeTaskBar =
+    activeBackgroundTasks.length > 0 ? (
+      <section className="chat-runtime-task-strip" aria-label="Runtime tasks">
+        {activeBackgroundTasks.slice(0, 3).map((task) => {
+          let progressLabel = task.status;
+
+          if (task.runKind === 'team') {
+            try {
+              const teamRun = JSON.parse(task.payloadJson) as AgentTeamRunRecord;
+              const completedCount = teamRun.members.filter((member) => member.status === 'completed').length;
+              progressLabel = `${completedCount}/${teamRun.members.length}`;
+            } catch {
+              progressLabel = task.status;
+            }
+          }
+
+          const tone =
+            task.status === 'failed'
+              ? 'error'
+              : task.status === 'completed'
+                ? 'success'
+                : task.status === 'running' || task.status === 'planning'
+                  ? 'running'
+                  : '';
+
+          return (
+            <article key={task.id} className={`chat-runtime-task-chip ${tone}`.trim()}>
+              <div>
+                <strong>{task.title}</strong>
+                <span>{task.summary || task.runKind}</span>
+              </div>
+              <code>{progressLabel}</code>
+            </article>
+          );
+        })}
+      </section>
+    ) : null;
   const agentChatContent = (
     <GNAgentMessageList
       messages={messages}
@@ -6553,6 +6818,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderRuntimeQuestion={renderRuntimeQuestionCard}
       listRef={messageListRef}
       messagesEndRef={messagesEndRef}
+      leadingContent={runtimeTaskBar}
     />
   );
   useEffect(() => {
@@ -6593,11 +6859,28 @@ export const AIChat: React.FC<AIChatProps> = ({
               <div className="chat-shell-status-strip">
                 <span className="chat-shell-status-pill">{selectedAgent.label}</span>
                 <span className="chat-shell-status-pill">{selectedRuntimeConfig?.model || '未启用模型'}</span>
+                <span className="chat-shell-status-pill">Session / {runtimeConnectionLabel}</span>
                 <span className="chat-shell-status-pill">Skills / {activeSkills.length}</span>
                 <span className="chat-shell-status-pill">MCP / {runtimeMcpServers.length}</span>
-                <span className="chat-shell-status-pill">审批策略 / {SANDBOX_POLICY_LABELS[sandboxPolicy]}</span>
+                <span className="chat-shell-status-pill">权限模式 / {PERMISSION_MODE_LABELS[permissionMode]}</span>
                 <span className={`chat-shell-status-pill ${pendingApprovalCount > 0 ? 'warning' : ''}`}>
                   Approvals / {pendingApprovalCount}
+                </span>
+                {activeRuntimeLiveState?.activeToolName ? (
+                  <span className="chat-shell-status-pill">Tool / {activeRuntimeLiveState.activeToolName}</span>
+                ) : null}
+                {activeRuntimeLiveState?.streamingToolInput ? (
+                  <span className="chat-shell-status-pill">Input / {activeRuntimeLiveState.streamingToolInput}</span>
+                ) : null}
+                {activeRuntimeLiveState?.pendingQuestionSummary ? (
+                  <span className="chat-shell-status-pill warning">Question / Waiting</span>
+                ) : null}
+                <span className="chat-shell-status-pill">
+                  Elapsed / {activeRuntimeLiveState?.elapsedSeconds || 0}s
+                </span>
+                <span className="chat-shell-status-pill">
+                  Tokens / ~{activeRuntimeLiveState?.tokenUsage.inputTokens || 0} in / ~
+                  {activeRuntimeLiveState?.tokenUsage.outputTokens || 0} out
                 </span>
                 <span className={`chat-shell-status-pill ${currentContextUsage.ratio >= 0.8 ? 'warning' : ''}`}>
                   {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
@@ -6700,14 +6983,23 @@ export const AIChat: React.FC<AIChatProps> = ({
                             onSelect={handleReferenceSearchSelect}
                           />
                         ) : null}
+                        {slashMenuOpen ? (
+                          <AIChatSlashCommandMenu
+                            entries={filteredSlashCommands}
+                            selectedIndex={slashSelectedIndex}
+                            onHover={setSlashSelectedIndex}
+                            onSelect={handleSlashCommandSelect}
+                          />
+                        ) : null}
                       </>
                     }
                     toolbarStartContent={
                       <ChatSandboxPolicySelector
-                        value={sandboxPolicy}
-                        onChange={async (policy) => {
-                          const nextPolicy = await setAgentSandboxPolicy(policy);
-                          setSandboxPolicy(nextPolicy);
+                        value={permissionMode}
+                        onChange={async (mode) => {
+                          const nextMode = await setAgentPermissionMode(mode);
+                          setPermissionMode(nextMode);
+                          setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
                         }}
                       />
                     }
@@ -6765,6 +7057,14 @@ export const AIChat: React.FC<AIChatProps> = ({
                             onSelect={handleReferenceSearchSelect}
                           />
                         ) : null}
+                        {slashMenuOpen ? (
+                          <AIChatSlashCommandMenu
+                            entries={filteredSlashCommands}
+                            selectedIndex={slashSelectedIndex}
+                            onHover={setSlashSelectedIndex}
+                            onSelect={handleSlashCommandSelect}
+                          />
+                        ) : null}
                         <textarea
                           ref={textareaRef}
                           value={input}
@@ -6789,10 +7089,11 @@ export const AIChat: React.FC<AIChatProps> = ({
 
                       <div className="chat-composer-footer">
                         <ChatSandboxPolicySelector
-                          value={sandboxPolicy}
-                          onChange={async (policy) => {
-                            const nextPolicy = await setAgentSandboxPolicy(policy);
-                            setSandboxPolicy(nextPolicy);
+                          value={permissionMode}
+                          onChange={async (mode) => {
+                            const nextMode = await setAgentPermissionMode(mode);
+                            setPermissionMode(nextMode);
+                            setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
                           }}
                         />
                         <div className="chat-composer-meta">

@@ -92,3 +92,42 @@ test('buildDirectChatPrompt includes recent conversation history before the new 
   assert.doesNotMatch(result.prompt, /Internal fallback notice/);
   assert.match(result.prompt, /user_request:\nNow connect that to the right pane behavior/);
 });
+
+test('buildDirectChatPrompt carries short affirmative replies over pending save questions', () => {
+  const result = buildDirectChatPrompt({
+    userInput: '好',
+    currentProjectName: 'PM Workspace',
+    contextWindowTokens: 200000,
+    skillIntent: null,
+    conversationHistory: [
+      { role: 'user', content: '帮我整理一下这段需求。' },
+      { role: 'assistant', content: '我可以把整理后的内容保存到需求文档里，要不要保存？' },
+    ],
+  });
+
+  assert.match(result.prompt, /pending_user_confirmation:/);
+  assert.match(result.prompt, /authorization to execute the previously proposed low-risk file action/);
+  assert.match(result.prompt, /user_request:\n好/);
+});
+
+test('buildDirectChatPrompt strips obsolete internal flow protocol from conversation history', () => {
+  const result = buildDirectChatPrompt({
+    userInput: '整理需求',
+    currentProjectName: 'PM Workspace',
+    contextWindowTokens: 200000,
+    skillIntent: null,
+    conversationHistory: [
+      {
+        role: 'assistant',
+        content:
+          '<goodnight-m-flow>\n1. Route — 识别候选面\n候选面：requirement、design、workflow\n</goodnight-m-flow>\n好的，我来整理。',
+      },
+    ],
+  });
+
+  assert.match(result.prompt, /assistant: 好的，我来整理。/);
+  assert.doesNotMatch(result.prompt, /goodnight-m-flow/i);
+  assert.doesNotMatch(result.prompt, /m-flow/i);
+  assert.doesNotMatch(result.prompt, /候选面/);
+  assert.doesNotMatch(result.prompt, /Route/);
+});

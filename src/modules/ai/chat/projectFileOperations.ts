@@ -29,6 +29,16 @@ export type ProjectFileProposal = {
   executionMessage?: string | null;
 };
 
+export type PendingProjectFileProposalMessage = {
+  id: string;
+  projectFileProposal?: ProjectFileProposal;
+};
+
+export type PendingProjectFileProposalAction = {
+  messageId: string;
+  proposal: ProjectFileProposal;
+};
+
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/;
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\\]+\\[^\\]+/;
 
@@ -62,7 +72,13 @@ const TASK_WRITE_TARGET_PATTERN =
 const QUESTION_ONLY_PATTERN = /(^|\s)(为什么|怎么|如何|what|why|how|which)(\s|$)|\?/i;
 
 const ANALYSIS_ONLY_PATTERN =
-  /(鎬荤粨|姒傝|鍒嗘瀽|瑙ｉ噴|璇存槑|瀵规瘮|姣旇緝|妫€鏌?|review|summary|summarize|analyze|analysis|compare|explain|inspect)/i;
+  /(总结|概要|分析|解释|说明|对比|比较|检查|review|summary|summarize|analyze|analysis|compare|explain|inspect)/i;
+
+const SHORT_PENDING_ACTION_AFFIRMATIVE_PATTERN =
+  /^(?:\u597d|\u597d\u7684|\u53ef\u4ee5|\u884c|\u884c\u7684|\u55ef|\u55ef\u55ef|\u786e\u8ba4|\u5bf9|\u662f|\u662f\u7684|ok|okay|yes|yep|sure|go ahead)[\s\u3002\uff01!.,，]*$/i;
+
+const SHORT_PENDING_ACTION_NEGATIVE_PATTERN =
+  /^(?:\u4e0d|\u4e0d\u8981|\u4e0d\u7528|\u5148\u4e0d|\u7b97\u4e86|\u53d6\u6d88|no|nope|cancel)[\s\u3002\uff01!.,，]*$/i;
 
 const trimLeadingSeparators = (value: string) => value.replace(/^[\\/]+/, '');
 
@@ -160,6 +176,38 @@ export const detectProjectFileWriteIntent = (value: string) => WRITE_INTENT_PATT
 
 export const detectProjectFileReadIntent = (value: string) =>
   READ_INTENT_PATTERN.test(value) && !detectProjectFileWriteIntent(value);
+
+export const isShortPendingActionAffirmation = (value: string) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return Boolean(
+    normalized &&
+      SHORT_PENDING_ACTION_AFFIRMATIVE_PATTERN.test(normalized) &&
+      !SHORT_PENDING_ACTION_NEGATIVE_PATTERN.test(normalized)
+  );
+};
+
+export const isShortPendingActionRejection = (value: string) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return Boolean(normalized && SHORT_PENDING_ACTION_NEGATIVE_PATTERN.test(normalized));
+};
+
+export const findLatestPendingProjectFileProposalAction = (
+  messages: PendingProjectFileProposalMessage[]
+): PendingProjectFileProposalAction | null => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const proposal = message?.projectFileProposal;
+
+    if (proposal?.status === 'pending') {
+      return {
+        messageId: message.id,
+        proposal,
+      };
+    }
+  }
+
+  return null;
+};
 
 export const detectTaskAuthorizedProjectWriteIntent = (value: string) => {
   const normalized = value.trim();

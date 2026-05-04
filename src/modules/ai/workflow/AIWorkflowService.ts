@@ -5,10 +5,12 @@ import { useProjectStore } from '../../../store/projectStore';
 import { useFeatureTreeStore } from '../../../store/featureTreeStore';
 import {
   createWireframeModule,
+  formatCanvasPreset,
   getCanvasPreset,
   isMobileAppType,
   toWireframeModuleDrafts,
 } from '../../../utils/wireframe';
+import { syncSketchFilesToProjectDir } from '../../../utils/projectPersistence';
 import { buildKnowledgeContextSelection, buildKnowledgeEntries } from '../../knowledge/knowledgeEntries';
 import {
   AIExperienceMode,
@@ -759,6 +761,7 @@ const mapWireframesToDocuments = (
   appType: StyleProfile['appType']
 ): Record<string, WireframeDocument> => {
   const now = new Date().toISOString();
+  const frame = formatCanvasPreset(getCanvasPreset(appType));
   const pageMap = new Map(collectDesignPages(pageStructure).map((page) => [page.name, page]));
 
   return output.pages.reduce<Record<string, WireframeDocument>>((accumulator, pageDraft) => {
@@ -771,6 +774,7 @@ const mapWireframesToDocuments = (
       id: uuidv4(),
       pageId: page.id,
       pageName: page.name,
+      frame,
       updatedAt: now,
       status: 'ready',
       elements: pageDraft.modules.map((module) =>
@@ -1539,9 +1543,12 @@ export const runAIWorkflowPackage = async (
 
       const wireframeExecution = createSkillExecution('wireframe_skill', 'wireframes');
       applyRunUpdate(upsertRunWithSkill(run, wireframeExecution));
+      const canvasPreset = getCanvasPreset(project.appType);
 
       const wireframePrompt = trimAndJoin(
         `app_type: ${project.appType}`,
+        `target_frame: ${formatCanvasPreset(canvasPreset)}`,
+        `target_surface: ${canvasPreset.frameType}`,
         'design_goal: 先拆模块，再输出线框；每个模块都要写清职责、内容、关键操作和优先级。',
         `page_context:
 ${buildWireframePageContext(nextPageStructure, currentFeatureTree)}`
@@ -1551,6 +1558,9 @@ ${buildWireframePageContext(nextPageStructure, currentFeatureTree)}`
 
       const nextWireframes = mapWireframesToDocuments(wireframeResult.data, nextPageStructure, project.appType);
       projectStore.replaceWireframes(nextWireframes, featureTreeStore.tree);
+      void syncSketchFilesToProjectDir(project.id, collectDesignPages(nextPageStructure), nextWireframes).catch(
+        () => undefined
+      );
       const wireframeSyncedTree = projectStore.generatePlanningArtifacts(featureTreeStore.tree);
       if (wireframeSyncedTree) {
         featureTreeStore.setTree(wireframeSyncedTree);

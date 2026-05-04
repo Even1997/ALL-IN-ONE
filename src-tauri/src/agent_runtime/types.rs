@@ -172,6 +172,7 @@ pub struct AppendRuntimeReplayEventInput {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeSettingsRecord {
     pub sandbox_policy: String,
+    pub permission_mode: String,
     pub auto_resume_on_launch: bool,
     pub persist_resume_drafts: bool,
 }
@@ -180,8 +181,36 @@ pub struct RuntimeSettingsRecord {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRuntimeSettingsInput {
     pub sandbox_policy: Option<String>,
+    pub permission_mode: Option<String>,
     pub auto_resume_on_launch: Option<bool>,
     pub persist_resume_drafts: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentBackgroundTaskRecord {
+    pub id: String,
+    pub thread_id: String,
+    pub run_kind: String,
+    pub title: String,
+    pub status: String,
+    pub summary: String,
+    pub payload_json: String,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertAgentBackgroundTaskInput {
+    pub id: Option<String>,
+    pub thread_id: String,
+    pub run_kind: String,
+    pub title: String,
+    pub status: String,
+    pub summary: String,
+    pub payload_json: String,
+    pub created_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

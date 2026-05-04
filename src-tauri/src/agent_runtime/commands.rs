@@ -1,4 +1,5 @@
 use super::approval_store;
+use super::background_task_store;
 use super::mcp_store;
 use super::memory_store;
 use super::replay_store;
@@ -13,6 +14,7 @@ use super::types::{
     RewindAgentTurnInput, RuntimeMcpServerRecord, RuntimeMcpToolCallRecord,
     RuntimeReplayEventRecord, RuntimeSettingsRecord, SaveAgentTurnCheckpointInput,
     SaveProjectMemoryEntryInput, UpdateRuntimeSettingsInput, UpsertRuntimeMcpServerInput,
+    AgentBackgroundTaskRecord, UpsertAgentBackgroundTaskInput,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -174,6 +176,7 @@ pub fn set_agent_sandbox_policy(
             &app_data_dir,
             UpdateRuntimeSettingsInput {
                 sandbox_policy: Some(policy),
+                permission_mode: None,
                 auto_resume_on_launch: None,
                 persist_resume_drafts: None,
             },
@@ -301,6 +304,37 @@ pub fn rewind_agent_turn(
 ) -> Result<AgentTurnRewindResult, String> {
     let app_data_dir = resolve_app_data_dir(&app_handle)?;
     turn_checkpoint_store::rewind_turn(&app_data_dir, input, current_time_millis())
+}
+
+#[tauri::command]
+pub fn upsert_agent_background_task(
+    app_handle: tauri::AppHandle,
+    input: UpsertAgentBackgroundTaskInput,
+) -> Result<AgentBackgroundTaskRecord, String> {
+    let app_data_dir = resolve_app_data_dir(&app_handle)?;
+    let now = current_time_millis();
+    let task = AgentBackgroundTaskRecord {
+        id: input.id.unwrap_or_else(|| build_record_id("task")),
+        thread_id: input.thread_id,
+        run_kind: input.run_kind,
+        title: input.title,
+        status: input.status,
+        summary: input.summary,
+        payload_json: input.payload_json,
+        created_at: input.created_at.unwrap_or(now),
+        updated_at: now,
+    };
+
+    background_task_store::upsert_task(&app_data_dir, task)
+}
+
+#[tauri::command]
+pub fn list_agent_background_tasks(
+    app_handle: tauri::AppHandle,
+    thread_id: String,
+) -> Result<Vec<AgentBackgroundTaskRecord>, String> {
+    let app_data_dir = resolve_app_data_dir(&app_handle)?;
+    background_task_store::list_tasks(&app_data_dir, &thread_id)
 }
 
 #[cfg(test)]

@@ -43,57 +43,6 @@ body :where(*) {
     linear-gradient(135deg, #eef4ff 0%, #f7f8fb 45%, #eef8f1 100%);
 }
 
-.project-setup-hero {
-  padding: 72px 64px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 22px;
-}
-
-.project-setup-badge {
-  width: fit-content;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(0, 122, 255, 0.12);
-  color: #005fcc;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.project-setup-hero h1 {
-  margin: 0;
-  font-size: 48px;
-  line-height: 1.05;
-  letter-spacing: -0.05em;
-  max-width: 520px;
-}
-
-.project-setup-hero p {
-  margin: 0;
-  max-width: 560px;
-  font-size: 16px;
-  color: #536071;
-}
-
-.project-setup-points {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.project-setup-points span {
-  padding: 9px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  font-size: 12px;
-  font-weight: 600;
-  color: #324055;
-}
-
 .project-setup-card {
   margin: 40px;
   padding: 28px;
@@ -3231,14 +3180,6 @@ body :where(*) {
     grid-template-columns: 1fr;
   }
 
-  .project-setup-hero {
-    padding: 40px 24px 8px;
-  }
-
-  .project-setup-hero h1 {
-    font-size: 34px;
-  }
-
   .project-setup-card {
     margin: 0 16px 24px;
   }
@@ -3338,13 +3279,11 @@ textarea {
     linear-gradient(135deg, #f2fbf9 0%, #f7f8fb 48%, #eef6ff 100%);
 }
 
-.project-setup-badge,
 .project-setup-status {
   background: rgba(15, 118, 110, 0.12);
   color: var(--primary-container);
 }
 
-.project-setup-hero h1,
 .project-setup-header h2,
 .design-system-header h2,
 .ops-header h2 {
@@ -3353,7 +3292,6 @@ textarea {
   color: var(--on-surface);
 }
 
-.project-setup-hero p,
 .project-setup-header p {
   color: var(--text-muted);
 }
@@ -4279,9 +4217,7 @@ body,
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.project-setup-hero h1,
 .project-setup-header h2,
-.project-setup-hero p,
 .project-setup-header p,
 .setup-field span,
 .setup-section-title,
@@ -4587,7 +4523,6 @@ body,
 .case-name,
 .target-name,
 .deploy-history h3,
-.project-setup-hero h1,
 .project-setup-header h2 {
   color: var(--mode-text);
 }
@@ -4610,7 +4545,6 @@ body,
 .case-time,
 .history-time,
 .history-target,
-.project-setup-hero p,
 .project-setup-header p,
 .setup-field span,
 .setup-section-title,
@@ -8228,52 +8162,6 @@ body.ai-chat-sidebar-collapsed .app-main {
   box-shadow: var(--mode-shadow-soft);
 }
 
-.project-manager-hero {
-  margin: 0;
-  min-height: auto;
-  padding: 40px 42px;
-  border-radius: 32px;
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--mode-accent) 18%, transparent), transparent 30%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.28));
-  border: 1px solid var(--mode-border);
-  box-shadow: var(--mode-shadow-soft);
-}
-
-.project-manager-points span {
-  background: color-mix(in srgb, var(--mode-chip-strong) 94%, transparent);
-  border-color: var(--mode-border);
-  color: var(--mode-soft-text);
-}
-
-.project-manager-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.project-manager-back-btn {
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--mode-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mode-chip) 94%, transparent);
-  color: var(--mode-text);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    background 0.18s ease;
-}
-
-.project-manager-back-btn:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--mode-accent) 28%, var(--mode-border));
-  background: color-mix(in srgb, var(--mode-chip-strong) 92%, transparent);
-}
-
 .project-manager-form {
   width: min(760px, 100%);
   margin-inline: auto;
@@ -8352,7 +8240,6 @@ body.ai-chat-sidebar-collapsed .app-main {
     padding: 20px;
   }
 
-  .project-manager-hero,
   .project-manager-form {
     padding: 28px;
   }
@@ -8391,7 +8278,6 @@ body.ai-chat-sidebar-collapsed .app-main {
     justify-content: space-between;
   }
 
-  .project-manager-hero,
   .project-manager-form,
   .project-manager-sidebar {
     padding: 20px;
@@ -12190,14 +12076,12 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .pm-card-header h3,
-.project-setup-header h2,
-.project-setup-hero h1 {
+.project-setup-header h2 {
   color: var(--macos-text-primary);
 }
 
 .pm-card-header span,
 .project-setup-header p,
-.project-setup-hero p,
 .setup-helper-text,
 .project-manager-stat span,
 .project-manager-open span {

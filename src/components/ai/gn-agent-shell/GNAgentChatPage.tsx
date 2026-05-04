@@ -3,8 +3,10 @@ import type { LocalAgentConfigSnapshot } from '../../../modules/ai/gn-agent/loca
 import { useGNAgentShellStore } from '../../../modules/ai/gn-agent/gnAgentShellStore';
 import { listProjectMemoryEntries, saveProjectMemoryEntry } from '../../../modules/ai/runtime/agentRuntimeClient';
 import type { AgentMemoryEntry } from '../../../modules/ai/runtime/agentRuntimeTypes';
+import type { RuntimeToolStep } from '../../../modules/ai/runtime/agent-kernel/agentKernelTypes';
 import { type AgentMemoryCandidate, useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
 import { useRuntimeMcpStore } from '../../../modules/ai/runtime/mcp/runtimeMcpStore';
+import type { RuntimeMcpToolCall } from '../../../modules/ai/runtime/mcp/runtimeMcpTypes';
 import { getLatestTurnSession } from '../../../modules/ai/runtime/session/agentSessionSelectors';
 import { AI_CHAT_COMMAND_EVENT } from '../../../modules/ai/chat/chatCommands';
 import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
@@ -29,6 +31,10 @@ import { buildAutoRenamedMemoryTitle, findMemoryEntryByTitle } from './memorySav
 
 const claudeRuntime = new ClaudeRuntime();
 const codexRuntime = new CodexRuntime();
+const EMPTY_TOOL_CALLS: RuntimeToolStep[] = [];
+const EMPTY_MCP_TOOL_CALLS: RuntimeMcpToolCall[] = [];
+const EMPTY_MEMORY_CANDIDATES: AgentMemoryCandidate[] = [];
+const EMPTY_MEMORY_ENTRIES: AgentMemoryEntry[] = [];
 
 type PendingMemorySaveConflict = {
   candidate: AgentMemoryCandidate;
@@ -56,16 +62,18 @@ export const GNAgentChatPage: React.FC<{
     activeSessionId ? state.contextByThread[activeSessionId] || null : null
   );
   const toolCalls = useAgentRuntimeStore((state) =>
-    activeSessionId ? state.toolCallsByThread[activeSessionId] || [] : []
+    activeSessionId ? state.toolCallsByThread[activeSessionId] || EMPTY_TOOL_CALLS : EMPTY_TOOL_CALLS
   );
   const mcpToolCalls = useRuntimeMcpStore((state) =>
-    activeSessionId ? state.toolCallsByThread[activeSessionId] || [] : []
+    activeSessionId ? state.toolCallsByThread[activeSessionId] || EMPTY_MCP_TOOL_CALLS : EMPTY_MCP_TOOL_CALLS
   );
   const memoryCandidates = useAgentRuntimeStore((state) =>
-    activeSessionId ? state.memoryCandidatesByThread[activeSessionId] || [] : []
+    activeSessionId
+      ? state.memoryCandidatesByThread[activeSessionId] || EMPTY_MEMORY_CANDIDATES
+      : EMPTY_MEMORY_CANDIDATES
   );
   const memoryEntries = useAgentRuntimeStore((state) =>
-    currentProject ? state.memoryByProject[currentProject.id] || [] : []
+    currentProject ? state.memoryByProject[currentProject.id] || EMPTY_MEMORY_ENTRIES : EMPTY_MEMORY_ENTRIES
   );
   const setMemoryEntries = useAgentRuntimeStore((state) => state.setMemoryEntries);
   const resolveMemoryCandidate = useAgentRuntimeStore((state) => state.resolveMemoryCandidate);
@@ -108,20 +116,20 @@ export const GNAgentChatPage: React.FC<{
       : providerId === 'classic'
         ? 'default'
         : 'provider-embedded';
-  const dispatchChatPrompt = useCallback((prompt: string) => {
+  const prefillChatPrompt = useCallback((prompt: string) => {
     window.dispatchEvent(
       new CustomEvent(AI_CHAT_COMMAND_EVENT, {
         detail: {
           prompt,
-          autoSubmit: true,
+          autoSubmit: false,
         },
       })
     );
   }, []);
   const dispatchChatGuidance = useCallback((prompt: string, guidance: string) => {
     const nextPrompt = `${prompt}\n\nAdditional guidance:\n${guidance}`;
-    dispatchChatPrompt(nextPrompt);
-  }, [dispatchChatPrompt]);
+    prefillChatPrompt(nextPrompt);
+  }, [prefillChatPrompt]);
   const dispatchPauseRequest = useCallback((prompt: string) => {
     dispatchChatGuidance(
       prompt,
@@ -243,8 +251,8 @@ export const GNAgentChatPage: React.FC<{
           <GNAgentStatusPanel latestTurnSession={latestTurnSession} />
           <GNAgentTurnSummaryCards
             session={latestTurnSession}
-            onRetryTurn={dispatchChatPrompt}
-            onResumeTurn={dispatchChatPrompt}
+            onRetryTurn={prefillChatPrompt}
+            onResumeTurn={prefillChatPrompt}
             onFeedTurn={dispatchChatGuidance}
             onPauseTurn={dispatchPauseRequest}
           />

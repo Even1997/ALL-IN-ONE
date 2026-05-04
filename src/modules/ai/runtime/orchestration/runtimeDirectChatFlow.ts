@@ -27,6 +27,9 @@ const summarizeRuntimeReferenceContent = (value: string, fallback = '', maxLengt
 
 const INTERNAL_RESPONSE_PATTERNS = [
   /m-flow/i,
+  /候选面/,
+  /\bRoute\b.*识别/,
+  /识别候选面/,
   /(^|[/\\])_goodnight([/\\]|$)/i,
   /(^|[/\\])\.goodnight([/\\]|$)/i,
   /(^|[/\\])\.ai([/\\]|$)/i,

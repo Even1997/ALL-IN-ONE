@@ -3,6 +3,8 @@ import type { AgentTurnSession } from '../../../modules/ai/runtime/session/agent
 import { useShallow } from 'zustand/react/shallow';
 import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
 import { useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
+import { useApprovalStore } from '../../../modules/ai/runtime/approval/approvalStore';
+import { PERMISSION_MODE_LABELS } from '../../../modules/ai/runtime/approval/permissionMode';
 import { useProjectStore } from '../../../store/projectStore';
 
 const formatStatusTime = (value: number) =>
@@ -30,9 +32,33 @@ export const GNAgentStatusPanel: React.FC<{
   const activityEntries = projectChatState?.activityEntries || [];
   const recentActivity = useMemo(() => activityEntries.slice(0, 3), [activityEntries]);
   const activeSessionId = projectChatState?.activeSessionId || projectChatState?.sessions[0]?.id || null;
-  const latestTeamRun = useAgentRuntimeStore((state) =>
-    activeSessionId ? state.teamRunsByThread[activeSessionId]?.[0] || null : null
+  const { latestTeamRun, activeLiveState } = useAgentRuntimeStore(
+    useShallow((state) => ({
+      latestTeamRun: activeSessionId ? state.teamRunsByThread[activeSessionId]?.[0] || null : null,
+      activeLiveState: activeSessionId ? state.liveStateByThread[activeSessionId] || null : null,
+    }))
   );
+  const { approvalsByThread, permissionMode } = useApprovalStore(
+    useShallow((state) => ({
+      approvalsByThread: state.approvalsByThread,
+      permissionMode: state.permissionMode,
+    }))
+  );
+  const pendingApprovalCount = useMemo(
+    () =>
+      activeSessionId
+        ? (approvalsByThread[activeSessionId] || []).filter((approval) => approval.status === 'pending').length
+        : 0,
+    [activeSessionId, approvalsByThread]
+  );
+  const runtimeConnectionLabel =
+    activeLiveState?.connectionState === 'connecting'
+      ? 'Connecting'
+      : activeLiveState?.connectionState === 'reconnecting'
+        ? 'Reconnecting'
+        : activeLiveState?.connectionState === 'connected'
+          ? 'Connected'
+          : 'Disconnected';
 
   return (
     <section className="gn-agent-runtime-panel gn-agent-status-panel">
@@ -45,6 +71,24 @@ export const GNAgentStatusPanel: React.FC<{
           <strong>{currentProject?.name || 'No project open'}</strong>
           <span>{latestTurnSession?.plan?.summary || `${projectChatState?.sessions.length || 0} sessions`}</span>
         </article>
+        {activeSessionId ? (
+          <article className="gn-agent-runtime-card">
+            <strong>Session Runtime</strong>
+            <span>{activeLiveState?.statusVerb || latestTurnSession?.status || 'idle'}</span>
+            <code>
+              {runtimeConnectionLabel} / {activeLiveState?.activeToolName || 'idle'} / {activeLiveState?.elapsedSeconds || 0}s / ~
+              {activeLiveState?.tokenUsage.inputTokens || 0} / ~{activeLiveState?.tokenUsage.outputTokens || 0}
+            </code>
+            <code>
+              {PERMISSION_MODE_LABELS[permissionMode]} / approvals {pendingApprovalCount}
+            </code>
+            {activeLiveState?.streamingToolInput ? (
+              <span>{formatPreview(activeLiveState.streamingToolInput, '')}</span>
+            ) : null}
+            {activeLiveState?.pendingApprovalSummary ? <span>{activeLiveState.pendingApprovalSummary}</span> : null}
+            {activeLiveState?.pendingQuestionSummary ? <span>{activeLiveState.pendingQuestionSummary}</span> : null}
+          </article>
+        ) : null}
         {latestTeamRun ? (
           <article className="gn-agent-runtime-card">
             <strong>Team Run</strong>

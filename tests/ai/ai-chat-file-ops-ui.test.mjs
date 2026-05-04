@@ -27,8 +27,12 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
   assert.match(chatSource, /renderRuntimeApproval/);
   assert.match(chatSource, /detectProjectFileWriteIntent/);
   assert.match(chatSource, /detectProjectFileReadIntent/);
+  assert.match(chatSource, /findLatestPendingProjectFileProposalAction/);
+  assert.match(chatSource, /isShortPendingActionAffirmation/);
+  assert.match(chatSource, /handleExecuteProjectFileProposal\(\s*pendingProjectFileAction\.messageId/);
+  assert.match(chatSource, /handleCancelProjectFileProposal\(pendingProjectFileAction\.messageId\)/);
   assert.match(chatSource, /parseProjectFileOperationsPlan/);
-  assert.match(chatSource, /buildProjectFilePlanningPrompt\(\{/);
+  assert.match(chatSource, /executeRuntimeProjectFilePlanning\(\{/);
   assert.match(chatSource, /conversationHistory/);
   assert.match(chatSource, /executeProjectFileOperations/);
   assert.match(chatSource, /setProjectFileOperationMode\('manual'\)/);
@@ -39,6 +43,8 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
 
   assert.match(helperSource, /resolveProjectOperationPath/);
   assert.match(helperSource, /isSupportedProjectTextFilePath/);
+  assert.match(helperSource, /findLatestPendingProjectFileProposalAction/);
+  assert.match(helperSource, /SHORT_PENDING_ACTION_AFFIRMATIVE_PATTERN/);
 
   assert.match(cssSource, /\.chat-mode-switch/);
   assert.match(cssSource, /\.chat-project-file-proposal-card/);

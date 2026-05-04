@@ -2,11 +2,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { aiService, type AITextStreamEvent } from '../core/AIService';
 import { ClaudeRuntime } from '../gn-agent/runtime/claude/ClaudeRuntime';
 import { CodexRuntime } from '../gn-agent/runtime/codex/CodexRuntime';
-import type { ApprovalRecord, SandboxPolicy } from './approval/approvalTypes';
+import type { ApprovalRecord, PermissionMode, SandboxPolicy } from './approval/approvalTypes';
+import { permissionModeToSandboxPolicy } from './approval/permissionMode';
 import type { AIConfigEntry } from '../store/aiConfigState';
 import { toRuntimeAIConfig } from '../store/aiConfigState';
 import { isTauriRuntimeAvailable } from '../../../utils/projectPersistence';
 import type {
+  AgentBackgroundTaskRecord,
   AgentMemoryEntry,
   AgentProviderId,
   AgentTurnCheckpointDiff,
@@ -20,12 +22,14 @@ const claudeRuntime = new ClaudeRuntime();
 const codexRuntime = new CodexRuntime();
 export type AgentRuntimeSettings = {
   sandboxPolicy: SandboxPolicy;
+  permissionMode: PermissionMode;
   autoResumeOnLaunch: boolean;
   persistResumeDrafts: boolean;
 };
 
 let localRuntimeSettings: AgentRuntimeSettings = {
   sandboxPolicy: 'ask',
+  permissionMode: 'ask',
   autoResumeOnLaunch: false,
   persistResumeDrafts: true,
 };
@@ -80,6 +84,17 @@ type RewindAgentTurnInput = {
   threadId: string;
   runId: string;
   projectRoot: string;
+};
+
+type UpsertAgentBackgroundTaskInput = {
+  id?: string;
+  threadId: string;
+  runKind: string;
+  title: string;
+  status: string;
+  summary: string;
+  payloadJson: string;
+  createdAt?: number;
 };
 
 const createLocalId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -244,6 +259,19 @@ export const setAgentSandboxPolicy = async (policy: SandboxPolicy): Promise<Sand
   return (await updateAgentRuntimeSettings({ sandboxPolicy: policy })).sandboxPolicy;
 };
 
+export const getAgentPermissionMode = async (): Promise<PermissionMode> => {
+  return (await getAgentRuntimeSettings()).permissionMode;
+};
+
+export const setAgentPermissionMode = async (mode: PermissionMode): Promise<PermissionMode> => {
+  return (
+    await updateAgentRuntimeSettings({
+      permissionMode: mode,
+      sandboxPolicy: permissionModeToSandboxPolicy(mode),
+    })
+  ).permissionMode;
+};
+
 export const getAgentRuntimeSettings = async (): Promise<AgentRuntimeSettings> => {
   if (!isTauriRuntimeAvailable()) {
     return localRuntimeSettings;
@@ -297,6 +325,37 @@ export const getAgentTurnCheckpointDiff = async (input: {
 export const rewindAgentTurn = async (
   input: RewindAgentTurnInput
 ): Promise<AgentTurnRewindResult> => invoke<AgentTurnRewindResult>('rewind_agent_turn', { input });
+
+export const upsertAgentBackgroundTask = async (
+  input: UpsertAgentBackgroundTaskInput
+): Promise<AgentBackgroundTaskRecord> => {
+  if (!isTauriRuntimeAvailable()) {
+    const now = Date.now();
+    return {
+      id: input.id || createLocalId('task'),
+      threadId: input.threadId,
+      runKind: input.runKind,
+      title: input.title,
+      status: input.status,
+      summary: input.summary,
+      payloadJson: input.payloadJson,
+      createdAt: input.createdAt || now,
+      updatedAt: now,
+    };
+  }
+
+  return invoke<AgentBackgroundTaskRecord>('upsert_agent_background_task', { input });
+};
+
+export const listAgentBackgroundTasks = async (
+  threadId: string
+): Promise<AgentBackgroundTaskRecord[]> => {
+  if (!isTauriRuntimeAvailable()) {
+    return [];
+  }
+
+  return invoke<AgentBackgroundTaskRecord[]>('list_agent_background_tasks', { threadId });
+};
 
 export const executePrompt = async (options: {
   providerId: AgentProviderId;

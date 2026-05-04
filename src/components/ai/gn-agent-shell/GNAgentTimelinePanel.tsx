@@ -1,9 +1,14 @@
 import React, { useMemo } from 'react';
-import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
+import { useAIChatStore, type ChatSession } from '../../../modules/ai/store/aiChatStore';
 import { useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
 import { canResumeFromRecovery } from '../../../modules/ai/runtime/replay/runtimeReplayRecovery';
+import type { AgentReplayEvent, AgentTimelineEvent } from '../../../modules/ai/runtime/agentRuntimeTypes';
 import type { AgentTurnSession } from '../../../modules/ai/runtime/session/agentSessionTypes';
 import { useProjectStore } from '../../../store/projectStore';
+
+const EMPTY_SESSIONS: ChatSession[] = [];
+const EMPTY_TIMELINE: AgentTimelineEvent[] = [];
+const EMPTY_REPLAY_EVENTS: AgentReplayEvent[] = [];
 
 const formatTimelineTime = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
@@ -25,7 +30,7 @@ export const GNAgentTimelinePanel: React.FC<{
 }> = ({ latestTurnSession = null }) => {
   const currentProject = useProjectStore((state) => state.currentProject);
   const projectSessions = useAIChatStore((state) =>
-    currentProject ? state.projects[currentProject.id]?.sessions || [] : []
+    currentProject ? state.projects[currentProject.id]?.sessions || EMPTY_SESSIONS : EMPTY_SESSIONS
   );
   const activeSessionId = useAIChatStore((state) =>
     currentProject ? state.projects[currentProject.id]?.activeSessionId || null : null
@@ -37,10 +42,12 @@ export const GNAgentTimelinePanel: React.FC<{
   const activeThreadId = activeSessionId || null;
   const activeReplayThreadId = activeSession?.runtimeThreadId || null;
   const timeline = useAgentRuntimeStore((state) =>
-    activeThreadId ? state.timelineByThread[activeThreadId] || [] : []
+    activeThreadId ? state.timelineByThread[activeThreadId] || EMPTY_TIMELINE : EMPTY_TIMELINE
   );
   const replayEvents = useAgentRuntimeStore((state) =>
-    activeReplayThreadId ? state.replayEventsByThread[activeReplayThreadId] || [] : []
+    activeReplayThreadId
+      ? state.replayEventsByThread[activeReplayThreadId] || EMPTY_REPLAY_EVENTS
+      : EMPTY_REPLAY_EVENTS
   );
   const recoveryState = useAgentRuntimeStore((state) =>
     activeThreadId ? state.recoveryByThread[activeThreadId] || null : null
@@ -48,6 +55,9 @@ export const GNAgentTimelinePanel: React.FC<{
   const requestReplayResumeFromRecovery = useAgentRuntimeStore((state) => state.requestReplayResumeFromRecovery);
   const latestTeamRun = useAgentRuntimeStore((state) =>
     activeThreadId ? state.teamRunsByThread[activeThreadId]?.[0] || null : null
+  );
+  const activeLiveState = useAgentRuntimeStore((state) =>
+    activeThreadId ? state.liveStateByThread[activeThreadId] || null : null
   );
 
   return (
@@ -68,6 +78,18 @@ export const GNAgentTimelinePanel: React.FC<{
               {timeline.length} events / {replayEvents.length} replay
             </span>
             <code>{latestTurnSession?.mode || 'direct'}</code>
+            <code>
+              {activeLiveState?.connectionState || 'disconnected'} / {activeLiveState?.activeToolName || 'idle'}
+            </code>
+            {activeLiveState?.streamingToolInput ? (
+              <span>{formatPreview(activeLiveState.streamingToolInput, '')}</span>
+            ) : null}
+            {activeLiveState?.pendingApprovalSummary ? (
+              <span>{activeLiveState.pendingApprovalSummary}</span>
+            ) : null}
+            {activeLiveState?.pendingQuestionSummary ? (
+              <span>{activeLiveState.pendingQuestionSummary}</span>
+            ) : null}
           </article>
           {canResumeFromRecovery(recoveryState) ? (
             <article className="gn-agent-runtime-card">

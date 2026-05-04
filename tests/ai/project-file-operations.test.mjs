@@ -61,6 +61,53 @@ test('project file operations detect task-authorized write intent without requir
   assert.equal(detectTaskAuthorizedProjectWriteIntent('\u5e2e\u6211\u770b\u770b docs \u76ee\u5f55\u91cc\u6709\u4ec0\u4e48'), false);
 });
 
+test('project file operations recognize short replies to pending file proposals', async () => {
+  const {
+    findLatestPendingProjectFileProposalAction,
+    isShortPendingActionAffirmation,
+    isShortPendingActionRejection,
+  } = await loadModule();
+  const pendingProposal = {
+    id: 'proposal-1',
+    mode: 'manual',
+    status: 'pending',
+    summary: 'save draft',
+    assistantMessage: 'Ready to save.',
+    operations: [
+      {
+        id: 'create_file:docs/spec.md:0',
+        type: 'create_file',
+        targetPath: 'docs/spec.md',
+        summary: 'create spec',
+        content: '# Spec',
+      },
+    ],
+  };
+
+  assert.equal(isShortPendingActionAffirmation('\u597d'), true);
+  assert.equal(isShortPendingActionAffirmation('\u53ef\u4ee5'), true);
+  assert.equal(isShortPendingActionAffirmation('OK'), true);
+  assert.equal(isShortPendingActionAffirmation('\u597d\uff0c\u4f46\u662f\u5148\u522b\u5199'), false);
+  assert.equal(isShortPendingActionRejection('\u4e0d\u7528'), true);
+  assert.equal(isShortPendingActionRejection('cancel'), true);
+  assert.deepEqual(
+    findLatestPendingProjectFileProposalAction([
+      { id: 'message-1', projectFileProposal: { ...pendingProposal, status: 'executed' } },
+      { id: 'message-2', projectFileProposal: pendingProposal },
+    ]),
+    {
+      messageId: 'message-2',
+      proposal: pendingProposal,
+    }
+  );
+  assert.equal(
+    findLatestPendingProjectFileProposalAction([
+      { id: 'message-1', projectFileProposal: { ...pendingProposal, status: 'cancelled' } },
+    ]),
+    null
+  );
+});
+
 test('project file operations reject paths outside the project root', async () => {
   const { resolveProjectOperationPath } = await loadModule();
 

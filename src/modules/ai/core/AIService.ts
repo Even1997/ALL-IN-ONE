@@ -1,7 +1,13 @@
 import type { ChangeScope, AIStreamChunk } from '../../../types/index.ts';
 import { v4 as uuidv4 } from 'uuid';
-import { ToolExecutor, formatToolResult, parseToolCalls } from '../../../components/workspace/tools.ts';
+import {
+  ToolExecutor,
+  containsToolProtocolMarkers,
+  formatToolResult,
+  parseToolCalls,
+} from '../../../components/workspace/tools.ts';
 import { buildAIConfigurationError, hasUsableAIConfiguration, listModelsSupportMode } from './configStatus.ts';
+import { withRetry } from '../runtime/retry/withRetry.ts';
 
 export type AIModule = 'feature-tree' | 'canvas' | 'code-editor' | 'backend' | 'bug-fix' | 'deploy';
 export type AIAction = 'generate' | 'modify' | 'review' | 'fix' | 'explain' | 'optimize';
@@ -30,6 +36,18 @@ export interface AIResponse {
   suggestions?: AISuggestion[];
   metadata?: Record<string, unknown>;
 }
+
+const TOOL_CALL_REPAIR_MESSAGE = [
+  'Your last response appears to contain tool protocol markup, but it was not in a parseable format.',
+  'If you want to call a tool, resend only the tool call using this exact XML format:',
+  '<tool_use>',
+  '<tool name="tool_name">',
+  '<tool_params>{"key":"value"}</tool_params>',
+  '</tool>',
+  '</tool_use>',
+  'Do not include DSML, tool_calls JSON, or any extra commentary before the tool call.',
+  'If no tool is needed, answer the user directly.',
+].join('\n');
 
 export interface CodeBlock {
   language: string;
@@ -82,6 +100,7 @@ type RunAgentLoopResult = {
 export type AITextStreamEvent = {
   kind: 'thinking' | 'text';
   delta: string;
+  finishReason?: 'stop' | 'length' | 'tool_use' | 'content_filter';
 };
 
 const DEFAULT_PROJECT_ROOT = '.';
@@ -455,6 +474,15 @@ ${this.buildToolInstructions()}
 
       const toolCalls = parseToolCalls(assistantText);
       if (toolCalls.length === 0) {
+        if (containsToolProtocolMarkers(assistantText)) {
+          messages.push({ role: 'assistant', content: assistantText });
+          messages.push({
+            role: 'user',
+            content: TOOL_CALL_REPAIR_MESSAGE,
+          });
+          continue;
+        }
+
         return { final, transcript: transcript.trim() };
       }
 
@@ -527,38 +555,46 @@ ${this.buildToolInstructions()}
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey}`,
-        ...this.parseCustomHeaders(),
-      },
-      body: JSON.stringify(payload),
-      signal,
-    });
+    const doFetch = async () => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+          ...this.parseCustomHeaders(),
+        },
+        body: JSON.stringify(payload),
+        signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`OpenAI-compatible API error (${response.status}): ${errorText}`);
-    }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenAI-compatible API error (${response.status}): ${errorText}`);
+      }
 
-    if (onEvent && response.body) {
-      return this.readOpenAICompatibleStream(response.body, onEvent);
-    }
+      if (onEvent && response.body) {
+        return this.readOpenAICompatibleStream(response.body, onEvent);
+      }
 
-    const json = await response.json();
-    const content = json?.choices?.[0]?.message?.content;
+      const json = await response.json();
+      const content = json?.choices?.[0]?.message?.content;
+      const finishReason = json?.choices?.[0]?.finish_reason;
+      if (finishReason) {
+        onEvent?.({ kind: 'text', delta: '', finishReason });
+      }
 
-    if (typeof content === 'string') {
-      return content;
-    }
+      if (typeof content === 'string') {
+        return content;
+      }
 
-    if (Array.isArray(content)) {
-      return content.map((item) => item?.text || '').join('\n');
-    }
+      if (Array.isArray(content)) {
+        return content.map((item) => item?.text || '').join('\n');
+      }
 
-    throw new Error('OpenAI-compatible API returned empty content');
+      throw new Error('OpenAI-compatible API returned empty content');
+    };
+
+    return withRetry(doFetch, { signal });
   }
 
   private async callAnthropic(
@@ -576,41 +612,50 @@ ${this.buildToolInstructions()}
         content: message.content,
       }));
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.config.apiKey,
-        'anthropic-version': '2023-06-01',
-        ...this.parseCustomHeaders(),
-      },
-      body: JSON.stringify({
-        model: this.config.model,
-        max_tokens: this.config.maxTokens,
-        temperature: this.config.temperature,
-        system: systemPrompt,
-        stream: Boolean(onEvent),
-        messages: anthropicMessages,
-      }),
-      signal,
-    });
+    const doFetch = async () => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.config.apiKey,
+          'anthropic-version': '2023-06-01',
+          ...this.parseCustomHeaders(),
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          max_tokens: this.config.maxTokens,
+          temperature: this.config.temperature,
+          system: systemPrompt,
+          stream: Boolean(onEvent),
+          messages: anthropicMessages,
+        }),
+        signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Anthropic API error (${response.status}): ${errorText}`);
-    }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Anthropic API error (${response.status}): ${errorText}`);
+      }
 
-    if (onEvent && response.body) {
-      return this.readAnthropicStream(response.body, onEvent);
-    }
+      if (onEvent && response.body) {
+        return this.readAnthropicStream(response.body, onEvent);
+      }
 
-    const json = await response.json();
-    const blocks = json?.content;
-    if (!Array.isArray(blocks)) {
-      throw new Error('Anthropic API returned empty content');
-    }
+      const json = await response.json();
+      const stopReason = json?.stop_reason as string | undefined;
+      if (stopReason && stopReason !== 'end_turn') {
+        onEvent?.({ kind: 'text', delta: '', finishReason: stopReason as AITextStreamEvent['finishReason'] });
+      }
 
-    return blocks.map((block) => block?.text || '').join('\n');
+      const blocks = json?.content;
+      if (!Array.isArray(blocks)) {
+        throw new Error('Anthropic API returned empty content');
+      }
+
+      return blocks.map((block) => block?.text || '').join('\n');
+    };
+
+    return withRetry(doFetch, { signal });
   }
 
   private parseCustomHeaders(): Record<string, string> {
@@ -663,7 +708,14 @@ ${this.buildToolInstructions()}
       }
 
       const json = JSON.parse(data);
-      const delta = json?.choices?.[0]?.delta;
+      const choice = json?.choices?.[0];
+      const delta = choice?.delta;
+      const finishReason = choice?.finish_reason as string | undefined;
+
+      if (finishReason) {
+        onEvent({ kind: 'text', delta: '', finishReason: finishReason as AITextStreamEvent['finishReason'] });
+      }
+
       if (!delta) {
         return [];
       }
@@ -702,6 +754,17 @@ ${this.buildToolInstructions()}
   ): Promise<string> {
     const text = await this.readEventStream(body, onEvent, (data) => {
       const json = JSON.parse(data);
+      const type = json?.type as string | undefined;
+
+      // message_delta carries stop_reason
+      if (type === 'message_delta') {
+        const stopReason = json?.delta?.stop_reason as string | undefined;
+        if (stopReason && stopReason !== 'end_turn') {
+          onEvent({ kind: 'text', delta: '', finishReason: stopReason as AITextStreamEvent['finishReason'] });
+        }
+        return [];
+      }
+
       const delta = json?.delta;
       if (!delta || typeof delta !== 'object') {
         return [];
@@ -728,58 +791,96 @@ ${this.buildToolInstructions()}
   ): Promise<{ answer: string; thinking: string }> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
+    const IDLE_TIMEOUT_MS = 90000;
+    const STALL_LOG_MS = 30000;
     let buffer = '';
     let answer = '';
     let thinking = '';
+    let lastEventTime = Date.now();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
+    const createIdleTimer = () =>
+      new Promise<never>((_, reject) => {
+        const interval = setInterval(() => {
+          const elapsed = Date.now() - lastEventTime;
+          if (elapsed >= IDLE_TIMEOUT_MS) {
+            clearInterval(interval);
+            reject(new Error(`SSE stream idle timeout after ${Math.round(elapsed / 1000)}s`));
+          }
+        }, 5000);
+      });
+
+    let timedOut = false;
+    const idlePromise = createIdleTimer();
+
+    const readLoop = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        const now = Date.now();
+        if (now - lastEventTime > STALL_LOG_MS) {
+          console.warn(`[AIService] SSE stall: ${Math.round((now - lastEventTime) / 1000)}s since last event`);
+        }
+        lastEventTime = now;
+
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split('\n\n');
+        buffer = frames.pop() || '';
+
+        for (const frame of frames) {
+          const dataLines = frame
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trimStart());
+          if (dataLines.length === 0) {
+            continue;
+          }
+
+          const events = parseEvents(dataLines.join('\n'));
+          events.forEach((event) => {
+            if (event.kind === 'thinking') {
+              thinking += event.delta;
+            } else {
+              answer += event.delta;
+            }
+            this.emitIfPresent(onEvent, event.kind, event.delta);
+          });
+        }
       }
+    };
 
-      buffer += decoder.decode(value, { stream: true });
-      const frames = buffer.split('\n\n');
-      buffer = frames.pop() || '';
+    try {
+      await Promise.race([readLoop(), idlePromise]);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('idle timeout')) {
+        timedOut = true;
+        try { reader.cancel(); } catch { /* ignore */ }
+        throw error;
+      }
+      throw error;
+    }
 
-      for (const frame of frames) {
-        const dataLines = frame
+    if (!timedOut) {
+      buffer += decoder.decode();
+      const tail = buffer.trim();
+      if (tail) {
+        const dataLines = tail
           .split('\n')
           .filter((line) => line.startsWith('data:'))
           .map((line) => line.slice(5).trimStart());
-        if (dataLines.length === 0) {
-          continue;
+        if (dataLines.length > 0) {
+          const events = parseEvents(dataLines.join('\n'));
+          events.forEach((event) => {
+            if (event.kind === 'thinking') {
+              thinking += event.delta;
+            } else {
+              answer += event.delta;
+            }
+            this.emitIfPresent(onEvent, event.kind, event.delta);
+          });
         }
-
-        const events = parseEvents(dataLines.join('\n'));
-        events.forEach((event) => {
-          if (event.kind === 'thinking') {
-            thinking += event.delta;
-          } else {
-            answer += event.delta;
-          }
-          this.emitIfPresent(onEvent, event.kind, event.delta);
-        });
-      }
-    }
-
-    buffer += decoder.decode();
-    const tail = buffer.trim();
-    if (tail) {
-      const dataLines = tail
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trimStart());
-      if (dataLines.length > 0) {
-        const events = parseEvents(dataLines.join('\n'));
-        events.forEach((event) => {
-          if (event.kind === 'thinking') {
-            thinking += event.delta;
-          } else {
-            answer += event.delta;
-          }
-          this.emitIfPresent(onEvent, event.kind, event.delta);
-        });
       }
     }
 

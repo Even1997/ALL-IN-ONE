@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 struct RuntimeSettingsStoreData {
     #[serde(default = "default_sandbox_policy")]
     sandbox_policy: String,
+    #[serde(default = "default_permission_mode")]
+    permission_mode: String,
     #[serde(default)]
     auto_resume_on_launch: bool,
     #[serde(default = "default_persist_resume_drafts")]
@@ -24,10 +26,15 @@ fn default_persist_resume_drafts() -> bool {
     true
 }
 
+fn default_permission_mode() -> String {
+    "ask".to_string()
+}
+
 impl Default for RuntimeSettingsStoreData {
     fn default() -> Self {
         Self {
             sandbox_policy: default_sandbox_policy(),
+            permission_mode: default_permission_mode(),
             auto_resume_on_launch: false,
             persist_resume_drafts: default_persist_resume_drafts(),
         }
@@ -38,6 +45,7 @@ impl RuntimeSettingsStoreData {
     fn into_record(self) -> RuntimeSettingsRecord {
         RuntimeSettingsRecord {
             sandbox_policy: self.sandbox_policy,
+            permission_mode: self.permission_mode,
             auto_resume_on_launch: self.auto_resume_on_launch,
             persist_resume_drafts: self.persist_resume_drafts,
         }
@@ -63,6 +71,11 @@ fn build_default_settings_store(app_data_dir: &Path) -> Result<RuntimeSettingsSt
     if let Some(legacy_sandbox_policy) = approval_store::get_legacy_sandbox_policy(app_data_dir)? {
         store.sandbox_policy = legacy_sandbox_policy;
     }
+    store.permission_mode = match store.sandbox_policy.as_str() {
+        "deny" => "plan".to_string(),
+        "allow" => "auto".to_string(),
+        _ => "ask".to_string(),
+    };
 
     Ok(store)
 }
@@ -94,6 +107,9 @@ pub fn update_settings(
 
     if let Some(sandbox_policy) = input.sandbox_policy {
         store.sandbox_policy = sandbox_policy;
+    }
+    if let Some(permission_mode) = input.permission_mode {
+        store.permission_mode = permission_mode;
     }
     if let Some(auto_resume_on_launch) = input.auto_resume_on_launch {
         store.auto_resume_on_launch = auto_resume_on_launch;
@@ -133,6 +149,7 @@ mod tests {
         let settings = get_settings(&app_data_dir).expect("load runtime settings");
 
         assert_eq!(settings.sandbox_policy, "ask");
+        assert_eq!(settings.permission_mode, "ask");
         assert!(!settings.auto_resume_on_launch);
         assert!(settings.persist_resume_drafts);
 
@@ -153,6 +170,7 @@ mod tests {
         let settings = get_settings(&app_data_dir).expect("load migrated settings");
 
         assert_eq!(settings.sandbox_policy, "deny");
+        assert_eq!(settings.permission_mode, "plan");
         assert!(!settings.auto_resume_on_launch);
         assert!(settings.persist_resume_drafts);
 
@@ -167,6 +185,7 @@ mod tests {
             &app_data_dir,
             UpdateRuntimeSettingsInput {
                 sandbox_policy: Some("allow".to_string()),
+                permission_mode: Some("bypass".to_string()),
                 auto_resume_on_launch: Some(true),
                 persist_resume_drafts: Some(false),
             },
@@ -174,11 +193,13 @@ mod tests {
         .expect("update runtime settings");
 
         assert_eq!(updated.sandbox_policy, "allow");
+        assert_eq!(updated.permission_mode, "bypass");
         assert!(updated.auto_resume_on_launch);
         assert!(!updated.persist_resume_drafts);
 
         let reloaded = get_settings(&app_data_dir).expect("reload runtime settings");
         assert_eq!(reloaded.sandbox_policy, "allow");
+        assert_eq!(reloaded.permission_mode, "bypass");
         assert!(reloaded.auto_resume_on_launch);
         assert!(!reloaded.persist_resume_drafts);
 

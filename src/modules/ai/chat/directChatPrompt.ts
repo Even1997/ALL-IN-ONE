@@ -6,6 +6,7 @@ import {
 } from '../skills/runtimeSkillArguments.ts';
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes.ts';
 import type { SkillIntent } from '../workflow/skillRouting.ts';
+import { estimateTextTokens } from './contextBudget.ts';
 
 type ConversationHistoryMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -19,6 +20,7 @@ const TASK_AUTHORIZATION_POLICY = [
   'Treat task-oriented user requests as authorization for low-risk internal actions needed to complete the task.',
   'This includes drafting and saving task-scoped local changes when they are reversible and stay inside the current workspace.',
   'Do not treat your own reply text as authorization.',
+  'If the assistant just asked whether to save, write, create, or update something, and the next user message is a short affirmative confirmation such as "好", "可以", "行", "嗯", "确认", "OK", or "yes", treat that reply as authorization to perform the pending action.',
   'Ask for confirmation before irreversible, high-risk, external, or out-of-scope actions.',
 ].join(' ');
 
@@ -109,27 +111,112 @@ const stripInternalThinking = (content: string) =>
     .replace(/<think>[\s\S]*$/g, '')
     .trim();
 
-const truncateHistoryContent = (content: string, maxChars = 1200) =>
-  content.length > maxChars ? `${content.slice(0, maxChars)}...[truncated]` : content;
+const INTERNAL_HISTORY_BLOCK_PATTERNS = [
+  /<goodnight-m-flow\b[^>]*>[\s\S]*?<\/goodnight-m-flow>/gi,
+  /<[^>\n]*m-flow[^>\n]*>[\s\S]*?<\/[^>\n]*m-flow[^>\n]*>/gi,
+];
+
+const INTERNAL_HISTORY_LINE_PATTERNS = [
+  /m-flow/i,
+  /候选面/,
+  /\bRoute\b.*识别/,
+  /识别候选面/,
+];
+
+const stripInternalHistoryProtocols = (content: string) => {
+  const withoutBlocks = INTERNAL_HISTORY_BLOCK_PATTERNS.reduce(
+    (current, pattern) => current.replace(pattern, ''),
+    content
+  );
+
+  return withoutBlocks
+    .split('\n')
+    .filter((line) => !INTERNAL_HISTORY_LINE_PATTERNS.some((pattern) => pattern.test(line.trim())))
+    .join('\n')
+    .trim();
+};
+
+const HISTORY_TOKEN_BUDGET = 8000;
+const HISTORY_MAX_CHARS_PER_MSG = 2000;
+
+const SAVE_LIKE_ACTION_PATTERN = /(?:\u4fdd\u5b58|\u5199\u5165|\u521b\u5efa|\u66f4\u65b0|\u4fee\u6539|\bsave\b|\bwrite\b|\bcreate\b|\bupdate\b)/i;
+const CONFIRMATION_QUESTION_PATTERN = /(?:\u8981\u4e0d\u8981|\u662f\u5426|\u9700\u8981|\u53ef\u4ee5.*\u5417|\u5417|would you like|should i|do you want|confirm)/i;
+const SHORT_AFFIRMATIVE_PATTERN = /^(?:\u597d|\u597d\u7684|\u53ef\u4ee5|\u884c|\u884c\u7684|\u55ef|\u55ef\u55ef|\u786e\u8ba4|\u5bf9|\u662f|\u662f\u7684|ok|okay|yes|yep|sure|go ahead)[\s\u3002\uff01!.,，]*$/i;
+const SHORT_NEGATIVE_PATTERN = /^(?:\u4e0d|\u4e0d\u8981|\u4e0d\u7528|\u5148\u4e0d|\u7b97\u4e86|no|nope|cancel)[\s\u3002\uff01!.,，]*$/i;
+
+const findLatestAssistantMessage = (messages: ConversationHistoryMessage[]) =>
+  [...messages].reverse().find((message) => message.role === 'assistant' && message.content.trim().length > 0) || null;
+
+const isShortAffirmativeReply = (value: string) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return Boolean(normalized && SHORT_AFFIRMATIVE_PATTERN.test(normalized) && !SHORT_NEGATIVE_PATTERN.test(normalized));
+};
+
+const looksLikePendingSaveQuestion = (value: string) =>
+  SAVE_LIKE_ACTION_PATTERN.test(value) && CONFIRMATION_QUESTION_PATTERN.test(value);
+
+const buildPendingConfirmationSection = (input: {
+  userInput: string;
+  conversationHistory: ConversationHistoryMessage[];
+}) => {
+  if (!isShortAffirmativeReply(input.userInput)) {
+    return '';
+  }
+
+  const latestAssistant = findLatestAssistantMessage(input.conversationHistory);
+  if (!latestAssistant || !looksLikePendingSaveQuestion(latestAssistant.content)) {
+    return '';
+  }
+
+  return [
+    'pending_user_confirmation:',
+    'The latest user message is a short affirmative reply to the assistant\'s previous save/write/create/update question.',
+    'Treat this as authorization to execute the previously proposed low-risk file action; do not wait for the literal word "save".',
+  ].join('\n');
+};
 
 export const buildConversationHistorySection = (
   messages: ConversationHistoryMessage[] = [],
-  maxMessages = 8,
+  maxTokens = HISTORY_TOKEN_BUDGET,
 ) => {
+  if (messages.length === 0) {
+    return '';
+  }
+
   const visibleMessages = messages
     .filter((message) => message.role === 'user' || message.role === 'assistant')
     .map((message) => ({
       ...message,
-      content: truncateHistoryContent(stripInternalThinking(message.content).replace(/\s+/g, ' ')),
+      content: stripInternalHistoryProtocols(stripInternalThinking(message.content)).replace(/\s+/g, ' '),
     }))
-    .filter((message) => message.content.length > 0)
-    .slice(-maxMessages);
+    .filter((message) => message.content.length > 0);
 
   if (visibleMessages.length === 0) {
     return '';
   }
 
-  return visibleMessages.map((message) => `${message.role}: ${message.content}`).join('\n');
+  // Build from most recent backwards, stop when token budget exceeded
+  const included: string[] = [];
+  let usedTokens = 0;
+
+  for (let i = visibleMessages.length - 1; i >= 0; i -= 1) {
+    const message = visibleMessages[i]!;
+    const perMessageBudget = Math.max(300, Math.min(HISTORY_MAX_CHARS_PER_MSG, maxTokens - usedTokens));
+    const truncated = message.content.length > perMessageBudget
+      ? `${message.content.slice(0, perMessageBudget)}...[truncated]`
+      : message.content;
+    const line = `${message.role}: ${truncated}`;
+    const lineTokens = estimateTextTokens(line);
+
+    if (usedTokens + lineTokens > maxTokens) {
+      break;
+    }
+
+    included.unshift(line);
+    usedTokens += lineTokens;
+  }
+
+  return included.join('\n');
 };
 
 export const buildDirectChatPrompt = (options: {
@@ -171,6 +258,10 @@ export const buildDirectChatPrompt = (options: {
         )
       : activeSkill?.prompt || '';
   const conversationHistorySection = buildConversationHistorySection(conversationHistory);
+  const pendingConfirmationSection = buildPendingConfirmationSection({
+    userInput,
+    conversationHistory,
+  });
   const promptSections = [`user_request:\n${userInput.trim()}`];
 
   if (skillLabel) {
@@ -192,6 +283,10 @@ export const buildDirectChatPrompt = (options: {
 
   if (conversationHistorySection) {
     promptSections.unshift(`conversation_history:\n${conversationHistorySection}`);
+  }
+
+  if (pendingConfirmationSection) {
+    promptSections.unshift(pendingConfirmationSection);
   }
 
   if (contextWindowTokens) {

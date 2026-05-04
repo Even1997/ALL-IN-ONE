@@ -111,3 +111,15 @@ export type AgentTurnRewindResult = {
   checkpointCount: number;
   rewoundAt: number;
 };
+
+export type AgentBackgroundTaskRecord = {
+  id: string;
+  threadId: string;
+  runKind: string;
+  title: string;
+  status: string;
+  summary: string;
+  payloadJson: string;
+  createdAt: number;
+  updatedAt: number;
+};

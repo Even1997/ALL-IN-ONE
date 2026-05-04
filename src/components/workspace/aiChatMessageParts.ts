@@ -1,6 +1,6 @@
 export type AIChatMessagePart =
-  | { type: 'text'; content: string }
-  | { type: 'thinking'; content: string; collapsed: boolean }
+  | { type: 'text'; content: string; createdAt?: number }
+  | { type: 'thinking'; content: string; collapsed: boolean; createdAt?: number }
   | {
       type: 'tool';
       name: string;
@@ -9,6 +9,7 @@ export type AIChatMessagePart =
       command?: string;
       input?: string;
       output?: string;
+      createdAt?: number;
     };
 
 export type AssistantStructuredContentState = {
@@ -35,18 +36,20 @@ const TOOL_LABELS: Record<string, string> = {
 const RAW_DSML_TOOL_BLOCK_PATTERN =
   /<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
 const RAW_APPLY_SKILL_BLOCK_PATTERN = /<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>/gi;
+const RAW_BARE_TOOL_BLOCK_PATTERN = /<tool name="(\w+)">[\s\S]*?<\/tool>/gi;
 const RAW_INTERNAL_SKILL_LINE_PATTERN =
   /^(?:让我先用|我先用)\s+[`'"]?[\w-]+[`'"]?\s+技能[:：]?\s*$/gim;
 const RAW_INTERNAL_PROTOCOL_LINE_PATTERN =
-  /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false").*$/gim;
+  /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=|<\/tool>|<tool_params>|<\/tool_params>).*\s*$/gim;
 
 const RAW_ASSISTANT_EXECUTION_BLOCK_PATTERN =
-  /<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>|<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>|<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
+  /<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool name="(\w+)">([\s\S]*?)<\/tool>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>|<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>|<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
 
 export const cleanVisibleAssistantText = (content: string) =>
   content
     .replace(RAW_DSML_TOOL_BLOCK_PATTERN, '')
     .replace(RAW_APPLY_SKILL_BLOCK_PATTERN, '')
+    .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
     .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
     .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
     .replace(/\n{3,}/g, '\n\n')
@@ -105,6 +108,16 @@ const normalizeToolInput = (rawParams: string) => {
   return normalized || undefined;
 };
 
+const cleanThinkingAssistantText = (content: string) =>
+  content
+    .replace(RAW_DSML_TOOL_BLOCK_PATTERN, '')
+    .replace(RAW_APPLY_SKILL_BLOCK_PATTERN, '')
+    .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
+    .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
+    .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 export const buildAssistantMessageParts = (input: {
   content?: string;
   thinkingContent?: string;
@@ -126,11 +139,14 @@ export const buildAssistantMessageParts = (input: {
   const parts: AIChatMessagePart[] = [];
 
   if (input.thinkingContent?.trim()) {
-    parts.push({
-      type: 'thinking',
-      content: input.thinkingContent.trim(),
-      collapsed: input.thinkingCollapsed ?? false,
-    });
+    const thinkingContent = cleanThinkingAssistantText(input.thinkingContent);
+    if (thinkingContent) {
+      parts.push({
+        type: 'thinking',
+        content: thinkingContent,
+        collapsed: input.thinkingCollapsed ?? false,
+      });
+    }
   }
 
   if (input.answerContent?.trim()) {
@@ -144,7 +160,7 @@ export const buildAssistantMessageParts = (input: {
     return parts;
   }
 
-  return parseAIChatMessageParts(input.content || '');
+  return [];
 };
 
 export const extractAssistantMessageContent = (content: string) => {
@@ -168,7 +184,7 @@ export const extractAssistantMessageContent = (content: string) => {
   const unfinishedThinkIndex = content.lastIndexOf('<think>');
   if (unfinishedThinkIndex !== -1 && content.indexOf('</think>', unfinishedThinkIndex) === -1) {
     return {
-      thinkingContent: content.slice(unfinishedThinkIndex + '<think>'.length).trim(),
+      thinkingContent: cleanThinkingAssistantText(content.slice(unfinishedThinkIndex + '<think>'.length)),
       answerContent: cleanVisibleAssistantText(content.slice(0, unfinishedThinkIndex)),
       hasExecutionBlocks: false,
     };
@@ -176,7 +192,7 @@ export const extractAssistantMessageContent = (content: string) => {
 
   const explicitThinkingParts: string[] = [];
   const workingContent = content.replace(/<think>([\s\S]*?)<\/think>/g, (_, thinkingContent: string) => {
-    const normalizedThinking = thinkingContent.trim();
+    const normalizedThinking = cleanThinkingAssistantText(thinkingContent);
     if (normalizedThinking) {
       explicitThinkingParts.push(normalizedThinking);
     }
@@ -235,11 +251,14 @@ export const buildStoredAssistantParts = (input: {
   const parts: AIChatMessagePart[] = [];
 
   if (input.thinkingContent?.trim()) {
-    parts.push({
-      type: 'thinking',
-      content: input.thinkingContent.trim(),
-      collapsed: input.thinkingCollapsed ?? false,
-    });
+    const thinkingContent = cleanThinkingAssistantText(input.thinkingContent);
+    if (thinkingContent) {
+      parts.push({
+        type: 'thinking',
+        content: thinkingContent,
+        collapsed: input.thinkingCollapsed ?? false,
+      });
+    }
   }
 
   if (input.answerContent?.trim()) {
@@ -275,7 +294,7 @@ export const buildAssistantStructuredContentState = (input: {
   thinkingCollapsed?: boolean;
 }): AssistantStructuredContentState => {
   const extracted = extractAssistantMessageContent(input.content || '');
-  const parsedThinkingContent = extracted.thinkingContent || input.fallbackThinkingContent?.trim() || '';
+  const parsedThinkingContent = extracted.thinkingContent || cleanThinkingAssistantText(input.fallbackThinkingContent || '') || '';
   const parsedAnswerContent =
     extracted.answerContent ||
     (!parsedThinkingContent && !extracted.hasExecutionBlocks ? cleanVisibleAssistantText(input.content || '') : '');
@@ -283,7 +302,7 @@ export const buildAssistantStructuredContentState = (input: {
   const preferredParts = Array.isArray(input.preferredAssistantParts) ? input.preferredAssistantParts : [];
   const preferredThinkingContent = preferredParts
     .filter((part) => part.type === 'thinking')
-    .map((part) => part.content.trim())
+    .map((part) => cleanThinkingAssistantText(part.content))
     .filter(Boolean)
     .join('\n\n')
     .trim();
@@ -343,7 +362,7 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
 
   const parts: AIChatMessagePart[] = [];
   const pattern =
-    /<think>[\s\S]*?<\/think>|<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>/g;
+    /<think>[\s\S]*?<\/think>|<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool name="(\w+)">([\s\S]*?)<\/tool>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -357,9 +376,10 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
         content: thinkingMatch?.[1]?.trim() || '',
         collapsed: true,
       });
-    } else if (match[1]) {
-      const name = match[1];
-      const paramsMatch = match[2].match(/<tool_params>([\s\S]*?)<\/tool_params>/);
+    } else if (match[1] || match[3]) {
+      const name = match[1] || match[3];
+      const rawToolBody = match[2] || match[4] || '';
+      const paramsMatch = rawToolBody.match(/<tool_params>([\s\S]*?)<\/tool_params>/);
       const rawParams = paramsMatch?.[1] || '';
       parts.push({
         type: 'tool',
@@ -369,14 +389,14 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
         input: normalizeToolInput(rawParams),
         status: 'running',
       });
-    } else if (match[4]) {
-      const toolName = match[3] || 'tool';
+    } else if (match[6]) {
+      const toolName = match[5] || 'tool';
       parts.push({
         type: 'tool',
         name: toolName,
         title: getToolTitle(toolName),
-        output: match[5].trim(),
-        status: match[4] === 'error' ? 'error' : 'success',
+        output: match[7].trim(),
+        status: match[6] === 'error' ? 'error' : 'success',
       });
     }
 

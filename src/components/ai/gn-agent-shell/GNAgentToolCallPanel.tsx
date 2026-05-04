@@ -3,25 +3,25 @@ import type { RuntimeToolStep } from '../../../modules/ai/runtime/agent-kernel/a
 import type { RuntimeMcpToolCall } from '../../../modules/ai/runtime/mcp/runtimeMcpTypes';
 
 const toolStatusLabels: Record<RuntimeToolStep['status'], string> = {
-  running: '执行中',
-  completed: '已完成',
-  failed: '失败',
-  blocked: '已阻止',
+  running: 'Running',
+  completed: 'Completed',
+  failed: 'Failed',
+  blocked: 'Blocked',
 };
 
 const mcpStatusLabels: Record<RuntimeMcpToolCall['status'], string> = {
-  running: '执行中',
-  completed: '已完成',
-  error: '失败',
+  running: 'Running',
+  completed: 'Completed',
+  error: 'Failed',
 };
 
 const summarizeToolCall = (toolCall: RuntimeToolStep) => {
   const input = toolCall.input;
   if (toolCall.name === 'view' && typeof input.file_path === 'string') {
-    return `读取 ${input.file_path}`;
+    return `Read ${input.file_path}`;
   }
   if ((toolCall.name === 'write' || toolCall.name === 'edit') && typeof input.file_path === 'string') {
-    return `${toolCall.name === 'write' ? '写入' : '编辑'} ${input.file_path}`;
+    return `${toolCall.name === 'write' ? 'Write' : 'Edit'} ${input.file_path}`;
   }
   if (toolCall.name === 'bash' && typeof input.command === 'string') {
     return input.command;
@@ -30,28 +30,28 @@ const summarizeToolCall = (toolCall: RuntimeToolStep) => {
     return input.url;
   }
   if (toolCall.name === 'grep' && typeof input.pattern === 'string') {
-    return `搜索 ${input.pattern}`;
+    return `Search ${input.pattern}`;
   }
   if (toolCall.name === 'glob' && typeof input.pattern === 'string') {
-    return `匹配 ${input.pattern}`;
+    return `Match ${input.pattern}`;
   }
   if (toolCall.name === 'ls' && typeof input.path === 'string') {
-    return `列出 ${input.path}`;
+    return `List ${input.path}`;
   }
   if (toolCall.name === 'AskUserQuestion') {
-    return '等待用户输入';
+    return 'Waiting for input';
   }
   return toolStatusLabels[toolCall.status];
 };
 
 const summarizeFileChange = (change: NonNullable<RuntimeToolStep['fileChanges']>[number]) => {
   if (change.beforeContent === null && change.afterContent !== null) {
-    return '新建';
+    return 'Created';
   }
   if (change.beforeContent !== null && change.afterContent === null) {
-    return '删除';
+    return 'Deleted';
   }
-  return '修改';
+  return 'Updated';
 };
 
 const formatToolCounter = (toolCalls: RuntimeToolStep[], mcpToolCalls: RuntimeMcpToolCall[]) => {
@@ -63,7 +63,7 @@ const formatToolCounter = (toolCalls: RuntimeToolStep[], mcpToolCalls: RuntimeMc
     toolCalls.filter((toolCall) => toolCall.status === 'failed' || toolCall.status === 'blocked').length +
     mcpToolCalls.filter((toolCall) => toolCall.status === 'error').length;
 
-  return `${total} calls · 完成 ${completed}${failed > 0 ? ` · 异常 ${failed}` : ''}`;
+  return `${total} calls / completed ${completed}${failed > 0 ? ` / failed ${failed}` : ''}`;
 };
 
 export const GNAgentToolCallPanel: React.FC<{

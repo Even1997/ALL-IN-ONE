@@ -5040,7 +5040,6 @@ ${selectedContextPrompt}` : '',
       onPickProjectStoragePath={handlePickProjectStoragePath}
       onPickProjectVaultPath={canUseProjectFilesystem ? handlePickProjectVaultPath : undefined}
       onResetProjectStoragePath={handleResetProjectStoragePath}
-      onClose={() => setIsProjectManagerOpen(false)}
     />
   ) : roleContent;
   const appDesktopContent = appMainContent;

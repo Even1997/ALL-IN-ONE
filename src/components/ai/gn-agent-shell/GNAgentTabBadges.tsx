@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
 import { useProjectStore } from '../../../store/projectStore';
@@ -20,7 +20,7 @@ export const GNAgentTabBadges: React.FC = () => {
 
   return (
     <div className="gn-agent-tab-badges">
-      {(visibleSessions.length > 0 ? visibleSessions : [{ id: 'placeholder', title: '浼氳瘽 1' }]).map((session, index) => {
+      {(visibleSessions.length > 0 ? visibleSessions : [{ id: 'placeholder', title: '会话 1' }]).map((session, index) => {
         const isActive = session.id === activeSessionId || (visibleSessions.length === 0 && index === 0);
         return (
           <button
@@ -43,4 +43,3 @@ export const GNAgentTabBadges: React.FC = () => {
     </div>
   );
 };
-

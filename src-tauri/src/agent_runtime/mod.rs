@@ -1,3 +1,4 @@
+pub mod background_task_store;
 pub mod approval_store;
 pub mod commands;
 pub mod context_store;

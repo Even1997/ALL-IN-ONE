@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useApprovalStore } from '../../../modules/ai/runtime/approval/approvalStore';
+import { PERMISSION_MODE_LABELS } from '../../../modules/ai/runtime/approval/permissionMode';
 import { useGNAgentShellStore } from '../../../modules/ai/gn-agent/gnAgentShellStore';
 import { useRuntimeMcpStore } from '../../../modules/ai/runtime/mcp/runtimeMcpStore';
 import { useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
@@ -10,6 +11,8 @@ import type { LocalAgentConfigSnapshot } from '../../../modules/ai/gn-agent/loca
 import { ClaudeRuntime } from '../../../modules/ai/gn-agent/runtime/claude/ClaudeRuntime';
 import { CodexRuntime } from '../../../modules/ai/gn-agent/runtime/codex/CodexRuntime';
 import { canResumeFromRecovery } from '../../../modules/ai/runtime/replay/runtimeReplayRecovery';
+import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
+import { useProjectStore } from '../../../store/projectStore';
 
 const claudeRuntime = new ClaudeRuntime();
 const codexRuntime = new CodexRuntime();
@@ -18,22 +21,27 @@ export const GNAgentRuntimeSummary: React.FC<{
   providerId: 'claude' | 'codex';
   localSnapshot: LocalAgentConfigSnapshot | null;
 }> = ({ providerId, localSnapshot }) => {
+  const currentProject = useProjectStore((state) => state.currentProject);
+  const activeSessionId = useAIChatStore((state) =>
+    currentProject ? state.projects[currentProject.id]?.activeSessionId || null : null
+  );
   const { aiConfigs } = useGlobalAIStore(
     useShallow((state) => ({
       aiConfigs: state.aiConfigs,
     }))
   );
-  const { approvalsByThread, sandboxPolicy } = useApprovalStore(
+  const { approvalsByThread, permissionMode } = useApprovalStore(
     useShallow((state) => ({
       approvalsByThread: state.approvalsByThread,
-      sandboxPolicy: state.sandboxPolicy,
+      permissionMode: state.permissionMode,
     }))
   );
-  const { activeSkillsByThread, replayEventsByThread, recoveryByThread } = useAgentRuntimeStore(
+  const { activeSkillsByThread, replayEventsByThread, recoveryByThread, liveStateByThread } = useAgentRuntimeStore(
     useShallow((state) => ({
       activeSkillsByThread: state.activeSkillsByThread,
       replayEventsByThread: state.replayEventsByThread,
       recoveryByThread: state.recoveryByThread,
+      liveStateByThread: state.liveStateByThread,
     }))
   );
   const { runtimeMcpServers, toolCallsByThread } = useRuntimeMcpStore(
@@ -91,6 +99,7 @@ export const GNAgentRuntimeSummary: React.FC<{
     [recoveryByThread]
   );
   const resumeState = resumableThreads > 0 ? 'resume-ready' : replayEvents > 0 ? 'resume-idle' : 'resume-empty';
+  const activeLiveState = activeSessionId ? liveStateByThread[activeSessionId] || null : null;
 
   return (
     <section className={`gn-agent-runtime-summary ${status.ready ? 'ready' : 'missing'}`}>
@@ -100,8 +109,22 @@ export const GNAgentRuntimeSummary: React.FC<{
       </div>
       <p>{status.summary}</p>
       <div className="gn-agent-runtime-summary-details">
+        <code>session: {activeLiveState?.connectionState || 'disconnected'}</code>
+        <code>status: {activeLiveState?.statusVerb || 'idle'}</code>
+        <code>tool: {activeLiveState?.activeToolName || 'none'}</code>
+        {activeLiveState?.streamingToolInput ? (
+          <code>input: {activeLiveState.streamingToolInput}</code>
+        ) : null}
+        <code>elapsed: {activeLiveState?.elapsedSeconds || 0}s</code>
+        <code>tokens: ~{activeLiveState?.tokenUsage.inputTokens || 0} / ~{activeLiveState?.tokenUsage.outputTokens || 0}</code>
         <code>approval: {pendingApprovalCount} pending</code>
-        <code>approval policy: {sandboxPolicy}</code>
+        {activeLiveState?.pendingApprovalSummary ? (
+          <code>approval summary: {activeLiveState.pendingApprovalSummary}</code>
+        ) : null}
+        {activeLiveState?.pendingQuestionSummary ? (
+          <code>question: {activeLiveState.pendingQuestionSummary}</code>
+        ) : null}
+        <code>mode: {PERMISSION_MODE_LABELS[permissionMode]}</code>
         <code>skills: {activeSkillCount}</code>
         <code>mcp: {runtimeMcpServers.length}</code>
         <code>mcp calls: {mcpCalls}</code>

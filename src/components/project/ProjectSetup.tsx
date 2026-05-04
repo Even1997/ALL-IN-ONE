@@ -20,7 +20,6 @@ interface ProjectSetupProps {
   onPickProjectStoragePath?: () => void | Promise<void>;
   onResetProjectStoragePath?: () => void | Promise<void>;
   onPickProjectVaultPath?: () => void | Promise<void>;
-  onClose?: () => void;
 }
 
 export const ProjectSetup: React.FC<ProjectSetupProps> = ({
@@ -34,7 +33,6 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
   onOpenProject,
   onDeleteProject,
   onPickProjectVaultPath,
-  onClose,
 }) => {
   const defaultProjectStoragePath =
     projectStorageSettings?.rootPath || projectStorageSettings?.defaultPath || '';
@@ -144,30 +142,6 @@ export const ProjectSetup: React.FC<ProjectSetupProps> = ({
       </MacPanel>
 
       <div className="project-manager-main">
-        <div className="project-setup-hero project-manager-hero">
-          <div className="project-setup-badge">Projects</div>
-          <h1>多项目工作区</h1>
-          <p>
-            左侧固定项目列表，右侧专注创建和设置，让切换项目和管理知识库都更顺手。
-          </p>
-          <div className="project-setup-points project-manager-points">
-            <span>左侧快速切换项目</span>
-            <span>右侧直接新建项目</span>
-            <span>知识库可独立绑定本地文件夹</span>
-          </div>
-          {onClose ? (
-            <div className="project-manager-hero-actions">
-              <MacButton
-                className="project-manager-back-btn"
-                variant="secondary"
-                onClick={onClose}
-              >
-                返回当前项目
-              </MacButton>
-            </div>
-          ) : null}
-        </div>
-
         <MacPanel
           as="form"
           className="project-setup-card project-manager-panel project-manager-form"

@@ -6,7 +6,31 @@ export const estimateTextTokens = (text: string) => {
     return 0;
   }
 
-  return Math.ceil(normalized.length / 4);
+  let tokens = 0;
+  for (const ch of normalized) {
+    const code = ch.codePointAt(0) ?? 0;
+    // CJK Unified Ideographs, Extension A-F, Compatibility Ideographs
+    if (
+      (code >= 0x4e00 && code <= 0x9fff) ||
+      (code >= 0x3400 && code <= 0x4dbf) ||
+      (code >= 0x20000 && code <= 0x2ebef) ||
+      (code >= 0xf900 && code <= 0xfaff)
+    ) {
+      tokens += 1.5;
+    } else if (
+      // CJK punctuation, fullwidth forms, symbols
+      (code >= 0x3000 && code <= 0x303f) ||
+      (code >= 0xff00 && code <= 0xffef)
+    ) {
+      tokens += 1;
+    } else if (code >= 0x80) {
+      tokens += 0.5;
+    } else {
+      tokens += 0.25;
+    }
+  }
+
+  return Math.ceil(tokens);
 };
 
 export const formatTokenCount = (value: number) => {

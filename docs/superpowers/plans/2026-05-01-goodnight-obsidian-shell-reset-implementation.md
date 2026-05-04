@@ -383,7 +383,7 @@ assert.doesNotMatch(noteSource, /onOrganizeKnowledge:/);
 assert.doesNotMatch(noteSource, /wiki-index/);
 assert.doesNotMatch(noteSource, /ai-summary/);
 assert.doesNotMatch(noteSource, /m-flow/);
-assert.doesNotMatch(noteSource, /绯荤粺绱㈠紩/);
+assert.doesNotMatch(noteSource, /系统索引/);
 
 assert.doesNotMatch(workbenchSource, /rebuildProjectMFlow/);
 assert.doesNotMatch(workbenchSource, /KnowledgeGraphWorkspace/);

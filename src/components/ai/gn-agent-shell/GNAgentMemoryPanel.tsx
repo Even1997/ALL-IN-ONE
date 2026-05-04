@@ -1,12 +1,15 @@
 import React from 'react';
 import { useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
+import type { AgentMemoryEntry } from '../../../modules/ai/runtime/agentRuntimeTypes';
 import { useProjectStore } from '../../../store/projectStore';
+
+const EMPTY_MEMORY_ENTRIES: AgentMemoryEntry[] = [];
 
 export const GNAgentMemoryPanel: React.FC = () => {
   const currentProject = useProjectStore((state) => state.currentProject);
-  const fallbackMemoryEntries = useProjectStore((state) => state.memory?.memoryEntries || []);
+  const fallbackMemoryEntries = useProjectStore((state) => state.memory?.memoryEntries || EMPTY_MEMORY_ENTRIES);
   const runtimeMemoryEntries = useAgentRuntimeStore((state) =>
-    currentProject ? state.memoryByProject[currentProject.id] || [] : []
+    currentProject ? state.memoryByProject[currentProject.id] || EMPTY_MEMORY_ENTRIES : EMPTY_MEMORY_ENTRIES
   );
   const entries = runtimeMemoryEntries.length > 0 ? runtimeMemoryEntries : fallbackMemoryEntries;
 

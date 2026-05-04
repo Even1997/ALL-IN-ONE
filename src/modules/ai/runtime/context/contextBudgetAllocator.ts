@@ -54,8 +54,9 @@ export const allocateContextBudget = (
     };
   };
   const requiredBudget = estimateBudget(requiredIds);
+  const overflowing = requiredBudget.usedTokens > safeLimit;
 
-  if (requiredBudget.usedTokens <= safeLimit) {
+  if (!overflowing) {
     sections.forEach((section) => {
       if (requiredIds.has(section.id)) {
         return;
@@ -73,6 +74,10 @@ export const allocateContextBudget = (
   const finalIncludedIds = new Set([...requiredIds, ...includedOptionalIds]);
   const allocatedSections = markIncludedSections(finalIncludedIds);
   const budget = estimateBudget(finalIncludedIds);
+
+  if (overflowing) {
+    budget.overflow = true;
+  }
 
   return {
     sections: allocatedSections,

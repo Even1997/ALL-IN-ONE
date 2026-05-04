@@ -43,7 +43,7 @@ assert.match(source, /Skills/);
 assert.match(source, /Activity/);
 assert.match(source, /chat-agent-lane-tabs/);
 assert.match(source, /chat-agent-capability-grid/);
-assert.match(source, /@变更同步|@鍙樻洿鍚屾/);
+assert.match(source, /@变更同步|@变更同步/);
 assert.doesNotMatch(source, /Legacy Workspace/);
 assert.doesNotMatch(source, /Legacy Settings/);
 ```

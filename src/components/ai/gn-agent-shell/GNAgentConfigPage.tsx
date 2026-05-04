@@ -101,7 +101,7 @@ export const GNAgentConfigPage: React.FC = () => {
             title="当前 AI 配置"
             desc={
               selectedConfig
-                ? `${selectedConfig.name} 路 ${selectedConfig.provider} 路 ${selectedConfig.model}`
+                ? `${selectedConfig.name} · ${selectedConfig.provider} · ${selectedConfig.model}`
                 : '当前还没有选中的运行时配置。'
             }
             code={selectedConfig ? selectedConfig.baseURL : '未选择配置'}
@@ -165,7 +165,7 @@ export const GNAgentConfigPage: React.FC = () => {
           >
             <div className="gn-agent-shell-config-list">
               {claudeConfigs.map((config) => (
-                <code key={config.id}>{`${config.name} 路 ${config.model}`}</code>
+                <code key={config.id}>{`${config.name} · ${config.model}`}</code>
               ))}
             </div>
           </ConfigCard>
@@ -199,7 +199,7 @@ export const GNAgentConfigPage: React.FC = () => {
           >
             <div className="gn-agent-shell-config-list">
               {codexConfigs.map((config) => (
-                <code key={config.id}>{`${config.name} 路 ${config.model}`}</code>
+                <code key={config.id}>{`${config.name} · ${config.model}`}</code>
               ))}
             </div>
           </ConfigCard>

@@ -11,8 +11,8 @@ test('direct chat prompt tells the AI not to claim file saves without real verif
   const source = await readFile(promptPath, 'utf8');
 
   assert.match(source, /FILE_OPERATION_TRUTHFULNESS_POLICY/);
-  assert.match(source, /\u5df2\u4fdd\u5b58/);
-  assert.match(source, /\u5df2\u521b\u5efa\u6587\u4ef6/);
-  assert.match(source, /\u5df2\u5199\u5165/);
-  assert.match(source, /\u5df2\u5220\u9664/);
+  assert.match(source, /Unless a real file operation succeeded/);
+  assert.match(source, /created, saved, edited, or deleted/);
+  assert.match(source, /short affirmative confirmation/);
+  assert.match(source, /\u786e\u8ba4/);
 });
