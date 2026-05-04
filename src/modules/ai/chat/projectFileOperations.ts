@@ -39,6 +39,8 @@ export type PendingProjectFileProposalAction = {
   proposal: ProjectFileProposal;
 };
 
+export type ProjectFileRequestKind = 'read' | 'write' | 'none';
+
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/;
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\\]+\\[^\\]+/;
 
@@ -176,6 +178,30 @@ export const detectProjectFileWriteIntent = (value: string) => WRITE_INTENT_PATT
 
 export const detectProjectFileReadIntent = (value: string) =>
   READ_INTENT_PATTERN.test(value) && !detectProjectFileWriteIntent(value);
+
+export const resolveProjectFileRequestKind = (input: {
+  rawInput: string;
+  cleanedInput?: string | null;
+}): ProjectFileRequestKind => {
+  const candidates = [input.rawInput, input.cleanedInput || '']
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (candidates.some((value) => detectProjectFileWriteIntent(value))) {
+    return 'write';
+  }
+
+  if (candidates.some((value) => detectProjectFileReadIntent(value))) {
+    return 'read';
+  }
+
+  return 'none';
+};
+
+export const shouldForceProjectFileProposal = (value: string) =>
+  /(?:先(?:给我)?看|先确认|确认一下|不要直接写|先别写|先出(?:方案|计划)|preview|review first|show me (?:the )?(?:plan|changes))/i.test(
+    value.trim()
+  );
 
 export const isShortPendingActionAffirmation = (value: string) => {
   const normalized = value.replace(/\s+/g, ' ').trim();

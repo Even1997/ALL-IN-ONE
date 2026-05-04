@@ -5,6 +5,7 @@ import {
   joinProjectRelativePath,
   mapGeneratedFilesForProjectOutput,
   mapSketchFilesForProjectOutput,
+  resolveProjectRuntimeRootPath,
   sanitizeProjectRelativePath,
 } from '../src/utils/projectPersistence.ts';
 import { readFile } from 'node:fs/promises';
@@ -48,6 +49,23 @@ test('project output sync keeps only design prototypes and design-native files',
     { path: 'design/prototypes/manifest.json', content: '{"pages":[]}' },
     { path: 'design/styles/custom.md', content: '---\nname: Custom\n---' },
   ]);
+});
+
+test('project persistence prefers the bound vault path for runtime file access', () => {
+  assert.equal(
+    resolveProjectRuntimeRootPath(
+      { id: 'project-1', vaultPath: 'C:\\workspace\\demo' },
+      'C:\\internal\\project-1'
+    ),
+    'C:\\workspace\\demo'
+  );
+  assert.equal(
+    resolveProjectRuntimeRootPath(
+      { id: 'project-1', vaultPath: '   ' },
+      'C:\\internal\\project-1'
+    ),
+    'C:\\internal\\project-1'
+  );
 });
 
 test('project persistence joins relative project paths segment-by-segment for Windows roots', () => {

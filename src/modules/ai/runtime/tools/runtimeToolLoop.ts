@@ -15,6 +15,7 @@ import type {
   RuntimeToolStep,
 } from '../agent-kernel/agentKernelTypes.ts';
 import { compactOldToolResults, isContextLengthError, removeOldestTurn } from '../compaction/compactToolResults.ts';
+import { createAgentEventDispatcher, sanitizeAgentVisibleText } from '../dispatch/agentEvents.ts';
 
 const previewResult = (result: ToolResult) => result.content.slice(0, 1000);
 
@@ -99,6 +100,7 @@ export async function runRuntimeToolLoop(
   const toolCalls: RuntimeToolStep[] = [];
   const allowedTools = new Set(options.allowedTools);
   let finalContent = '';
+  const agentEvents = createAgentEventDispatcher(options.onAgentEvent);
 
   const wrapOnModelEvent = (onEvent?: (event: AITextStreamEvent) => void) => {
     let finishReason: AITextStreamEvent['finishReason'];
@@ -133,8 +135,21 @@ export async function runRuntimeToolLoop(
       step.status = 'blocked';
       step.resultPreview = previewResult(result);
       step.resultContent = result.content;
+      agentEvents.emit({ type: 'tool_call_started', toolCall: { ...step } });
+      agentEvents.emit({
+        type: 'tool_result',
+        toolCallId: step.id,
+        name: step.name,
+        status: step.status,
+        content: result.content,
+        isError: true,
+      });
+      agentEvents.emit({ type: 'tool_call_completed', toolCall: { ...step } });
       return { step, result };
     }
+
+    agentEvents.emit({ type: 'tool_call_started', toolCall: { ...step } });
+    options.onToolCallsChange?.([...toolCalls, step].map((toolCall) => ({ ...toolCall })));
 
     if (!allowedTools.has(call.name)) {
       const result: ToolResult = {
@@ -145,6 +160,15 @@ export async function runRuntimeToolLoop(
       step.status = 'blocked';
       step.resultPreview = previewResult(result);
       step.resultContent = result.content;
+      agentEvents.emit({
+        type: 'tool_result',
+        toolCallId: step.id,
+        name: step.name,
+        status: step.status,
+        content: result.content,
+        isError: true,
+      });
+      agentEvents.emit({ type: 'tool_call_completed', toolCall: { ...step } });
       return { step, result };
     }
 
@@ -155,6 +179,16 @@ export async function runRuntimeToolLoop(
       step.resultContent = result.content;
       step.fileChanges = result.is_error ? [] : extractResultFileChanges(result);
       await options.afterToolCall?.(call);
+      agentEvents.emit({
+        type: 'tool_result',
+        toolCallId: step.id,
+        name: step.name,
+        status: step.status,
+        content: result.content,
+        isError: result.is_error,
+        fileChanges: step.fileChanges,
+      });
+      agentEvents.emit({ type: 'tool_call_completed', toolCall: { ...step } });
       return { step, result };
     } catch (error) {
       const result: ToolResult = {
@@ -165,6 +199,15 @@ export async function runRuntimeToolLoop(
       step.status = 'failed';
       step.resultPreview = previewResult(result);
       step.resultContent = result.content;
+      agentEvents.emit({
+        type: 'tool_result',
+        toolCallId: step.id,
+        name: step.name,
+        status: step.status,
+        content: result.content,
+        isError: true,
+      });
+      agentEvents.emit({ type: 'tool_call_completed', toolCall: { ...step } });
       return { step, result };
     }
   };
@@ -238,6 +281,7 @@ export async function runRuntimeToolLoop(
       const compaction = compactOldToolResults(messages);
       if (compaction.compacted) {
         options.onContextCompaction?.('tool_results_trimmed');
+        agentEvents.emit({ type: 'context_compacted', reason: 'tool_results_trimmed' });
         try {
           assistantContent = await options.callModel(
             [...messages],
@@ -249,6 +293,7 @@ export async function runRuntimeToolLoop(
           const removal = removeOldestTurn(messages);
           if (removal.compacted) {
             options.onContextCompaction?.('old_turns_removed');
+            agentEvents.emit({ type: 'context_compacted', reason: 'old_turns_removed' });
             assistantContent = await options.callModel(
               [...messages],
               options.systemPrompt,
@@ -262,6 +307,7 @@ export async function runRuntimeToolLoop(
         const removal = removeOldestTurn(messages);
         if (removal.compacted) {
           options.onContextCompaction?.('old_turns_removed');
+          agentEvents.emit({ type: 'context_compacted', reason: 'old_turns_removed' });
           assistantContent = await options.callModel(
             [...messages],
             options.systemPrompt,
@@ -276,7 +322,7 @@ export async function runRuntimeToolLoop(
     // Wait for any in-flight stream-detected tool executions
     await Promise.all(streamExecutionPromises);
 
-    finalContent = assistantContent;
+    finalContent = sanitizeAgentVisibleText(assistantContent);
     messages.push({
       role: 'assistant',
       content: assistantContent,
@@ -312,6 +358,14 @@ export async function runRuntimeToolLoop(
 
     // No tool calls found in either stream or full parse
     if (containsToolProtocolMarkers(assistantContent)) {
+      if (finalContent) {
+        agentEvents.emit({ type: 'final_text', text: finalContent });
+        return {
+          finalContent,
+          transcript: messages,
+          toolCalls,
+        };
+      }
       messages.push({
         role: 'user',
         content: createToolCallRepairMessage(),
@@ -327,6 +381,7 @@ export async function runRuntimeToolLoop(
       continue;
     }
 
+    agentEvents.emit({ type: 'final_text', text: finalContent });
     return {
       finalContent,
       transcript: messages,

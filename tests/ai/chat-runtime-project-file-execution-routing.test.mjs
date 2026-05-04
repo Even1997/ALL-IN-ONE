@@ -15,6 +15,9 @@ test('chat delegates runtime project-file execution to orchestration helper', as
   assert.match(source, /executeRuntimeApprovedProjectFileProposal/);
   assert.match(source, /executeRuntimeProjectFileOperations/);
   assert.match(source, /type RuntimeProjectFileToolResponse/);
+  assert.match(source, /resolveProjectRuntimeRootPath/);
+  assert.match(source, /const resolveProjectRootById = useCallback\(/);
+  assert.match(source, /getProjectDir:\s*resolveProjectRootById/);
   assert.match(source, /const executeProjectFileOperations = useCallback\(/);
   assert.match(source, /executeRuntimeProjectFileOperations\(/);
   assert.match(source, /await cancelRuntimeProjectFileProposal\(/);

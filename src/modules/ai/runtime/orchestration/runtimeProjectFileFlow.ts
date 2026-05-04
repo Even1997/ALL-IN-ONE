@@ -14,7 +14,7 @@ import {
 import type { ApprovalRiskLevel, SandboxPolicy } from '../approval/approvalTypes.ts';
 import type { ApprovalRecord } from '../approval/approvalTypes.ts';
 import { requestRuntimeApproval, type RuntimePendingApprovalAction } from './runtimeApprovalCoordinator.ts';
-import { sanitizeInternalWorkspaceMentions } from './runtimeDirectChatFlow.ts';
+import { sanitizeInternalWorkspaceMentions } from './runtimeResponseSanitizer.ts';
 
 export const buildProjectFileApprovalActionType = (operations: ProjectFileOperation[]) => {
   if (operations.some((operation) => operation.type === 'delete_file')) {

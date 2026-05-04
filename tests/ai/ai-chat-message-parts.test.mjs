@@ -15,6 +15,27 @@ test('parseAIChatMessageParts keeps completed think content as a collapsed think
   ]);
 });
 
+test('buildAssistantStructuredContentState strips legacy transcript tool echoes', () => {
+  const state = buildAssistantStructuredContentState({
+    content: [
+      '好的，我先看一下项目文件夹结构。',
+      '<tool_use>',
+      '</tool_use>',
+      'user:',
+      'Tool ls result:',
+      '<tool_result name="ls" status="success">',
+      'src',
+      '</tool_result>',
+      '结论：项目可以继续整理。',
+    ].join('\n'),
+    thinkingCollapsed: true,
+  });
+
+  assert.equal(state.thinkingContent, '');
+  assert.equal(state.answerContent, '好的，我先看一下项目文件夹结构。\n\n结论：项目可以继续整理。');
+  assert.doesNotMatch(state.content, /tool_use|tool_result|Tool ls result|^user:/m);
+});
+
 test('parseAIChatMessageParts shows unfinished think streams expanded with content', () => {
   assert.deepEqual(parseAIChatMessageParts('<think>Analyze the current page'), [
     { type: 'thinking', content: 'Analyze the current page', collapsed: false },

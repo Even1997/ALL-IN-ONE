@@ -1,6 +1,7 @@
 import type { ToolCall, ToolResult } from '../../../../components/workspace/tools.ts';
 import type { AITextStreamEvent } from '../../core/AIService.ts';
 import type { CompactionReason } from '../compaction/compactionTypes.ts';
+import type { AgentEvent } from '../dispatch/agentEvents.ts';
 
 export type RuntimeToolMessage = {
   role: 'user' | 'assistant';
@@ -36,6 +37,7 @@ export type RuntimeToolLoopOptions = {
   beforeToolCall?: (call: ToolCall) => Promise<void>;
   afterToolCall?: (call: ToolCall) => Promise<void>;
   onToolCallsChange?: (toolCalls: RuntimeToolStep[]) => void;
+  onAgentEvent?: (event: AgentEvent) => void;
   onModelEvent?: (event: AITextStreamEvent) => void;
   onContextCompaction?: (reason: CompactionReason) => void;
   callModel: (

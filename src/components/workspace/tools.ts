@@ -2,7 +2,7 @@
 // Based on OpenCode's tool definitions
 
 import { invoke } from '@tauri-apps/api/core';
-import { readProjectTextFile } from '../../utils/projectPersistence';
+import { readProjectTextFile } from '../../utils/projectPersistence.ts';
 
 export interface Tool {
   name: string;

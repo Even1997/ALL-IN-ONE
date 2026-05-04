@@ -1,4 +1,5 @@
 import type { AgentProviderId, AgentTurnRecord } from '../agentRuntimeTypes';
+import { sanitizeAgentVisibleText } from '../dispatch/agentEvents.ts';
 
 const createTurnId = () => `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const EMPTY_RUNTIME_RESPONSE_MESSAGE = '已收到请求，但这次没有返回内容。';
@@ -280,33 +281,8 @@ export type RuntimeStreamingAssistantDraft = {
   >;
 };
 
-const STREAM_PROTOCOL_LINE_PATTERN =
-  /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=|<\/tool>|<tool_params>|<\/tool_params>).*\s*$/gim;
-const STREAM_DSML_BLOCK_PATTERN = /<\s*\|\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
-const STREAM_BARE_TOOL_BLOCK_PATTERN = /<tool name="(\w+)">[\s\S]*?<\/tool>/gi;
-const STREAM_TOOL_USE_BLOCK_PATTERN =
-  /<tool_use>\s*<tool name="(\w+)">[\s\S]*?<\/tool>\s*<\/tool_use>/gi;
-const STREAM_TOOL_RESULT_BLOCK_PATTERN =
-  /<tool_result name="([^"]+)"\s+status="(?:success|error)">[\s\S]*?<\/tool_result>/gi;
-const sanitizeStreamingVisibleText = (value: string) =>
-  value
-    .replace(STREAM_DSML_BLOCK_PATTERN, '')
-    .replace(STREAM_TOOL_USE_BLOCK_PATTERN, '')
-    .replace(STREAM_TOOL_RESULT_BLOCK_PATTERN, '')
-    .replace(STREAM_BARE_TOOL_BLOCK_PATTERN, '')
-    .replace(STREAM_PROTOCOL_LINE_PATTERN, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-const sanitizeStreamingThinkingText = (value: string) =>
-  value
-    .replace(STREAM_DSML_BLOCK_PATTERN, '')
-    .replace(STREAM_TOOL_USE_BLOCK_PATTERN, '')
-    .replace(STREAM_TOOL_RESULT_BLOCK_PATTERN, '')
-    .replace(STREAM_BARE_TOOL_BLOCK_PATTERN, '')
-    .replace(STREAM_PROTOCOL_LINE_PATTERN, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+const sanitizeStreamingVisibleText = sanitizeAgentVisibleText;
+const sanitizeStreamingThinkingText = sanitizeAgentVisibleText;
 
 export const createRuntimeStreamingMessageAssembler = () => {
   let state: 'initial' | 'thinking' | 'answer' = 'initial';

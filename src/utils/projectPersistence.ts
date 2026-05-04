@@ -114,6 +114,18 @@ export const joinProjectRelativePath = (projectDir: string, relativePath: string
   return joinPath(projectDir, ...segments);
 };
 
+export const resolveProjectRuntimeRootPath = (
+  project: Pick<ProjectConfig, 'id' | 'vaultPath'> | null | undefined,
+  fallbackProjectDir: string | null | undefined
+) => {
+  const preferredRoot = project?.vaultPath?.trim();
+  if (preferredRoot) {
+    return preferredRoot;
+  }
+
+  return (fallbackProjectDir || '').trim();
+};
+
 const readJSONFile = async <T>(filePath: string): Promise<T | null> => {
   const content = await readTextFile(filePath);
   if (!content) {

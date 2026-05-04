@@ -61,6 +61,36 @@ test('project file operations detect task-authorized write intent without requir
   assert.equal(detectTaskAuthorizedProjectWriteIntent('\u5e2e\u6211\u770b\u770b docs \u76ee\u5f55\u91cc\u6709\u4ec0\u4e48'), false);
 });
 
+test('project file operations resolve request kind and explicit review-first prompts', async () => {
+  const { resolveProjectFileRequestKind, shouldForceProjectFileProposal } = await loadModule();
+
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u8bfb\u53d6 docs/prd.md \u5185\u5bb9',
+      cleanedInput: '\u8bfb\u53d6 docs/prd.md \u5185\u5bb9',
+    }),
+    'read'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u8bf7\u628a\u9700\u6c42\u6587\u6863\u4fdd\u5b58\u5230 docs/prd.md',
+      cleanedInput: '\u8bf7\u628a\u9700\u6c42\u6587\u6863\u4fdd\u5b58\u5230 docs/prd.md',
+    }),
+    'write'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u4e3a\u4ec0\u4e48 login \u9875\u9762\u4f1a\u62a5\u9519\uff1f',
+      cleanedInput: '\u4e3a\u4ec0\u4e48 login \u9875\u9762\u4f1a\u62a5\u9519\uff1f',
+    }),
+    'none'
+  );
+
+  assert.equal(shouldForceProjectFileProposal('\u5148\u7ed9\u6211\u770b\u4e00\u4e0b\u8981\u600e\u4e48\u5199\uff0c\u518d\u786e\u8ba4'), true);
+  assert.equal(shouldForceProjectFileProposal('\u4e0d\u8981\u76f4\u63a5\u5199\uff0c\u5148\u786e\u8ba4'), true);
+  assert.equal(shouldForceProjectFileProposal('\u8bf7\u76f4\u63a5\u4fdd\u5b58\u5230 docs/prd.md'), false);
+});
+
 test('project file operations recognize short replies to pending file proposals', async () => {
   const {
     findLatestPendingProjectFileProposalAction,

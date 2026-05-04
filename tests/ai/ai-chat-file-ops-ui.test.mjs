@@ -11,32 +11,32 @@ const servicePath = path.resolve(testDir, '../../src/modules/ai/core/AIService.t
 const helperPath = path.resolve(testDir, '../../src/modules/ai/chat/projectFileOperations.ts');
 const cssPath = path.resolve(testDir, '../../src/components/workspace/AIChat.css');
 
-test('AI chat exposes per-chat file operation mode and file operation proposal UI', async () => {
+test('AI chat routes project file requests through read/planning helpers and proposal UI', async () => {
   const chatSource = await readFile(chatPath, 'utf8');
   const messageListSource = await readFile(messageListPath, 'utf8');
   const helperSource = await readFile(helperPath, 'utf8');
   const cssSource = await readFile(cssPath, 'utf8');
 
-  assert.match(chatSource, /type ProjectFileOperationMode/);
-  assert.match(chatSource, /modeLabelMap/);
-  assert.match(chatSource, /manual: '手动确认'/);
-  assert.match(chatSource, /auto: '自动确认'/);
-  assert.match(chatSource, /useState<ProjectFileOperationMode>\('auto'\)/);
   assert.match(chatSource, /projectFileProposal/);
   assert.match(chatSource, /renderProjectFileProposal/);
   assert.match(chatSource, /renderRuntimeApproval/);
   assert.match(chatSource, /detectProjectFileWriteIntent/);
   assert.match(chatSource, /detectProjectFileReadIntent/);
+  assert.match(chatSource, /resolveProjectFileRequestKind/);
+  assert.match(chatSource, /shouldForceProjectFileProposal/);
   assert.match(chatSource, /findLatestPendingProjectFileProposalAction/);
   assert.match(chatSource, /isShortPendingActionAffirmation/);
   assert.match(chatSource, /handleExecuteProjectFileProposal\(\s*pendingProjectFileAction\.messageId/);
   assert.match(chatSource, /handleCancelProjectFileProposal\(pendingProjectFileAction\.messageId\)/);
   assert.match(chatSource, /parseProjectFileOperationsPlan/);
-  assert.match(chatSource, /executeRuntimeProjectFilePlanning\(\{/);
+  assert.match(chatSource, /executeRuntimeProjectFileRead/);
+  assert.match(chatSource, /executeRuntimeProjectFilePlanning/);
+  assert.match(chatSource, /prepareProjectFileProposalFlow/);
   assert.match(chatSource, /conversationHistory/);
   assert.match(chatSource, /executeProjectFileOperations/);
-  assert.match(chatSource, /setProjectFileOperationMode\('manual'\)/);
-  assert.match(chatSource, /setProjectFileOperationMode\('auto'\)/);
+  assert.match(chatSource, /projectFileRequestKind === 'read'/);
+  assert.match(chatSource, /projectFileRequestKind === 'write'/);
+  assert.match(chatSource, /projectFileMode = shouldForceProjectFileProposal/);
 
   assert.match(messageListSource, /renderProjectFileProposal/);
   assert.match(messageListSource, /renderRuntimeApproval/);
@@ -45,8 +45,9 @@ test('AI chat exposes per-chat file operation mode and file operation proposal U
   assert.match(helperSource, /isSupportedProjectTextFilePath/);
   assert.match(helperSource, /findLatestPendingProjectFileProposalAction/);
   assert.match(helperSource, /SHORT_PENDING_ACTION_AFFIRMATIVE_PATTERN/);
+  assert.match(helperSource, /resolveProjectFileRequestKind/);
+  assert.match(helperSource, /shouldForceProjectFileProposal/);
 
-  assert.match(cssSource, /\.chat-mode-switch/);
   assert.match(cssSource, /\.chat-project-file-proposal-card/);
   assert.match(cssSource, /\.chat-project-file-proposal-actions/);
   assert.match(cssSource, /\.chat-runtime-approval-card/);

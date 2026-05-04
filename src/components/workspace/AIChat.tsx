@@ -62,6 +62,14 @@ import {
   createRuntimeReplayExecutionController,
 } from '../../modules/ai/runtime/orchestration/agentTurnRunner';
 import type { RuntimeToolStep } from '../../modules/ai/runtime/agent-kernel/agentKernelTypes';
+import {
+  buildRuntimeEventId,
+  buildSyntheticRuntimeToolCallId,
+  syncRuntimeEventsWithToolCalls,
+  syncTeamRunRuntimeEvents,
+  upsertRuntimeToolResultEvent,
+  upsertRuntimeToolUseEvent,
+} from '../../modules/ai/runtime/dispatch/agentEvents';
 import { executeRuntimeBuiltInAgentTurn } from '../../modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn';
 import { executeRuntimeMcpTurn } from '../../modules/ai/runtime/orchestration/executeRuntimeMcpTurn';
 import { runRuntimeLocalAgentExecution } from '../../modules/ai/runtime/orchestration/runRuntimeLocalAgentExecution';
@@ -86,6 +94,11 @@ import {
   executeRuntimeProjectFileOperations,
   type RuntimeProjectFileToolResponse,
 } from '../../modules/ai/runtime/orchestration/runtimeProjectFileExecutionFlow';
+import {
+  executeRuntimeProjectFilePlanning,
+  executeRuntimeProjectFileRead,
+  prepareProjectFileProposalFlow,
+} from '../../modules/ai/runtime/orchestration/runtimeProjectFileFlow';
 import {
   buildRuntimeChangedPathActivityEntry,
 } from '../../modules/ai/runtime/orchestration/runtimeTurnOutcomeFlow';
@@ -148,12 +161,17 @@ import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
+  detectProjectFileReadIntent,
+  detectProjectFileWriteIntent,
   findLatestPendingProjectFileProposalAction,
   isShortPendingActionAffirmation,
   isShortPendingActionRejection,
+  parseProjectFileOperationsPlan,
   type ProjectFileOperation,
   type ProjectFileProposal,
+  resolveProjectFileRequestKind,
   resolveProjectOperationPath,
+  shouldForceProjectFileProposal,
   isSupportedProjectTextFilePath,
 } from '../../modules/ai/chat/projectFileOperations';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
@@ -163,6 +181,7 @@ import { usePreviewStore } from '../../store/previewStore';
 import {
   getProjectDir,
   readProjectTextFile,
+  resolveProjectRuntimeRootPath,
   writeProjectTextFile,
 } from '../../utils/projectPersistence';
 import { getDirectoryPath, joinFileSystemPath } from '../../utils/fileSystemPaths';
@@ -280,6 +299,7 @@ const normalizeErrorMessage = (error: unknown) => {
 
 const ASK_USER_TOOL_NAME = 'AskUserQuestion';
 const READ_ONLY_CHAT_TOOLS = ['glob', 'grep', 'ls', 'view', ASK_USER_TOOL_NAME];
+const PROJECT_FILE_READ_ONLY_TOOLS = ['glob', 'grep', 'ls', 'view'];
 const BUILT_IN_EXECUTION_TOOLS = ['glob', 'grep', 'ls', 'view', 'write', 'edit', 'bash', 'fetch', ASK_USER_TOOL_NAME];
 const PROJECT_INSTRUCTION_FILE_NAMES = ['GOODNIGHT.md', 'CLAUDE.md'];
 const RISKY_BUILT_IN_TOOLS = new Set(['write', 'edit', 'bash', 'fetch']);
@@ -958,165 +978,6 @@ const buildRunDiffKey = (runId: string, path: string) => `${runId}::${path}`;
 const isRunDiffActive = (expandedRunDiffKey: string | null, runId: string, path: string) =>
   expandedRunDiffKey === buildRunDiffKey(runId, path);
 
-const buildRuntimeEventId = (kind: StoredChatRuntimeEvent['kind'], sourceId: string) =>
-  `runtime-event_${kind}_${sourceId}`;
-
-const buildSyntheticRuntimeToolCallId = (scope: string, sourceId: string, step?: string) =>
-  [scope, sourceId, step].filter(Boolean).join(':');
-
-const toRuntimeEventStatus = (status: 'running' | 'completed' | 'failed' | 'blocked' | 'pending') =>
-  status === 'completed' || status === 'failed' || status === 'blocked' ? status : 'running';
-
-const upsertRuntimeEvent = (
-  runtimeEvents: StoredChatRuntimeEvent[] | undefined,
-  nextEvent: StoredChatRuntimeEvent,
-  matcher: (event: StoredChatRuntimeEvent) => boolean
-): StoredChatRuntimeEvent[] => {
-  const events = [...(runtimeEvents || [])];
-  const index = events.findIndex(matcher);
-
-  if (index >= 0) {
-    events[index] = nextEvent;
-    return events;
-  }
-
-  events.push(nextEvent);
-  return events;
-};
-
-const upsertRuntimeToolUseEvent = (
-  runtimeEvents: StoredChatRuntimeEvent[] | undefined,
-  input: {
-    toolCallId: string;
-    parentToolCallId?: string | null;
-    toolName: string;
-    toolInput: Record<string, unknown>;
-    status: RuntimeToolStep['status'];
-  }
-): StoredChatRuntimeEvent[] => {
-  const existingEvent = runtimeEvents?.find(
-    (event): event is Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }> =>
-      event.kind === 'tool_use' && event.toolCallId === input.toolCallId
-  );
-
-  return upsertRuntimeEvent(
-    runtimeEvents,
-    {
-      id: buildRuntimeEventId('tool_use', input.toolCallId),
-      kind: 'tool_use',
-      toolCallId: input.toolCallId,
-      parentToolCallId: input.parentToolCallId ?? null,
-      toolName: input.toolName,
-      input: input.toolInput,
-      status: input.status,
-      createdAt: existingEvent?.createdAt || Date.now(),
-    },
-    (event) => event.kind === 'tool_use' && event.toolCallId === input.toolCallId
-  );
-};
-
-const upsertRuntimeToolResultEvent = (
-  runtimeEvents: StoredChatRuntimeEvent[] | undefined,
-  input: {
-    toolCallId: string;
-    parentToolCallId?: string | null;
-    toolName: string;
-    status: RuntimeToolStep['status'];
-    output: string;
-    fileChanges?: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges'];
-  }
-): StoredChatRuntimeEvent[] => {
-  const existingEvent = runtimeEvents?.find(
-    (event): event is Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }> =>
-      event.kind === 'tool_result' && event.toolCallId === input.toolCallId
-  );
-
-  return upsertRuntimeEvent(
-    runtimeEvents,
-    {
-      id: buildRuntimeEventId('tool_result', input.toolCallId),
-      kind: 'tool_result',
-      toolCallId: input.toolCallId,
-      parentToolCallId: input.parentToolCallId ?? null,
-      toolName: input.toolName,
-      status: input.status,
-      output: input.output,
-      fileChanges: input.fileChanges,
-      createdAt: existingEvent?.createdAt || Date.now(),
-    },
-    (event) => event.kind === 'tool_result' && event.toolCallId === input.toolCallId
-  );
-};
-
-const syncTeamRunRuntimeEvents = (
-  runtimeEvents: StoredChatRuntimeEvent[] | undefined,
-  parentToolCallId: string,
-  teamRun: AgentTeamRunRecord
-): StoredChatRuntimeEvent[] => {
-  let nextEvents = [...(runtimeEvents || [])];
-
-  for (const phase of teamRun.phases) {
-    if (phase.status === 'pending' && !phase.startedAt && !phase.completedAt) {
-      continue;
-    }
-
-    const phaseToolCallId = buildSyntheticRuntimeToolCallId('team-phase', teamRun.id, phase.id);
-    nextEvents = upsertRuntimeToolUseEvent(nextEvents, {
-      toolCallId: phaseToolCallId,
-      parentToolCallId,
-      toolName: 'team_phase',
-      toolInput: {
-        id: phase.id,
-        title: phase.title,
-        summary: phase.summary,
-        goal: phase.goal,
-      },
-      status: toRuntimeEventStatus(phase.status),
-    });
-
-    if (phase.status === 'completed' || phase.status === 'failed') {
-      nextEvents = upsertRuntimeToolResultEvent(nextEvents, {
-        toolCallId: phaseToolCallId,
-        parentToolCallId,
-        toolName: 'team_phase',
-        status: toRuntimeEventStatus(phase.status),
-        output: phase.summary || phase.goal || phase.title,
-      });
-    }
-
-    for (const member of teamRun.members.filter((entry: AgentTeamRunRecord['members'][number]) => entry.phaseId === phase.id)) {
-      if (member.status === 'pending' && !member.startedAt && !member.completedAt) {
-        continue;
-      }
-
-      const memberToolCallId = buildSyntheticRuntimeToolCallId('team-member', teamRun.id, member.id);
-      nextEvents = upsertRuntimeToolUseEvent(nextEvents, {
-        toolCallId: memberToolCallId,
-        parentToolCallId: phaseToolCallId,
-        toolName: 'team_member_task',
-        toolInput: {
-          title: member.title,
-          agent: member.agentId,
-          role: member.role,
-        },
-        status: toRuntimeEventStatus(member.status),
-      });
-
-      if (member.status === 'completed' || member.status === 'failed') {
-        nextEvents = upsertRuntimeToolResultEvent(nextEvents, {
-          toolCallId: memberToolCallId,
-          parentToolCallId: phaseToolCallId,
-          toolName: 'team_member_task',
-          status: toRuntimeEventStatus(member.status),
-          output: member.error || member.result || `${member.agentId} finished ${member.title}.`,
-        });
-      }
-    }
-  }
-
-  return nextEvents;
-};
-
 const syncWorkflowRuntimeEvents = (
   runtimeEvents: StoredChatRuntimeEvent[] | undefined,
   parentToolCallId: string,
@@ -1228,71 +1089,6 @@ const syncWorkflowRuntimeEvents = (
           currentStageSummary ||
           `${WORKFLOW_PACKAGE_LABELS[workflowRun.targetPackage] || workflowRun.targetPackage} completed.`,
       });
-    }
-  }
-
-  return nextEvents;
-};
-
-const syncRuntimeEventsWithToolCalls = (
-  runtimeEvents: StoredChatRuntimeEvent[] | undefined,
-  toolCalls: RuntimeToolStep[]
-): StoredChatRuntimeEvent[] => {
-  const nextEvents = [...(runtimeEvents || [])];
-
-  for (const toolCall of toolCalls) {
-    const toolUseEventId = buildRuntimeEventId('tool_use', toolCall.id);
-    const existingToolUseIndex = nextEvents.findIndex(
-      (event) => event.kind === 'tool_use' && event.toolCallId === toolCall.id
-    );
-    const toolUseEvent: StoredChatRuntimeEvent = {
-      id: toolUseEventId,
-      kind: 'tool_use',
-      toolCallId: toolCall.id,
-      parentToolCallId: toolCall.parentToolCallId ?? null,
-      toolName: toolCall.name,
-      input: toolCall.input,
-      status: toolCall.status,
-      createdAt: existingToolUseIndex >= 0 ? nextEvents[existingToolUseIndex]!.createdAt : Date.now(),
-    };
-
-    if (existingToolUseIndex >= 0) {
-      nextEvents[existingToolUseIndex] = toolUseEvent;
-    } else {
-      nextEvents.push(toolUseEvent);
-    }
-
-    if (toolCall.status === 'running') {
-      continue;
-    }
-
-    const toolResultEventId = buildRuntimeEventId('tool_result', toolCall.id);
-    const existingToolResultIndex = nextEvents.findIndex(
-      (event) => event.kind === 'tool_result' && event.toolCallId === toolCall.id
-    );
-    const toolResultEvent: StoredChatRuntimeEvent = {
-      id: toolResultEventId,
-      kind: 'tool_result',
-      toolCallId: toolCall.id,
-      parentToolCallId: toolCall.parentToolCallId ?? null,
-      toolName: toolCall.name,
-      status: toolCall.status,
-      output: toolCall.resultContent || toolCall.resultPreview,
-      fileChanges: toolCall.fileChanges,
-      createdAt: existingToolResultIndex >= 0 ? nextEvents[existingToolResultIndex]!.createdAt : Date.now(),
-    };
-
-    if (existingToolResultIndex >= 0) {
-      nextEvents[existingToolResultIndex] = toolResultEvent;
-    } else {
-      const insertionIndex = nextEvents.findIndex(
-        (event) => event.kind === 'tool_use' && event.toolCallId === toolCall.id
-      );
-      if (insertionIndex >= 0) {
-        nextEvents.splice(insertionIndex + 1, 0, toolResultEvent);
-      } else {
-        nextEvents.push(toolResultEvent);
-      }
     }
   }
 
@@ -2963,6 +2759,17 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     },
     [activeSessionId, currentProject, setActiveSkills]
   );
+  const resolveProjectRootById = useCallback(
+    async (projectId: string) => {
+      const projectDir = await getProjectDir(projectId);
+      if (currentProject?.id === projectId) {
+        return resolveProjectRuntimeRootPath(currentProject, projectDir);
+      }
+
+      return projectDir;
+    },
+    [currentProject]
+  );
   const persistTurnCheckpointForRun = useCallback(
     async (input: {
       threadId: string;
@@ -3009,7 +2816,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       }
 
       const uniquePaths = Array.from(new Set(changedPaths));
-      const projectRoot = await getProjectDir(projectId);
+      const projectRoot = await resolveProjectRootById(projectId);
       const results = await Promise.all(
         uniquePaths.map(async (relativePath) => {
           try {
@@ -3032,7 +2839,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
 
       return results;
     },
-    []
+    [resolveProjectRootById]
   );
 
   const handleCancelProjectFileProposal = useCallback(
@@ -3069,15 +2876,19 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   const handleExecuteProjectFileProposal = useCallback(
     async (messageId: string, proposal: ProjectFileProposal) => {
       if (!currentProject || !activeSessionId) {
-        return false;
+        return {
+          ok: false,
+          message: 'Project file execution is unavailable because there is no active project session.',
+        };
       }
       const targetMessage = activeSession?.messages.find((message) => message.id === messageId) || null;
       const proposalRunId = targetMessage?.runId || createRunId();
       const approvalThreadId = activeSession?.runtimeThreadId || activeSessionId;
       const projectFileFlowToolCallId = buildSyntheticRuntimeToolCallId('project-file', messageId);
       const projectFileApplyToolCallId = buildSyntheticRuntimeToolCallId('project-file', messageId, 'apply');
+      let executionMessage = proposal.summary;
 
-      return executeRuntimeApprovedProjectFileProposal({
+      const ok = await executeRuntimeApprovedProjectFileProposal({
         projectId: currentProject.id,
         sessionId: activeSessionId,
         messageId,
@@ -3092,7 +2903,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         resolveAgentApproval,
         runId: proposalRunId,
         createActivityEntryId,
-        getProjectDir,
+        getProjectDir: resolveProjectRootById,
         executeProjectFileOperations,
         appendActivityEntry,
         normalizeErrorMessage,
@@ -3110,6 +2921,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           });
         },
         onExecutionSuccess: async ({ runId, messageId: executedMessageId, summary, fileChanges }) => {
+          executionMessage = summary;
           upsertRuntimeToolResultInMessage(messageId, {
             toolCallId: projectFileApplyToolCallId,
             parentToolCallId: projectFileFlowToolCallId,
@@ -3133,6 +2945,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           });
         },
         onExecutionFailed: ({ message }) => {
+          executionMessage = message;
           upsertRuntimeToolResultInMessage(messageId, {
             toolCallId: projectFileApplyToolCallId,
             parentToolCallId: projectFileFlowToolCallId,
@@ -3148,6 +2961,11 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           });
         },
       });
+
+      return {
+        ok,
+        message: executionMessage,
+      };
     },
     [
       activeSession,
@@ -3847,7 +3665,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       setRewindError('');
 
       try {
-        const projectRoot = await getProjectDir(currentProject.id);
+        const projectRoot = await resolveProjectRootById(currentProject.id);
         const result = await rewindAgentTurn({
           threadId: activeCheckpointThreadId,
           runId: checkpoint.runId,
@@ -4689,7 +4507,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           );
           return;
         }
-        const contextProjectRoot = await getProjectDir(currentProject.id);
+        const contextProjectRoot = await resolveProjectRootById(currentProject.id);
         const conversationHistory = targetSession?.messages || activeSession?.messages || [];
         const projectInstructionReferences = await loadProjectInstructionReferences(contextProjectRoot);
         const agentInstructions = [
@@ -5226,7 +5044,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                   : 'Run local agent',
               localAgentFlow.summary
             );
-            const projectRoot = await getProjectDir(currentProject.id);
+            const projectRoot = await resolveProjectRootById(currentProject.id);
             const runPrompt = async ({
               agent,
               projectRoot,
@@ -5571,8 +5389,299 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           return;
         }
 
+        const projectRoot = await resolveProjectRootById(currentProject.id);
+        const projectFileRequestKind =
+          detectProjectFileWriteIntent(rawContent) || detectProjectFileWriteIntent(cleanedContent)
+            ? 'write'
+            : detectProjectFileReadIntent(rawContent) || detectProjectFileReadIntent(cleanedContent)
+              ? 'read'
+              : resolveProjectFileRequestKind({
+                  rawInput: rawContent,
+                  cleanedInput: cleanedContent,
+                });
+
+        if (projectFileRequestKind === 'read') {
+          const projectFileFlowToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id);
+          const projectFileReadToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id, 'read');
+
+          markTurnExecuting('Read project files', buildSessionPreview(cleanedContent), 'project_file_read');
+          upsertRuntimeToolUseInMessage(assistantMessage.id, {
+            toolCallId: projectFileFlowToolCallId,
+            toolName: 'project_file_flow',
+            toolInput: {
+              summary: buildSessionPreview(cleanedContent) || cleanedContent,
+            },
+            status: 'running',
+          });
+          upsertRuntimeToolUseInMessage(assistantMessage.id, {
+            toolCallId: projectFileReadToolCallId,
+            parentToolCallId: projectFileFlowToolCallId,
+            toolName: 'project_file_read',
+            toolInput: {
+              request: cleanedContent,
+            },
+            status: 'running',
+          });
+
+          const readContent = await executeRuntimeProjectFileRead({
+            userInput: cleanedContent,
+            projectName: currentProject.name,
+            projectRoot,
+            allowedTools: PROJECT_FILE_READ_ONLY_TOOLS,
+            readFiles: ({ prompt, systemPrompt, allowedTools, onChunk }) =>
+              aiService.chatWithTools({
+                prompt,
+                systemPrompt,
+                allowedTools,
+                onChunk,
+              }),
+          });
+
+          patchLiveState(runtimeStoreThreadId, (state) => ({
+            ...state,
+            connectionState: 'connected',
+            statusVerb: '',
+            activeThinking: false,
+            activeToolName: null,
+            streamingToolInput: '',
+            streamingText: '',
+          }));
+          upsertRuntimeToolResultInMessage(assistantMessage.id, {
+            toolCallId: projectFileReadToolCallId,
+            parentToolCallId: projectFileFlowToolCallId,
+            toolName: 'project_file_read',
+            status: 'completed',
+            output: readContent,
+          });
+          upsertRuntimeToolResultInMessage(assistantMessage.id, {
+            toolCallId: projectFileFlowToolCallId,
+            toolName: 'project_file_flow',
+            status: 'completed',
+            output: readContent,
+          });
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            ...buildAssistantContentState(readContent),
+          }));
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId('assistant'),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: `Assistant: ${buildSessionPreview(readContent)}`,
+            createdAt: Date.now(),
+          });
+          await persistRuntimeTimelineEvent({
+            threadId: replayThreadId,
+            providerId: runtimeProviderId,
+            summary: `Assistant: ${buildSessionPreview(readContent)}`,
+          });
+          await completeTurnSession(readContent);
+          return;
+        }
+
+        if (projectFileRequestKind === 'write') {
+          const projectFileFlowToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id);
+          const projectFilePlanToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id, 'plan');
+          const projectFileMode = shouldForceProjectFileProposal(rawContent) ? 'manual' : 'auto';
+
+          markTurnExecuting('Plan project file changes', buildSessionPreview(cleanedContent), 'project_file_flow');
+          upsertRuntimeToolUseInMessage(assistantMessage.id, {
+            toolCallId: projectFileFlowToolCallId,
+            toolName: 'project_file_flow',
+            toolInput: {
+              summary: buildSessionPreview(cleanedContent) || cleanedContent,
+            },
+            status: 'running',
+          });
+          upsertRuntimeToolUseInMessage(assistantMessage.id, {
+            toolCallId: projectFilePlanToolCallId,
+            parentToolCallId: projectFileFlowToolCallId,
+            toolName: 'project_file_plan',
+            toolInput: {
+              request: cleanedContent,
+            },
+            status: 'running',
+          });
+
+          const planningResult = await executeRuntimeProjectFilePlanning({
+            userInput: cleanedContent,
+            conversationHistory,
+            projectName: currentProject.name,
+            projectRoot,
+            allowedTools: PROJECT_FILE_READ_ONLY_TOOLS,
+            executePlanning: ({ prompt, systemPrompt, allowedTools }) =>
+              aiService.chatWithTools({
+                prompt,
+                systemPrompt,
+                allowedTools,
+              }),
+            parsePlan: parseProjectFileOperationsPlan,
+          });
+
+          if (planningResult.status !== 'ready') {
+            const clarificationMessage = planningResult.message;
+
+            patchLiveState(runtimeStoreThreadId, (state) => ({
+              ...state,
+              connectionState: 'connected',
+              statusVerb: '',
+              activeThinking: false,
+              activeToolName: null,
+              streamingToolInput: '',
+              streamingText: '',
+            }));
+            upsertRuntimeToolResultInMessage(assistantMessage.id, {
+              toolCallId: projectFilePlanToolCallId,
+              parentToolCallId: projectFileFlowToolCallId,
+              toolName: 'project_file_plan',
+              status: 'completed',
+              output: clarificationMessage,
+            });
+            upsertRuntimeToolResultInMessage(assistantMessage.id, {
+              toolCallId: projectFileFlowToolCallId,
+              toolName: 'project_file_flow',
+              status: 'completed',
+              output: clarificationMessage,
+            });
+            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+              ...message,
+              ...buildAssistantContentState(clarificationMessage),
+            }));
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('assistant'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: `Assistant: ${buildSessionPreview(clarificationMessage)}`,
+              createdAt: Date.now(),
+            });
+            await persistRuntimeTimelineEvent({
+              threadId: replayThreadId,
+              providerId: runtimeProviderId,
+              summary: `Assistant: ${buildSessionPreview(clarificationMessage)}`,
+            });
+            await completeTurnSession(clarificationMessage);
+            return;
+          }
+
+          const preparedProjectFileFlow = prepareProjectFileProposalFlow({
+            proposalId: `proposal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            mode: projectFileMode,
+            plan: planningResult.plan,
+            sandboxPolicy,
+          });
+
+          upsertRuntimeToolResultInMessage(assistantMessage.id, {
+            toolCallId: projectFilePlanToolCallId,
+            parentToolCallId: projectFileFlowToolCallId,
+            toolName: 'project_file_plan',
+            status: 'completed',
+            output: preparedProjectFileFlow.proposal.summary,
+          });
+
+          if (preparedProjectFileFlow.decision === 'auto-execute') {
+            const executionOutcome = await handleExecuteProjectFileProposal(
+              assistantMessage.id,
+              preparedProjectFileFlow.proposal
+            );
+
+            patchLiveState(runtimeStoreThreadId, (state) => ({
+              ...state,
+              connectionState: 'connected',
+              statusVerb: '',
+              activeThinking: false,
+              activeToolName: null,
+              streamingToolInput: '',
+              streamingText: '',
+            }));
+
+            if (!executionOutcome.ok) {
+              updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+                ...message,
+                role: 'system',
+                tone: 'error',
+                content: executionOutcome.message,
+                ...clearAssistantContentState(),
+              }));
+              appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+                id: createRuntimeEventId('error'),
+                threadId: runtimeStoreThreadId,
+                providerId: runtimeProviderId,
+                summary: `Error: ${buildSessionPreview(executionOutcome.message)}`,
+                createdAt: Date.now(),
+              });
+              await failTurnSession(executionOutcome.message);
+              return;
+            }
+
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('assistant'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: `Assistant: ${buildSessionPreview(preparedProjectFileFlow.proposal.assistantMessage)}`,
+              createdAt: Date.now(),
+            });
+            await persistRuntimeTimelineEvent({
+              threadId: replayThreadId,
+              providerId: runtimeProviderId,
+              summary: `Assistant: ${buildSessionPreview(preparedProjectFileFlow.proposal.assistantMessage)}`,
+            });
+            await completeTurnSession(preparedProjectFileFlow.proposal.assistantMessage);
+            return;
+          }
+
+          const proposalMessage =
+            preparedProjectFileFlow.proposal.executionMessage || preparedProjectFileFlow.proposal.summary;
+
+          patchLiveState(runtimeStoreThreadId, (state) => ({
+            ...state,
+            connectionState: 'connected',
+            statusVerb: '',
+            activeThinking: false,
+            activeToolName: null,
+            streamingToolInput: '',
+            streamingText: '',
+          }));
+          upsertRuntimeToolResultInMessage(assistantMessage.id, {
+            toolCallId: projectFileFlowToolCallId,
+            toolName: 'project_file_flow',
+            status: preparedProjectFileFlow.decision === 'blocked' ? 'blocked' : 'completed',
+            output: proposalMessage,
+          });
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
+            ...message,
+            ...buildAssistantContentState(preparedProjectFileFlow.proposal.assistantMessage),
+            projectFileProposal: preparedProjectFileFlow.proposal,
+          }));
+
+          if (preparedProjectFileFlow.decision === 'blocked') {
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('error'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: `Error: ${buildSessionPreview(proposalMessage)}`,
+              createdAt: Date.now(),
+            });
+            await blockTurnSession(proposalMessage, proposalMessage, 'Revise file changes');
+            return;
+          }
+
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId('assistant'),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: `Assistant: ${buildSessionPreview(preparedProjectFileFlow.proposal.assistantMessage)}`,
+            createdAt: Date.now(),
+          });
+          await persistRuntimeTimelineEvent({
+            threadId: replayThreadId,
+            providerId: runtimeProviderId,
+            summary: `Assistant: ${buildSessionPreview(preparedProjectFileFlow.proposal.assistantMessage)}`,
+          });
+          await completeTurnSession(preparedProjectFileFlow.proposal.assistantMessage);
+          return;
+        }
+
         markTurnExecuting('Run built-in agent turn', buildSessionPreview(cleanedContent));
-        const projectRoot = await getProjectDir(currentProject.id);
         const toolExecutor = new ToolExecutor(projectRoot);
         const builtInAllowedTools =
           sandboxPolicy === 'deny' ? READ_ONLY_CHAT_TOOLS : BUILT_IN_EXECUTION_TOOLS;

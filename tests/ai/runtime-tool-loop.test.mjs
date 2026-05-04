@@ -121,3 +121,35 @@ test('runtime tool loop emits tool call snapshots while calls run and settle', a
   assert.equal(snapshots[1][0].status, 'completed');
   assert.match(snapshots[1][0].resultPreview, /console\.log/);
 });
+
+test('runtime tool loop emits unified agent events for tools and final text', async () => {
+  const events = [];
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'List files.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['ls'],
+    callModel: async (messages) =>
+      messages.length === 1
+        ? toolUse('ls', { path: '.' })
+        : 'Done.\n<tool_use>\n</tool_use>\nuser:\nTool ls result:\ninternal',
+    executeTool: async () => ({
+      type: 'text',
+      content: 'src\npackage.json',
+    }),
+    onAgentEvent: (event) => {
+      events.push(event);
+    },
+  });
+
+  assert.equal(result.finalContent, 'Done.');
+  assert.deepEqual(
+    events.map((event) => event.type),
+    ['tool_call_started', 'tool_result', 'tool_call_completed', 'final_text'],
+  );
+  assert.equal(events[0].toolCall.name, 'ls');
+  assert.equal(events[1].content, 'src\npackage.json');
+  assert.equal(events[2].toolCall.status, 'completed');
+  assert.equal(events[3].text, 'Done.');
+});

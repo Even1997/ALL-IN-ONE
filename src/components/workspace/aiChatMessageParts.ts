@@ -1,3 +1,5 @@
+import { sanitizeAgentVisibleText } from '../../modules/ai/runtime/dispatch/agentEvents.ts';
+
 export type AIChatMessagePart =
   | { type: 'text'; content: string; createdAt?: number }
   | { type: 'thinking'; content: string; collapsed: boolean; createdAt?: number }
@@ -46,14 +48,14 @@ const RAW_ASSISTANT_EXECUTION_BLOCK_PATTERN =
   /<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool name="(\w+)">([\s\S]*?)<\/tool>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>|<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>|<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
 
 export const cleanVisibleAssistantText = (content: string) =>
-  content
-    .replace(RAW_DSML_TOOL_BLOCK_PATTERN, '')
-    .replace(RAW_APPLY_SKILL_BLOCK_PATTERN, '')
-    .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
-    .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
-    .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  sanitizeAgentVisibleText(
+    content
+      .replace(RAW_DSML_TOOL_BLOCK_PATTERN, '')
+      .replace(RAW_APPLY_SKILL_BLOCK_PATTERN, '')
+      .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
+      .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
+      .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
+  );
 
 const EXECUTION_PLANNING_LINE_PATTERN =
   /(?:^|[。！？\n])\s*(?:好的[,，]?\s*)?(?:我先|让我先|我需要先|我会接下来先|先去)(?:查看|看一下|看看|检查|读取|搜索|查找|分析|确认|了解|总结|扫描|定位)/;
@@ -109,14 +111,14 @@ const normalizeToolInput = (rawParams: string) => {
 };
 
 const cleanThinkingAssistantText = (content: string) =>
-  content
-    .replace(RAW_DSML_TOOL_BLOCK_PATTERN, '')
-    .replace(RAW_APPLY_SKILL_BLOCK_PATTERN, '')
-    .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
-    .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
-    .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  sanitizeAgentVisibleText(
+    content
+      .replace(RAW_DSML_TOOL_BLOCK_PATTERN, '')
+      .replace(RAW_APPLY_SKILL_BLOCK_PATTERN, '')
+      .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
+      .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
+      .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
+  );
 
 export const buildAssistantMessageParts = (input: {
   content?: string;

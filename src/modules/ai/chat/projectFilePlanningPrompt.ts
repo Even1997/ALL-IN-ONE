@@ -1,4 +1,4 @@
-import { buildConversationHistorySection } from './directChatPrompt.ts';
+import { buildConversationHistorySection } from './conversationHistoryPrompt.ts';
 
 type ProjectFilePlanningConversationMessage = {
   role: 'user' | 'assistant' | 'system';

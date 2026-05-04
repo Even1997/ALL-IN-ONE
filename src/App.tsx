@@ -57,6 +57,7 @@ import {
   loadWorkflowStateFromDisk,
   removeProjectDirectoryFromDisk,
   resetProjectStorageRoot,
+  resolveProjectRuntimeRootPath,
   saveDesignBoardStateToDisk,
   saveProjectIndexToDisk,
   saveProjectSnapshotToDisk,
@@ -1843,12 +1844,13 @@ const App: React.FC = () => {
   }, [canUseProjectFilesystem, currentProject]);
 
   useEffect(() => {
-    if (!currentProjectDir) {
+    const runtimeProjectRoot = resolveProjectRuntimeRootPath(currentProject, currentProjectDir);
+    if (!runtimeProjectRoot) {
       return;
     }
 
-    aiService.setConfig({ projectRoot: currentProjectDir });
-  }, [currentProjectDir]);
+    aiService.setConfig({ projectRoot: runtimeProjectRoot });
+  }, [currentProject, currentProjectDir]);
 
   useEffect(() => {
     if (!currentProject || !currentProjectDir || !projectStorageSettings) {
