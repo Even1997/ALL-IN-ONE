@@ -27,6 +27,10 @@ test('agent workspace page composes the reusable GN agent pages behind a dedicat
   assert.match(source, /aria-label="Agent workspace sections"/);
   assert.match(source, /get_agent_shell_settings/);
   assert.match(source, /update_agent_shell_settings/);
+  assert.match(source, /modeToTab\(settings\.mode\)/);
+  assert.match(source, /input:\s*\{\s*mode:\s*tabToMode\(tabId\)/);
+  assert.doesNotMatch(source, /activeTab\?:/);
+  assert.doesNotMatch(source, /settings\?\.activeTab/);
 });
 
 test('agent workspace page includes first-pass shell styles for the dedicated workspace', async () => {

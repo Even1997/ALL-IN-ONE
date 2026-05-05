@@ -23,5 +23,9 @@ test('tauri agent runtime exposes dedicated runtime settings store and commands'
   assert.match(handlerMatch.groups.commands, /\bget_agent_runtime_settings\b/);
   assert.match(handlerMatch.groups.commands, /\bupdate_agent_runtime_settings\b/);
   assert.match(runtimeClientSource, /\bgetAgentRuntimeSettings\b/);
-  assert.match(runtimeClientSource, /\bupdateAgentRuntimeSettings\b/);
+  assert.match(runtimeClientSource, /\bconst updateAgentRuntimeSettings\b/);
+  assert.doesNotMatch(runtimeClientSource, /\bexport const getAgentSandboxPolicy\b/);
+  assert.doesNotMatch(runtimeClientSource, /\bexport const setAgentSandboxPolicy\b/);
+  assert.doesNotMatch(runtimeClientSource, /\bexport const getAgentPermissionMode\b/);
+  assert.doesNotMatch(runtimeClientSource, /\bexport const updateAgentRuntimeSettings\b/);
 });

@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GoodNight AI 架构与流程文档</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-card: #161b22;
+    --bg-hover: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d2a8ff;
+    --accent4: #f0883e;
+    --accent5: #ff7b72;
+    --accent6: #79c0ff;
+    --radius: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0;
+  }
+
+  /* Header */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 48px 32px 32px;
+    text-align: center;
+    background: linear-gradient(180deg, #161b22 0%, var(--bg) 100%);
+  }
+  .header h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; }
+  .header .subtitle {
+    color: var(--text-dim);
+    margin-top: 8px;
+    font-size: 14px;
+  }
+  .header .meta {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .header .meta span { display: flex; align-items: center; gap: 4px; }
+
+  /* Layout */
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  /* TOC */
+  .toc {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 28px;
+    margin-bottom: 40px;
+  }
+  .toc h2 { font-size: 14px; color: var(--text-dim); margin-bottom: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+  .toc ol { columns: 2; column-gap: 32px; list-style: none; counter-reset: toc; }
+  .toc li { counter-increment: toc; margin-bottom: 6px; font-size: 13px; break-inside: avoid; }
+  .toc li::before { content: counter(toc) ". "; color: var(--accent); font-weight: 500; }
+  .toc a { color: var(--text); text-decoration: none; }
+  .toc a:hover { color: var(--accent); }
+
+  /* Section */
+  .section { margin-bottom: 48px; }
+  .section h2 {
+    font-size: 20px;
+    font-weight: 600;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 20px 0 10px;
+    color: var(--accent6);
+  }
+  .section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 16px 0 6px;
+    color: var(--accent2);
+  }
+  .section p { font-size: 14px; margin-bottom: 12px; color: var(--text-dim); }
+  .section p strong, .section li strong { color: var(--text); }
+
+  /* Cards */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin: 12px 0;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-size: 13px;
+  }
+  .card .title { font-weight: 600; color: var(--accent); margin-bottom: 4px; font-size: 13px; }
+  .card .desc { color: var(--text-dim); font-size: 12px; line-height: 1.6; }
+  .card .file { font-family: "SF Mono", "Cascadia Code", monospace; font-size: 11px; color: var(--text-dim); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 16px 0;
+    padding: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .flow .node {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 12px;
+    text-align: center;
+  }
+  .flow .node.highlight { border-color: var(--accent); background: #0d2d4a; }
+  .flow .node.accent2 { border-color: var(--accent2); background: #0a2e1a; }
+  .flow .node.accent3 { border-color: var(--accent3); background: #1c0e2e; }
+  .flow .node.accent4 { border-color: var(--accent4); background: #2a1a0a; }
+  .flow .arrow { color: var(--text-dim); font-size: 14px; user-select: none; }
+
+  /* Vertical flow */
+  .vflow { margin: 16px 0; }
+  .vflow .step {
+    display: flex;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .vflow .step .num {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    background: var(--accent);
+    color: #000;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .vflow .step .num.green { background: var(--accent2); }
+  .vflow .step .num.purple { background: var(--accent3); }
+  .vflow .step .num.orange { background: var(--accent4); }
+  .vflow .step .num.red { background: var(--accent5); }
+  .vflow .step .content { flex: 1; }
+  .vflow .step .content .label { font-weight: 600; color: var(--text); }
+  .vflow .step .content .detail { color: var(--text-dim); font-size: 12px; }
+  .vflow .step .content .detail code {
+    background: var(--bg-hover); padding: 1px 5px; border-radius: 3px;
+    font-family: "SF Mono", "Cascadia Code", monospace; font-size: 11px; color: var(--accent6);
+  }
+
+  /* State machine */
+  .state-machine {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin: 12px 0;
+    padding: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 12px;
+  }
+  .state-machine .state {
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--bg-hover);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .state-machine .state.active { border-color: var(--accent2); background: #0a2e1a; }
+  .state-machine .state.error { border-color: var(--accent5); background: #2a0a0a; }
+  .state-machine .state.wait { border-color: var(--accent4); background: #2a1a0a; }
+  .state-machine .arrow { color: var(--text-dim); }
+
+  /* Architecture layers */
+  .layers { margin: 16px 0; }
+  .layers .layer {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    margin-bottom: 2px;
+    background: var(--bg-card);
+    font-size: 13px;
+  }
+  .layers .layer:nth-child(1) { border-left-color: var(--accent); }
+  .layers .layer:nth-child(2) { border-left-color: var(--accent2); }
+  .layers .layer:nth-child(3) { border-left-color: var(--accent3); }
+  .layers .layer:nth-child(4) { border-left-color: var(--accent4); }
+  .layers .layer:nth-child(5) { border-left-color: var(--accent5); }
+  .layers .layer .lname { font-weight: 600; color: var(--text); font-size: 13px; }
+  .layers .layer .ldesc { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+
+  /* Lists */
+  ul, ol { margin: 8px 0 12px 20px; font-size: 14px; color: var(--text-dim); }
+  li { margin-bottom: 4px; }
+  li strong { color: var(--text); }
+  li code {
+    background: var(--bg-hover); padding: 1px 5px; border-radius: 3px;
+    font-family: "SF Mono", "Cascadia Code", monospace; font-size: 12px; color: var(--accent6);
+  }
+
+  .tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: 500;
+    margin: 0 2px;
+  }
+  .tag.ts { background: #2b5f8a; color: #fff; }
+  .tag.rs { background: #a34c38; color: #fff; }
+  .tag.react { background: #2b5f8a; color: #fff; }
+  .tag.store { background: #5a4a8a; color: #fff; }
+
+  .callout {
+    background: #0d2d4a;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 12px 0;
+  }
+  .callout strong { color: var(--accent); }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .container { padding: 16px; }
+    .toc ol { columns: 1; }
+    .card-grid { grid-template-columns: 1fr; }
+    .flow { gap: 4px; }
+    .flow .node { font-size: 11px; padding: 6px 8px; }
+    .flow .arrow { font-size: 10px; }
+    .header { padding: 32px 16px 24px; }
+    .header h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>GoodNight AI 内部架构与执行流程</h1>
+  <div class="subtitle">基于代码库现状的完整分析文档</div>
+  <div class="meta">
+    <span>📁 2026-05-06</span>
+    <span>🔧 基于 main 分支</span>
+    <span>📄 持续更新</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- TOC -->
+<div class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#overview">整体架构概览</a></li>
+    <li><a href="#dataflow">核心数据流</a></li>
+    <li><a href="#runtime">AI Runtime 系统</a></li>
+    <li><a href="#orchestration">编排层（Orchestration）</a></li>
+    <li><a href="#turn">Turn 执行生命周期</a></li>
+    <li><a href="#context">上下文组装系统</a></li>
+    <li><a href="#approval">审批与风控系统</a></li>
+    <li><a href="#providers">Provider 运行时</a></li>
+    <li><a href="#skills">技能（Skills）系统</a></li>
+    <li><a href="#memory">记忆系统</a></li>
+    <li><a href="#backend">Rust 后端</a></li>
+    <li><a href="#components">组件层</a></li>
+    <li><a href="#flow">完整请求链路</a></li>
+  </ol>
+</div>
+
+<!-- 1. Overview -->
+<section class="section" id="overview">
+  <h2>1. 整体架构概览</h2>
+  <p>GoodNight 的 AI 系统采用<strong>分层架构</strong>，分为表现层、编排层、运行时和后端持久化四层。各层通过 Zustand store 和 Tauri invoke 通信。</p>
+
+  <div class="layers">
+    <div class="layer">
+      <div class="lname">🎨 表现层 (Presentation)</div>
+      <div class="ldesc">React 组件：Workspace → Chat → MessageViewport / ComposerToolbar，以及各类面板（Memory、Timeline、Skills、Context、Approval）</div>
+    </div>
+    <div class="layer">
+      <div class="lname">🔀 编排层 (Orchestration)</div>
+      <div class="ldesc">负责路由用户意图：Direct Chat Flow → Local Agent Flow → Built-in Agent Turn → Team Flow，协调审批、上下文组装、Memory 提取</div>
+    </div>
+    <div class="layer">
+      <div class="lname">⚙️ 运行时层 (Runtime)</div>
+      <div class="ldesc">Zustand Store（<code>agentRuntimeStore</code>）+ 客户端 API（<code>agentRuntimeClient</code>）+ 工具循环（<code>runtimeToolLoop</code>）+ Provider 执行</div>
+    </div>
+    <div class="layer">
+      <div class="lname">🦀 持久化层 (Persistence)</div>
+      <div class="ldesc">Rust Tauri 后端：<code>agent_runtime/</code>（线程、Timeline、Memory、审批等 JSON 文件存储）+ <code>agent_shell/</code>（Shell 会话、设置）</div>
+    </div>
+  </div>
+
+  <h3>核心设计原则</h3>
+  <ul>
+    <li><strong>事件驱动</strong>：所有状态变更通过 Zustand store 的 actions 触发，组件通过 selector 订阅</li>
+    <li><strong>Provider 抽象</strong>：Built-in、Claude、Codex 三种 Provider 通过统一接口执行，由 Runtime Registry 解析</li>
+    <li><strong>可恢复性</strong>：Turn 执行记录 Replay Event，支持断点恢复、重试和回放</li>
+    <li><strong>审批门禁</strong>：高风险操作（bash、remove）需要用户审批，通过 <code>runtimeApprovalCoordinator</code> 协调</li>
+  </ul>
+
+  <div class="callout">
+    <strong>关键路径提示：</strong>用户的一条消息最终会经过 "组件 → Store → 编排 → 上下文组装 → Provider 调用 → 工具循环 → Memory 提取 → Timeline 记录" 的完整链路。
+  </div>
+</section>
+
+<!-- 2. Data Flow -->
+<section class="section" id="dataflow">
+  <h2>2. 核心数据流</h2>
+  <p>用户输入到最终响应的数据流向如下：</p>
+
+  <div class="flow">
+    <div class="node highlight">用户输入</div>
+    <div class="arrow">→</div>
+    <div class="node">ComposerToolbar</div>
+    <div class="arrow">→</div>
+    <div class="node">skillRouting</div>
+    <div class="arrow">→</div>
+    <div class="node highlight">编排层路由</div>
+    <div class="arrow">→</div>
+    <div class="node">上下文组装</div>
+    <div class="arrow">→</div>
+    <div class="node accent2">Provider 调用</div>
+    <div class="arrow">→</div>
+    <div class="node accent4">工具循环</div>
+    <div class="arrow">→</div>
+    <div class="node">响应渲染</div>
+  </div>
+
+  <h3>三种执行路径</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">💬 Direct Chat（直接对话）</div>
+      <div class="desc">最简单的路径：用户输入 → 上下文组装 → AI 直接回答。用于日常对话、非任务型请求。</div>
+      <div class="file"><code>runtimeDirectChatFlow.ts</code></div>
+    </div>
+    <div class="card">
+      <div class="title">🤖 Built-in Agent（内置代理）</div>
+      <div class="desc">完整执行路径：包含 Skills 准备 → 上下文组装 → <code>runAgentTurn()</code>（工具循环）→ 响应归一化 → 异常重试 → Memory 提取。</div>
+      <div class="file"><code>executeRuntimeBuiltInAgentTurn.ts</code></div>
+    </div>
+    <div class="card">
+      <div class="title">🖥️ Local Agent（本地代理）</div>
+      <div class="desc">将用户意图路由到外部 CLI 代理（Claude Code CLI / Codex CLI），包含风险分类和审批流程。</div>
+      <div class="file"><code>runtimeLocalAgentFlow.ts</code></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>注意：</strong>目前 <code>executeRuntimeBuiltInAgentTurn.ts</code> 是主要的 Turn 执行路径，它通过 <code>runAgentTurn()</code> 调用工具循环（最多 4 轮），并包含两套重试机制（Project Access 失败降级、Artifact Draft 回退）。
+  </div>
+</section>
+
+<!-- 3. AI Runtime System -->
+<section class="section" id="runtime">
+  <h2>3. AI Runtime 系统</h2>
+  <p>Runtime 系统是整个 AI 引擎的核心，围绕 Zustand store 构建，以 Thread（对话线程）为聚合根。</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">📦 agentRuntimeStore.ts <span class="tag store">Store</span></div>
+      <div class="desc">全局状态中心，以 threadId 为 key 存储所有运行时数据：线程、Turns、Timeline 事件、Sessions、Executions、Memory、Replay、Live State、Binding 等。</div>
+      <div class="file">~20 个状态切片，以 <code>ByThread</code> 后缀命名</div>
+    </div>
+    <div class="card">
+      <div class="title">📐 agentRuntimeTypes.ts <span class="tag ts">Types</span></div>
+      <div class="desc">共享类型定义：<code>AgentProviderId</code> ('built-in'|'claude'|'codex'|'team')、<code>AgentTurnRecord</code>、<code>AgentThreadRecord</code>、<code>AgentTimelineEvent</code> 等。</div>
+      <div class="file">核心接口层</div>
+    </div>
+    <div class="card">
+      <div class="title">🔌 agentRuntimeClient.ts <span class="tag ts">Client</span></div>
+      <div class="desc">封装 Tauri invoke 调用的客户端 API，提供非 Tauri 环境的降级。管理 Thread/Timeline/Memory/Approval/Checkpoint 的 CRUD，以及 <code>executePrompt()</code> 路由。</div>
+      <div class="file">UI → 后端的桥梁</div>
+    </div>
+  </div>
+
+  <h3>Store 状态结构</h3>
+  <div class="vflow">
+    <div class="step">
+      <div class="num">S</div>
+      <div class="content">
+        <div class="label">State Slices（按 threadId 索引）</div>
+        <div class="detail">
+          <code>threadsByProject</code> — 项目级线程列表<br>
+          <code>timelineByThread</code> — Timeline 事件流<br>
+          <code>turnsByThread</code> — Turn 执行记录<br>
+          <code>sessionsByThread</code> — Session 状态机<br>
+          <code>bindingByThread</code> — Provider → Thread 绑定<br>
+          <code>runStateByThread</code> — 运行状态（idle/running/error）<br>
+          <code>liveStateByThread</code> — 实时流状态（连接、动词、耗时、工具名、Streaming 文本）<br>
+          <code>memoryByProject</code> / <code>memoryCandidatesByThread</code> — 记忆<br>
+          <code>replayEventsByThread</code> / <code>recoveryByThread</code> — 回放<br>
+          <code>tasks/runs/agentRunsByThread</code> — 执行追踪
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Orchestration -->
+<section class="section" id="orchestration">
+  <h2>4. 编排层（Orchestration）</h2>
+  <p>编排层位于 <code>src/modules/ai/runtime/orchestration/</code>，负责将用户意图路由到正确的执行路径并管理生命周期。</p>
+
+  <h3>编排核心文件</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">runtimeDirectChatFlow.ts</div>
+      <div class="desc">直接对话流的请求构建与响应归一化。使用 <code>buildRuntimeDirectChatRequest()</code> 组装 Prompt，<code>normalizeRuntimeDirectChatResponse()</code> 清理内部标记。</div>
+    </div>
+    <div class="card">
+      <div class="title">executeRuntimeBuiltInAgentTurn.ts</div>
+      <div class="desc">内置代理的完整 Turn 执行。包含 Skills 准备、Direct Chat 构建、<code>runAgentTurn()</code> 调用、响应归一化、Project Access 失败降级、Artifact Draft 重试、文件变更守卫、Memory 提取。</div>
+    </div>
+    <div class="card">
+      <div class="title">runtimeLocalAgentFlow.ts</div>
+      <div class="desc">本地代理流程。风险分类（Risk Policy）→ 审批请求 → 执行 CLI 命令 → 决策处理回调。</div>
+    </div>
+    <div class="card">
+      <div class="title">runtimeTurnSessionFlow.ts</div>
+      <div class="desc">Session 状态机辅助函数：<code>applyRuntimeTurnClassifying()</code>、<code>buildRuntimeTurnReviewPlan()</code>、<code>applyRuntimeTurnExecuting/Completed/Failed/Blocked()</code>。</div>
+    </div>
+    <div class="card">
+      <div class="title">runtimeTurnOutcomeFlow.ts</div>
+      <div class="desc">创建 Activity Log 记录和标准化的 Outcome 描述（成功/失败），用于 Built-in 和 Local Agent。</div>
+    </div>
+    <div class="card">
+      <div class="title">agentTurnRunner.ts</div>
+      <div class="desc">Turn 和 Execution 控制器的工厂函数，提供 Streaming 消息组装器。包含 Turn ID 生成、<code>createRuntimeTurnController()</code>、<code>createRuntimeExecutionController()</code>、流式消息状态机。</div>
+    </div>
+  </div>
+
+  <h3>Conversation Gateway（对话网关）</h3>
+  <p><code>runtimeConversationGateway.ts</code> + <code>useRuntimeConversationGateway.ts</code> 是一个重要的汇聚点，它将 <code>aiChatStore</code> 和 <code>agentRuntimeStore</code> 的数据合并为一个 <code>RuntimeConversationProjection</code>，组件通过 React Hook 订阅。包含：最新的 Turn Session、Live State、审批、Memory Candidates、Replay 状态、Team Runs 等。</p>
+</section>
+
+<!-- 5. Turn Lifecycle -->
+<section class="section" id="turn">
+  <h2>5. Turn 执行生命周期</h2>
+
+  <h3>Session 状态机</h3>
+  <p>一个 Turn 从创建到完成经历以下状态转换：</p>
+
+  <div class="state-machine">
+    <span class="state">queued</span>
+    <span class="arrow">→</span>
+    <span class="state active">classifying</span>
+    <span class="arrow">→</span>
+    <span class="state">planning</span>
+    <span class="arrow">→</span>
+    <span class="state wait">waiting_approval</span>
+    <span class="arrow">→</span>
+    <span class="state active">executing</span>
+    <span class="arrow">→</span>
+    <span class="state active">completed</span>
+    <span class="arrow" style="color:var(--accent5);">→</span>
+    <span class="state error">failed</span>
+    <span class="arrow">→</span>
+    <span class="state wait">resumable</span>
+  </div>
+
+  <p style="margin-top: 8px; font-size: 13px; color: var(--text-dim);">
+    状态转换定义在 <code>agentSessionStateMachine.ts</code> 的 <code>reduceAgentTurnSession()</code> 纯函数中，事件类型有 7 种：<code>start_classifying</code> → <code>enter_planning</code> → <code>plan_waiting_approval</code> → <code>approval_granted</code> → <code>execution_blocked</code> → <code>execution_completed</code> → <code>execution_failed</code>。
+  </p>
+
+  <h3>Agent Kernel 执行</h3>
+  <div class="vflow">
+    <div class="step">
+      <div class="num">1</div>
+      <div class="content">
+        <div class="label">构建上下文</div>
+        <div class="detail"><code>buildAgentContext(input)</code> — 将项目信息、Instructions、Skills、Memory、Reference Files、对话历史组装为带预算的 <code>AgentContextSnapshot</code></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num green">2</div>
+      <div class="content">
+        <div class="label">运行工具循环</div>
+        <div class="detail"><code>runRuntimeToolLoop()</code> — 调用模型 → 解析 Tool Call → 执行工具 → 结果回传 → 重复（最多 4 轮）。支持 Streaming 检测工具调用、并行执行只读工具、上下文超长时自动压缩。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num purple">3</div>
+      <div class="content">
+        <div class="label">返回结果</div>
+        <div class="detail">返回 <code>RunAgentTurnResult</code>：<code>finalContent</code>（最终文本）+ <code>context</code>（上下文快照）+ <code>toolCalls</code>（工具调用记录）+ <code>transcript</code>（完整消息日志）</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>工具循环（Tool Loop）</h3>
+  <p><code>runtimeToolLoop.ts</code> 是整个 AI 代理的核心推理循环：</p>
+  <ul>
+    <li><strong>流式检测</strong>：<code>createStreamingToolDetector()</code> 在流式输出中实时检测 <code>&lt;tool_use&gt;</code> 标记</li>
+    <li><strong>工具解析</strong>：<code>parseToolCalls()</code> 解析 XML 格式的工具调用</li>
+    <li><strong>并行执行</strong>：只读工具（glob、grep、ls）并行执行，写操作串行</li>
+    <li><strong>压缩机制</strong>：上下文超长时触发 <code>compactOldToolResults()</code> 或 <code>removeOldestTurn()</code></li>
+    <li><strong>结果预览</strong>：工具结果截断至 1000 字符，防止 Token 溢出</li>
+    <li><strong>文件变更追踪</strong>：提取工具执行的 File Changes，供审批守卫校验</li>
+  </ul>
+
+  <div class="callout">
+    <strong>系统提示词：</strong>Agent Kernel 的系统提示词直接硬编码在 <code>runAgentTurn.ts</code> 中（<code>GOODNIGHT_AGENT_SYSTEM_PROMPT</code>），规定了可用工具、XML 格式、内部文件保密规则、回答策略等。允许的工具包括：<code>glob, grep, ls, view, write, edit, bash, fetch, AskUserQuestion</code>。
+  </div>
+
+  <h3>Streaming 消息组装</h3>
+  <p><code>createRuntimeStreamingMessageAssembler()</code> 是一个状态机，将 AI 的流式输出片段逐步组装为结构化的 Draft，包含 <code>thinking</code> 和 <code>text</code> 两部分，并做可见文本消毒。</p>
+</section>
+
+<!-- 6. Context Assembly -->
+<section class="section" id="context">
+  <h2>6. 上下文组装系统</h2>
+  <p>上下文组装位于 <code>src/modules/ai/runtime/context/</code>，负责将项目信息、历史记录和参考材料组装为发给 AI 的完整 Prompt。</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">assembleAgentContext.ts</div>
+      <div class="desc">简单工厂函数，从 Project 信息、Instructions、Reference Files、Memory、Active Skills 创建 <code>AgentContextBundle</code>。</div>
+    </div>
+    <div class="card">
+      <div class="title">buildThreadPrompt.ts</div>
+      <div class="desc">将 <code>AgentContextBundle</code> 渲染为 XML 格式的 Prompt 字符串，含 <code>&lt;instructions&gt;</code>、<code>&lt;skills&gt;</code>、<code>&lt;memory&gt;</code>、<code>&lt;references&gt;</code> 等标签。</div>
+    </div>
+    <div class="card">
+      <div class="title">buildAgentContext.ts</div>
+      <div class="desc">核心构建器。将输入分解为 7 个 Section：<code>instructions, skills, history, memory, reference, active-context, user-input</code>。通过 <code>allocateContextBudget()</code> 做贪心分配，最多迭代 8 次收敛 Token 计数。</div>
+    </div>
+    <div class="card">
+      <div class="title">contextBudgetAllocator.ts</div>
+      <div class="desc">贪心预算分配：Required（<code>instructions + user-input</code>）始终包含，Optional 按优先级依次包含直到 Token 上限。</div>
+    </div>
+    <div class="card">
+      <div class="title">agentContextTypes.ts</div>
+      <div class="desc">类型定义：<code>AgentContextSection</code>、<code>AgentContextBudget</code>、<code>AgentContextBuildInput</code>、<code>AgentContextSnapshot</code>、<code>AgentContextSectionKind</code>。</div>
+    </div>
+  </div>
+
+  <h3>上下文结构</h3>
+  <p>构建后的 Prompt 是一个多层 XML 文档，末尾附有 <code>&lt;context_report&gt;</code> 报告 Token 使用情况：</p>
+
+  <div class="vflow">
+    <div class="step">
+      <div class="num">1</div>
+      <div class="content">
+        <div class="label">Instructions（必须）</div>
+        <div class="detail">系统指令和行为规则，如 <code>FILE_OPERATION_TRUTHFULNESS_POLICY</code>、<code>TASK_AUTHORIZATION_POLICY</code> 等</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num green">2</div>
+      <div class="content">
+        <div class="label">Skills</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num purple">3</div>
+      <div class="content">
+        <div class="label">History | Memory | Reference | Active Context</div>
+        <div class="detail">按优先级排队，预算内尽量包含。Active Context 包含 <code>project + project_id + thread_id</code></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num">4</div>
+      <div class="content">
+        <div class="label">User Input（必须）</div>
+        <div class="detail">当前用户的输入消息</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num orange">5</div>
+      <div class="content">
+        <div class="label">&lt;context_report&gt;</div>
+        <div class="detail"><code>used_tokens / limit_tokens</code> 报告，列出 included 和 excluded 的各 Section 及 Token 数</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7. Approval -->
+<section class="section" id="approval">
+  <h2>7. 审批与风控系统</h2>
+  <p>审批系统位于 <code>src/modules/ai/runtime/approval/</code>，为高风险操作提供门禁。</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">riskPolicy.ts</div>
+      <div class="desc">风险分类：<br>
+        🔴 <strong>High</strong>：<code>tool_remove</code>、<code>tool_bash</code>、<code>run_local_agent_prompt</code><br>
+        🟡 <strong>Medium</strong>：<code>tool_edit</code>、<code>tool_write</code>、<code>project_file_write</code><br>
+        还根据敏感路径（<code>.env</code>、<code>package.json</code>、<code>src-tauri/</code>）提升风险等级。</div>
+    </div>
+    <div class="card">
+      <div class="title">approvalStore.ts <span class="tag store">Store</span></div>
+      <div class="desc">Zustand Store：<code>approvalsByThread</code>、<code>sandboxPolicy</code>、<code>permissionMode</code>。Actions：<code>enqueueApproval()</code>、<code>resolveApproval()</code>。</div>
+    </div>
+    <div class="card">
+      <div class="title">runtimeApprovalCoordinator.ts</div>
+      <div class="desc">核心协调器：<code>requestRuntimeApproval()</code> 创建审批记录并在 <code>pendingApprovalActions</code> 存储回调；<code>resolveRuntimeApproval()</code> 查找并执行回调。</div>
+    </div>
+    <div class="card">
+      <div class="title">permissionMode.ts</div>
+      <div class="desc">策略映射：<code>'ask'</code> → 每次询问、<code>'plan'</code> → 先计划再执行、<code>'auto'</code> → 自动执行、<code>'bypass'</code> → 跳过审批。</div>
+    </div>
+    <div class="card">
+      <div class="title">approvalTypes.ts</div>
+      <div class="desc">类型：<code>ApprovalRiskLevel</code> ('low'|'medium'|'high')、<code>ApprovalStatus</code>、<code>SandboxPolicy</code>、<code>PermissionMode</code>、<code>ApprovalRecord</code>。</div>
+    </div>
+  </div>
+
+  <h3>审批流程</h3>
+  <div class="flow">
+    <div class="node">操作请求</div>
+    <div class="arrow">→</div>
+    <div class="node">riskPolicy.ts<br>分类风险</div>
+    <div class="arrow">→</div>
+    <div class="node accent4">需要审批？</div>
+    <div class="arrow">→</div>
+    <div class="node">approvalStore<br>enqueue</div>
+    <div class="arrow">→</div>
+    <div class="node highlight">用户审批</div>
+    <div class="arrow">→</div>
+    <div class="node accent2">执行回调</div>
+  </div>
+</section>
+
+<!-- 8. Providers -->
+<section class="section" id="providers">
+  <h2>8. Provider 运行时</h2>
+  <p>系统支持三个 AI Provider，通过统一的注册机制集成。</p>
+
+  <h3>Provider 注册</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">🏠 Built-in（内置）</div>
+      <div class="desc"><code>AIService.ts</code> 单例，支持 Anthropic 和 OpenAI-compatible 两种 API。包含完整的 <code>runAgentLoop()</code>（多轮工具调用）、Streaming SSE、内置 Tool Executor。</div>
+      <div class="file"><code>src/modules/ai/core/AIService.ts</code></div>
+    </div>
+    <div class="card">
+      <div class="title">🟣 Claude</div>
+      <div class="desc"><code>ClaudeRuntime</code> 类，包装 <code>aiService.completeText()</code>，筛选 <code>provider === 'anthropic'</code> 的配置。检测本地 <code>.claude/settings.json</code>。</div>
+      <div class="file"><code>ClaudeRuntime.ts</code></div>
+    </div>
+    <div class="card">
+      <div class="title">🔵 Codex</div>
+      <div class="desc"><code>CodexRuntime</code> 类，和 ClaudeRuntime 结构一致，筛选 <code>provider === 'openai-compatible'</code>。检测本地 <code>.codex/</code> 目录。</div>
+      <div class="file"><code>CodexRuntime.ts</code></div>
+    </div>
+  </div>
+
+  <h3>Provider 配置</h3>
+  <ul>
+    <li><strong>Provider Presets</strong>（<code>providerPresets.ts</code>）：预置 7 个 Provider：MiniMax、SiliconFlow、OpenRouter、DeepSeek、Anthropic、OpenAI、Ollama</li>
+    <li><strong>AI Config State</strong>（<code>aiConfigState.ts</code>）：管理 <code>AIConfigEntry</code> 的增删改查、Preset 合并、启用过滤</li>
+    <li><strong>Runtime Registry</strong>（<code>runtimeRegistry.ts</code>）：运行时解析 Chat Agent：'claude' | 'codex' | 'team' | 'built-in'</li>
+  </ul>
+</section>
+
+<!-- 9. Skills -->
+<section class="section" id="skills">
+  <h2>9. 技能（Skills）系统</h2>
+  <p>Skills 系统是 AI 的能力扩展机制，支持从本地文件和系统捆绑两个来源加载，按需激活。</p>
+
+  <h3>Skills 生命周期</h3>
+  <div class="vflow">
+    <div class="step">
+      <div class="num">1</div>
+      <div class="content">
+        <div class="label">发现与加载</div>
+        <div class="detail"><code>skillLibrary.ts</code> 通过 <code>discover_local_skills</code> Tauri 命令发现本地 SKILL.md 文件，用 <code>parseSkillMarkdown.ts</code> 解析 frontmatter + body，与系统捆绑 Skill 合并去重。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num green">2</div>
+      <div class="content">
+        <div class="label">意图路由</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num purple">3</div>
+      <div class="content">
+        <div class="label">注册与管理</div>
+        <div class="detail"><code>runtimeSkillRegistry.ts</code> 管理每个 Thread 的 Skill 激活列表，支持 <code>activationPaths</code> 自动激活（基于 glob 匹配）、无条件激活和 Thread 级手动激活。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num">4</div>
+      <div class="content">
+        <div class="label">Prompt 生成</div>
+        <div class="detail"><code>buildRuntimeSkillPrompt.ts</code> 将激活的 Skill 定义渲染为 XML <code>&lt;skill&gt;</code> 块，包含元数据属性。</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num orange">5</div>
+      <div class="content">
+        <div class="label">预处理</div>
+        <div class="detail"><code>runtimeSkillPreparation.ts</code> 在 Turn 执行前预处理 Skill：参数替换（<code>substituteRuntimeSkillArguments</code>）、Shell 变量替换（<code>${CLAUDE_SESSION_ID}</code>）、执行内联 Shell 命令（<code>!</code>cmd`` 或 <code>```!</code> 代码块）、创建 Tool Hook Runner（<code>PreToolUse</code>/<code>PostToolUse</code>）。</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Skill 定义结构</h3>
+  <p><code>RuntimeSkillDefinition</code> 包含：<code>id</code>、<code>name</code>、<code>description</code>、<code>whenToUse</code>、<code>prompt</code>、<code>token</code>、<code>aliases</code>、<code>executionContext</code>（'inline'|'fork'）、<code>agent</code>、<code>model</code>、<code>hooks</code>、<code>activationPaths</code>、<code>allowedTools</code>、<code>userInvocable</code>、<code>modelInvocable</code>、<code>source</code>。</p>
+</section>
+
+<!-- 10. Memory -->
+<section class="section" id="memory">
+  <h2>10. 记忆系统</h2>
+  <p>记忆系统负责在对话之间持久化用户的偏好和项目事实。</p>
+
+  <h3>记忆提取与存储</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">extractMemoryCandidates.ts</div>
+      <div class="desc">扫描用户输入中的 <code>项目事实:</code> 前缀和偏好模式（<code>我喜欢</code>、<code>偏好:</code>、<code>回答短一点</code>），创建 <code>pending</code> 状态的 Memory Candidate（<code>projectFact</code> 或 <code>userPreference</code>）。</div>
+    </div>
+    <div class="card">
+      <div class="title">threadMemoryRuntime.ts</div>
+      <div class="desc">Thread 级别 Memory 的工厂函数，每个 Thread 有自己的作用域。</div>
+    </div>
+    <div class="card">
+      <div class="title">projectMemoryRuntime.ts</div>
+      <div class="desc">Project 级别 Memory 的工厂函数，跨 Thread 共享。</div>
+    </div>
+  </div>
+
+  <h3>Memory Candidate 类型</h3>
+  <div class="flow">
+    <div class="node">用户输入</div>
+    <div class="arrow">→</div>
+    <div class="node">extractMemoryCandidates</div>
+    <div class="arrow">→</div>
+    <div class="node">pending</div>
+    <div class="arrow">→</div>
+    <div class="node accent2">saved</div>
+    <div class="arrow">→</div>
+    <div class="node accent5">dismissed</div>
+  </div>
+
+  <p style="margin-top: 8px; font-size: 13px; color: var(--text-dim);">
+    Memory Candidate 包含：<code>id</code>、<code>threadId</code>、<code>title</code>、<code>summary</code>、<code>content</code>、<code>kind</code>（projectFact|userPreference）、<code>status</code>（pending|saved|dismissed）、<code>createdAt</code>。
+  </p>
+
+  <h3>知识系统（Knowledge）</h3>
+  <p>位于 <code>src/features/knowledge/</code>，与 Memory 互补但独立：</p>
+  <ul>
+    <li><strong>Knowledge Note</strong>：从项目 Markdown 文件扫描（Vault 扫描），支持全文搜索和语义搜索</li>
+    <li><strong>Knowledge Graph</strong>：<code>globalKnowledgeGraph.ts</code> 定义知识图谱的节点和边</li>
+    <li><strong>Similar Notes / Neighborhood Graph</strong>：<code>loadSimilarNotes()</code>、<code>loadNeighborhoodGraph()</code> 提供语义关联</li>
+    <li><strong>Workspace</strong>：<code>KnowledgeGraphCanvas.tsx</code> 图谱可视化、<code>KnowledgeMarkdownViewer.tsx</code> Markdown 渲染</li>
+  </ul>
+  <div class="callout">
+    <strong>注意：</strong><code>src/modules/ai/knowledge/</code> 目录存在但为空。Knowledge Proposal 相关文件（<code>knowledgeProposal.ts</code>、<code>knowledgeOperationPolicy.ts</code>、<code>knowledgeProposalStore.ts</code>）已被删除。
+  </div>
+</section>
+
+<!-- 11. Rust Backend -->
+<section class="section" id="backend">
+  <h2>11. Rust 后端</h2>
+  <p>后端位于 <code>src-tauri/src/</code>，分为两个子系统：Agent Runtime 和 Agent Shell，均使用 JSON 文件持久化到 Tauri 的 App Data 目录。</p>
+
+  <h3>Agent Runtime（执行持久化）</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">thread_store.rs</div>
+      <div class="desc">线程记录 + Timeline 事件的 JSON 文件存储。</div>
+    </div>
+    <div class="card">
+      <div class="title">memory_store.rs</div>
+      <div class="desc">项目级 Memory 条目的持久化。</div>
+    </div>
+    <div class="card">
+      <div class="title">approval_store.rs</div>
+      <div class="desc">审批记录的持久化。</div>
+    </div>
+    <div class="card">
+      <div class="title">mcp_store.rs</div>
+      <div class="desc">MCP 服务器配置和工具调用记录。</div>
+    </div>
+    <div class="card">
+      <div class="title">replay_store.rs</div>
+      <div class="desc">Replay 事件持久化，支持 Turn 回放和恢复。</div>
+    </div>
+    <div class="card">
+      <div class="title">turn_checkpoint_store.rs</div>
+      <div class="desc">Turn Checkpoint 持久化，含文件差异比对和回滚能力。</div>
+    </div>
+    <div class="card">
+      <div class="title">background_task_store.rs</div>
+      <div class="desc">后台任务记录持久化。</div>
+    </div>
+    <div class="card">
+      <div class="title">context_store.rs</div>
+      <div class="desc">上下文数据持久化。</div>
+    </div>
+    <div class="card">
+      <div class="title">settings_store.rs</div>
+      <div class="desc">运行时设置（Sandbox Policy、Permission Mode、Auto Resume）。</div>
+    </div>
+  </div>
+
+  <h3>Agent Shell（Shell 会话）</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">session_store.rs</div>
+      <div class="desc">Shell 会话记录持久化。</div>
+    </div>
+    <div class="card">
+      <div class="title">settings_store.rs</div>
+      <div class="desc">Shell 设置（mode、claude/codex config IDs）。</div>
+    </div>
+    <div class="card">
+      <div class="title">context_store.rs</div>
+      <div class="desc">上下文数据持久化。</div>
+    </div>
+  </div>
+
+  <h3>Tauri 命令</h3>
+  <p><code>commands.rs</code>（Agent Runtime）暴露 18 个 Tauri 命令，覆盖所有 CRUD 操作：</p>
+  <ul>
+    <li><code>list_threads</code> / <code>get_thread</code> / <code>save_thread</code> / <code>delete_thread</code></li>
+    <li><code>list_timeline_events</code> / <code>save_timeline_event</code></li>
+    <li><code>list_memory_entries</code> / <code>save_memory_entry</code> / <code>delete_memory_entry</code></li>
+    <li><code>list_approvals</code> / <code>save_approval</code> / <code>resolve_approval</code></li>
+    <li><code>get_runtime_settings</code> / <code>save_runtime_settings</code></li>
+    <li><code>list_mcp_servers</code> / <code>save_mcp_server</code> / <code>list_tool_calls</code> / <code>save_tool_call</code></li>
+    <li><code>list_replay_events</code> / <code>save_replay_event</code></li>
+    <li><code>list_turn_checkpoints</code> / <code>save_turn_checkpoint</code></li>
+    <li><code>list_background_tasks</code> / <code>save_background_task</code></li>
+  </ul>
+</section>
+
+<!-- 12. Components -->
+<section class="section" id="components">
+  <h2>12. 组件层</h2>
+  <p>UI 组件集中在 <code>src/components/ai/</code>，按职责分组。</p>
+
+  <h3>Workspace 层</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">AIWorkspace.tsx</div>
+      <div class="desc">AI 功能顶层容器，渲染 <code>&lt;AIChat variant="gn-agent-embedded"&gt;</code>。</div>
+    </div>
+    <div class="card">
+      <div class="title">ClaudeWorkspace.tsx</div>
+      <div class="desc">Claude Provider 专属工作区。</div>
+    </div>
+    <div class="card">
+      <div class="title">CodexWorkspace.tsx</div>
+      <div class="desc">Codex Provider 专属工作区。</div>
+    </div>
+    <div class="card">
+      <div class="title">ClassicWorkspace.tsx</div>
+      <div class="desc">经典模式工作区。</div>
+    </div>
+    <div class="card">
+      <div class="title">ProviderWorkspaceLayout.tsx</div>
+      <div class="desc">通用布局组合：<code>SessionSidebar</code> + 主区域（<code>RuntimeStatusBar</code> + <code>MessageViewport</code> + <code>ComposerToolbar</code>）。</div>
+    </div>
+  </div>
+
+  <h3>Chat 组件</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">ComposerToolbar.tsx</div>
+      <div class="desc">消息输入区域。</div>
+    </div>
+    <div class="card">
+      <div class="title">MessageViewport.tsx</div>
+      <div class="desc">消息展示区域。</div>
+    </div>
+    <div class="card">
+      <div class="title">RuntimeStatusBar.tsx</div>
+      <div class="desc">连接状态显示（disconnected/connecting/connected/reconnecting）+ 状态动词 + 耗时。</div>
+    </div>
+    <div class="card">
+      <div class="title">SessionSidebar.tsx</div>
+      <div class="desc">会话列表侧边栏。</div>
+    </div>
+  </div>
+
+  <h3>GN-Agent Shell 面板</h3>
+  <p>位于 <code>src/components/ai/gn-agent-shell/</code>，提供丰富的运行时面板：</p>
+  <div class="card-grid">
+    <div class="card"><div class="title">GNAgentChatPage.tsx</div><div class="desc">Claude/Codex 主聊天页面。</div></div>
+    <div class="card"><div class="title">GNAgentConfigPage.tsx</div><div class="desc">AI 配置管理页面。</div></div>
+    <div class="card"><div class="title">GNAgentSkillsPage.tsx</div><div class="desc">Skills 浏览/管理页面。</div></div>
+    <div class="card"><div class="title">GNAgentContextPanel.tsx</div><div class="desc">上下文组装可视化面板。</div></div>
+    <div class="card"><div class="title">GNAgentMemoryPanel.tsx</div><div class="desc">记忆展示面板。</div></div>
+    <div class="card"><div class="title">GNAgentMemoryInbox.tsx</div><div class="desc">待审批记忆候选收件箱。</div></div>
+    <div class="card"><div class="title">GNAgentTimelinePanel.tsx</div><div class="desc">Timeline 事件展示。</div></div>
+    <div class="card"><div class="title">GNAgentTurnSummaryCards.tsx</div><div class="desc">Turn 执行摘要卡片。</div></div>
+    <div class="card"><div class="title">GNAgentToolCallPanel.tsx</div><div class="desc">工具调用展示。</div></div>
+    <div class="card"><div class="title">GNAgentStatusPanel.tsx</div><div class="desc">运行时状态展示。</div></div>
+    <div class="card"><div class="title">GNAgentPlanPanel.tsx</div><div class="desc">计划可视化。</div></div>
+    <div class="card"><div class="title">GNAgentTeamPanel.tsx</div><div class="desc">团队编排展示。</div></div>
+    <div class="card"><div class="title">GNAgentThreadList.tsx</div><div class="desc">线程列表。</div></div>
+    <div class="card"><div class="title">GNAgentRuntimeSummary.tsx</div><div class="desc">Provider 运行时状态摘要。</div></div>
+    <div class="card"><div class="title">GNAgentModeSwitch.tsx</div><div class="desc">模式切换器（classic/claude/codex/config/skills）。</div></div>
+    <div class="card"><div class="title">GNAgentTabBadges.tsx</div><div class="desc">待处理审批/Memory 的角标。</div></div>
+  </div>
+
+  <h3>Store 层</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">aiChatStore.ts <span class="tag store">Store</span></div>
+      <div class="desc">Zustand + persist。管理 <code>ChatSession[]</code> 和 <code>ActivityEntry[]</code>。每个 Session 含消息列表、Timeline 卡片、Replay 事件和恢复状态。</div>
+    </div>
+    <div class="card">
+      <div class="title">globalAIStore.ts <span class="tag store">Store</span></div>
+      <div class="desc">旧版 AI 面板的全局状态（Provider、API Key、流状态、请求历史）。</div>
+    </div>
+    <div class="card">
+      <div class="title">gnAgentShellStore.ts <span class="tag store">Store</span></div>
+      <div class="desc">Shell 模式状态：当前 <code>mode</code>（classic|config|skills|claude|codex）+ claudeCodexConfigId。</div>
+    </div>
+    <div class="card">
+      <div class="title">chatSessionEventLog.ts <span class="tag ts">Types</span></div>
+      <div class="desc">事件溯源日志：message_appended、session_initialized、thread_bound 等。</div>
+    </div>
+  </div>
+</section>
+
+<!-- 13. Complete Flow -->
+<section class="section" id="flow">
+  <h2>13. 完整请求链路</h2>
+  <p>以下是用户发送一条消息后的完整执行链路，涵盖所有系统和子步骤。</p>
+
+  <div class="vflow">
+    <div class="step">
+      <div class="num">1</div>
+      <div class="content">
+        <div class="label">用户输入消息</div>
+        <div class="detail">
+          ComposerToolbar 提交文本 → <code>aiChatStore</code> 追加消息到 ChatSession<br>
+          → <code>resolveSkillIntent()</code> 检查是否触发 <code>/skill</code> 或 <code>@skill</code>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num green">2</div>
+      <div class="content">
+        <div class="label">创建 Turn &amp; Session</div>
+        <div class="detail">
+          <code>createQueuedRuntimeTurn()</code> → <code>startRuntimeTurnLifecycle()</code> → <code>submitTurn()</code><br>
+          → <code>agentSessionStateMachine</code>: classify → plan → execute
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num purple">3</div>
+      <div class="content">
+        <div class="label">路由到执行路径</div>
+        <div class="detail">
+          根据 Provider 类型和消息上下文选择：<br>
+          <strong>Built-in Turn</strong> → <code>executeRuntimeBuiltInAgentTurn.ts</code><br>
+          <strong>Direct Chat</strong> → <code>buildRuntimeDirectChatRequest()</code><br>
+          <strong>Local Agent</strong> → <code>prepareRuntimeLocalAgentFlow()</code> → 风险分类 → 审批
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num">4</div>
+      <div class="content">
+        <div class="label">上下文组装</div>
+        <div class="detail">
+          <code>buildAgentContext()</code> → 7 个 Section 构建 → <code>allocateContextBudget()</code> 贪心分配 → 最多 8 次迭代收敛 Token → 生成 <code>&lt;context_report&gt;</code>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num orange">5</div>
+      <div class="content">
+        <div class="label">Agent Kernel 执行</div>
+        <div class="detail">
+          <code>runAgentTurn()</code> → <code>runRuntimeToolLoop()</code>:<br>
+          → 调用 AI 模型（Streaming）<br>
+          → 流式检测工具调用标记<br>
+          → 解析 XML Tool Call<br>
+          → 并行执行只读工具 / 串行执行写工具<br>
+          → 结果回传到模型<br>
+          → 重复直到模型返回最终内容或达到 4 轮上限
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num">6</div>
+      <div class="content">
+        <div class="label">响应后处理</div>
+        <div class="detail">
+          <code>normalizeRuntimeDirectChatResponse()</code> 清理内部标记<br>
+          重试机制：Project Access 失败降级 / Artifact Draft 重试<br>
+          <code>runtimeFileMutationClaimGuard.ts</code> 校验未验证的文件变更声明<br>
+          <code>extractMemoryCandidates()</code> 提取记忆候选
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="num">7</div>
+      <div class="content">
+        <div class="label">持久化与更新</div>
+        <div class="detail">
+          Turn 状态 → completed / failed / resumable<br>
+          Timeline 事件追加<br>
+          Tauri invoke → Rust Store → JSON 文件<br>
+          Conversation Gateway 触发组件更新 → 渲染新消息
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>重试与恢复机制</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="title">🔄 Project Access Fallback</div>
+      <div class="desc">如果内置代理的 Project Context 访问失败，自动降级重试 — 不使用工具，仅基于用户输入回答。</div>
+    </div>
+    <div class="card">
+      <div class="title">📝 Artifact Draft Retry</div>
+      <div class="desc">如果模型仅返回流程叙述而非实际内容，自动重试一次。</div>
+    </div>
+    <div class="card">
+      <div class="title">📦 Context Length Recovery</div>
+      <div class="desc">工具循环中检测上下文超长错误，触发 <code>compactOldToolResults()</code> 压缩或 <code>removeOldestTurn()</code> 移除最早轮次。</div>
+    </div>
+    <div class="card">
+      <div class="title">⏯️ Replay 恢复</div>
+      <div class="desc"><code>runtimeReplayRecovery.ts</code> 判断线程是否可以恢复/重试，自动创建 Resume Request。</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>总结：</strong>GoodNight 的 AI 系统是一个<strong>分层明确、事件驱动、可扩展</strong>的架构。核心围绕 Runtime Store 构建，通过编排层统一路由，工具循环提供自主能力，审批系统确保安全，Rust 后端保证持久化。三个 Provider（Built-in / Claude / Codex）共享同一套编排和上下文系统，体现了良好的抽象设计。但目前的状态机只支持单线程顺序执行，Team 编排也尚在早期阶段。
+  </div>
+</section>
+
+<hr>
+
+<div style="text-align: center; color: var(--text-dim); font-size: 12px; padding-bottom: 48px;">
+  本文档基于 GoodNight 代码库 main 分支生成 · 2026-05-06
+</div>
+
+</div>
+</body>
+</html>

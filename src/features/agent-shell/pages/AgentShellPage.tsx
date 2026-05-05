@@ -8,9 +8,12 @@ import { getLocalAgentConfigSnapshot } from '../../../modules/ai/gn-agent/localC
 import './AgentShellPage.css';
 
 type AgentWorkspaceTabId = 'chat' | 'claude' | 'codex' | 'skills' | 'config';
+type AgentShellMode = 'classic' | 'claude' | 'codex' | 'skills' | 'config';
 
 type AgentShellSettings = {
-  activeTab?: AgentWorkspaceTabId;
+  mode?: string;
+  claudeConfigId?: string | null;
+  codexConfigId?: string | null;
 };
 
 const AGENT_WORKSPACE_TABS: Array<{ id: AgentWorkspaceTabId; label: string }> = [
@@ -20,6 +23,18 @@ const AGENT_WORKSPACE_TABS: Array<{ id: AgentWorkspaceTabId; label: string }> = 
   { id: 'skills', label: 'Skills' },
   { id: 'config', label: 'Config' },
 ];
+
+const tabToMode = (tabId: AgentWorkspaceTabId): AgentShellMode => (tabId === 'chat' ? 'classic' : tabId);
+
+const modeToTab = (mode?: string): AgentWorkspaceTabId | null => {
+  if (mode === 'classic') {
+    return 'chat';
+  }
+  if (mode === 'claude' || mode === 'codex' || mode === 'skills' || mode === 'config') {
+    return mode;
+  }
+  return null;
+};
 
 export const AgentShellPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AgentWorkspaceTabId>('chat');
@@ -37,8 +52,11 @@ export const AgentShellPage: React.FC = () => {
         return;
       }
 
-      if (settings?.activeTab) {
-        setActiveTab(settings.activeTab);
+      if (settings) {
+        const persistedTab = modeToTab(settings.mode);
+        if (persistedTab) {
+          setActiveTab(persistedTab);
+        }
       }
       setLocalSnapshot(snapshot);
     })();
@@ -51,8 +69,8 @@ export const AgentShellPage: React.FC = () => {
   const updateActiveTab = (tabId: AgentWorkspaceTabId) => {
     setActiveTab(tabId);
     void invoke('update_agent_shell_settings', {
-      params: {
-        activeTab: tabId,
+      input: {
+        mode: tabToMode(tabId),
       },
     }).catch(() => undefined);
   };

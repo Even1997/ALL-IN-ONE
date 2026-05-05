@@ -251,18 +251,6 @@ export const listAgentApprovals = async (threadId: string): Promise<ApprovalReco
   return invoke<ApprovalRecord[]>('list_agent_approvals', { threadId });
 };
 
-export const getAgentSandboxPolicy = async (): Promise<SandboxPolicy> => {
-  return (await getAgentRuntimeSettings()).sandboxPolicy;
-};
-
-export const setAgentSandboxPolicy = async (policy: SandboxPolicy): Promise<SandboxPolicy> => {
-  return (await updateAgentRuntimeSettings({ sandboxPolicy: policy })).sandboxPolicy;
-};
-
-export const getAgentPermissionMode = async (): Promise<PermissionMode> => {
-  return (await getAgentRuntimeSettings()).permissionMode;
-};
-
 export const setAgentPermissionMode = async (mode: PermissionMode): Promise<PermissionMode> => {
   return (
     await updateAgentRuntimeSettings({
@@ -280,7 +268,7 @@ export const getAgentRuntimeSettings = async (): Promise<AgentRuntimeSettings> =
   return invoke<AgentRuntimeSettings>('get_agent_runtime_settings');
 };
 
-export const updateAgentRuntimeSettings = async (
+const updateAgentRuntimeSettings = async (
   input: Partial<AgentRuntimeSettings>
 ): Promise<AgentRuntimeSettings> => {
   if (!isTauriRuntimeAvailable()) {
