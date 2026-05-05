@@ -24,7 +24,7 @@ test('GN agent shell wires turn summary cards and a plan panel into the main lay
   assert.match(chatPageSource, /GNAgentTurnSummaryCards/);
   assert.match(chatPageSource, /latestTurnSession/);
   assert.match(chatPageSource, /AI_CHAT_COMMAND_EVENT/);
-  assert.match(chatPageSource, /autoSubmit: true/);
+  assert.match(chatPageSource, /prefillChatPrompt\(prompt,\s*true\)/);
   assert.match(chatPageSource, /Additional guidance:/);
   assert.match(chatPageSource, /Pause after the current step and wait for more instructions before continuing\./);
   assert.match(aiChatSource, /sessionsByThread|upsertTurnSession|patchTurnSession/);

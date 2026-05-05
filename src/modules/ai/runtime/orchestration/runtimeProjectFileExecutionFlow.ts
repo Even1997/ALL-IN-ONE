@@ -326,7 +326,7 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
 
     input.updateMessage(input.projectId, input.sessionId, input.messageId, (message) => ({
       ...message,
-      content: input.proposal.assistantMessage,
+      content: result.message,
       projectFileProposal: message.projectFileProposal
         ? {
             ...message.projectFileProposal,

@@ -347,41 +347,6 @@ test('latest activity entries are kept in reverse chronological order', async ()
   assert.equal(entries[0].id, 'a2');
 });
 
-test('ai chat store keeps assistant knowledge proposal metadata intact', async () => {
-  const { useAIChatStore, createChatSession, createStoredChatMessage } = await loadStore();
-  const store = useAIChatStore.getState();
-
-  const session = createChatSession('project-proposal', 'Knowledge proposal');
-  store.upsertSession('project-proposal', session);
-  store.appendMessage('project-proposal', session.id, {
-    ...createStoredChatMessage('assistant', 'I found 1 knowledge update.'),
-    knowledgeProposal: {
-      id: 'proposal-1',
-      projectId: 'project-proposal',
-      summary: 'Found 1 wiki update suggestion',
-      trigger: 'wiki-stale',
-      status: 'pending',
-      createdAt: 1,
-      operations: [
-        {
-          id: 'op-1',
-          type: 'update_wiki',
-          targetTitle: 'Project overview.md',
-          reason: 'onboarding flow changed',
-          evidence: ['note:login discussion.md'],
-          draftContent: '# Project overview',
-          riskLevel: 'low',
-          selected: true,
-        },
-      ],
-    },
-  });
-
-  const savedMessage = useAIChatStore.getState().projects['project-proposal'].sessions[0].messages[0];
-  assert.equal(savedMessage.knowledgeProposal.summary, 'Found 1 wiki update suggestion');
-  assert.equal(savedMessage.knowledgeProposal.operations[0].selected, true);
-});
-
 test('ai chat store keeps assistant structured cards intact after persistence and rehydration', async () => {
   const storage = new MemoryStorage();
   const { useAIChatStore, createChatSession, createStoredChatMessage } = await loadStore(storage);

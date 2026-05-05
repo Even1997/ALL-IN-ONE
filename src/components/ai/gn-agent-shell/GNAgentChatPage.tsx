@@ -36,6 +36,7 @@ import { buildAutoRenamedMemoryTitle, findMemoryEntryByTitle } from './memorySav
 
 const claudeRuntime = new ClaudeRuntime();
 const codexRuntime = new CodexRuntime();
+
 type PendingMemorySaveConflict = {
   candidate: AgentMemoryCandidate;
   conflictingEntry: AgentMemoryEntry;
@@ -110,19 +111,19 @@ export const GNAgentChatPage: React.FC<{
       : providerId === 'classic'
         ? 'default'
         : 'provider-embedded';
-  const prefillChatPrompt = useCallback((prompt: string) => {
+  const prefillChatPrompt = useCallback((prompt: string, autoSubmit = false) => {
     window.dispatchEvent(
       new CustomEvent(AI_CHAT_COMMAND_EVENT, {
         detail: {
           prompt,
-          autoSubmit: false,
+          autoSubmit,
         },
       })
     );
   }, []);
   const dispatchChatGuidance = useCallback((prompt: string, guidance: string) => {
     const nextPrompt = `${prompt}\n\nAdditional guidance:\n${guidance}`;
-    prefillChatPrompt(nextPrompt);
+    prefillChatPrompt(nextPrompt, true);
   }, [prefillChatPrompt]);
   const dispatchPauseRequest = useCallback((prompt: string) => {
     dispatchChatGuidance(
@@ -323,8 +324,8 @@ export const GNAgentChatPage: React.FC<{
           />
           <GNAgentTurnSummaryCards
             session={latestTurnSession}
-            onRetryTurn={prefillChatPrompt}
-            onResumeTurn={prefillChatPrompt}
+            onRetryTurn={(prompt) => prefillChatPrompt(prompt, true)}
+            onResumeTurn={(prompt) => prefillChatPrompt(prompt, true)}
             onFeedTurn={dispatchChatGuidance}
             onPauseTurn={dispatchPauseRequest}
           />

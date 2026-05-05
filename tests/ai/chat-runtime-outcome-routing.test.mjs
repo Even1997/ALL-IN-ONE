@@ -8,17 +8,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const chatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 
-test('chat delegates runtime execution outcome shaping to orchestration helpers', async () => {
+test('chat delegates changed-path activity extraction to the runtime outcome helper', async () => {
   const source = await readFile(chatPath, 'utf8');
 
   assert.match(source, /buildRuntimeChangedPathActivityEntry/);
-  assert.match(source, /buildRuntimeProjectFileAutoExecuteSuccess/);
-  assert.match(source, /buildRuntimeProjectFileAutoExecuteFailure/);
-  assert.match(source, /buildRuntimeLocalAgentSuccessOutcome/);
-  assert.match(source, /buildRuntimeLocalAgentFailureOutcome/);
-  assert.match(source, /const successOutcome = buildRuntimeProjectFileAutoExecuteSuccess\(/);
-  assert.match(source, /const failureOutcome = buildRuntimeProjectFileAutoExecuteFailure\(/);
-  assert.match(source, /const successOutcome = buildRuntimeLocalAgentSuccessOutcome\(/);
-  assert.match(source, /const failureOutcome = buildRuntimeLocalAgentFailureOutcome\(/);
+  assert.match(source, /activityEntry: buildRuntimeChangedPathActivityEntry\(/);
+  assert.match(source, /const activityEntry = buildRuntimeChangedPathActivityEntry\(/);
   assert.doesNotMatch(source, /const activityEntry = buildRunSummaryEntry\(/);
 });

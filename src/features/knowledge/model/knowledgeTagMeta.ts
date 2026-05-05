@@ -1,7 +1,6 @@
 import type { KnowledgeNote } from './knowledge';
 
 const KNOWLEDGE_TAG_LABELS: Record<string, string> = {
-  'kind/wiki': '系统索引',
   'kind/note': '\u7b14\u8bb0',
   'status/stale': '\u5f85\u6e05\u7406',
   'status/archived': '\u5df2\u5f52\u6863',
@@ -10,7 +9,7 @@ const KNOWLEDGE_TAG_LABELS: Record<string, string> = {
 
 export const mergeKnowledgeSystemTags = (
   tags: string[],
-  docType?: KnowledgeNote['docType']
+  _docType?: KnowledgeNote['docType']
 ) => {
   const normalizedTags = Array.from(
     new Set(
@@ -19,10 +18,6 @@ export const mergeKnowledgeSystemTags = (
         .filter(Boolean)
     )
   );
-
-  if (docType === 'wiki-index' && !normalizedTags.includes('kind/wiki')) {
-    normalizedTags.unshift('kind/wiki');
-  }
 
   return normalizedTags;
 };

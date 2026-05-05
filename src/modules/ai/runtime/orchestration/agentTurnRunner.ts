@@ -323,13 +323,10 @@ export const createRuntimeStreamingMessageAssembler = () => {
       answerContentRaw += pendingText;
     }
     appendAssistantPartContent(mode, pendingText, mode === 'thinking');
-
     pendingText = '';
   };
 
   const buildDraft = (completeThinking: boolean): RuntimeStreamingAssistantDraft => {
-    // Streaming 态下，tool 前的 pendingText 先按折叠 thinking 展示。
-    // 一旦进入 answer 状态，只有正文继续作为可见 answer 输出。
     const visibleAnswerContent = sanitizeStreamingVisibleText(state === 'answer' ? answerContentRaw : '');
     const visibleThinkingContent = sanitizeStreamingThinkingText(
       state === 'answer' ? thinkingContent : `${thinkingContent}${pendingText}`
@@ -350,7 +347,6 @@ export const createRuntimeStreamingMessageAssembler = () => {
       })
       .filter((part): part is RuntimeStreamingAssistantDraft['assistantParts'][number] => Boolean(part));
 
-    // Streaming 态下 pendingText 尚未归入 assistantParts，追加为折叠 thinking part。
     if (!completeThinking && pendingText && state !== 'answer') {
       const sanitizedPending = sanitizeStreamingThinkingText(pendingText);
       if (sanitizedPending) {
@@ -378,30 +374,24 @@ export const createRuntimeStreamingMessageAssembler = () => {
   return {
     append: (event: { kind: string; delta: string }) => {
       if (event.kind === 'thinking') {
-        // 模型的 native reasoning → 始终作为 thinking 内容
         flushPendingText('thinking');
         state = 'thinking';
         thinkingContent += event.delta;
         appendAssistantPartContent('thinking', event.delta, true);
       } else if (state === 'thinking') {
-        // 已有 native thinking → text 是正文，直接送入 answer
         answerContentRaw += event.delta;
         appendAssistantPartContent('answer', event.delta, false);
         state = 'answer';
       } else if (state === 'answer') {
-        // 已过 tool 边界或正文段 → text 直接送入 answer
         answerContentRaw += event.delta;
         appendAssistantPartContent('answer', event.delta, false);
       } else {
-        // initial 态 → 尚未收到 native thinking，缓冲等待 tool 边界或流结束
         pendingText += event.delta;
       }
 
       return buildDraft(false);
     },
     markToolBoundary: (): RuntimeStreamingAssistantDraft => {
-      // 没有 native thinking 时，tool 前的 text 是 pre-tool reasoning → 归入 thinking
-      // 有 native thinking 时，text 已在 append 中直接进入 answer，pendingText 为空
       if (!thinkingContent.trim()) {
         flushPendingText('thinking');
       }
@@ -411,25 +401,41 @@ export const createRuntimeStreamingMessageAssembler = () => {
     },
     buildFinal: (response: string): RuntimeStreamingAssistantDraft => {
       if (state === 'initial') {
-        // 全程没有 native thinking 也没有 tool 调用 → pendingText 就是最终答案
         flushPendingText('answer');
-        state = 'answer'; // buildDraft 依赖 state === 'answer' 来展示 answerContentRaw
+        state = 'answer';
       }
-      // 其他情况：text 已在 append/markToolBoundary 中正确归位，无需处理
 
       const draft = buildDraft(true);
-
       const sanitizedResponse = sanitizeStreamingVisibleText(response);
-      if (!draft.thinkingContent.trim() && !draft.answerContent.trim()) {
-        draft.content = sanitizedResponse || EMPTY_RUNTIME_RESPONSE_MESSAGE;
+      let answerContent = draft.answerContent;
+      let finalParts = draft.assistantParts;
+
+      if (sanitizedResponse && !answerContent.trim()) {
+        answerContent = sanitizedResponse;
+        finalParts = [
+          ...draft.assistantParts,
+          {
+            type: 'text',
+            content: sanitizedResponse,
+            createdAt: Date.now(),
+          },
+        ];
       }
-      const content = draft.content;
+
+      const content =
+        !draft.thinkingContent.trim() && !answerContent.trim()
+          ? sanitizedResponse || EMPTY_RUNTIME_RESPONSE_MESSAGE
+          : buildRuntimeStreamingMessage({
+              thinkingContent: draft.thinkingContent,
+              answerContent,
+              completeThinking: true,
+            });
 
       return {
         content: content !== '正在思考...' ? content : sanitizedResponse || EMPTY_RUNTIME_RESPONSE_MESSAGE,
         thinkingContent: draft.thinkingContent,
-        answerContent: draft.answerContent,
-        assistantParts: draft.assistantParts,
+        answerContent,
+        assistantParts: finalParts,
       };
     },
   };

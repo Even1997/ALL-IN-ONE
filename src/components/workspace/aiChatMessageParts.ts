@@ -39,13 +39,14 @@ const RAW_DSML_TOOL_BLOCK_PATTERN =
   /<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
 const RAW_APPLY_SKILL_BLOCK_PATTERN = /<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>/gi;
 const RAW_BARE_TOOL_BLOCK_PATTERN = /<tool name="(\w+)">[\s\S]*?<\/tool>/gi;
+const RAW_LEGACY_BASH_BLOCK_PATTERN = /<bash\b[^>]*>[\s\S]*?<\/bash>/gi;
 const RAW_INTERNAL_SKILL_LINE_PATTERN =
   /^(?:让我先用|我先用)\s+[`'"]?[\w-]+[`'"]?\s+技能[:：]?\s*$/gim;
 const RAW_INTERNAL_PROTOCOL_LINE_PATTERN =
-  /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=|<\/tool>|<tool_params>|<\/tool_params>).*\s*$/gim;
+  /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=|<\/tool>|<tool_params>|<\/tool_params>|<bash>|<\/bash>|<cmd>|<\/cmd>).*\s*$/gim;
 
 const RAW_ASSISTANT_EXECUTION_BLOCK_PATTERN =
-  /<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool name="(\w+)">([\s\S]*?)<\/tool>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>|<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>|<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
+  /<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool name="(\w+)">([\s\S]*?)<\/tool>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>|<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>|<bash\b[^>]*>[\s\S]*?<\/bash>|<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
 
 export const cleanVisibleAssistantText = (content: string) =>
   sanitizeAgentVisibleText(
@@ -53,6 +54,7 @@ export const cleanVisibleAssistantText = (content: string) =>
       .replace(RAW_DSML_TOOL_BLOCK_PATTERN, '')
       .replace(RAW_APPLY_SKILL_BLOCK_PATTERN, '')
       .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
+      .replace(RAW_LEGACY_BASH_BLOCK_PATTERN, '')
       .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
       .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
   );
@@ -116,9 +118,41 @@ const cleanThinkingAssistantText = (content: string) =>
       .replace(RAW_DSML_TOOL_BLOCK_PATTERN, '')
       .replace(RAW_APPLY_SKILL_BLOCK_PATTERN, '')
       .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
+      .replace(RAW_LEGACY_BASH_BLOCK_PATTERN, '')
       .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
       .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
   );
+
+const buildCanonicalAssistantTextParts = (input: {
+  thinkingContent?: string;
+  answerContent?: string;
+  thinkingCollapsed?: boolean;
+}) => {
+  const parts: AIChatMessagePart[] = [];
+
+  if (input.thinkingContent?.trim()) {
+    const thinkingContent = cleanThinkingAssistantText(input.thinkingContent);
+    if (thinkingContent) {
+      parts.push({
+        type: 'thinking',
+        content: thinkingContent,
+        collapsed: input.thinkingCollapsed ?? false,
+      });
+    }
+  }
+
+  if (input.answerContent?.trim()) {
+    const answerContent = cleanVisibleAssistantText(input.answerContent);
+    if (answerContent) {
+      parts.push({
+        type: 'text',
+        content: answerContent,
+      });
+    }
+  }
+
+  return parts;
+};
 
 export const buildAssistantMessageParts = (input: {
   content?: string;
@@ -290,34 +324,21 @@ export const buildStoredAssistantParts = (input: {
         Boolean(part)
     );
 
+  const canonicalParts = buildCanonicalAssistantTextParts({
+    thinkingContent: input.thinkingContent,
+    answerContent: input.answerContent,
+    thinkingCollapsed: input.thinkingCollapsed,
+  });
+
   if (preferredParts.length > 0) {
-    return preferredParts;
-  }
-
-  const parts: AIChatMessagePart[] = [];
-
-  if (input.thinkingContent?.trim()) {
-    const thinkingContent = cleanThinkingAssistantText(input.thinkingContent);
-    if (thinkingContent) {
-      parts.push({
-        type: 'thinking',
-        content: thinkingContent,
-        collapsed: input.thinkingCollapsed ?? false,
-      });
+    const preferredContent = serializeAssistantMessageParts(preferredParts);
+    const canonicalContent = serializeAssistantMessageParts(canonicalParts);
+    if (!canonicalContent || preferredContent === canonicalContent) {
+      return preferredParts;
     }
   }
 
-  if (input.answerContent?.trim()) {
-    const answerContent = cleanVisibleAssistantText(input.answerContent);
-    if (answerContent) {
-      parts.push({
-        type: 'text',
-        content: answerContent,
-      });
-    }
-  }
-
-  return parts;
+  return canonicalParts;
 };
 
 export const serializeAssistantMessageParts = (parts: AIChatMessagePart[]) =>
@@ -412,7 +433,7 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
 
   const parts: AIChatMessagePart[] = [];
   const pattern =
-    /<think>[\s\S]*?<\/think>|<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool name="(\w+)">([\s\S]*?)<\/tool>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>/g;
+    /<think>[\s\S]*?<\/think>|<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool name="(\w+)">([\s\S]*?)<\/tool>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>|<bash>\s*<cmd>([\s\S]*?)<\/cmd>\s*<\/bash>/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -447,6 +468,16 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
         title: getToolTitle(toolName),
         output: match[7].trim(),
         status: match[6] === 'error' ? 'error' : 'success',
+      });
+    } else if (match[8]) {
+      const command = match[8].trim();
+      parts.push({
+        type: 'tool',
+        name: 'bash',
+        title: getToolTitle('bash'),
+        command,
+        input: command,
+        status: 'running',
       });
     }
 

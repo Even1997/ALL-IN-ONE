@@ -66,8 +66,6 @@ import {
   buildRuntimeEventId,
   buildSyntheticRuntimeToolCallId,
   syncTeamRunRuntimeEvents,
-  upsertRuntimeToolResultEvent,
-  upsertRuntimeToolUseEvent,
 } from '../../modules/ai/runtime/dispatch/agentEvents';
 import {
   buildCapabilityApprovalLifecycleDescriptor,
@@ -107,6 +105,7 @@ import {
   executeRuntimeProjectFilePlanning,
   executeRuntimeProjectFileRead,
   prepareProjectFileProposalFlow,
+  requestRuntimeProjectFileApproval,
 } from '../../modules/ai/runtime/orchestration/runtimeProjectFileFlow';
 import {
   buildRuntimeChangedPathActivityEntry,
@@ -119,7 +118,6 @@ import {
   applyRuntimeTurnFailed,
   buildRuntimeTurnReviewPlan,
 } from '../../modules/ai/runtime/orchestration/runtimeTurnSessionFlow';
-import { executeRuntimeWorkflowPackage } from '../../modules/ai/runtime/orchestration/runtimeWorkflowFlow';
 import type {
   AgentBackgroundTaskRecord,
   AgentProviderId,
@@ -156,7 +154,6 @@ import {
   deriveTaskStatusFromRuns,
   patchExecutionRunStatus,
   syncTeamExecutionGraph,
-  syncWorkflowExecutionGraph,
 } from '../../modules/ai/runtime/execution/agentExecutionGraph';
 import { decideAgentTurnMode } from '../../modules/ai/runtime/session/agentSessionController';
 import { reduceAgentTurnSession } from '../../modules/ai/runtime/session/agentSessionStateMachine';
@@ -198,7 +195,6 @@ import {
 } from '../../modules/ai/store/assistantTimeline.ts';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
-import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
@@ -226,8 +222,6 @@ import {
   writeProjectTextFile,
 } from '../../utils/projectPersistence';
 import { getDirectoryPath, joinFileSystemPath } from '../../utils/fileSystemPaths';
-import { runAIWorkflowPackage } from '../../modules/ai/workflow/AIWorkflowService';
-import type { AIWorkflowPackage, AIWorkflowRun } from '../../types';
 import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
@@ -339,29 +333,6 @@ const PROJECT_INSTRUCTION_FILE_NAMES = ['GOODNIGHT.md', 'CLAUDE.md'];
 const RISKY_BUILT_IN_TOOLS = new Set(['write', 'edit', 'bash', 'fetch']);
 const MISSING_PROJECT_FILE_PATTERN =
   /(?:not found|no such file|cannot find the file|\u627e\u4e0d\u5230|\u4e0d\u5b58\u5728|os error 2)/i;
-
-const WORKFLOW_STAGE_LABELS: Record<string, string> = {
-  project_brief: 'Project Brief',
-  requirements_spec: 'Requirements Spec',
-  feature_tree: 'Feature Tree',
-  page_structure: 'Page Structure',
-  wireframes: 'Wireframes',
-  html_prototype: 'HTML Prototype',
-};
-
-const WORKFLOW_PACKAGE_LABELS: Record<AIWorkflowPackage, string> = {
-  requirements: 'Requirements',
-  prototype: 'Prototype',
-  page: 'Page',
-};
-
-const WORKFLOW_SKILL_LABELS: Record<string, string> = {
-  requirements_spec_skill: 'Requirements Spec Skill',
-  feature_tree_skill: 'Feature Tree Skill',
-  page_structure_skill: 'Page Structure Skill',
-  wireframe_skill: 'Wireframe Skill',
-  html_prototype_skill: 'HTML Prototype Skill',
-};
 
 const estimateTokenCount = (value: string) => Math.max(0, Math.ceil(value.trim().length / 4));
 
@@ -779,7 +750,6 @@ const RUNTIME_TOOL_GROUP_LABELS: Record<string, string> = {
   project_file_apply: '应用文件改动',
   run_local_agent: '调用本地 Agent',
   run_agent_team: '协调多 Agent',
-  workflow_package: '执行工作流',
 };
 
 const getRuntimeToolDisplayName = (toolName: string) => RUNTIME_TOOL_GROUP_LABELS[toolName] || toolName;
@@ -897,39 +867,6 @@ const summarizeRuntimeToolCall = (toolName: string, input: Record<string, unknow
     return input.title;
   }
 
-  if (toolName === 'workflow_package') {
-    if (typeof input.package === 'string') {
-      return WORKFLOW_PACKAGE_LABELS[input.package as AIWorkflowPackage] || input.package;
-    }
-    if (typeof input.summary === 'string') {
-      return input.summary;
-    }
-  }
-
-  if (toolName === 'workflow_package_stage') {
-    if (typeof input.package === 'string') {
-      return WORKFLOW_PACKAGE_LABELS[input.package as AIWorkflowPackage] || input.package;
-    }
-  }
-
-  if (toolName === 'workflow_stage') {
-    if (typeof input.title === 'string') {
-      return input.title;
-    }
-    if (typeof input.stage === 'string') {
-      return input.stage;
-    }
-  }
-
-  if (toolName === 'workflow_skill') {
-    if (typeof input.title === 'string') {
-      return input.title;
-    }
-    if (typeof input.skill === 'string') {
-      return WORKFLOW_SKILL_LABELS[input.skill] || input.skill;
-    }
-  }
-
   if ((toolName === 'glob' || toolName === 'grep') && typeof input.pattern === 'string') {
     return input.pattern;
   }
@@ -1014,123 +951,6 @@ const summarizeProjectFilePath = (value: string) => {
 const buildRunDiffKey = (runId: string, path: string) => `${runId}::${path}`;
 const isRunDiffActive = (expandedRunDiffKey: string | null, runId: string, path: string) =>
   expandedRunDiffKey === buildRunDiffKey(runId, path);
-
-const syncWorkflowRuntimeEvents = (
-  runtimeEvents: StoredChatRuntimeEvent[] | undefined,
-  parentToolCallId: string,
-  workflowRuns: Array<{
-    targetPackage: AIWorkflowPackage;
-    status: AIWorkflowRun['status'];
-    currentStage: AIWorkflowRun['currentStage'];
-    completedStages: AIWorkflowRun['completedStages'];
-    stageSummaries: AIWorkflowRun['stageSummaries'];
-    skillExecutions: AIWorkflowRun['skillExecutions'];
-  }>
-): StoredChatRuntimeEvent[] => {
-  if (workflowRuns.length === 0) {
-    return runtimeEvents || [];
-  }
-
-  let nextEvents = [...(runtimeEvents || [])];
-  for (const workflowRun of workflowRuns) {
-    const packageToolCallId = buildSyntheticRuntimeToolCallId('workflow-package', parentToolCallId, workflowRun.targetPackage);
-    const packageFailed = workflowRun.status === 'error';
-    const packageCompleted = workflowRun.status === 'awaiting_confirmation' || workflowRun.status === 'completed';
-
-    nextEvents = upsertRuntimeToolUseEvent(nextEvents, {
-      toolCallId: packageToolCallId,
-      parentToolCallId,
-      toolName: 'workflow_package_stage',
-      toolInput: {
-        package: workflowRun.targetPackage,
-        title: WORKFLOW_PACKAGE_LABELS[workflowRun.targetPackage] || workflowRun.targetPackage,
-      },
-      status: packageFailed ? 'failed' : packageCompleted ? 'completed' : 'running',
-    });
-
-    const stageIds = Array.from(new Set([...workflowRun.completedStages, workflowRun.currentStage].filter(Boolean)));
-    for (const stageId of stageIds) {
-      const stageToolCallId = buildSyntheticRuntimeToolCallId(
-        'workflow-stage',
-        packageToolCallId,
-        stageId
-      );
-      const isCompleted = workflowRun.completedStages.includes(stageId);
-      const isFailed = workflowRun.status === 'error' && workflowRun.currentStage === stageId;
-      const summary = workflowRun.stageSummaries[stageId] || '';
-
-      nextEvents = upsertRuntimeToolUseEvent(nextEvents, {
-        toolCallId: stageToolCallId,
-        parentToolCallId: packageToolCallId,
-        toolName: 'workflow_stage',
-        toolInput: {
-          stage: stageId,
-          title: WORKFLOW_STAGE_LABELS[stageId] || stageId,
-        },
-        status: isFailed ? 'failed' : isCompleted ? 'completed' : 'running',
-      });
-
-      if (isCompleted || isFailed) {
-        nextEvents = upsertRuntimeToolResultEvent(nextEvents, {
-          toolCallId: stageToolCallId,
-          parentToolCallId: packageToolCallId,
-          toolName: 'workflow_stage',
-          status: isFailed ? 'failed' : 'completed',
-          output: summary || `${WORKFLOW_STAGE_LABELS[stageId] || stageId} completed.`,
-        });
-      }
-
-      const stageSkillExecutions = workflowRun.skillExecutions.filter((execution) => execution.stage === stageId);
-      for (const execution of stageSkillExecutions) {
-        const skillToolCallId = buildSyntheticRuntimeToolCallId('workflow-skill', stageToolCallId, execution.id);
-        const skillFailed = execution.status === 'error';
-        const skillCompleted =
-          execution.status === 'completed' || execution.status === 'fallback';
-        nextEvents = upsertRuntimeToolUseEvent(nextEvents, {
-          toolCallId: skillToolCallId,
-          parentToolCallId: stageToolCallId,
-          toolName: 'workflow_skill',
-          toolInput: {
-            skill: execution.skill,
-            title: WORKFLOW_SKILL_LABELS[execution.skill] || execution.skill,
-            provider: execution.provider || '',
-            model: execution.model || '',
-            retries: execution.retries,
-          },
-          status: skillFailed ? 'failed' : skillCompleted ? 'completed' : 'running',
-        });
-
-        if (skillCompleted || skillFailed) {
-          nextEvents = upsertRuntimeToolResultEvent(nextEvents, {
-            toolCallId: skillToolCallId,
-            parentToolCallId: stageToolCallId,
-            toolName: 'workflow_skill',
-            status: skillFailed ? 'failed' : 'completed',
-            output:
-              execution.error ||
-              execution.summary ||
-              `${WORKFLOW_SKILL_LABELS[execution.skill] || execution.skill} completed.`,
-          });
-        }
-      }
-    }
-
-    if (packageCompleted || packageFailed) {
-      const currentStageSummary = workflowRun.stageSummaries[workflowRun.currentStage] || '';
-      nextEvents = upsertRuntimeToolResultEvent(nextEvents, {
-        toolCallId: packageToolCallId,
-        parentToolCallId,
-        toolName: 'workflow_package_stage',
-        status: packageFailed ? 'failed' : 'completed',
-        output:
-          currentStageSummary ||
-          `${WORKFLOW_PACKAGE_LABELS[workflowRun.targetPackage] || workflowRun.targetPackage} completed.`,
-      });
-    }
-  }
-
-  return nextEvents;
-};
 
 const getFileChangeTypeLabel = (change: { beforeContent: string | null; afterContent: string | null }) => {
   if (change.beforeContent === null && change.afterContent !== null) {
@@ -1305,18 +1125,6 @@ const getRuntimeToolHeadline = (toolName: string, input: Record<string, unknown>
     return '成员任务';
   }
 
-  if (toolName === 'workflow_package' || toolName === 'workflow_package_stage') {
-    return '工作流包';
-  }
-
-  if (toolName === 'workflow_stage') {
-    return '工作流阶段';
-  }
-
-  if (toolName === 'workflow_skill') {
-    return '运行技能';
-  }
-
   const summary = summarizeRuntimeToolCall(toolName, input).trim();
   if (summary) {
     return summary;
@@ -1420,6 +1228,70 @@ const resolveProjectFileProposalNote = (proposal: ProjectFileProposal) => {
   }
 
   return proposal.executionMessage || '';
+};
+
+const buildProjectFileApprovalDisplay = (
+  proposal: ProjectFileProposal
+): RuntimePendingApprovalAction['display'] => {
+  const summarizeOperation = (operation: ProjectFileOperation) => ({
+    type: projectFileOperationTypeLabel[operation.type],
+    path: operation.targetPath,
+    summary: operation.summary || '',
+    preview: summarizeProjectFileOperationPreview(operation) || undefined,
+  });
+
+  if (proposal.operations.length === 1) {
+    const [operation] = proposal.operations;
+    const inputJson = JSON.stringify(
+      {
+        summary: proposal.summary,
+        operation: summarizeOperation(operation),
+      },
+      null,
+      2
+    );
+
+    if (operation.type === 'delete_file') {
+      return {
+        toolName: 'remove',
+        filePath: operation.targetPath,
+        inputJson,
+      };
+    }
+
+    if (typeof operation.oldString === 'string' && typeof operation.newString === 'string') {
+      return {
+        toolName: 'edit',
+        filePath: operation.targetPath,
+        oldString: operation.oldString,
+        newString: operation.newString,
+        inputJson,
+      };
+    }
+
+    return {
+      toolName: 'write',
+      filePath: operation.targetPath,
+      content: operation.content || operation.newString || operation.summary,
+      inputJson,
+    };
+  }
+
+  return {
+    toolName: proposal.operations.some((operation) => operation.type === 'delete_file')
+      ? 'remove'
+      : proposal.operations.some((operation) => operation.type === 'edit_file')
+        ? 'edit'
+        : 'write',
+    inputJson: JSON.stringify(
+      {
+        summary: proposal.summary,
+        operations: proposal.operations.map((operation) => summarizeOperation(operation)),
+      },
+      null,
+      2
+    ),
+  };
 };
 
 const groupActivityEntriesByRunId = (entries: ActivityEntry[]) =>
@@ -3334,6 +3206,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       if (!proposal) {
         return null;
       }
+      if (proposal.status === 'pending') {
+        return null;
+      }
 
       const stageItems = buildProjectFileStageItems(proposal);
 
@@ -3373,22 +3248,10 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           {resolveProjectFileProposalNote(proposal) ? (
             <div className="chat-project-file-proposal-note">{resolveProjectFileProposalNote(proposal)}</div>
           ) : null}
-          <div className="chat-project-file-proposal-actions">
-            {proposal.status === 'pending' ? (
-              <>
-                <button type="button" onClick={() => void handleExecuteProjectFileProposal(message.id, proposal)}>
-                  确认写入
-                </button>
-                <button type="button" onClick={() => void handleCancelProjectFileProposal(message.id)}>
-                  取消这次改动
-                </button>
-              </>
-            ) : null}
-          </div>
         </section>
       );
     },
-    [handleCancelProjectFileProposal, handleExecuteProjectFileProposal]
+    []
   );
   useEffect(() => {
     const container = messageListRef.current;
@@ -5501,7 +5364,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                 runId: currentMessage.runId,
                 teamRun: currentMessage.teamRun,
                 structuredCards: currentMessage.structuredCards,
-                knowledgeProposal: currentMessage.knowledgeProposal,
                 projectFileProposal: currentMessage.projectFileProposal,
                 createdAt: currentMessage.createdAt,
               };
@@ -5544,175 +5406,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           } else {
             await completeTurnSession(mcpResult.content);
           }
-          return;
-        }
-
-        if (skillIntent?.skill === 'requirements') {
-          setRawRequirementInput(cleanedContent);
-        }
-
-        if (
-          skillIntent &&
-          (skillIntent.package === 'requirements' ||
-            skillIntent.package === 'prototype' ||
-            skillIntent.package === 'page')
-        ) {
-          if (selectedRuntimeConfig) {
-            aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
-          }
-
-          const targetWorkflowPackage = skillIntent.package;
-          const workflowToolCallId = buildSyntheticRuntimeToolCallId('workflow', assistantMessage.id);
-          const workflowPackageRunId = `run_${executionTaskId}_workflow_package_${targetWorkflowPackage}`;
-          upsertExecutionRun(
-            runtimeStoreThreadId,
-            createExecutionRunRecord({
-              id: workflowPackageRunId,
-              threadId: runtimeStoreThreadId,
-              taskId: executionTaskId,
-              turnId: runtimeTurnSessionId,
-              parentRunId: rootExecutionRunId,
-              providerId: 'built-in',
-              kind: 'workflow_package',
-              title: targetWorkflowPackage,
-              summary: buildSessionPreview(cleanedContent) || cleanedContent,
-              status: 'running',
-            })
-          );
-          patchExecutionTaskFromRuns();
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: workflowToolCallId,
-            toolName: 'workflow_package',
-            toolInput: {
-              package: targetWorkflowPackage,
-              summary: buildSessionPreview(cleanedContent) || cleanedContent,
-            },
-            status: 'running',
-          });
-          let workflowCompletion;
-          const workflowRunSnapshots = new Map<
-            AIWorkflowPackage,
-            {
-              targetPackage: AIWorkflowPackage;
-              status: AIWorkflowRun['status'];
-              currentStage: AIWorkflowRun['currentStage'];
-              completedStages: AIWorkflowRun['completedStages'];
-              stageSummaries: AIWorkflowRun['stageSummaries'];
-              skillExecutions: AIWorkflowRun['skillExecutions'];
-            }
-          >();
-          try {
-            workflowCompletion = await executeRuntimeWorkflowPackage({
-              targetPackage: targetWorkflowPackage,
-              runWorkflowPackage: runAIWorkflowPackage,
-              getLatestRun: () => useAIWorkflowStore.getState().projects[currentProject.id]?.runs[0] || null,
-              onRunUpdate: ({ targetPackage, run }) => {
-                workflowRunSnapshots.set(targetPackage, {
-                  targetPackage,
-                  status: run.status,
-                  currentStage: run.currentStage,
-                  completedStages: [...run.completedStages],
-                  stageSummaries: { ...run.stageSummaries },
-                  skillExecutions: [...run.skillExecutions],
-                });
-                updateAssistantMessageTimeline(assistantMessage.id, (timeline) =>
-                  replaceAssistantRuntimeTimelineEvents(
-                    timeline,
-                    syncWorkflowRuntimeEvents(
-                      getAssistantRuntimeTimelineEvents(timeline),
-                      workflowToolCallId,
-                      Array.from(workflowRunSnapshots.values())
-                    )
-                  )
-                );
-                syncExecutionGraph(
-                  syncWorkflowExecutionGraph(
-                    useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || [],
-                    useAgentRuntimeStore.getState().agentRunsByThread[runtimeStoreThreadId] || [],
-                    {
-                      threadId: runtimeStoreThreadId,
-                      taskId: executionTaskId,
-                      turnId: runtimeTurnSessionId!,
-                      parentRunId: rootExecutionRunId,
-                      workflowRuns: Array.from(workflowRunSnapshots.values()),
-                    }
-                  )
-                );
-              },
-            });
-          } catch (error) {
-            const message = normalizeErrorMessage(error);
-            const currentWorkflowRun = (useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || []).find(
-              (run) => run.id === workflowPackageRunId
-            );
-            if (currentWorkflowRun) {
-              upsertExecutionRun(
-                runtimeStoreThreadId,
-                patchExecutionRunStatus(currentWorkflowRun, 'failed', message)
-              );
-              patchExecutionTaskFromRuns();
-            }
-            upsertRuntimeToolResultInMessage(assistantMessage.id, {
-              toolCallId: workflowToolCallId,
-              toolName: 'workflow_package',
-              status: 'failed',
-              output: message,
-            });
-            throw error;
-          }
-          upsertRuntimeToolResultInMessage(assistantMessage.id, {
-            toolCallId: workflowToolCallId,
-            toolName: 'workflow_package',
-            status: 'completed',
-            output: workflowCompletion.finalContent,
-          });
-          updateAssistantMessageTimeline(assistantMessage.id, (timeline) =>
-            replaceAssistantRuntimeTimelineEvents(
-              timeline,
-              syncWorkflowRuntimeEvents(
-                getAssistantRuntimeTimelineEvents(timeline),
-                workflowToolCallId,
-                Array.from(workflowRunSnapshots.values())
-              )
-            )
-          );
-          syncExecutionGraph(
-            syncWorkflowExecutionGraph(
-              useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || [],
-              useAgentRuntimeStore.getState().agentRunsByThread[runtimeStoreThreadId] || [],
-              {
-                threadId: runtimeStoreThreadId,
-                taskId: executionTaskId,
-                turnId: runtimeTurnSessionId!,
-                parentRunId: rootExecutionRunId,
-                workflowRuns: Array.from(workflowRunSnapshots.values()),
-              }
-            )
-          );
-
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            ...buildAssistantContentState(workflowCompletion.finalContent),
-          }));
-
-          appendActivityEntry(currentProject.id, {
-            id: createActivityEntryId(),
-            runId,
-            type: 'run-summary',
-            summary: workflowCompletion.activitySummary,
-            changedPaths: [],
-            runtime: 'built-in',
-            skill: resolvedSkill,
-            createdAt: Date.now(),
-          });
-          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-            id: createRuntimeEventId('workflow'),
-            threadId: runtimeStoreThreadId,
-            providerId: runtimeProviderId,
-            summary: workflowCompletion.timelineSummary,
-            createdAt: Date.now(),
-          });
-          await completeTurnSession(workflowCompletion.finalContent);
           return;
         }
 
@@ -6461,15 +6154,15 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               id: createRuntimeEventId('assistant'),
               threadId: runtimeStoreThreadId,
               providerId: runtimeProviderId,
-              summary: `Assistant: ${buildSessionPreview(preparedProjectFileFlow.proposal.assistantMessage)}`,
+              summary: `Assistant: ${buildSessionPreview(executionOutcome.message)}`,
               createdAt: Date.now(),
             });
             await persistRuntimeTimelineEvent({
               threadId: replayThreadId,
               providerId: runtimeProviderId,
-              summary: `Assistant: ${buildSessionPreview(preparedProjectFileFlow.proposal.assistantMessage)}`,
+              summary: `Assistant: ${buildSessionPreview(executionOutcome.message)}`,
             });
-            await completeTurnSession(preparedProjectFileFlow.proposal.assistantMessage);
+            await completeTurnSession(executionOutcome.message);
             return;
           }
 
@@ -6507,6 +6200,48 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             });
             await blockTurnSession(proposalMessage, proposalMessage, 'Revise file changes');
             return;
+          }
+
+          if (preparedProjectFileFlow.decision === 'approval-required') {
+            await requestRuntimeProjectFileApproval({
+              threadId: runtimeThreadId || targetSessionId,
+              runtimeStoreThreadId,
+              replayThreadId,
+              providerId: runtimeProviderId,
+              actionType: preparedProjectFileFlow.approvalActionType,
+              riskLevel: preparedProjectFileFlow.riskLevel,
+              summary: preparedProjectFileFlow.proposal.summary,
+              messageId: assistantMessage.id,
+              toolCallId: projectFileFlowToolCallId,
+              onApprove: async () => {
+                await handleExecuteProjectFileProposal(
+                  assistantMessage.id,
+                  preparedProjectFileFlow.proposal
+                );
+              },
+              onDeny: async () => {
+                await handleCancelProjectFileProposal(assistantMessage.id);
+              },
+              display: buildProjectFileApprovalDisplay(preparedProjectFileFlow.proposal),
+              requestApproval: (payload) =>
+                requestRuntimeApproval({
+                  threadId: payload.threadId,
+                  runtimeStoreThreadId: payload.runtimeStoreThreadId || runtimeStoreThreadId,
+                  replayThreadId: payload.replayThreadId || replayThreadId,
+                  providerId: (payload.providerId as AgentProviderId) || runtimeProviderId,
+                  actionType: payload.actionType,
+                  riskLevel: payload.riskLevel,
+                  summary: payload.summary,
+                  messageId: payload.messageId,
+                  toolCallId: payload.toolCallId,
+                  onApprove: payload.onApprove,
+                  onDeny: payload.onDeny,
+                  display: payload.display,
+                }),
+              enqueueAgentApproval,
+              enqueueApproval,
+              pendingApprovalActions: pendingApprovalActionsRef.current,
+            });
           }
 
           appendRuntimeTimelineEvent(runtimeStoreThreadId, {
@@ -6615,6 +6350,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         let toolTimerInterval: ReturnType<typeof setInterval> | null = null;
         const streamingAssembler = createRuntimeStreamingMessageAssembler();
         await emitMemoryReadLifecycle();
+        // Provider-embedded pages intentionally keep the codex-like runAgentTurn shape:
+        // executeModel: (prompt) => executeRuntimePrompt({ providerId: runtimeProviderId, ... }).
         const agentTurn = await executeRuntimeBuiltInAgentTurn({
           projectId: currentProject.id,
           projectName: currentProject.name,

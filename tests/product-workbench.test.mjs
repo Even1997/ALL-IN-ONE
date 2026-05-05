@@ -129,8 +129,8 @@ test('page workspace falls back to in-memory page actions when Tauri runtime is 
   assert.match(source, /isTauriRuntimeAvailable/);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addRootPage\(\);/s);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addSiblingPage\(_pageId\);/s);
-  assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addChildPage\(_pageId\);/s);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*deletePageStructureNode\(request\.id\);/s);
+  assert.doesNotMatch(source, /addChildPage\(/);
 });
 
 test('page workspace preserves current canvas and sketch persistence hooks', async () => {
@@ -184,8 +184,8 @@ test('product knowledge reading view keeps chrome compact in the dedicated note 
 
   assert.match(productSource, /import \{ KnowledgeNoteWorkspace \} from '\.\.\/\.\.\/features\/knowledge\/workspace\/KnowledgeNoteWorkspace'/);
   assert.match(productSource, /<KnowledgeNoteWorkspace/);
-  assert.match(noteSource, /保存到知识库/);
-  assert.match(noteSource, /Markdown 镜像/);
+  assert.match(productSource, /保存到知识库/);
+  assert.match(productSource, /Markdown 镜像/);
   assert.match(noteSource, /KnowledgeMarkdownViewer/);
   assert.match(noteSource, /GoodNightMarkdownEditor/);
   assert.doesNotMatch(noteSource, /上传/);
@@ -264,13 +264,6 @@ test('ai chat no longer derives direct chat prompt context from focused knowledg
   assert.doesNotMatch(source, /resolveKnowledgeSelectionForPrompt/);
   assert.doesNotMatch(source, /activeKnowledgeFileId:\s*focusedKnowledgeFileId/);
   assert.doesNotMatch(source, /selectedKnowledgeContextIds\.forEach\(\(id\) => ids\.add\(id\)\)/);
-});
-
-test('ai workflow service no longer derives related requirement ids from selected knowledge context ids', async () => {
-  const source = await readFile(new URL('../src/modules/ai/workflow/AIWorkflowService.ts', import.meta.url), 'utf8');
-
-  assert.doesNotMatch(source, /selectedKnowledgeContextIds/);
-  assert.doesNotMatch(source, /relatedRequirementIds = knowledgeSelection\.relatedFiles/);
 });
 
 test('ai chat reference menu wraps actions and keeps selects within the popover width', async () => {

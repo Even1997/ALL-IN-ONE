@@ -241,13 +241,31 @@ export const denyRuntimeProjectFileApproval = async (input: {
 
 export const requestRuntimeProjectFileApproval = async (input: {
   threadId: string;
+  runtimeStoreThreadId?: string;
+  replayThreadId?: string;
+  providerId?: string;
   actionType: string;
   riskLevel: ApprovalRiskLevel;
   summary: string;
   messageId?: string | null;
+  toolCallId?: string | null;
   onApprove: () => Promise<void>;
   onDeny?: () => void | Promise<void>;
   display?: RuntimePendingApprovalAction['display'];
+  requestApproval?: (payload: {
+    threadId: string;
+    runtimeStoreThreadId?: string;
+    replayThreadId?: string;
+    providerId?: string;
+    actionType: string;
+    riskLevel: ApprovalRiskLevel;
+    summary: string;
+    messageId?: string | null;
+    toolCallId?: string | null;
+    onApprove: () => Promise<void>;
+    onDeny?: () => void | Promise<void>;
+    display?: RuntimePendingApprovalAction['display'];
+  }) => Promise<unknown>;
   enqueueAgentApproval: (payload: {
     threadId: string;
     actionType: string;
@@ -258,19 +276,34 @@ export const requestRuntimeProjectFileApproval = async (input: {
   enqueueApproval: (approval: ApprovalRecord) => void;
   pendingApprovalActions: Record<string, RuntimePendingApprovalAction>;
 }) =>
-  requestRuntimeApproval({
-    threadId: input.threadId,
-    actionType: input.actionType,
-    riskLevel: input.riskLevel,
-    summary: input.summary,
-    messageId: input.messageId,
-    onApprove: input.onApprove,
-    onDeny: input.onDeny,
-    display: input.display,
-    enqueueAgentApproval: input.enqueueAgentApproval,
-    enqueueApproval: input.enqueueApproval,
-    pendingApprovalActions: input.pendingApprovalActions,
-  });
+  input.requestApproval
+    ? input.requestApproval({
+        threadId: input.threadId,
+        runtimeStoreThreadId: input.runtimeStoreThreadId,
+        replayThreadId: input.replayThreadId,
+        providerId: input.providerId,
+        actionType: input.actionType,
+        riskLevel: input.riskLevel,
+        summary: input.summary,
+        messageId: input.messageId,
+        toolCallId: input.toolCallId,
+        onApprove: input.onApprove,
+        onDeny: input.onDeny,
+        display: input.display,
+      })
+    : requestRuntimeApproval({
+        threadId: input.threadId,
+        actionType: input.actionType,
+        riskLevel: input.riskLevel,
+        summary: input.summary,
+        messageId: input.messageId,
+        onApprove: input.onApprove,
+        onDeny: input.onDeny,
+        display: input.display,
+        enqueueAgentApproval: input.enqueueAgentApproval,
+        enqueueApproval: input.enqueueApproval,
+        pendingApprovalActions: input.pendingApprovalActions,
+      });
 
 export const handleRuntimeProjectFileDecision = async (input: {
   decision: PreparedProjectFileProposalFlow['decision'];

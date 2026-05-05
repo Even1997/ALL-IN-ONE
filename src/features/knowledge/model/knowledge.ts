@@ -4,7 +4,7 @@ export type KnowledgeNote = {
   bodyMarkdown: string;
   createdAt?: string;
   updatedAt: string;
-  docType?: 'wiki-index' | 'ai-summary';
+  docType?: 'ai-summary';
   tags: string[];
   referenceTitles: string[];
   kind?: 'note' | 'sketch' | 'design';

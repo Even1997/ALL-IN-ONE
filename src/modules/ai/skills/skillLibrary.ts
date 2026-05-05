@@ -1,9 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes';
 import {
-  getBundledChatSkillById,
-  getBundledChatSkills,
-  type RuntimeChatSkillDefinition,
+  getSystemSkillDefinitionById,
+  getSystemSkillDefinitions,
+  type RuntimeSystemSkillDefinition,
 } from './bundledSkillDefinitions.ts';
 import { parseSkillMarkdown } from './parseSkillMarkdown.ts';
 
@@ -54,11 +54,16 @@ export const readSkillFile = (filePath: string) =>
 export const deleteLibrarySkill = (skillId: string) =>
   invoke<SkillDeleteResult>('delete_library_skill', { params: { skillId } });
 
-export const getDefaultRuntimeSkillDefinitions = (): RuntimeSkillDefinition[] => getBundledChatSkills();
+export const getSystemRuntimeSkillDefinitions = (): RuntimeSkillDefinition[] => getSystemSkillDefinitions();
 
-export const getDefaultChatSkillDefinitions = (): RuntimeChatSkillDefinition[] => getBundledChatSkills();
+export const getRouteableSystemSkillDefinitions = (): RuntimeSystemSkillDefinition[] =>
+  getSystemSkillDefinitions();
 
-export const getDefaultChatSkillDefinitionById = (skillId: string) => getBundledChatSkillById(skillId);
+export const getSystemRuntimeSkillDefinitionById = (skillId: string) =>
+  getSystemSkillDefinitionById(skillId);
+
+export const getDefaultRuntimeSkillDefinitions = (): RuntimeSkillDefinition[] =>
+  getSystemRuntimeSkillDefinitions();
 
 const getSkillPromptPath = (skill: SkillDiscoveryEntry) =>
   skill.manifestPath.replace(/skill\.json$/i, 'SKILL.md');
@@ -127,6 +132,7 @@ const buildDiscoveredRuntimeSkillDefinition = (
     skillRoot: getSkillRoot(skill),
     allowedTools: Array.isArray(frontmatter['allowed-tools']) ? frontmatter['allowed-tools'] : [],
     userInvocable: frontmatter['user-invocable'] !== false,
+    userTagInvocable: frontmatter['user-tag-invocable'] !== false,
     modelInvocable: frontmatter['disable-model-invocation'] !== true,
     source: isProjectSkillEntry(skill, projectRoot) ? 'project' : 'local',
   };
@@ -135,7 +141,7 @@ const buildDiscoveredRuntimeSkillDefinition = (
 export const loadRuntimeSkillCatalog = async (params?: {
   projectRoot?: string | null;
 }): Promise<RuntimeSkillCatalog> => {
-  const bundledSkills = getBundledChatSkills();
+  const systemSkills = getSystemSkillDefinitions();
   const discoveredSkills = await discoverLocalSkills(params).catch(() => [] as SkillDiscoveryEntry[]);
   const loadableSkills = discoveredSkills.filter((skill) =>
     shouldLoadDiscoveredSkill(skill, params?.projectRoot)
@@ -143,7 +149,7 @@ export const loadRuntimeSkillCatalog = async (params?: {
 
   if (loadableSkills.length === 0) {
     return {
-      skills: bundledSkills,
+      skills: systemSkills,
       discoveredSkills: [],
       loadedSkills: [],
     };
@@ -163,7 +169,7 @@ export const loadRuntimeSkillCatalog = async (params?: {
   const resolvedLoadedSkills = loadedSkills.filter(
     (skill): skill is RuntimeSkillDefinition => Boolean(skill)
   );
-  const mergedSkills = [...bundledSkills, ...resolvedLoadedSkills];
+  const mergedSkills = [...systemSkills, ...resolvedLoadedSkills];
   const seenSkillIds = new Set<string>();
 
   const skills = mergedSkills.filter((skill) => {
@@ -189,4 +195,4 @@ export const loadRuntimeSkillDefinitions = async (params?: {
   return catalog.skills;
 };
 
-export type { RuntimeChatSkillDefinition } from './bundledSkillDefinitions.ts';
+export type { RuntimeSystemSkillDefinition } from './bundledSkillDefinitions.ts';

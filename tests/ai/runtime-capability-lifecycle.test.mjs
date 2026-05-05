@@ -27,7 +27,7 @@ test('runtime capability lifecycle builds skill activation descriptors', async (
       allowedTools: ['view'],
       userInvocable: true,
       modelInvocable: true,
-      source: 'bundled',
+      source: 'system',
     },
     invocationKind: 'tag',
     prompt: 'Please use requirements',

@@ -18,6 +18,7 @@ export type ParsedSkillFrontmatter = {
   paths?: string[];
   ['allowed-tools']?: string[];
   ['user-invocable']?: boolean;
+  ['user-tag-invocable']?: boolean;
   ['disable-model-invocation']?: boolean;
 };
 

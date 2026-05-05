@@ -21,19 +21,15 @@ const getSourceDirectory = (note: KnowledgeNote) => {
 };
 
 const toGlobalGraphDepth = (note: KnowledgeNote) => {
-  if (note.docType === 'wiki-index') {
+  if (note.docType === 'ai-summary') {
     return 0;
   }
 
-  if (note.docType === 'ai-summary') {
+  if (note.kind === 'sketch' || note.kind === 'design') {
     return 1;
   }
 
-  if (note.kind === 'sketch' || note.kind === 'design') {
-    return 2;
-  }
-
-  return 3;
+  return 2;
 };
 
 const buildCandidateEdge = (left: KnowledgeNote, right: KnowledgeNote): EdgeCandidate | null => {
@@ -153,8 +149,7 @@ export const buildGlobalKnowledgeGraph = (
   });
 
   if (edges.length === 0 && nodes.length > 1) {
-    const wikiNodes = nodes.filter((node) => node.docType === 'wiki-index');
-    const anchors = wikiNodes.length > 0 ? wikiNodes : [nodes[0]];
+    const anchors = [nodes[0]];
 
     anchors.forEach((anchor) => {
       nodes.forEach((node) => {

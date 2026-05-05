@@ -22,25 +22,25 @@ const loadModule = async () => {
   return import(`data:text/javascript;charset=utf-8,${encodeURIComponent(transpiled.outputText)}`);
 };
 
-test('inferKnowledgeDocType recognizes generated wiki and summary filenames', async () => {
+test('inferKnowledgeDocType only recognizes slash-skill summary filenames', async () => {
   const { inferKnowledgeDocType } = await loadModule();
 
-  assert.equal(inferKnowledgeDocType('project-overview.md'), 'wiki-index');
-  assert.equal(inferKnowledgeDocType('feature-inventory.md'), 'wiki-index');
-  assert.equal(inferKnowledgeDocType('page-inventory.md'), 'wiki-index');
+  assert.equal(inferKnowledgeDocType('project-overview.md'), undefined);
+  assert.equal(inferKnowledgeDocType('feature-inventory.md'), undefined);
+  assert.equal(inferKnowledgeDocType('page-inventory.md'), undefined);
   assert.equal(inferKnowledgeDocType('terminology.md'), 'ai-summary');
   assert.equal(inferKnowledgeDocType('open-questions.md'), 'ai-summary');
 });
 
-test('inferKnowledgeDocType recognizes bare wiki headings without markdown extensions', async () => {
+test('inferKnowledgeDocType no longer infers embedded wiki headings', async () => {
   const { inferKnowledgeDocType } = await loadModule();
 
-  assert.equal(inferKnowledgeDocType('project overview'), 'wiki-index');
-  assert.equal(inferKnowledgeDocType('feature inventory'), 'wiki-index');
-  assert.equal(inferKnowledgeDocType('page inventory'), 'wiki-index');
-  assert.equal(inferKnowledgeDocType('\u9879\u76ee\u6982\u89c8'), 'wiki-index');
-  assert.equal(inferKnowledgeDocType('\u529f\u80fd\u6e05\u5355'), 'wiki-index');
-  assert.equal(inferKnowledgeDocType('\u9875\u9762\u6e05\u5355'), 'wiki-index');
+  assert.equal(inferKnowledgeDocType('project overview'), undefined);
+  assert.equal(inferKnowledgeDocType('feature inventory'), undefined);
+  assert.equal(inferKnowledgeDocType('page inventory'), undefined);
+  assert.equal(inferKnowledgeDocType('\u9879\u76ee\u6982\u89c8'), undefined);
+  assert.equal(inferKnowledgeDocType('\u529f\u80fd\u6e05\u5355'), undefined);
+  assert.equal(inferKnowledgeDocType('\u9875\u9762\u6e05\u5355'), undefined);
   assert.equal(inferKnowledgeDocType('\u5f00\u653e\u95ee\u9898'), 'ai-summary');
   assert.equal(inferKnowledgeDocType('\u672f\u8bed\u8868'), 'ai-summary');
 });

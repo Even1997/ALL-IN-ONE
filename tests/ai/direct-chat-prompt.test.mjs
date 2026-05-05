@@ -18,6 +18,10 @@ test('buildDirectChatPrompt keeps default chat free-form when no explicit skill 
   assert.doesNotMatch(result.prompt, /knowledge_context:/);
   assert.match(result.systemPrompt, /low-risk internal actions/i);
   assert.match(result.systemPrompt, /do not treat your own reply text as authorization/i);
+  assert.match(result.systemPrompt, /draft the artifact directly in chat first/i);
+  assert.match(result.systemPrompt, /slash skills as explicit opt-in accelerators/i);
+  assert.doesNotMatch(result.systemPrompt, /system index/i);
+  assert.doesNotMatch(result.systemPrompt, /proposal/i);
 });
 
 test('buildDirectChatPrompt adds explicit skill focus without injecting knowledge file bodies', () => {
@@ -26,19 +30,21 @@ test('buildDirectChatPrompt adds explicit skill focus without injecting knowledg
     currentProjectName: 'PM Workspace',
     contextWindowTokens: 200000,
     skillIntent: {
-      package: 'page',
+      package: null,
       skill: 'ui-design',
       cleanedInput: 'Generate a home page design from the current sketch',
-      token: '@UI',
+      token: '/ui-design',
+      invocationKind: 'slash',
     },
   });
 
-  assert.equal(result.skillLabel, 'UI 设计');
-  assert.match(result.prompt, /mode: UI 设计/);
+  assert.equal(result.skillLabel, 'UI Design');
+  assert.match(result.prompt, /mode: UI Design/);
   assert.match(result.prompt, /context_window:\s*200000 tokens/);
   assert.doesNotMatch(result.prompt, /knowledge_context:/);
   assert.doesNotMatch(result.prompt, /current_file/);
   assert.doesNotMatch(result.prompt, /related_files/);
+  assert.doesNotMatch(result.systemPrompt, /force the entire conversation into a workflow/i);
 });
 
 test('buildDirectChatPrompt no longer injects agent plan metadata', () => {
@@ -101,7 +107,10 @@ test('buildDirectChatPrompt carries short affirmative replies over pending save 
     skillIntent: null,
     conversationHistory: [
       { role: 'user', content: '帮我整理一下这段需求。' },
-      { role: 'assistant', content: '我可以把整理后的内容保存到需求文档里，要不要保存？' },
+      {
+        role: 'assistant',
+        content: '我可以把整理后的内容保存到需求文档里，要不要保存？',
+      },
     ],
   });
 
@@ -120,7 +129,7 @@ test('buildDirectChatPrompt strips obsolete internal flow protocol from conversa
       {
         role: 'assistant',
         content:
-          '<goodnight-m-flow>\n1. Route — 识别候选面\n候选面：requirement、design、workflow\n</goodnight-m-flow>\n好的，我来整理。',
+          '<goodnight-m-flow>\n1. Route - 识别候选面\n候选面：requirement、design、workflow\n</goodnight-m-flow>\n好的，我来整理。',
       },
     ],
   });

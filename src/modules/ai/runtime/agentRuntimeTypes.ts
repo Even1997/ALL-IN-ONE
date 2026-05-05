@@ -138,15 +138,12 @@ export type AgentExecutionAgentRunStatus =
 
 export type AgentExecutionRunKind =
   | 'turn'
-  | 'workflow_package'
-  | 'workflow_stage'
   | 'local_agent'
   | 'team'
   | 'team_phase';
 
 export type AgentExecutionAgentRunKind =
   | 'local_agent'
-  | 'workflow_skill'
   | 'team_member';
 
 export type AgentExecutionTaskRecord = {

@@ -49,3 +49,19 @@ test('runtime streaming assembler keeps native thinking stream collapsed', () =>
     },
   ]);
 });
+
+test('runtime streaming assembler keeps final answer body after tool inspection reasoning', () => {
+  const assembler = createRuntimeStreamingMessageAssembler();
+
+  assembler.append({
+    kind: 'text',
+    delta: '我先看一下项目里已有的文件情况。',
+  });
+  assembler.markToolBoundary();
+
+  const finalDraft = assembler.buildFinal('# 动漫 APP 需求文档\n\n## 1. 产品定位\n\n面向动漫用户的内容社区。');
+
+  assert.match(finalDraft.content, /# 动漫 APP 需求文档/);
+  assert.equal(finalDraft.answerContent, '# 动漫 APP 需求文档\n\n## 1. 产品定位\n\n面向动漫用户的内容社区。');
+  assert.equal(finalDraft.assistantParts.at(-1)?.type, 'text');
+});

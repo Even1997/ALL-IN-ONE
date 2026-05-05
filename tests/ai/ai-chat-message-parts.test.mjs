@@ -7,6 +7,28 @@ import {
   parseAIChatMessageParts,
 } from '../../src/components/workspace/aiChatMessageParts.ts';
 
+test('buildAssistantStructuredContentState strips legacy bash blocks and keeps planning as thinking', () => {
+  const state = buildAssistantStructuredContentState({
+    content: [
+      '好的，我先查看一下项目现有的 sketch 目录和相关文件，然后按移动优先的规范输出首页草图。',
+      '<bash>',
+      '<cmd>Get-ChildItem sketch</cmd>',
+      '</bash>',
+      '## 首页草图',
+      '- 顶部搜索',
+      '- 今日推荐',
+    ].join('\n\n'),
+    thinkingCollapsed: true,
+  });
+
+  assert.equal(
+    state.thinkingContent,
+    '好的，我先查看一下项目现有的 sketch 目录和相关文件，然后按移动优先的规范输出首页草图。'
+  );
+  assert.equal(state.answerContent, '## 首页草图\n\n- 顶部搜索\n\n- 今日推荐');
+  assert.doesNotMatch(state.content, /<bash>|<cmd>|Get-ChildItem sketch/);
+});
+
 test('parseAIChatMessageParts keeps completed think content as a collapsed thinking block', () => {
   const parts = parseAIChatMessageParts('<think>Analyze the references first</think>Final answer: keep the entry clean.');
 
@@ -127,6 +149,27 @@ Build complete.`);
       status: 'success',
     },
     { type: 'text', content: 'Build complete.' },
+  ]);
+});
+
+test('parseAIChatMessageParts extracts legacy bash command blocks as operation cards', () => {
+  const parts = parseAIChatMessageParts(`Checking workspace
+<bash>
+<cmd>Get-ChildItem sketch</cmd>
+</bash>
+Summary continues`);
+
+  assert.deepEqual(parts, [
+    { type: 'text', content: 'Checking workspace' },
+    {
+      type: 'tool',
+      name: 'bash',
+      title: '运行终端命令',
+      command: 'Get-ChildItem sketch',
+      input: 'Get-ChildItem sketch',
+      status: 'running',
+    },
+    { type: 'text', content: 'Summary continues' },
   ]);
 });
 

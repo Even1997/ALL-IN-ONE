@@ -84,6 +84,9 @@ const ANALYSIS_ONLY_PATTERN =
 const FILE_MANAGEMENT_WRITE_PATTERN =
   /(?:\u65b0\u5efa|\u521b\u5efa|\u751f\u6210(?:\u4e00\u4e2a)?(?:\u6587\u4ef6|\u6587\u6863)?|\u5199\u5165|\u5199\u5230|\u4fdd\u5b58(?:\u6210|\u5230)?|\u53e6\u5b58\u4e3a|\u843d\u76d8|\u5220\u9664|\u79fb\u9664|\u91cd\u547d\u540d|\u79fb\u52a8|remove|delete|create|write|save|rename|move)/i;
 
+const FILE_SAVE_TARGET_PATTERN =
+  /(?:\u4fdd\u5b58(?:\u6210|\u5230)?|\u5199\u5165|\u5199\u5230|\u53e6\u5b58\u4e3a|\u843d\u76d8|save(?:\s+as|\s+to)?|write(?:\s+to)?)/i;
+
 const EXPLICIT_FILE_READ_PATTERN =
   /(?:\u67e5\u770b|\u8bfb\u53d6|\u8bfb\u4e00\u4e0b|\u6253\u5f00|\u5217\u51fa|\u770b\u770b|\u6d4f\u89c8|\u641c\u7d22|\u67e5\u627e|\u68c0\u7d22|read|open|show|list|search|grep)/i;
 
@@ -241,8 +244,15 @@ const extractJsonPayload = (raw: string) => {
 const containsExplicitFileReference = (value: string) =>
   EXPLICIT_FILE_REFERENCE_PATTERN.test(value) || FILE_NOUN_PATTERN.test(value);
 
+const containsConcreteProjectFileReference = (value: string) =>
+  EXPLICIT_FILE_REFERENCE_PATTERN.test(value);
+
 const looksLikeExplicitProjectFileWriteRequest = (value: string) =>
-  FILE_MANAGEMENT_WRITE_PATTERN.test(value) && containsExplicitFileReference(value);
+  FILE_MANAGEMENT_WRITE_PATTERN.test(value) &&
+  (
+    containsConcreteProjectFileReference(value) ||
+    (FILE_SAVE_TARGET_PATTERN.test(value) && containsExplicitFileReference(value))
+  );
 
 const looksLikeExplicitProjectFileReadRequest = (value: string) => {
   if (looksLikeExplicitProjectFileWriteRequest(value)) {

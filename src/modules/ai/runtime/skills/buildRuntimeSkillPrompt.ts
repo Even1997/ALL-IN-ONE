@@ -3,6 +3,7 @@ import type { RuntimeSkillDefinition } from './runtimeSkillTypes';
 export const buildRuntimeSkillPrompt = (skills: RuntimeSkillDefinition[]) =>
   skills
     .map((skill) => {
+      const allowedTools = Array.isArray(skill.allowedTools) ? skill.allowedTools : [];
       const metadata = [
         `id="${skill.id}"`,
         `name="${skill.name}"`,
@@ -22,7 +23,7 @@ export const buildRuntimeSkillPrompt = (skills: RuntimeSkillDefinition[]) =>
         skill.activationPaths && skill.activationPaths.length > 0
           ? `paths="${skill.activationPaths.join(', ')}"`
           : null,
-        skill.allowedTools.length > 0 ? `allowed_tools="${skill.allowedTools.join(', ')}"` : null,
+        allowedTools.length > 0 ? `allowed_tools="${allowedTools.join(', ')}"` : null,
       ]
         .filter((item): item is string => Boolean(item))
         .join(' ');

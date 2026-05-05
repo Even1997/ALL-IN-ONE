@@ -8,18 +8,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const chatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 
-test('chat delegates runtime direct-chat request building and response normalization to runtime helpers', async () => {
+test('chat delegates direct-chat execution to orchestration entry points and runtime session helpers', async () => {
   const source = await readFile(chatPath, 'utf8');
 
-  assert.match(source, /buildRuntimeDirectChatRequest/);
-  assert.match(source, /normalizeRuntimeDirectChatResponse/);
+  assert.match(source, /executeRuntimeBuiltInAgentTurn/);
+  assert.match(source, /runRuntimeLocalAgentExecution/);
   assert.match(source, /createEmptyAgentTurnSession/);
   assert.match(source, /reduceAgentTurnSession/);
   assert.match(source, /decideAgentTurnMode/);
   assert.match(source, /upsertTurnSession/);
   assert.match(source, /patchTurnSession/);
-  assert.match(source, /const buildDirectChatRequest = \(\) =>\s*buildRuntimeDirectChatRequest\(/);
-  assert.match(source, /const normalizedFinalContent = normalizeRuntimeDirectChatResponse\(/);
+  assert.match(source, /buildAgentContext/);
   assert.doesNotMatch(source, /const buildPromptReferenceContext =/);
   assert.doesNotMatch(source, /const runtimeContext = assembleAgentContext\(/);
   assert.doesNotMatch(source, /const runtimePrompt = buildThreadPrompt\(/);

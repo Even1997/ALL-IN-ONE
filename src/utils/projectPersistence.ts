@@ -9,7 +9,6 @@ import {
 } from '../modules/design/stylePack.ts';
 import { buildSketchReferenceFile } from '../modules/knowledge/referenceFiles.ts';
 import { buildSketchPageContent, buildSketchPagePath, parseSketchPageFile } from '../modules/knowledge/sketchPageFiles.ts';
-import type { WorkflowProjectState } from '../modules/ai/store/workflowStore';
 import type { GeneratedFile } from '../types';
 import { joinFileSystemPath, stripWindowsExtendedLengthPathPrefix } from './fileSystemPaths.ts';
 
@@ -234,9 +233,6 @@ export const getProjectSnapshotPath = (projectDir: string) =>
 export const getDesignBoardPath = (projectDir: string) =>
   joinPath(getProjectStateDir(projectDir), 'design-board.json');
 
-export const getWorkflowStatePath = (projectDir: string) =>
-  joinPath(getProjectStateDir(projectDir), 'ai-workflow.json');
-
 export const getContextIndexPath = (projectDir: string) =>
   joinPath(projectDir, '.ai', 'context-index.json');
 
@@ -324,24 +320,6 @@ export const saveDesignBoardStateToDisk = async (projectId: string, state: Persi
 
   const projectDir = await getProjectDir(projectId);
   await writeJSONFile(getDesignBoardPath(projectDir), state);
-};
-
-export const loadWorkflowStateFromDisk = async (projectId: string) => {
-  if (!isTauriRuntimeAvailable()) {
-    return null;
-  }
-
-  const projectDir = await getProjectDir(projectId);
-  return readJSONFile<WorkflowProjectState>(getWorkflowStatePath(projectDir));
-};
-
-export const saveWorkflowStateToDisk = async (projectId: string, state: WorkflowProjectState) => {
-  if (!isTauriRuntimeAvailable()) {
-    return;
-  }
-
-  const projectDir = await getProjectDir(projectId);
-  await writeJSONFile(getWorkflowStatePath(projectDir), state);
 };
 
 export const loadContextIndexFromDisk = async (projectId: string) => {

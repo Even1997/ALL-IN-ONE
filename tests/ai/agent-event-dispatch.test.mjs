@@ -79,6 +79,21 @@ test('agent visible text sanitizer strips standalone xml declaration lines', () 
   assert.doesNotMatch(cleaned, /<\?xml version=/i);
 });
 
+test('agent visible text sanitizer strips legacy bash command blocks', () => {
+  const raw = [
+    '好的，我先看一下当前 sketch 目录。',
+    '<bash>',
+    '<cmd>Get-ChildItem sketch</cmd>',
+    '</bash>',
+    '已经看完了。',
+  ].join('\n');
+
+  const cleaned = sanitizeAgentVisibleText(raw);
+
+  assert.equal(cleaned, '好的，我先看一下当前 sketch 目录。\n\n已经看完了。');
+  assert.doesNotMatch(cleaned, /<bash>|<cmd>|Get-ChildItem sketch/);
+});
+
 test('agent runtime event helpers upsert tool use and result records', () => {
   const started = upsertRuntimeToolUseEvent(undefined, {
     toolCallId: 'call-1',

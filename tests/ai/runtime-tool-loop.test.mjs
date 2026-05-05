@@ -153,3 +153,42 @@ test('runtime tool loop emits unified agent events for tools and final text', as
   assert.equal(events[2].toolCall.status, 'completed');
   assert.equal(events[3].text, 'Done.');
 });
+
+test('runtime tool loop preserves verified file mutation metadata from tool results', async () => {
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Update the config file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['write'],
+    callModel: async (messages) =>
+      messages.length === 1
+        ? toolUse('write', { file_path: 'src/config.ts', content: 'export const ok = true;\n' })
+        : 'Saved the config file.',
+    executeTool: async () => ({
+      type: 'text',
+      content: 'File successfully written: src/config.ts',
+      metadata: {
+        fileChanges: [
+          {
+            path: 'src/config.ts',
+            operation: 'write',
+            beforeContent: null,
+            afterContent: 'export const ok = true;\n',
+            verified: true,
+          },
+        ],
+      },
+    }),
+  });
+
+  assert.equal(result.toolCalls.length, 1);
+  assert.deepEqual(result.toolCalls[0].fileChanges, [
+    {
+      path: 'src/config.ts',
+      operation: 'write',
+      beforeContent: null,
+      afterContent: 'export const ok = true;\n',
+      verified: true,
+    },
+  ]);
+});

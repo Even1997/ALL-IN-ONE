@@ -124,7 +124,7 @@ export const GNAgentRuntimeSummary: React.FC<{
         {activeLiveState?.pendingQuestionSummary ? (
           <code>question: {activeLiveState.pendingQuestionSummary}</code>
         ) : null}
-        <code>mode: {PERMISSION_MODE_LABELS[permissionMode]}</code>
+        <code>approval policy: {PERMISSION_MODE_LABELS[permissionMode]}</code>
         <code>skills: {activeSkillCount}</code>
         <code>mcp: {runtimeMcpServers.length}</code>
         <code>mcp calls: {mcpCalls}</code>

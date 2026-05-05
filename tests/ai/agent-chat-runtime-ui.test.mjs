@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 const agentPagePath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx');
 
-test('AI chat wiring uses agent runtime store, client, context assembler, and project memory runtime', async () => {
+test('AI chat wiring uses runtime stores, orchestration entry points, and project memory runtime', async () => {
   const source = await readFile(aiChatPath, 'utf8');
 
   assert.match(source, /useAgentRuntimeStore/);
@@ -20,8 +20,9 @@ test('AI chat wiring uses agent runtime store, client, context assembler, and pr
   assert.match(source, /patchTurnSession/);
   assert.match(source, /executeRuntimePrompt/);
   assert.match(source, /persistRuntimeThread/);
-  assert.match(source, /buildRuntimeDirectChatRequest/);
-  assert.match(source, /normalizeRuntimeDirectChatResponse/);
+  assert.match(source, /executeRuntimeBuiltInAgentTurn/);
+  assert.match(source, /runRuntimeLocalAgentExecution/);
+  assert.match(source, /buildAgentContext/);
   assert.match(source, /buildProjectMemoryEntry/);
   assert.match(source, /bindRuntimeThread/);
   assert.match(source, /threadId: runtimeThreadId \|\| targetSessionId/);

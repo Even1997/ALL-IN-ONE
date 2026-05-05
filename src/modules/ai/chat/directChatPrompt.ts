@@ -1,5 +1,4 @@
-import { buildKnowledgeOperationPolicy } from '../knowledge/knowledgeOperationPolicy.ts';
-import { getDefaultChatSkillDefinitionById } from '../skills/skillLibrary.ts';
+import { getSystemRuntimeSkillDefinitionById } from '../skills/skillLibrary.ts';
 import {
   buildRuntimeSkillArgumentStatus,
   substituteRuntimeSkillArguments,
@@ -36,6 +35,12 @@ const RESPONSE_STYLE_POLICY = [
   'When summarizing project content, focus on user-facing product files, features, pages, and deliverables first.',
 ].join(' ');
 
+const ARTIFACT_DRAFT_POLICY = [
+  'If the user asks for a requirements doc, PRD, spec, sketch, wireframe, UI direction, or similar artifact without explicitly asking to save it into a project file, draft the artifact directly in chat first.',
+  'Only switch into immediate file-writing behavior when the user explicitly asks to save, create, or update a concrete project file.',
+  'Treat slash skills as explicit opt-in accelerators, not as prerequisites for delivering the first useful answer.',
+].join(' ');
+
 const buildFreeChatSystemPrompt = (projectName?: string) =>
   [
     'You are a natural conversational AI assistant for the current project.',
@@ -54,6 +59,7 @@ const buildFreeChatSystemPrompt = (projectName?: string) =>
     TASK_AUTHORIZATION_POLICY,
     INTERNAL_CONTEXT_DISCLOSURE_POLICY,
     RESPONSE_STYLE_POLICY,
+    ARTIFACT_DRAFT_POLICY,
   ].join('\n');
 
 const buildSkillSystemPrompt = (projectName: string | undefined, skillName: string, skillPrompt: string) =>
@@ -61,11 +67,12 @@ const buildSkillSystemPrompt = (projectName: string | undefined, skillName: stri
     'You are a natural conversational AI assistant for the current project.',
     `Current project: ${projectName || 'Unnamed project'}`,
     `The user explicitly invoked the ${skillName} skill for this request.`,
-    'Follow the skill guidance only for the current request. Do not force the entire conversation into a workflow.',
+    'Follow the skill guidance only for the current request. Keep the conversation direct and task-focused.',
     FILE_OPERATION_TRUTHFULNESS_POLICY,
     TASK_AUTHORIZATION_POLICY,
     INTERNAL_CONTEXT_DISCLOSURE_POLICY,
     RESPONSE_STYLE_POLICY,
+    ARTIFACT_DRAFT_POLICY,
     `<skill_playbook>\n${skillPrompt}\n</skill_playbook>`,
     skillName === 'UI Design'
       ? 'Preserve the validated shell structure and information hierarchy unless you clearly explain why a change is needed.'
@@ -126,9 +133,9 @@ const INTERNAL_HISTORY_BLOCK_PATTERNS = [
 
 const INTERNAL_HISTORY_LINE_PATTERNS = [
   /m-flow/i,
-  /候选面/,
-  /\bRoute\b.*识别/,
-  /识别候选面/,
+  /鍊欓€夐潰/,
+  /\bRoute\b.*璇嗗埆/,
+  /璇嗗埆鍊欓€夐潰/,
 ];
 
 const stripInternalHistoryProtocols = (content: string) => {
@@ -149,8 +156,8 @@ const HISTORY_MAX_CHARS_PER_MSG = 2000;
 
 const SAVE_LIKE_ACTION_PATTERN = /(?:\u4fdd\u5b58|\u5199\u5165|\u521b\u5efa|\u66f4\u65b0|\u4fee\u6539|\bsave\b|\bwrite\b|\bcreate\b|\bupdate\b)/i;
 const CONFIRMATION_QUESTION_PATTERN = /(?:\u8981\u4e0d\u8981|\u662f\u5426|\u9700\u8981|\u53ef\u4ee5.*\u5417|\u5417|would you like|should i|do you want|confirm)/i;
-const SHORT_AFFIRMATIVE_PATTERN = /^(?:\u597d|\u597d\u7684|\u53ef\u4ee5|\u884c|\u884c\u7684|\u55ef|\u55ef\u55ef|\u786e\u8ba4|\u5bf9|\u662f|\u662f\u7684|ok|okay|yes|yep|sure|go ahead)[\s\u3002\uff01!.,，]*$/i;
-const SHORT_NEGATIVE_PATTERN = /^(?:\u4e0d|\u4e0d\u8981|\u4e0d\u7528|\u5148\u4e0d|\u7b97\u4e86|no|nope|cancel)[\s\u3002\uff01!.,，]*$/i;
+const SHORT_AFFIRMATIVE_PATTERN = /^(?:\u597d|\u597d\u7684|\u53ef\u4ee5|\u884c|\u884c\u7684|\u55ef|\u55ef\u55ef|\u786e\u8ba4|\u5bf9|\u662f|\u662f\u7684|ok|okay|yes|yep|sure|go ahead)[\s\u3002\uff01\uff0c!.,]*$/i;
+const SHORT_NEGATIVE_PATTERN = /^(?:\u4e0d|\u4e0d\u8981|\u4e0d\u7528|\u5148\u4e0d|\u7b97\u4e86|no|nope|cancel)[\s\u3002\uff01\uff0c!.,]*$/i;
 
 const findLatestAssistantMessage = (messages: ConversationHistoryMessage[]) =>
   [...messages].reverse().find((message) => message.role === 'assistant' && message.content.trim().length > 0) || null;
@@ -203,7 +210,6 @@ export const buildConversationHistorySection = (
     return '';
   }
 
-  // Build from most recent backwards, stop when token budget exceeded
   const included: string[] = [];
   let usedTokens = 0;
 
@@ -255,7 +261,7 @@ export const buildDirectChatPrompt = (options: {
 
   const activeSkill =
     (skillIntent ? availableSkills.find((skill) => skill.id === skillIntent.skill) : null) ||
-    (skillIntent ? getDefaultChatSkillDefinitionById(skillIntent.skill) : null);
+    (skillIntent ? getSystemRuntimeSkillDefinitionById(skillIntent.skill) : null);
   const skillLabel = activeSkill?.name || null;
   const resolvedSkillPrompt =
     activeSkill && skillIntent
@@ -320,7 +326,6 @@ export const buildDirectChatPrompt = (options: {
         : buildFreeChatSystemPrompt(currentProjectName),
       referenceContext?.indexSection ? buildIndexedKnowledgePolicy() : null,
       referenceContext?.policySection || null,
-      buildKnowledgeOperationPolicy(),
     ]
       .filter((item): item is string => Boolean(item))
       .join('\n\n'),

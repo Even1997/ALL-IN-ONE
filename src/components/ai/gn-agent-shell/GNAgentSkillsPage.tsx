@@ -60,7 +60,7 @@ const buildSkillSummary = (skill: SkillDiscoveryEntry) => {
   }
 
   if (skill.imported) {
-    return '已经纳入 GoodNight 全局技能库，可直接在聊天中用 @skill 调用。';
+    return '已经纳入 GoodNight 全局技能库，可直接在聊天中用 /skill 调用。';
   }
 
   return '来自外部来源，还没有进入 .goodnight，全局可见后可一键导入。';
@@ -310,7 +310,7 @@ export const GNAgentSkillsPage: React.FC = () => {
         <div className="gn-agent-skills-hero">
           <span className="gn-agent-context-badge">GN Agent</span>
           <h3>让 GoodNight 按你的方式工作</h3>
-          <p>技能只属于 GoodNight，本体统一保存在用户级 `.goodnight` 全局库里。在这里浏览、导入和管理，然后在聊天里通过 `@skill` 调用它们。</p>
+          <p>技能只属于 GoodNight，本体统一保存在用户级 `.goodnight` 全局库里。在这里浏览、导入和管理，然后在聊天里通过 `/skill` 调用它们。</p>
         </div>
 
         <div className="gn-agent-skills-search-row">

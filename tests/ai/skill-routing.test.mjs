@@ -3,63 +3,65 @@ import test from 'node:test';
 
 import { resolveSkillIntent } from '../../src/modules/ai/workflow/skillRouting.ts';
 
-test('resolveSkillIntent detects UI tokens and returns the concise token', () => {
-  const result = resolveSkillIntent('@UI设计 根据当前草图生成设计');
-
-  assert.deepEqual(result, {
-    package: 'page',
-    skill: 'ui-design',
-    cleanedInput: '根据当前草图生成设计',
-    token: '@UI',
-  });
-});
-
-test('resolveSkillIntent detects requirements mode', () => {
-  const result = resolveSkillIntent('@需求 帮我整理当前文档');
-
-  assert.deepEqual(result, {
-    package: 'requirements',
-    skill: 'requirements',
-    cleanedInput: '帮我整理当前文档',
-    token: '@需求',
-  });
-});
-
-test('resolveSkillIntent detects change sync mode', () => {
-  const result = resolveSkillIntent('@变更同步 检查当前原型变更');
-
-  assert.deepEqual(result, {
-    package: 'change-sync',
-    skill: 'change-sync',
-    cleanedInput: '检查当前原型变更',
-    token: '@变更同步',
-  });
-});
-
-test('resolveSkillIntent falls back when no skill token exists', () => {
-  const result = resolveSkillIntent('继续生成原型');
+test('resolveSkillIntent keeps direct chat free-form when legacy UI tags are used', () => {
+  const result = resolveSkillIntent('@UI  based on the current sketch, refine the interface');
 
   assert.equal(result, null);
 });
 
-test('resolveSkillIntent detects index mode and routes it to knowledge organize', () => {
-  const result = resolveSkillIntent('@索引 帮我整理当前项目知识库');
+test('resolveSkillIntent keeps direct chat free-form when legacy sketch tags are used', () => {
+  const result = resolveSkillIntent('@sketch generate the landing page sketch');
+
+  assert.equal(result, null);
+});
+
+test('resolveSkillIntent falls back when no skill token exists', () => {
+  const result = resolveSkillIntent('continue generating the prototype');
+
+  assert.equal(result, null);
+});
+
+test('resolveSkillIntent keeps removed legacy workflow tags disabled', () => {
+  assert.equal(resolveSkillIntent('@需求 帮我整理当前文档'), null);
+  assert.equal(resolveSkillIntent('@索引 帮我整理当前项目知识库'), null);
+  assert.equal(resolveSkillIntent('@变更同步 检查当前原型变更'), null);
+});
+
+test('resolveSkillIntent routes wiki through slash commands', () => {
+  const result = resolveSkillIntent('/wiki sync the current note and project context');
 
   assert.deepEqual(result, {
-    package: 'knowledge-organize',
-    skill: 'knowledge-organize',
-    cleanedInput: '帮我整理当前项目知识库',
-    token: '@索引',
+    skill: 'wiki',
+    cleanedInput: 'sync the current note and project context',
+    token: '/wiki',
+    invocationKind: 'slash',
   });
 });
 
-test('resolveSkillIntent keeps the legacy organize alias working', () => {
-  const result = resolveSkillIntent('@整理 帮我整理当前项目知识库');
+test('resolveSkillIntent routes sketch through slash commands', () => {
+  const result = resolveSkillIntent('/sketch generate the landing page sketch');
 
   assert.deepEqual(result, {
-    package: 'knowledge-organize',
-    skill: 'knowledge-organize',
-    cleanedInput: '帮我整理当前项目知识库',
-    token: '@索引',
+    skill: 'sketch',
+    cleanedInput: 'generate the landing page sketch',
+    token: '/sketch',
+    invocationKind: 'slash',
   });
+});
+
+test('resolveSkillIntent routes ui-design through slash commands', () => {
+  const result = resolveSkillIntent('/ui-design based on the current sketch, refine the interface');
+
+  assert.deepEqual(result, {
+    skill: 'ui-design',
+    cleanedInput: 'based on the current sketch, refine the interface',
+    token: '/ui-design',
+    invocationKind: 'slash',
+  });
+});
+
+test('resolveSkillIntent keeps removed structured workflow slash skills disabled', () => {
+  assert.equal(resolveSkillIntent('/requirements clarify the current product scope'), null);
+  assert.equal(resolveSkillIntent('/knowledge-organize build a stable fact base for this project'), null);
+  assert.equal(resolveSkillIntent('/change-sync inspect downstream drift after this prototype update'), null);
 });

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { GN_AGENT_PROVIDER_REGISTRY } from '../../../modules/ai/gn-agent/providers';
 import {
@@ -208,4 +208,3 @@ export const GNAgentConfigPage: React.FC = () => {
     </section>
   );
 };
-

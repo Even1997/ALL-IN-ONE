@@ -164,7 +164,8 @@ test('GN agent chat page wires memory inbox to active session candidates', async
   const source = await readFile(chatPagePath, 'utf8');
 
   assert.match(source, /GNAgentMemoryInbox/);
-  assert.match(source, /memoryCandidatesByThread\[activeSessionId\]/);
+  assert.match(source, /conversation\.memoryCandidates/);
+  assert.match(source, /candidates=\{memoryCandidates\}/);
   assert.match(source, /saveProjectMemoryEntry/);
   assert.match(source, /listProjectMemoryEntries/);
   assert.match(source, /setMemoryEntries\(\s*currentProject\.id/);

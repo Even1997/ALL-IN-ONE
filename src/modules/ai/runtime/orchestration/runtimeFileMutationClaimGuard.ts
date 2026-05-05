@@ -16,6 +16,10 @@ const NEGATED_FILE_MUTATION_CLAIM_PATTERN =
 
 const UNVERIFIED_FILE_MUTATION_MESSAGE =
   '\u6211\u8fd8\u6ca1\u6709\u62ff\u5230\u6210\u529f\u7684\u9879\u76ee\u6587\u4ef6\u53d8\u66f4\u7ed3\u679c\uff0c\u56e0\u6b64\u4e0d\u80fd\u786e\u8ba4\u5df2\u4fdd\u5b58\u3001\u5df2\u4fee\u6539\u6216\u5df2\u5220\u9664\u3002\u8bf7\u660e\u786e\u76ee\u6807\u6587\u4ef6\u540e\u6211\u4f1a\u901a\u8fc7\u6587\u4ef6\u53d8\u66f4\u6d41\u7a0b\u6267\u884c\u3002';
+const UNVERIFIED_FILE_MUTATION_APPENDIX =
+  '\u6ce8\u610f\uff1a\u4e0a\u9762\u7684\u5185\u5bb9\u5df2\u751f\u6210\uff0c\u4f46\u6211\u8fd8\u6ca1\u6709\u62ff\u5230\u6210\u529f\u7684\u9879\u76ee\u6587\u4ef6\u53d8\u66f4\u7ed3\u679c\uff0c\u6240\u4ee5\u672c\u5730\u843d\u76d8\u72b6\u6001\u4ecd\u672a\u786e\u8ba4\u3002\u8bf7\u660e\u786e\u76ee\u6807\u6587\u4ef6\u540e\uff0c\u6211\u4f1a\u901a\u8fc7\u6587\u4ef6\u53d8\u66f4\u6d41\u7a0b\u6267\u884c\u3002';
+const SUBSTANTIVE_CONTENT_PATTERN =
+  /(?:^|\n)\s{0,3}(?:#{1,6}\s|[-*]\s|\d+\.\s)|\n\s*\n/;
 
 const hasVerifiedFileMutationToolResult = (toolCalls: FileMutationToolCall[]) =>
   toolCalls.some(
@@ -24,6 +28,50 @@ const hasVerifiedFileMutationToolResult = (toolCalls: FileMutationToolCall[]) =>
       Array.isArray(toolCall.fileChanges) &&
       toolCall.fileChanges.some((change) => change.path.trim().length > 0 && change.verified === true)
   );
+
+const stripStandaloneMutationClaimParagraphs = (content: string) => {
+  let removed = false;
+  const paragraphs = content
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  const preserved = paragraphs.filter((paragraph) => {
+    const normalized = paragraph.replace(/\s+/g, ' ').trim();
+    if (!normalized) {
+      return false;
+    }
+
+    if (!FILE_MUTATION_SUCCESS_CLAIM_PATTERN.test(normalized)) {
+      return true;
+    }
+
+    if (NEGATED_FILE_MUTATION_CLAIM_PATTERN.test(normalized)) {
+      return true;
+    }
+
+    if (normalized.length > 160) {
+      return true;
+    }
+
+    removed = true;
+    return false;
+  });
+
+  return {
+    removed,
+    content: preserved.join('\n\n').trim(),
+  };
+};
+
+const looksLikeSubstantiveContent = (content: string) => {
+  const normalized = content.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.length >= 40 || SUBSTANTIVE_CONTENT_PATTERN.test(normalized);
+};
 
 export const guardUnverifiedFileMutationClaims = (input: {
   content: string;
@@ -44,6 +92,11 @@ export const guardUnverifiedFileMutationClaims = (input: {
 
   if (hasVerifiedFileMutationToolResult(input.toolCalls)) {
     return input.content;
+  }
+
+  const preservedContent = stripStandaloneMutationClaimParagraphs(input.content);
+  if (preservedContent.removed && looksLikeSubstantiveContent(preservedContent.content)) {
+    return `${preservedContent.content}\n\n${UNVERIFIED_FILE_MUTATION_APPENDIX}`;
   }
 
   return UNVERIFIED_FILE_MUTATION_MESSAGE;

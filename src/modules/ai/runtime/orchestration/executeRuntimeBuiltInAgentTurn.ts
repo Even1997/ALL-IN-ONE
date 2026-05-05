@@ -24,6 +24,12 @@ const PROJECT_ACCESS_FAILURE_PATTERNS = [
   /Cannot access (?:file|directory) outside the current project\./i,
   /Current project root is unavailable\./i,
 ];
+const ARTIFACT_REQUEST_PATTERN =
+  /(?:requirements?\s*doc|requirements?|需求文档|PRD|spec|规格文档|设计文档|方案文档|草图|wireframe|ui direction)/i;
+const SUBSTANTIVE_ARTIFACT_PATTERN =
+  /(?:^|\n)\s{0,3}(?:#|##|\d+\.\s|[-*]\s)|(?:产品定位|目标用户|核心功能|用户故事|信息架构|交互流程|非功能需求|验收标准|里程碑|risk|scope|requirements?)/i;
+const PROCESS_ONLY_REPLY_PATTERN =
+  /^(?:我先|我来先|让我先|先看(?:一|一下)?|我先看|我来看看|好的，我看到|现在我来|接下来我来|我会先|我将先|let me|first[, ]+i(?:'| wi)?ll|now i(?:'| wi)?ll)/i;
 
 const findProjectAccessFailure = (toolCalls: RuntimeToolStep[]) => {
   for (const toolCall of toolCalls) {
@@ -59,6 +65,34 @@ const shouldRetryWithoutProjectTools = (input: {
     TOOL_LOOP_EXHAUSTED_PATTERN.test(value.trim()) ||
     PROJECT_ACCESS_FAILURE_PATTERNS.some((pattern) => pattern.test(value))
   );
+};
+
+const looksLikeArtifactRequest = (value: string) => ARTIFACT_REQUEST_PATTERN.test(value);
+
+const looksLikeSubstantiveArtifact = (value: string) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.length >= 120 || SUBSTANTIVE_ARTIFACT_PATTERN.test(value);
+};
+
+const shouldRetryArtifactDraftAfterTooling = (input: {
+  userInput: string;
+  finalContent: string;
+  toolCalls: RuntimeToolStep[];
+}) => {
+  if (!looksLikeArtifactRequest(input.userInput) || input.toolCalls.length === 0) {
+    return false;
+  }
+
+  const normalized = input.finalContent.replace(/\s+/g, ' ').trim();
+  if (!normalized || looksLikeSubstantiveArtifact(input.finalContent)) {
+    return false;
+  }
+
+  return PROCESS_ONLY_REPLY_PATTERN.test(normalized);
 };
 
 export type ExecuteRuntimeBuiltInAgentTurnInput = {
@@ -193,6 +227,33 @@ export async function executeRuntimeBuiltInAgentTurn(
     finalContent = normalizeRuntimeDirectChatResponse({
       response: fallbackResponse,
       streamedContent: fallbackResponse,
+    });
+  }
+
+  if (
+    shouldRetryArtifactDraftAfterTooling({
+      userInput: input.rawUserInput,
+      finalContent,
+      toolCalls: agentTurn.toolCalls,
+    })
+  ) {
+    const artifactFallbackResponse = await input.executeModel(
+      [
+        directChat.prompt,
+        'Runtime note:',
+        'You already inspected the relevant project files for this request.',
+        `The last assistant reply stopped at process narration instead of delivering the requested artifact: ${finalContent}`,
+        'Do not call any more tools.',
+        'The user asked for the artifact directly in chat.',
+        'Output the full artifact body now.',
+        'Do not describe what you will do next.',
+      ].join('\n\n'),
+      directChat.systemPrompt,
+      input.onModelEvent
+    );
+    finalContent = normalizeRuntimeDirectChatResponse({
+      response: artifactFallbackResponse,
+      streamedContent: artifactFallbackResponse,
     });
   }
 

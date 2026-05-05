@@ -75,12 +75,12 @@ test('built-in skills encode vault-safe boundary and output contracts', async ()
   assert.doesNotMatch(sketch, /\.goodnight\/m-flow/);
   assert.doesNotMatch(sketch, /_goodnight\/outputs\/m-flow/i);
   assert.doesNotMatch(sketch, /_goodnight\/outputs\/<skill>/i);
-  assert.match(sketch, /##\s*新页面 1/);
-  assert.match(sketch, /- route:\s*\/pages\/新页面-1/);
+  assert.match(sketch, /##\s*Page 1/);
+  assert.match(sketch, /- route:\s*\/pages\/page-1/);
   assert.match(sketch, /- frame:\s*1280x800/);
   assert.match(sketch, /- modules:/);
-  assert.match(sketch, /position:\s*0,\s*0/);
-  assert.match(sketch, /size:\s*80,\s*60/);
+  assert.match(sketch, /position:\s*24,\s*24/);
+  assert.match(sketch, /size:\s*1232,\s*56/);
   assert.match(sketch, /sketch\/pages\/<page-slug>\.md/i);
   assert.match(sketch, /\/pages\/<page-slug>/i);
   assert.match(sketch, /Use integers only for `position` and `size`/i);

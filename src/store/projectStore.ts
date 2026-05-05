@@ -16,7 +16,7 @@ import {
   DevTask,
   GeneratedFile,
   PageStructureNode,
-  ProductPRD,
+  ProjectBrief,
   ProjectConfig,
   ProjectGraph,
   ProjectMemory,
@@ -44,7 +44,7 @@ export interface ProjectWorkspaceSnapshot {
   requirementDocs: RequirementDoc[];
   documentEvents: DocumentChangeEvent[];
   activeKnowledgeFileId: string | null;
-  prd: ProductPRD | null;
+  brief: ProjectBrief | null;
   pageStructure: PageStructureNode[];
   wireframes: Record<string, WireframeDocument>;
   designSystem: DesignSystemDoc | null;
@@ -67,7 +67,7 @@ interface ProjectState {
   requirementDocs: RequirementDoc[];
   documentEvents: DocumentChangeEvent[];
   activeKnowledgeFileId: string | null;
-  prd: ProductPRD | null;
+  brief: ProjectBrief | null;
   pageStructure: PageStructureNode[];
   wireframes: Record<string, WireframeDocument>;
   designSystem: DesignSystemDoc | null;
@@ -336,7 +336,7 @@ const buildFeatureTreeFromRequirements = (
           description: '让产品可以描述需求、选择技能并通过 AI 头脑风暴快速形成产品资料。',
           details: ['支持直接输入需求', '支持选择 skill', '保留 AI 生成上下文'],
           inputs: ['原始需求文本', '需求文档上传', '选中的 skill'],
-          outputs: ['PRD 草案', '功能清单', '线稿任务'],
+          outputs: ['项目简报草案', '功能清单', '线稿任务'],
           acceptanceCriteria: ['能从需求输入进入规划', 'AI 提示词可复用', '产品文档可持续修改'],
           priority: 'critical',
           progress: 60,
@@ -452,7 +452,7 @@ const mapFeatureStatus = (status: FeatureNode['status']): GraphNodeBase['status'
   }
 };
 
-const mapPrdStatus = (status: ProductPRD['status']): GraphNodeBase['status'] =>
+const mapBriefStatus = (status: ProjectBrief['status']): GraphNodeBase['status'] =>
   status === 'ready' ? 'ready' : 'draft';
 
 const ensureFeatureName = (feature?: FeatureNode) => feature?.name || '核心功能';
@@ -474,19 +474,19 @@ const getPageMetadata = (node: Pick<PageStructureNode, 'name' | 'kind' | 'descri
   ...node.metadata,
 });
 
-const buildPRDFromProject = (
+const buildProjectBriefFromProject = (
   project: ProjectConfig,
   docs: RequirementDoc[],
   rawRequirementInput: string,
   featureTree: FeatureTree | null
-): ProductPRD => {
+): ProjectBrief => {
   const features = featureTree?.children || [];
   const now = new Date().toISOString();
   const summarySource = docs.map((doc) => doc.summary).filter(Boolean).join('；');
 
   return {
     id: uuidv4(),
-    title: `${project.name} PRD`,
+    title: `${project.name} 项目简报`,
     summary: summarySource || `${project.name} 的产品目标与 MVP 范围整理`,
     updatedAt: now,
     status: 'ready',
@@ -507,7 +507,7 @@ const buildPRDFromProject = (
       {
         id: uuidv4(),
         title: '核心流程',
-        content: '项目创建 -> 需求输入 -> PRD -> Feature Tree -> Page Structure -> Wireframe -> 开发工作区',
+        content: '聊天 -> /wiki -> /sketch -> /ui-design -> 开发工作区',
       },
     ],
   };
@@ -521,12 +521,12 @@ export const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | nul
       id: uuidv4(),
       name: '产品门户',
       kind: 'flow',
-      description: '承接需求输入、PRD 查看与功能规划。',
+      description: '承接需求输入、项目简报查看与功能规划。',
       featureIds: features[0] ? [features[0].id] : [],
       metadata: {
         route: '/product',
         title: '产品门户',
-        goal: '集中查看需求、PRD 与规划结果。',
+        goal: '集中查看知识笔记、项目简报与规划结果。',
         template: 'workspace',
         ownerRole: '产品',
         notes: '作为需求到规划产物的统一入口。',
@@ -537,12 +537,12 @@ export const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | nul
           id: uuidv4(),
           name: '需求工作台',
           kind: 'page',
-          description: `集中录入原始需求、补充约束，并沉淀成 PRD。`,
+          description: `集中录入原始信息、补充约束，并沉淀成项目简报。`,
           featureIds: features[0] ? [features[0].id] : [],
           metadata: {
-            route: '/product/requirements',
+            route: '/wiki',
             title: '需求工作台',
-            goal: '沉淀原始需求并生成 PRD。',
+            goal: '沉淀原始需求并生成项目简报。',
             template: 'form',
             ownerRole: '产品',
             notes: '适合放置需求输入区、需求条目列表和规划操作。',
@@ -575,7 +575,7 @@ export const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | nul
           description: `梳理 ${ensureFeatureName(features[1])} 对应的页面和模块关系。`,
           featureIds: features[1] ? [features[1].id] : [],
           metadata: {
-            route: '/design/pages',
+            route: '/sketch/pages',
             title: '页面结构总览',
             goal: '确认页面信息架构与模块关系。',
             template: 'list',
@@ -592,7 +592,7 @@ export const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | nul
           description: '页面结构确认后进入线框图编辑。',
           featureIds: features[1] ? [features[1].id] : [],
           metadata: {
-            route: '/design/wireframe',
+            route: '/sketch',
             title: '线框图画布',
             goal: '把页面结构细化为页面级布局草图。',
             template: 'workspace',
@@ -948,7 +948,7 @@ const buildPlanningFiles = (
   requirementDocs: RequirementDoc[],
   featureTree: FeatureTree | null,
   fallbackFeaturesMarkdown: string,
-  prd: ProductPRD | null,
+  brief: ProjectBrief | null,
   pageStructure: PageStructureNode[],
   wireframes: Record<string, WireframeDocument>
 ): { featuresMarkdown: string; wireframesMarkdown: string; files: GeneratedFile[] } => {
@@ -978,7 +978,7 @@ const buildPlanningFiles = (
 
   const files: GeneratedFile[] = [
     {
-      path: 'src/generated/planning/requirements.md',
+      path: 'src/generated/wiki/notes.md',
       content: [
         `# ${project.name} 需求资料`,
         '',
@@ -1014,13 +1014,13 @@ const buildPlanningFiles = (
       updatedAt: now,
     },
     {
-      path: 'src/generated/planning/prd.md',
-      content: prd
-        ? `# ${prd.title}\n\n${prd.summary}\n\n${prd.sections.map((section) => `## ${section.title}\n\n${section.content}`).join('\n\n')}\n`
-        : '# PRD\n\n暂无内容。\n',
+      path: 'src/generated/wiki/brief.md',
+      content: brief
+        ? `# ${brief.title}\n\n${brief.summary}\n\n${brief.sections.map((section) => `## ${section.title}\n\n${section.content}`).join('\n\n')}\n`
+        : '# 项目简报\n\n暂无内容。\n',
       language: 'md',
       category: 'design',
-      summary: 'PRD 文档',
+      summary: '项目简报',
       sourceTaskIds: [],
       updatedAt: now,
     },
@@ -1149,7 +1149,7 @@ const buildProjectGraph = (
   project: ProjectConfig,
   docs: RequirementDoc[],
   featureTree: FeatureTree | null,
-  prd: ProductPRD | null,
+  brief: ProjectBrief | null,
   pageStructure: PageStructureNode[],
   wireframes: Record<string, WireframeDocument>,
   designSystem: DesignSystemDoc | null,
@@ -1176,17 +1176,17 @@ const buildProjectGraph = (
       updatedAt: doc.updatedAt,
     },
   }));
-  const prdNodes: GraphNodeBase[] = prd
+  const briefNodes: GraphNodeBase[] = brief
     ? [
         {
-          id: prd.id,
-          type: 'prd',
-          name: prd.title,
-          status: mapPrdStatus(prd.status),
+          id: brief.id,
+          type: 'brief',
+          name: brief.title,
+          status: mapBriefStatus(brief.status),
           metadata: {
-            summary: prd.summary,
-            updatedAt: prd.updatedAt,
-            sectionCount: prd.sections.length,
+            summary: brief.summary,
+            updatedAt: brief.updatedAt,
+            sectionCount: brief.sections.length,
           },
         },
       ]
@@ -1293,7 +1293,7 @@ const buildProjectGraph = (
       },
     },
     ...requirementNodes,
-    ...prdNodes,
+    ...briefNodes,
     ...featureNodes,
     ...structureNodes,
     ...wireframeGraphNodes,
@@ -1324,17 +1324,17 @@ const buildProjectGraph = (
       to: project.id,
       relation: 'derived_from' as const,
     })),
-    ...(prd
+    ...(brief
       ? docs.map((doc) => ({
           id: uuidv4(),
           from: doc.id,
-          to: prd.id,
+          to: brief.id,
           relation: 'derived_from' as const,
         }))
       : []),
     ...features.map((feature, index) => ({
       id: uuidv4(),
-      from: prd?.id || docs[index % docs.length]?.id || project.id,
+      from: brief?.id || docs[index % docs.length]?.id || project.id,
       to: feature.id,
       relation: 'contains' as const,
     })),
@@ -1430,14 +1430,14 @@ const buildReconciledArtifacts = (
   existingGeneratedFiles: GeneratedFile[]
 ) => {
   const syncedFeatureTree = syncFeatureTreeWithPageStructure(featureTree, pageStructure) || featureTree;
-  const prd = buildPRDFromProject(project, requirementDocs, rawRequirementInput, syncedFeatureTree);
+  const brief = buildProjectBriefFromProject(project, requirementDocs, rawRequirementInput, syncedFeatureTree);
   const planningArtifacts = buildPlanningFiles(
     project,
     rawRequirementInput,
     requirementDocs,
     syncedFeatureTree,
     syncedFeatureTree ? featureTreeToMarkdown(syncedFeatureTree) : '',
-    prd,
+    brief,
     pageStructure,
     wireframes
   );
@@ -1452,7 +1452,7 @@ const buildReconciledArtifacts = (
 
   return {
     syncedFeatureTree,
-    prd,
+    brief,
     planningArtifacts,
     deliveryArtifacts,
     generatedFiles,
@@ -1460,7 +1460,7 @@ const buildReconciledArtifacts = (
       project,
       requirementDocs,
       syncedFeatureTree,
-      prd,
+      brief,
       pageStructure,
       wireframes,
       deliveryArtifacts.designSystem,
@@ -1482,7 +1482,7 @@ const normalizeRequirementKind = (value: unknown): RequirementDoc['kind'] =>
   value === 'sketch' || value === 'spec' ? value : 'note';
 
 const normalizeRequirementDocType = (value: unknown): RequirementDoc['docType'] =>
-  value === 'wiki-index' || value === 'ai-summary' ? value : undefined;
+  value === 'ai-summary' ? value : undefined;
 
 const normalizeGraph = (value: unknown): ProjectGraph => {
   if (!value || typeof value !== 'object') {
@@ -1492,7 +1492,15 @@ const normalizeGraph = (value: unknown): ProjectGraph => {
   const graph = value as Partial<ProjectGraph>;
 
   return {
-    nodes: Array.isArray(graph.nodes) ? graph.nodes.filter(Boolean) as GraphNodeBase[] : [],
+    nodes: Array.isArray(graph.nodes)
+      ? graph.nodes
+          .filter(Boolean)
+          .map((node) =>
+            node && typeof node === 'object' && (node as { type?: string }).type === 'prd'
+              ? { ...(node as GraphNodeBase), type: 'brief' }
+              : (node as GraphNodeBase)
+          )
+      : [],
     edges: Array.isArray(graph.edges) ? graph.edges.filter(Boolean) as GraphEdge[] : [],
   };
 };
@@ -1594,19 +1602,19 @@ const normalizeDocumentChangeEvents = (value: unknown): DocumentChangeEvent[] =>
         .slice(0, MAX_DOCUMENT_CHANGE_EVENTS)
     : [];
 
-const normalizePrd = (value: unknown): ProductPRD | null => {
+const normalizeBrief = (value: unknown): ProjectBrief | null => {
   if (!value || typeof value !== 'object') {
     return null;
   }
 
-  const prd = value as Partial<ProductPRD>;
+  const brief = value as Partial<ProjectBrief>;
 
   return {
-    id: typeof prd.id === 'string' ? prd.id : uuidv4(),
-    title: typeof prd.title === 'string' ? prd.title : 'PRD',
-    summary: typeof prd.summary === 'string' ? prd.summary : '',
-    sections: Array.isArray(prd.sections)
-      ? prd.sections
+    id: typeof brief.id === 'string' ? brief.id : uuidv4(),
+    title: typeof brief.title === 'string' ? brief.title : '项目简报',
+    summary: typeof brief.summary === 'string' ? brief.summary : '',
+    sections: Array.isArray(brief.sections)
+      ? brief.sections
           .filter((section) => Boolean(section) && typeof section === 'object')
           .map((section) => ({
             id: typeof section.id === 'string' ? section.id : uuidv4(),
@@ -1614,8 +1622,8 @@ const normalizePrd = (value: unknown): ProductPRD | null => {
             content: typeof section.content === 'string' ? section.content : '',
           }))
       : [],
-    updatedAt: typeof prd.updatedAt === 'string' ? prd.updatedAt : new Date().toISOString(),
-    status: prd.status === 'ready' ? 'ready' : 'draft',
+    updatedAt: typeof brief.updatedAt === 'string' ? brief.updatedAt : new Date().toISOString(),
+    status: brief.status === 'ready' ? 'ready' : 'draft',
   };
 };
 
@@ -2041,7 +2049,7 @@ export const useProjectStore = create<ProjectState>()(
       requirementDocs: [],
       documentEvents: [],
       activeKnowledgeFileId: null,
-      prd: null,
+      brief: null,
       pageStructure: [],
       wireframes: {},
       designSystem: null,
@@ -2071,7 +2079,7 @@ export const useProjectStore = create<ProjectState>()(
           children: [],
         };
         const rawRequirementInput = '';
-        const prd = null;
+        const brief = null;
         const pageStructure: PageStructureNode[] = [];
         const wireframes: Record<string, WireframeDocument> = {};
         const memory = buildProjectMemory(project);
@@ -2079,7 +2087,7 @@ export const useProjectStore = create<ProjectState>()(
           project,
           requirementDocs,
           featureTree,
-          prd,
+          brief,
           pageStructure,
           wireframes,
           null,
@@ -2101,7 +2109,7 @@ export const useProjectStore = create<ProjectState>()(
           wireframesMarkdown: '',
           requirementDocs,
           activeKnowledgeFileId,
-          prd,
+          brief,
           pageStructure,
           wireframes,
           designSystem: null,
@@ -2119,7 +2127,9 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       loadProjectWorkspace: (snapshot) =>
-        set(() => ({
+        set(() => {
+          const legacySnapshot = snapshot as ProjectWorkspaceSnapshot & { prd?: ProjectBrief | null };
+          return {
           currentProjectId: snapshot.currentProject?.id || null,
           currentProject: snapshot.currentProject,
           graph: snapshot.graph,
@@ -2130,7 +2140,7 @@ export const useProjectStore = create<ProjectState>()(
           requirementDocs: snapshot.requirementDocs,
           documentEvents: snapshot.documentEvents,
           activeKnowledgeFileId: snapshot.activeKnowledgeFileId,
-          prd: snapshot.prd,
+          brief: snapshot.brief ?? legacySnapshot.prd ?? null,
           pageStructure: snapshot.pageStructure,
           wireframes: snapshot.wireframes,
           designSystem: snapshot.designSystem,
@@ -2139,7 +2149,8 @@ export const useProjectStore = create<ProjectState>()(
           generatedFiles: snapshot.generatedFiles,
           testPlan: snapshot.testPlan,
           deployPlan: snapshot.deployPlan,
-        })),
+        };
+        }),
 
       switchProject: (project) =>
         set((state) => ({
@@ -2174,7 +2185,7 @@ export const useProjectStore = create<ProjectState>()(
               nextProject,
               state.requirementDocs,
               null,
-              state.prd,
+              state.brief,
               state.pageStructure,
               state.wireframes,
               state.designSystem,
@@ -2199,7 +2210,7 @@ export const useProjectStore = create<ProjectState>()(
             state.requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             state.pageStructure,
             state.wireframes
           );
@@ -2262,7 +2273,7 @@ export const useProjectStore = create<ProjectState>()(
             requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             state.pageStructure,
             state.wireframes
           );
@@ -2279,7 +2290,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               requirementDocs,
               null,
-              state.prd,
+              state.brief,
               state.pageStructure,
               state.wireframes,
               state.designSystem,
@@ -2327,7 +2338,7 @@ export const useProjectStore = create<ProjectState>()(
             requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             state.pageStructure,
             state.wireframes
           );
@@ -2345,7 +2356,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               requirementDocs,
               null,
-              state.prd,
+              state.brief,
               state.pageStructure,
               state.wireframes,
               state.designSystem,
@@ -2382,7 +2393,7 @@ export const useProjectStore = create<ProjectState>()(
             requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             state.pageStructure,
             state.wireframes
           );
@@ -2401,7 +2412,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               requirementDocs,
               null,
-              state.prd,
+              state.brief,
               state.pageStructure,
               state.wireframes,
               state.designSystem,
@@ -2446,7 +2457,7 @@ export const useProjectStore = create<ProjectState>()(
             requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             state.pageStructure,
             state.wireframes
           );
@@ -2463,7 +2474,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               requirementDocs,
               null,
-              state.prd,
+              state.brief,
               state.pageStructure,
               state.wireframes,
               state.designSystem,
@@ -2505,7 +2516,7 @@ export const useProjectStore = create<ProjectState>()(
             requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             state.pageStructure,
             state.wireframes
           );
@@ -2526,7 +2537,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               requirementDocs,
               null,
-              state.prd,
+              state.brief,
               state.pageStructure,
               state.wireframes,
               state.designSystem,
@@ -2559,7 +2570,7 @@ export const useProjectStore = create<ProjectState>()(
           return {
             pageStructure,
             wireframes,
-            prd: next.prd,
+            brief: next.brief,
             featuresMarkdown: next.planningArtifacts.featuresMarkdown,
             wireframesMarkdown: next.planningArtifacts.wireframesMarkdown,
             designSystem: next.deliveryArtifacts.designSystem,
@@ -2591,7 +2602,7 @@ export const useProjectStore = create<ProjectState>()(
 
           return {
             wireframes: nextWireframes,
-            prd: next.prd,
+            brief: next.brief,
             featuresMarkdown: next.planningArtifacts.featuresMarkdown,
             wireframesMarkdown: next.planningArtifacts.wireframesMarkdown,
             designSystem: next.deliveryArtifacts.designSystem,
@@ -2648,7 +2659,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               state.requirementDocs,
               null,
-              state.prd,
+              state.brief,
               state.pageStructure,
               state.wireframes,
               state.designSystem,
@@ -2668,7 +2679,7 @@ export const useProjectStore = create<ProjectState>()(
           }
 
           const syncedFeatureTree = syncFeatureTreeWithPageStructure(featureTree, state.pageStructure) || featureTree;
-          const prd = buildPRDFromProject(
+          const brief = buildProjectBriefFromProject(
             state.currentProject,
             state.requirementDocs,
             state.rawRequirementInput,
@@ -2680,7 +2691,7 @@ export const useProjectStore = create<ProjectState>()(
             state.requirementDocs,
             syncedFeatureTree,
             state.featuresMarkdown,
-            prd,
+            brief,
             state.pageStructure,
             state.wireframes
           );
@@ -2695,7 +2706,7 @@ export const useProjectStore = create<ProjectState>()(
             state.currentProject,
             state.requirementDocs,
             syncedFeatureTree,
-            prd,
+            brief,
             state.pageStructure,
             state.wireframes,
             deliveryArtifacts.designSystem,
@@ -2707,7 +2718,7 @@ export const useProjectStore = create<ProjectState>()(
           );
 
           set({
-            prd,
+            brief,
             featuresMarkdown: planningArtifacts.featuresMarkdown,
             wireframesMarkdown: planningArtifacts.wireframesMarkdown,
             designSystem: deliveryArtifacts.designSystem,
@@ -2788,7 +2799,7 @@ export const useProjectStore = create<ProjectState>()(
             state.requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             state.pageStructure,
             wireframes
           );
@@ -2813,7 +2824,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               state.requirementDocs,
               null,
-              state.prd,
+              state.brief,
               state.pageStructure,
               wireframes,
               deliveryArtifacts.designSystem,
@@ -2857,7 +2868,7 @@ export const useProjectStore = create<ProjectState>()(
             current.requirementDocs,
             null,
             current.featuresMarkdown,
-            current.prd,
+            current.brief,
             pageStructure,
             wireframes
           );
@@ -2883,7 +2894,7 @@ export const useProjectStore = create<ProjectState>()(
               current.currentProject,
               current.requirementDocs,
               null,
-              current.prd,
+              current.brief,
               pageStructure,
               wireframes,
               deliveryArtifacts.designSystem,
@@ -2942,7 +2953,7 @@ export const useProjectStore = create<ProjectState>()(
             current.requirementDocs,
             null,
             current.featuresMarkdown,
-            current.prd,
+            current.brief,
             pageStructure,
             wireframes
           );
@@ -2968,7 +2979,7 @@ export const useProjectStore = create<ProjectState>()(
               current.currentProject,
               current.requirementDocs,
               null,
-              current.prd,
+              current.brief,
               pageStructure,
               wireframes,
               deliveryArtifacts.designSystem,
@@ -3031,7 +3042,7 @@ export const useProjectStore = create<ProjectState>()(
             current.requirementDocs,
             null,
             current.featuresMarkdown,
-            current.prd,
+            current.brief,
             pageStructure,
             wireframes
           );
@@ -3057,7 +3068,7 @@ export const useProjectStore = create<ProjectState>()(
               current.currentProject,
               current.requirementDocs,
               null,
-              current.prd,
+              current.brief,
               pageStructure,
               wireframes,
               deliveryArtifacts.designSystem,
@@ -3092,7 +3103,7 @@ export const useProjectStore = create<ProjectState>()(
             state.requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             pageStructure,
             wireframes
           );
@@ -3118,7 +3129,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               state.requirementDocs,
               null,
-              state.prd,
+              state.brief,
               pageStructure,
               wireframes,
               deliveryArtifacts.designSystem,
@@ -3156,7 +3167,7 @@ export const useProjectStore = create<ProjectState>()(
             state.requirementDocs,
             null,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             pageStructure,
             wireframes
           );
@@ -3182,7 +3193,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               state.requirementDocs,
               null,
-              state.prd,
+              state.brief,
               pageStructure,
               wireframes,
               deliveryArtifacts.designSystem,
@@ -3213,7 +3224,7 @@ export const useProjectStore = create<ProjectState>()(
             state.requirementDocs,
             featureTree,
             state.featuresMarkdown,
-            state.prd,
+            state.brief,
             state.pageStructure,
             state.wireframes
           );
@@ -3232,7 +3243,7 @@ export const useProjectStore = create<ProjectState>()(
               state.currentProject,
               state.requirementDocs,
               featureTree,
-              state.prd,
+              state.brief,
               state.pageStructure,
               state.wireframes,
               deliveryArtifacts.designSystem,
@@ -3257,7 +3268,7 @@ export const useProjectStore = create<ProjectState>()(
           requirementDocs: [],
           documentEvents: [],
           activeKnowledgeFileId: null,
-          prd: null,
+          brief: null,
           pageStructure: [],
           wireframes: {},
           designSystem: null,
@@ -3288,7 +3299,9 @@ export const useProjectStore = create<ProjectState>()(
           projects.find((project) => project.id === currentProjectId) ||
           normalizeProjectConfig(persisted.currentProject);
         const requirementDocs = normalizeRequirementDocs(persisted.requirementDocs);
-        const prd = normalizePrd(persisted.prd);
+        const brief = normalizeBrief(
+          (persisted as Record<string, unknown>).brief ?? (persisted as Record<string, unknown>).prd
+        );
         const pageStructure = normalizePageStructure(persisted.pageStructure);
         const wireframes = normalizeWireframes(persisted.wireframes);
         const designSystem = normalizeDesignSystem(persisted.designSystem);
@@ -3308,7 +3321,7 @@ export const useProjectStore = create<ProjectState>()(
                 currentProject,
                 requirementDocs,
                 null,
-                prd,
+                brief,
                 pageStructure,
                 wireframes,
                 designSystem,
@@ -3326,7 +3339,7 @@ export const useProjectStore = create<ProjectState>()(
           requirementDocs,
           documentEvents: normalizeDocumentChangeEvents(persisted.documentEvents),
           activeKnowledgeFileId: typeof persisted.activeKnowledgeFileId === 'string' ? persisted.activeKnowledgeFileId : null,
-          prd,
+          brief,
           pageStructure,
           wireframes,
           designSystem,

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { confirm, open } from '@tauri-apps/plugin-dialog';
@@ -6,6 +6,7 @@ import { AIWorkspace } from './components/ai/AIWorkspace';
 import { Workspace } from './components/workspace';
 import { ProjectSetup } from './components/project/ProjectSetup';
 import { ProductWorkbench } from './components/product/ProductWorkbench';
+import { AgentShellPage } from './features/agent-shell/pages/AgentShellPage';
 import { WorkbenchIcon } from './components/ui/WorkbenchIcon';
 import { MacButton, MacIconButton, MacInput, MacPanel, MacSelectField } from './components/ui';
 import { UiFeedbackMode } from './components/ui/UiFeedbackMode';
@@ -19,26 +20,21 @@ import {
   toStylePackPath,
 } from './modules/design/stylePack';
 import { buildDesignStyleReferencePath, buildSketchReferencePath } from './modules/knowledge/referenceFiles';
-import { useAIWorkflowStore } from './modules/ai/store/workflowStore';
-import { createDefaultStyleProfiles, runAIWorkflowPackage } from './modules/ai/workflow/AIWorkflowService';
 import { useProjectStore } from './store/projectStore';
 import { APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appTheme';
 import {
   DESKTOP_PRIMARY_ROLES,
   DESKTOP_WORKBENCH_ROLES,
   ROLE_TAB_ICONS,
-  roleShowsLegacyAiWorkspace,
   type RoleView,
 } from './appNavigation';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type {
-  AIWorkflowPackage,
   AppType,
   FeatureNode,
   GeneratedFile,
   PageStructureNode,
   ProjectConfig,
-  StyleProfile,
   WireframeDocument,
 } from './types';
 import { clampLayoutSize, LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
@@ -54,7 +50,6 @@ import {
   loadSketchPageArtifactsFromProjectDir,
   loadProjectSnapshotFromDisk,
   loadProjectStylePackPresets,
-  loadWorkflowStateFromDisk,
   removeProjectDirectoryFromDisk,
   resetProjectStorageRoot,
   resolveProjectRuntimeRootPath,
@@ -62,7 +57,6 @@ import {
   saveProjectIndexToDisk,
   saveProjectSnapshotToDisk,
   saveProjectStylePackFile,
-  saveWorkflowStateToDisk,
   setProjectStorageRoot,
   syncGeneratedFilesToProjectDir,
   syncSketchFilesToProjectDir,
@@ -723,25 +717,6 @@ const buildDesignDraftElements = (
   ];
 };
 
-const buildWorkflowStyleProfileFromDesignNode = (
-  node: DesignStyleNode,
-  appType?: AppType | null
-): StyleProfile => ({
-  id: `design-style-${node.id}`,
-  name: node.title || 'Design Style',
-  summary: node.summary || node.prompt || '当前设计画布中选择的样式节点。',
-  industry: 'Custom',
-  direction: node.prompt || node.summary || 'Canvas-selected style direction',
-  colorMood: node.keywords.slice(0, 2).join(' / ') || 'Custom',
-  appType: appType || 'web',
-  palette: node.palette,
-  typography: { heading: 'Manrope', body: 'Inter' },
-  radius: '18px',
-  notes: [node.prompt, ...node.keywords].filter(Boolean),
-  status: 'ready',
-  updatedAt: new Date().toISOString(),
-});
-
 const renderGeneratedFileLabel = (file: GeneratedFile) => file.path.split('/').pop() || file.path;
 
 const PointerToolGlyph = () => (
@@ -922,7 +897,6 @@ const App: React.FC = () => {
   const [designCanvasContextMenu, setDesignCanvasContextMenu] = useState<DesignCanvasContextMenuState>(null);
   const [isSketchLibraryOpen, setIsSketchLibraryOpen] = useState(true);
   const [sketchLibrarySearch, setSketchLibrarySearch] = useState('');
-  const [activeWorkflowAction, setActiveWorkflowAction] = useState<AIWorkflowPackage | null>(null);
   const [styleInspectorMode, setStyleInspectorMode] = useState<'fields' | 'markdown'>('fields');
   const [styleMarkdownDraft, setStyleMarkdownDraft] = useState('');
   const [expandedSketchLibraryNodeIds, setExpandedSketchLibraryNodeIds] = useState<Set<string>>(() => new Set());
@@ -967,11 +941,6 @@ const App: React.FC = () => {
 
   const { clearCanvas } = usePreviewStore();
   const { setTree, tree: featureTree, clearTree } = useFeatureTreeStore();
-  const workflowProjects = useAIWorkflowStore((state) => state.projects);
-  const replaceWorkflowProjectState = useAIWorkflowStore((state) => state.replaceProjectState);
-  const clearWorkflowProjectState = useAIWorkflowStore((state) => state.clearProjectState);
-  const setWorkflowStyleProfiles = useAIWorkflowStore((state) => state.setStyleProfiles);
-  const selectWorkflowStyleProfile = useAIWorkflowStore((state) => state.selectStyleProfile);
   const {
     currentProjectId,
     currentProject,
@@ -983,7 +952,7 @@ const App: React.FC = () => {
     requirementDocs,
     documentEvents,
     activeKnowledgeFileId,
-    prd,
+    brief,
     pageStructure,
     wireframes,
     designSystem,
@@ -1183,7 +1152,7 @@ const App: React.FC = () => {
     [currentRole]
   );
   const isDesktopWorkbenchMode = Boolean(currentProject);
-  const canShowLegacyAiWorkspace = roleShowsLegacyAiWorkspace(currentRole);
+  const showWorkspaceSidebar = currentRole !== 'agent';
 
   useEffect(() => {
     document.body.classList.toggle('desktop-workbench-mode', isDesktopWorkbenchMode);
@@ -1209,7 +1178,7 @@ const App: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!canShowLegacyAiWorkspace) {
+    if (!showWorkspaceSidebar) {
       if (desktopAiTransitionTimerRef.current !== null) {
         window.clearTimeout(desktopAiTransitionTimerRef.current);
         desktopAiTransitionTimerRef.current = null;
@@ -1279,7 +1248,7 @@ const App: React.FC = () => {
       setIsDesktopAiPaneMounted(false);
       desktopAiTransitionTimerRef.current = null;
     }, DESKTOP_AI_PANE_TRANSITION_MS);
-  }, [canShowLegacyAiWorkspace, isDesktopAiCollapsed]);
+  }, [showWorkspaceSidebar, isDesktopAiCollapsed]);
 
   useEffect(() => {
     writeLayoutSize(
@@ -1290,7 +1259,7 @@ const App: React.FC = () => {
   }, [desktopAiPaneWidth]);
 
   const handleDesktopAiResizePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!canShowLegacyAiWorkspace || !isDesktopAiPaneVisible) {
+    if (!showWorkspaceSidebar || !isDesktopAiPaneVisible) {
       return;
     }
 
@@ -1314,7 +1283,7 @@ const App: React.FC = () => {
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
-  }, [canShowLegacyAiWorkspace, desktopAiPaneWidth, isDesktopAiPaneVisible]);
+  }, [showWorkspaceSidebar, desktopAiPaneWidth, isDesktopAiPaneVisible]);
 
   const handleDesktopAiResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
@@ -1651,7 +1620,7 @@ const App: React.FC = () => {
         requirementDocs,
         documentEvents,
         activeKnowledgeFileId,
-        prd,
+        brief,
         pageStructure,
         wireframes,
         designSystem,
@@ -1667,8 +1636,6 @@ const App: React.FC = () => {
         featureTree: featureTreeOverride,
       });
 
-      const workflowProjectState = workflowProjects[activeProject.id];
-
       void saveProjectSnapshotToDisk(activeProject, {
         workspace,
         featureTree: featureTreeOverride,
@@ -1680,10 +1647,6 @@ const App: React.FC = () => {
           ])
         )
         .catch(() => undefined);
-
-      if (workflowProjectState) {
-        void saveWorkflowStateToDisk(activeProject.id, workflowProjectState).catch(() => undefined);
-      }
 
       setProjects((current) => {
         const nextProjects = [...current.filter((item) => item.id !== activeProject.id), activeProject].sort(
@@ -1706,7 +1669,7 @@ const App: React.FC = () => {
       graph,
       memory,
       pageStructure,
-      prd,
+      brief,
       rawRequirementInput,
       requirementDocs,
       documentEvents,
@@ -1715,7 +1678,6 @@ const App: React.FC = () => {
       uiSpecs,
       wireframes,
       wireframesMarkdown,
-      workflowProjects,
     ]
   );
 
@@ -1944,39 +1906,6 @@ const App: React.FC = () => {
       isMounted = false;
     };
   }, [canUseProjectFilesystem, currentProject, refreshSketchArtifactsFromDisk]);
-
-  useEffect(() => {
-    if (!currentProject) {
-      return;
-    }
-
-    let isMounted = true;
-
-    void loadWorkflowStateFromDisk(currentProject.id)
-      .then((workflowState) => {
-        if (isMounted && workflowState) {
-          replaceWorkflowProjectState(currentProject.id, workflowState);
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      isMounted = false;
-    };
-  }, [currentProject, replaceWorkflowProjectState]);
-
-  useEffect(() => {
-    if (!currentProject) {
-      return;
-    }
-
-    const workflowProjectState = workflowProjects[currentProject.id];
-    if (!workflowProjectState) {
-      return;
-    }
-
-    void saveWorkflowStateToDisk(currentProject.id, workflowProjectState).catch(() => undefined);
-  }, [currentProject, workflowProjects]);
 
   useEffect(() => {
     if (!canUseProjectFilesystem || !currentProject || !selectedDesignPage) {
@@ -2346,11 +2275,6 @@ const App: React.FC = () => {
       setSelectedFeature(null);
     }
 
-    const workflowState = await loadWorkflowStateFromDisk(projectId);
-    if (workflowState) {
-      replaceWorkflowProjectState(projectId, workflowState);
-    }
-
     clearCanvas();
     setCurrentRole('knowledge');
     setIsProjectManagerOpen(false);
@@ -2358,7 +2282,7 @@ const App: React.FC = () => {
     if (targetProject.vaultPath) {
       void ensureProjectVaultDirectory(targetProject).catch(() => undefined);
     }
-  }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, replaceWorkflowProjectState, setTree, switchProject]);
+  }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, setTree, switchProject]);
 
   useEffect(() => {
     if (hasRestoredPersistedProjectRef.current || !currentProjectId) {
@@ -2397,7 +2321,6 @@ const App: React.FC = () => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(getDesignBoardStorageKey(projectId));
     }
-    clearWorkflowProjectState(projectId);
 
     await removeProjectDirectoryFromDisk(projectId).catch(() => undefined);
 
@@ -2420,7 +2343,7 @@ const App: React.FC = () => {
         setIsProjectManagerOpen(true);
       }
     }
-  }, [clearCanvas, clearProject, clearTree, clearWorkflowProjectState, currentProject?.id, deleteProject, handleOpenProject, projects]);
+  }, [clearCanvas, clearProject, clearTree, currentProject?.id, deleteProject, handleOpenProject, projects]);
 
   const handleResetProject = useCallback(() => {
     if (currentProject && typeof window !== 'undefined') {
@@ -2471,7 +2394,7 @@ const App: React.FC = () => {
         window.alert('当前界面参考桌面应用菜单栏布局：左侧切换工作区，顶部菜单负责项目级操作，内容区按默认窗口尺寸排布。');
         break;
       case 'help.knowledge_overview':
-        window.alert('知识库用于承载用户内容；系统索引用于帮助 AI 快速检索和回答问题。');
+        window.alert('知识库用于承载用户内容；AI 会直接结合当前项目内容和技能上下文来回答问题。');
         break;
       case 'help.page_overview':
         window.alert('页面用于维护页面结构、页面草图和画布模块。');
@@ -2513,55 +2436,6 @@ const App: React.FC = () => {
   const handleGenerateDelivery = () => {
     generateDeliveryArtifacts(featureTree);
   };
-
-  const syncSelectedStyleToWorkflow = useCallback(() => {
-    if (!currentProject || !selectedStyleNode) {
-      return;
-    }
-
-    const workflowProfiles =
-      workflowProjects[currentProject.id]?.styleProfiles.length
-        ? workflowProjects[currentProject.id]?.styleProfiles || []
-        : createDefaultStyleProfiles(currentProject.appType);
-    const nextProfile = buildWorkflowStyleProfileFromDesignNode(selectedStyleNode, currentProject.appType);
-    const nextProfiles = [nextProfile, ...workflowProfiles.filter((profile) => profile.id !== nextProfile.id)];
-
-    setWorkflowStyleProfiles(currentProject.id, nextProfiles);
-    selectWorkflowStyleProfile(currentProject.id, nextProfile.id);
-  }, [
-    currentProject,
-    selectedStyleNode,
-    selectWorkflowStyleProfile,
-    setWorkflowStyleProfiles,
-    workflowProjects,
-  ]);
-
-  const handleRunWorkflowAction = useCallback(
-    async (targetPackage: AIWorkflowPackage) => {
-      if (!currentProject) {
-        return;
-      }
-
-      if (!rawRequirementInput.trim()) {
-        window.alert('请先输入需求，再触发 AI 生成。');
-        return;
-      }
-
-      if (targetPackage === 'page') {
-        syncSelectedStyleToWorkflow();
-      }
-
-      setActiveWorkflowAction(targetPackage);
-      try {
-        await runAIWorkflowPackage(targetPackage);
-      } catch (error) {
-        window.alert(error instanceof Error ? error.message : String(error));
-      } finally {
-        setActiveWorkflowAction(null);
-      }
-    },
-    [currentProject, rawRequirementInput, syncSelectedStyleToWorkflow]
-  );
 
   const handleGenerateDesignDraft = useCallback(() => {
     if (!selectedDesignPage || designCanvasSelection?.type !== 'page') {
@@ -3891,32 +3765,6 @@ ${selectedContextPrompt}` : '',
                   {isConnectorMode ? '退出连线' : '开始连线'}
                 </button>
               </div>
-              <div className="design-workbench-action-group">
-                <button
-                  className="doc-action-btn secondary"
-                  onClick={() => void handleRunWorkflowAction('requirements')}
-                  type="button"
-                  disabled={activeWorkflowAction !== null}
-                >
-                  {activeWorkflowAction === 'requirements' ? '整理需求中...' : 'AI 整理需求'}
-                </button>
-                <button
-                  className="doc-action-btn secondary"
-                  onClick={() => void handleRunWorkflowAction('prototype')}
-                  type="button"
-                  disabled={activeWorkflowAction !== null}
-                >
-                  {activeWorkflowAction === 'prototype' ? '生成草图中...' : 'AI 生成页面草图'}
-                </button>
-                <button
-                  className="doc-action-btn secondary"
-                  onClick={() => void handleRunWorkflowAction('page')}
-                  type="button"
-                  disabled={activeWorkflowAction !== null}
-                >
-                  {activeWorkflowAction === 'page' ? '生成原型中...' : 'AI 生成 HTML 原型'}
-                </button>
-              </div>
               <div className="design-workbench-action-group design-workbench-action-group-primary">
                 <button className="doc-action-btn secondary" onClick={handleGenerateDelivery} type="button">
                   更新交付物
@@ -4812,6 +4660,8 @@ ${selectedContextPrompt}` : '',
     </div>
   );
 
+  const renderAgentView = () => <AgentShellPage />;
+
   const renderDevelopView = () => (
     <div className="develop-view">
       <div className="workspace-shell">
@@ -4880,7 +4730,7 @@ ${selectedContextPrompt}` : '',
             </div>
             <div className="stat-card success">
               <span className="stat-num">{requirementDocs.length}</span>
-              <span className="stat-label">需求文档</span>
+              <span className="stat-label">知识笔记</span>
             </div>
             <div className="stat-card warning">
               <span className="stat-num">{featureTree?.children.length || 0}</span>
@@ -4983,7 +4833,7 @@ ${selectedContextPrompt}` : '',
             <div className="history-item">
               <span className="history-status success">完成</span>
               <span className="history-version">Phase 2-6</span>
-              <span className="history-time">需求 / 设计 / 开发 / 测试 / 部署</span>
+              <span className="history-time">Wiki / Sketch / UI / Dev / Test / Deploy</span>
               <span className="history-target">{deployPlan?.target || 'Workspace'}</span>
             </div>
           </div>
@@ -5051,10 +4901,10 @@ ${selectedContextPrompt}` : '',
   const roleContent =
     currentRole === 'product' || currentRole === 'knowledge'
       ? renderProductView('knowledge')
-      : currentRole === 'wiki'
-        ? renderProductView('knowledge')
       : currentRole === 'page'
         ? renderProductView('page')
+      : currentRole === 'agent'
+        ? renderAgentView()
       : currentRole === 'design'
         ? renderDesignView()
         : currentRole === 'develop'
@@ -5099,7 +4949,7 @@ ${selectedContextPrompt}` : '',
               <img src="/branding/goodnight-icon.svg" alt="GoodNight" />
             </MacButton>
 
-            <nav className="desktop-primary-nav" aria-label="工作流切换">
+            <nav className="desktop-primary-nav" aria-label="工作区切换">
               {DESKTOP_PRIMARY_ROLES.flatMap((roleId) => {
                 const role = DESKTOP_WORKBENCH_ROLES.find((item) => item.id === roleId);
                 return role ? [
@@ -5162,7 +5012,7 @@ ${selectedContextPrompt}` : '',
                 <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
                   项目
                 </MacButton>
-                {canShowLegacyAiWorkspace ? (
+                {showWorkspaceSidebar ? (
                   <MacIconButton
                     className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
                     onClick={() => setIsDesktopAiCollapsed((current) => !current)}
@@ -5179,7 +5029,7 @@ ${selectedContextPrompt}` : '',
               <div className="app-workbench-pane app-workbench-main-shell">
                 <main className="app-main app-main-desktop">{appDesktopContent}</main>
               </div>
-              {canShowLegacyAiWorkspace && isDesktopAiPaneMounted ? (
+              {showWorkspaceSidebar && isDesktopAiPaneMounted ? (
                 <>
                   {isDesktopAiPaneVisible ? (
                     <div
@@ -5281,7 +5131,7 @@ ${selectedContextPrompt}` : '',
             <div className="app-workbench-pane app-workbench-main-shell">
               <main className="app-main app-main-desktop">{appDesktopContent}</main>
             </div>
-            {canShowLegacyAiWorkspace ? (
+            {showWorkspaceSidebar ? (
               <>
                 <div
                   className="desktop-ai-resize-handle"
@@ -5314,7 +5164,7 @@ ${selectedContextPrompt}` : '',
         ) : (
           <>
             <main className="app-main app-main-desktop">{appMainContent}</main>
-            {canShowLegacyAiWorkspace ? <AIWorkspace /> : null}
+            {showWorkspaceSidebar ? <AIWorkspace /> : null}
           </>
         )}
       </div>

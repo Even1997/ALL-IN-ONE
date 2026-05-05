@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { ActivityEntry } from '../skills/activityLog';
 import type { ChatStructuredCard } from '../chat/chatCards';
-import type { KnowledgeProposal } from '../../../features/knowledge/model/knowledgeProposal';
 import type { ProjectFileProposal } from '../chat/projectFileOperations';
 import type { AgentProviderId } from '../runtime/agentRuntimeTypes';
 import type { AgentReplayRecoveryState } from '../runtime/replay/runtimeReplayRecovery.ts';
@@ -57,7 +56,6 @@ type StoredChatMessageBase = {
   runId?: string;
   teamRun?: AgentTeamRunRecord | null;
   structuredCards?: ChatStructuredCard[];
-  knowledgeProposal?: KnowledgeProposal;
   projectFileProposal?: ProjectFileProposal;
   createdAt: number;
 };

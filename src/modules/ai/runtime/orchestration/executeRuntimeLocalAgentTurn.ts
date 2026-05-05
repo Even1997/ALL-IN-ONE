@@ -87,9 +87,7 @@ export async function executeRuntimeLocalAgentTurn(
   });
 
   return {
-    finalContent: result.content,
-    changedPaths: Array.isArray(result.changedPaths)
-      ? result.changedPaths.filter((value) => value.trim().length > 0)
-      : [],
+    finalContent: typeof result === 'string' ? result : result.content,
+    changedPaths: typeof result === 'string' ? [] : result.changedPaths,
   };
 }

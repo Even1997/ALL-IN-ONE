@@ -19,7 +19,7 @@ export type PreparedRuntimeLocalAgentFlow = {
 };
 
 export const buildRuntimeLocalAgentSummary = (agentId: string) =>
-  `Allow ${agentId} local agent execution inside the current project`;
+  `允许 ${agentId} 本地 Agent 在当前项目内执行任务`;
 
 export const buildRuntimeLocalAgentDecisionFeedback = (input: {
   decision: Extract<RuntimeLocalAgentDecision, 'blocked' | 'approval-required'>;
@@ -240,7 +240,7 @@ export const prepareRuntimeLocalAgentFlow = (input: {
       summary,
       decision: 'approval-required',
       denialMessage: null,
-      pendingMessage: 'Approval is required before the local agent can run.',
+      pendingMessage: '需要审批后才能启动本地 Agent。',
     };
   }
 
@@ -261,6 +261,13 @@ export type RuntimeLocalAgentCommandResult = {
   changedPaths?: string[] | null;
 };
 
+export type RuntimeLocalAgentPromptResult =
+  | string
+  | {
+      content: string;
+      changedPaths: string[];
+    };
+
 export const executeRuntimeLocalAgentPrompt = async (input: {
   agentId: string;
   projectRoot: string;
@@ -270,7 +277,7 @@ export const executeRuntimeLocalAgentPrompt = async (input: {
     projectRoot: string;
     prompt: string;
   }) => Promise<RuntimeLocalAgentCommandResult>;
-}) => {
+}): Promise<RuntimeLocalAgentPromptResult> => {
   const result = await input.runPrompt({
     agent: input.agentId,
     projectRoot: input.projectRoot,
@@ -281,8 +288,17 @@ export const executeRuntimeLocalAgentPrompt = async (input: {
     throw new Error(result.error || 'Local agent execution failed.');
   }
 
+  const content = result.content.trim() || 'Local agent completed, but no content was returned.';
+  const changedPaths = Array.isArray(result.changedPaths)
+    ? result.changedPaths.filter((value) => value.trim().length > 0)
+    : [];
+
+  if (changedPaths.length === 0) {
+    return content;
+  }
+
   return {
-    content: result.content.trim() || 'Local agent completed, but no content was returned.',
-    changedPaths: Array.isArray(result.changedPaths) ? result.changedPaths : [],
+    content,
+    changedPaths,
   };
 };

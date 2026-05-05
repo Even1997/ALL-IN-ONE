@@ -40,8 +40,10 @@ test('gnAgent skills page exposes a global skill management surface', async () =
   assert.match(pageSource, /导入本地技能/);
   assert.match(pageSource, /GitHub 下载/);
   assert.match(pageSource, /移除/);
+  assert.match(pageSource, /\/skill/);
   assert.match(pageSource, /skill\.category === 'system'/);
   assert.match(pageSource, /skill\.source === 'GoodNight recommended'/);
+  assert.doesNotMatch(pageSource, /@skill/);
   assert.doesNotMatch(pageSource, /syncSkillToRuntime/);
   assert.doesNotMatch(pageSource, /Sync to Codex/);
   assert.doesNotMatch(pageSource, /Sync to Claude/);

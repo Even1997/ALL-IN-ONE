@@ -34,7 +34,8 @@ test('agent chat page wires the context panel into the runtime shell', async () 
   const source = await readFile(chatPagePath, 'utf8');
 
   assert.match(source, /GNAgentContextPanel/);
-  assert.match(source, /contextByThread\[activeSessionId\]/);
+  assert.match(source, /conversation\.contextSnapshot/);
+  assert.match(source, /context=\{contextSnapshot\}/);
 });
 
 test('agent tool call panel surfaces tool call status and result fields', async () => {
@@ -50,7 +51,9 @@ test('agent chat page wires tool calls by active session into the runtime shell'
   const source = await readFile(chatPagePath, 'utf8');
 
   assert.match(source, /GNAgentToolCallPanel/);
-  assert.match(source, /toolCallsByThread\[activeSessionId\]/);
+  assert.match(source, /conversation\.toolCalls/);
+  assert.match(source, /conversation\.mcpToolCalls/);
+  assert.match(source, /toolCalls=\{toolCalls\}/);
 });
 
 test('agent runtime store tracks tool calls by thread', async () => {

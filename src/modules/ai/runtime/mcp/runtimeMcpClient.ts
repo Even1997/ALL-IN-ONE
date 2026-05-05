@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { getDefaultRuntimeSkillDefinitions } from '../../skills/skillLibrary';
+import { getSystemRuntimeSkillDefinitions } from '../../skills/skillLibrary';
 import { isTauriRuntimeAvailable } from '../../../../utils/projectPersistence';
 import type { RuntimeMcpServer, RuntimeMcpToolCall } from './runtimeMcpTypes';
 
@@ -49,8 +49,8 @@ export const invokeRuntimeMcpTool = (input: {
         serverId: input.serverId,
         toolName: input.toolName,
         status: 'completed' as const,
-        summary: `Listed ${getDefaultRuntimeSkillDefinitions().length} runtime skills`,
-        resultPreview: getDefaultRuntimeSkillDefinitions()
+        summary: `Listed ${getSystemRuntimeSkillDefinitions().length} runtime skills`,
+        resultPreview: getSystemRuntimeSkillDefinitions()
           .map((skill) => `${skill.id} - ${skill.name}`)
           .join('\n'),
         argumentsText: input.argumentsText || '',

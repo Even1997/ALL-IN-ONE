@@ -40,10 +40,6 @@ export const parseRuntimeReplayTurnStartPayload = (
       normalizedPrompt: typeof parsed.normalizedPrompt === 'string' ? parsed.normalizedPrompt : '',
       skillIntent: isObject(parsed.skillIntent)
         ? {
-            package:
-              typeof parsed.skillIntent.package === 'string' || parsed.skillIntent.package === null
-                ? (parsed.skillIntent.package as SkillIntent['package'])
-                : null,
             skill: typeof parsed.skillIntent.skill === 'string' ? parsed.skillIntent.skill : '',
             cleanedInput:
               typeof parsed.skillIntent.cleanedInput === 'string' ? parsed.skillIntent.cleanedInput : '',

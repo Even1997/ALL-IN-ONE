@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const chatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 
-test('chat delegates runtime project-file execution to orchestration helper', async () => {
+test('chat delegates runtime project-file execution to orchestration helpers', async () => {
   const source = await readFile(chatPath, 'utf8');
 
   assert.match(source, /cancelRuntimeProjectFileProposal/);
@@ -21,7 +21,9 @@ test('chat delegates runtime project-file execution to orchestration helper', as
   assert.match(source, /const executeProjectFileOperations = useCallback\(/);
   assert.match(source, /executeRuntimeProjectFileOperations\(/);
   assert.match(source, /await cancelRuntimeProjectFileProposal\(/);
-  assert.match(source, /return executeRuntimeApprovedProjectFileProposal\(/);
+  assert.match(source, /executeRuntimeApprovedProjectFileProposal\(/);
+  assert.match(source, /completeTurnSession\(executionOutcome\.message\)/);
+  assert.match(source, /buildSessionPreview\(executionOutcome\.message\)/);
   assert.doesNotMatch(source, /const changedPaths: string\[\] = \[\];/);
   assert.doesNotMatch(source, /invoke<TauriToolResponse>\('tool_mkdir'/);
   assert.doesNotMatch(source, /invoke<TauriToolResponse>\('tool_edit'/);

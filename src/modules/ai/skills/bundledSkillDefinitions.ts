@@ -1,39 +1,24 @@
-import type { AIWorkflowPackage } from '../../../types';
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes.ts';
 import { parseSkillMarkdown } from './parseSkillMarkdown.ts';
-import changeSyncSkillMarkdown from './bundled/change-sync/SKILL.md?raw';
-import knowledgeOrganizeSkillMarkdown from './bundled/knowledge-organize/SKILL.md?raw';
-import requirementsSkillMarkdown from './bundled/requirements/SKILL.md?raw';
-import sketchSkillMarkdown from './bundled/sketch/SKILL.md?raw';
-import uiDesignSkillMarkdown from './bundled/ui-design/SKILL.md?raw';
+import {
+  sketchSkillMarkdown,
+  uiDesignSkillMarkdown,
+  wikiSkillMarkdown,
+} from './bundledSkillMarkdown.ts';
 
-export type RuntimeChatSkillId =
-  | 'knowledge-organize'
-  | 'requirements'
-  | 'sketch'
-  | 'ui-design'
-  | 'change-sync';
+export type RuntimeSystemSkillId = 'wiki' | 'sketch' | 'ui-design';
 
-export type RuntimeChatSkillDefinition = RuntimeSkillDefinition & {
-  packageId: AIWorkflowPackage | 'knowledge-organize' | 'change-sync';
+export type RuntimeSystemSkillDefinition = RuntimeSkillDefinition & {
   aliases: string[];
   token: string;
 };
 
-const DEFAULT_PACKAGE_BY_SKILL: Record<
-  RuntimeChatSkillId,
-  RuntimeChatSkillDefinition['packageId']
-> = {
-  'knowledge-organize': 'knowledge-organize',
-  requirements: 'requirements',
-  sketch: 'prototype',
-  'ui-design': 'page',
-  'change-sync': 'change-sync',
-};
-
-const buildBundledSkillDefinition = (markdown: string, fallbackId: RuntimeChatSkillId): RuntimeChatSkillDefinition => {
+const buildSystemSkillDefinition = (
+  markdown: string,
+  fallbackId: RuntimeSystemSkillId
+): RuntimeSystemSkillDefinition => {
   const { frontmatter, body } = parseSkillMarkdown(markdown);
-  const skillId = (frontmatter.skill as RuntimeChatSkillId | undefined) || fallbackId;
+  const skillId = (frontmatter.skill as RuntimeSystemSkillId | undefined) || fallbackId;
 
   return {
     id: skillId,
@@ -56,25 +41,21 @@ const buildBundledSkillDefinition = (markdown: string, fallbackId: RuntimeChatSk
     activationPaths: Array.isArray(frontmatter.paths) ? frontmatter.paths : undefined,
     allowedTools: Array.isArray(frontmatter['allowed-tools']) ? frontmatter['allowed-tools'] : [],
     userInvocable: frontmatter['user-invocable'] !== false,
+    userTagInvocable: frontmatter['user-tag-invocable'] !== false,
     modelInvocable: frontmatter['disable-model-invocation'] !== true,
-    source: 'bundled',
-    packageId:
-      (frontmatter.package as RuntimeChatSkillDefinition['packageId'] | undefined) ||
-      DEFAULT_PACKAGE_BY_SKILL[skillId],
+    source: 'system',
     aliases: Array.isArray(frontmatter.aliases) ? frontmatter.aliases : [],
     token: frontmatter.token || `@${skillId}`,
   };
 };
 
-const BUNDLED_CHAT_SKILLS: RuntimeChatSkillDefinition[] = [
-  buildBundledSkillDefinition(knowledgeOrganizeSkillMarkdown, 'knowledge-organize'),
-  buildBundledSkillDefinition(requirementsSkillMarkdown, 'requirements'),
-  buildBundledSkillDefinition(sketchSkillMarkdown, 'sketch'),
-  buildBundledSkillDefinition(uiDesignSkillMarkdown, 'ui-design'),
-  buildBundledSkillDefinition(changeSyncSkillMarkdown, 'change-sync'),
+const SYSTEM_SKILLS: RuntimeSystemSkillDefinition[] = [
+  buildSystemSkillDefinition(wikiSkillMarkdown, 'wiki'),
+  buildSystemSkillDefinition(sketchSkillMarkdown, 'sketch'),
+  buildSystemSkillDefinition(uiDesignSkillMarkdown, 'ui-design'),
 ];
 
-export const getBundledChatSkills = () => BUNDLED_CHAT_SKILLS;
+export const getSystemSkillDefinitions = () => SYSTEM_SKILLS;
 
-export const getBundledChatSkillById = (skillId: string) =>
-  BUNDLED_CHAT_SKILLS.find((skill) => skill.id === skillId) || null;
+export const getSystemSkillDefinitionById = (skillId: string) =>
+  SYSTEM_SKILLS.find((skill) => skill.id === skillId) || null;

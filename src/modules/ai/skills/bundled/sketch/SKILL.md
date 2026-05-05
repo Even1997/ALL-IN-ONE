@@ -2,13 +2,11 @@
 name: Sketch
 description: Turn confirmed requirements into low-fidelity page structure and module-level wireframe guidance.
 when_to_use: Use when the user wants information architecture or low-fidelity structure before visual polish.
-package: prototype
 skill: sketch
-token: @sketch
-aliases: @sketch, @草图
 context: inline
 allowed-tools: read, grep, glob, ls, view
 user-invocable: true
+user-tag-invocable: false
 disable-model-invocation: false
 ---
 

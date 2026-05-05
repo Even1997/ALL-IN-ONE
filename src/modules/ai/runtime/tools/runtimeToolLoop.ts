@@ -38,6 +38,11 @@ const extractResultFileChanges = (result: ToolResult): ToolResultFileChange[] =>
     return [
       {
         path,
+        operation:
+          'operation' in candidate &&
+          (candidate.operation === 'write' || candidate.operation === 'edit' || candidate.operation === 'delete')
+            ? candidate.operation
+            : undefined,
         beforeContent:
           'beforeContent' in candidate && typeof candidate.beforeContent === 'string'
             ? candidate.beforeContent
@@ -50,6 +55,7 @@ const extractResultFileChanges = (result: ToolResult): ToolResultFileChange[] =>
             : candidate.afterContent === null
               ? null
               : null,
+        verified: 'verified' in candidate && candidate.verified === true ? true : undefined,
       } satisfies ToolResultFileChange,
     ];
   });

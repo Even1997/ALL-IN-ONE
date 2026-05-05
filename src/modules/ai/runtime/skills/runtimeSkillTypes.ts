@@ -35,6 +35,7 @@ export type RuntimeSkillDefinition = {
   skillRoot?: string;
   allowedTools: string[];
   userInvocable: boolean;
+  userTagInvocable?: boolean;
   modelInvocable: boolean;
-  source: 'bundled' | 'local' | 'project' | 'plugin' | 'mcp';
+  source: 'system' | 'local' | 'project' | 'plugin' | 'mcp';
 };

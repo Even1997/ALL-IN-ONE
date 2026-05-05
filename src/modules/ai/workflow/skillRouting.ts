@@ -1,9 +1,7 @@
-import type { AIWorkflowPackage } from '../../../types';
-import { getDefaultChatSkillDefinitions } from '../skills/skillLibrary.ts';
+import { getRouteableSystemSkillDefinitions } from '../skills/skillLibrary.ts';
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes.ts';
 
 export type SkillIntent = {
-  package: AIWorkflowPackage | 'knowledge-organize' | 'change-sync' | null;
   skill: string;
   cleanedInput: string;
   token: string;
@@ -12,20 +10,20 @@ export type SkillIntent = {
 
 type RouteableSkillDefinition = Pick<
   RuntimeSkillDefinition,
-  'id' | 'userInvocable' | 'token' | 'aliases'
-> & {
-  packageId?: AIWorkflowPackage | 'knowledge-organize' | 'change-sync';
-};
+  'id' | 'userInvocable' | 'userTagInvocable' | 'token' | 'aliases'
+>;
 
-const getDefaultRouteableSkills = (): RouteableSkillDefinition[] => getDefaultChatSkillDefinitions();
+const getDefaultRouteableSkills = (): RouteableSkillDefinition[] => getRouteableSystemSkillDefinitions();
 
 const buildSkillPatterns = (skills: RouteableSkillDefinition[]) =>
   skills
     .filter((skill) => skill.userInvocable)
     .map((skill) => ({
-      patterns: [skill.token || `@${skill.id}`, ...(skill.aliases || [])],
+      patterns:
+        skill.userTagInvocable === false
+          ? []
+          : [skill.token || `@${skill.id}`, ...(skill.aliases || [])],
       slashCommand: `/${skill.id}`,
-      package: skill.packageId || null,
       skill: skill.id,
       token: skill.token || `@${skill.id}`,
     }));
@@ -34,7 +32,13 @@ const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\
 
 const buildSkillPattern = (patterns: string[]) => new RegExp(patterns.map(escapePattern).join('|'), 'i');
 
-const stripSkillToken = (input: string, patterns: string[]) => input.replace(buildSkillPattern(patterns), '').trim();
+const findMatchedTagPattern = (input: string, patterns: string[]) =>
+  [...patterns]
+    .sort((left, right) => right.length - left.length)
+    .find((pattern) => new RegExp(`^${escapePattern(pattern)}(?:\\s|$)`, 'i').test(input)) || null;
+
+const stripSkillToken = (input: string, pattern: string) =>
+  input.replace(new RegExp(`^${escapePattern(pattern)}`, 'i'), '').trim();
 
 export const resolveSkillIntent = (
   input: string,
@@ -51,7 +55,6 @@ export const resolveSkillIntent = (
   );
   if (slashMatched) {
     return {
-      package: slashMatched.package,
       skill: slashMatched.skill,
       cleanedInput: normalized.slice(slashMatched.slashCommand.length).trim(),
       token: slashMatched.slashCommand,
@@ -59,24 +62,29 @@ export const resolveSkillIntent = (
     };
   }
 
-  const matched = skillPatterns.find(({ patterns }) => buildSkillPattern(patterns).test(normalized));
+  const matched = skillPatterns.find(
+    ({ patterns }) => patterns.length > 0 && buildSkillPattern(patterns).test(normalized)
+  );
   if (!matched) {
     return null;
   }
 
+  const matchedPattern = findMatchedTagPattern(normalized, matched.patterns);
+  if (!matchedPattern) {
+    return null;
+  }
+
   return {
-    package: matched.package,
     skill: matched.skill,
-    cleanedInput: stripSkillToken(normalized, matched.patterns),
+    cleanedInput: stripSkillToken(normalized, matchedPattern),
     token: matched.token,
     invocationKind: 'tag',
   };
 };
 
-export const AVAILABLE_CHAT_SKILLS: Array<Pick<SkillIntent, 'skill' | 'token' | 'package'> & { slashCommand: string }> =
+export const AVAILABLE_CHAT_SKILLS: Array<Pick<SkillIntent, 'skill' | 'token'> & { slashCommand: string }> =
   buildSkillPatterns(getDefaultRouteableSkills()).map((skill) => ({
     skill: skill.skill,
     token: skill.token,
-    package: skill.package,
     slashCommand: skill.slashCommand,
   }));

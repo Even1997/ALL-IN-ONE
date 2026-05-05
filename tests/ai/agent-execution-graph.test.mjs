@@ -48,54 +48,6 @@ test('execution graph creates stable task and root run ids', async () => {
   );
 });
 
-test('workflow execution graph creates parented package, stage, and skill runs', async () => {
-  const { syncWorkflowExecutionGraph } = await loadExecutionGraph();
-
-  const graph = syncWorkflowExecutionGraph([], [], {
-    threadId: 'thread_workflow',
-    taskId: 'task_workflow',
-    turnId: 'turn_workflow',
-    parentRunId: 'run_task_workflow_root',
-    workflowRuns: [
-      {
-        targetPackage: 'prototype',
-        status: 'running',
-        currentStage: 'wireframes',
-        completedStages: ['requirements_spec'],
-        stageSummaries: {
-          requirements_spec: 'Requirements locked',
-          wireframes: 'Wireframes are in progress',
-        },
-        skillExecutions: [
-          {
-            id: 'skill_1',
-            stage: 'wireframes',
-            skill: 'wireframe_skill',
-            provider: 'codex',
-            model: 'gpt-5.5',
-            status: 'running',
-            retries: 0,
-            summary: 'Building compact panel wireframes',
-          },
-        ],
-      },
-    ],
-  });
-
-  const packageRun = graph.runs.find((run) => run.kind === 'workflow_package');
-  const stageRuns = graph.runs.filter((run) => run.kind === 'workflow_stage');
-  const skillRun = graph.agentRuns.find((run) => run.kind === 'workflow_skill');
-
-  assert.ok(packageRun);
-  assert.equal(packageRun.parentRunId, 'run_task_workflow_root');
-  assert.equal(stageRuns.length, 2);
-  assert.ok(stageRuns.some((run) => run.title === 'requirements_spec' && run.status === 'completed'));
-  assert.ok(stageRuns.some((run) => run.title === 'wireframes' && run.status === 'running'));
-  assert.ok(skillRun);
-  assert.equal(skillRun.runId, stageRuns.find((run) => run.title === 'wireframes')?.id);
-  assert.equal(skillRun.status, 'running');
-});
-
 test('team execution graph creates parented team, phase, and member runs', async () => {
   const { syncTeamExecutionGraph } = await loadExecutionGraph();
 

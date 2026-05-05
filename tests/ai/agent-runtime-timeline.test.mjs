@@ -276,6 +276,12 @@ test('agent turn runner builds a queued runtime turn shell', async () => {
     '<think>Done\n\nEnd',
   );
 
+  const legacyBashAssembler = createRuntimeStreamingMessageAssembler();
+  assert.equal(
+    legacyBashAssembler.append({ kind: 'text', delta: 'Inspect first\n<bash>\n<cmd>Get-ChildItem sketch</cmd>\n</bash>\nThen answer' }).content,
+    '<think>Inspect first\n\nThen answer',
+  );
+
   const responseOnlyAssembler = createRuntimeStreamingMessageAssembler();
   assert.equal(responseOnlyAssembler.buildFinal('Fallback response').content, 'Fallback response');
 

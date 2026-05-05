@@ -17,11 +17,13 @@ test('AIChat keeps icon-first shell controls and GN Agent embedded entry support
   assert.match(source, /chat-shell-icon-btn/);
   assert.match(source, /GNAgentSkillsEntryButton/);
   assert.match(source, /GNAgentSkillsPage/);
-  assert.match(source, /GN_AGENT_SUGGESTIONS/);
-  assert.match(source, /@索引/);
-  assert.match(source, /@需求/);
+  assert.match(source, /resolveSkillIntent/);
+  assert.match(source, /GNAgentHistoryMenu/);
   assert.match(pieces, /chat-composer-gn-agent-entry/);
   assert.match(pieces, /chat-composer-embedded-toolbar/);
+  assert.doesNotMatch(source, /GN_AGENT_SUGGESTIONS/);
+  assert.doesNotMatch(source, /@绱㈠紩/);
+  assert.doesNotMatch(source, /@闇€姹?/);
 });
 
 test('AIChat no longer renders the old reference menu surface in the embedded GN Agent pieces', async () => {

@@ -8,7 +8,6 @@ export type RuntimeToolGroupType =
   | 'read'
   | 'plan'
   | 'agent'
-  | 'workflow'
   | 'input'
   | 'other';
 
@@ -55,7 +54,6 @@ const SEARCH_TOOL_NAMES = new Set(['glob', 'grep']);
 const READ_TOOL_NAMES = new Set(['view', 'ls', 'project_file_read']);
 const PLAN_TOOL_NAMES = new Set(['project_file_plan']);
 const AGENT_TOOL_NAMES = new Set(['run_local_agent', 'run_agent_team', 'team_phase', 'team_member_task']);
-const WORKFLOW_TOOL_NAMES = new Set(['workflow_package', 'workflow_package_stage', 'workflow_stage', 'workflow_skill']);
 
 const sortRuntimeEventsByCreatedAt = (runtimeEvents: StoredChatRuntimeEvent[]) =>
   [...runtimeEvents].sort((left, right) => left.createdAt - right.createdAt);
@@ -86,9 +84,6 @@ const classifyToolGroupType = (
   }
   if (AGENT_TOOL_NAMES.has(toolUse.toolName)) {
     return 'agent';
-  }
-  if (WORKFLOW_TOOL_NAMES.has(toolUse.toolName)) {
-    return 'workflow';
   }
   return 'other';
 };
@@ -133,7 +128,6 @@ const buildCombinedToolGroupLabel = (
     read: 0,
     plan: 0,
     agent: 0,
-    workflow: 0,
     input: 0,
     other: 0,
   };
@@ -181,10 +175,6 @@ const buildCombinedToolGroupLabel = (
       counts.agent += 1;
       continue;
     }
-    if (groupType === 'workflow') {
-      counts.workflow += 1;
-      continue;
-    }
     if (groupType === 'input') {
       counts.input += 1;
       continue;
@@ -221,9 +211,6 @@ const buildCombinedToolGroupLabel = (
   }
   if (counts.agent > 0) {
     segments.push(`已分派 ${counts.agent} 个任务`);
-  }
-  if (counts.workflow > 0) {
-    segments.push(`已执行 ${counts.workflow} 个流程`);
   }
   if (counts.input > 0) {
     segments.push(`等待 ${counts.input} 个输入`);

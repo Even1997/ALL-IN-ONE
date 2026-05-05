@@ -3,8 +3,8 @@ import type { WorkbenchIconName } from './components/ui/WorkbenchIcon';
 export type RoleView =
   | 'product'
   | 'knowledge'
-  | 'wiki'
   | 'page'
+  | 'agent'
   | 'design'
   | 'develop'
   | 'test'
@@ -13,8 +13,8 @@ export type RoleView =
 export const ROLE_TAB_ICONS = {
   product: 'product',
   knowledge: 'knowledge',
-  wiki: 'gitBranch',
   page: 'page',
+  agent: 'terminal',
   design: 'design',
   develop: 'files',
   test: 'bug',
@@ -26,14 +26,13 @@ export const DESKTOP_WORKBENCH_ROLES: Array<{
   label: string;
   summary: string;
 }> = [
-  { id: 'knowledge', label: 'Knowledge', summary: 'Notes and references' },
-  { id: 'page', label: 'Pages', summary: 'Structure and wireframes' },
-  { id: 'design', label: 'Design', summary: 'Boards and visual system' },
+  { id: 'knowledge', label: 'Wiki', summary: 'Notes and references' },
+  { id: 'page', label: 'Sketch', summary: 'Pages and canvas drafts' },
+  { id: 'agent', label: 'Agent', summary: 'Unified AI runtime workspace' },
+  { id: 'design', label: 'UI Design', summary: 'Boards and visual system' },
   { id: 'develop', label: 'Develop', summary: 'Files and tasks' },
   { id: 'test', label: 'Test', summary: 'Plans and defects' },
   { id: 'operations', label: 'Ops', summary: 'Deploy and release flow' },
 ];
 
-export const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'page', 'design'];
-
-export const roleShowsLegacyAiWorkspace = (role: RoleView) => role !== 'design';
+export const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'page', 'agent', 'design'];

@@ -8,7 +8,6 @@ import type {
   AgentProviderId,
 } from '../agentRuntimeTypes.ts';
 import type { AgentTeamRunRecord } from '../teams/teamTypes.ts';
-import type { AIWorkflowPackage, AIWorkflowRun, AIWorkflowStage } from '../../../../types/index.ts';
 
 const sortByUpdatedAt = <T extends { updatedAt: number }>(items: T[]) =>
   [...items].sort((left, right) => right.updatedAt - left.updatedAt);
@@ -33,26 +32,6 @@ const toTaskStatus = (
       : status === 'failed'
         ? 'failed'
         : 'completed';
-
-const toWorkflowRunStatus = (status: AIWorkflowRun['status']): AgentExecutionRunStatus =>
-  status === 'error'
-    ? 'failed'
-    : status === 'completed' || status === 'awaiting_confirmation'
-      ? 'completed'
-      : status === 'running'
-        ? 'running'
-        : 'queued';
-
-const toWorkflowAgentStatus = (
-  status: AIWorkflowRun['skillExecutions'][number]['status']
-): AgentExecutionAgentRunStatus =>
-  status === 'error'
-    ? 'failed'
-    : status === 'completed' || status === 'fallback'
-      ? 'completed'
-      : status === 'running'
-        ? 'running'
-        : 'pending';
 
 const toTeamRunStatus = (status: AgentTeamRunRecord['status']): AgentExecutionRunStatus =>
   status === 'planning' ? 'planning' : status === 'running' ? 'running' : status === 'failed' ? 'failed' : 'completed';
@@ -191,102 +170,6 @@ export const createExecutionAgentRunRecord = (input: {
       input.status === 'completed' || input.status === 'failed' || input.status === 'blocked'
         ? createdAt
         : null,
-  };
-};
-
-export const syncWorkflowExecutionGraph = (
-  currentRuns: AgentExecutionRunRecord[],
-  currentAgentRuns: AgentExecutionAgentRunRecord[],
-  input: {
-    threadId: string;
-    taskId: string;
-    turnId: string;
-    parentRunId: string;
-    workflowRuns: Array<{
-      targetPackage: AIWorkflowPackage;
-      status: AIWorkflowRun['status'];
-      currentStage: AIWorkflowRun['currentStage'];
-      completedStages: AIWorkflowRun['completedStages'];
-      stageSummaries: AIWorkflowRun['stageSummaries'];
-      skillExecutions: AIWorkflowRun['skillExecutions'];
-    }>;
-  }
-) => {
-  let runs = [...currentRuns];
-  let agentRuns = [...currentAgentRuns];
-
-  for (const workflowRun of input.workflowRuns) {
-    const packageRunId = `run_${input.taskId}_workflow_package_${workflowRun.targetPackage}`;
-    runs = upsertById(
-      runs,
-      createExecutionRunRecord({
-        id: packageRunId,
-        threadId: input.threadId,
-        taskId: input.taskId,
-        turnId: input.turnId,
-        parentRunId: input.parentRunId,
-        providerId: 'built-in',
-        kind: 'workflow_package',
-        title: workflowRun.targetPackage,
-        summary: workflowRun.stageSummaries[workflowRun.currentStage] || workflowRun.targetPackage,
-        status: toWorkflowRunStatus(workflowRun.status),
-      })
-    );
-
-    const stageIds = Array.from(
-      new Set(
-        [...workflowRun.completedStages, workflowRun.currentStage].filter(
-          (stageId): stageId is AIWorkflowStage => Boolean(stageId)
-        )
-      )
-    );
-
-    for (const stageId of stageIds) {
-      const stageRunId = `run_${packageRunId}_${stageId}`;
-      runs = upsertById(
-        runs,
-        createExecutionRunRecord({
-          id: stageRunId,
-          threadId: input.threadId,
-          taskId: input.taskId,
-          turnId: input.turnId,
-          parentRunId: packageRunId,
-          providerId: 'built-in',
-          kind: 'workflow_stage',
-          title: stageId,
-          summary: workflowRun.stageSummaries[stageId] || stageId,
-          status:
-            workflowRun.status === 'error' && workflowRun.currentStage === stageId
-              ? 'failed'
-              : workflowRun.completedStages.includes(stageId)
-                ? 'completed'
-                : 'running',
-        })
-      );
-
-      for (const execution of workflowRun.skillExecutions.filter((item) => item.stage === stageId)) {
-        agentRuns = upsertById(
-          agentRuns,
-          createExecutionAgentRunRecord({
-            id: `agent_run_${stageRunId}_${execution.id}`,
-            threadId: input.threadId,
-            taskId: input.taskId,
-            runId: stageRunId,
-            kind: 'workflow_skill',
-            agentId: execution.provider || 'built-in',
-            role: execution.skill,
-            title: execution.skill,
-            summary: execution.summary || execution.error || execution.skill,
-            status: toWorkflowAgentStatus(execution.status),
-          })
-        );
-      }
-    }
-  }
-
-  return {
-    runs: sortByUpdatedAt(runs),
-    agentRuns: sortByUpdatedAt(agentRuns),
   };
 };
 

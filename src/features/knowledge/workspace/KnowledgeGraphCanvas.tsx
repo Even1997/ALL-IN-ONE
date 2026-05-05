@@ -51,10 +51,6 @@ const getNodeRadius = (
     return 46;
   }
 
-  if (node.docType === 'wiki-index') {
-    return 28;
-  }
-
   if (node.docType === 'ai-summary') {
     return 24;
   }
@@ -70,9 +66,7 @@ const getNodeClassName = (node: LayoutedNode) => {
   if (node.isSelected) {
     classes.push('is-selected');
   }
-  if (node.docType === 'wiki-index') {
-    classes.push('is-wiki');
-  } else if (node.docType === 'ai-summary') {
+  if (node.docType === 'ai-summary') {
     classes.push('is-ai');
   } else if (node.kind === 'sketch') {
     classes.push('is-sketch');
@@ -241,7 +235,7 @@ export const KnowledgeGraphCanvas = ({
       <svg
         className={`gn-graph-canvas${compact ? ' is-compact' : ''}`}
         viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
-        aria-label="系统索引图谱画布"
+        aria-label="知识关联图谱画布"
       >
       <defs>
         <radialGradient id={compact ? 'gn-graph-glow-compact' : 'gn-graph-glow'} cx="50%" cy="50%" r="64%">

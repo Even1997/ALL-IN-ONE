@@ -5,11 +5,11 @@ export type ChatRuntimePlugin = ChatAgentDefinition & {
   source: 'built-in';
 };
 
-export const BUILT_IN_CHAT_RUNTIME_PLUGINS: ChatRuntimePlugin[] = [
+const INTERNAL_CHAT_RUNTIME_PLUGINS: ChatRuntimePlugin[] = [
   {
     id: 'claude',
     label: 'Claude',
-    title: 'Claude CLI',
+    title: 'Claude Agent',
     runtime: 'local',
     pluginType: 'chat-runtime',
     source: 'built-in',
@@ -40,9 +40,13 @@ export const BUILT_IN_CHAT_RUNTIME_PLUGINS: ChatRuntimePlugin[] = [
   },
 ];
 
+export const BUILT_IN_CHAT_RUNTIME_PLUGINS: ChatRuntimePlugin[] = INTERNAL_CHAT_RUNTIME_PLUGINS.filter(
+  (plugin) => plugin.id !== 'team'
+);
+
 export const getChatAgents = (): ChatAgentDefinition[] => BUILT_IN_CHAT_RUNTIME_PLUGINS.slice();
 
 export const getChatAgent = (id: ChatAgentId) =>
-  BUILT_IN_CHAT_RUNTIME_PLUGINS.find((plugin) => plugin.id === id) || null;
+  INTERNAL_CHAT_RUNTIME_PLUGINS.find((plugin) => plugin.id === id) || null;
 
 export const getChatAgentIds = () => BUILT_IN_CHAT_RUNTIME_PLUGINS.map((plugin) => plugin.id);

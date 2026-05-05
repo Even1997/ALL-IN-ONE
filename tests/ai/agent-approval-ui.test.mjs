@@ -50,9 +50,8 @@ test('AIChat and runtime summary expose approval state with approval-policy word
   const chat = await readFile(aiChatPath, 'utf8');
   const summary = await readFile(runtimeSummaryPath, 'utf8');
 
-  assert.match(chat, /审批策略/);
-  assert.match(chat, /批准执行|确认执行/);
+  assert.match(chat, /批准执行/);
   assert.match(chat, /拒绝|取消/);
-  assert.match(summary, /approval/i);
+  assert.match(summary, /approval:/i);
   assert.match(summary, /approval policy/i);
 });

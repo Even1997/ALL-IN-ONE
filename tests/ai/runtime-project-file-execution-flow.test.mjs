@@ -262,7 +262,7 @@ test('runtime project file execution flow executes approved proposals and record
     normalizeErrorMessage: (error) => String(error),
   });
 
-  assert.equal(currentMessage.content, 'Applied the change');
+  assert.equal(currentMessage.content, 'edited src/app.ts');
   assert.equal(currentMessage.projectFileProposal.status, 'executed');
   assert.equal(currentMessage.projectFileProposal.executionMessage, 'edited src/app.ts');
   assert.equal(appendedEntries.length, 1);

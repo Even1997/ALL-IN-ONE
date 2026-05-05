@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import type { GNAgentShellMode } from './types';
 
 type GNAgentShellState = {
@@ -21,4 +21,3 @@ export const useGNAgentShellStore = create<GNAgentShellState>((set) => ({
         : { ...state, codexConfigId: configId }
     ),
 }));
-

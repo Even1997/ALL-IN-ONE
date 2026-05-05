@@ -80,6 +80,34 @@ test('project file operations resolve request kind and explicit review-first pro
   );
   assert.equal(
     resolveProjectFileRequestKind({
+      rawInput: '\u5199\u4e00\u4e2a\u9700\u6c42\u6587\u6863\u5173\u4e8e\u52a8\u6f2bapp\u7684',
+      cleanedInput: '\u5199\u4e00\u4e2a\u9700\u6c42\u6587\u6863\u5173\u4e8e\u52a8\u6f2bapp\u7684',
+    }),
+    'none'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u7ed9\u6211\u4e00\u4efd PRD\uff0c\u5148\u76f4\u63a5\u8f93\u51fa\u5728\u804a\u5929\u91cc',
+      cleanedInput: '\u7ed9\u6211\u4e00\u4efd PRD\uff0c\u5148\u76f4\u63a5\u8f93\u51fa\u5728\u804a\u5929\u91cc',
+    }),
+    'none'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u7ed9\u6211\u4e00\u4e2a\u52a8\u6f2b app \u9996\u9875\u8349\u56fe',
+      cleanedInput: '\u7ed9\u6211\u4e00\u4e2a\u52a8\u6f2b app \u9996\u9875\u8349\u56fe',
+    }),
+    'none'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u5e2e\u6211\u505a\u4e00\u4e0b\u8fd9\u4e2a\u9875\u9762\u7684 UI \u65b9\u5411',
+      cleanedInput: '\u5e2e\u6211\u505a\u4e00\u4e0b\u8fd9\u4e2a\u9875\u9762\u7684 UI \u65b9\u5411',
+    }),
+    'none'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
       rawInput: '\u4fee\u6539 src/App.tsx \u652f\u6301\u62d6\u62fd\u4e0a\u4f20',
       cleanedInput: '\u4fee\u6539 src/App.tsx \u652f\u6301\u62d6\u62fd\u4e0a\u4f20',
     }),

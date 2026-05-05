@@ -30,6 +30,7 @@ test('AI chat routes project file requests through read/planning helpers and pro
   assert.match(chatSource, /executeRuntimeProjectFileRead/);
   assert.match(chatSource, /executeRuntimeProjectFilePlanning/);
   assert.match(chatSource, /prepareProjectFileProposalFlow/);
+  assert.match(chatSource, /requestRuntimeProjectFileApproval/);
   assert.match(chatSource, /conversationHistory/);
   assert.match(chatSource, /conversationHistory,\s*projectName: currentProject\.name/);
   assert.match(chatSource, /executeProjectFileOperations/);
@@ -49,8 +50,8 @@ test('AI chat routes project file requests through read/planning helpers and pro
   assert.match(helperSource, /shouldForceProjectFileProposal/);
 
   assert.match(cssSource, /\.chat-project-file-proposal-card/);
-  assert.match(cssSource, /\.chat-project-file-proposal-actions/);
   assert.match(cssSource, /\.chat-runtime-approval-card/);
+  assert.doesNotMatch(chatSource, /确认写入/);
 });
 
 test('AI service exposes a read-tools chat path for project file queries', async () => {
