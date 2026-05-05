@@ -34,6 +34,8 @@ export interface ToolResultFileChange {
   path: string;
   beforeContent: string | null;
   afterContent: string | null;
+  operation?: 'write' | 'edit' | 'delete';
+  verified?: boolean;
 }
 
 export interface RustToolResult {
@@ -41,6 +43,76 @@ export interface RustToolResult {
   content: string;
   error: string | null;
 }
+
+export const resolveRustToolResultText = (result: RustToolResult) =>
+  result.success ? result.content : result.error || result.content || 'Tool execution failed.';
+
+export const resolveViewFilePathParam = (params: Record<string, unknown>) => {
+  const candidate = params.file_path ?? params.path ?? params.file;
+  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+};
+
+const SLOW_SNAPSHOT_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.rst']);
+const FILE_CHANGE_SNAPSHOT_CHAR_LIMIT = 12_000;
+
+const getLowercaseFileExtension = (filePath: string) => {
+  const normalized = filePath.replace(/\\/g, '/');
+  const fileName = normalized.split('/').pop() || normalized;
+  const extensionIndex = fileName.lastIndexOf('.');
+  return extensionIndex >= 0 ? fileName.slice(extensionIndex).toLowerCase() : '';
+};
+
+export const shouldCaptureFileChangeSnapshot = (filePath: string, contentLength?: number) => {
+  if (SLOW_SNAPSHOT_EXTENSIONS.has(getLowercaseFileExtension(filePath))) {
+    return false;
+  }
+
+  if (typeof contentLength === 'number' && contentLength > FILE_CHANGE_SNAPSHOT_CHAR_LIMIT) {
+    return false;
+  }
+
+  return true;
+};
+
+export const buildVerifiedFileChange = (input: {
+  path: string;
+  operation: NonNullable<ToolResultFileChange['operation']>;
+  beforeContent: string | null;
+  afterContent: string | null;
+}): ToolResultFileChange => ({
+  path: input.path,
+  operation: input.operation,
+  beforeContent: input.beforeContent,
+  afterContent: input.afterContent,
+  verified: true,
+});
+
+export const verifyWriteFileMutation = async (input: {
+  filePath: string;
+  expectedContent: string;
+  readTextFile: (filePath: string) => Promise<string | null>;
+}) => {
+  const persistedContent = await input.readTextFile(input.filePath);
+  return persistedContent === input.expectedContent;
+};
+
+export const verifyEditFileMutation = async (input: {
+  filePath: string;
+  beforeContent: string | null;
+  newString: string;
+  readTextFile: (filePath: string) => Promise<string | null>;
+}) => {
+  const persistedContent = await input.readTextFile(input.filePath);
+  if (persistedContent === null) {
+    return false;
+  }
+
+  if (input.beforeContent !== null && persistedContent === input.beforeContent) {
+    return false;
+  }
+
+  return input.newString.length === 0 || persistedContent.includes(input.newString);
+};
 
 const TOOL_PROTOCOL_MARKER_PATTERN =
   /<tool_use>|<\/tool_use>|<tool_result|<\/tool_result>|<apply_skill\b|<\s*\|\s*DSML\b|tool_calls>|"tool_calls"\s*:/i;
@@ -350,7 +422,7 @@ export class ToolExecutor {
 
       return {
         type: 'text',
-        content: result.content,
+        content: resolveRustToolResultText(result),
         is_error: !result.success,
       };
     } catch (e) {
@@ -375,7 +447,7 @@ export class ToolExecutor {
 
       return {
         type: 'text',
-        content: result.content,
+        content: resolveRustToolResultText(result),
         is_error: !result.success,
       };
     } catch (e) {
@@ -398,7 +470,7 @@ export class ToolExecutor {
 
       return {
         type: 'text',
-        content: result.content,
+        content: resolveRustToolResultText(result),
         is_error: !result.success,
       };
     } catch (e) {
@@ -412,7 +484,11 @@ export class ToolExecutor {
 
   private async view(params: ViewParams): Promise<ToolResult> {
     try {
-      const filePath = this.ensureProjectPath(params.file_path, 'file');
+      const requestedFilePath = resolveViewFilePathParam(params as unknown as Record<string, unknown>);
+      if (!requestedFilePath) {
+        throw new Error('view requires a file_path parameter.');
+      }
+      const filePath = this.ensureProjectPath(requestedFilePath, 'file');
       const result = await invoke<RustToolResult>('tool_view', {
         params: {
           file_path: filePath,
@@ -423,7 +499,7 @@ export class ToolExecutor {
 
       return {
         type: 'text',
-        content: result.content,
+        content: resolveRustToolResultText(result),
         is_error: !result.success,
       };
     } catch (e) {
@@ -438,26 +514,39 @@ export class ToolExecutor {
   private async write(params: WriteParams): Promise<ToolResult> {
     try {
       const filePath = this.ensureProjectPath(params.file_path, 'file');
-      const beforeContent = await this.readTextFileSnapshot(filePath);
+      const captureSnapshot = shouldCaptureFileChangeSnapshot(filePath, params.content.length);
+      const beforeContent = captureSnapshot ? await this.readTextFileSnapshot(filePath) : null;
       const result = await invoke<RustToolResult>('tool_write', {
         params: {
           file_path: filePath,
           content: params.content,
         },
       });
+      const verified =
+        result.success &&
+        (await verifyWriteFileMutation({
+          filePath,
+          expectedContent: params.content,
+          readTextFile: (path) => this.readTextFileSnapshot(path),
+        }));
 
       return {
         type: 'text',
-        content: result.content,
-        is_error: !result.success,
-        metadata: result.success
+        content: verified
+          ? resolveRustToolResultText(result)
+          : result.success
+            ? `Write verification failed: ${filePath}`
+            : resolveRustToolResultText(result),
+        is_error: !verified,
+        metadata: verified
           ? {
               fileChanges: [
-                {
+                buildVerifiedFileChange({
                   path: this.toProjectRelativePath(filePath),
+                  operation: 'write',
                   beforeContent,
-                  afterContent: params.content,
-                } satisfies ToolResultFileChange,
+                  afterContent: captureSnapshot ? params.content : null,
+                }),
               ],
             }
           : undefined,
@@ -474,7 +563,11 @@ export class ToolExecutor {
   private async edit(params: EditParams): Promise<ToolResult> {
     try {
       const filePath = this.ensureProjectPath(params.file_path, 'file');
-      const beforeContent = await this.readTextFileSnapshot(filePath);
+      const captureSnapshot = shouldCaptureFileChangeSnapshot(
+        filePath,
+        params.old_string.length + params.new_string.length
+      );
+      const beforeContent = captureSnapshot ? await this.readTextFileSnapshot(filePath) : null;
       const result = await invoke<RustToolResult>('tool_edit', {
         params: {
           file_path: filePath,
@@ -483,22 +576,35 @@ export class ToolExecutor {
         },
       });
 
-      const afterContent = result.success
+      const afterContent = result.success && captureSnapshot
         ? await this.readTextFileSnapshot(filePath)
         : null;
+      const verified =
+        result.success &&
+        (await verifyEditFileMutation({
+          filePath,
+          beforeContent,
+          newString: params.new_string,
+          readTextFile: (path) => this.readTextFileSnapshot(path),
+        }));
 
       return {
         type: 'text',
-        content: result.content,
-        is_error: !result.success,
-        metadata: result.success
+        content: verified
+          ? resolveRustToolResultText(result)
+          : result.success
+            ? `Edit verification failed: ${filePath}`
+            : resolveRustToolResultText(result),
+        is_error: !verified,
+        metadata: verified
           ? {
               fileChanges: [
-                {
+                buildVerifiedFileChange({
                   path: this.toProjectRelativePath(filePath),
+                  operation: 'edit',
                   beforeContent,
                   afterContent,
-                } satisfies ToolResultFileChange,
+                }),
               ],
             }
           : undefined,
@@ -865,7 +971,9 @@ interface LSParams {
 }
 
 interface ViewParams {
-  file_path: string;
+  file_path?: string;
+  path?: string;
+  file?: string;
   offset?: number;
   limit?: number;
 }

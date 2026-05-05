@@ -1,0 +1,106 @@
+<h2>统一时间线的浅深色适配</h2>
+<p class="subtitle">保持同一结构，不靠“换颜色硬套”。重点看浅色下是否仍然清晰、克制、舒服。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Dark</div>
+    <div class="mockup-body" style="background:#181818;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="padding:12px 14px;border-radius:14px;background:#232323;border:1px solid #353535">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#f3f3f3">
+          <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+          思考过程
+          <span style="color:#929292;font-weight:500">默认折叠</span>
+        </div>
+      </div>
+      <div style="padding:12px 14px;border-radius:14px;background:#232323;border:1px solid #353535">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#f3f3f3">
+            <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+            已编辑 3 个文件，已运行 2 条命令
+          </div>
+          <div style="color:#9a9a9a">展开</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="padding:10px 12px;border-radius:12px;background:#2a2a2a;border:1px solid #383838">
+          <div style="font-weight:700;color:#f1f1f1">规划修改</div>
+          <div style="color:#9a9a9a;font-size:13px">先确认原因，再补测试，再改实现</div>
+        </div>
+        <div style="padding:10px 12px;border-radius:12px;background:#2a2a2a;border:1px solid #383838">
+          <div style="font-weight:700;color:#f1f1f1">修改文件</div>
+          <div style="color:#9a9a9a;font-size:13px">runtimeEventRenderModel.ts</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Light</div>
+    <div class="mockup-body" style="background:#f5f2eb;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="padding:12px 14px;border-radius:14px;background:#fffdfa;border:1px solid #ddd4c7;box-shadow:0 1px 0 rgba(77,58,32,0.04)">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#1f1c17">
+          <span style="width:8px;height:8px;border-radius:999px;background:#4b9b55;display:inline-block"></span>
+          思考过程
+          <span style="color:#8c8173;font-weight:500">默认折叠</span>
+        </div>
+      </div>
+      <div style="padding:12px 14px;border-radius:14px;background:#fffdfa;border:1px solid #ddd4c7;box-shadow:0 1px 0 rgba(77,58,32,0.04)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#1f1c17">
+            <span style="width:8px;height:8px;border-radius:999px;background:#4b9b55;display:inline-block"></span>
+            已编辑 3 个文件，已运行 2 条命令
+          </div>
+          <div style="color:#8c8173">展开</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="padding:10px 12px;border-radius:12px;background:#ffffff;border:1px solid #e3dbcf">
+          <div style="font-weight:700;color:#1f1c17">规划修改</div>
+          <div style="color:#8c8173;font-size:13px">先确认原因，再补测试，再改实现</div>
+        </div>
+        <div style="padding:10px 12px;border-radius:12px;background:#ffffff;border:1px solid #e3dbcf">
+          <div style="font-weight:700;color:#1f1c17">修改文件</div>
+          <div style="color:#8c8173;font-size:13px">runtimeEventRenderModel.ts</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>这版浅色的原则</h4>
+      <ul>
+        <li>不用纯白，改成温和纸面底色，减少刺眼感。</li>
+        <li>层级靠边框、明度和留白，不靠重阴影。</li>
+        <li>状态色只做点缀，正文还是中性灰黑主导。</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>我刻意避免的做法</h4>
+      <ul>
+        <li>浅色里继续沿用深色的纯黑高对比。</li>
+        <li>大面积蓝紫色块。</li>
+        <li>每一层都加阴影，导致看起来发飘。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="light-warm-neutral" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>浅色用暖中性纸面感</h3>
+      <p>更柔和，也更符合你现在这套右侧面板的气质。我推荐这个。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="light-cool-neutral" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>浅色改成偏冷灰</h3>
+      <p>会更科技一点，但也更容易显得普通。</p>
+    </div>
+  </div>
+</div>

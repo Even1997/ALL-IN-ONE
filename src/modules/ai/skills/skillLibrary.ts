@@ -27,6 +27,12 @@ export type SkillDeleteResult = {
   deleted: boolean;
 };
 
+export type RuntimeSkillCatalog = {
+  skills: RuntimeSkillDefinition[];
+  discoveredSkills: SkillDiscoveryEntry[];
+  loadedSkills: RuntimeSkillDefinition[];
+};
+
 export type GitHubSkillImportParams = {
   repo: string;
   path: string;
@@ -126,9 +132,9 @@ const buildDiscoveredRuntimeSkillDefinition = (
   };
 };
 
-export const loadRuntimeSkillDefinitions = async (params?: {
+export const loadRuntimeSkillCatalog = async (params?: {
   projectRoot?: string | null;
-}): Promise<RuntimeSkillDefinition[]> => {
+}): Promise<RuntimeSkillCatalog> => {
   const bundledSkills = getBundledChatSkills();
   const discoveredSkills = await discoverLocalSkills(params).catch(() => [] as SkillDiscoveryEntry[]);
   const loadableSkills = discoveredSkills.filter((skill) =>
@@ -136,7 +142,11 @@ export const loadRuntimeSkillDefinitions = async (params?: {
   );
 
   if (loadableSkills.length === 0) {
-    return bundledSkills;
+    return {
+      skills: bundledSkills,
+      discoveredSkills: [],
+      loadedSkills: [],
+    };
   }
 
   const loadedSkills = await Promise.all(
@@ -150,10 +160,13 @@ export const loadRuntimeSkillDefinitions = async (params?: {
     })
   );
 
-  const mergedSkills = [...bundledSkills, ...loadedSkills.filter((skill): skill is RuntimeSkillDefinition => Boolean(skill))];
+  const resolvedLoadedSkills = loadedSkills.filter(
+    (skill): skill is RuntimeSkillDefinition => Boolean(skill)
+  );
+  const mergedSkills = [...bundledSkills, ...resolvedLoadedSkills];
   const seenSkillIds = new Set<string>();
 
-  return mergedSkills.filter((skill) => {
+  const skills = mergedSkills.filter((skill) => {
     if (seenSkillIds.has(skill.id)) {
       return false;
     }
@@ -161,6 +174,19 @@ export const loadRuntimeSkillDefinitions = async (params?: {
     seenSkillIds.add(skill.id);
     return true;
   });
+
+  return {
+    skills,
+    discoveredSkills: loadableSkills,
+    loadedSkills: resolvedLoadedSkills,
+  };
+};
+
+export const loadRuntimeSkillDefinitions = async (params?: {
+  projectRoot?: string | null;
+}): Promise<RuntimeSkillDefinition[]> => {
+  const catalog = await loadRuntimeSkillCatalog(params);
+  return catalog.skills;
 };
 
 export type { RuntimeChatSkillDefinition } from './bundledSkillDefinitions.ts';

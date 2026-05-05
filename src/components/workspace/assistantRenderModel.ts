@@ -1,11 +1,12 @@
-import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore';
-import { buildAssistantMessageParts, type AIChatMessagePart } from './aiChatMessageParts';
+import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
+import {
+  getAssistantTimelineText,
+  type AssistantTimelineEvent,
+} from '../../modules/ai/store/assistantTimeline.ts';
+import type { AIChatMessagePart } from './aiChatMessageParts.ts';
 
 export type AssistantDraftState = {
-  content: string;
-  thinkingContent: string;
-  answerContent: string;
-  assistantParts: AIChatMessagePart[];
+  timeline: AssistantTimelineEvent[];
 };
 
 export type AssistantRenderItem =
@@ -22,29 +23,20 @@ export type AssistantRenderModel = {
 const normalizeAssistantCopy = (value: string) => value.replace(/\s+/g, ' ').trim();
 
 const shouldSuppressAssistantTextPart = (
-  message: StoredChatMessage,
+  _message: StoredChatMessage,
   part: AIChatMessagePart,
   bubbleCardCount: number
 ) => {
-  if (part.type !== 'text' || bubbleCardCount === 0) {
+  if (part.type !== 'text') {
     return false;
   }
 
-  if (message.projectFileProposal || message.runtimeQuestion) {
-    return true;
-  }
-
-  const hasRuntimeCards = Boolean(message.toolCalls?.length || message.runtimeEvents?.length);
-  if (!hasRuntimeCards) {
+  if (bubbleCardCount === 0) {
     return false;
   }
 
   const normalized = normalizeAssistantCopy(part.content);
-  if (!normalized) {
-    return true;
-  }
-
-  return normalized.length <= 120;
+  return normalized.length === 0;
 };
 
 export const buildAssistantRenderModel = (
@@ -52,14 +44,36 @@ export const buildAssistantRenderModel = (
   draftState?: AssistantDraftState,
   bubbleCardCount = 0
 ): AssistantRenderModel => {
-  const content = draftState?.content ?? message.content;
+  const timeline = Array.isArray(draftState?.timeline)
+    ? draftState.timeline
+    : message.role === 'assistant' && Array.isArray(message.timeline)
+      ? message.timeline
+      : [];
+  const content = getAssistantTimelineText(timeline);
   const isStreaming = Boolean(draftState);
-  const parts = buildAssistantMessageParts({
-    content,
-    assistantParts: draftState?.assistantParts ?? (message.assistantParts as AIChatMessagePart[] | undefined),
-    thinkingContent: draftState?.thinkingContent ?? message.thinkingContent,
-    answerContent: draftState?.answerContent ?? message.answerContent,
-    thinkingCollapsed: isStreaming ? false : undefined,
+  const parts = timeline.flatMap((event): AIChatMessagePart[] => {
+    if (event.kind === 'reasoning') {
+      return [
+        {
+          type: 'thinking',
+          content: event.content,
+          collapsed: event.collapsed,
+          createdAt: event.createdAt,
+        },
+      ];
+    }
+
+    if (event.kind === 'text') {
+      return [
+        {
+          type: 'text',
+          content: event.content,
+          createdAt: event.createdAt,
+        },
+      ];
+    }
+
+    return [];
   });
 
   const items = parts
@@ -75,6 +89,6 @@ export const buildAssistantRenderModel = (
     content,
     isStreaming,
     items,
-    copyText: (draftState?.answerContent ?? message.answerContent ?? '').trim(),
+    copyText: getAssistantTimelineText(timeline),
   };
 };

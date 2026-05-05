@@ -5,6 +5,7 @@ import {
   type RuntimeMcpCommand,
 } from '../mcp/runtimeMcpFlow.ts';
 import type { RuntimeMcpServer, RuntimeMcpToolCall } from '../mcp/runtimeMcpTypes.ts';
+import { buildMcpLifecycleOutcomeDescriptor } from '../dispatch/runtimeCapabilityLifecycle.ts';
 
 type ExecuteRuntimeMcpTurnFailure = {
   status: 'failed';
@@ -47,15 +48,14 @@ export async function executeRuntimeMcpTurn(input: {
   }
 
   const { toolCall } = result;
+  const lifecycle = buildMcpLifecycleOutcomeDescriptor(toolCall);
 
   return {
     status: result.status,
     toolCall,
     content: formatRuntimeMcpToolCallResult(toolCall),
-    timelineSummary: toolCall.error
-      ? `MCP failed: ${toolCall.serverId}/${toolCall.toolName}`
-      : `MCP completed: ${toolCall.serverId}/${toolCall.toolName}`,
-    replaySummary: `MCP: ${toolCall.serverId}/${toolCall.toolName} - ${toolCall.summary}`,
+    timelineSummary: lifecycle.timelineSummary,
+    replaySummary: lifecycle.replaySummary,
     replayPayload: buildRuntimeMcpReplayPayload(toolCall),
   };
 }

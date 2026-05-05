@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Panel - Command Center</title>
+    <style>
+      :root {
+        --bg: #081116;
+        --shell: #0e1a20;
+        --panel: #13232a;
+        --panel-2: #0f1d23;
+        --line: rgba(154, 188, 192, 0.14);
+        --text: #ecf7f7;
+        --muted: #8fadad;
+        --accent: #39b7a4;
+        --warn: #f59e0b;
+        --good: #22c55e;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(57, 183, 164, 0.18), transparent 28%),
+          linear-gradient(180deg, #091116, #071015 60%, #061015);
+      }
+
+      .page {
+        width: min(1480px, calc(100% - 28px));
+        margin: 14px auto;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        overflow: hidden;
+        background: rgba(8, 17, 22, 0.92);
+        box-shadow: 0 40px 100px rgba(0, 0, 0, 0.45);
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .topbar h1,
+      .panel h2,
+      .card h3,
+      .message strong {
+        margin: 0;
+      }
+
+      .topbar h1 {
+        font-size: 18px;
+        letter-spacing: 0.04em;
+      }
+
+      .meta {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .pill {
+        padding: 7px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 278px minmax(0, 1fr) 332px;
+        min-height: calc(100vh - 80px);
+      }
+
+      .column {
+        padding: 18px;
+        border-right: 1px solid var(--line);
+      }
+
+      .column:last-child {
+        border-right: 0;
+      }
+
+      .panel,
+      .card,
+      .message,
+      .composer {
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(19, 35, 42, 0.96), rgba(13, 25, 30, 0.96));
+        border-radius: 18px;
+      }
+
+      .panel {
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .panel-head h2 {
+        font-size: 14px;
+      }
+
+      .panel-head span,
+      .small,
+      .message time,
+      .card code {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .card {
+        padding: 12px;
+      }
+
+      .card h3 {
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .card code {
+        display: inline-block;
+        margin-top: 8px;
+      }
+
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .status-card {
+        padding: 14px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(57, 183, 164, 0.09), rgba(19, 35, 42, 0.96));
+      }
+
+      .status-card strong {
+        display: block;
+        font-size: 22px;
+        margin-top: 10px;
+      }
+
+      .summary-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .summary-box {
+        padding: 14px;
+        border-radius: 18px;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+      }
+
+      .summary-box p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .chat {
+        display: grid;
+        gap: 12px;
+      }
+
+      .message {
+        padding: 16px;
+      }
+
+      .message header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 10px;
+      }
+
+      .message p {
+        margin: 0;
+        color: #d8e8e8;
+        line-height: 1.72;
+      }
+
+      .message.assistant {
+        border-color: rgba(57, 183, 164, 0.24);
+      }
+
+      .message.user {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(19, 35, 42, 0.96));
+      }
+
+      .subcards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .subcard {
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .composer {
+        position: sticky;
+        bottom: 0;
+        padding: 14px;
+        margin-top: 14px;
+      }
+
+      .composer textarea {
+        width: 100%;
+        min-height: 96px;
+        border: 0;
+        resize: vertical;
+        outline: 0;
+        color: var(--text);
+        font: inherit;
+        border-radius: 14px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .composer-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      .button {
+        padding: 10px 14px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--accent);
+        color: #08221f;
+        font-weight: 700;
+      }
+
+      .button.alt {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+      }
+
+      .tone-good {
+        color: var(--good);
+      }
+
+      .tone-warn {
+        color: var(--warn);
+      }
+
+      @media (max-width: 1200px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .column {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .status-grid,
+        .summary-strip {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 720px) {
+        .status-grid,
+        .summary-strip {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <h1>AI Panel / Command Center</h1>
+        <div class="meta">
+          <span class="pill">project: ALL-IN-ONE</span>
+          <span class="pill">runtime: Codex Connected</span>
+          <span class="pill">permission: approvals 2</span>
+          <span class="pill">context: 13,420 / 32,000</span>
+        </div>
+      </header>
+
+      <section class="layout">
+        <aside class="column">
+          <section class="panel">
+            <div class="panel-head"><h2>Threads</h2><span>6 active</span></div>
+            <div class="stack">
+              <article class="card">
+                <h3>AI 面板显示整理</h3>
+                <p>codex · 14:21 · active</p>
+                <code class="tone-good">Resume available</code>
+              </article>
+              <article class="card">
+                <h3>Team Run 回顾</h3>
+                <p>claude · 13:58 · idle</p>
+                <code>replay ready</code>
+              </article>
+              <article class="card">
+                <h3>Context 预算异常</h3>
+                <p>classic · 13:27 · blocked</p>
+                <code class="tone-warn">approval</code>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Timeline</h2><span>executing</span></div>
+            <div class="stack">
+              <article class="card">
+                <h3>Session</h3>
+                <p>18 events / 4 replay · connected / shell_command</p>
+              </article>
+              <article class="card">
+                <h3>Recovery</h3>
+                <p>可以从最近一次输入继续恢复，避免整轮重跑。</p>
+                <code>Resume latest input</code>
+              </article>
+              <article class="card">
+                <h3>14:17</h3>
+                <p>读取 GNAgentChatPage、Status、Timeline、Context 与 Tool Call 面板。</p>
+              </article>
+              <article class="card">
+                <h3>14:20</h3>
+                <p>提炼出“左导航 / 中对话 / 右审计”的当前显示模型。</p>
+              </article>
+            </div>
+          </section>
+        </aside>
+
+        <main class="column">
+          <section class="status-grid">
+            <article class="status-card">
+              <div class="small">Agent Status</div>
+              <strong>executing</strong>
+            </article>
+            <article class="status-card">
+              <div class="small">Active Tool</div>
+              <strong>shell_command</strong>
+            </article>
+            <article class="status-card">
+              <div class="small">Token Usage</div>
+              <strong>~2.3k / 4.6k</strong>
+            </article>
+            <article class="status-card">
+              <div class="small">Recent Activity</div>
+              <strong>12 items</strong>
+            </article>
+          </section>
+
+          <section class="summary-strip">
+            <article class="summary-box">
+              <h3>Turn Summary</h3>
+              <p>当前回合目标：梳理现有 AI 面板显示逻辑，并输出多套静态 HTML 样式稿。</p>
+            </article>
+            <article class="summary-box">
+              <h3>Step 1</h3>
+              <p>读取关键组件，确认三栏布局和各面板职责。</p>
+            </article>
+            <article class="summary-box">
+              <h3>Step 2</h3>
+              <p>把 Status / Plan / Context / Tools 重新分层，提高主次清晰度。</p>
+            </article>
+            <article class="summary-box">
+              <h3>Feed Guidance</h3>
+              <p>这里保留“追加指令”“暂停当前回合”“恢复重试”等控制入口。</p>
+            </article>
+          </section>
+
+          <section class="chat">
+            <article class="message user">
+              <header>
+                <strong>你</strong>
+                <time>14:11</time>
+              </header>
+              <p>我觉得现在 AI 面板显示效果不好看，你整理一下现在的显示逻辑生成 html 给我看一下。</p>
+            </article>
+
+            <article class="message assistant">
+              <header>
+                <strong>Agent</strong>
+                <time>14:18</time>
+              </header>
+              <p>
+                我先按代码里的真实结构做整理：左边是 Threads 和 Timeline，中间是 Agent Status、
+                Turn Summary 和 AIChat，右边是 Team、Plan、Context、Tools、Memory Inbox、Memory。
+                这版把它做成更像“运行指挥台”的信息密度。
+              </p>
+              <div class="subcards">
+                <span class="subcard">Structured Cards</span>
+                <span class="subcard">Runtime Approval</span>
+                <span class="subcard">Tool Result Preview</span>
+              </div>
+            </article>
+
+            <article class="message assistant">
+              <header>
+                <strong>Agent</strong>
+                <time>14:23</time>
+              </header>
+              <p>
+                这套视觉更强调“过程在线感”。如果你希望 AI 面板看起来像一个真正工作的系统，而不是普通聊天框，
+                这一版会比较合适。
+              </p>
+            </article>
+          </section>
+
+          <section class="composer">
+            <textarea placeholder="Add guidance for the current turn">把右侧辅助信息里的优先级再整理一下，少一点像调试面板，多一点像产品界面。</textarea>
+            <div class="composer-footer">
+              <div class="small">Codex Runtime · context healthy · live connected</div>
+              <div>
+                <button class="button alt">Pause turn</button>
+                <button class="button">Send guidance</button>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside class="column">
+          <section class="panel">
+            <div class="panel-head"><h2>Team Run</h2><span>idle</span></div>
+            <div class="stack">
+              <article class="card">
+                <h3>Task Summary</h3>
+                <p>4 members · running 1 · completed 2 · failed 1</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Plan</h2><span>medium</span></div>
+            <div class="stack">
+              <article class="card">
+                <h3>结构映射</h3>
+                <p>从组件关系反推信息架构，不先动视觉。</p>
+                <code>auto</code>
+              </article>
+              <article class="card">
+                <h3>样式产出</h3>
+                <p>三套 HTML 各自覆盖不同使用重心。</p>
+                <code>auto</code>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Context</h2><span>9 sections</span></div>
+            <div class="stack">
+              <article class="card"><h3>AGENTS.md</h3><p>included</p><code>policy</code></article>
+              <article class="card"><h3>GNAgentChatPage.tsx</h3><p>included</p><code>source</code></article>
+              <article class="card"><h3>AIPanel.css</h3><p>included</p><code>source</code></article>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Tools</h2><span>7 calls / completed 7</span></div>
+            <div class="stack">
+              <article class="card"><h3>shell_command</h3><p>Read GNAgentStatusPanel.tsx</p><code>Completed</code></article>
+              <article class="card"><h3>shell_command</h3><p>Read GNAgentToolCallPanel.tsx</p><code>Completed</code></article>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Memory Inbox</h2><span>2 pending</span></div>
+            <div class="stack">
+              <article class="card">
+                <h3>AI 面板现状</h3>
+                <p>当前骨架已经明确是三栏结构，但视觉层级不够鲜明。</p>
+                <code>projectFact</code>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Memory</h2><span>6 entries</span></div>
+            <div class="stack">
+              <article class="card"><h3>Right rail houses audit data</h3><p>长期保留给后续改版参考。</p></article>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </div>
+  </body>
+</html>

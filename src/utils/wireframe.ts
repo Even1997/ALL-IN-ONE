@@ -11,6 +11,7 @@ export interface CanvasPreset {
 export interface WireframeModuleDraft {
   id?: string;
   name: string;
+  type?: string;
   x: number;
   y: number;
   width?: number;
@@ -23,6 +24,7 @@ export interface WireframeModuleDraft {
 
 export interface MarkdownModuleMatch {
   name: string;
+  type?: string;
   x: number;
   y: number;
   width?: number;
@@ -36,10 +38,14 @@ export interface MarkdownModuleMatch {
 }
 
 const MOBILE_APP_TYPES: AppType[] = ['mobile', 'mini_program'];
-export const MIN_MODULE_WIDTH = 80;
-export const MIN_MODULE_HEIGHT = 60;
+export const MIN_MODULE_WIDTH = 1;
+export const MIN_MODULE_HEIGHT = 1;
+export const DEFAULT_WIREFRAME_MODULE_TYPE = '线框';
+export const TEXT_WIREFRAME_MODULE_TYPE = '文字';
 const FRAME_SIZE_REGEX = /^(?:(.+?)\s+)?(\d+)\s*x\s*(\d+)$/i;
+const MODULE_CONTENT_TYPE_REGEX = /(?:^|[;\n]\s*)type:\s*([a-z-]+)/i;
 const MOBILE_FRAME_REGEX = /(mobile|mini|phone|移动|手机|小程序)/i;
+const MODULE_BLOCK_START_REGEX = /(^|\n)\s{2,}-\s+name:\s*/g;
 const EMPTY_MODULE_NAME = '暂无模块';
 const EMPTY_MODULE_CONTENT = '无';
 
@@ -75,6 +81,53 @@ const normalizeModuleActions = (value: unknown) => {
   return [];
 };
 
+export const getWireframeModuleContentType = (content: unknown): string | null => {
+  if (typeof content !== 'string') {
+    return null;
+  }
+
+  const match = MODULE_CONTENT_TYPE_REGEX.exec(content.trim());
+  return match?.[1]?.trim().toLowerCase() || null;
+};
+
+export const normalizeWireframeModuleType = (value: unknown): 'text' | 'wireframe' | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === '文字' || normalized === 'text') {
+    return 'text';
+  }
+
+  if (normalized === '线框' || normalized === 'wireframe') {
+    return 'wireframe';
+  }
+
+  return null;
+};
+
+export const getWireframeModuleTypeLabel = (value: unknown): string => {
+  const normalized = normalizeWireframeModuleType(value);
+  return normalized === 'text' ? TEXT_WIREFRAME_MODULE_TYPE : DEFAULT_WIREFRAME_MODULE_TYPE;
+};
+
+export const getWireframeModuleVisualType = (
+  type: unknown,
+  content?: unknown
+): 'text' | 'wireframe' => {
+  const normalized = normalizeWireframeModuleType(type);
+  if (normalized) {
+    return normalized;
+  }
+
+  return getWireframeModuleContentType(content) === 'text' ? 'text' : 'wireframe';
+};
+
 export const isMobileAppType = (appType?: AppType | null) => Boolean(appType && MOBILE_APP_TYPES.includes(appType));
 
 export const formatCanvasPreset = (preset: CanvasPreset) => `${preset.width}x${preset.height}`;
@@ -85,7 +138,7 @@ export const getCanvasPreset = (appType?: AppType | null): CanvasPreset => {
       width: 390,
       height: 844,
       frameType: 'mobile',
-      label: appType === 'mini_program' ? '小程序线框' : '移动端线框',
+      label: appType === 'mini_program' ? '小程序线框图' : '移动端线框图',
       description: '移动端画布，适合单列页面和底部主操作。',
     };
   }
@@ -94,7 +147,7 @@ export const getCanvasPreset = (appType?: AppType | null): CanvasPreset => {
     width: 1280,
     height: 800,
     frameType: 'browser',
-    label: 'Web 端线框',
+    label: 'Web 端线框图',
   };
 };
 
@@ -123,7 +176,7 @@ export const resolveCanvasPresetFromFrame = (
 
   const explicitLabel = match[1]?.trim();
   const inferredMobile = width <= 480;
-  const label = explicitLabel || (inferredMobile ? '移动端线框' : 'Web 端线框');
+  const label = explicitLabel || (inferredMobile ? '移动端线框图' : 'Web 端线框图');
   const frameType = MOBILE_FRAME_REGEX.test(label) || width <= 480 ? 'mobile' : 'browser';
 
   return {
@@ -176,10 +229,16 @@ const getElementPriority = (element: CanvasElement) => {
   return typeof rawPriority === 'string' ? rawPriority.trim() : '';
 };
 
+const getElementModuleType = (element: CanvasElement) =>
+  getWireframeModuleVisualType(element.props.moduleType, element.props.content) === 'text'
+    ? TEXT_WIREFRAME_MODULE_TYPE
+    : DEFAULT_WIREFRAME_MODULE_TYPE;
+
 export const toWireframeModuleDrafts = (elements: CanvasElement[]): WireframeModuleDraft[] =>
   elements.map((element, index) => ({
     id: element.id,
     name: getElementName(element, index),
+    type: getElementModuleType(element),
     x: Number.isFinite(element.x) ? Math.max(0, Math.round(element.x)) : 0,
     y: Number.isFinite(element.y) ? Math.max(0, Math.round(element.y)) : 0,
     width: Number.isFinite(element.width) ? Math.max(MIN_MODULE_WIDTH, Math.round(element.width)) : MIN_MODULE_WIDTH,
@@ -198,6 +257,10 @@ export const createWireframeModule = (
   const size = getModuleSize(appType, content);
   const width = Math.max(MIN_MODULE_WIDTH, Math.round(draft.width ?? size.width));
   const height = Math.max(MIN_MODULE_HEIGHT, Math.round(draft.height ?? size.height));
+  const moduleType =
+    getWireframeModuleVisualType(draft.type, content) === 'text'
+      ? TEXT_WIREFRAME_MODULE_TYPE
+      : DEFAULT_WIREFRAME_MODULE_TYPE;
 
   return {
     id: draft.id || globalThis.crypto?.randomUUID?.() || `wire-${Math.random().toString(36).slice(2, 10)}`,
@@ -208,6 +271,7 @@ export const createWireframeModule = (
     height,
     props: {
       name: draft.name.trim() || '模块',
+      moduleType,
       content,
       purpose: draft.purpose?.trim() || '',
       actions: normalizeModuleActions(draft.actions),
@@ -222,6 +286,7 @@ export const snapToGrid = (value: number, gridSize = 8) =>
 
 const buildModuleMarkdownLines = (module: WireframeModuleDraft) => [
   `  - name: ${module.name}`,
+  `    type: ${getWireframeModuleTypeLabel(module.type)}`,
   `    position: ${module.x}, ${module.y}`,
   `    size: ${module.width ?? MIN_MODULE_WIDTH}, ${module.height ?? MIN_MODULE_HEIGHT}`,
   ...(module.purpose ? [`    purpose: ${module.purpose}`] : []),
@@ -254,6 +319,7 @@ export const buildPageWireframeMarkdown = (
       ? modules.flatMap((module) => buildModuleMarkdownLines(module))
       : [
           `  - name: ${EMPTY_MODULE_NAME}`,
+          `    type: ${DEFAULT_WIREFRAME_MODULE_TYPE}`,
           '    position: 0, 0',
           `    size: ${MIN_MODULE_WIDTH}, ${MIN_MODULE_HEIGHT}`,
           `    content: ${EMPTY_MODULE_CONTENT}`,
@@ -289,6 +355,7 @@ export const parsePageWireframeMarkdown = (
       createWireframeModule(
         {
           name: module.name,
+          type: module.type,
           x: module.x,
           y: module.y,
           width: module.width,
@@ -308,38 +375,50 @@ export const parseFrameFromWireframeMarkdown = (markdown: string) => {
   return match?.[1]?.trim() || null;
 };
 
-export const getMarkdownModuleMatches = (markdown: string): MarkdownModuleMatch[] => {
-  const matches: MarkdownModuleMatch[] = [];
-  const moduleRegex =
-    /(^|\n)(\s*-\s+name:\s*(.+?)\s*\n\s+position:\s*(\d+)\s*,\s*(\d+)\s*(?:\n\s+size:\s*(\d+)\s*,\s*(\d+)\s*)?(?:\n\s+purpose:\s*(.+?)\s*)?(?:\n\s+actions:\s*(.+?)\s*)?(?:\n\s+priority:\s*(.+?)\s*)?\n\s+content:\s*(.+?))(?=\n\s+-\s+name:|\n*$)/gms;
+const parseModuleBlock = (block: string, start: number): MarkdownModuleMatch | null => {
+  const nameMatch = /^\s*-\s+name:\s*(.+)$/m.exec(block);
+  const typeMatch = /^\s+type:\s*(.+)$/m.exec(block);
+  const positionMatch = /^\s+position:\s*(\d+)\s*,\s*(\d+)$/m.exec(block);
+  const sizeMatch = /^\s+size:\s*(\d+)\s*,\s*(\d+)$/m.exec(block);
+  const purposeMatch = /^\s+purpose:\s*(.+)$/m.exec(block);
+  const actionsMatch = /^\s+actions:\s*(.+)$/m.exec(block);
+  const priorityMatch = /^\s+priority:\s*(.+)$/m.exec(block);
+  const contentMatch = /^\s+content:\s*(.+)$/m.exec(block);
+  const name = nameMatch?.[1]?.trim() || '';
 
-  let match = moduleRegex.exec(markdown);
-
-  while (match) {
-    const blockStart = (match.index || 0) + (match[1] ? match[1].length : 0);
-    const block = match[2];
-    const name = match[3].trim();
-
-    if (name !== EMPTY_MODULE_NAME) {
-      matches.push({
-        name,
-        x: Number(match[4]),
-        y: Number(match[5]),
-        width: match[6] ? Number(match[6]) : undefined,
-        height: match[7] ? Number(match[7]) : undefined,
-        purpose: match[8]?.trim() || '',
-        actions: normalizeModuleActions(match[9]),
-        priority: match[10]?.trim() || '',
-        content: match[11].trim() === EMPTY_MODULE_CONTENT ? '' : match[11].trim(),
-        start: blockStart,
-        end: blockStart + block.length,
-      });
-    }
-
-    match = moduleRegex.exec(markdown);
+  if (!name || name === EMPTY_MODULE_NAME || !positionMatch || !contentMatch) {
+    return null;
   }
 
-  return matches;
+  return {
+    name,
+    type: typeMatch?.[1]?.trim() || undefined,
+    x: Number(positionMatch[1]),
+    y: Number(positionMatch[2]),
+    width: sizeMatch?.[1] ? Number(sizeMatch[1]) : undefined,
+    height: sizeMatch?.[2] ? Number(sizeMatch[2]) : undefined,
+    purpose: purposeMatch?.[1]?.trim() || '',
+    actions: normalizeModuleActions(actionsMatch?.[1]),
+    priority: priorityMatch?.[1]?.trim() || '',
+    content: contentMatch[1].trim() === EMPTY_MODULE_CONTENT ? '' : contentMatch[1].trim(),
+    start,
+    end: start + block.length,
+  };
+};
+
+export const getMarkdownModuleMatches = (markdown: string): MarkdownModuleMatch[] => {
+  const normalizedMarkdown = markdown.replace(/\r/g, '');
+  const starts = [...normalizedMarkdown.matchAll(MODULE_BLOCK_START_REGEX)].map((match) => ({
+    index: (match.index || 0) + (match[1] ? match[1].length : 0),
+  }));
+
+  return starts
+    .map((start, index) => {
+      const end = index + 1 < starts.length ? starts[index + 1].index - 1 : normalizedMarkdown.length;
+      const block = normalizedMarkdown.slice(start.index, end).trimEnd();
+      return parseModuleBlock(block, start.index);
+    })
+    .filter((match): match is MarkdownModuleMatch => Boolean(match));
 };
 
 export const findMarkdownModuleMatch = (

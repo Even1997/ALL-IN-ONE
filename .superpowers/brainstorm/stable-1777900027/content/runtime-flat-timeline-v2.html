@@ -1,0 +1,96 @@
+<h2>统一事件时间线 v2</h2>
+<p class="subtitle">按你的要求收敛：Thinking 默认折叠；执行摘要是一行；展开后所有步骤保持同一级，不再显示多层父子卡片。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">现在的问题</div>
+    <div class="mockup-body" style="display:flex;flex-direction:column;gap:10px">
+      <div style="padding:12px;border-radius:14px;background:#201f1f;border:1px solid #343434">
+        <div style="font-weight:700;margin-bottom:8px">已编辑 1 个文件，已运行 2 条命令</div>
+        <div style="padding-left:12px;border-left:1px solid #404040;display:flex;flex-direction:column;gap:8px">
+          <div style="padding:10px;border-radius:10px;background:#2a2a2a">应用修改</div>
+          <div style="padding-left:12px;border-left:1px solid #4a4a4a;display:flex;flex-direction:column;gap:8px">
+            <div style="padding:8px;border-radius:8px;background:#313131">规划修改</div>
+            <div style="padding:8px;border-radius:8px;background:#313131">修改文件</div>
+          </div>
+        </div>
+      </div>
+      <div class="subtitle">问题：层级太多，用户先看到的是结构，不是时间线。</div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">建议的目标效果</div>
+    <div class="mockup-body" style="display:flex;flex-direction:column;gap:10px">
+      <div style="padding:12px;border-radius:14px;background:#201f1f;border:1px solid #343434">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700">
+          <span style="width:8px;height:8px;border-radius:999px;background:#6abf69;display:inline-block"></span>
+          思考过程
+          <span style="color:#8e8e8e;font-weight:500">默认折叠</span>
+        </div>
+      </div>
+      <div style="padding:12px;border-radius:14px;background:#201f1f;border:1px solid #343434">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700">
+            <span style="width:8px;height:8px;border-radius:999px;background:#6abf69;display:inline-block"></span>
+            已编辑 3 个文件，已运行 2 条命令
+          </div>
+          <div style="color:#8e8e8e">展开</div>
+        </div>
+      </div>
+      <div style="padding:12px;border-radius:14px;background:#201f1f;border:1px solid #343434">
+        <div class="label">展开后仍在同一级</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+          <div style="padding:10px;border-radius:10px;background:#2a2a2a">
+            <div style="font-weight:700">规划修改</div>
+            <div style="color:#8e8e8e;font-size:13px">整理 runtime 时间线结构</div>
+          </div>
+          <div style="padding:10px;border-radius:10px;background:#2a2a2a">
+            <div style="font-weight:700">读取文件</div>
+            <div style="color:#8e8e8e;font-size:13px">AIChatRuntimeToolBlocks.tsx</div>
+          </div>
+          <div style="padding:10px;border-radius:10px;background:#2a2a2a">
+            <div style="font-weight:700">修改文件</div>
+            <div style="color:#8e8e8e;font-size:13px">runtimeEventRenderModel.ts</div>
+          </div>
+          <div style="padding:10px;border-radius:10px;background:#2a2a2a">
+            <div style="font-weight:700">运行命令</div>
+            <div style="color:#8e8e8e;font-size:13px">node --test ...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="cards">
+    <div class="card" data-choice="same-level-secondary-line" onclick="toggleSelect(this)">
+      <div class="card-body">
+        <h3>我推荐这个展开样式</h3>
+        <p>每条操作只保留两层信息：主标题 + 一行灰色副信息。没有父卡片里再套子卡片。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>这版会保留的东西</h4>
+      <ul>
+        <li>真实时间顺序。</li>
+        <li>Thinking 和 Action 都在同一条事件流里。</li>
+        <li>默认折叠，用户先看摘要。</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>这版会删掉的东西</h4>
+      <ul>
+        <li>`project_file_flow` 这种包装层的可见卡片。</li>
+        <li>展开后再嵌套 children 的树形结构。</li>
+        <li>“更多细节”这类额外入口。</li>
+      </ul>
+    </div>
+  </div>
+</div>

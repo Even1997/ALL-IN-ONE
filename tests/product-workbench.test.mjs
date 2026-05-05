@@ -28,6 +28,17 @@ test('module list text fields keep local drafts and commit on blur instead of ev
   assert.doesNotMatch(source, /onChange=\{\(event\) => handleModuleFieldChange\(\{ content: event\.target\.value \}\)\}/);
 });
 
+test('module list drag handle can reorder layer position with pointer drag', async () => {
+  const source = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(source, /const isModuleCardDragControl =/);
+  assert.match(source, /const getModuleCardIdFromPoint =/);
+  assert.match(source, /const handleDragHandlePointerDown = useCallback/);
+  assert.match(source, /window\.addEventListener\('pointerup', handlePointerUp\)/);
+  assert.match(source, /reorderElements\(moduleId, targetModuleId\)/);
+  assert.match(source, /onPointerDown=\{handleDragHandlePointerDown\}/);
+});
+
 // Regression: committing a module field schedules an autosave. When that saved
 // wireframe comes back through currentWireframe, the bridge must not reload the
 // same element snapshot because loadFromCode clears selectedElementId and

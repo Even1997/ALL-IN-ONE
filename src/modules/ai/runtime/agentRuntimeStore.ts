@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type {
   AgentBackgroundTaskRecord,
+  AgentExecutionAgentRunRecord,
+  AgentExecutionRunRecord,
+  AgentExecutionTaskRecord,
   AgentMemoryEntry,
   AgentProviderId,
   AgentReplayEvent,
@@ -79,6 +82,9 @@ type AgentRuntimeState = {
   timelineByThread: Record<string, AgentTimelineEvent[]>;
   turnsByThread: Record<string, AgentTurnRecord[]>;
   sessionsByThread: Record<string, AgentTurnSession[]>;
+  tasksByThread: Record<string, AgentExecutionTaskRecord[]>;
+  runsByThread: Record<string, AgentExecutionRunRecord[]>;
+  agentRunsByThread: Record<string, AgentExecutionAgentRunRecord[]>;
   memoryByProject: Record<string, AgentMemoryEntry[]>;
   memoryCandidatesByThread: Record<string, AgentMemoryCandidate[]>;
   replayEventsByThread: Record<string, AgentReplayEvent[]>;
@@ -97,6 +103,11 @@ type AgentRuntimeState = {
   appendTimelineEvent: (threadId: string, event: AgentTimelineEvent) => void;
   submitTurn: (threadId: string, turn: AgentTurnRecord) => void;
   upsertTurnSession: (threadId: string, session: AgentTurnSession) => void;
+  upsertExecutionTask: (threadId: string, task: AgentExecutionTaskRecord) => void;
+  upsertExecutionRun: (threadId: string, run: AgentExecutionRunRecord) => void;
+  setExecutionRuns: (threadId: string, runs: AgentExecutionRunRecord[]) => void;
+  upsertExecutionAgentRun: (threadId: string, agentRun: AgentExecutionAgentRunRecord) => void;
+  setExecutionAgentRuns: (threadId: string, agentRuns: AgentExecutionAgentRunRecord[]) => void;
   patchTurnSession: (
     threadId: string,
     turnId: string,
@@ -150,6 +161,15 @@ const sortTurns = (turns: AgentTurnRecord[]) =>
 const sortSessions = (sessions: AgentTurnSession[]) =>
   [...sessions].sort((left, right) => left.createdAt - right.createdAt);
 
+const sortExecutionTasks = (tasks: AgentExecutionTaskRecord[]) =>
+  [...tasks].sort((left, right) => right.updatedAt - left.updatedAt);
+
+const sortExecutionRuns = (runs: AgentExecutionRunRecord[]) =>
+  [...runs].sort((left, right) => right.updatedAt - left.updatedAt);
+
+const sortExecutionAgentRuns = (agentRuns: AgentExecutionAgentRunRecord[]) =>
+  [...agentRuns].sort((left, right) => right.updatedAt - left.updatedAt);
+
 const sortReplayEvents = (events: AgentReplayEvent[]) =>
   [...events].sort((left, right) => left.createdAt - right.createdAt);
 
@@ -188,6 +208,9 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
   timelineByThread: {},
   turnsByThread: {},
   sessionsByThread: {},
+  tasksByThread: {},
+  runsByThread: {},
+  agentRunsByThread: {},
   memoryByProject: {},
   memoryCandidatesByThread: {},
   replayEventsByThread: {},
@@ -244,6 +267,55 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
           session,
           ...(state.sessionsByThread[threadId] || []).filter((item) => item.id !== session.id),
         ]),
+      },
+    })),
+
+  upsertExecutionTask: (threadId, task) =>
+    set((state) => ({
+      tasksByThread: {
+        ...state.tasksByThread,
+        [threadId]: sortExecutionTasks([
+          task,
+          ...(state.tasksByThread[threadId] || []).filter((item) => item.id !== task.id),
+        ]),
+      },
+    })),
+
+  upsertExecutionRun: (threadId, run) =>
+    set((state) => ({
+      runsByThread: {
+        ...state.runsByThread,
+        [threadId]: sortExecutionRuns([
+          run,
+          ...(state.runsByThread[threadId] || []).filter((item) => item.id !== run.id),
+        ]),
+      },
+    })),
+
+  setExecutionRuns: (threadId, runs) =>
+    set((state) => ({
+      runsByThread: {
+        ...state.runsByThread,
+        [threadId]: sortExecutionRuns([...runs]),
+      },
+    })),
+
+  upsertExecutionAgentRun: (threadId, agentRun) =>
+    set((state) => ({
+      agentRunsByThread: {
+        ...state.agentRunsByThread,
+        [threadId]: sortExecutionAgentRuns([
+          agentRun,
+          ...(state.agentRunsByThread[threadId] || []).filter((item) => item.id !== agentRun.id),
+        ]),
+      },
+    })),
+
+  setExecutionAgentRuns: (threadId, agentRuns) =>
+    set((state) => ({
+      agentRunsByThread: {
+        ...state.agentRunsByThread,
+        [threadId]: sortExecutionAgentRuns([...agentRuns]),
       },
     })),
 
@@ -458,6 +530,18 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
         sessionsByThread: {
           ...state.sessionsByThread,
           [threadId]: (state.sessionsByThread[threadId] || []).filter((session) => session.createdAt < createdAt),
+        },
+        tasksByThread: {
+          ...state.tasksByThread,
+          [threadId]: (state.tasksByThread[threadId] || []).filter((task) => task.createdAt < createdAt),
+        },
+        runsByThread: {
+          ...state.runsByThread,
+          [threadId]: (state.runsByThread[threadId] || []).filter((run) => run.createdAt < createdAt),
+        },
+        agentRunsByThread: {
+          ...state.agentRunsByThread,
+          [threadId]: (state.agentRunsByThread[threadId] || []).filter((run) => run.createdAt < createdAt),
         },
         replayEventsByThread: {
           ...state.replayEventsByThread,

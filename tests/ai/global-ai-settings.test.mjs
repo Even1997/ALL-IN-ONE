@@ -64,9 +64,9 @@ test('ai settings modal exposes one explicit save action while keeping model swi
   assert.match(source, /settingsModelOptions\.map\(\(candidate\)/);
   assert.match(source, /model:\s*candidate/);
   assert.match(source, /syncModelCatalog\(settingsDraft\.provider,\s*settingsDraft\.baseURL,\s*settingsModelOptions\)/);
-  assert.match(source, /contextWindowTokens:\s*config\?\.contextWindowTokens\s*\|\|\s*200000/);
-  assert.match(source, /value=\{settingsDraft\.contextWindowTokens\}/);
-  assert.match(source, /contextWindowTokens:\s*Math\.max\(1000,\s*Number\.isFinite\(nextValue\)\s*\?\s*nextValue\s*:\s*200000\)/);
+  assert.match(source, /contextWindowTokens:\s*config\?\.contextWindowTokens\s*\|\|\s*258000/);
+  assert.match(source, /value=\{Math\.round\(settingsDraft\.contextWindowTokens \/ 1000\)\}/);
+  assert.match(source, /contextWindowTokens:\s*Math\.max\(1000,\s*Number\.isFinite\(nextValue\)\s*\?\s*nextValue\s*:\s*258000\)/);
 });
 
 test('ai chat exposes direct new-session entry and context budget indicator near the composer', async () => {

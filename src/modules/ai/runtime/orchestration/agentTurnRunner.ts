@@ -322,19 +322,18 @@ export const createRuntimeStreamingMessageAssembler = () => {
     } else {
       answerContentRaw += pendingText;
     }
-    appendAssistantPartContent(mode, pendingText, false);
+    appendAssistantPartContent(mode, pendingText, mode === 'thinking');
 
     pendingText = '';
   };
 
   const buildDraft = (completeThinking: boolean): RuntimeStreamingAssistantDraft => {
-    // Streaming 态（completeThinking=false）下，pendingText 在 initial/thinking 态都展示为
-    // 可见 answer 内容，让用户在模型生成 pre-tool reasoning 时也能看到文字流。
-    // 若后续触发 tool 边界，markToolBoundary 会将 pendingText 移至 thinking 块。
-    const visibleAnswerContent = sanitizeStreamingVisibleText(
-      state === 'answer' ? answerContentRaw : pendingText,
+    // Streaming 态下，tool 前的 pendingText 先按折叠 thinking 展示。
+    // 一旦进入 answer 状态，只有正文继续作为可见 answer 输出。
+    const visibleAnswerContent = sanitizeStreamingVisibleText(state === 'answer' ? answerContentRaw : '');
+    const visibleThinkingContent = sanitizeStreamingThinkingText(
+      state === 'answer' ? thinkingContent : `${thinkingContent}${pendingText}`
     );
-    const visibleThinkingContent = sanitizeStreamingThinkingText(thinkingContent);
     const visibleParts = assistantParts
       .map((part) => {
         const content =
@@ -345,19 +344,20 @@ export const createRuntimeStreamingMessageAssembler = () => {
           ? {
               ...part,
               content,
-              ...(part.type === 'thinking' ? { collapsed: completeThinking } : {}),
+              ...(part.type === 'thinking' ? { collapsed: true } : {}),
             }
           : null;
       })
       .filter((part): part is RuntimeStreamingAssistantDraft['assistantParts'][number] => Boolean(part));
 
-    // Streaming 态下 pendingText 尚未归入 assistantParts，追加为可见 text part
+    // Streaming 态下 pendingText 尚未归入 assistantParts，追加为折叠 thinking part。
     if (!completeThinking && pendingText && state !== 'answer') {
-      const sanitizedPending = sanitizeStreamingVisibleText(pendingText);
+      const sanitizedPending = sanitizeStreamingThinkingText(pendingText);
       if (sanitizedPending) {
         visibleParts.push({
-          type: 'text',
+          type: 'thinking',
           content: sanitizedPending,
+          collapsed: true,
           createdAt: Date.now(),
         });
       }
@@ -382,7 +382,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
         flushPendingText('thinking');
         state = 'thinking';
         thinkingContent += event.delta;
-        appendAssistantPartContent('thinking', event.delta, false);
+        appendAssistantPartContent('thinking', event.delta, true);
       } else if (state === 'thinking') {
         // 已有 native thinking → text 是正文，直接送入 answer
         answerContentRaw += event.delta;

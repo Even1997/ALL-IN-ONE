@@ -152,10 +152,13 @@ export const buildAssistantMessageParts = (input: {
   }
 
   if (input.answerContent?.trim()) {
-    parts.push({
-      type: 'text',
-      content: input.answerContent.trim(),
-    });
+    const answerContent = cleanVisibleAssistantText(input.answerContent);
+    if (answerContent) {
+      parts.push({
+        type: 'text',
+        content: answerContent,
+      });
+    }
   }
 
   if (parts.length > 0) {
@@ -249,7 +252,48 @@ export const buildStoredAssistantParts = (input: {
   thinkingContent?: string;
   answerContent?: string;
   thinkingCollapsed?: boolean;
+  preferredAssistantParts?: AIChatMessagePart[];
 }) => {
+  const preferredParts = (input.preferredAssistantParts || [])
+    .map((part) => {
+      if (part.type === 'thinking') {
+        const content = cleanThinkingAssistantText(part.content);
+        if (!content) {
+          return null;
+        }
+
+        return {
+          ...part,
+          content,
+          collapsed: input.thinkingCollapsed ?? part.collapsed,
+        } as Extract<AIChatMessagePart, { type: 'thinking' }>;
+      }
+
+      if (part.type === 'text') {
+        const content = cleanVisibleAssistantText(part.content);
+        if (!content) {
+          return null;
+        }
+
+        return {
+          ...part,
+          content,
+        } as Extract<AIChatMessagePart, { type: 'text' }>;
+      }
+
+      return null;
+    })
+    .filter(
+      (
+        part
+      ): part is Extract<AIChatMessagePart, { type: 'thinking' }> | Extract<AIChatMessagePart, { type: 'text' }> =>
+        Boolean(part)
+    );
+
+  if (preferredParts.length > 0) {
+    return preferredParts;
+  }
+
   const parts: AIChatMessagePart[] = [];
 
   if (input.thinkingContent?.trim()) {
@@ -264,10 +308,13 @@ export const buildStoredAssistantParts = (input: {
   }
 
   if (input.answerContent?.trim()) {
-    parts.push({
-      type: 'text',
-      content: input.answerContent.trim(),
-    });
+    const answerContent = cleanVisibleAssistantText(input.answerContent);
+    if (answerContent) {
+      parts.push({
+        type: 'text',
+        content: answerContent,
+      });
+    }
   }
 
   return parts;
@@ -321,6 +368,7 @@ export const buildAssistantStructuredContentState = (input: {
     thinkingContent,
     answerContent,
     thinkingCollapsed: input.thinkingCollapsed ?? true,
+    preferredAssistantParts: preferredParts,
   });
   const content = assistantParts.length > 0 ? serializeAssistantMessageParts(assistantParts) : cleanVisibleAssistantText(input.content || '');
 
@@ -349,7 +397,7 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
   }
 
   if (THINKING_PLACEHOLDERS.has(trimmed)) {
-    return [{ type: 'thinking', content: '', collapsed: false }];
+    return [{ type: 'thinking', content: '', collapsed: true }];
   }
 
   const unfinishedThinkIndex = content.lastIndexOf('<think>');
@@ -358,7 +406,7 @@ export const parseAIChatMessageParts = (content: string): AIChatMessagePart[] =>
     const thinkingContent = content.slice(unfinishedThinkIndex + '<think>'.length).trim();
     const parts: AIChatMessagePart[] = [];
     pushTextPart(parts, beforeThink);
-    parts.push({ type: 'thinking', content: thinkingContent, collapsed: false });
+    parts.push({ type: 'thinking', content: thinkingContent, collapsed: true });
     return parts;
   }
 

@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Chat 结构对比 - Assistant Reply</title>
+    <style>
+      :root {
+        --bg: #f6f1e7;
+        --paper: #fffdf9;
+        --paper-2: #f3ece1;
+        --ink: #191613;
+        --muted: #73675b;
+        --line: rgba(61, 48, 37, 0.12);
+        --accent: #0f766e;
+        --accent-soft: rgba(15, 118, 110, 0.12);
+        --warning: #b45309;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.1), transparent 26%),
+          linear-gradient(180deg, #fbf8f2, var(--bg));
+      }
+
+      .page {
+        width: min(1500px, calc(100% - 28px));
+        margin: 14px auto 28px;
+      }
+
+      .hero,
+      .compare,
+      .note {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: rgba(255, 253, 249, 0.9);
+        backdrop-filter: blur(16px);
+        box-shadow: 0 18px 60px rgba(93, 69, 40, 0.1);
+      }
+
+      .hero {
+        padding: 28px 30px;
+        margin-bottom: 18px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 11px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        margin-top: 14px;
+        font-size: clamp(28px, 4.6vw, 44px);
+        line-height: 1.04;
+      }
+
+      .hero p {
+        margin-top: 12px;
+        max-width: 920px;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .compare {
+        padding: 16px;
+      }
+
+      .compare-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .variant {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+
+      .variant-head {
+        padding: 18px 18px 14px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent);
+      }
+
+      .variant-head p {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .frame {
+        padding: 16px;
+        background:
+          linear-gradient(180deg, rgba(243, 236, 225, 0.42), rgba(255, 253, 249, 0.86));
+      }
+
+      .chat-shell {
+        min-height: 680px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: #171819;
+        overflow: hidden;
+      }
+
+      .chat-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        color: #f4f1ea;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .chat-topbar span {
+        color: rgba(244, 241, 234, 0.58);
+        font-size: 12px;
+      }
+
+      .chat-body {
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+        background: #171819;
+      }
+
+      .user-row,
+      .assistant-row {
+        display: flex;
+      }
+
+      .user-row {
+        justify-content: flex-end;
+      }
+
+      .assistant-row {
+        justify-content: flex-start;
+      }
+
+      .user-bubble,
+      .assistant-bubble,
+      .thinking-chip,
+      .tool-card,
+      .inline-rail,
+      .response-card,
+      .control-card {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .user-bubble {
+        max-width: 72%;
+        padding: 12px 14px;
+        border-radius: 18px 18px 8px 18px;
+        background: #22262b;
+        color: #f5f7f8;
+        line-height: 1.65;
+        font-size: 13px;
+      }
+
+      .meta {
+        margin-top: 6px;
+        color: rgba(255, 255, 255, 0.42);
+        font-size: 11px;
+      }
+
+      .assistant-stack {
+        width: min(100%, 880px);
+        display: grid;
+        gap: 8px;
+      }
+
+      .assistant-bubble {
+        padding: 2px 0 0;
+        border-radius: 0;
+        background: transparent;
+        color: #f3f0eb;
+      }
+
+      .answer {
+        display: grid;
+        gap: 10px;
+        font-size: 13px;
+        line-height: 1.72;
+      }
+
+      .answer p {
+        color: #f3f0eb;
+      }
+
+      .thinking-chip {
+        width: fit-content;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.04);
+        color: rgba(255, 255, 255, 0.55);
+        font-size: 11px;
+      }
+
+      .tool-card {
+        padding: 11px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        color: rgba(255, 255, 255, 0.76);
+      }
+
+      .tool-card strong,
+      .inline-rail strong,
+      .response-card strong,
+      .control-card strong {
+        display: block;
+        margin-bottom: 5px;
+        color: #f5f2ec;
+        font-size: 12px;
+      }
+
+      .tool-card span,
+      .inline-rail span,
+      .control-card span {
+        color: rgba(255, 255, 255, 0.56);
+        font-size: 11px;
+        line-height: 1.55;
+      }
+
+      .divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.08);
+        margin: 2px 0;
+      }
+
+      .layout-current .assistant-stack {
+        gap: 6px;
+      }
+
+      .layout-current .assistant-bubble {
+        max-width: 100%;
+      }
+
+      .layout-current .tool-card {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .layout-editorial .assistant-stack {
+        width: min(760px, 100%);
+        gap: 10px;
+      }
+
+      .layout-editorial .response-card {
+        padding: 16px 18px 14px;
+        border-radius: 20px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+      }
+
+      .layout-editorial .assistant-bubble {
+        padding: 0;
+      }
+
+      .layout-editorial .answer {
+        gap: 12px;
+      }
+
+      .layout-editorial .tool-group {
+        display: grid;
+        gap: 6px;
+        margin-top: 4px;
+      }
+
+      .layout-editorial .tool-card {
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .layout-editorial .control-card {
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(180, 83, 9, 0.08);
+      }
+
+      .layout-inline .assistant-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 180px;
+        gap: 10px;
+        align-items: start;
+      }
+
+      .layout-inline .response-card {
+        padding: 16px 18px 14px;
+        border-radius: 20px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+      }
+
+      .layout-inline .inline-rail {
+        padding: 10px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        display: grid;
+        gap: 8px;
+      }
+
+      .layout-inline .inline-rail-item {
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .layout-inline .inline-rail-item:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+
+      .bottom-note {
+        padding: 14px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.52);
+        font-size: 11px;
+      }
+
+      .note {
+        margin-top: 16px;
+        padding: 18px 20px;
+      }
+
+      .note h4 {
+        margin-bottom: 10px;
+      }
+
+      .note ul {
+        margin: 0;
+        padding-left: 1.2em;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .note li + li {
+        margin-top: 4px;
+      }
+
+      @media (max-width: 1240px) {
+        .compare-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .chat-shell {
+          min-height: auto;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .layout-inline .assistant-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <span class="eyebrow">Assistant Reply Structure</span>
+        <h1>同一段 AI 回复，3 种不同的聊天结构</h1>
+        <p>
+          我只聚焦你选的 B：助手回复不好看。这里不是改配色，而是改“回复怎么组织”。
+          你现在的问题更像是正文、thinking、tool/approval 卡片在同一条时间线上混排，
+          所以阅读节奏会被打断。
+        </p>
+      </section>
+
+      <section class="compare">
+        <div class="compare-grid">
+          <article class="variant">
+            <header class="variant-head">
+              <h2>A. 当前感受</h2>
+              <p>正文、thinking、工具卡片按时间线穿插。信息全有，但读起来像“日志流”。</p>
+            </header>
+            <div class="frame">
+              <div class="chat-shell layout-current">
+                <div class="chat-topbar">
+                  <strong>AI Chat</strong>
+                  <span>embedded · current structure</span>
+                </div>
+                <div class="chat-body">
+                  <div class="user-row">
+                    <div>
+                      <div class="user-bubble">不是的哦，是AI聊天结构，目前效果不太好</div>
+                      <div class="meta">14:52</div>
+                    </div>
+                  </div>
+                  <div class="assistant-row">
+                    <div class="assistant-stack">
+                      <div class="thinking-chip">thinking · 已定位到 assistant message item</div>
+                      <div class="assistant-bubble">
+                        <div class="answer">
+                          <p>我看完当前 AIChat 结构了，问题点主要集中在 3 块：消息正文和各种卡片是并排/串联混在一起的。</p>
+                        </div>
+                      </div>
+                      <div class="tool-card">
+                        <strong>Turn Summary Card</strong>
+                        <span>目标：收窄到“助手回复结构本身”</span>
+                      </div>
+                      <div class="assistant-bubble">
+                        <div class="answer">
+                          <p>这样阅读时会从回答跳到卡片、再跳回回答，所以不像一个完整的回复。</p>
+                        </div>
+                      </div>
+                      <div class="tool-card">
+                        <strong>Runtime Approval</strong>
+                        <span>需要你确认使用浏览器视觉对比</span>
+                      </div>
+                      <div class="assistant-bubble">
+                        <div class="answer">
+                          <p>尤其当工具、审批、结构卡都很多时，主答案会被切碎。</p>
+                        </div>
+                      </div>
+                      <div class="meta">14:55</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="bottom-note">问题：像事件流，不像完成态回复。</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="variant">
+            <header class="variant-head">
+              <h2>B. 推荐方向</h2>
+              <p>先给完整回答，再把 thinking、工具和审批降成“回复附属层”。阅读顺序最稳定。</p>
+            </header>
+            <div class="frame">
+              <div class="chat-shell layout-editorial">
+                <div class="chat-topbar">
+                  <strong>AI Chat</strong>
+                  <span>editorial reply · recommended</span>
+                </div>
+                <div class="chat-body">
+                  <div class="user-row">
+                    <div>
+                      <div class="user-bubble">不是的哦，是AI聊天结构，目前效果不太好</div>
+                      <div class="meta">14:52</div>
+                    </div>
+                  </div>
+                  <div class="assistant-row">
+                    <div class="assistant-stack">
+                      <div class="response-card">
+                        <strong>Assistant</strong>
+                        <div class="answer">
+                          <p>我看完当前 AIChat 结构了，主要问题不是颜色，而是“助手回复被切碎了”。</p>
+                          <p>现在正文、thinking、tool/approval 卡片会一起进入消息时间线，所以用户读一段主答案，就可能被插进来的结构卡打断。</p>
+                          <p>更顺的做法是：先把完整回答讲完，再把运行态信息放到回复下面，作为可展开或弱化的附属层。</p>
+                        </div>
+                        <div class="meta">14:55</div>
+                      </div>
+                      <div class="tool-group">
+                        <div class="thinking-chip">Thinking summary · 已确认根因在消息编排层</div>
+                        <div class="tool-card">
+                          <strong>Support Cards</strong>
+                          <span>Turn summary / tool trace / runtime approval 不再打断正文，只挂在正文下方。</span>
+                        </div>
+                      </div>
+                      <div class="control-card">
+                        <strong>为什么这版更像聊天</strong>
+                        <span>用户先读“答复”，再决定要不要看“过程”。主次更明确。</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="bottom-note">优点：最像成品聊天界面，阅读节奏最好。</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="variant">
+            <header class="variant-head">
+              <h2>C. 过程陪伴型</h2>
+              <p>正文仍是主角，但把工具/状态做成右侧小侧轨，适合保留“AI 正在工作”的在线感。</p>
+            </header>
+            <div class="frame">
+              <div class="chat-shell layout-inline">
+                <div class="chat-topbar">
+                  <strong>AI Chat</strong>
+                  <span>inline audit rail</span>
+                </div>
+                <div class="chat-body">
+                  <div class="user-row">
+                    <div>
+                      <div class="user-bubble">不是的哦，是AI聊天结构，目前效果不太好</div>
+                      <div class="meta">14:52</div>
+                    </div>
+                  </div>
+                  <div class="assistant-row">
+                    <div class="assistant-stack">
+                      <div class="assistant-grid">
+                        <div class="response-card">
+                          <strong>Assistant</strong>
+                          <div class="answer">
+                            <p>我先聚焦助手回复本身。当前的核心问题是，正文和过程信息共享同一个阅读轨道。</p>
+                            <p>如果你还想保留“AI 正在工作”的感觉，可以把工具、审批、thinking 移到一个更窄的辅助侧轨里。</p>
+                            <p>这样正文保持完整，但过程感不会完全消失。</p>
+                          </div>
+                          <div class="meta">14:55</div>
+                        </div>
+                        <aside class="inline-rail">
+                          <div class="inline-rail-item">
+                            <strong>Thinking</strong>
+                            <span>已锁定 root cause</span>
+                          </div>
+                          <div class="inline-rail-item">
+                            <strong>Tools</strong>
+                            <span>Read AIChat.tsx / GNAgentMessageItem</span>
+                          </div>
+                          <div class="inline-rail-item">
+                            <strong>Approval</strong>
+                            <span>Browser compare confirmed</span>
+                          </div>
+                        </aside>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="bottom-note">优点：比当前清楚，也比纯聊天更保留 agent 感。</div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="note">
+        <h4>我现在的推荐</h4>
+        <ul>
+          <li>`B` 最适合你这次反馈，因为它优先解决“助手回复不像完整回复”的核心问题。</li>
+          <li>`C` 适合你如果不想丢掉太多运行态可见性，还想保留一些 agent 在线工作的感觉。</li>
+          <li>`A` 基本就是现在的症状示意，不建议继续沿这个方向细修。</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

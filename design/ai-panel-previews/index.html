@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 面板样式预览</title>
+    <style>
+      :root {
+        --bg: #f4efe7;
+        --panel: rgba(255, 252, 247, 0.9);
+        --panel-strong: #fffdfa;
+        --text: #1d1a17;
+        --muted: #6e6257;
+        --line: rgba(56, 43, 31, 0.12);
+        --accent: #0f766e;
+        --accent-soft: rgba(15, 118, 110, 0.12);
+        --shadow: 0 24px 60px rgba(50, 35, 23, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 32%),
+          radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.12), transparent 28%),
+          var(--bg);
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 32px));
+        margin: 32px auto;
+      }
+
+      .hero,
+      .card {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        backdrop-filter: blur(18px);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 32px;
+        margin-bottom: 24px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      h1 {
+        margin: 18px 0 12px;
+        font-size: clamp(32px, 5vw, 52px);
+        line-height: 1;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      .logic-grid,
+      .preview-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .logic-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-bottom: 24px;
+      }
+
+      .preview-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        padding: 22px;
+      }
+
+      .card h2,
+      .card h3 {
+        margin: 0 0 12px;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .tag {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(29, 26, 23, 0.05);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .preview-card {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .preview-shot {
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        background: var(--panel-strong);
+        padding: 14px;
+        min-height: 220px;
+      }
+
+      .shot-frame {
+        height: 100%;
+        border-radius: 16px;
+        overflow: hidden;
+      }
+
+      .shot-frame.command {
+        background:
+          linear-gradient(90deg, #19242a 0 24%, #f8fbfc 24% 74%, #edf6f5 74% 100%);
+      }
+
+      .shot-frame.focus {
+        background:
+          linear-gradient(180deg, #141c1f 0 17%, #fbf6ec 17% 100%);
+      }
+
+      .shot-frame.timeline {
+        background:
+          linear-gradient(90deg, #faf5ef 0 28%, #ffffff 28% 100%);
+      }
+
+      .preview-card a {
+        width: fit-content;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: var(--text);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .preview-card a:hover {
+        opacity: 0.88;
+      }
+
+      @media (max-width: 960px) {
+        .logic-grid,
+        .preview-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <span class="eyebrow">AI Panel Preview Pack</span>
+        <h1>基于当前显示逻辑的 3 套 AI 面板样式稿</h1>
+        <p>
+          我先按代码里的真实结构做了整理，再只改“展示层”。现在的核心骨架是固定的：
+          左栏承载线程和时间线，中间承载状态卡、回合摘要和主对话，右栏承载 Team / Plan /
+          Context / Tools / Memory Inbox / Memory。
+        </p>
+      </section>
+
+      <section class="logic-grid">
+        <article class="card">
+          <h2>左栏</h2>
+          <p>当前偏“导航与追溯”：线程列表用来切线程，时间线用来看事件、恢复入口和多代理阶段。</p>
+          <div class="tag-row">
+            <span class="tag">Threads</span>
+            <span class="tag">Timeline</span>
+            <span class="tag">Recovery</span>
+          </div>
+        </article>
+        <article class="card">
+          <h2>中栏</h2>
+          <p>当前偏“执行主舞台”：顶部是 Agent Status，中间是 Turn Summary，主体才是 AIChat。</p>
+          <div class="tag-row">
+            <span class="tag">Status</span>
+            <span class="tag">Turn Summary</span>
+            <span class="tag">Chat</span>
+          </div>
+        </article>
+        <article class="card">
+          <h2>右栏</h2>
+          <p>当前偏“辅助决策与审计”：计划、上下文、工具调用、记忆建议和长期记忆都在这里。</p>
+          <div class="tag-row">
+            <span class="tag">Plan</span>
+            <span class="tag">Context</span>
+            <span class="tag">Tools</span>
+            <span class="tag">Memory</span>
+          </div>
+        </article>
+      </section>
+
+      <section class="preview-grid">
+        <article class="card preview-card">
+          <div class="preview-shot">
+            <div class="shot-frame command"></div>
+          </div>
+          <div>
+            <h3>方案 A: Command Center</h3>
+            <p>保留三栏，但把密度做得更专业，像“调度台”。适合你想强化运行态、工具态和线程态的时候。</p>
+          </div>
+          <a href="./variant-command-center.html">打开 HTML</a>
+        </article>
+
+        <article class="card preview-card">
+          <div class="preview-shot">
+            <div class="shot-frame focus"></div>
+          </div>
+          <div>
+            <h3>方案 B: Focus Chat</h3>
+            <p>把中间主对话做成真正主角，左右信息收成可读摘要，更适合日常高频使用。</p>
+          </div>
+          <a href="./variant-focus-chat.html">打开 HTML</a>
+        </article>
+
+        <article class="card preview-card">
+          <div class="preview-shot">
+            <div class="shot-frame timeline"></div>
+          </div>
+          <div>
+            <h3>方案 C: Timeline Review</h3>
+            <p>把“过程可解释性”放大，适合强调回放、审核、恢复和多代理协作的场景。</p>
+          </div>
+          <a href="./variant-timeline-review.html">打开 HTML</a>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

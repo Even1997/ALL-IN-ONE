@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import type { StoredChatMessage } from '../../../modules/ai/store/aiChatStore';
-import { buildAssistantRenderModel } from '../../workspace/assistantRenderModel';
+import type { StoredChatMessage } from '../../../modules/ai/store/aiChatStore.ts';
+import { buildAssistantRenderModel, type AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
-import { buildGNAgentMessageFlow } from './GNAgentMessageFlow';
 
 type MessagePartRenderer = (
   message: StoredChatMessage,
@@ -19,23 +18,22 @@ type MessagePartRenderer = (
 
 type MessagePartsParser = (content: string) => AIChatMessagePart[];
 
-type MessageRenderItem =
-  | { kind: 'thinking_lane'; key: string; node: React.ReactNode; createdAt?: number }
-  | { kind: 'bubble_part'; key: string; node: React.ReactNode; createdAt?: number }
-  | { kind: 'bubble_card'; key: string; node: React.ReactNode; createdAt?: number };
+type MessageRenderItem = {
+  key: string;
+  node: React.ReactNode;
+  createdAt?: number;
+};
 
 type GNAgentMessageItemProps = {
   message: StoredChatMessage;
-  draftState?: {
-    content: string;
-    thinkingContent: string;
-    answerContent: string;
-    assistantParts: AIChatMessagePart[];
-  };
+  draftState?: AssistantDraftState;
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
-  bubbleCards: React.ReactNode[];
+  bubbleCards: Array<{
+    node: React.ReactNode;
+    createdAt?: number;
+  }>;
 };
 
 const AssistantMessageActionBar: React.FC<{
@@ -67,19 +65,6 @@ const AssistantMessageActionBar: React.FC<{
   );
 };
 
-const areMessageItemPropsEqual = (
-  prev: GNAgentMessageItemProps,
-  next: GNAgentMessageItemProps
-) => {
-  if (prev.message.id !== next.message.id) return false;
-  if (prev.draftState !== next.draftState) return false;
-  if (prev.bubbleCards.length !== next.bubbleCards.length) return false;
-  if (prev.formatTimestamp !== next.formatTimestamp) return false;
-  if (prev.parseMessageParts !== next.parseMessageParts) return false;
-  if (prev.renderMessagePart !== next.renderMessagePart) return false;
-  return true;
-};
-
 export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   message,
   draftState,
@@ -89,17 +74,11 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   bubbleCards,
 }: GNAgentMessageItemProps) {
   const [expandedThinkingKeys, setExpandedThinkingKeys] = useState<Record<string, boolean>>({});
-  const content = draftState?.content ?? message.content;
-  const firstRuntimeEventTime = message.runtimeEvents?.reduce<number | undefined>(
-    (earliest, event) =>
-      typeof earliest === 'number' && earliest <= event.createdAt ? earliest : event.createdAt,
-    undefined
-  );
-  const bubbleRenderItems: MessageRenderItem[] = bubbleCards.map((node, index) => ({
-    kind: 'bubble_card',
+  const content = message.role === 'assistant' ? '' : message.content;
+  const bubbleRenderItems: MessageRenderItem[] = bubbleCards.map((bubbleCard, index) => ({
     key: `${message.id}-card-${index}`,
-    node,
-    createdAt: firstRuntimeEventTime,
+    node: bubbleCard.node,
+    createdAt: bubbleCard.createdAt,
   }));
   const assistantRenderModel =
     message.role === 'assistant' ? buildAssistantRenderModel(message, draftState, bubbleRenderItems.length) : null;
@@ -111,16 +90,15 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     assistantRenderModel.items.forEach((item) => {
       const thinkingKey = `${message.id}-thinking-${item.index}`;
       const thinkingExpanded =
-        item.part.type === 'thinking' ? (isStreaming ? true : expandedThinkingKeys[thinkingKey] ?? false) : undefined;
+        item.part.type === 'thinking' ? expandedThinkingKeys[thinkingKey] ?? false : undefined;
       partRenderItems.push({
-        kind: item.kind,
         key: item.key,
         node: renderMessagePart(message, message.id, item.part, item.index, {
           content: assistantRenderModel.content,
           isStreaming,
           thinkingExpanded,
           onToggleThinking:
-            item.part.type === 'thinking' && !isStreaming
+            item.part.type === 'thinking'
               ? () =>
                   setExpandedThinkingKeys((current) => ({
                     ...current,
@@ -135,7 +113,6 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     const parts = parseMessageParts(content);
     parts.forEach((part, index) => {
       partRenderItems.push({
-        kind: part.type === 'thinking' ? 'thinking_lane' : 'bubble_part',
         key: `${message.id}-part-${index}`,
         node: renderMessagePart(message, message.id, part, index, {
           content,
@@ -146,55 +123,33 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     });
   }
 
-  const thinkingItems = partRenderItems.filter((item) => item.kind === 'thinking_lane');
-  const bubbleItems = partRenderItems.filter((item) => item.kind !== 'thinking_lane');
-  const itemsByKey = new Map([...thinkingItems, ...bubbleItems, ...bubbleRenderItems].map((item) => [item.key, item]));
-  const flowSections = buildGNAgentMessageFlow([
-    ...thinkingItems.map((item) => ({ kind: 'thinking' as const, key: item.key, createdAt: item.createdAt })),
-    ...bubbleItems.map((item) => ({ kind: 'bubble' as const, key: item.key, createdAt: item.createdAt })),
-    ...bubbleRenderItems.map((item) => ({ kind: 'cards' as const, key: item.key, createdAt: item.createdAt })),
-  ]);
-
-  const renderSectionItems = (keys: string[]) =>
-    keys.map((key) => {
-      const item = itemsByKey.get(key);
-      return item ? <React.Fragment key={item.key}>{item.node}</React.Fragment> : null;
+  const timelineItems = [...partRenderItems, ...bubbleRenderItems]
+    .map((item, index) => ({ ...item, timelineIndex: index }))
+    .sort((left, right) => {
+      const leftTime = typeof left.createdAt === 'number' ? left.createdAt : Number.MAX_SAFE_INTEGER;
+      const rightTime = typeof right.createdAt === 'number' ? right.createdAt : Number.MAX_SAFE_INTEGER;
+      return leftTime - rightTime || left.timelineIndex - right.timelineIndex;
     });
-
-  const hasVisibleContent = flowSections.some((section) => section.keys.length > 0);
+  const hasVisibleContent = timelineItems.length > 0;
 
   return (
     <article className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}>
-      {flowSections.map((section, sectionIndex) => {
-        if (section.kind === 'thinking') {
-          return (
-            <div key={`thinking-${sectionIndex}`} className="chat-message-thinking-lane">
-              {renderSectionItems(section.keys)}
-            </div>
-          );
-        }
-
-        if (section.kind === 'cards') {
-          return (
-            <div key={`cards-${sectionIndex}`} className="chat-message-card-lane">
-              {renderSectionItems(section.keys)}
-            </div>
-          );
-        }
-
-        return (
-          <div key={`bubble-${sectionIndex}`} className="chat-message-bubble">
-            <div className="chat-message-content">{renderSectionItems(section.keys)}</div>
-            {message.role === 'assistant' && sectionIndex === flowSections.length - 1 ? (
-              <AssistantMessageActionBar copyText={isStreaming ? undefined : assistantCopyText} />
-            ) : null}
-            <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
+      {hasVisibleContent ? (
+        <div className="chat-message-bubble">
+          <div className="chat-message-content chat-message-content-timeline">
+            {timelineItems.map((item) => (
+              <React.Fragment key={item.key}>{item.node}</React.Fragment>
+            ))}
           </div>
-        );
-      })}
+          {message.role === 'assistant' ? (
+            <AssistantMessageActionBar copyText={isStreaming ? undefined : assistantCopyText} />
+          ) : null}
+          <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
+        </div>
+      ) : null}
       {!hasVisibleContent ? (
         <div className="chat-message-meta chat-message-meta-standalone">{formatTimestamp(message.createdAt)}</div>
       ) : null}
     </article>
   );
-}, areMessageItemPropsEqual);
+});

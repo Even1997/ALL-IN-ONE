@@ -65,6 +65,29 @@ test('runtime project file execution flow executes create, edit, and delete oper
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedPaths, ['docs\\readme.md', 'src\\app.ts', 'obsolete.md']);
   assert.match(result.message, /3/);
+  assert.deepEqual(result.fileChanges, [
+    {
+      path: 'docs\\readme.md',
+      operation: 'write',
+      beforeContent: null,
+      afterContent: '# Demo',
+      verified: true,
+    },
+    {
+      path: 'src\\app.ts',
+      operation: 'edit',
+      beforeContent: 'const a = 1;',
+      afterContent: 'const a = 2;',
+      verified: true,
+    },
+    {
+      path: 'obsolete.md',
+      operation: 'delete',
+      beforeContent: 'old',
+      afterContent: null,
+      verified: true,
+    },
+  ]);
   assert.equal(files.get('C:\\repo\\demo\\docs\\readme.md'), '# Demo');
   assert.equal(files.get('C:\\repo\\demo\\src\\app.ts'), 'const a = 2;');
   assert.equal(files.has('C:\\repo\\demo\\obsolete.md'), false);

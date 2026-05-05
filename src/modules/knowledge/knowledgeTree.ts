@@ -27,8 +27,33 @@ export const SYSTEM_KNOWLEDGE_GROUPS: Array<Pick<KnowledgeTreeNode, 'id' | 'labe
   { id: 'design', label: '设计', group: 'design', protected: true },
 ];
 
+const stripWindowsExtendedLengthPathPrefix = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (/^\\\\\?\\UNC\\/i.test(trimmed)) {
+    return `\\\\${trimmed.slice(8)}`;
+  }
+
+  if (/^\\\\\?\\/.test(trimmed)) {
+    return trimmed.slice(4);
+  }
+
+  if (/^\/{2,}\?\/UNC\//i.test(trimmed)) {
+    return `//${trimmed.replace(/^\/{2,}\?\/UNC\//i, '')}`;
+  }
+
+  if (/^\/{2,}\?\//.test(trimmed)) {
+    return trimmed.replace(/^\/{2,}\?\//, '');
+  }
+
+  return trimmed;
+};
+
 const normalizePath = (value: string) =>
-  value.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/').replace(/\/$/, '');
+  stripWindowsExtendedLengthPathPrefix(value).replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/').replace(/\/$/, '');
 
 const basename = (value: string) => {
   const normalized = normalizePath(value);

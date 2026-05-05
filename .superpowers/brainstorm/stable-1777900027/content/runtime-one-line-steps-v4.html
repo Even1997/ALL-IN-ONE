@@ -1,0 +1,91 @@
+<h2>统一时间线 v4</h2>
+<p class="subtitle">继续按你的意思收紧：展开后每条操作也是一行，不再是“标题 + 副标题”两行结构。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">展开前</div>
+    <div class="mockup-body" style="background:#181818;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="padding:12px 14px;border-radius:14px;background:#232323;border:1px solid #353535">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#f3f3f3">
+          <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+          思考过程
+          <span style="color:#929292;font-weight:500">默认折叠</span>
+        </div>
+      </div>
+      <div style="padding:12px 14px;border-radius:14px;background:#232323;border:1px solid #353535">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#f3f3f3">
+            <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+            已编辑 3 个文件，已运行 2 条命令
+          </div>
+          <div style="color:#9a9a9a">展开</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">展开后</div>
+    <div class="mockup-body" style="background:#181818;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px">
+      <div style="padding:12px 14px;border-radius:14px;background:#232323;border:1px solid #353535">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#f3f3f3">
+            <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+            已编辑 3 个文件，已运行 2 条命令
+          </div>
+          <div style="color:#9a9a9a">收起</div>
+        </div>
+      </div>
+
+      <div style="padding:10px 12px;border-radius:12px;background:#252525;border:1px solid #383838;color:#efefef;font-weight:650">
+        规划修改
+        <span style="color:#979797;font-weight:500"> · 先确认原因，再补测试，再改实现</span>
+      </div>
+
+      <div style="padding:10px 12px;border-radius:12px;background:#252525;border:1px solid #383838;color:#efefef;font-weight:650">
+        读取文件
+        <span style="color:#979797;font-weight:500"> · runtimeEventRenderModel.ts</span>
+      </div>
+
+      <div style="padding:10px 12px;border-radius:12px;background:#252525;border:1px solid #383838;color:#efefef;font-weight:650">
+        修改文件
+        <span style="color:#979797;font-weight:500"> · tests/ai/ai-chat-runtime-output-flow.test.mjs</span>
+      </div>
+
+      <div style="padding:10px 12px;border-radius:12px;background:#252525;border:1px solid #383838;color:#efefef;font-weight:650">
+        运行命令
+        <span style="color:#979797;font-weight:500"> · node --test tests\\ai\\ai-chat-runtime-output-flow.test.mjs</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>这一版的好处</h4>
+      <ul>
+        <li>展开后视觉噪音更低，看起来更像 Codex 的执行流。</li>
+        <li>所有操作在同一级，顺着读就能看懂。</li>
+        <li>标题和细节都还在，但被压进同一行里。</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>需要取舍的地方</h4>
+      <ul>
+        <li>如果一行太长，后面要做省略和 hover/展开策略。</li>
+        <li>审批和提问也要套进同一种一行样式，不能另起一套视觉。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="one-line-steps-confirm" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>展开项也一行</h3>
+      <p>像 “规划修改 · 先确认原因，再补测试，再改实现” 这样。我理解你现在要的就是这个。</p>
+    </div>
+  </div>
+</div>

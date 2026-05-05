@@ -365,8 +365,9 @@ export const executePrompt = async (options: {
   prompt: string;
   onChunk?: (text: string) => void;
   onEvent?: (event: AITextStreamEvent) => void;
+  signal?: AbortSignal;
 }) => {
-  const { providerId, sessionId, config, systemPrompt, prompt, onChunk, onEvent } = options;
+  const { providerId, sessionId, config, systemPrompt, prompt, onChunk, onEvent, signal } = options;
 
   if (providerId === 'claude' && config) {
     return claudeRuntime.executePrompt({
@@ -376,6 +377,7 @@ export const executePrompt = async (options: {
       prompt,
       onChunk,
       onEvent,
+      signal,
     });
   }
 
@@ -387,6 +389,7 @@ export const executePrompt = async (options: {
       prompt,
       onChunk,
       onEvent,
+      signal,
     });
   }
 
@@ -401,6 +404,7 @@ export const executePrompt = async (options: {
       prompt,
       onChunk,
       onEvent,
+      signal,
     });
   } finally {
     if (config) {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildAssistantMessageParts,
   buildAssistantStructuredContentState,
   parseAIChatMessageParts,
 } from '../../src/components/workspace/aiChatMessageParts.ts';
@@ -12,6 +13,51 @@ test('parseAIChatMessageParts keeps completed think content as a collapsed think
   assert.deepEqual(parts, [
     { type: 'thinking', content: 'Analyze the references first', collapsed: true },
     { type: 'text', content: 'Final answer: keep the entry clean.' },
+  ]);
+});
+
+test('buildAssistantStructuredContentState strips fragmented tool protocol tags', () => {
+  const state = buildAssistantStructuredContentState({
+    content: [
+      '思考过程 The user wants a stable answer.',
+      '<tool_',
+      'use>',
+      '<tool',
+      '_use>',
+      '好的，我已经查看了项目状态。',
+      '最终答案：这里是干净的正文。',
+    ].join('\n\n'),
+    thinkingCollapsed: true,
+  });
+
+  assert.doesNotMatch(state.content, /<tool_|use>|<tool|_use>/);
+  assert.doesNotMatch(state.answerContent, /<tool_|use>|<tool|_use>/);
+  assert.match(state.answerContent, /最终答案：这里是干净的正文。/);
+});
+
+test('buildAssistantMessageParts cleans answerContent before rendering text parts', () => {
+  const parts = buildAssistantMessageParts({
+    answerContent: ['最终答案之前', '<tool_', 'use>', '最终答案之后'].join('\n\n'),
+  });
+
+  assert.deepEqual(parts, [{ type: 'text', content: '最终答案之前\n\n最终答案之后' }]);
+});
+
+test('buildAssistantStructuredContentState preserves preferred assistant part ordering and timestamps', () => {
+  const state = buildAssistantStructuredContentState({
+    content: '<think>先看目录</think>\n\n我先检查一下项目结构。\n\n再给你草稿。',
+    preferredAssistantParts: [
+      { type: 'thinking', content: '先看目录', collapsed: false, createdAt: 10 },
+      { type: 'text', content: '我先检查一下项目结构。', createdAt: 20 },
+      { type: 'text', content: '再给你草稿。', createdAt: 30 },
+    ],
+    thinkingCollapsed: true,
+  });
+
+  assert.deepEqual(state.assistantParts, [
+    { type: 'thinking', content: '先看目录', collapsed: true, createdAt: 10 },
+    { type: 'text', content: '我先检查一下项目结构。', createdAt: 20 },
+    { type: 'text', content: '再给你草稿。', createdAt: 30 },
   ]);
 });
 
@@ -36,9 +82,9 @@ test('buildAssistantStructuredContentState strips legacy transcript tool echoes'
   assert.doesNotMatch(state.content, /tool_use|tool_result|Tool ls result|^user:/m);
 });
 
-test('parseAIChatMessageParts shows unfinished think streams expanded with content', () => {
+test('parseAIChatMessageParts keeps unfinished think streams collapsed with content', () => {
   assert.deepEqual(parseAIChatMessageParts('<think>Analyze the current page'), [
-    { type: 'thinking', content: 'Analyze the current page', collapsed: false },
+    { type: 'thinking', content: 'Analyze the current page', collapsed: true },
   ]);
 });
 
@@ -85,7 +131,7 @@ Build complete.`);
 });
 
 test('parseAIChatMessageParts turns loading placeholders into thinking state', () => {
-  assert.deepEqual(parseAIChatMessageParts('正在思考...'), [{ type: 'thinking', content: '', collapsed: false }]);
+  assert.deepEqual(parseAIChatMessageParts('正在思考...'), [{ type: 'thinking', content: '', collapsed: true }]);
 });
 
 test('buildAssistantStructuredContentState treats Chinese planning text as thinking', () => {

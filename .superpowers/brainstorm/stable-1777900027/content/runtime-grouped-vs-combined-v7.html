@@ -1,0 +1,94 @@
+<h2>执行摘要要不要拆块</h2>
+<p class="subtitle">结论先说：我更推荐像 Codex 一样“按动作类型有限拆分”，而不是把编辑、命令、提问全塞进一个总摘要。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">A. 全塞进一个摘要</div>
+    <div class="mockup-body" style="background:#181818;border-radius:18px;padding:18px 16px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px;color:#efefef;font-weight:700">
+        <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+        思考过程
+        <span style="color:#8f8f8f;font-weight:500">默认折叠</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#efefef;font-weight:700">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">已编辑 3 个文件，已运行 2 条命令，等待 1 个确认</span>
+        </div>
+        <span style="color:#8f8f8f;font-weight:500">展开</span>
+      </div>
+      <div style="padding-left:18px;display:flex;flex-direction:column;gap:8px">
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">规划修改<span style="color:#8f8f8f;font-weight:500"> · 先确认原因，再补测试，再改实现</span></div>
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">修改文件<span style="color:#8f8f8f;font-weight:500"> · runtimeEventRenderModel.ts</span></div>
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">运行命令<span style="color:#8f8f8f;font-weight:500"> · node --test ...</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">B. 像 Codex 一样按类型拆成兄弟块</div>
+    <div class="mockup-body" style="background:#181818;border-radius:18px;padding:18px 16px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px;color:#efefef;font-weight:700">
+        <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+        思考过程
+        <span style="color:#8f8f8f;font-weight:500">默认折叠</span>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#efefef;font-weight:700">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">已编辑 3 个文件</span>
+        </div>
+        <span style="color:#8f8f8f;font-weight:500">展开</span>
+      </div>
+      <div style="padding-left:18px;display:flex;flex-direction:column;gap:8px">
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">规划修改<span style="color:#8f8f8f;font-weight:500"> · 先确认原因，再补测试，再改实现</span></div>
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">修改文件<span style="color:#8f8f8f;font-weight:500"> · runtimeEventRenderModel.ts</span></div>
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">修改文件<span style="color:#8f8f8f;font-weight:500"> · ai-chat-runtime-output-flow.test.mjs</span></div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#efefef;font-weight:700">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">已运行 2 条命令</span>
+        </div>
+        <span style="color:#8f8f8f;font-weight:500">展开</span>
+      </div>
+      <div style="padding-left:18px;display:flex;flex-direction:column;gap:8px">
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">运行命令<span style="color:#8f8f8f;font-weight:500"> · node --test tests\\ai\\ai-chat-runtime-output-flow.test.mjs</span></div>
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">运行命令<span style="color:#8f8f8f;font-weight:500"> · npm run build</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>我推荐 B 的原因</h4>
+      <ul>
+        <li>用户一眼能区分“改了什么”和“跑了什么”，认知负担更低。</li>
+        <li>每个块都还能保持摘要一行、展开后操作一行，结构仍然很干净。</li>
+        <li>比一个超长混合摘要更接近 Codex 的节奏。</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>B 需要控制的边界</h4>
+      <ul>
+        <li>只按大类拆块，不要每个工具都单独成块。</li>
+        <li>块和块之间仍要按时间顺序排列，不能回到复杂树形。</li>
+        <li>提问 / 审批最好也作为独立兄弟块，而不是嵌在编辑块里。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="grouped-top-level-blocks" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>按类型拆成兄弟块</h3>
+      <p>如果你同意，我就把最终设计方向改成这个：统一时间线，但顶层允许“已编辑文件 / 已运行命令 / 等待确认”分块。</p>
+    </div>
+  </div>
+</div>

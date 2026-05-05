@@ -1,0 +1,62 @@
+<h2>统一时间线 v5</h2>
+<p class="subtitle">展开项保持单行；超过一行直接省略。这样信息密度高，但不会把列表撑得很乱。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">规则</div>
+    <div class="mockup-body" style="background:#181818;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="padding:12px 14px;border-radius:14px;background:#232323;border:1px solid #353535;color:#efefef;font-weight:700">
+        已编辑 3 个文件，已运行 2 条命令
+      </div>
+      <div style="padding:10px 12px;border-radius:12px;background:#252525;border:1px solid #383838;color:#efefef;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        规划修改<span style="color:#979797;font-weight:500"> · 先确认原因，再补测试，再改实现</span>
+      </div>
+      <div style="padding:10px 12px;border-radius:12px;background:#252525;border:1px solid #383838;color:#efefef;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        读取文件<span style="color:#979797;font-weight:500"> · src/components/workspace/runtimeEventRenderModel.ts</span>
+      </div>
+      <div style="padding:10px 12px;border-radius:12px;background:#252525;border:1px solid #383838;color:#efefef;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        运行命令<span style="color:#979797;font-weight:500"> · node --test tests\\ai\\ai-chat-runtime-output-flow.test.mjs tests\\ai\\gn-agent-message-flow-source.test.mjs</span>
+      </div>
+      <div class="subtitle">重点：看起来始终像一列整齐的时间线，不会因为长内容把高度拉炸。</div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">浅色适配</div>
+    <div class="mockup-body" style="background:#f5f2eb;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="padding:12px 14px;border-radius:14px;background:#fffdfa;border:1px solid #ddd4c7;color:#1f1c17;font-weight:700">
+        已编辑 3 个文件，已运行 2 条命令
+      </div>
+      <div style="padding:10px 12px;border-radius:12px;background:#ffffff;border:1px solid #e3dbcf;color:#1f1c17;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        规划修改<span style="color:#8c8173;font-weight:500"> · 先确认原因，再补测试，再改实现</span>
+      </div>
+      <div style="padding:10px 12px;border-radius:12px;background:#ffffff;border:1px solid #e3dbcf;color:#1f1c17;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        读取文件<span style="color:#8c8173;font-weight:500"> · src/components/workspace/runtimeEventRenderModel.ts</span>
+      </div>
+      <div style="padding:10px 12px;border-radius:12px;background:#ffffff;border:1px solid #e3dbcf;color:#1f1c17;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        运行命令<span style="color:#8c8173;font-weight:500"> · node --test tests\\ai\\ai-chat-runtime-output-flow.test.mjs tests\\ai\\gn-agent-message-flow-source.test.mjs</span>
+      </div>
+      <div class="subtitle">浅色也保持同样的压缩规则，不换结构，只换气质。</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>这版会固定下来的规则</h4>
+      <ul>
+        <li>执行摘要一行。</li>
+        <li>展开后的每条操作也一行。</li>
+        <li>长文本一律省略，不换行。</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>后续还需要补的交互</h4>
+      <ul>
+        <li>被截断的内容最好支持 hover title 或再次展开查看完整值。</li>
+        <li>审批 / 提问 / 失败项也要用同一套单行规则统一处理。</li>
+      </ul>
+    </div>
+  </div>
+</div>

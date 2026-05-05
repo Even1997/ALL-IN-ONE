@@ -42,7 +42,7 @@ import type {
   WireframeDocument,
 } from './types';
 import { clampLayoutSize, LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
-import { createWireframeModule, getCanvasPreset, isMobileAppType } from './utils/wireframe';
+import { createWireframeModule, getCanvasPreset, getWireframeModuleTypeLabel, getWireframeModuleVisualType, isMobileAppType } from './utils/wireframe';
 import {
   getProjectDir,
   ensureProjectVaultDirectory,
@@ -69,6 +69,7 @@ import {
   writeSketchPageFile,
   type ProjectStorageSettings,
 } from './utils/projectPersistence';
+import { normalizeComparableFileSystemPath, stripWindowsExtendedLengthPathPrefix } from './utils/fileSystemPaths.ts';
 import 'allotment/dist/style.css';
 import './App.css';
 
@@ -203,12 +204,25 @@ const readProjectIndex = (): ProjectConfig[] => {
   }
 };
 
+const safeLocalStorageSetItem = (key: string, value: string) => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const writeProjectIndex = (projects: ProjectConfig[]) => {
   if (typeof window === 'undefined') {
     return;
   }
 
-  window.localStorage.setItem(PROJECT_INDEX_STORAGE_KEY, JSON.stringify(projects));
+  safeLocalStorageSetItem(PROJECT_INDEX_STORAGE_KEY, JSON.stringify(projects));
 };
 
 const getProjectSnapshotStorageKey = (projectId: string) => `${PROJECT_SNAPSHOT_STORAGE_PREFIX}:${projectId}`;
@@ -235,7 +249,7 @@ const writeProjectSnapshot = (projectId: string, snapshot: PersistedProjectSnaps
     return;
   }
 
-  window.localStorage.setItem(getProjectSnapshotStorageKey(projectId), JSON.stringify(snapshot));
+  safeLocalStorageSetItem(getProjectSnapshotStorageKey(projectId), JSON.stringify(snapshot));
 };
 
 const removeProjectSnapshot = (projectId: string) => {
@@ -247,12 +261,7 @@ const removeProjectSnapshot = (projectId: string) => {
 };
 
 const normalizeProjectVaultComparablePath = (value: string | null | undefined) =>
-  (value || '')
-    .trim()
-    .replace(/^\\\\\?\\/, '')
-    .replace(/\\/g, '/')
-    .replace(/\/+$/, '')
-    .toLowerCase();
+  normalizeComparableFileSystemPath(value);
 
 const resolveProjectVaultPathForProjectDir = (
   vaultPath: string,
@@ -270,7 +279,7 @@ const resolveProjectVaultPathForProjectDir = (
     return projectDir;
   }
 
-  return vaultPath.trim();
+  return stripWindowsExtendedLengthPathPrefix(vaultPath.trim());
 };
 
 const THEME_STORAGE_KEY = 'goodnight-theme-mode';
@@ -590,11 +599,23 @@ const buildSketchPreviewImage = (
   const blocks = elements.slice(0, 12).map((element) => {
     const label = escapeSketchPreviewSvgText(getSketchPreviewLabel(element).slice(0, 28));
     const content = escapeSketchPreviewSvgText(getSketchPreviewContent(element).slice(0, 72));
+    const isTextModule = getWireframeModuleVisualType(element.props.moduleType, element.props.content) === 'text';
     const width = Math.max(56, Math.round(element.width));
     const height = Math.max(40, Math.round(element.height));
     const headerHeight = Math.min(30, Math.max(18, Math.round(height * 0.32)));
     const labelY = Math.min(headerHeight - 6, 18);
     const contentY = headerHeight + 14;
+    const textBaselineY = Math.max(18, Math.min(height - 8, 22));
+    const textUnderlineWidth = Math.max(40, Math.min(width, label.length * 8 + 20));
+
+    if (isTextModule) {
+      return [
+        `<g transform="translate(${Math.max(0, Math.round(element.x))} ${Math.max(0, Math.round(element.y))})">`,
+        `<text x="0" y="${textBaselineY}" fill="${textColor}" font-size="12" font-weight="700" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">${label}</text>`,
+        `<rect y="${Math.max(textBaselineY + 4, 0)}" width="${textUnderlineWidth}" height="2" rx="1" fill="rgba(15, 23, 42, 0.24)" />`,
+        '</g>',
+      ].join('');
+    }
 
     return [
       `<g transform="translate(${Math.max(0, Math.round(element.x))} ${Math.max(0, Math.round(element.y))})">`,
@@ -642,6 +663,7 @@ const buildDesignPageModuleMarkdown = (
 
     return {
       name: name || `模块 ${index + 1}`,
+      type: getWireframeModuleTypeLabel(element.props.moduleType),
       x: Math.max(0, Math.round(element.x)),
       y: Math.max(0, Math.round(element.y)),
       width: Math.max(0, Math.round(element.width)),
@@ -659,6 +681,7 @@ const buildDesignPageModuleMarkdown = (
     ...(modules.length > 0
       ? modules.flatMap((module) => [
           `- name: ${module.name}`,
+          `  type: ${module.type}`,
           `  position: ${module.x}, ${module.y}`,
           `  size: ${module.width}, ${module.height}`,
           ...(module.purpose ? [`  purpose: ${module.purpose}`] : []),
@@ -931,6 +954,7 @@ const App: React.FC = () => {
   const designLayerCounterRef = useRef(1);
   const designConnectionRef = useRef<DesignConnectionDraft | null>(null);
   const hasAutoFramedDesignBoardRef = useRef(false);
+  const hasRestoredPersistedProjectRef = useRef(false);
   const lastPersistedSketchSnapshotRef = useRef('');
   const lastSelectedStyleNodeIdRef = useRef<string | null>(null);
   const lastSyncedStyleMarkdownRef = useRef('');
@@ -2049,7 +2073,7 @@ const App: React.FC = () => {
       edges: designFlowEdges,
     } satisfies PersistedDesignBoardState;
 
-    window.localStorage.setItem(
+    safeLocalStorageSetItem(
       getDesignBoardStorageKey(currentProject.id),
       JSON.stringify(persistedState)
     );
@@ -2335,6 +2359,20 @@ const App: React.FC = () => {
       void ensureProjectVaultDirectory(targetProject).catch(() => undefined);
     }
   }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, replaceWorkflowProjectState, setTree, switchProject]);
+
+  useEffect(() => {
+    if (hasRestoredPersistedProjectRef.current || !currentProjectId) {
+      return;
+    }
+
+    const persistedProject = projects.find((project) => project.id === currentProjectId) || currentProject;
+    if (!persistedProject) {
+      return;
+    }
+
+    hasRestoredPersistedProjectRef.current = true;
+    void handleOpenProject(persistedProject.id);
+  }, [currentProject, currentProjectId, handleOpenProject, projects]);
 
   const handleDeleteProject = useCallback(async (projectId: string) => {
     const targetProject = projects.find((item) => item.id === projectId);

@@ -1,7 +1,13 @@
 import React from 'react';
-import type { ChatSession, StoredChatMessage } from '../../../modules/ai/store/aiChatStore';
+import type { ChatSession, StoredChatMessage } from '../../../modules/ai/store/aiChatStore.ts';
 import type { ActivityEntry } from '../../../modules/ai/skills/activityLog';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
+import type { AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
+import {
+  getAssistantRuntimeTimelineEvents,
+  getAssistantTimelineReasoning,
+  getAssistantTimelineText,
+} from '../../../modules/ai/store/assistantTimeline.ts';
 import { GNAgentMessageItem } from './GNAgentMessageItem';
 
 type MessagePartRenderer = (
@@ -18,6 +24,11 @@ type MessagePartRenderer = (
 ) => React.ReactNode;
 
 type MessagePartsParser = (content: string) => AIChatMessagePart[];
+
+export type MessageBubbleCard = {
+  node: React.ReactNode;
+  createdAt?: number;
+};
 
 export const GNAgentHistoryMenu: React.FC<{
   sessions: ChatSession[];
@@ -36,7 +47,7 @@ export const GNAgentHistoryMenu: React.FC<{
         const lastMessage = session.messages?.[session.messages.length - 1];
         const lastPreviewSource =
           lastMessage?.role === 'assistant'
-            ? lastMessage.answerContent || lastMessage.thinkingContent || lastMessage.content
+            ? getAssistantTimelineText(lastMessage.timeline) || getAssistantTimelineReasoning(lastMessage.timeline)
             : lastMessage?.content || '';
         return (
           <div
@@ -75,14 +86,14 @@ export const GNAgentHistoryMenu: React.FC<{
 
 type GNAgentMessageListProps = {
   messages: StoredChatMessage[];
-  draftContents?: Record<string, { content: string; thinkingContent: string; answerContent: string; assistantParts: AIChatMessagePart[] }>;
+  draftContents?: Record<string, AssistantDraftState>;
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
   renderStructuredCards?: (message: StoredChatMessage) => React.ReactNode;
   renderKnowledgeProposal?: (message: StoredChatMessage) => React.ReactNode;
   renderProjectFileProposal?: (message: StoredChatMessage) => React.ReactNode;
-  renderToolExecutionCard?: (message: StoredChatMessage) => React.ReactNode;
+  renderToolExecutionCard?: (message: StoredChatMessage) => MessageBubbleCard[] | null;
   renderRunSummaryCard?: (message: StoredChatMessage) => React.ReactNode;
   renderRuntimeApproval?: (message: StoredChatMessage) => React.ReactNode;
   renderRuntimeQuestion?: (message: StoredChatMessage) => React.ReactNode;
@@ -91,29 +102,12 @@ type GNAgentMessageListProps = {
   leadingContent?: React.ReactNode;
 };
 
-const areMessageListPropsEqual = (
-  prev: GNAgentMessageListProps,
-  next: GNAgentMessageListProps
-) => {
-  const prevLen = prev.messages.length;
-  const nextLen = next.messages.length;
-  if (prevLen !== nextLen) return false;
-  if (prevLen > 0 && prev.messages[0].id !== next.messages[0].id) return false;
-  if (prevLen > 0 && prev.messages[prevLen - 1].id !== next.messages[nextLen - 1].id) return false;
-  if (prev.draftContents !== next.draftContents) return false;
-  if (prev.renderMessagePart !== next.renderMessagePart) return false;
-  if (prev.renderStructuredCards !== next.renderStructuredCards) return false;
-  if (prev.renderKnowledgeProposal !== next.renderKnowledgeProposal) return false;
-  if (prev.renderProjectFileProposal !== next.renderProjectFileProposal) return false;
-  if (prev.renderToolExecutionCard !== next.renderToolExecutionCard) return false;
-  if (prev.renderRunSummaryCard !== next.renderRunSummaryCard) return false;
-  if (prev.renderRuntimeApproval !== next.renderRuntimeApproval) return false;
-  if (prev.renderRuntimeQuestion !== next.renderRuntimeQuestion) return false;
-  if (prev.formatTimestamp !== next.formatTimestamp) return false;
-  if (prev.parseMessageParts !== next.parseMessageParts) return false;
-  if (prev.leadingContent !== next.leadingContent) return false;
-  return true;
-};
+const getEarliestRuntimeEventTime = (message: StoredChatMessage) =>
+  (message.role === 'assistant' ? getAssistantRuntimeTimelineEvents(message.timeline) : []).reduce<number | undefined>(
+    (earliest, event) =>
+      typeof earliest === 'number' && earliest <= event.createdAt ? earliest : event.createdAt,
+    undefined
+  );
 
 export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   messages,
@@ -133,17 +127,31 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   leadingContent,
 }: GNAgentMessageListProps) {
   const bubbleCardsByMessage = React.useMemo(() => {
-    const map: Record<string, React.ReactNode[]> = {};
+    const map: Record<string, MessageBubbleCard[]> = {};
     for (const message of messages) {
+      const earliestRuntimeEventTime = getEarliestRuntimeEventTime(message);
+      const structuredCardsNode = renderStructuredCards?.(message) || null;
+      const knowledgeProposalNode = renderKnowledgeProposal?.(message) || null;
+      const projectFileProposalNode = renderProjectFileProposal?.(message) || null;
+      const toolExecutionCards = renderToolExecutionCard?.(message) || [];
+      const runSummaryNode = renderRunSummaryCard?.(message) || null;
+      const runtimeApprovalNode = renderRuntimeApproval?.(message) || null;
+      const runtimeQuestionNode = renderRuntimeQuestion?.(message) || null;
+      const cards: Array<MessageBubbleCard | null> = [
+        structuredCardsNode ? { node: structuredCardsNode, createdAt: message.createdAt } : null,
+        knowledgeProposalNode ? { node: knowledgeProposalNode, createdAt: message.createdAt } : null,
+        projectFileProposalNode ? { node: projectFileProposalNode, createdAt: message.createdAt } : null,
+        runSummaryNode ? { node: runSummaryNode, createdAt: message.createdAt } : null,
+        runtimeApprovalNode ? { node: runtimeApprovalNode, createdAt: message.createdAt } : null,
+        runtimeQuestionNode ? { node: runtimeQuestionNode, createdAt: message.createdAt } : null,
+      ];
       map[message.id] = [
-        renderStructuredCards?.(message),
-        renderKnowledgeProposal?.(message),
-        renderProjectFileProposal?.(message),
-        renderToolExecutionCard?.(message),
-        renderRunSummaryCard?.(message),
-        renderRuntimeApproval?.(message),
-        renderRuntimeQuestion?.(message),
-      ].filter((node): node is React.ReactNode => Boolean(node));
+        ...cards.filter((card): card is MessageBubbleCard => Boolean(card?.node)),
+        ...toolExecutionCards.map((card) => ({
+          ...card,
+          createdAt: card.createdAt ?? earliestRuntimeEventTime ?? message.createdAt,
+        })),
+      ];
     }
     return map;
   }, [
@@ -179,7 +187,10 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       {leadingContent}
       {shouldFold ? (
         <details className="chat-message-list-fold">
-          <summary>{`Show earlier ${foldCount} messages`}</summary>
+          <summary className="chat-inline-disclosure chat-message-list-fold-summary">
+            <span className="chat-inline-disclosure-copy">{`Show earlier ${foldCount} messages`}</span>
+            <span className="chat-inline-disclosure-caret" aria-hidden="true" />
+          </summary>
           {messages.slice(0, foldCount).map(renderMessageItem)}
         </details>
       ) : null}
@@ -187,7 +198,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       <div ref={messagesEndRef} />
     </div>
   );
-}, areMessageListPropsEqual);
+});
 
 export const GNAgentEmbeddedComposer: React.FC<{
   entrySwitch?: React.ReactNode;
@@ -273,8 +284,8 @@ export const GNAgentEmbeddedComposer: React.FC<{
           <button
             type="button"
             className="chat-send-btn"
-            aria-label={isLoading ? '\u53d1\u9001\u4e2d' : '\u53d1\u9001'}
-            title={isLoading ? '\u53d1\u9001\u4e2d' : '\u53d1\u9001'}
+            aria-label={isLoading ? '\u7ec8\u6b62' : '\u53d1\u9001'}
+            title={isLoading ? '\u7ec8\u6b62' : '\u53d1\u9001'}
             disabled={disabled}
             onClick={onSubmit}
           >

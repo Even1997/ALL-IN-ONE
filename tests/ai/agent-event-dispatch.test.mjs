@@ -6,8 +6,11 @@ import {
   syncRuntimeEventsWithToolCalls,
   syncTeamRunRuntimeEvents,
   createAgentEventState,
+  mapRuntimeEvents,
   reduceAgentEvent,
   sanitizeAgentVisibleText,
+  upsertRuntimeApprovalEvent,
+  upsertRuntimeQuestionEvent,
   upsertRuntimeToolResultEvent,
   upsertRuntimeToolUseEvent,
 } from '../../src/modules/ai/runtime/dispatch/agentEvents.ts';
@@ -63,6 +66,19 @@ test('agent visible text sanitizer removes legacy tool protocol and transcript e
   assert.doesNotMatch(cleaned, /tool_use|tool_result|Tool ls result|^user:/m);
 });
 
+test('agent visible text sanitizer strips standalone xml declaration lines', () => {
+  const raw = [
+    'I checked the asset file.',
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    'The SVG header should not show in chat.',
+  ].join('\n');
+
+  const cleaned = sanitizeAgentVisibleText(raw);
+
+  assert.equal(cleaned, 'I checked the asset file.\n\nThe SVG header should not show in chat.');
+  assert.doesNotMatch(cleaned, /<\?xml version=/i);
+});
+
 test('agent runtime event helpers upsert tool use and result records', () => {
   const started = upsertRuntimeToolUseEvent(undefined, {
     toolCallId: 'call-1',
@@ -102,6 +118,79 @@ test('agent runtime event helpers upsert tool use and result records', () => {
   assert.equal(withResult[1].id, buildRuntimeEventId('tool_result', 'call-1'));
   assert.equal(withResult[1].kind, 'tool_result');
   assert.equal(withResult[1].output, 'file content');
+});
+
+test('agent runtime event helpers upsert approval and question records with stable timestamps', () => {
+  const withApproval = upsertRuntimeApprovalEvent(undefined, {
+    id: 'approval-event-1',
+    kind: 'approval',
+    approvalId: 'approval-1',
+    toolCallId: 'call-1',
+    actionType: 'bash',
+    summary: 'Run command',
+    riskLevel: 'high',
+    status: 'pending',
+    createdAt: 10,
+  });
+  const withApprovalUpdate = upsertRuntimeApprovalEvent(withApproval, {
+    ...withApproval[0],
+    status: 'approved',
+    createdAt: 99,
+  });
+  const withQuestion = upsertRuntimeQuestionEvent(withApprovalUpdate, {
+    id: 'question-event-1',
+    kind: 'question',
+    questionId: 'question-1',
+    payload: {
+      id: 'question-1',
+      toolCallId: 'call-2',
+      status: 'pending',
+      questions: [{ question: 'Continue?' }],
+      createdAt: 11,
+    },
+    createdAt: 11,
+  });
+
+  assert.equal(withApprovalUpdate[0].createdAt, 10);
+  assert.equal(withApprovalUpdate[0].status, 'approved');
+  assert.equal(withQuestion[1].kind, 'question');
+  assert.equal(withQuestion[1].createdAt, 11);
+});
+
+test('agent runtime event helpers map matching events in place', () => {
+  const updated = mapRuntimeEvents(
+    [
+      {
+        id: 'approval-event-1',
+        kind: 'approval',
+        approvalId: 'approval-1',
+        toolCallId: 'call-1',
+        actionType: 'edit',
+        summary: 'Edit file',
+        riskLevel: 'medium',
+        status: 'pending',
+        createdAt: 1,
+      },
+      {
+        id: 'question-event-1',
+        kind: 'question',
+        questionId: 'question-1',
+        payload: {
+          id: 'question-1',
+          toolCallId: 'call-2',
+          status: 'pending',
+          questions: [{ question: 'Path?' }],
+          createdAt: 2,
+        },
+        createdAt: 2,
+      },
+    ],
+    (event) => event.kind === 'approval' && event.approvalId === 'approval-1',
+    (event) => (event.kind === 'approval' ? { ...event, status: 'denied' } : event)
+  );
+
+  assert.equal(updated[0].status, 'denied');
+  assert.equal(updated[1].kind, 'question');
 });
 
 test('agent runtime event helpers sync tool call snapshots into ordered runtime events', () => {

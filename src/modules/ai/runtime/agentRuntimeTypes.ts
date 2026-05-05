@@ -123,3 +123,76 @@ export type AgentBackgroundTaskRecord = {
   createdAt: number;
   updatedAt: number;
 };
+
+export type AgentExecutionTaskStatus = 'queued' | 'planning' | 'running' | 'completed' | 'failed' | 'blocked';
+
+export type AgentExecutionRunStatus = AgentExecutionTaskStatus;
+
+export type AgentExecutionAgentRunStatus =
+  | 'pending'
+  | 'planning'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'blocked';
+
+export type AgentExecutionRunKind =
+  | 'turn'
+  | 'workflow_package'
+  | 'workflow_stage'
+  | 'local_agent'
+  | 'team'
+  | 'team_phase';
+
+export type AgentExecutionAgentRunKind =
+  | 'local_agent'
+  | 'workflow_skill'
+  | 'team_member';
+
+export type AgentExecutionTaskRecord = {
+  id: string;
+  threadId: string;
+  turnId: string;
+  providerId: AgentProviderId;
+  title: string;
+  prompt: string;
+  summary: string;
+  status: AgentExecutionTaskStatus;
+  rootRunId: string | null;
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number | null;
+};
+
+export type AgentExecutionRunRecord = {
+  id: string;
+  threadId: string;
+  taskId: string;
+  turnId: string;
+  parentRunId: string | null;
+  providerId: AgentProviderId;
+  kind: AgentExecutionRunKind;
+  title: string;
+  summary: string;
+  status: AgentExecutionRunStatus;
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number | null;
+};
+
+export type AgentExecutionAgentRunRecord = {
+  id: string;
+  threadId: string;
+  taskId: string;
+  runId: string;
+  parentAgentRunId: string | null;
+  kind: AgentExecutionAgentRunKind;
+  agentId: string;
+  role: string;
+  title: string;
+  summary: string;
+  status: AgentExecutionAgentRunStatus;
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number | null;
+};

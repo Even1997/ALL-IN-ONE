@@ -1,8 +1,10 @@
 import type { AppType, PageStructureNode, WireframeDocument } from '../../types';
 import {
   createWireframeModule,
+  DEFAULT_WIREFRAME_MODULE_TYPE,
   getCanvasPreset,
   getMarkdownModuleMatches,
+  getWireframeModuleTypeLabel,
   MIN_MODULE_HEIGHT,
   MIN_MODULE_WIDTH,
   toWireframeModuleDrafts,
@@ -52,6 +54,7 @@ const buildModulesSection = (wireframe: WireframeDocument | null | undefined) =>
     return [
       '- modules:',
       `  - name: ${EMPTY_MODULE_NAME}`,
+      `    type: ${DEFAULT_WIREFRAME_MODULE_TYPE}`,
       '    position: 0, 0',
       `    size: ${MIN_MODULE_WIDTH}, ${MIN_MODULE_HEIGHT}`,
       `    content: ${EMPTY_MODULE_CONTENT}`,
@@ -62,6 +65,7 @@ const buildModulesSection = (wireframe: WireframeDocument | null | undefined) =>
     '- modules:',
     ...modules.flatMap((module) => [
       `  - name: ${module.name}`,
+      `    type: ${getWireframeModuleTypeLabel(module.type)}`,
       `    position: ${module.x}, ${module.y}`,
       `    size: ${module.width ?? MIN_MODULE_WIDTH}, ${module.height ?? MIN_MODULE_HEIGHT}`,
       ...(module.purpose ? [`    purpose: ${module.purpose}`] : []),
@@ -101,6 +105,7 @@ export const parseSketchPageFile = (relativePath: string, content: string) => {
     createWireframeModule({
       id: `${pageId}:module:${index + 1}`,
       name: module.name,
+      type: module.type,
       x: module.x,
       y: module.y,
       width: module.width,

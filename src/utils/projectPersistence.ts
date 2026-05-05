@@ -11,7 +11,7 @@ import { buildSketchReferenceFile } from '../modules/knowledge/referenceFiles.ts
 import { buildSketchPageContent, buildSketchPagePath, parseSketchPageFile } from '../modules/knowledge/sketchPageFiles.ts';
 import type { WorkflowProjectState } from '../modules/ai/store/workflowStore';
 import type { GeneratedFile } from '../types';
-import { joinFileSystemPath } from './fileSystemPaths.ts';
+import { joinFileSystemPath, stripWindowsExtendedLengthPathPrefix } from './fileSystemPaths.ts';
 
 export interface PersistedProjectSnapshot {
   workspace: ProjectWorkspaceSnapshot;
@@ -118,12 +118,12 @@ export const resolveProjectRuntimeRootPath = (
   project: Pick<ProjectConfig, 'id' | 'vaultPath'> | null | undefined,
   fallbackProjectDir: string | null | undefined
 ) => {
-  const preferredRoot = project?.vaultPath?.trim();
-  if (preferredRoot) {
-    return preferredRoot;
+  const fallbackRoot = stripWindowsExtendedLengthPathPrefix((fallbackProjectDir || '').trim());
+  if (fallbackRoot) {
+    return fallbackRoot;
   }
 
-  return (fallbackProjectDir || '').trim();
+  return stripWindowsExtendedLengthPathPrefix(project?.vaultPath?.trim() || '');
 };
 
 const readJSONFile = async <T>(filePath: string): Promise<T | null> => {
@@ -173,13 +173,19 @@ const listDirectory = async (directoryPath: string) => {
 };
 
 export const getProjectDir = async (projectId: string) =>
-  invokeTauri<string>('get_project_dir', { projectId });
+  stripWindowsExtendedLengthPathPrefix(await invokeTauri<string>('get_project_dir', { projectId }));
 
 export const getProjectsIndexPath = async () =>
-  invokeTauri<string>('get_projects_index_path');
+  stripWindowsExtendedLengthPathPrefix(await invokeTauri<string>('get_projects_index_path'));
 
-export const getProjectStorageSettings = async () =>
-  invokeTauri<ProjectStorageSettings>('get_project_storage_settings');
+export const getProjectStorageSettings = async () => {
+  const settings = await invokeTauri<ProjectStorageSettings>('get_project_storage_settings');
+  return {
+    ...settings,
+    rootPath: stripWindowsExtendedLengthPathPrefix(settings.rootPath),
+    defaultPath: stripWindowsExtendedLengthPathPrefix(settings.defaultPath),
+  };
+};
 
 export const setProjectStorageRoot = async (rootPath: string) =>
   invokeTauri<ProjectStorageSettings>('set_project_storage_root', { rootPath });
@@ -207,8 +213,16 @@ export const saveProjectIndexToDisk = async (projects: ProjectConfig[]) => {
 
 export const getProjectVaultRootDir = (project: Pick<ProjectConfig, 'vaultPath'>) => project.vaultPath;
 
+export const getProjectVaultDirectoryPaths = (projectDir: string) => [
+  projectDir,
+  joinPath(projectDir, 'sketch', 'pages'),
+  joinPath(projectDir, 'design', 'prototypes'),
+];
+
 export const ensureProjectVaultDirectory = async (project: Pick<ProjectConfig, 'vaultPath'>) => {
-  await ensureDirectory(project.vaultPath);
+  await Promise.all(
+    getProjectVaultDirectoryPaths(project.vaultPath).map((directoryPath) => ensureDirectory(directoryPath))
+  );
   return project.vaultPath;
 };
 
@@ -238,9 +252,7 @@ export const getProjectStyleDir = (projectDir: string) =>
 export const ensureProjectFilesystemStructure = async (projectId: string) => {
   const projectDir = await getProjectDir(projectId);
 
-  await ensureDirectory(joinPath(projectDir, 'project'));
-  await ensureDirectory(joinPath(projectDir, 'sketch', 'pages'));
-  await ensureDirectory(joinPath(projectDir, 'design', 'prototypes'));
+  await ensureProjectVaultDirectory({ vaultPath: projectDir });
   await ensureBuiltInStylePackFiles(projectId);
 
   return projectDir;

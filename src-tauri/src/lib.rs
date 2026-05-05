@@ -412,14 +412,18 @@ fn resolve_project_storage_paths(
 }
 
 fn display_project_storage_path(path: PathBuf) -> String {
-    let display = path.to_string_lossy().to_string();
+    let display = path.to_string_lossy().trim().to_string();
 
     #[cfg(target_os = "windows")]
     {
-        display
-            .strip_prefix(r"\\?\")
-            .unwrap_or(display.as_str())
-            .to_string()
+        if let Some(without_prefix) = display.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{}", without_prefix)
+        } else {
+            display
+                .strip_prefix(r"\\?\")
+                .unwrap_or(display.as_str())
+                .to_string()
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -480,7 +484,7 @@ fn build_local_config_probe(path: PathBuf, include_content: bool) -> LocalConfig
     };
 
     LocalConfigProbeEntry {
-        path: path.to_string_lossy().to_string(),
+        path: display_project_storage_path(path),
         exists,
         content,
     }
@@ -861,8 +865,8 @@ fn build_skill_entry(
         name: descriptor.name,
         category: descriptor.category,
         source: source.to_string(),
-        path: descriptor.skill_dir.to_string_lossy().to_string(),
-        manifest_path: descriptor.manifest_path.to_string_lossy().to_string(),
+        path: display_project_storage_path(descriptor.skill_dir),
+        manifest_path: display_project_storage_path(descriptor.manifest_path),
         imported,
         builtin,
         deletable,
@@ -1499,7 +1503,7 @@ fn sync_skill_to_runtime(
     Ok(SkillRuntimeSyncResult {
         skill_id,
         runtime: params.runtime,
-        target_path: target_path.to_string_lossy().to_string(),
+        target_path: display_project_storage_path(target_path),
         synced: true,
     })
 }
@@ -1538,7 +1542,7 @@ fn delete_library_skill(
 
     Ok(SkillDeleteResult {
         skill_id,
-        deleted_path: imported_dir.to_string_lossy().to_string(),
+        deleted_path: display_project_storage_path(imported_dir),
         deleted: true,
     })
 }
@@ -1916,7 +1920,7 @@ fn tool_glob(params: GlobParams) -> ToolResult {
                 };
 
                 if matches_pattern {
-                    matches.push(path.to_string_lossy().to_string());
+                    matches.push(display_project_storage_path(path.clone()));
                 }
 
                 // Recurse into directories
@@ -2163,7 +2167,7 @@ fn set_project_storage_root(
     let normalized_root = normalize_project_storage_root_path(root_path)?;
     let stored_root = normalized_root
         .filter(|path| path != &default_path)
-        .map(|path| path.to_string_lossy().to_string());
+        .map(display_project_storage_path);
 
     if let Some(path) = stored_root.as_ref() {
         fs::create_dir_all(path)
@@ -2194,8 +2198,8 @@ fn get_requirements_dir(
 
     dir_path
         .canonicalize()
-        .map(|path| path.to_string_lossy().to_string())
-        .or_else(|_| Ok(dir_path.to_string_lossy().to_string()))
+        .map(display_project_storage_path)
+        .or_else(|_| Ok(display_project_storage_path(dir_path)))
 }
 
 #[tauri::command]
@@ -2207,8 +2211,8 @@ fn get_project_dir(app_handle: tauri::AppHandle, project_id: String) -> Result<S
 
     dir_path
         .canonicalize()
-        .map(|path| path.to_string_lossy().to_string())
-        .or_else(|_| Ok(dir_path.to_string_lossy().to_string()))
+        .map(display_project_storage_path)
+        .or_else(|_| Ok(display_project_storage_path(dir_path)))
 }
 
 #[tauri::command]
@@ -2222,8 +2226,8 @@ fn get_projects_index_path(app_handle: tauri::AppHandle) -> Result<String, Strin
 
     file_path
         .canonicalize()
-        .map(|path| path.to_string_lossy().to_string())
-        .or_else(|_| Ok(file_path.to_string_lossy().to_string()))
+        .map(display_project_storage_path)
+        .or_else(|_| Ok(display_project_storage_path(file_path)))
 }
 
 fn build_unique_destination_path(target_dir: &Path, file_name: &std::ffi::OsStr) -> PathBuf {
@@ -2302,7 +2306,7 @@ fn import_knowledge_assets(params: ImportKnowledgeAssetsParams) -> Result<Vec<St
                 error
             )
         })?;
-        imported_paths.push(destination.to_string_lossy().to_string());
+        imported_paths.push(display_project_storage_path(destination));
     }
 
     Ok(imported_paths)

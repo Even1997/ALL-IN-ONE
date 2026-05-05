@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Runtime Architecture Map: ALL-IN-ONE vs CC-haha</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --panel-soft: #f0f4f8;
+      --ink: #16202a;
+      --muted: #617181;
+      --line: #d6dee7;
+      --green: #16854f;
+      --amber: #a86200;
+      --red: #c23b33;
+      --blue: #246bfe;
+      --cyan: #0d8a9c;
+      --violet: #6b58c4;
+      --shadow: 0 10px 28px rgba(16, 28, 45, 0.08);
+      --radius: 8px;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(1360px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+
+    section,
+    header {
+      margin-bottom: 18px;
+      padding: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin-top: 4px;
+      font-size: clamp(24px, 3vw, 38px);
+      line-height: 1.08;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    h3 {
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .meta {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .meta-row:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .meta strong {
+      color: var(--ink);
+    }
+
+    .grid-3,
+    .grid-2 {
+      display: grid;
+      gap: 12px;
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .card {
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .metric {
+      min-height: 116px;
+      border-top: 3px solid var(--line);
+    }
+
+    .metric.done {
+      border-top-color: var(--green);
+    }
+
+    .metric.partial {
+      border-top-color: var(--amber);
+    }
+
+    .metric.later {
+      border-top-color: var(--red);
+    }
+
+    .value {
+      margin-top: 10px;
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 2px 8px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .badge.done {
+      color: #0f6b3e;
+      background: #e7f6ee;
+      border-color: #bde5d0;
+    }
+
+    .badge.partial {
+      color: #8a5200;
+      background: #fff4de;
+      border-color: #efd19b;
+    }
+
+    .badge.later {
+      color: #a4302a;
+      background: #ffecea;
+      border-color: #f0c3be;
+    }
+
+    .badge.ref {
+      color: #174ea6;
+      background: #eaf1ff;
+      border-color: #c9d9ff;
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .lane {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .lane-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .flow {
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+    }
+
+    .node {
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 48px;
+      padding: 10px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 7px;
+    }
+
+    .index {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      background: var(--ink);
+    }
+
+    .node.current .index {
+      background: var(--cyan);
+    }
+
+    .node.reference .index {
+      background: var(--violet);
+    }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: #a9b5c2;
+      font-size: 18px;
+    }
+
+    .matrix {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    table {
+      width: 100%;
+      min-width: 980px;
+      border-collapse: collapse;
+      background: var(--panel);
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #ecf1f6;
+      color: #2a3948;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td:first-child {
+      width: 180px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    code {
+      padding: 1px 5px;
+      color: #263443;
+      background: #eef2f6;
+      border: 1px solid #dce3ea;
+      border-radius: 5px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 11px;
+    }
+
+    .callout {
+      display: grid;
+      gap: 12px;
+    }
+
+    .plan-card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .plan-card.done {
+      border-top: 3px solid var(--green);
+    }
+
+    .plan-card.partial {
+      border-top: 3px solid var(--amber);
+    }
+
+    .plan-card.later {
+      border-top: 3px solid var(--red);
+    }
+
+    @media (max-width: 980px) {
+      header,
+      .grid-3,
+      .grid-2,
+      .architecture {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      main {
+        width: auto;
+        padding: 0;
+      }
+
+      section,
+      header {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">Architecture Comparison</div>
+        <h1>AI Runtime Architecture Map</h1>
+        <p>
+          This report compares the shipped ALL-IN-ONE AI runtime stack with the CC-haha reference,
+          shows the phase-by-phase rollout status, and makes the current boundary explicit:
+          Phase 5 is now closed as an in-repo runtime conversation gateway, while a true external
+          sidecar and remote entry points remain later platform work.
+        </p>
+      </div>
+      <aside class="meta" aria-label="metadata">
+        <div class="meta-row"><span>Generated</span><strong>2026-05-05</strong></div>
+        <div class="meta-row"><span>Workspace</span><strong>ALL-IN-ONE</strong></div>
+        <div class="meta-row"><span>Reference</span><strong>cc-haha-main</strong></div>
+        <div class="meta-row"><span>Report type</span><strong>Static HTML</strong></div>
+      </aside>
+    </header>
+
+    <section class="grid-3" aria-label="summary">
+      <article class="card metric done">
+        <h3>Core state</h3>
+        <div class="value">Phases 1-5</div>
+        <p>Event plane, session event log, execution graph, capability lifecycle, and runtime boundary projection are now shipped inside the app runtime.</p>
+      </article>
+      <article class="card metric done">
+        <h3>Phase 5 result</h3>
+        <div class="value">Shared gateway</div>
+        <p>Embedded chat and GN shell now consume one conversation and runtime projection instead of rebuilding state separately.</p>
+      </article>
+      <article class="card metric later">
+        <h3>Still later</h3>
+        <div class="value">External sidecar</div>
+        <p>CLI or TUI entry points, remote adapters, and a real out-of-process runtime boundary remain Phase 6 platform work.</p>
+      </article>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <h2>Side-by-Side Architecture</h2>
+          <p>Both stacks are shown at the same abstraction level so the boundary difference stays visible.</p>
+        </div>
+        <div class="legend">
+          <span class="badge done">Done</span>
+          <span class="badge partial">Partial</span>
+          <span class="badge later">Later</span>
+          <span class="badge ref">Reference</span>
+        </div>
+      </div>
+
+      <div class="architecture">
+        <article class="lane">
+          <div class="lane-title">
+            <h3>ALL-IN-ONE current stack</h3>
+            <span class="badge done">In-app runtime</span>
+          </div>
+          <div class="flow">
+            <div class="node current">
+              <div class="index">1</div>
+              <div>
+                <h3>Workspace and product context</h3>
+                <p>Projects, files, canvas, knowledge, and workflow context stay inside the product surface.</p>
+              </div>
+              <span class="badge done">Done</span>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="node current">
+              <div class="index">2</div>
+              <div>
+                <h3>AIChat and GN shell</h3>
+                <p>The embedded panel and shell surfaces are now two views over the same conversation projection.</p>
+              </div>
+              <span class="badge done">Done</span>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="node current">
+              <div class="index">3</div>
+              <div>
+                <h3>Event and session model</h3>
+                <p>Assistant timeline events, session event log projection, replay recovery, and execution graph form the shared state core.</p>
+              </div>
+              <span class="badge done">Done</span>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="node current">
+              <div class="index">4</div>
+              <div>
+                <h3>Runtime conversation gateway</h3>
+                <p>Session reconciliation, active conversation selection, thread routing, live state, approvals, and tool state now flow through one gateway.</p>
+              </div>
+              <span class="badge done">Phase 5</span>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="node current">
+              <div class="index">5</div>
+              <div>
+                <h3>Execution and capability layer</h3>
+                <p>Runtime tools, MCP, skills, approvals, memory lifecycle, local agents, team runs, and replay all live in-process today.</p>
+              </div>
+              <span class="badge partial">Sidecar later</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="lane">
+          <div class="lane-title">
+            <h3>CC-haha reference stack</h3>
+            <span class="badge ref">Local runtime platform</span>
+          </div>
+          <div class="flow">
+            <div class="node reference">
+              <div class="index">1</div>
+              <div>
+                <h3>Desktop, TUI, and remote adapters</h3>
+                <p>Multiple entry points attach to the same runtime system instead of one product-embedded surface.</p>
+              </div>
+              <span class="badge ref">Mature</span>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="node reference">
+              <div class="index">2</div>
+              <div>
+                <h3>HTTP and WebSocket sidecar</h3>
+                <p>Session APIs, streaming events, permissions, tools, and providers are mediated by a dedicated runtime service.</p>
+              </div>
+              <span class="badge ref">Mature</span>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="node reference">
+              <div class="index">3</div>
+              <div>
+                <h3>CLI subprocess runtime</h3>
+                <p>The execution boundary is explicit, headless-friendly, and recoverable across sessions.</p>
+              </div>
+              <span class="badge ref">Mature</span>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="node reference">
+              <div class="index">4</div>
+              <div>
+                <h3>Agent orchestration platform</h3>
+                <p>Multi-agent teams, worktrees, mailbox flows, and tool isolation are native runtime features.</p>
+              </div>
+              <span class="badge ref">Mature</span>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="node reference">
+              <div class="index">5</div>
+              <div>
+                <h3>Plugins, memory, remote, computer use</h3>
+                <p>Capabilities extend outside one app shell because the platform boundary was built earlier.</p>
+              </div>
+              <span class="badge ref">Mature</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <h2>Plan Tracker</h2>
+          <p>This is the direct answer to what is shipped, what it maps to, and what is still later.</p>
+        </div>
+      </div>
+
+      <div class="matrix">
+        <table>
+          <thead>
+            <tr>
+              <th>Phase</th>
+              <th>Target</th>
+              <th>Status</th>
+              <th>What is closed</th>
+              <th>What it maps to</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Phase 1</td>
+              <td>Event Plane V1</td>
+              <td><span class="badge done">Done</span></td>
+              <td>Assistant timeline helpers, runtime-event mutation helpers, streaming draft preservation, and event-first rendering are in place.</td>
+              <td>Stabilizes tool blocks, approvals, questions, and compact panel rendering.</td>
+            </tr>
+            <tr>
+              <td>Phase 2</td>
+              <td>Session Event Log</td>
+              <td><span class="badge done">Done</span></td>
+              <td>Sessions persist an event log, replay and recovery project from it, and restore paths are aligned.</td>
+              <td>Supports stable reopen, replay, recovery, and later multi-surface consistency.</td>
+            </tr>
+            <tr>
+              <td>Phase 3</td>
+              <td>Task / Run / AgentRun</td>
+              <td><span class="badge done">Done</span></td>
+              <td>Stable execution ids, parent-child graph helpers, thread-scoped run stores, and execution-aware UI are shipped.</td>
+              <td>Prevents background runs, local agents, teams, and workflow branches from mixing state.</td>
+            </tr>
+            <tr>
+              <td>Phase 4</td>
+              <td>Skills / MCP / Memory Lifecycle</td>
+              <td><span class="badge done">Done</span></td>
+              <td>Skill discovery and activation, MCP lifecycle, approvals, memory read and write, and rewind rollback share one lifecycle path.</td>
+              <td>Makes capability events replayable, inspectable, and renderable without bespoke branches.</td>
+            </tr>
+            <tr>
+              <td>Phase 5</td>
+              <td>Runtime Boundary + Multi-Session Shell</td>
+              <td><span class="badge done">Done</span></td>
+              <td>The runtime conversation gateway is shipped; AIChat and GN shell now read one conversation projection, and shell panels are prop-driven.</td>
+              <td>Closes in-app shell alignment and removes duplicated UI ownership of session, live, approval, and tool state.</td>
+            </tr>
+            <tr>
+              <td>Phase 6</td>
+              <td>Strategic Platform Scope</td>
+              <td><span class="badge later">Later</span></td>
+              <td>External sidecar, CLI or TUI entry points, remote adapters, stronger observability, and computer use.</td>
+              <td>Moves the runtime from a strong in-app system to a broader local AI platform.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <h2>Phase 5 Delivery Map</h2>
+          <p>This section maps the actual Phase 5 implementation to files and architectural meaning.</p>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <article class="plan-card done">
+          <h3>Gateway foundation</h3>
+          <p><code>src/modules/ai/runtime/conversation/runtimeConversationGateway.ts</code> and <code>useRuntimeConversationGateway.ts</code> now own session reconciliation, active-session selection, thread routing, and runtime projection assembly.</p>
+          <ul>
+            <li>One shared selection model for active session and thread ids.</li>
+            <li>One projection for messages, tools, approvals, recovery, live state, and background tasks.</li>
+            <li>Explicitly an in-repo boundary, not a fake sidecar claim.</li>
+          </ul>
+        </article>
+
+        <article class="plan-card done">
+          <h3>Embedded chat adoption</h3>
+          <p><code>src/components/workspace/AIChat.tsx</code> now reads active conversation state from the gateway and uses shared runtime-thread reconciliation.</p>
+          <ul>
+            <li>Session selection and bootstrap logic no longer live as a second custom derivation.</li>
+            <li>Replay recovery, latest turn, live state, and background task reads stay aligned with shell views.</li>
+          </ul>
+        </article>
+
+        <article class="plan-card done">
+          <h3>GN shell adoption</h3>
+          <p><code>src/components/ai/gn-agent-shell/GNAgentChatPage.tsx</code> now centralizes shell runtime reads, while <code>GNAgentThreadList.tsx</code> and <code>GNAgentStatusPanel.tsx</code> are prop-driven.</p>
+          <ul>
+            <li>The shell no longer rebuilds shared state through separate store subscriptions.</li>
+            <li>Thread selection, resume, status, and recent activity stay tied to the same projection.</li>
+          </ul>
+        </article>
+
+        <article class="plan-card done">
+          <h3>Verification and closure</h3>
+          <p>Phase 5 now has dedicated source and gateway tests, plus the broader shell-facing regression checks required for this phase.</p>
+          <ul>
+            <li><code>tests/ai/runtime-conversation-gateway.test.mjs</code></li>
+            <li><code>tests/ai/agent-runtime-thread-ui.test.mjs</code></li>
+            <li><code>tests/ai/gn-agent-chat-structure.test.mjs</code></li>
+            <li><code>tests/ai/agent-runtime-timeline.test.mjs</code></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <h2>Capability Matrix</h2>
+          <p>The gap is not mainly visual UI now. The real difference is runtime boundary depth.</p>
+        </div>
+      </div>
+
+      <div class="matrix">
+        <table>
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th>ALL-IN-ONE</th>
+              <th>Status</th>
+              <th>CC-haha</th>
+              <th>Decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Assistant event plane</td>
+              <td>Timeline events are the rendering foundation for assistant output, tools, approvals, and questions.</td>
+              <td><span class="badge done">Done</span></td>
+              <td>Reference stack also treats streamed runtime state as event-driven.</td>
+              <td>Keep this as the stable UI substrate.</td>
+            </tr>
+            <tr>
+              <td>Session projection</td>
+              <td>Session event log and replay recovery now drive restore and reopen behavior.</td>
+              <td><span class="badge done">Done</span></td>
+              <td>Reference stack already uses explicit session boundaries across surfaces.</td>
+              <td>Closed for in-app usage.</td>
+            </tr>
+            <tr>
+              <td>Execution hierarchy</td>
+              <td>Task, Run, and AgentRun identities are first-class and thread-scoped.</td>
+              <td><span class="badge done">Done</span></td>
+              <td>Reference stack carries richer platform orchestration on top of the same kind of structure.</td>
+              <td>Strong enough for current product scope.</td>
+            </tr>
+            <tr>
+              <td>Capability lifecycle</td>
+              <td>Skills, MCP, approvals, memory reads and writes, and rewind now share one lifecycle path.</td>
+              <td><span class="badge done">Done</span></td>
+              <td>Reference stack extends deeper into plugin and remote ecosystems.</td>
+              <td>Closed for app runtime, external audits later.</td>
+            </tr>
+            <tr>
+              <td>Runtime boundary</td>
+              <td>Shared runtime conversation gateway is shipped, but still in-process.</td>
+              <td><span class="badge partial">Phase 5 done</span></td>
+              <td>Reference stack already uses an explicit sidecar and subprocess boundary.</td>
+              <td>Next step is a real sidecar only when Phase 6 starts.</td>
+            </tr>
+            <tr>
+              <td>Remote entry points</td>
+              <td>No detached CLI, TUI, or remote adapters yet.</td>
+              <td><span class="badge later">Later</span></td>
+              <td>Reference stack is built around multi-entry runtime access.</td>
+              <td>Do not start before the current runtime stays stable.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <h2>Completed Mapping</h2>
+          <p>These are the concrete code-level deliveries already shipped in the repo.</p>
+        </div>
+      </div>
+
+      <div class="matrix">
+        <table>
+          <thead>
+            <tr>
+              <th>Completed item</th>
+              <th>Files</th>
+              <th>Architecture layer</th>
+              <th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Shared runtime event helpers</td>
+              <td><code>src/modules/ai/runtime/dispatch/agentEvents.ts</code><br /><code>src/modules/ai/store/assistantTimeline.ts</code></td>
+              <td>Event Plane / Execution Plane</td>
+              <td>Tool, approval, and question state now mutate through shared helper surfaces instead of ad hoc UI edits.</td>
+            </tr>
+            <tr>
+              <td>Session event log projection</td>
+              <td><code>src/modules/ai/store/chatSessionEventLog.ts</code><br /><code>src/modules/ai/store/aiChatStore.ts</code></td>
+              <td>Persistence Plane</td>
+              <td>Session restore, replay, recovery snapshots, and migration now project from the session event log.</td>
+            </tr>
+            <tr>
+              <td>Execution graph model</td>
+              <td><code>src/modules/ai/runtime/execution/agentExecutionGraph.ts</code><br /><code>src/modules/ai/runtime/agentRuntimeStore.ts</code></td>
+              <td>Execution Plane / Control Plane</td>
+              <td>Stable task, run, and agent-run identities now back runtime branches and timeline surfaces.</td>
+            </tr>
+            <tr>
+              <td>Capability lifecycle layer</td>
+              <td><code>src/modules/ai/runtime/dispatch/runtimeCapabilityLifecycle.ts</code><br /><code>src/modules/ai/skills/skillLibrary.ts</code></td>
+              <td>Execution Plane / Replay</td>
+              <td>Skills, MCP, approvals, and memory lifecycle are normalized for audit, replay, and render.</td>
+            </tr>
+            <tr>
+              <td>Runtime conversation gateway</td>
+              <td><code>src/modules/ai/runtime/conversation/runtimeConversationGateway.ts</code><br /><code>src/modules/ai/runtime/conversation/useRuntimeConversationGateway.ts</code></td>
+              <td>Control Plane / Presentation Plane</td>
+              <td>Phase 5 delivers a shared runtime projection boundary for session, thread, tool, approval, and live-state reads.</td>
+            </tr>
+            <tr>
+              <td>AIChat and shell unification</td>
+              <td><code>src/components/workspace/AIChat.tsx</code><br /><code>src/components/ai/gn-agent-shell/GNAgentChatPage.tsx</code><br /><code>src/components/ai/gn-agent-shell/GNAgentThreadList.tsx</code><br /><code>src/components/ai/gn-agent-shell/GNAgentStatusPanel.tsx</code></td>
+              <td>Presentation Plane / Shell UX</td>
+              <td>The embedded panel and GN shell now read one conversation model, and shell views are simpler because they no longer own duplicated subscriptions.</td>
+            </tr>
+            <tr>
+              <td>Phase 5 verification</td>
+              <td><code>tests/ai/runtime-conversation-gateway.test.mjs</code><br /><code>tests/ai/agent-runtime-thread-ui.test.mjs</code><br /><code>tests/ai/gn-agent-chat-structure.test.mjs</code><br /><code>tests/ai/agent-runtime-timeline.test.mjs</code></td>
+              <td>Verification Layer</td>
+              <td>Locks the gateway contract, shell projection wiring, and timeline-level shell expectations.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="callout">
+      <div class="section-head">
+        <div>
+          <h2>Conclusion</h2>
+          <p>The product is no longer in the "patchy chat panel" stage. It now has a coherent in-app runtime model.</p>
+        </div>
+      </div>
+      <div class="grid-2">
+        <article class="plan-card done">
+          <h3>What is truly closed now</h3>
+          <ul>
+            <li>One event plane for assistant UI stability.</li>
+            <li>One session event log for restore and replay.</li>
+            <li>One execution hierarchy for local, team, and workflow runs.</li>
+            <li>One lifecycle path for skills, MCP, approvals, and memory.</li>
+            <li>One conversation gateway shared by AIChat and GN shell.</li>
+          </ul>
+        </article>
+        <article class="plan-card later">
+          <h3>What is intentionally not claimed yet</h3>
+          <ul>
+            <li>No true external sidecar process yet.</li>
+            <li>No detached CLI or TUI runtime entry point yet.</li>
+            <li>No remote adapter layer yet.</li>
+            <li>No computer-use or broader platform plugin surface yet.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

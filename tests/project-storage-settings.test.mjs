@@ -14,6 +14,11 @@ test('tauri project storage commands resolve defaults from documents and persist
   assert.match(source, /fn set_project_storage_root\(\s*app_handle: tauri::AppHandle,\s*root_path: Option<String>,/);
   assert.match(source, /fn get_project_dir\(app_handle: tauri::AppHandle,\s*project_id: String\)/);
   assert.match(source, /get_projects_root_path\(&app_handle\)/);
+  assert.match(source, /fn display_project_storage_path\(path: PathBuf\) -> String/);
+  assert.match(source, /display_project_storage_path[\s\S]*strip_prefix/);
+  assert.match(source, /fn get_requirements_dir\([\s\S]*?dir_path[\s\S]*?\.canonicalize\(\)[\s\S]*?\.map\(display_project_storage_path\)[\s\S]*?\.or_else\(\|_\| Ok\(display_project_storage_path\(dir_path\)\)\)/);
+  assert.match(source, /fn get_project_dir\(app_handle: tauri::AppHandle,\s*project_id: String\) -> Result<String, String> \{[\s\S]*?dir_path[\s\S]*?\.canonicalize\(\)[\s\S]*?\.map\(display_project_storage_path\)[\s\S]*?\.or_else\(\|_\| Ok\(display_project_storage_path\(dir_path\)\)\)/);
+  assert.match(source, /fn get_projects_index_path\(app_handle: tauri::AppHandle\) -> Result<String, String> \{[\s\S]*?file_path[\s\S]*?\.canonicalize\(\)[\s\S]*?\.map\(display_project_storage_path\)[\s\S]*?\.or_else\(\|_\| Ok\(display_project_storage_path\(file_path\)\)\)/);
 });
 
 test('tauri dialog plugin is registered for directory selection and default capability access', async () => {

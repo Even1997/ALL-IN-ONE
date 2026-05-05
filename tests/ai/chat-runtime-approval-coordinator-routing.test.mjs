@@ -14,7 +14,9 @@ test('chat delegates approval pending-action bookkeeping to the runtime approval
   assert.match(source, /requestRuntimeApprovalFlow/);
   assert.match(source, /resolveRuntimeApproval/);
   assert.match(source, /type RuntimePendingApprovalAction/);
+  assert.match(source, /buildCapabilityApprovalLifecycleDescriptor/);
   assert.match(source, /const approval = await requestRuntimeApprovalFlow\(/);
   assert.match(source, /const pendingAction = await resolveRuntimeApproval\(/);
+  assert.match(source, /replayRecoveryController\.appendAndSync/);
   assert.doesNotMatch(source, /pendingApprovalActionsRef\.current\[approval\.id\] = \{ onApprove, onDeny \}/);
 });

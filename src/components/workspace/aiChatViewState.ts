@@ -1,31 +1,15 @@
-export type AIChatMessage = {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  tone?: 'default' | 'error';
-  createdAt: number;
-};
+import { createStoredChatMessage, type StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
 
-const createMessageId = (role: AIChatMessage['role']) =>
-  `${role}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+export type AIChatMessage = StoredChatMessage;
 
 export const createChatMessage = (
-  role: AIChatMessage['role'],
+  role: StoredChatMessage['role'],
   content: string,
-  tone: AIChatMessage['tone'] = 'default'
-): AIChatMessage => ({
-  id: createMessageId(role),
-  role,
-  content,
-  tone,
-  createdAt: Date.now(),
-});
+  tone: StoredChatMessage['tone'] = 'default'
+): AIChatMessage => createStoredChatMessage(role, content, tone);
 
-export const buildWelcomeMessage = (projectName?: string | null) =>
-  createChatMessage(
-    'assistant',
-    projectName ? `${projectName} 已就绪。直接说需求。` : '已就绪。直接说需求。'
-  );
+export const buildWelcomeMessage = () =>
+  createChatMessage('assistant', '');
 
 export const getChatShellLayoutClassName = (isCollapsed: boolean) =>
   isCollapsed ? 'chat-shell is-sidebar is-collapsed' : 'chat-shell is-sidebar';

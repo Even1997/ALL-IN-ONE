@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   joinProjectRelativePath,
+  getProjectVaultDirectoryPaths,
   mapGeneratedFilesForProjectOutput,
   mapSketchFilesForProjectOutput,
   resolveProjectRuntimeRootPath,
@@ -71,12 +72,20 @@ test('project persistence prefers the bound vault path for runtime file access',
 test('project persistence joins relative project paths segment-by-segment for Windows roots', () => {
   assert.equal(
     joinProjectRelativePath('\\\\?\\C:\\DevFlow\\projects\\demo', 'design/styles/custom.md'),
-    '\\\\?\\C:\\DevFlow\\projects\\demo\\design\\styles\\custom.md'
+    'C:\\DevFlow\\projects\\demo\\design\\styles\\custom.md'
   );
   assert.equal(
     joinProjectRelativePath('C:\\DevFlow\\projects\\demo', 'sketch/pages/home.md'),
     'C:\\DevFlow\\projects\\demo\\sketch\\pages\\home.md'
   );
+});
+
+test('project vault initializer keeps only sketch and design default folders', () => {
+  assert.deepEqual(getProjectVaultDirectoryPaths('C:\\DevFlow\\projects\\demo'), [
+    'C:\\DevFlow\\projects\\demo',
+    'C:\\DevFlow\\projects\\demo\\sketch\\pages',
+    'C:\\DevFlow\\projects\\demo\\design\\prototypes',
+  ]);
 });
 
 test('project output sync maps sketch markdown into sketch/pages files', () => {
@@ -120,10 +129,9 @@ test('project output sync maps sketch markdown into sketch/pages files', () => {
 test('project persistence defines a project filesystem initializer for required folders', async () => {
   const source = await readFile(new URL('../src/utils/projectPersistence.ts', import.meta.url), 'utf8');
 
+  assert.match(source, /export const getProjectVaultDirectoryPaths = \(projectDir: string\) => \[/);
   assert.match(source, /export const ensureProjectFilesystemStructure = async/);
-  assert.match(source, /await ensureDirectory\(joinPath\(projectDir, 'project'\)\)/);
-  assert.match(source, /await ensureDirectory\(joinPath\(projectDir, 'sketch', 'pages'\)\)/);
-  assert.match(source, /await ensureDirectory\(joinPath\(projectDir, 'design', 'prototypes'\)\)/);
+  assert.match(source, /ensureProjectVaultDirectory\(\{ vaultPath: projectDir \}\)/);
   assert.match(source, /await ensureBuiltInStylePackFiles\(projectId\)/);
 });
 

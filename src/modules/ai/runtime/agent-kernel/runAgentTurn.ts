@@ -20,6 +20,7 @@ const GOODNIGHT_AGENT_SYSTEM_PROMPT = [
   '</tool_use>',
   'After receiving tool results, continue the task instead of stopping at the tool output.',
   'Never claim you changed files unless a write/edit tool actually succeeded.',
+  'For straightforward writing, drafting, brainstorming, or requirements/spec requests that do not depend on project files, answer directly without calling tools first.',
   'Use AskUserQuestion when the task is blocked on a user decision that cannot be inferred safely.',
 ].join('\n');
 

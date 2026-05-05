@@ -1,6 +1,14 @@
 import type { ApprovalRecord, ApprovalRiskLevel, ApprovalStatus } from '../approval/approvalTypes.ts';
 
 export type RuntimePendingApprovalAction = {
+  threadId?: string;
+  runtimeStoreThreadId?: string;
+  replayThreadId?: string;
+  providerId?: string;
+  actionType?: string;
+  riskLevel?: ApprovalRiskLevel;
+  summary?: string;
+  toolCallId?: string | null;
   messageId?: string | null;
   onApprove: () => Promise<void>;
   onDeny?: () => void | Promise<void>;
@@ -17,10 +25,14 @@ export type RuntimePendingApprovalAction = {
 
 export const requestRuntimeApproval = async (input: {
   threadId: string;
+  runtimeStoreThreadId?: string;
+  replayThreadId?: string;
+  providerId?: string;
   actionType: string;
   riskLevel: ApprovalRiskLevel;
   summary: string;
   messageId?: string | null;
+  toolCallId?: string | null;
   onApprove: () => Promise<void>;
   onDeny?: () => void | Promise<void>;
   display?: RuntimePendingApprovalAction['display'];
@@ -44,6 +56,14 @@ export const requestRuntimeApproval = async (input: {
 
   input.enqueueApproval(approval);
   input.pendingApprovalActions[approval.id] = {
+    threadId: input.threadId,
+    runtimeStoreThreadId: input.runtimeStoreThreadId || input.threadId,
+    replayThreadId: input.replayThreadId || input.threadId,
+    providerId: input.providerId || 'built-in',
+    actionType: input.actionType,
+    riskLevel: input.riskLevel,
+    summary: input.summary,
+    toolCallId: input.toolCallId || null,
     messageId: input.messageId || null,
     onApprove: input.onApprove,
     onDeny: input.onDeny,

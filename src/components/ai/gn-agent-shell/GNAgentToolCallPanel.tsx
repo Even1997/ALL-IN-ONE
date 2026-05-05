@@ -51,6 +51,9 @@ const summarizeFileChange = (change: NonNullable<RuntimeToolStep['fileChanges']>
   if (change.beforeContent !== null && change.afterContent === null) {
     return 'Deleted';
   }
+  if (change.beforeContent === null && change.afterContent === null) {
+    return 'Written';
+  }
   return 'Updated';
 };
 

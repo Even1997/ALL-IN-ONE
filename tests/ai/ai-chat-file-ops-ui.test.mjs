@@ -36,6 +36,7 @@ test('AI chat routes project file requests through read/planning helpers and pro
   assert.match(chatSource, /projectFileRequestKind === 'read'/);
   assert.match(chatSource, /projectFileRequestKind === 'write'/);
   assert.match(chatSource, /projectFileMode = shouldForceProjectFileProposal/);
+  assert.match(chatSource, /resolveProjectFileRequestKind\(\{\s*rawInput: rawContent,\s*cleanedInput: cleanedContent,\s*conversationHistory,/);
 
   assert.match(messageListSource, /renderProjectFileProposal/);
   assert.match(messageListSource, /renderRuntimeApproval/);

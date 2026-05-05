@@ -40,6 +40,9 @@ test('agent runtime types define shared provider ids and runtime records', async
   const promptContext = getTypeAlias(sourceFile, 'AgentPromptContext');
   const contextBundle = getTypeAlias(sourceFile, 'AgentContextBundle');
   const memoryEntry = getTypeAlias(sourceFile, 'AgentMemoryEntry');
+  const executionTaskRecord = getTypeAlias(sourceFile, 'AgentExecutionTaskRecord');
+  const executionRunRecord = getTypeAlias(sourceFile, 'AgentExecutionRunRecord');
+  const executionAgentRunRecord = getTypeAlias(sourceFile, 'AgentExecutionAgentRunRecord');
 
   assert.ok(providerId);
   assert.ok(timelineEvent);
@@ -47,10 +50,13 @@ test('agent runtime types define shared provider ids and runtime records', async
   assert.ok(promptContext);
   assert.ok(contextBundle);
   assert.ok(memoryEntry);
+  assert.ok(executionTaskRecord);
+  assert.ok(executionRunRecord);
+  assert.ok(executionAgentRunRecord);
   assert.ok(ts.isUnionTypeNode(providerId.type));
   assert.deepEqual(
     providerId.type.types.map((node) => node.literal.text),
-    ['built-in', 'claude', 'codex'],
+    ['built-in', 'claude', 'codex', 'team'],
   );
   assert.ok(ts.isTypeReferenceNode(contextBundle.type));
   assert.equal(contextBundle.type.typeName.getText(sourceFile), 'AgentPromptContext');

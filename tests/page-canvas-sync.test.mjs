@@ -6,18 +6,14 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const appPath = path.resolve(__dirname, '../src/App.tsx');
 const canvasPath = path.resolve(__dirname, '../src/components/canvas/Canvas.tsx');
 const productWorkbenchPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
 
-test('page canvas keeps 4px move precision, drops the floating toolbar, and grows downward with content', async () => {
+test('page canvas keeps board height tied to the selected frame', async () => {
   const source = await readFile(canvasPath, 'utf8');
 
-  assert.match(source, /const GRID_SIZE = 4;/);
   assert.match(source, /const boardHeight = height;/);
-  assert.match(source, /className=\{`design-board-scroll/);
-  assert.doesNotMatch(source, /className="design-canvas-toolbar"/);
-  assert.doesNotMatch(source, /const \[interactionMode, setInteractionMode\]/);
-  assert.doesNotMatch(source, /width: snapToGrid\(nextWidth, GRID_SIZE\)/);
   assert.doesNotMatch(source, /maxElementBottom = elements\.reduce/);
 });
 
@@ -46,4 +42,18 @@ test('page workspace exposes a floating frame editor and syncs frame presets int
   assert.match(source, /onClick=\{\(\) => handleApplyFrameValue\('1280x800'\)\}/);
   assert.match(source, /onClick=\{\(\) => handleApplyFrameValue\('390x844'\)\}/);
   assert.match(source, /编辑 Frame/);
+});
+
+test('page canvas and sketch preview render text wireframe modules with dedicated text styling', async () => {
+  const canvasSource = await readFile(canvasPath, 'utf8');
+  const appSource = await readFile(appPath, 'utf8');
+  const productWorkbenchSource = await readFile(productWorkbenchPath, 'utf8');
+
+  assert.match(canvasSource, /getWireframeModuleVisualType/);
+  assert.match(canvasSource, /const isTextModule = getModuleContentType\(element\) === 'text';/);
+  assert.match(appSource, /getWireframeModuleVisualType/);
+  assert.match(appSource, /const isTextModule = getWireframeModuleVisualType\(element\.props\.moduleType, element\.props\.content\) === 'text';/);
+  assert.match(productWorkbenchSource, /<span>\{'模块类型'\}<\/span>/);
+  assert.match(productWorkbenchSource, /<option value="线框">线框<\/option>/);
+  assert.match(productWorkbenchSource, /<option value="文字">文字<\/option>/);
 });

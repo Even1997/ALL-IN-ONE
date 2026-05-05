@@ -20,6 +20,17 @@ type RunRuntimeSkillShellInput = {
   timeout?: number;
 };
 
+export type RuntimeSkillHookEvent = {
+  skillId: string;
+  skillName: string;
+  eventName: 'PreToolUse' | 'PostToolUse';
+  toolName: string;
+  matcher: string;
+  command: string;
+  status: 'completed' | 'failed';
+  error?: string | null;
+};
+
 const INLINE_SHELL_PATTERN = /!`([^`]+)`/g;
 const BLOCK_SHELL_PATTERN = /```!\n([\s\S]*?)\n```/g;
 
@@ -148,6 +159,7 @@ const buildHookKey = (skillId: string, eventName: string, matcher: string, comma
 export const createRuntimeSkillHookRunner = (input: {
   skills: RuntimeSkillDefinition[];
   projectRoot?: string;
+  onHookEvent?: (event: RuntimeSkillHookEvent) => Promise<void> | void;
 }) => {
   const executedOnce = new Set<string>();
 
@@ -168,11 +180,36 @@ export const createRuntimeSkillHookRunner = (input: {
           continue;
         }
 
-        await runRuntimeSkillShell({
-          command: hook.command,
-          cwd: skill.skillRoot || input.projectRoot,
-          shell: skill.shell,
-        });
+        try {
+          await runRuntimeSkillShell({
+            command: hook.command,
+            cwd: skill.skillRoot || input.projectRoot,
+            shell: skill.shell,
+          });
+          await input.onHookEvent?.({
+            skillId: skill.id,
+            skillName: skill.name,
+            eventName,
+            toolName,
+            matcher: matcherEntry.matcher,
+            command: hook.command,
+            status: 'completed',
+            error: null,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          await input.onHookEvent?.({
+            skillId: skill.id,
+            skillName: skill.name,
+            eventName,
+            toolName,
+            matcher: matcherEntry.matcher,
+            command: hook.command,
+            status: 'failed',
+            error: message,
+          });
+          throw error;
+        }
 
         if (hook.once) {
           executedOnce.add(hookKey);

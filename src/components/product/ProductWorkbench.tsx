@@ -1,5 +1,5 @@
 ﻿import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, Dispatch, SetStateAction } from 'react';
+import type { CSSProperties, Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Canvas } from '../canvas/Canvas';
 import {
@@ -27,6 +27,7 @@ import {
   findMarkdownModuleMatch,
   formatCanvasPreset,
   getCanvasPreset,
+  getWireframeModuleTypeLabel,
   isMobileAppType,
   MIN_MODULE_HEIGHT,
   MIN_MODULE_WIDTH,
@@ -272,34 +273,17 @@ const filterKnowledgeNotes = (notes: KnowledgeNote[], keyword: string) => {
   );
 };
 
-const createCanvasId = () =>
-  globalThis.crypto?.randomUUID?.() ?? `canvas-${Math.random().toString(36).slice(2, 10)}`;
 
-const buildSampleWireframe = (pageName: string, featureName: string, isMobile: boolean): CanvasElement[] =>
-  isMobile
-    ? [
-        createWireframeModule({ id: createCanvasId(), name: `${pageName} 顶部`, x: 20, y: 28, content: featureName }, 'mobile'),
-        createWireframeModule({ id: createCanvasId(), name: '搜索按钮', x: 20, y: 142, content: '搜索入口' }, 'mobile'),
-        createWireframeModule({ id: createCanvasId(), name: '主内容区', x: 20, y: 256, content: '列表或卡片主区域' }, 'mobile'),
-        createWireframeModule({ id: createCanvasId(), name: '底部操作', x: 20, y: 370, content: '提交 / 下一步' }, 'mobile'),
-      ]
-    : [
-        createWireframeModule({ id: createCanvasId(), name: `${pageName} 页头`, x: 28, y: 24, content: featureName }, 'web'),
-        createWireframeModule({ id: createCanvasId(), name: '左侧导航', x: 28, y: 138, content: '一级导航 / 二级导航' }, 'web'),
-        createWireframeModule({ id: createCanvasId(), name: '搜索按钮', x: 356, y: 138, content: '搜索与筛选' }, 'web'),
-        createWireframeModule({ id: createCanvasId(), name: '主内容区', x: 356, y: 252, content: '表格、卡片或列表区域' }, 'web'),
-      ];
 
 interface PageTreeNodeProps {
   node: PageStructureNode;
   depth: number;
   selectedPageId: string | null;
   onSelect: (pageId: string) => void;
-  onAddPage: (pageId: string) => void;
   onDeletePage: (pageId: string) => void;
 }
 
-const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onSelect, onAddPage, onDeletePage }) => {
+const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onSelect, onDeletePage }) => {
   const isPage = node.kind === 'page';
   const isSelected = selectedPageId === node.id;
   const hasChildren = node.children.length > 0;
@@ -319,7 +303,6 @@ const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onS
             depth={depth}
             selectedPageId={selectedPageId}
             onSelect={onSelect}
-            onAddPage={onAddPage}
             onDeletePage={onDeletePage}
           />
         ))}
@@ -353,18 +336,6 @@ const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onS
           </button>
           <div className="pm-page-tree-actions" aria-label={`${node.name} 操作`}>
             <button
-              className="pm-page-tree-action"
-              type="button"
-              title={`给 ${node.name} 添加子页面`}
-              aria-label={`给 ${node.name} 添加子页面`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onAddPage(node.id);
-              }}
-            >
-              <WorkbenchIcon name="plus" />
-            </button>
-            <button
               className="pm-page-tree-action danger"
               type="button"
               title={`删除 ${node.name}`}
@@ -389,7 +360,6 @@ const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onS
               depth={depth + 1}
               selectedPageId={selectedPageId}
               onSelect={onSelect}
-              onAddPage={onAddPage}
               onDeletePage={onDeletePage}
             />
           ))}
@@ -399,24 +369,10 @@ const PageTreeNode = memo<PageTreeNodeProps>(({ node, depth, selectedPageId, onS
   );
 });
 
-interface WireframeSidebarProps {
-  selectedPage: PageStructureNode;
-  appType?: AppType;
-  featureTree: FeatureTree | null;
-  draggingModuleId: string | null;
-  setDraggingModuleId: Dispatch<SetStateAction<string | null>>;
-  linkedFeatureName: string;
-  canvasLabel: string;
-  onAddModule: (position?: { x: number; y: number }) => void;
-  onAddChildPage: () => void;
-  onGenerateSampleWireframe: () => void;
-  onClearCurrentWireframe: () => void;
-  onRequestDeleteModule: (moduleId: string, moduleTitle: string) => void;
-}
-
 const getModuleDraft = (element: CanvasElement): WireframeModuleDraft => ({
   id: element.id,
   name: String(element.props.name || element.props.title || element.props.text || '未命名模块'),
+  type: getWireframeModuleTypeLabel(element.props.moduleType),
   x: Number.isFinite(element.x) ? Math.max(0, Math.round(element.x)) : 0,
   y: Number.isFinite(element.y) ? Math.max(0, Math.round(element.y)) : 0,
   width: Number.isFinite(element.width) ? Math.max(MIN_MODULE_WIDTH, Math.round(element.width)) : MIN_MODULE_WIDTH,
@@ -433,6 +389,23 @@ const getModuleContentSummary = (content: string) => {
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
 };
 
+const isModuleCardDragControl = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(target.closest('button, input, textarea, select, [contenteditable="true"]'));
+};
+
+const getModuleCardIdFromPoint = (clientX: number, clientY: number) => {
+  const target = document.elementFromPoint(clientX, clientY);
+  if (!(target instanceof HTMLElement)) {
+    return null;
+  }
+
+  return target.closest<HTMLElement>('[data-module-id]')?.dataset.moduleId || null;
+};
+
 interface WireframeModuleCardProps {
   moduleId: string;
   draggingModuleId: string | null;
@@ -443,15 +416,82 @@ interface WireframeModuleCardProps {
 
 const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, draggingModuleId, setDraggingModuleId, appType, onRequestDelete }) => {
   const element = usePreviewStore((state) => state.elements.find((item) => item.id === moduleId) || null);
+  const elementIndex = usePreviewStore((state) => state.elements.findIndex((item) => item.id === moduleId));
+  const elements = usePreviewStore((state) => state.elements);
   const isActive = usePreviewStore((state) => state.selectedElementId === moduleId);
   const selectElement = usePreviewStore((state) => state.selectElement);
   const reorderElements = usePreviewStore((state) => state.reorderElements);
   const updateElement = usePreviewStore((state) => state.updateElement);
+  const isFirst = elementIndex === 0;
+  const isLast = elementIndex === elements.length - 1;
+
+  const handleMoveUp = useCallback(() => {
+    if (elementIndex <= 0) return;
+    const prevId = elements[elementIndex - 1].id;
+    reorderElements(moduleId, prevId);
+    selectElement(moduleId);
+  }, [elementIndex, elements, moduleId, reorderElements, selectElement]);
+
+  const handleMoveDown = useCallback(() => {
+    if (elementIndex >= elements.length - 1) return;
+    const nextId = elements[elementIndex + 1].id;
+    reorderElements(nextId, moduleId);
+    selectElement(moduleId);
+  }, [elementIndex, elements, moduleId, reorderElements, selectElement]);
+
+  const handleDragHandlePointerDown = useCallback((event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (isModuleCardDragControl(event.target)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setDraggingModuleId(moduleId);
+
+    let lastTargetModuleId: string | null = null;
+
+    const reorderToPoint = (clientX: number, clientY: number) => {
+      const targetModuleId = getModuleCardIdFromPoint(clientX, clientY);
+      if (!targetModuleId || targetModuleId === moduleId || targetModuleId === lastTargetModuleId) {
+        return;
+      }
+
+      lastTargetModuleId = targetModuleId;
+      reorderElements(moduleId, targetModuleId);
+      selectElement(moduleId);
+    };
+
+    const handlePointerMove = (pointerEvent: PointerEvent) => {
+      reorderToPoint(pointerEvent.clientX, pointerEvent.clientY);
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
+      setDraggingModuleId(null);
+    };
+
+    const handlePointerUp = (pointerEvent: PointerEvent) => {
+      reorderToPoint(pointerEvent.clientX, pointerEvent.clientY);
+      cleanup();
+    };
+
+    const handlePointerCancel = () => {
+      cleanup();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerCancel);
+  }, [moduleId, reorderElements, selectElement, setDraggingModuleId]);
+
   const module = useMemo(() => (element ? getModuleDraft(element) : null), [element]);
   const [textDrafts, setTextDrafts] = useState<{ name: string; content: string }>({
     name: '',
     content: '',
   });
+  const [moduleTypeDraft, setModuleTypeDraft] = useState('线框');
   const [numericDrafts, setNumericDrafts] = useState<{ x: string; y: string; width: string; height: string }>({
     x: '0',
     y: '0',
@@ -459,7 +499,7 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
     height: String(MIN_MODULE_HEIGHT),
   });
 
-  const handleModuleFieldChange = useCallback((updates: Partial<{ name: string; x: number; y: number; width: number; height: number; content: string }>) => {
+  const handleModuleFieldChange = useCallback((updates: Partial<{ name: string; type: string; x: number; y: number; width: number; height: number; content: string }>) => {
     if (!element) {
       return;
     }
@@ -468,6 +508,7 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
       {
         id: moduleId,
         name: typeof updates.name === 'string' ? updates.name : String(element.props.name || element.props.title || '模块'),
+        type: typeof updates.type === 'string' ? updates.type : getWireframeModuleTypeLabel(element.props.moduleType),
         x: typeof updates.x === 'number' ? Math.max(0, Math.round(updates.x)) : element.x,
         y: typeof updates.y === 'number' ? Math.max(0, Math.round(updates.y)) : element.y,
         width: typeof updates.width === 'number' ? Math.max(MIN_MODULE_WIDTH, Math.round(updates.width)) : element.width,
@@ -489,6 +530,7 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
       name: module.name,
       content: module.content,
     });
+    setModuleTypeDraft(module.type || '线框');
     setNumericDrafts({
       x: String(module.x),
       y: String(module.y),
@@ -513,6 +555,11 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
 
     handleModuleFieldChange({ [field]: nextValue });
   }, [handleModuleFieldChange, module, textDrafts]);
+
+  const handleModuleTypeChange = useCallback((value: string) => {
+    setModuleTypeDraft(value);
+    handleModuleFieldChange({ type: value });
+  }, [handleModuleFieldChange]);
 
   const handleNumericDraftChange = useCallback((
     field: 'x' | 'y' | 'width' | 'height',
@@ -558,17 +605,6 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
       onClick={() => selectElement(moduleId)}
       role="button"
       tabIndex={0}
-      onDragOver={(event) => {
-        event.preventDefault();
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        if (draggingModuleId && draggingModuleId !== moduleId) {
-          reorderElements(draggingModuleId, moduleId);
-          selectElement(draggingModuleId);
-        }
-        setDraggingModuleId(null);
-      }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
@@ -578,29 +614,52 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
     >
       <div className="pm-module-card-header">
         <div className="pm-module-card-title">
-          <button
+          <span
             className="pm-drag-handle"
-            type="button"
-            draggable
-            onDragStart={() => setDraggingModuleId(moduleId)}
-            onDragEnd={() => setDraggingModuleId(null)}
+            onPointerDown={handleDragHandlePointerDown}
             onClick={(event) => event.stopPropagation()}
             title="拖动调整层级"
           >
             ⋮⋮
-          </button>
+          </span>
           <strong>{module.name}</strong>
         </div>
-        <button
-          className="pm-link-btn"
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRequestDelete(moduleId, module.name);
-          }}
-        >
-          删除
-        </button>
+        <div className="pm-module-card-actions">
+          <button
+            className="pm-link-btn"
+            type="button"
+            disabled={isFirst}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleMoveUp();
+            }}
+            title="上移层级"
+          >
+            上移
+          </button>
+          <button
+            className="pm-link-btn"
+            type="button"
+            disabled={isLast}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleMoveDown();
+            }}
+            title="下移层级"
+          >
+            下移
+          </button>
+          <button
+            className="pm-link-btn"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRequestDelete(moduleId, module.name);
+            }}
+          >
+            删除
+          </button>
+        </div>
       </div>
 
       <div className="pm-module-card-meta">
@@ -626,6 +685,17 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
               }}
               placeholder={"\u8f93\u5165\u6a21\u5757\u540d\u79f0"}
             />
+          </label>
+          <label className="pm-field-stack pm-field-stack-compact">
+            <span>{'模块类型'}</span>
+            <select
+              className="product-input pm-form-input"
+              value={moduleTypeDraft}
+              onChange={(event) => handleModuleTypeChange(event.target.value)}
+            >
+              <option value="线框">线框</option>
+              <option value="文字">文字</option>
+            </select>
           </label>
           <div className="pm-form-grid">
             <label className="pm-field-stack pm-field-stack-compact">
@@ -713,263 +783,6 @@ const WireframeModuleCard = memo<WireframeModuleCardProps>(({ moduleId, dragging
   );
 });
 
-const WireframeSidebar = memo<WireframeSidebarProps>(({
-  selectedPage,
-  appType,
-  featureTree,
-  draggingModuleId,
-  setDraggingModuleId,
-  linkedFeatureName,
-  canvasLabel,
-  onAddModule,
-  onAddChildPage,
-  onGenerateSampleWireframe,
-  onClearCurrentWireframe,
-  onRequestDeleteModule,
-}) => {
-  const [isMarkdownEditorOpen, setIsMarkdownEditorOpen] = useState(false);
-  const [pageMarkdownDraft, setPageMarkdownDraft] = useState('');
-  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const moduleListRef = useRef<HTMLDivElement | null>(null);
-  const lastSyncedMarkdownRef = useRef('');
-  const elements = usePreviewStore((state) => state.elements);
-  const selectedElementId = usePreviewStore((state) => state.selectedElementId);
-  const selectElement = usePreviewStore((state) => state.selectElement);
-  const loadFromCode = usePreviewStore((state) => state.loadFromCode);
-  const updatePageStructureNode = useProjectStore((state) => state.updatePageStructureNode);
-  const updateWireframeFrame = useProjectStore((state) => state.updateWireframeFrame);
-  const currentWireframeFrame = useProjectStore((state) => state.wireframes[selectedPage.id]?.frame || null);
-  const moduleIds = useMemo(() => elements.map((element) => element.id), [elements]);
-  const moduleDrafts = useMemo(() => toWireframeModuleDrafts(elements), [elements]);
-  const selectedModule = useMemo(
-    () => moduleDrafts.find((module) => module.id === selectedElementId) || null,
-    [moduleDrafts, selectedElementId]
-  );
-  const buildCurrentPageMarkdown = useCallback(() => {
-    const currentWireframe = useProjectStore.getState().wireframes[selectedPage.id] || null;
-
-    return buildPageWireframeMarkdown(
-      selectedPage,
-      {
-        id: currentWireframe?.id || `draft-${selectedPage.id}`,
-        pageId: selectedPage.id,
-        pageName: selectedPage.name,
-        frame: currentWireframe?.frame,
-        elements: usePreviewStore.getState().elements,
-        updatedAt: currentWireframe?.updatedAt || new Date().toISOString(),
-        status: currentWireframe?.status || 'draft',
-      },
-      featureTree,
-      appType
-    );
-  }, [appType, currentWireframeFrame, featureTree, selectedPage]);
-
-  useEffect(() => {
-    setIsMarkdownEditorOpen(false);
-    setPageMarkdownDraft('');
-    lastSyncedMarkdownRef.current = '';
-  }, [selectedPage.id]);
-
-  useEffect(() => {
-    if (!isMarkdownEditorOpen || !selectedModule || !markdownTextareaRef.current) {
-      return;
-    }
-
-    const match = findMarkdownModuleMatch(pageMarkdownDraft, selectedModule);
-    if (!match) {
-      return;
-    }
-
-    const textarea = markdownTextareaRef.current;
-    const activeElement = document.activeElement;
-    const isEditingAnotherField =
-      activeElement instanceof HTMLInputElement ||
-      (activeElement instanceof HTMLTextAreaElement && activeElement !== textarea);
-
-    if (!isEditingAnotherField) {
-      textarea.focus();
-    }
-
-    textarea.setSelectionRange(match.start, match.end);
-    const linesBefore = pageMarkdownDraft.slice(0, match.start).split('\n').length - 1;
-    textarea.scrollTop = Math.max(0, linesBefore * 22 - 48);
-  }, [isMarkdownEditorOpen, pageMarkdownDraft, selectedModule]);
-
-  const handleMarkdownCursorSync = useCallback((cursorPosition: number) => {
-    const match = findMarkdownModuleByOffset(pageMarkdownDraft, cursorPosition);
-    if (!match) {
-      return;
-    }
-
-    const targetModule = moduleDrafts.find((module) =>
-      module.name === match.name &&
-      module.x === match.x &&
-      module.y === match.y
-    ) || moduleDrafts.find((module) => module.name === match.name);
-
-    if (!targetModule?.id) {
-      return;
-    }
-
-    selectElement(targetModule.id);
-    const moduleNode = moduleListRef.current?.querySelector<HTMLElement>(`[data-module-id="${targetModule.id}"]`);
-    moduleNode?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [moduleDrafts, pageMarkdownDraft, selectElement]);
-
-  const handleApplyMarkdown = useCallback(() => {
-    const parsedElements = parsePageWireframeMarkdown(pageMarkdownDraft, appType);
-    const nextFrame = parseFrameFromWireframeMarkdown(pageMarkdownDraft);
-    lastSyncedMarkdownRef.current = pageMarkdownDraft;
-    if (nextFrame) {
-      updateWireframeFrame(selectedPage, nextFrame);
-    }
-    loadFromCode(parsedElements);
-  }, [appType, loadFromCode, pageMarkdownDraft, selectedPage, updateWireframeFrame]);
-
-  const handleToggleMarkdownEditor = useCallback(() => {
-    setIsMarkdownEditorOpen((current) => {
-      if (current) {
-        return false;
-      }
-
-      const nextMarkdown = buildCurrentPageMarkdown();
-      lastSyncedMarkdownRef.current = nextMarkdown;
-      setPageMarkdownDraft(nextMarkdown);
-      return true;
-    });
-  }, [buildCurrentPageMarkdown]);
-
-  const handleResetMarkdown = useCallback(() => {
-    const nextMarkdown = buildCurrentPageMarkdown();
-    lastSyncedMarkdownRef.current = nextMarkdown;
-    setPageMarkdownDraft(nextMarkdown);
-  }, [buildCurrentPageMarkdown]);
-
-  useEffect(() => {
-    if (!isMarkdownEditorOpen) {
-      return;
-    }
-
-    const nextMarkdown = buildCurrentPageMarkdown();
-    if (pageMarkdownDraft !== lastSyncedMarkdownRef.current || nextMarkdown === pageMarkdownDraft) {
-      return;
-    }
-
-    lastSyncedMarkdownRef.current = nextMarkdown;
-    setPageMarkdownDraft(nextMarkdown);
-  }, [buildCurrentPageMarkdown, elements, isMarkdownEditorOpen, pageMarkdownDraft]);
-
-  return (
-    <section className="pm-card pm-wireframe-side">
-      <div className="pm-wireframe-inline-meta">
-        <div className="pm-context-card pm-wireframe-page-card">
-          <div className="pm-wireframe-side-header">
-            <div>
-              <strong>{selectedPage.name}</strong>
-              <span>{selectedPage.metadata.route || canvasLabel}</span>
-            </div>
-            <div className="pm-inline-actions">
-              <button className="doc-action-btn" type="button" onClick={() => onAddModule()}>
-                添加模块
-              </button>
-              <button className="doc-action-btn secondary" type="button" onClick={onAddChildPage}>
-                添加子页面
-              </button>
-              <button className="doc-action-btn secondary" type="button" onClick={onGenerateSampleWireframe}>
-                示例草图
-              </button>
-              <button className="doc-action-btn secondary" type="button" onClick={onClearCurrentWireframe}>
-                清空
-              </button>
-            </div>
-          </div>
-
-          <div className="pm-form-grid pm-page-form-grid">
-            <label className="pm-field-stack">
-              <span>{'\u9875\u9762\u540d\u79f0'}</span>
-              <input
-                className="product-input pm-form-input pm-page-form-input"
-              value={selectedPage.name}
-              onChange={(event) => updatePageStructureNode(selectedPage.id, { name: event.target.value })}
-              placeholder="\u9875\u9762\u540d\u79f0"
-              />
-            </label>
-            <label className="pm-field-stack">
-              <span>{'\u9875\u9762\u63cf\u8ff0'}</span>
-              <textarea
-                className="product-textarea compact pm-page-description-input pm-page-form-input"
-              value={selectedPage.description}
-              onChange={(event) => updatePageStructureNode(selectedPage.id, { description: event.target.value })}
-              placeholder="\u9875\u9762\u63cf\u8ff0"
-              />
-            </label>
-          </div>
-
-          <div className="pm-wireframe-meta-strip">
-            <span>{moduleDrafts.length} 个模块</span>
-            {linkedFeatureName ? <span>{linkedFeatureName}</span> : null}
-          </div>
-        </div>
-
-        <div className="pm-card-header pm-wireframe-section-header">
-          <div>
-            <h3>模块清单</h3>
-          </div>
-          <div className="pm-inline-actions">
-            <button className="doc-action-btn secondary" type="button" onClick={handleToggleMarkdownEditor}>
-              {isMarkdownEditorOpen ? '收起 Markdown' : '编辑 Markdown'}
-            </button>
-          </div>
-        </div>
-
-        <div className="pm-module-list" ref={moduleListRef}>
-          {moduleIds.length > 0 ? (
-            moduleIds.map((moduleId) => (
-              <WireframeModuleCard
-                key={moduleId}
-                moduleId={moduleId}
-                draggingModuleId={draggingModuleId}
-                setDraggingModuleId={setDraggingModuleId}
-                appType={appType}
-                onRequestDelete={onRequestDeleteModule}
-              />
-            ))
-          ) : (
-            <div className="pm-context-card">
-              <strong>暂无模块</strong>
-              <span>点击“添加模块”或“生成示例草图”开始编辑。</span>
-            </div>
-          )}
-        </div>
-
-        {isMarkdownEditorOpen && (
-          <div className="pm-context-card">
-            <strong>页面 Markdown</strong>
-            <textarea
-              ref={markdownTextareaRef}
-              className="product-textarea pm-markdown-editor"
-              value={pageMarkdownDraft}
-              onChange={(event) => {
-                setPageMarkdownDraft(event.target.value);
-              }}
-              onClick={(event) => handleMarkdownCursorSync(event.currentTarget.selectionStart)}
-              onKeyUp={(event) => handleMarkdownCursorSync(event.currentTarget.selectionStart)}
-            />
-            <div className="pm-inline-actions">
-              <button className="doc-action-btn" type="button" onClick={handleApplyMarkdown}>
-                应用到画布
-              </button>
-              <button className="doc-action-btn secondary" type="button" onClick={handleResetMarkdown}>
-                重置
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-});
-
 interface WireframeSyncBridgeProps {
   selectedPage: PageStructureNode | null;
 }
@@ -1029,6 +842,254 @@ const WireframeSyncBridge = memo<WireframeSyncBridgeProps>(({ selectedPage }) =>
   return null;
 });
 
+interface PagePropertiesFloatProps {
+  selectedPage: PageStructureNode;
+  moduleCount: number;
+  canvasLabel: string;
+  onClearCurrentWireframe: () => void;
+}
+
+const PagePropertiesFloat = memo<PagePropertiesFloatProps>(({
+  selectedPage, moduleCount, canvasLabel, onClearCurrentWireframe
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const updatePageStructureNode = useProjectStore((state) => state.updatePageStructureNode);
+
+  return (
+    <div className={`pm-page-props-float ${isExpanded ? 'is-expanded' : 'is-compact'}`}>
+      {isExpanded ? (
+        <div className="pm-page-props-float-body">
+          <div className="pm-page-props-float-header">
+            <div>
+              <strong>{selectedPage.name}</strong>
+              <span>{selectedPage.metadata.route || canvasLabel}</span>
+            </div>
+            <button className="doc-action-btn secondary" type="button" onClick={() => setIsExpanded(false)}>
+              ▾
+            </button>
+          </div>
+          <div className="pm-form-grid pm-page-form-grid">
+            <label className="pm-field-stack">
+              <span>{'页面名称'}</span>
+              <input
+                className="product-input pm-form-input pm-page-form-input"
+                value={selectedPage.name}
+                onChange={(event) => updatePageStructureNode(selectedPage.id, { name: event.target.value })}
+                placeholder="页面名称"
+              />
+            </label>
+            <label className="pm-field-stack">
+              <span>{'页面描述'}</span>
+              <textarea
+                className="product-textarea compact pm-page-description-input pm-page-form-input"
+                value={selectedPage.description}
+                onChange={(event) => updatePageStructureNode(selectedPage.id, { description: event.target.value })}
+                placeholder="页面描述"
+              />
+            </label>
+          </div>
+          <div className="pm-wireframe-meta-strip">
+            <span>{moduleCount} 个模块</span>
+          </div>
+          <div className="pm-inline-actions">
+            <button className="doc-action-btn secondary" type="button" onClick={onClearCurrentWireframe}>清空</button>
+          </div>
+        </div>
+      ) : (
+        <button className="pm-page-props-float-trigger" type="button" onClick={() => setIsExpanded(true)}>
+          <strong>{selectedPage.name}</strong>
+          <span>{selectedPage.metadata.route || canvasLabel}</span>
+          <span className="pm-page-props-float-expand-icon">◂</span>
+        </button>
+      )}
+    </div>
+  );
+});
+
+interface ModuleListFloatProps {
+  selectedPage: PageStructureNode;
+  appType?: AppType;
+  featureTree: FeatureTree | null;
+  onAddModule: () => void;
+  onRequestDeleteModule: (moduleId: string, moduleTitle: string) => void;
+  onClosePanel?: () => void;
+}
+
+const ModuleListFloat = memo<ModuleListFloatProps>(({
+  selectedPage, appType, featureTree, onAddModule, onRequestDeleteModule, onClosePanel
+}) => {
+  const [isMarkdownEditorOpen, setIsMarkdownEditorOpen] = useState(false);
+  const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
+  const [pageMarkdownDraft, setPageMarkdownDraft] = useState('');
+  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const moduleListRef = useRef<HTMLDivElement | null>(null);
+  const lastSyncedMarkdownRef = useRef('');
+  const elements = usePreviewStore((state) => state.elements);
+  const selectedElementId = usePreviewStore((state) => state.selectedElementId);
+  const selectElement = usePreviewStore((state) => state.selectElement);
+  const loadFromCode = usePreviewStore((state) => state.loadFromCode);
+  const updateWireframeFrame = useProjectStore((state) => state.updateWireframeFrame);
+  const moduleIds = useMemo(() => elements.map((element) => element.id), [elements]);
+  const moduleDrafts = useMemo(() => toWireframeModuleDrafts(elements), [elements]);
+  const selectedModule = useMemo(
+    () => moduleDrafts.find((module) => module.id === selectedElementId) || null,
+    [moduleDrafts, selectedElementId]
+  );
+
+  const buildCurrentPageMarkdown = useCallback(() => {
+    const currentWireframe = useProjectStore.getState().wireframes[selectedPage.id] || null;
+    return buildPageWireframeMarkdown(
+      selectedPage,
+      {
+        id: currentWireframe?.id || `draft-${selectedPage.id}`,
+        pageId: selectedPage.id,
+        pageName: selectedPage.name,
+        frame: currentWireframe?.frame,
+        elements: usePreviewStore.getState().elements,
+        updatedAt: currentWireframe?.updatedAt || new Date().toISOString(),
+        status: currentWireframe?.status || 'draft',
+      },
+      featureTree,
+      appType
+    );
+  }, [appType, featureTree, selectedPage]);
+
+  useEffect(() => {
+    setIsMarkdownEditorOpen(false);
+    setPageMarkdownDraft('');
+    lastSyncedMarkdownRef.current = '';
+  }, [selectedPage.id]);
+
+  useEffect(() => {
+    if (!isMarkdownEditorOpen || !selectedModule || !markdownTextareaRef.current) return;
+    const match = findMarkdownModuleMatch(pageMarkdownDraft, selectedModule);
+    if (!match) return;
+    const textarea = markdownTextareaRef.current;
+    const activeElement = document.activeElement;
+    const isEditingAnotherField =
+      activeElement instanceof HTMLInputElement ||
+      (activeElement instanceof HTMLTextAreaElement && activeElement !== textarea);
+    if (!isEditingAnotherField) {
+      textarea.focus();
+    }
+    textarea.setSelectionRange(match.start, match.end);
+    const linesBefore = pageMarkdownDraft.slice(0, match.start).split('\n').length - 1;
+    textarea.scrollTop = Math.max(0, linesBefore * 22 - 48);
+  }, [isMarkdownEditorOpen, pageMarkdownDraft, selectedModule]);
+
+  const handleMarkdownCursorSync = useCallback((cursorPosition: number) => {
+    const match = findMarkdownModuleByOffset(pageMarkdownDraft, cursorPosition);
+    if (!match) return;
+    const targetModule = moduleDrafts.find((module) =>
+      module.name === match.name && module.x === match.x && module.y === match.y
+    ) || moduleDrafts.find((module) => module.name === match.name);
+    if (!targetModule?.id) return;
+    selectElement(targetModule.id);
+    const moduleNode = moduleListRef.current?.querySelector<HTMLElement>(`[data-module-id="${targetModule.id}"]`);
+    moduleNode?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [moduleDrafts, pageMarkdownDraft, selectElement]);
+
+  const handleApplyMarkdown = useCallback(() => {
+    const parsedElements = parsePageWireframeMarkdown(pageMarkdownDraft, appType);
+    const nextFrame = parseFrameFromWireframeMarkdown(pageMarkdownDraft);
+    lastSyncedMarkdownRef.current = pageMarkdownDraft;
+    if (nextFrame) {
+      updateWireframeFrame(selectedPage, nextFrame);
+    }
+    loadFromCode(parsedElements);
+  }, [appType, loadFromCode, pageMarkdownDraft, selectedPage, updateWireframeFrame]);
+
+  const handleToggleMarkdownEditor = useCallback(() => {
+    setIsMarkdownEditorOpen((current) => {
+      if (current) return false;
+      const nextMarkdown = buildCurrentPageMarkdown();
+      lastSyncedMarkdownRef.current = nextMarkdown;
+      setPageMarkdownDraft(nextMarkdown);
+      return true;
+    });
+  }, [buildCurrentPageMarkdown]);
+
+  const handleResetMarkdown = useCallback(() => {
+    const nextMarkdown = buildCurrentPageMarkdown();
+    lastSyncedMarkdownRef.current = nextMarkdown;
+    setPageMarkdownDraft(nextMarkdown);
+  }, [buildCurrentPageMarkdown]);
+
+  useEffect(() => {
+    if (!isMarkdownEditorOpen) return;
+    const nextMarkdown = buildCurrentPageMarkdown();
+    if (pageMarkdownDraft !== lastSyncedMarkdownRef.current || nextMarkdown === pageMarkdownDraft) return;
+    lastSyncedMarkdownRef.current = nextMarkdown;
+    setPageMarkdownDraft(nextMarkdown);
+  }, [buildCurrentPageMarkdown, elements, isMarkdownEditorOpen, pageMarkdownDraft]);
+
+  const handleDismiss = useCallback(() => {
+    selectElement(null);
+    onClosePanel?.();
+  }, [selectElement, onClosePanel]);
+
+  return (
+    <>
+      <div className="pm-module-list-backdrop" onClick={handleDismiss} />
+      <div className="pm-module-list-overlay">
+        <div className="pm-module-list-overlay-header">
+          <h3>模块清单</h3>
+          <div className="pm-inline-actions">
+            <button className="doc-action-btn secondary" type="button" onClick={handleToggleMarkdownEditor}>
+              {isMarkdownEditorOpen ? '收起 Markdown' : '编辑 Markdown'}
+            </button>
+            <button className="doc-action-btn secondary pm-module-list-close" type="button" onClick={handleDismiss}>
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="pm-inline-actions" style={{ marginBottom: '10px' }}>
+          <button className="doc-action-btn" type="button" onClick={onAddModule}>添加模块</button>
+        </div>
+
+        <div className="pm-module-list" ref={moduleListRef}>
+          {moduleIds.length > 0 ? (
+            moduleIds.map((moduleId) => (
+              <WireframeModuleCard
+                key={moduleId}
+                moduleId={moduleId}
+                draggingModuleId={draggingModuleId}
+                setDraggingModuleId={setDraggingModuleId}
+                appType={appType}
+                onRequestDelete={onRequestDeleteModule}
+              />
+            ))
+          ) : (
+            <div className="pm-context-card">
+              <strong>暂无模块</strong>
+              <span>点击"添加模块"或"生成示例草图"开始编辑。</span>
+            </div>
+          )}
+        </div>
+
+        {isMarkdownEditorOpen && (
+          <div className="pm-context-card" style={{ marginTop: '12px' }}>
+            <strong>页面 Markdown</strong>
+            <textarea
+              ref={markdownTextareaRef}
+              className="product-textarea pm-markdown-editor"
+              value={pageMarkdownDraft}
+              onChange={(event) => { setPageMarkdownDraft(event.target.value); }}
+              onClick={(event) => handleMarkdownCursorSync(event.currentTarget.selectionStart)}
+              onKeyUp={(event) => handleMarkdownCursorSync(event.currentTarget.selectionStart)}
+            />
+            <div className="pm-inline-actions">
+              <button className="doc-action-btn" type="button" onClick={handleApplyMarkdown}>应用到画布</button>
+              <button className="doc-action-btn secondary" type="button" onClick={handleResetMarkdown}>重置</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+});
+
 interface ProductWorkbenchProps {
   onFeatureSelect?: (node: FeatureNode) => void;
   layoutFocus: WorkbenchLayoutFocus;
@@ -1056,7 +1117,6 @@ export const ProductWorkbench = ({
   const [projectRootDir, setProjectRootDir] = useState<string | null>(null);
   const [isSavingRequirement, setIsSavingRequirement] = useState(false);
   const [manualPageId, setManualPageId] = useState<string | null>(null);
-  const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
   const [knowledgeSearch, setKnowledgeSearch] = useState('');
   const [knowledgeDiskItems, setKnowledgeDiskItems] = useState<KnowledgeDiskItem[]>([]);
   const [knowledgeGroupOverrides, setKnowledgeGroupOverrides] = useState<Record<string, KnowledgeGroupId>>({});
@@ -1065,6 +1125,7 @@ export const ProductWorkbench = ({
   const [pageSearch, setPageSearch] = useState('');
   const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
   const [frameEditorDraft, setFrameEditorDraft] = useState('');
+  const [isModulePanelOpen, setIsModulePanelOpen] = useState(false);
   const knowledgeRefreshRequestIdRef = useRef(0);
   const hydratedKnowledgeNoteSignatureRef = useRef('');
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1080,7 +1141,6 @@ export const ProductWorkbench = ({
     setFeaturesMarkdown,
     addRootPage,
     addSiblingPage,
-    addChildPage,
     deletePageStructureNode,
     replaceRequirementDocs,
     replacePageStructure,
@@ -1095,7 +1155,6 @@ export const ProductWorkbench = ({
     setFeaturesMarkdown: state.setFeaturesMarkdown,
     addRootPage: state.addRootPage,
     addSiblingPage: state.addSiblingPage,
-    addChildPage: state.addChildPage,
     deletePageStructureNode: state.deletePageStructureNode,
     replaceRequirementDocs: state.replaceRequirementDocs,
     replacePageStructure: state.replacePageStructure,
@@ -1112,6 +1171,7 @@ export const ProductWorkbench = ({
   const setSceneContext = useAIContextStore((state) => state.setSceneContext);
   const setCanvasSize = usePreviewStore((state) => state.setCanvasSize);
   const clearCanvas = usePreviewStore((state) => state.clearCanvas);
+  const elements = usePreviewStore((state) => state.elements);
   const loadFromCode = usePreviewStore((state) => state.loadFromCode);
   const selectElement = usePreviewStore((state) => state.selectElement);
   const deleteElement = usePreviewStore((state) => state.deleteElement);
@@ -1198,8 +1258,6 @@ export const ProductWorkbench = ({
     const nodes = tree ? collectFeatureNodes(tree.children) : [];
     return new Map(nodes.map((node) => [node.id, node]));
   }, [tree]);
-  const linkedFeatures = selectedPage?.featureIds.map((id) => featureMap.get(id)).filter(Boolean) as FeatureNode[] | undefined;
-  const linkedFeatureName = linkedFeatures?.map((feature) => feature.name).join(' / ') || '核心页面';
   const activeTemporaryArtifact = useMemo(() => {
     if (!activeArtifactId) {
       return null;
@@ -1213,10 +1271,10 @@ export const ProductWorkbench = ({
   const layoutStyle = useMemo<CSSProperties>(() => {
     const pageColumns =
       layoutFocus === 'canvas'
-        ? 'minmax(0, 1.92fr) minmax(268px, 0.42fr)'
+        ? 'minmax(0, 1.92fr)'
         : layoutFocus === 'sidebar'
-          ? 'minmax(0, 1.34fr) minmax(292px, 0.62fr)'
-          : 'minmax(0, 1.72fr) minmax(280px, 0.48fr)';
+          ? 'minmax(0, 1.34fr)'
+          : 'minmax(0, 1.72fr)';
 
     return {
       ['--pm-page-columns' as string]: pageColumns,
@@ -2047,28 +2105,6 @@ export const ProductWorkbench = ({
     handleAddPageAfter(referencePageId);
   }, [designPages, handleAddPageAfter, handleAddRootPage, selectedPage]);
 
-  const handleAddChildPageById = useCallback(async (_pageId: string) => {
-    if (!canUseProjectFilesystem) {
-      const nextPage = addChildPage(_pageId);
-      if (nextPage) {
-        setManualPageId(nextPage.id);
-      }
-      return;
-    }
-
-    const nextPageId = await handleCreateSketchPage();
-    if (nextPageId) {
-      setManualPageId(nextPageId);
-    }
-  }, [addChildPage, canUseProjectFilesystem, handleCreateSketchPage]);
-
-  const handleAddChildPage = useCallback(() => {
-    if (!selectedPage) {
-      return;
-    }
-
-    handleAddChildPageById(selectedPage.id);
-  }, [handleAddChildPageById, selectedPage]);
 
   const handleDeletePageById = useCallback((pageId: string) => {
     const page = designPages.find((item) => item.id === pageId);
@@ -2205,19 +2241,6 @@ export const ProductWorkbench = ({
     selectElement(nextModule.id);
   }, [effectiveAppType, selectElement]);
 
-  const handleGenerateSampleWireframe = useCallback(() => {
-    if (!selectedPage) {
-      return;
-    }
-
-    const sampleElements = buildSampleWireframe(
-      selectedPage.name,
-      linkedFeatureName,
-      isMobileAppType(effectiveAppType)
-    );
-    loadFromCode(sampleElements);
-  }, [effectiveAppType, linkedFeatureName, loadFromCode, selectedPage]);
-
   const handleClearCurrentWireframe = useCallback(() => {
     if (!selectedPage) {
       return;
@@ -2225,6 +2248,11 @@ export const ProductWorkbench = ({
 
     loadFromCode([]);
   }, [loadFromCode, selectedPage]);
+
+  const handleRequestEditModule = useCallback((id: string) => {
+    selectElement(id);
+    setIsModulePanelOpen(true);
+  }, [selectElement]);
 
   const openKnowledgeNote = useCallback((noteId: string) => {
     setSelectedKnowledgeNoteId(noteId);
@@ -2316,7 +2344,6 @@ export const ProductWorkbench = ({
                       depth={0}
                       selectedPageId={selectedPage?.id || null}
                       onSelect={setManualPageId}
-                      onAddPage={handleAddChildPageById}
                       onDeletePage={handleDeletePageById}
                     />
                   ))}
@@ -2355,6 +2382,7 @@ export const ProductWorkbench = ({
     }
 
     return (
+      <>
       <div className="pm-page-workspace">
         <section className="pm-card pm-wireframe-main pm-wireframe-main-canvas">
           <div className="pm-card-header pm-wireframe-section-header pm-wireframe-canvas-header">
@@ -2414,25 +2442,29 @@ export const ProductWorkbench = ({
               width={canvasPreset.width}
               height={canvasPreset.height}
               frameType={canvasPreset.frameType}
+              onRequestEdit={handleRequestEditModule}
+            />
+            <PagePropertiesFloat
+              selectedPage={selectedPage}
+              moduleCount={elements.length}
+              canvasLabel={canvasPreset.label}
+              onClearCurrentWireframe={handleClearCurrentWireframe}
             />
           </div>
-        </section>
 
-        <WireframeSidebar
-          selectedPage={selectedPage}
-          appType={effectiveAppType}
-          featureTree={tree}
-          draggingModuleId={draggingModuleId}
-          setDraggingModuleId={setDraggingModuleId}
-          linkedFeatureName={linkedFeatureName}
-          canvasLabel={canvasPreset.label}
-          onAddModule={handleAddModule}
-          onAddChildPage={handleAddChildPage}
-          onGenerateSampleWireframe={handleGenerateSampleWireframe}
-          onClearCurrentWireframe={handleClearCurrentWireframe}
-          onRequestDeleteModule={handleRequestDeleteModule}
-        />
+          {isModulePanelOpen && (
+            <ModuleListFloat
+              selectedPage={selectedPage}
+              appType={effectiveAppType}
+              featureTree={tree}
+              onAddModule={handleAddModule}
+              onRequestDeleteModule={handleRequestDeleteModule}
+              onClosePanel={() => setIsModulePanelOpen(false)}
+            />
+          )}
+        </section>
       </div>
+      </>
     );
   };
 
@@ -2555,4 +2587,3 @@ export const ProductWorkbench = ({
     </>
   );
 };
-

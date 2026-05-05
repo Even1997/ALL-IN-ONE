@@ -114,6 +114,8 @@ interface ProjectState {
   clearProject: () => void;
 }
 
+type PersistedProjectState = Pick<ProjectState, 'projects' | 'currentProjectId'>;
+
 const buildStarterFeatureTree = (projectName: string): FeatureTree => ({
   id: uuidv4(),
   name: projectName,
@@ -149,6 +151,11 @@ const buildStarterFeatureTree = (projectName: string): FeatureTree => ({
       children: [],
     },
   ],
+});
+
+const buildPersistedProjectState = (state: ProjectState): PersistedProjectState => ({
+  projects: state.projects,
+  currentProjectId: state.currentProjectId,
 });
 
 void buildStarterFeatureTree;
@@ -3263,8 +3270,10 @@ export const useProjectStore = create<ProjectState>()(
     }),
     {
       name: 'goodnight-project-store',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => buildPersistedProjectState(state),
+      migrate: (persistedState) => persistedState as Partial<ProjectState>,
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<ProjectState>;
         delete (persisted as Record<string, unknown>)['selectedKnowledge' + 'ContextIds'];
@@ -3273,7 +3282,11 @@ export const useProjectStore = create<ProjectState>()(
               .map((project) => normalizeProjectConfig(project))
               .filter((project): project is ProjectConfig => Boolean(project))
           : [];
-        const currentProject = normalizeProjectConfig(persisted.currentProject);
+        const currentProjectId =
+          typeof persisted.currentProjectId === 'string' ? persisted.currentProjectId : null;
+        const currentProject =
+          projects.find((project) => project.id === currentProjectId) ||
+          normalizeProjectConfig(persisted.currentProject);
         const requirementDocs = normalizeRequirementDocs(persisted.requirementDocs);
         const prd = normalizePrd(persisted.prd);
         const pageStructure = normalizePageStructure(persisted.pageStructure);
@@ -3287,12 +3300,8 @@ export const useProjectStore = create<ProjectState>()(
 
         return {
           ...currentState,
-          ...persisted,
           projects,
-          currentProjectId:
-            typeof persisted.currentProjectId === 'string'
-              ? persisted.currentProjectId
-              : currentProject?.id || null,
+          currentProjectId: currentProjectId || currentProject?.id || null,
           currentProject,
           graph: currentProject
             ? buildProjectGraph(

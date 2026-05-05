@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -16,11 +16,13 @@ test('gnAgent chat page includes a status panel above the chat shell', async () 
   assert.match(source, /className="[^"]*gn-agent-shell-chat-stack/);
 });
 
-test('gnAgent status panel reads recent activity from ai chat store', async () => {
+test('gnAgent status panel renders recent activity as a prop-driven shell view', async () => {
   const source = await readFile(statusPanelPath, 'utf8');
   assert.match(source, /activityEntries/);
   assert.match(source, /Recent Activity/);
-  assert.match(source, /useAIChatStore/);
+  assert.doesNotMatch(source, /useAIChatStore/);
+  assert.doesNotMatch(source, /useAgentRuntimeStore/);
+  assert.match(source, /activeLiveState/);
 });
 
 test('gnAgent tab badges read sessions from ai chat store', async () => {
@@ -29,4 +31,3 @@ test('gnAgent tab badges read sessions from ai chat store', async () => {
   assert.match(source, /gn-agent-tab-badge/);
   assert.match(source, /setActiveSession/);
 });
-

@@ -41,6 +41,11 @@ export type PendingProjectFileProposalAction = {
 
 export type ProjectFileRequestKind = 'read' | 'write' | 'none';
 
+type ProjectFileRequestConversationMessage = {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+};
+
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/;
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\\]+\\[^\\]+/;
 
@@ -94,24 +99,65 @@ const SHORT_PENDING_ACTION_AFFIRMATIVE_PATTERN =
 const SHORT_PENDING_ACTION_NEGATIVE_PATTERN =
   /^(?:\u4e0d|\u4e0d\u8981|\u4e0d\u7528|\u5148\u4e0d|\u7b97\u4e86|\u53d6\u6d88|no|nope|cancel)[\s\u3002\uff01!.,]*$/i;
 
+const PROJECT_FILE_WRITE_ACCESS_FAILURE_PATTERN =
+  /(?:permission denied|access(?:\s+is)? denied|\u62d2\u7edd\u8bbf\u95ee|os error 5|sharing violation|used by another process|being used by another process)/i;
+
+const PENDING_SAVE_TARGET_PROMPT_PATTERN =
+  /(?:(?:\u4fdd\u5b58|\u5199\u5165|\u843d\u76d8|\u53e6\u5b58\u4e3a|save|write).*(?:\u6587\u4ef6\u540d|\u8def\u5f84|\u5230|filename|file name|path)|(?:\u6587\u4ef6\u540d|\u8def\u5f84|filename|file name|path).*(?:\u4fdd\u5b58|\u5199\u5165|\u843d\u76d8|\u53e6\u5b58\u4e3a|save|write))/i;
+
+const FILE_TARGET_ONLY_REPLY_PATTERN =
+  /^[^<>:"|?*\r\n]+(?:\.(?:css|html|js|json|jsx|markdown|md|txt|ts|tsx|yaml|yml))[\s\u3002\uff01!.,]*$/i;
+
 const trimLeadingSeparators = (value: string) => value.replace(/^[\\/]+/, '');
 
 const trimTrailingSeparators = (value: string) => value.replace(/[\\/]+$/, '');
 
+const stripWindowsExtendedLengthPathPrefix = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (/^\\\\\?\\UNC\\/i.test(trimmed)) {
+    return `\\\\${trimmed.slice(8)}`;
+  }
+
+  if (/^\\\\\?\\/.test(trimmed)) {
+    return trimmed.slice(4);
+  }
+
+  if (/^\/{2,}\?\/UNC\//i.test(trimmed)) {
+    return `//${trimmed.replace(/^\/{2,}\?\/UNC\//i, '')}`;
+  }
+
+  if (/^\/{2,}\?\//.test(trimmed)) {
+    return trimmed.replace(/^\/{2,}\?\//, '');
+  }
+
+  return trimmed;
+};
+
 const usesWindowsPathSemantics = (value: string) =>
-  WINDOWS_DRIVE_PATH_PATTERN.test(value) || WINDOWS_UNC_PATH_PATTERN.test(value) || value.includes('\\');
+  WINDOWS_DRIVE_PATH_PATTERN.test(stripWindowsExtendedLengthPathPrefix(value)) ||
+  WINDOWS_UNC_PATH_PATTERN.test(stripWindowsExtendedLengthPathPrefix(value)) ||
+  stripWindowsExtendedLengthPathPrefix(value).includes('\\');
 
 const isAbsoluteFilePath = (value: string) =>
-  value.startsWith('/') || WINDOWS_DRIVE_PATH_PATTERN.test(value) || WINDOWS_UNC_PATH_PATTERN.test(value);
+  stripWindowsExtendedLengthPathPrefix(value).startsWith('/') ||
+  WINDOWS_DRIVE_PATH_PATTERN.test(stripWindowsExtendedLengthPathPrefix(value)) ||
+  WINDOWS_UNC_PATH_PATTERN.test(stripWindowsExtendedLengthPathPrefix(value));
 
 const normalizeRelativeFileSystemPath = (value: string) =>
-  trimTrailingSeparators(trimLeadingSeparators(value.replace(/[\\/]+/g, '/')));
+  trimTrailingSeparators(
+    trimLeadingSeparators(stripWindowsExtendedLengthPathPrefix(value).replace(/[\\/]+/g, '/'))
+  );
 
 const joinFileSystemPath = (basePath: string, ...segments: string[]) => {
-  const separator = usesWindowsPathSemantics(basePath) ? '\\' : '/';
-  const normalizedBase = trimTrailingSeparators(basePath);
+  const normalizedBasePath = stripWindowsExtendedLengthPathPrefix(basePath);
+  const separator = usesWindowsPathSemantics(normalizedBasePath) ? '\\' : '/';
+  const normalizedBase = trimTrailingSeparators(normalizedBasePath);
   const normalizedSegments = segments
-    .map((segment) => segment.replace(/[\\/]+/g, separator))
+    .map((segment) => stripWindowsExtendedLengthPathPrefix(segment).replace(/[\\/]+/g, separator))
     .map((segment) => trimLeadingSeparators(segment))
     .filter(Boolean);
 
@@ -119,8 +165,12 @@ const joinFileSystemPath = (basePath: string, ...segments: string[]) => {
 };
 
 const getRelativePathFromRoot = (absolutePath: string, rootPath: string) => {
-  const normalizedAbsolutePath = trimTrailingSeparators(absolutePath.replace(/[\\/]+/g, '/'));
-  const normalizedRootPath = trimTrailingSeparators(rootPath.replace(/[\\/]+/g, '/'));
+  const normalizedAbsolutePath = trimTrailingSeparators(
+    stripWindowsExtendedLengthPathPrefix(absolutePath).replace(/[\\/]+/g, '/')
+  );
+  const normalizedRootPath = trimTrailingSeparators(
+    stripWindowsExtendedLengthPathPrefix(rootPath).replace(/[\\/]+/g, '/')
+  );
 
   if (!normalizedRootPath) {
     return null;
@@ -159,6 +209,11 @@ const normalizeAbsolutePathForComparison = (value: string) => {
 
 const buildOperationId = (type: ProjectFileOperationType, targetPath: string, index: number) =>
   `${type}:${targetPath}:${index}`;
+
+const resolveToolTargetPath = (input: Record<string, unknown>) => {
+  const candidate = input.file_path ?? input.path ?? input.file;
+  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : '';
+};
 
 const extractJsonPayload = (raw: string) => {
   const trimmed = raw.trim();
@@ -201,6 +256,34 @@ const looksLikeExplicitProjectFileReadRequest = (value: string) => {
   return containsExplicitFileReference(value);
 };
 
+const findLatestAssistantContent = (messages: ProjectFileRequestConversationMessage[] = []) => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === 'assistant' && message.content.trim()) {
+      return message.content;
+    }
+  }
+
+  return '';
+};
+
+const looksLikeFilenameOnlySaveTarget = (value: string) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return Boolean(normalized && FILE_TARGET_ONLY_REPLY_PATTERN.test(normalized) && isSupportedProjectTextFilePath(normalized));
+};
+
+const isReplyToPendingSaveTargetPrompt = (input: {
+  value: string;
+  conversationHistory?: ProjectFileRequestConversationMessage[] | null;
+}) => {
+  if (!looksLikeFilenameOnlySaveTarget(input.value)) {
+    return false;
+  }
+
+  const latestAssistantContent = findLatestAssistantContent(input.conversationHistory || []);
+  return Boolean(latestAssistantContent && PENDING_SAVE_TARGET_PROMPT_PATTERN.test(latestAssistantContent));
+};
+
 export const isSupportedProjectTextFilePath = (value: string) =>
   SUPPORTED_TEXT_FILE_EXTENSIONS.has(extractExtension(value));
 
@@ -212,10 +295,22 @@ export const detectProjectFileReadIntent = (value: string) =>
 export const resolveProjectFileRequestKind = (input: {
   rawInput: string;
   cleanedInput?: string | null;
+  conversationHistory?: ProjectFileRequestConversationMessage[] | null;
 }): ProjectFileRequestKind => {
   const candidates = [input.rawInput, input.cleanedInput || '']
     .map((value) => value.trim())
     .filter(Boolean);
+
+  if (
+    candidates.some((value) =>
+      isReplyToPendingSaveTargetPrompt({
+        value,
+        conversationHistory: input.conversationHistory,
+      })
+    )
+  ) {
+    return 'write';
+  }
 
   if (candidates.some((value) => looksLikeExplicitProjectFileWriteRequest(value))) {
     return 'write';
@@ -391,4 +486,70 @@ export const parseProjectFileOperationsPlan = (raw: string): ProjectFileOperatio
     summary,
     operations,
   };
+};
+
+export const isProjectFileWriteAccessFailure = (value: string) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return Boolean(normalized && PROJECT_FILE_WRITE_ACCESS_FAILURE_PATTERN.test(normalized));
+};
+
+export const buildProjectFileOperationFromToolCall = (input: {
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  fileExists?: boolean | null;
+  index?: number;
+}): ProjectFileOperation | null => {
+  const targetPath = resolveToolTargetPath(input.toolInput);
+  if (!targetPath) {
+    return null;
+  }
+
+  const index = typeof input.index === 'number' ? input.index : 0;
+
+  if (input.toolName === 'write') {
+    const content = typeof input.toolInput.content === 'string' ? input.toolInput.content : null;
+    if (content === null) {
+      return null;
+    }
+
+    const type: ProjectFileOperationType = input.fileExists === false ? 'create_file' : 'edit_file';
+    return {
+      id: buildOperationId(type, targetPath, index),
+      type,
+      targetPath,
+      summary: type === 'create_file' ? `创建 ${targetPath}` : `写入 ${targetPath}`,
+      content,
+    };
+  }
+
+  if (input.toolName === 'edit') {
+    const oldString = typeof input.toolInput.old_string === 'string' ? input.toolInput.old_string : null;
+    const newString = typeof input.toolInput.new_string === 'string' ? input.toolInput.new_string : null;
+
+    if (oldString !== null && newString !== null) {
+      return {
+        id: buildOperationId('edit_file', targetPath, index),
+        type: 'edit_file',
+        targetPath,
+        summary: `编辑 ${targetPath}`,
+        oldString,
+        newString,
+      };
+    }
+
+    const content = typeof input.toolInput.content === 'string' ? input.toolInput.content : null;
+    if (content === null) {
+      return null;
+    }
+
+    return {
+      id: buildOperationId('edit_file', targetPath, index),
+      type: 'edit_file',
+      targetPath,
+      summary: `写入 ${targetPath}`,
+      content,
+    };
+  }
+
+  return null;
 };

@@ -12,8 +12,10 @@ export type AgentToolCallSnapshot = {
   resultContent?: string;
   fileChanges?: Array<{
     path: string;
+    operation?: 'write' | 'edit' | 'delete';
     beforeContent: string | null;
     afterContent: string | null;
+    verified?: boolean;
   }>;
 };
 
@@ -49,8 +51,10 @@ export type AgentEventState = {
 
 export type AgentStoredRuntimeFileChange = {
   path: string;
+  operation?: 'write' | 'edit' | 'delete';
   beforeContent: string | null;
   afterContent: string | null;
+  verified?: boolean;
 };
 
 export type AgentStoredRuntimeEvent<ApprovalDisplay = unknown, QuestionPayload = unknown> =
@@ -103,8 +107,11 @@ const RAW_TOOL_RESULT_BLOCK_PATTERN =
 const RAW_TRANSCRIPT_TOOL_RESULT_PATTERN =
   /^[^\S\r\n]*Tool\s+\S+\s+result:[^\S\r\n]*(?:\r?\n[\s\S]*?(?=(?:\r?\n[^\S\r\n]*\r?\n)|$))?/gim;
 const RAW_TRANSCRIPT_ROLE_LINE_PATTERN = /^\s*(?:user|assistant|system):\s*$/gim;
+const RAW_XML_DECLARATION_LINE_PATTERN = /^\s*<\?xml\b[^>]*\?>\s*$/gim;
 const RAW_PROTOCOL_LINE_PATTERN =
   /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=|<\/tool>|<tool_params>|<\/tool_params>|<tool_use>|<\/tool_use>|<tool_result|<\/tool_result>).*\s*$/gim;
+const RAW_FRAGMENTED_TOOL_PROTOCOL_LINE_PATTERN =
+  /^\s*(?:<\/?\s*tool_?|_?use\s*>|<\/?\s*tool\s*|_tool_use\s*>|tool_use\s*>|<\/?\s*tool_result_?|_result\s*>)\s*$/gim;
 
 export const sanitizeAgentVisibleText = (value: string) =>
   value
@@ -114,7 +121,9 @@ export const sanitizeAgentVisibleText = (value: string) =>
     .replace(RAW_TOOL_RESULT_BLOCK_PATTERN, '')
     .replace(RAW_TRANSCRIPT_ROLE_LINE_PATTERN, '')
     .replace(RAW_TRANSCRIPT_TOOL_RESULT_PATTERN, '')
+    .replace(RAW_XML_DECLARATION_LINE_PATTERN, '')
     .replace(RAW_PROTOCOL_LINE_PATTERN, '')
+    .replace(RAW_FRAGMENTED_TOOL_PROTOCOL_LINE_PATTERN, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -238,6 +247,12 @@ export const upsertRuntimeEvent = <TRuntimeEvent extends AgentStoredRuntimeEvent
   return events;
 };
 
+export const mapRuntimeEvents = <TRuntimeEvent extends AgentStoredRuntimeEvent = AgentStoredRuntimeEvent>(
+  runtimeEvents: TRuntimeEvent[] | undefined,
+  matcher: (event: TRuntimeEvent) => boolean,
+  updater: (event: TRuntimeEvent) => TRuntimeEvent
+) => (runtimeEvents || []).map((event) => (matcher(event) ? updater(event) : event));
+
 export const upsertRuntimeToolUseEvent = <TRuntimeEvent extends AgentStoredRuntimeEvent = AgentStoredRuntimeEvent>(
   runtimeEvents: TRuntimeEvent[] | undefined,
   input: {
@@ -299,6 +314,44 @@ export const upsertRuntimeToolResultEvent = <TRuntimeEvent extends AgentStoredRu
       createdAt: existingEvent?.createdAt || Date.now(),
     } as Extract<TRuntimeEvent, { kind: 'tool_result' }>,
     (event) => event.kind === 'tool_result' && event.toolCallId === input.toolCallId
+  );
+};
+
+export const upsertRuntimeApprovalEvent = <TRuntimeEvent extends AgentStoredRuntimeEvent = AgentStoredRuntimeEvent>(
+  runtimeEvents: TRuntimeEvent[] | undefined,
+  input: Extract<TRuntimeEvent, { kind: 'approval' }>
+) => {
+  const existingEvent = runtimeEvents?.find(
+    (event): event is Extract<TRuntimeEvent, { kind: 'approval' }> =>
+      event.kind === 'approval' && event.approvalId === input.approvalId
+  );
+
+  return upsertRuntimeEvent(
+    runtimeEvents,
+    {
+      ...input,
+      createdAt: existingEvent?.createdAt || input.createdAt || Date.now(),
+    },
+    (event) => event.kind === 'approval' && event.approvalId === input.approvalId
+  );
+};
+
+export const upsertRuntimeQuestionEvent = <TRuntimeEvent extends AgentStoredRuntimeEvent = AgentStoredRuntimeEvent>(
+  runtimeEvents: TRuntimeEvent[] | undefined,
+  input: Extract<TRuntimeEvent, { kind: 'question' }>
+) => {
+  const existingEvent = runtimeEvents?.find(
+    (event): event is Extract<TRuntimeEvent, { kind: 'question' }> =>
+      event.kind === 'question' && event.questionId === input.questionId
+  );
+
+  return upsertRuntimeEvent(
+    runtimeEvents,
+    {
+      ...input,
+      createdAt: existingEvent?.createdAt || input.createdAt || Date.now(),
+    },
+    (event) => event.kind === 'question' && event.questionId === input.questionId
   );
 };
 

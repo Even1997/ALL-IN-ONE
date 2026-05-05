@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Panel - Focus Chat</title>
+    <style>
+      :root {
+        --bg: #f6f0e4;
+        --paper: rgba(255, 251, 245, 0.96);
+        --paper-alt: #efe7d6;
+        --ink: #181411;
+        --muted: #756857;
+        --line: rgba(70, 52, 33, 0.12);
+        --accent: #b45309;
+        --accent-soft: rgba(180, 83, 9, 0.12);
+        --green: #15803d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top center, rgba(180, 83, 9, 0.12), transparent 30%),
+          linear-gradient(180deg, #fcf8f0, var(--bg));
+      }
+
+      .shell {
+        width: min(1400px, calc(100% - 30px));
+        margin: 16px auto;
+        border: 1px solid var(--line);
+        border-radius: 30px;
+        overflow: hidden;
+        background: rgba(255, 253, 248, 0.82);
+        backdrop-filter: blur(20px);
+        box-shadow: 0 24px 80px rgba(90, 64, 34, 0.16);
+      }
+
+      .hero {
+        padding: 18px 22px;
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(180, 83, 9, 0.06), transparent),
+          rgba(255, 255, 255, 0.4);
+      }
+
+      .hero-top,
+      .stats,
+      .thread-list,
+      .chip-row,
+      .tool-list,
+      .memory-row,
+      .composer-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .hero-top {
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .sub {
+        margin-top: 8px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .chip {
+        padding: 7px 11px;
+        border-radius: 999px;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr) 300px;
+      }
+
+      aside,
+      main {
+        padding: 18px;
+      }
+
+      aside.left {
+        border-right: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.35);
+      }
+
+      aside.right {
+        border-left: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .section {
+        margin-bottom: 16px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .section-head h2 {
+        font-size: 14px;
+      }
+
+      .section-head span,
+      .meta,
+      .mini {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .thread {
+        width: 100%;
+        padding: 14px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: var(--paper);
+      }
+
+      .thread.active {
+        background: linear-gradient(180deg, rgba(180, 83, 9, 0.08), rgba(255, 251, 245, 0.96));
+        border-color: rgba(180, 83, 9, 0.24);
+      }
+
+      .thread strong,
+      .timeline-card strong,
+      .summary-card strong,
+      .message strong,
+      .side-card strong {
+        display: block;
+      }
+
+      .thread span {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .timeline-card,
+      .summary-card,
+      .message,
+      .side-card,
+      .composer {
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: var(--paper);
+      }
+
+      .timeline-stack,
+      .summary-grid,
+      .side-stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .timeline-card,
+      .side-card {
+        padding: 14px;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-bottom: 16px;
+      }
+
+      .summary-card {
+        padding: 16px;
+      }
+
+      .summary-card.highlight {
+        background: linear-gradient(180deg, rgba(180, 83, 9, 0.1), rgba(255, 251, 245, 0.96));
+      }
+
+      .summary-card p,
+      .timeline-card p,
+      .side-card p,
+      .message p {
+        margin-top: 8px;
+        color: var(--muted);
+        line-height: 1.7;
+        font-size: 13px;
+      }
+
+      .chat {
+        display: grid;
+        gap: 14px;
+      }
+
+      .message {
+        padding: 18px;
+      }
+
+      .message header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+
+      .message.assistant {
+        background: #fffdf9;
+      }
+
+      .message.user {
+        background: linear-gradient(180deg, rgba(24, 20, 17, 0.03), rgba(255, 251, 245, 0.96));
+      }
+
+      .artifact-strip {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 14px;
+        background: var(--paper-alt);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .composer {
+        position: sticky;
+        bottom: 0;
+        margin-top: 16px;
+        padding: 14px;
+        background: rgba(255, 251, 245, 0.98);
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 88px;
+        resize: vertical;
+        border: 0;
+        outline: 0;
+        border-radius: 14px;
+        padding: 14px;
+        font: inherit;
+        color: var(--ink);
+        background: #fff;
+      }
+
+      .composer-actions {
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font: inherit;
+      }
+
+      .primary {
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .ghost {
+        background: rgba(24, 20, 17, 0.06);
+        color: var(--ink);
+      }
+
+      .ok {
+        color: var(--green);
+      }
+
+      @media (max-width: 1200px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        aside.left,
+        aside.right {
+          border: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+
+      @media (max-width: 760px) {
+        .summary-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <div class="hero-top">
+          <h1>AI Panel / Focus Chat</h1>
+          <div class="stats">
+            <span class="chip">1 active session</span>
+            <span class="chip">Connected</span>
+            <span class="chip">2 approvals</span>
+            <span class="chip">Memory inbox 2</span>
+          </div>
+        </div>
+        <p class="sub">
+          这一版把“聊天主舞台”做得更舒服，原来散在上中下的状态信息被压缩成更干净的摘要卡。
+          适合你觉得当前面板像调试工具太多、像产品界面太少的情况。
+        </p>
+      </header>
+
+      <div class="layout">
+        <aside class="left">
+          <section class="section">
+            <div class="section-head"><h2>Threads</h2><span>6 active</span></div>
+            <div class="timeline-stack">
+              <article class="thread active">
+                <strong>AI 面板显示整理</strong>
+                <span>codex · 14:21 · active</span>
+              </article>
+              <article class="thread">
+                <strong>Timeline 方案回放</strong>
+                <span>claude · 13:58 · resumable</span>
+              </article>
+              <article class="thread">
+                <strong>Context Budget 审视</strong>
+                <span>classic · 13:27 · blocked</span>
+              </article>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-head"><h2>Timeline</h2><span>18 events</span></div>
+            <div class="timeline-stack">
+              <article class="timeline-card">
+                <strong>14:17</strong>
+                <p>读取主容器与右栏面板，确认当前真实结构。</p>
+              </article>
+              <article class="timeline-card">
+                <strong>14:20</strong>
+                <p>整理出“三栏，但中栏不够突出”的问题。</p>
+              </article>
+              <article class="timeline-card">
+                <strong>Recovery</strong>
+                <p>保留恢复入口，但弱化成次级信息，不抢主对话的注意力。</p>
+              </article>
+            </div>
+          </section>
+        </aside>
+
+        <main>
+          <section class="summary-grid">
+            <article class="summary-card highlight">
+              <strong>Agent Status</strong>
+              <p>executing · shell_command · ~2.3k / 4.6k tokens · Codex runtime</p>
+            </article>
+            <article class="summary-card">
+              <strong>Turn Summary</strong>
+              <p>目标：梳理现有 AI 面板显示逻辑，生成 3 套不同风格 HTML 预览。</p>
+            </article>
+            <article class="summary-card">
+              <strong>Plan Snapshot</strong>
+              <p>先映射结构，再做三种展示策略：指挥台、聊天优先、时间线审计。</p>
+            </article>
+          </section>
+
+          <section class="chat">
+            <article class="message user">
+              <header><strong>你</strong><span class="meta">14:11</span></header>
+              <p>NO，生成几个样式HTML给我看下</p>
+            </article>
+
+            <article class="message assistant">
+              <header><strong>Agent</strong><span class="meta">14:18</span></header>
+              <p>
+                可以，我先不改代码本体，直接把现有 AI 面板的显示逻辑整理成静态预览。
+                我会保留 Threads、Timeline、Status、Turn Summary、Chat、Plan、Context、Tools、Memory 这些信息块，
+                只改它们的视觉组织方式。
+              </p>
+              <div class="chip-row">
+                <span class="chip">current logic preserved</span>
+                <span class="chip">display only</span>
+                <span class="chip">3 variants</span>
+              </div>
+            </article>
+
+            <article class="message assistant">
+              <header><strong>Agent</strong><span class="meta">14:24</span></header>
+              <p>
+                这一版强调“读起来顺”，所以把 Status / Plan / Tools 变成轻摘要，让人先看懂聊天主线，再决定要不要钻右侧细节。
+              </p>
+              <div class="artifact-strip">
+                Structured cards · tool summaries · memory suggestions 会以内嵌卡片出现在消息附近，而不是全部堆去侧边。
+              </div>
+            </article>
+          </section>
+
+          <section class="composer">
+            <textarea>继续，把右侧的 Context 和 Tools 也再压缩一点，我想减少像后台监控的感觉。</textarea>
+            <div class="composer-actions">
+              <span class="mini ok">Context healthy · approvals pending 2</span>
+              <div class="button-row">
+                <button class="ghost">Pause turn</button>
+                <button class="primary">Send guidance</button>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside class="right">
+          <section class="section">
+            <div class="section-head"><h2>Team Run</h2><span>idle</span></div>
+            <div class="side-stack">
+              <article class="side-card">
+                <strong>Choose Team agent</strong>
+                <p>这里保留 staged multi-agent delivery 的入口，但视觉上退后一级。</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-head"><h2>Context</h2><span>9 sections</span></div>
+            <div class="side-stack">
+              <article class="side-card">
+                <strong>Included</strong>
+                <p>AGENTS.md · GNAgentChatPage.tsx · AIPanel.css</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-head"><h2>Tools</h2><span>7 calls</span></div>
+            <div class="tool-list">
+              <span class="chip">Read ThreadList</span>
+              <span class="chip">Read Timeline</span>
+              <span class="chip">Read ToolCallPanel</span>
+              <span class="chip">Read MemoryPanel</span>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-head"><h2>Memory Inbox</h2><span>2 pending</span></div>
+            <div class="side-stack">
+              <article class="side-card">
+                <strong>AI 面板现状</strong>
+                <p>当前结构功能完整，但视觉优先级不够自然。</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-head"><h2>Memory</h2><span>6 entries</span></div>
+            <div class="memory-row">
+              <span class="chip">projectFact</span>
+              <span class="chip">userPreference</span>
+              <span class="chip">right rail audit</span>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

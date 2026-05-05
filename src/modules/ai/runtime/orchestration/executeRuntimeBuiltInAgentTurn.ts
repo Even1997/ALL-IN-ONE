@@ -9,13 +9,57 @@ import type { AgentContextConversationMessage } from '../context/agentContextTyp
 import { extractMemoryCandidates } from '../memory/extractMemoryCandidates.ts';
 import type { RuntimeSkillDefinition } from '../skills/runtimeSkillTypes.ts';
 import { buildRuntimeDirectChatRequest, normalizeRuntimeDirectChatResponse } from './runtimeDirectChatFlow.ts';
+import { guardUnverifiedFileMutationClaims } from './runtimeFileMutationClaimGuard.ts';
 import {
   createRuntimeSkillHookRunner,
   prepareRuntimeSkillsForTurn,
   resolveRuntimeSkillAllowedTools,
+  type RuntimeSkillHookEvent,
 } from '../../skills/runtimeSkillPreparation.ts';
 
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 258000;
+const TOOL_LOOP_EXHAUSTED_PATTERN =
+  /^Runtime tool loop exhausted after \d+ rounds before the model returned final content\.$/i;
+const PROJECT_ACCESS_FAILURE_PATTERNS = [
+  /Cannot access (?:file|directory) outside the current project\./i,
+  /Current project root is unavailable\./i,
+];
+
+const findProjectAccessFailure = (toolCalls: RuntimeToolStep[]) => {
+  for (const toolCall of toolCalls) {
+    if (toolCall.status !== 'failed' && toolCall.status !== 'blocked') {
+      continue;
+    }
+
+    const candidates = [toolCall.resultContent, toolCall.resultPreview].filter(
+      (value): value is string => Boolean(value?.trim())
+    );
+    const matched = candidates.find((value) =>
+      PROJECT_ACCESS_FAILURE_PATTERNS.some((pattern) => pattern.test(value))
+    );
+    if (matched) {
+      return matched.trim();
+    }
+  }
+
+  return null;
+};
+
+const shouldRetryWithoutProjectTools = (input: {
+  rawFinalContent: string;
+  normalizedFinalContent: string;
+  projectAccessFailure: string | null;
+}) => {
+  if (!input.projectAccessFailure) {
+    return false;
+  }
+
+  const finalContentCandidates = [input.rawFinalContent, input.normalizedFinalContent];
+  return finalContentCandidates.some((value) =>
+    TOOL_LOOP_EXHAUSTED_PATTERN.test(value.trim()) ||
+    PROJECT_ACCESS_FAILURE_PATTERNS.some((pattern) => pattern.test(value))
+  );
+};
 
 export type ExecuteRuntimeBuiltInAgentTurnInput = {
   projectId: string;
@@ -35,6 +79,7 @@ export type ExecuteRuntimeBuiltInAgentTurnInput = {
   allowedTools: string[];
   beforeToolCall?: (call: ToolCall) => Promise<void>;
   afterToolCall?: (call: ToolCall) => Promise<void>;
+  onSkillHookEvent?: (event: RuntimeSkillHookEvent) => Promise<void> | void;
   onModelEvent?: (event: AITextStreamEvent) => void;
   executeModel: (
     prompt: string,
@@ -65,6 +110,7 @@ export async function executeRuntimeBuiltInAgentTurn(
   const hookRunner = createRuntimeSkillHookRunner({
     skills: preparedSkills,
     projectRoot: input.projectRoot,
+    onHookEvent: input.onSkillHookEvent,
   });
   const allowedTools = resolveRuntimeSkillAllowedTools({
     defaultAllowedTools: input.allowedTools,
@@ -118,10 +164,43 @@ export async function executeRuntimeBuiltInAgentTurn(
     executeTool: input.executeTool,
   });
 
-  const finalContent = normalizeRuntimeDirectChatResponse({
+  let finalContent = normalizeRuntimeDirectChatResponse({
     response: agentTurn.finalContent,
     streamedContent: agentTurn.finalContent,
   });
+  const projectAccessFailure = findProjectAccessFailure(agentTurn.toolCalls);
+
+  if (
+    shouldRetryWithoutProjectTools({
+      rawFinalContent: agentTurn.finalContent,
+      normalizedFinalContent: finalContent,
+      projectAccessFailure,
+    })
+  ) {
+    const fallbackResponse = await input.executeModel(
+      [
+        directChat.prompt,
+        'Runtime note:',
+        `Project inspection failed: ${projectAccessFailure}`,
+        'Do not call any more tools.',
+        'Continue by answering the user directly using only the request, conversation history, memory, and already-loaded references.',
+        'If the user asked for a draft, document, plan, or explanation, produce it now instead of stopping at the tool failure.',
+        'If project-specific facts are missing, mention that briefly and continue with a best-effort answer.',
+      ].join('\n\n'),
+      directChat.systemPrompt,
+      input.onModelEvent
+    );
+    finalContent = normalizeRuntimeDirectChatResponse({
+      response: fallbackResponse,
+      streamedContent: fallbackResponse,
+    });
+  }
+
+  finalContent = guardUnverifiedFileMutationClaims({
+    content: finalContent,
+    toolCalls: agentTurn.toolCalls,
+  });
+
   const memoryCandidates = extractMemoryCandidates({
     threadId: input.threadId,
     userInput: input.rawUserInput,

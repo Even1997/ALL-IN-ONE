@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Chat 严格现状 vs 浅色优化</title>
+    <style>
+      :root {
+        --bg: #f7f3eb;
+        --surface: rgba(255, 252, 247, 0.9);
+        --surface-strong: #fffdf9;
+        --text: #191613;
+        --muted: #6d6258;
+        --line: rgba(69, 52, 35, 0.12);
+        --accent: #0f766e;
+        --accent-soft: rgba(15, 118, 110, 0.1);
+        --warn: #b45309;
+        --shadow: 0 18px 48px rgba(87, 61, 35, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.1), transparent 28%),
+          linear-gradient(180deg, #fbf8f2, var(--bg));
+      }
+
+      .page {
+        width: min(1540px, calc(100% - 28px));
+        margin: 14px auto 30px;
+      }
+
+      .hero,
+      .board,
+      .summary {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--surface);
+        backdrop-filter: blur(18px);
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 28px 30px;
+        margin-bottom: 16px;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        margin-top: 14px;
+        font-size: clamp(28px, 4.4vw, 42px);
+        line-height: 1.05;
+      }
+
+      .hero p {
+        margin-top: 12px;
+        max-width: 960px;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .board {
+        padding: 16px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        overflow: hidden;
+        background: var(--surface-strong);
+      }
+
+      .panel-head {
+        padding: 18px 18px 14px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent);
+      }
+
+      .panel-head p {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.75;
+      }
+
+      .shot-wrap {
+        padding: 16px;
+        background: linear-gradient(180deg, rgba(243, 236, 225, 0.5), rgba(255, 253, 249, 0.92));
+      }
+
+      .chat-shell {
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        min-height: 740px;
+      }
+
+      .chat-shell.dark {
+        background: #171819;
+      }
+
+      .chat-shell.light {
+        background: #f7f2ea;
+        border-color: rgba(90, 71, 51, 0.12);
+      }
+
+      .chat-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        font-size: 13px;
+      }
+
+      .chat-shell.dark .chat-topbar {
+        color: #f0ece6;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .chat-shell.light .chat-topbar {
+        color: #201a15;
+        border-bottom: 1px solid rgba(90, 71, 51, 0.1);
+        background: rgba(255, 255, 255, 0.58);
+      }
+
+      .chat-body {
+        padding: 12px 12px 8px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .message-user,
+      .message-assistant {
+        display: flex;
+      }
+
+      .message-user {
+        justify-content: flex-end;
+      }
+
+      .message-assistant {
+        justify-content: flex-start;
+      }
+
+      .user-bubble {
+        max-width: 74%;
+        padding: 12px 14px;
+        border-radius: 18px 18px 8px 18px;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      .chat-shell.dark .user-bubble {
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: #171b20;
+        color: #f8fffd;
+      }
+
+      .chat-shell.light .user-bubble {
+        border: 1px solid rgba(90, 71, 51, 0.08);
+        background: #ece5d8;
+        color: #241e18;
+      }
+
+      .assistant-stack {
+        width: min(920px, 100%);
+        display: grid;
+        gap: 8px;
+      }
+
+      .assistant-stack.strict {
+        gap: 8px;
+      }
+
+      .assistant-stack.optimized {
+        width: min(760px, 100%);
+        gap: 10px;
+      }
+
+      .thinking,
+      .answer-block,
+      .approval-card,
+      .tool-trace,
+      .optimized-answer,
+      .support-card,
+      .footnote {
+        border-radius: 16px;
+      }
+
+      .thinking {
+        width: fit-content;
+        padding: 7px 10px;
+        font-size: 11px;
+      }
+
+      .chat-shell.dark .thinking {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      .chat-shell.light .thinking {
+        border: 1px solid rgba(90, 71, 51, 0.1);
+        background: rgba(15, 118, 110, 0.06);
+        color: #325f59;
+      }
+
+      .answer-block {
+        padding: 0;
+      }
+
+      .chat-shell.dark .answer-block {
+        border: 0;
+        background: transparent;
+      }
+
+      .answer-copy {
+        display: grid;
+        gap: 8px;
+      }
+
+      .strict .answer-copy {
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.55;
+      }
+
+      .strict .answer-copy p {
+        color: #f1f1ee;
+      }
+
+      .strict .separator {
+        height: 0;
+      }
+
+      .approval-card,
+      .tool-trace {
+        padding: 12px;
+      }
+
+      .chat-shell.dark .approval-card,
+      .chat-shell.dark .tool-trace {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: #222529;
+        color: #e9e9e6;
+      }
+
+      .approval-card strong,
+      .tool-trace strong,
+      .optimized-answer strong,
+      .support-card strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+
+      .approval-card span,
+      .tool-trace span,
+      .support-card span,
+      .footnote span {
+        display: block;
+        font-size: 11px;
+        line-height: 1.55;
+      }
+
+      .chat-shell.dark .approval-card span,
+      .chat-shell.dark .tool-trace span {
+        color: #8e949b;
+      }
+
+      .tool-trace code {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 7px 9px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-family: "SFMono-Regular", Consolas, monospace;
+      }
+
+      .chat-shell.dark .tool-trace code {
+        background: rgba(2, 6, 23, 0.42);
+        color: #e9e9e6;
+      }
+
+      .strict-note {
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px dashed rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.02);
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 11px;
+        line-height: 1.7;
+      }
+
+      .optimized-answer {
+        padding: 16px 18px 14px;
+      }
+
+      .chat-shell.light .optimized-answer {
+        border: 1px solid rgba(90, 71, 51, 0.08);
+        background: #fffefb;
+        box-shadow: 0 10px 24px rgba(119, 92, 62, 0.06);
+      }
+
+      .optimized-copy {
+        display: grid;
+        gap: 12px;
+        font-size: 14px;
+        line-height: 1.78;
+      }
+
+      .optimized-copy p {
+        color: #1f1914;
+      }
+
+      .support-grid {
+        display: grid;
+        gap: 8px;
+      }
+
+      .support-card {
+        padding: 11px 12px;
+      }
+
+      .chat-shell.light .support-card {
+        border: 1px solid rgba(90, 71, 51, 0.08);
+        background: #f4ede2;
+      }
+
+      .chat-shell.light .support-card span {
+        color: #665b50;
+      }
+
+      .footnote {
+        padding: 10px 12px;
+      }
+
+      .chat-shell.light .footnote {
+        border: 1px dashed rgba(90, 71, 51, 0.14);
+        background: rgba(15, 118, 110, 0.04);
+      }
+
+      .chat-shell.light .footnote span {
+        color: #55655f;
+      }
+
+      .legend {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .legend-item {
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.58);
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .summary {
+        margin-top: 16px;
+        padding: 18px 20px;
+      }
+
+      .summary h4 {
+        margin-bottom: 10px;
+      }
+
+      .summary ul {
+        margin: 0;
+        padding-left: 1.2em;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .summary li + li {
+        margin-top: 4px;
+      }
+
+      @media (max-width: 1240px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .chat-shell {
+          min-height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <span class="kicker">Strict Render Mapping</span>
+        <h1>当前真实输出渲染效果 vs 浅色优化版</h1>
+        <p>
+          左边是按当前代码严格还原的“助手消息输出结构”，不是美化后的猜测图。依据是：
+          `assistantRenderModel` 先生成 `thinking` 和 `text` part，
+          `GNAgentMessageItem` 再把这些 part 和 `bubbleCards` 合并为一个 `timelineItems`，
+          最终按 `createdAt` 排序后一起渲染。所以正文、审批卡、工具卡确实会混在同一条消息时间线里。
+        </p>
+      </section>
+
+      <section class="board">
+        <div class="grid">
+          <article class="panel">
+            <header class="panel-head">
+              <h2>左：严格按当前代码的输出效果</h2>
+              <p>
+                深色、assistant bubble 自身透明、正文字号约 `13px`、`font-weight: 500`、`line-height: 1.55`，
+                时间戳在 `gn-agent-workspace` 下被隐藏。审批卡和问题卡是深色独立块，但它们仍然和正文出现在同一条消息流里。
+              </p>
+            </header>
+            <div class="shot-wrap">
+              <div class="chat-shell dark">
+                <div class="chat-topbar">
+                  <strong>AI Chat / current embedded render</strong>
+                  <span>meta hidden for assistant</span>
+                </div>
+                <div class="chat-body">
+                  <div class="message-user">
+                    <div class="user-bubble">现在真的是这样吗，严格的写一下现在的输出渲染效果，然后再优化的写一个，浅色的</div>
+                  </div>
+
+                  <div class="message-assistant">
+                    <div class="assistant-stack strict">
+                      <div class="thinking">thinking block · 可折叠 · 单独在消息前面</div>
+
+                      <div class="answer-block">
+                        <div class="answer-copy">
+                          <p>我已经确认当前 assistant message 的真实结构了。它不是一个“完整答复卡”先出来，而是把回答文本 part 和各种 bubbleCards 合并进同一个 timeline。</p>
+                        </div>
+                      </div>
+
+                      <div class="approval-card">
+                        <strong>Runtime Approval Card</strong>
+                        <span>如果这一轮需要确认动作，会在消息流中间插入一张独立卡片。</span>
+                      </div>
+
+                      <div class="answer-block">
+                        <div class="answer-copy">
+                          <p>也就是说，读者可能先看到一段正文，再看到审批卡，再继续看到正文，这就是为什么它更像运行日志，不像一个干净的聊天回复。</p>
+                        </div>
+                      </div>
+
+                      <div class="tool-trace">
+                        <strong>Tool Trace / Detail Card</strong>
+                        <span>工具流会继续作为消息中的后续块出现。</span>
+                        <code>Read AIChat.tsx / GNAgentMessageItem / AIChat.css</code>
+                      </div>
+
+                      <div class="answer-block">
+                        <div class="answer-copy">
+                          <p>另外 assistant 自己的 bubble 没有外层实体背景，真正有背景的是里面插入的各类审批、问题或代码预览块。</p>
+                        </div>
+                      </div>
+
+                      <div class="strict-note">
+                        严格现状补充：
+                        assistant `.chat-message-bubble` 在嵌入态里 `width: min(920px, 100%)`、`padding: 0`、`border-radius: 0`；
+                        `.chat-message-meta` 被隐藏；
+                        tool trace 某些 compact detail 还会继续去边框、去背景。
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="legend">
+                <div class="legend-item">严格依据 `buildAssistantRenderModel` + `GNAgentMessageItem`：先合并 part 与 bubbleCards，再按 `createdAt` 排序。</div>
+                <div class="legend-item">所以问题不是“颜色深”，而是“主回答和过程块共享同一阅读轨道”。</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <header class="panel-head">
+              <h2>右：浅色优化版</h2>
+              <p>
+                目标只改结构表达，不改语义内容。先给出完整回答卡，再把 thinking、审批、tool trace 降成“回复附属层”，
+                并切到浅色、纸面感更强的阅读样式。
+              </p>
+            </header>
+            <div class="shot-wrap">
+              <div class="chat-shell light">
+                <div class="chat-topbar">
+                  <strong>AI Chat / optimized light reply</strong>
+                  <span>answer first · support after</span>
+                </div>
+                <div class="chat-body">
+                  <div class="message-user">
+                    <div class="user-bubble">现在真的是这样吗，严格的写一下现在的输出渲染效果，然后再优化的写一个，浅色的</div>
+                  </div>
+
+                  <div class="message-assistant">
+                    <div class="assistant-stack optimized">
+                      <div class="optimized-answer">
+                        <strong>Assistant</strong>
+                        <div class="optimized-copy">
+                          <p>是的，当前代码的真实输出确实会把 assistant 的文本段和各种运行态卡片混在同一条消息流里。</p>
+                          <p>根因是：文本 part、thinking part 和 bubbleCards 会先被合并，再按时间戳排序后一起渲染，所以回答过程会被审批卡、工具卡、结构卡打断。</p>
+                          <p>如果要优化，最关键的不是先换配色，而是把“完整回答”从“运行过程信息”里解耦出来，让用户先读答案，再决定是否展开过程。</p>
+                        </div>
+                      </div>
+
+                      <div class="support-grid">
+                        <div class="thinking">Thinking summary · 已确认根因在消息编排层</div>
+
+                        <div class="support-card">
+                          <strong>Approval</strong>
+                          <span>审批卡保留，但移到主回答下方，避免切断正文。</span>
+                        </div>
+
+                        <div class="support-card">
+                          <strong>Tool Trace</strong>
+                          <span>工具读取、结果预览、diff 等作为附属层挂载，不再和正文抢同一轨道。</span>
+                        </div>
+
+                        <div class="footnote">
+                          <span>浅色建议：正文卡用实体浅底，支持块用更浅一阶的次表面，形成“答案第一层 / 过程第二层”的层级。</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="legend">
+                <div class="legend-item">优化重点：主回答变成一个连续、可完整阅读的回复卡。</div>
+                <div class="legend-item">浅色只是结果表现，真正提升观感的是“先答案、后过程”的结构顺序。</div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="summary">
+        <h4>结论</h4>
+        <ul>
+          <li>当前现状里，你觉得“不像聊天”的判断是准确的，问题主要来自 assistant 回复被时间线式混排。</li>
+          <li>如果继续改真实代码，我建议优先做这一步：assistant 正文独立成主回答容器，bubbleCards 改为附属层，不再与正文按时间戳混流。</li>
+          <li>浅色版我已经按这个结构关系画出来了，如果你认可这个方向，下一步我就可以开始把真实 `AIChat` 改成这一套。</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

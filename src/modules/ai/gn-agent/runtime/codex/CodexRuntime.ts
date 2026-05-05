@@ -25,8 +25,9 @@ export class CodexRuntime {
     prompt: string;
     onChunk?: (text: string) => void;
     onEvent?: (event: AITextStreamEvent) => void;
+    signal?: AbortSignal;
   }) {
-    const { config, systemPrompt = '', prompt, onChunk, onEvent } = options;
+    const { config, systemPrompt = '', prompt, onChunk, onEvent, signal } = options;
     if (config.provider !== 'openai-compatible') {
       throw new Error('Codex runtime requires an OpenAI Compatible config.');
     }
@@ -39,6 +40,7 @@ export class CodexRuntime {
         prompt,
         onChunk,
         onEvent,
+        signal,
       });
     } finally {
       aiService.setConfig(previousConfig);

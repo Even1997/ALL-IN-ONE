@@ -16,11 +16,11 @@ const __dirname = path.dirname(__filename);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 
 test('buildWelcomeMessage creates a plain assistant welcome message', () => {
-  const message = buildWelcomeMessage('DevFlow');
+  const message = buildWelcomeMessage();
 
   assert.equal(message.role, 'assistant');
-  assert.equal(message.content, 'DevFlow 已就绪。直接说需求。');
-  assert.ok(message.content.length <= 24);
+  assert.equal('content' in message, false);
+  assert.deepEqual(message.timeline, []);
 });
 
 test('getComposerPlaceholder switches copy based on AI configuration state', () => {

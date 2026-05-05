@@ -26,4 +26,5 @@ test('runtime summary and chat runtime reference replay or resume state', async 
 
   assert.match(runtimeSummarySource, /replay|recovery|resume/i);
   assert.match(aiChatSource, /listRuntimeReplayEvents|appendRuntimeReplayEvent/);
+  assert.match(aiChatSource, /getLatestReplaySkillSnapshot\(activeSession\.recoveryState\)/);
 });

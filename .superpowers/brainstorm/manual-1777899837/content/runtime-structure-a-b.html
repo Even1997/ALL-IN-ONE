@@ -1,0 +1,87 @@
+<h2>Runtime 结构方向</h2>
+<p class="subtitle">目标：右侧 AI 页面更像 cc-haha，默认真实、简洁、可折叠，不把内部实现层级直接摊给用户。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. 统一事件时间线</div>
+        <div class="mockup-body" style="display:flex;flex-direction:column;gap:10px">
+          <div style="padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--border)">
+            <div class="label">Thinking</div>
+            <div style="font-weight:600">正在规划修改</div>
+            <div class="subtitle">默认只显示一行摘要</div>
+          </div>
+          <div style="padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--border)">
+            <div class="label">Action</div>
+            <div style="font-weight:600">修改 3 个文件</div>
+            <div class="subtitle">点开后才看见子步骤、文件、输出</div>
+          </div>
+          <div style="padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--border)">
+            <div class="label">Question</div>
+            <div style="font-weight:600">等待你确认 1 个权限</div>
+          </div>
+          <div style="padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--border)">
+            <div class="label">Result</div>
+            <div style="font-weight:600">已完成</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方向 A</h3>
+      <p>把思考、执行、提问、结果全部压进一条时间线。用户只看“发生了什么”，不先看技术层级。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. 答案区 + 执行区分栏</div>
+        <div class="mockup-body" style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
+          <div style="padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--border);min-height:220px">
+            <div class="label">Answer</div>
+            <div style="font-weight:600;margin-bottom:8px">模型回复正文</div>
+            <div class="subtitle">思考过程折叠成一个轻入口</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--border)">
+              <div class="label">Runtime</div>
+              <div style="font-weight:600">执行中</div>
+              <div class="subtitle">单独一栏显示所有动作</div>
+            </div>
+            <div style="padding:10px 12px;border-radius:12px;background:var(--card);border:1px solid var(--border)">
+              <div class="label">Approval</div>
+              <div style="font-weight:600">权限 / 提问独立聚合</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方向 B</h3>
+      <p>保留“回答”和“执行”两个视觉区块。信息更稳定，但执行层还是相对独立存在。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>我更推荐 A</h4>
+      <ul>
+        <li>最接近你说的“彻底统一事件时间线”。</li>
+        <li>最容易做出 haha 那种默认简洁、展开才见细节的感觉。</li>
+        <li>更容易保证“先思考后执行”的真实顺序。</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>B 的代价</h4>
+      <ul>
+        <li>回答区和执行区会继续割裂。</li>
+        <li>审批、提问、执行可能还是会显得像多个系统拼在一起。</li>
+        <li>更容易再次出现层级过多的问题。</li>
+      </ul>
+    </div>
+  </div>
+</div>

@@ -1,13 +1,14 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Circle, Group, Layer, Rect, Stage, Text } from 'react-konva';
+import { Group, Layer, Rect, Stage, Text } from 'react-konva';
 import { usePreviewStore } from '../../store/previewStore';
 import { CanvasElement } from '../../types';
-import { MIN_MODULE_HEIGHT, MIN_MODULE_WIDTH, snapToGrid } from '../../utils/wireframe';
+import { getWireframeModuleVisualType, MIN_MODULE_HEIGHT, MIN_MODULE_WIDTH, snapToGrid } from '../../utils/wireframe';
 
 interface CanvasProps {
   width?: number;
   height?: number;
   frameType?: 'mobile' | 'browser';
+  onRequestEdit?: (id: string) => void;
 }
 
 interface ElementRendererProps {
@@ -20,33 +21,21 @@ interface ElementRendererProps {
   onSelect: (id: string) => void;
   onDragEnd: (element: CanvasElement, x: number, y: number) => void;
   onResize: (element: CanvasElement, width: number, height: number) => void;
-  onContextMenu: (element: CanvasElement, clientX: number, clientY: number) => void;
+  onRequestEdit?: (id: string) => void;
 }
 
 interface CanvasPalette {
   stageFill: string;
-  frameShell: string;
-  frameInner: string;
-  frameStroke: string;
-  frameShadow: string;
   boardFill: string;
   boardStroke: string;
-  browserBar: string;
-  browserAddress: string;
-  browserRed: string;
-  browserYellow: string;
-  browserGreen: string;
-  deviceNotch: string;
   moduleFill: string;
-  moduleHeader: string;
   moduleText: string;
-  moduleMuted: string;
   moduleStroke: string;
   moduleSelected: string;
   accent: string;
 }
 
-const GRID_SIZE = 4;
+const GRID_SIZE = 1;
 
 const readCssVariable = (styles: CSSStyleDeclaration, name: string, fallback: string) =>
   styles.getPropertyValue(name).trim() || fallback;
@@ -54,21 +43,9 @@ const readCssVariable = (styles: CSSStyleDeclaration, name: string, fallback: st
 const getModuleLabel = (element: CanvasElement) =>
   String(element.props.name || element.props.title || element.props.text || '模块');
 
-const getModuleContent = (element: CanvasElement) =>
-  String(element.props.content || element.props.placeholder || element.props.text || '');
+const getModuleContentType = (element: CanvasElement) =>
+  getWireframeModuleVisualType(element.props.moduleType, element.props.content);
 
-const getContentPreview = (content: string, width: number, height: number) => {
-  const normalized = content.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return '双击右侧列表可继续补充内容';
-  }
-
-  const charsPerLine = Math.max(10, Math.floor(Math.max(width - 28, 40) / 7));
-  const maxLines = Math.max(1, Math.floor(Math.max(height - 58, 16) / 16));
-  const maxChars = Math.max(charsPerLine * maxLines, 24);
-
-  return normalized.length > maxChars ? `${normalized.slice(0, Math.max(maxChars - 3, 1))}...` : normalized;
-};
 
 const getPointerClientPosition = (
   event: MouseEvent | TouchEvent | PointerEvent | undefined | null
@@ -115,31 +92,6 @@ const hasCanvasElementAncestor = (target: any): boolean => {
   return false;
 };
 
-const getFrameChrome = (frameType: 'mobile' | 'browser', width: number, height: number) => {
-  if (frameType === 'mobile') {
-    return {
-      offsetX: 24,
-      offsetY: 42,
-      outerWidth: width + 48,
-      outerHeight: height + 84,
-      cornerRadius: 40,
-      innerInset: 10,
-      boardCornerRadius: 28,
-      notchWidth: Math.min(132, Math.max(92, width * 0.32)),
-    };
-  }
-
-  return {
-    offsetX: 18,
-    offsetY: 64,
-    outerWidth: width + 36,
-    outerHeight: height + 82,
-    cornerRadius: 24,
-    innerInset: 10,
-    boardCornerRadius: 20,
-    notchWidth: 0,
-  };
-};
 
 const ElementRenderer = memo<ElementRendererProps>(({
   element,
@@ -151,15 +103,16 @@ const ElementRenderer = memo<ElementRendererProps>(({
   onSelect,
   onDragEnd,
   onResize,
-  onContextMenu,
+  onRequestEdit,
 }) => {
   const elementWidth = Number.isFinite(element.width) ? Math.max(MIN_MODULE_WIDTH, Math.round(element.width)) : MIN_MODULE_WIDTH;
   const elementHeight = Number.isFinite(element.height) ? Math.max(MIN_MODULE_HEIGHT, Math.round(element.height)) : MIN_MODULE_HEIGHT;
   const label = getModuleLabel(element);
-  const content = getContentPreview(getModuleContent(element), elementWidth, elementHeight);
+  const isTextModule = getModuleContentType(element) === 'text';
   const handleSize = 12;
   const isSelectMode = interactionMode === 'select';
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
+  const textUnderlineWidth = Math.max(40, Math.min(elementWidth, label.length * 8 + 16));
 
   const handleMouseDown = (e: any) => {
     e.cancelBubble = true;
@@ -237,54 +190,67 @@ const ElementRenderer = memo<ElementRendererProps>(({
       }}
       onContextMenu={(e) => {
         e.evt.preventDefault();
-        onContextMenu(element, e.evt.clientX, e.evt.clientY);
+        onSelect(element.id);
+        onRequestEdit?.(element.id);
       }}
     >
-      <Rect
-        width={elementWidth}
-        height={elementHeight}
-        fill={palette.moduleFill}
-        stroke={isSelected ? palette.moduleSelected : palette.moduleStroke}
-        strokeWidth={isSelected ? 2 : 1.5}
-        cornerRadius={16}
-        shadowColor="rgba(0, 0, 0, 0.28)"
-        shadowBlur={isSelected ? 18 : 10}
-        shadowOpacity={isSelected ? 0.28 : 0.16}
-        shadowOffsetY={isSelected ? 10 : 6}
-        perfectDrawEnabled={false}
-        shadowForStrokeEnabled={false}
-      />
-      <Rect
-        width={elementWidth}
-        height={36}
-        fill={palette.moduleHeader}
-        cornerRadius={[16, 16, 0, 0]}
-        perfectDrawEnabled={false}
-        listening={false}
-      />
-      <Text
-        text={label}
-        x={14}
-        y={10}
-        width={Math.max(elementWidth - 28, 24)}
-        fontSize={13}
-        fontStyle="bold"
-        fill={palette.moduleText}
-        listening={false}
-        perfectDrawEnabled={false}
-      />
-      <Text
-        text={content}
-        x={14}
-        y={48}
-        width={Math.max(elementWidth - 28, 24)}
-        height={Math.max(elementHeight - 60, 16)}
-        fontSize={11}
-        fill={palette.moduleMuted}
-        lineHeight={1.45}
-        listening={false}
-        perfectDrawEnabled={false}
-      />
+      {isTextModule ? (
+        <>
+          <Rect
+            width={elementWidth}
+            height={elementHeight}
+            fill="rgba(255,255,255,0.001)"
+            perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
+          />
+          <Text
+            text={label}
+            width={Math.max(elementWidth, 24)}
+            height={Math.max(elementHeight - 6, 18)}
+            fontSize={14}
+            fontStyle="bold"
+            fill={palette.moduleText}
+            verticalAlign="middle"
+            listening={false}
+            perfectDrawEnabled={false}
+          />
+          <Rect
+            y={Math.max(elementHeight - 4, 0)}
+            width={textUnderlineWidth}
+            height={isSelected ? 3 : 2}
+            fill={isSelected ? palette.moduleSelected : palette.moduleStroke}
+            opacity={isSelected ? 0.9 : 0.55}
+            listening={false}
+            perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
+          />
+        </>
+      ) : (
+        <>
+          <Rect
+            width={elementWidth}
+            height={elementHeight}
+            fill={palette.moduleFill}
+            stroke={isSelected ? palette.moduleSelected : palette.moduleStroke}
+            strokeWidth={isSelected ? 2 : 1.5}
+            cornerRadius={0}
+            perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
+          />
+          <Text
+            text={label}
+            x={14}
+            width={Math.max(elementWidth - 28, 24)}
+            height={elementHeight}
+            fontSize={13}
+            fontStyle="bold"
+            fill={palette.moduleText}
+            verticalAlign="middle"
+            listening={false}
+            perfectDrawEnabled={false}
+          />
+        </>
+      )}
       {isSelected && isSelectMode && (
         <Rect
           x={elementWidth - handleSize}
@@ -305,6 +271,7 @@ export const Canvas = memo<CanvasProps>(({
   width = 800,
   height = 600,
   frameType = 'browser',
+  onRequestEdit,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const elements = usePreviewStore((state) => state.elements);
@@ -342,37 +309,21 @@ export const Canvas = memo<CanvasProps>(({
     () => Math.max(680, Math.ceil(boardHeight * scale + (frameType === 'mobile' ? 140 : 120))),
     [boardHeight, frameType, scale]
   );
-  const frameChrome = useMemo(
-    () => getFrameChrome(frameType, width, boardHeight),
-    [boardHeight, frameType, width]
-  );
   const fitScale = useMemo(() => {
     const safeWidth = Math.max(320, viewportSize.width - (frameType === 'mobile' ? 120 : 88));
     const safeHeight = Math.max(320, viewportSize.height - (frameType === 'mobile' ? 132 : 104));
-    const nextScale = Math.min(safeWidth / frameChrome.outerWidth, safeHeight / frameChrome.outerHeight);
+    const nextScale = Math.min(safeWidth / width, safeHeight / boardHeight);
 
     return Math.min(Math.max(nextScale, 0.72), frameType === 'mobile' ? 0.96 : 1.06);
-  }, [frameChrome.outerHeight, frameChrome.outerWidth, frameType, viewportSize.height, viewportSize.width]);
+  }, [boardHeight, width, frameType, viewportSize.height, viewportSize.width]);
   const palette = useMemo<CanvasPalette>(() => {
     if (typeof window === 'undefined') {
       return {
         stageFill: '#15171c',
-        frameShell: '#22252c',
-        frameInner: '#101318',
-        frameStroke: 'rgba(255, 255, 255, 0.08)',
-        frameShadow: 'rgba(0, 0, 0, 0.42)',
         boardFill: '#f8fafc',
         boardStroke: 'rgba(148, 163, 184, 0.28)',
-        browserBar: '#14181f',
-        browserAddress: 'rgba(255, 255, 255, 0.08)',
-        browserRed: '#ff6b6b',
-        browserYellow: '#ffd166',
-        browserGreen: '#06d6a0',
-        deviceNotch: '#05070b',
         moduleFill: '#f7f7f6',
-        moduleHeader: '#efefec',
         moduleText: '#14171b',
-        moduleMuted: '#475d69',
         moduleStroke: '#76808d',
         moduleSelected: '#8be9d6',
         accent: '#8be9d6',
@@ -383,22 +334,10 @@ export const Canvas = memo<CanvasProps>(({
 
     return {
       stageFill: readCssVariable(styles, '--canvas-stage-fill', '#15171c'),
-      frameShell: readCssVariable(styles, '--canvas-frame-shell', '#22252c'),
-      frameInner: readCssVariable(styles, '--canvas-frame-inner', '#101318'),
-      frameStroke: readCssVariable(styles, '--canvas-frame-stroke', 'rgba(255, 255, 255, 0.08)'),
-      frameShadow: readCssVariable(styles, '--canvas-frame-shadow', 'rgba(0, 0, 0, 0.42)'),
       boardFill: readCssVariable(styles, '--canvas-board-fill', '#f8fafc'),
       boardStroke: readCssVariable(styles, '--canvas-board-stroke', 'rgba(148, 163, 184, 0.28)'),
-      browserBar: readCssVariable(styles, '--canvas-browser-bar', '#14181f'),
-      browserAddress: readCssVariable(styles, '--canvas-browser-address', 'rgba(255, 255, 255, 0.08)'),
-      browserRed: readCssVariable(styles, '--canvas-browser-red', '#ff6b6b'),
-      browserYellow: readCssVariable(styles, '--canvas-browser-yellow', '#ffd166'),
-      browserGreen: readCssVariable(styles, '--canvas-browser-green', '#06d6a0'),
-      deviceNotch: readCssVariable(styles, '--canvas-device-notch', '#05070b'),
       moduleFill: readCssVariable(styles, '--canvas-module-fill', '#f7f7f6'),
-      moduleHeader: readCssVariable(styles, '--canvas-module-header', '#efefec'),
       moduleText: readCssVariable(styles, '--canvas-module-text', '#14171b'),
-      moduleMuted: readCssVariable(styles, '--canvas-module-muted', '#475d69'),
       moduleStroke: readCssVariable(styles, '--canvas-module-stroke', '#76808d'),
       moduleSelected: readCssVariable(styles, '--canvas-module-selected', '#8be9d6'),
       accent: readCssVariable(styles, '--mode-accent', '#8be9d6'),
@@ -682,14 +621,6 @@ export const Canvas = memo<CanvasProps>(({
     );
   }, [updateElement]);
 
-  const handleElementContextMenu = useCallback((element: CanvasElement, clientX: number, clientY: number) => {
-    const nextSelectedIds = selectedIds.includes(element.id) ? selectedIds : [element.id];
-    if (!selectedIds.includes(element.id)) {
-      applyCanvasSelection(nextSelectedIds, element.id);
-    }
-    openDeletePopup(clientX, clientY, nextSelectedIds);
-  }, [applyCanvasSelection, openDeletePopup, selectedIds]);
-
   const getBoardPoint = useCallback((clientX: number, clientY: number, clampToBoard = false) => {
     const container = containerRef.current;
     if (!container) {
@@ -954,89 +885,13 @@ export const Canvas = memo<CanvasProps>(({
               <Rect id="stage-bg" width={stageMetrics.stageWidth} height={stageMetrics.stageHeight} fill={palette.stageFill} listening={false} />
               <Group x={viewportOffset.x} y={viewportOffset.y} scaleX={scale} scaleY={scale}>
                 <Group x={stageMetrics.frameX} y={stageMetrics.frameY}>
-                  {frameType === 'mobile' ? (
-                    <>
-                      <Rect
-                        x={-frameChrome.offsetX}
-                        y={-frameChrome.offsetY}
-                        width={frameChrome.outerWidth}
-                        height={frameChrome.outerHeight}
-                        cornerRadius={frameChrome.cornerRadius}
-                        fill={palette.frameShell}
-                        stroke={palette.frameStroke}
-                        strokeWidth={1.2}
-                        shadowColor={palette.frameShadow}
-                        shadowBlur={28}
-                        shadowOpacity={0.28}
-                        shadowOffsetY={18}
-                        listening={false}
-                      />
-                      <Rect
-                        x={-frameChrome.offsetX + frameChrome.innerInset}
-                        y={-frameChrome.offsetY + frameChrome.innerInset}
-                        width={frameChrome.outerWidth - frameChrome.innerInset * 2}
-                        height={frameChrome.outerHeight - frameChrome.innerInset * 2}
-                        cornerRadius={frameChrome.cornerRadius - 10}
-                        fill={palette.frameInner}
-                        listening={false}
-                      />
-                      <Rect
-                        x={width / 2 - frameChrome.notchWidth / 2}
-                        y={-frameChrome.offsetY + 14}
-                        width={frameChrome.notchWidth}
-                        height={18}
-                        cornerRadius={999}
-                        fill={palette.deviceNotch}
-                        listening={false}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <Rect
-                        x={-frameChrome.offsetX}
-                        y={-frameChrome.offsetY}
-                        width={frameChrome.outerWidth}
-                        height={frameChrome.outerHeight}
-                        cornerRadius={frameChrome.cornerRadius}
-                        fill={palette.frameShell}
-                        stroke={palette.frameStroke}
-                        strokeWidth={1.2}
-                        shadowColor={palette.frameShadow}
-                        shadowBlur={24}
-                        shadowOpacity={0.22}
-                        shadowOffsetY={16}
-                        listening={false}
-                      />
-                      <Rect
-                        x={-frameChrome.offsetX + frameChrome.innerInset}
-                        y={-frameChrome.offsetY + frameChrome.innerInset}
-                        width={frameChrome.outerWidth - frameChrome.innerInset * 2}
-                        height={48}
-                        cornerRadius={[frameChrome.cornerRadius - 8, frameChrome.cornerRadius - 8, 16, 16]}
-                        fill={palette.browserBar}
-                        listening={false}
-                      />
-                      <Circle x={-frameChrome.offsetX + 26} y={-frameChrome.offsetY + 34} radius={5} fill={palette.browserRed} listening={false} />
-                      <Circle x={-frameChrome.offsetX + 44} y={-frameChrome.offsetY + 34} radius={5} fill={palette.browserYellow} listening={false} />
-                      <Circle x={-frameChrome.offsetX + 62} y={-frameChrome.offsetY + 34} radius={5} fill={palette.browserGreen} listening={false} />
-                      <Rect
-                        x={Math.max(width * 0.22, 96)}
-                        y={-frameChrome.offsetY + 23}
-                        width={Math.min(width * 0.48, 420)}
-                        height={22}
-                        cornerRadius={999}
-                        fill={palette.browserAddress}
-                        listening={false}
-                      />
-                    </>
-                  )}
                   <Rect
                     width={width}
                     height={boardHeight}
                     fill={palette.boardFill}
                     stroke={palette.boardStroke}
                     strokeWidth={1}
-                    cornerRadius={frameChrome.boardCornerRadius}
+                    cornerRadius={0}
                     listening={false}
                   />
                   {elements.map((element) => (
@@ -1051,7 +906,7 @@ export const Canvas = memo<CanvasProps>(({
                       onSelect={handleElementSelect}
                       onDragEnd={handleElementDragEnd}
                       onResize={handleElementResize}
-                      onContextMenu={handleElementContextMenu}
+                      onRequestEdit={onRequestEdit}
                     />
                   ))}
                   {selectionRect && (

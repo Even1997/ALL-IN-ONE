@@ -98,6 +98,25 @@ test('project file operations resolve request kind and explicit review-first pro
   assert.equal(shouldForceProjectFileProposal('\u8bf7\u76f4\u63a5\u4fdd\u5b58\u5230 docs/prd.md'), false);
 });
 
+test('project file operations route filename replies after save prompts to write flow', async () => {
+  const { resolveProjectFileRequestKind } = await loadModule();
+
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u9700\u6c42\u6587\u6863\u5ba1\u67e5\u610f\u89c1.md',
+      cleanedInput: '\u9700\u6c42\u6587\u6863\u5ba1\u67e5\u610f\u89c1.md',
+      conversationHistory: [
+        {
+          role: 'assistant',
+          content:
+            '\u6211\u5df2\u7ecf\u751f\u6210\u4e86\u9700\u6c42\u6587\u6863\u5ba1\u67e5\u610f\u89c1\uff0c\u8981\u4fdd\u5b58\u5230\u9879\u76ee\u6839\u76ee\u5f55\u5417\uff1f\u8bf7\u544a\u8bc9\u6211\u6587\u4ef6\u540d\u3002',
+        },
+      ],
+    }),
+    'write'
+  );
+});
+
 test('project file operations recognize short replies to pending file proposals', async () => {
   const {
     findLatestPendingProjectFileProposalAction,
@@ -175,5 +194,88 @@ test('project file operations parse structured plans from raw JSON or fenced JSO
       '```json\n{"status":"needs_clarification","assistantMessage":"\u8bf7\u786e\u8ba4\u5177\u4f53\u8def\u5f84","summary":"","operations":[]}\n```'
     ).status,
     'needs_clarification'
+  );
+});
+
+test('project file operations recognize write access failures that should become recovery proposals', async () => {
+  const { isProjectFileWriteAccessFailure } = await loadModule();
+
+  assert.equal(isProjectFileWriteAccessFailure('Access is denied. (os error 5)'), true);
+  assert.equal(isProjectFileWriteAccessFailure('Write error: Permission denied'), true);
+  assert.equal(isProjectFileWriteAccessFailure('\u62d2\u7edd\u8bbf\u95ee'), true);
+  assert.equal(
+    isProjectFileWriteAccessFailure('The process cannot access the file because it is being used by another process.'),
+    true
+  );
+  assert.equal(isProjectFileWriteAccessFailure('File not found'), false);
+  assert.equal(isProjectFileWriteAccessFailure('old_string not found in file'), false);
+});
+
+test('project file operations rebuild retryable operations from failed write and edit tool calls', async () => {
+  const { buildProjectFileOperationFromToolCall } = await loadModule();
+
+  assert.deepEqual(
+    buildProjectFileOperationFromToolCall({
+      toolName: 'write',
+      toolInput: {
+        file_path: 'docs/spec.md',
+        content: '# Spec',
+      },
+      fileExists: false,
+    }),
+    {
+      id: 'create_file:docs/spec.md:0',
+      type: 'create_file',
+      targetPath: 'docs/spec.md',
+      summary: '创建 docs/spec.md',
+      content: '# Spec',
+    }
+  );
+
+  assert.deepEqual(
+    buildProjectFileOperationFromToolCall({
+      toolName: 'write',
+      toolInput: {
+        file_path: 'docs/spec.md',
+        content: '# Updated spec',
+      },
+      fileExists: true,
+    }),
+    {
+      id: 'edit_file:docs/spec.md:0',
+      type: 'edit_file',
+      targetPath: 'docs/spec.md',
+      summary: '写入 docs/spec.md',
+      content: '# Updated spec',
+    }
+  );
+
+  assert.deepEqual(
+    buildProjectFileOperationFromToolCall({
+      toolName: 'edit',
+      toolInput: {
+        file_path: 'src/App.tsx',
+        old_string: 'foo()',
+        new_string: 'bar()',
+      },
+    }),
+    {
+      id: 'edit_file:src/App.tsx:0',
+      type: 'edit_file',
+      targetPath: 'src/App.tsx',
+      summary: '编辑 src/App.tsx',
+      oldString: 'foo()',
+      newString: 'bar()',
+    }
+  );
+
+  assert.equal(
+    buildProjectFileOperationFromToolCall({
+      toolName: 'write',
+      toolInput: {
+        content: '# Missing path',
+      },
+    }),
+    null
   );
 });

@@ -5,31 +5,44 @@ import type { ChatStructuredCard } from '../chat/chatCards';
 import type { KnowledgeProposal } from '../../../features/knowledge/model/knowledgeProposal';
 import type { ProjectFileProposal } from '../chat/projectFileOperations';
 import type { AgentProviderId } from '../runtime/agentRuntimeTypes';
-import type { RuntimeToolStep } from '../runtime/agent-kernel/agentKernelTypes';
+import type { AgentReplayRecoveryState } from '../runtime/replay/runtimeReplayRecovery.ts';
+import type { RuntimeReplayEvent } from '../runtime/replay/runtimeReplayTypes.ts';
 import type { AgentTeamRunRecord } from '../runtime/teams/teamTypes';
+import type { AIChatMessagePart } from '../../../components/workspace/aiChatMessageParts.ts';
 import {
-  buildAssistantStructuredContentState,
-  type AIChatMessagePart,
-} from '../../../components/workspace/aiChatMessageParts';
+  buildAssistantTimelineFromContent,
+  type AssistantTimelineEvent,
+  type RuntimeQuestionItem,
+  type RuntimeQuestionOption,
+  type RuntimeQuestionPayload,
+  type StoredChatRuntimeApprovalDisplay,
+  type StoredChatRuntimeEvent,
+  type StoredChatRuntimeFileChange,
+} from './assistantTimeline.ts';
+import {
+  appendChatSessionEvent,
+  buildChatSessionProjection,
+  createComposerPrefillClearedEvent,
+  createComposerPrefillQueuedEvent,
+  createMessageAppendedEvent,
+  createMessageUpdatedEvent,
+  createMessagesReplacedEvent,
+  createReplayStateSyncedEvent,
+  createRuntimeThreadBoundEvent,
+  createSessionInitializedEvent,
+  createSessionRenamedEvent,
+  ensureChatSessionEventLog,
+  type ChatSessionEvent,
+} from './chatSessionEventLog.ts';
 
-export type RuntimeQuestionOption = {
-  label: string;
-  description?: string;
-};
-
-export type RuntimeQuestionItem = {
-  question: string;
-  header?: string;
-  options?: RuntimeQuestionOption[];
-};
-
-export type RuntimeQuestionPayload = {
-  id: string;
-  toolCallId?: string | null;
-  status: 'pending' | 'answered';
-  questions: RuntimeQuestionItem[];
-  answers?: Record<string, string>;
-  createdAt: number;
+export type {
+  AssistantTimelineEvent,
+  RuntimeQuestionItem,
+  RuntimeQuestionOption,
+  RuntimeQuestionPayload,
+  StoredChatRuntimeApprovalDisplay,
+  StoredChatRuntimeEvent,
+  StoredChatRuntimeFileChange,
 };
 
 export type ComposerPrefillPayload = {
@@ -37,96 +50,29 @@ export type ComposerPrefillPayload = {
   nonce: number;
 };
 
-export type StoredChatRuntimeFileChange = {
-  path: string;
-  beforeContent: string | null;
-  afterContent: string | null;
-};
-
-export type StoredChatRuntimeApprovalDisplay = {
-  toolName?: string | null;
-  command?: string | null;
-  filePath?: string | null;
-  oldString?: string | null;
-  newString?: string | null;
-  content?: string | null;
-  inputJson?: string | null;
-};
-
-export type StoredChatRuntimeEvent =
-  | {
-      id: string;
-      kind: 'tool_use';
-      toolCallId: string;
-      parentToolCallId?: string | null;
-      toolName: string;
-      input: Record<string, unknown>;
-      status: RuntimeToolStep['status'];
-      createdAt: number;
-    }
-  | {
-      id: string;
-      kind: 'tool_result';
-      toolCallId: string;
-      parentToolCallId?: string | null;
-      toolName: string;
-      status: RuntimeToolStep['status'];
-      output: string;
-      fileChanges?: StoredChatRuntimeFileChange[];
-      createdAt: number;
-    }
-  | {
-      id: string;
-      kind: 'approval';
-      approvalId: string;
-      toolCallId?: string | null;
-      actionType: string;
-      summary: string;
-      riskLevel: 'low' | 'medium' | 'high';
-      status: 'pending' | 'approved' | 'denied';
-      display?: StoredChatRuntimeApprovalDisplay;
-      createdAt: number;
-    }
-  | {
-      id: string;
-      kind: 'question';
-      questionId: string;
-      payload: RuntimeQuestionPayload;
-      createdAt: number;
-    };
-
-export type StoredChatAssistantPart =
-  | { type: 'text'; content: string; createdAt?: number }
-  | { type: 'thinking'; content: string; collapsed: boolean; createdAt?: number }
-  | {
-      type: 'tool';
-      name: string;
-      title: string;
-      status: 'running' | 'success' | 'error';
-      command?: string;
-      input?: string;
-      output?: string;
-      createdAt?: number;
-    };
-
-export type StoredChatMessage = {
+type StoredChatMessageBase = {
   id: string;
   role: 'user' | 'assistant' | 'system';
-  content: string;
-  thinkingContent?: string;
-  answerContent?: string;
-  assistantParts?: StoredChatAssistantPart[];
   tone?: 'default' | 'error';
   runId?: string;
-  toolCalls?: RuntimeToolStep[];
-  runtimeEvents?: StoredChatRuntimeEvent[];
   teamRun?: AgentTeamRunRecord | null;
   structuredCards?: ChatStructuredCard[];
   knowledgeProposal?: KnowledgeProposal;
   projectFileProposal?: ProjectFileProposal;
-  runtimeQuestion?: RuntimeQuestionPayload;
   createdAt: number;
 };
+
+export type StoredChatAssistantMessage = StoredChatMessageBase & {
+  role: 'assistant';
+  timeline: AssistantTimelineEvent[];
+};
+
+export type StoredChatUserMessage = StoredChatMessageBase & {
+  role: 'user' | 'system';
+  content: string;
+};
+
+export type StoredChatMessage = StoredChatAssistantMessage | StoredChatUserMessage;
 
 export type ChatSession = {
   id: string;
@@ -136,14 +82,22 @@ export type ChatSession = {
   runtimeThreadId: string | null;
   composerPrefill?: ComposerPrefillPayload | null;
   messages: StoredChatMessage[];
+  replayEvents: RuntimeReplayEvent[];
+  recoveryState: AgentReplayRecoveryState | null;
+  eventLog: ChatSessionEvent[];
   createdAt: number;
   updatedAt: number;
 };
 
-type ChatProjectState = {
+export type ChatProjectState = {
   activeSessionId: string | null;
   sessions: ChatSession[];
   activityEntries: ActivityEntry[];
+};
+
+type PersistedChatSession = Omit<ChatSession, 'eventLog'>;
+type PersistedChatProjectState = Omit<ChatProjectState, 'sessions'> & {
+  sessions: PersistedChatSession[];
 };
 
 type AIChatStoreState = {
@@ -168,6 +122,13 @@ type AIChatStoreState = {
   ) => void;
   queueComposerPrefill: (projectId: string, sessionId: string, prompt: string) => void;
   clearComposerPrefill: (projectId: string, sessionId: string) => void;
+  syncSessionReplayState: (
+    projectId: string,
+    sessionId: string,
+    replayThreadId: string,
+    replayEvents: RuntimeReplayEvent[],
+    recoveryState: AgentReplayRecoveryState | null
+  ) => void;
   replaceSessionMessages: (projectId: string, sessionId: string, messages: StoredChatMessage[]) => void;
   renameSession: (projectId: string, sessionId: string, title: string) => void;
   removeSession: (projectId: string, sessionId: string) => void;
@@ -188,28 +149,26 @@ const normalizeAssistantMessage = (message: StoredChatMessage): StoredChatMessag
     return message;
   }
 
-  const hasStructuredState =
-    typeof message.thinkingContent === 'string' ||
-    typeof message.answerContent === 'string' ||
-    (Array.isArray(message.assistantParts) && message.assistantParts.length > 0);
+  return Array.isArray(message.timeline) ? message : { ...message, timeline: [] };
+};
 
-  if (hasStructuredState) {
-    return message;
-  }
-
-  const structured = buildAssistantStructuredContentState({
-    content: message.content,
-    preferredAssistantParts: message.assistantParts as AIChatMessagePart[] | undefined,
-    thinkingCollapsed: true,
-  });
-
-  return {
-    ...message,
-    content: structured.content,
-    thinkingContent: structured.thinkingContent,
-    answerContent: structured.answerContent,
-    assistantParts: structured.assistantParts,
+const normalizeChatSession = (session: ChatSession): ChatSession => {
+  const normalizedMessages = (session.messages || []).map(normalizeAssistantMessage);
+  const normalizedSession = {
+    ...session,
+    messages: normalizedMessages,
   };
+  const eventLog = ensureChatSessionEventLog(normalizedSession);
+  return (
+    buildChatSessionProjection(session.id, eventLog, {
+      ...normalizedSession,
+      eventLog,
+      messages: normalizedMessages,
+    }) || {
+      ...normalizedSession,
+      eventLog,
+    }
+  );
 };
 
 const normalizeStoredProjects = (projects: Record<string, ChatProjectState>) =>
@@ -218,33 +177,98 @@ const normalizeStoredProjects = (projects: Record<string, ChatProjectState>) =>
       projectId,
       {
         ...project,
-        sessions: (project.sessions || []).map((session) => ({
-          ...session,
-          messages: (session.messages || []).map(normalizeAssistantMessage),
-        })),
+        sessions: (project.sessions || []).map((session) =>
+          normalizeChatSession(session as ChatSession)
+        ),
       } satisfies ChatProjectState,
     ])
   );
 
+const normalizePersistedChatState = (state: unknown) => {
+  if (!state || typeof state !== 'object') {
+    return state as AIChatStoreState;
+  }
+
+  const persistedState = state as AIChatStoreState;
+  return {
+    ...persistedState,
+    projects: normalizeStoredProjects(persistedState.projects || {}),
+  };
+};
+
+const stripSessionEventLog = (session: ChatSession): PersistedChatSession => {
+  const { eventLog: _eventLog, ...persistedSession } = session;
+  return persistedSession;
+};
+
+const buildPersistedProjects = (
+  projects: Record<string, ChatProjectState>
+): Record<string, PersistedChatProjectState> =>
+  Object.fromEntries(
+    Object.entries(projects || {}).map(([projectId, project]) => [
+      projectId,
+      {
+        ...project,
+        sessions: (project.sessions || []).map((session) => stripSessionEventLog(session as ChatSession)),
+      },
+    ])
+  ) as Record<string, PersistedChatProjectState>;
+
 const sortSessions = (sessions: ChatSession[]) =>
   [...sessions].sort((left, right) => right.updatedAt - left.updatedAt);
+
+const areReplayEventsEqual = (left: RuntimeReplayEvent[], right: RuntimeReplayEvent[]) =>
+  JSON.stringify(left) === JSON.stringify(right);
+
+const areRecoveryStatesEqual = (
+  left: AgentReplayRecoveryState | null,
+  right: AgentReplayRecoveryState | null
+) => JSON.stringify(left) === JSON.stringify(right);
+
+const getSessionReplayThreadId = (session: ChatSession) =>
+  session.recoveryState?.replayThreadId || session.replayEvents[0]?.threadId || null;
 
 export const createStoredChatMessage = (
   role: StoredChatMessage['role'],
   content: string,
   tone: StoredChatMessage['tone'] = 'default',
-  options?: Pick<StoredChatMessage, 'runId' | 'thinkingContent' | 'answerContent' | 'assistantParts'>
-): StoredChatMessage => ({
-  id: createMessageId(role),
-  role,
-  content,
-  ...(typeof options?.thinkingContent === 'string' ? { thinkingContent: options.thinkingContent } : {}),
-  ...(typeof options?.answerContent === 'string' ? { answerContent: options.answerContent } : {}),
-  ...(Array.isArray(options?.assistantParts) ? { assistantParts: options.assistantParts } : {}),
-  tone,
-  ...(options?.runId ? { runId: options.runId } : {}),
-  createdAt: Date.now(),
-});
+  options?: {
+    runId?: string;
+    fallbackThinkingContent?: string;
+    preferredAssistantParts?: AIChatMessagePart[];
+    timeline?: AssistantTimelineEvent[];
+  }
+): StoredChatMessage => {
+  const createdAt = Date.now();
+  const base = {
+    id: createMessageId(role),
+    role,
+    tone,
+    ...(options?.runId ? { runId: options.runId } : {}),
+    createdAt,
+  };
+
+  if (role === 'assistant') {
+    return {
+      ...base,
+      role,
+      timeline:
+        options?.timeline ||
+        buildAssistantTimelineFromContent(content, {
+          fallbackThinkingContent: options?.fallbackThinkingContent,
+          preferredAssistantParts: options?.preferredAssistantParts,
+          thinkingCollapsed: true,
+          createdAt,
+        }),
+    };
+  }
+
+  return {
+    ...base,
+    role,
+    content,
+  };
+};
 
 export const createChatSession = (
   projectId: string,
@@ -252,14 +276,27 @@ export const createChatSession = (
   providerId: AgentProviderId = 'built-in'
 ): ChatSession => {
   const now = Date.now();
+  const id = createSessionId();
   return {
-    id: createSessionId(),
+    id,
     projectId,
     title,
     providerId,
     runtimeThreadId: null,
     composerPrefill: null,
     messages: [],
+    replayEvents: [],
+    recoveryState: null,
+    eventLog: [
+      createSessionInitializedEvent({
+        projectId,
+        title,
+        providerId,
+        runtimeThreadId: null,
+        composerPrefill: null,
+        createdAt: now,
+      }),
+    ],
     createdAt: now,
     updatedAt: now,
   };
@@ -280,10 +317,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
       upsertSession: (projectId, session) =>
         set((state) => {
           const project = state.projects[projectId] || createProjectState();
-          const normalizedSession = {
-            ...session,
-            messages: (session.messages || []).map(normalizeAssistantMessage),
-          };
+          const normalizedSession = normalizeChatSession(session);
           const sessions = sortSessions([normalizedSession, ...project.sessions.filter((item) => item.id !== session.id)]);
 
           return {
@@ -303,12 +337,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
           const project = state.projects[projectId] || createProjectState();
           const sessions = project.sessions.map((session) =>
             session.id === sessionId
-              ? {
-                  ...session,
-                  providerId,
-                  runtimeThreadId,
-                  updatedAt: Date.now(),
-                }
+              ? appendChatSessionEvent(session, createRuntimeThreadBoundEvent(providerId, runtimeThreadId))
               : session
           );
 
@@ -341,11 +370,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
           const normalizedMessage = normalizeAssistantMessage(message);
           const sessions = project.sessions.map((session) =>
             session.id === sessionId
-              ? {
-                  ...session,
-                  messages: [...session.messages, normalizedMessage],
-                  updatedAt: Date.now(),
-                }
+              ? appendChatSessionEvent(session, createMessageAppendedEvent(normalizedMessage))
               : session
           );
 
@@ -399,15 +424,19 @@ export const useAIChatStore = create<AIChatStoreState>()(
         set((state) => {
           const project = state.projects[projectId] || createProjectState();
           const sessions = project.sessions.map((session) =>
-            session.id === sessionId
-              ? {
-                  ...session,
-                  messages: session.messages.map((message) =>
-                    message.id === messageId ? normalizeAssistantMessage(updater(message)) : message
-                  ),
-                  updatedAt: Date.now(),
-                }
-              : session
+            session.id !== sessionId
+              ? session
+              : (() => {
+                  const currentMessage = session.messages.find((message) => message.id === messageId);
+                  if (!currentMessage) {
+                    return session;
+                  }
+                  const nextMessage = normalizeAssistantMessage(updater(currentMessage));
+                  return appendChatSessionEvent(
+                    session,
+                    createMessageUpdatedEvent(messageId, nextMessage)
+                  );
+                })()
           );
 
           return {
@@ -427,14 +456,13 @@ export const useAIChatStore = create<AIChatStoreState>()(
           const project = state.projects[projectId] || createProjectState();
           const sessions = project.sessions.map((session) =>
             session.id === sessionId
-              ? {
-                  ...session,
-                  composerPrefill: {
+              ? appendChatSessionEvent(
+                  session,
+                  createComposerPrefillQueuedEvent({
                     prompt,
                     nonce: Date.now(),
-                  },
-                  updatedAt: Date.now(),
-                }
+                  })
+                )
               : session
           );
 
@@ -455,11 +483,39 @@ export const useAIChatStore = create<AIChatStoreState>()(
           const project = state.projects[projectId] || createProjectState();
           const sessions = project.sessions.map((session) =>
             session.id === sessionId
-              ? {
-                  ...session,
-                  composerPrefill: null,
-                  updatedAt: Date.now(),
-                }
+              ? appendChatSessionEvent(session, createComposerPrefillClearedEvent())
+              : session
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                ...project,
+                activeSessionId: project.activeSessionId || sessionId,
+                sessions: sortSessions(sessions),
+              },
+            },
+          };
+        }),
+
+      syncSessionReplayState: (projectId, sessionId, replayThreadId, replayEvents, recoveryState) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.map((session) =>
+            session.id === sessionId
+              ? getSessionReplayThreadId(session) === replayThreadId &&
+                areReplayEventsEqual(session.replayEvents, replayEvents) &&
+                areRecoveryStatesEqual(session.recoveryState, recoveryState)
+                ? session
+                : appendChatSessionEvent(
+                    session,
+                    createReplayStateSyncedEvent({
+                      replayThreadId,
+                      replayEvents,
+                      recoveryState,
+                    })
+                  )
               : session
           );
 
@@ -481,11 +537,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
           const normalizedMessages = messages.map(normalizeAssistantMessage);
           const sessions = project.sessions.map((session) =>
             session.id === sessionId
-              ? {
-                  ...session,
-                  messages: normalizedMessages,
-                  updatedAt: Date.now(),
-                }
+              ? appendChatSessionEvent(session, createMessagesReplacedEvent(normalizedMessages))
               : session
           );
 
@@ -506,11 +558,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
           const project = state.projects[projectId] || createProjectState();
           const sessions = project.sessions.map((session) =>
             session.id === sessionId
-              ? {
-                  ...session,
-                  title,
-                  updatedAt: Date.now(),
-                }
+              ? appendChatSessionEvent(session, createSessionRenamedEvent(title))
               : session
           );
 
@@ -544,18 +592,17 @@ export const useAIChatStore = create<AIChatStoreState>()(
     }),
     {
       name: 'goodnight-ai-chat-store',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        projects: buildPersistedProjects(state.projects),
+      }),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...normalizePersistedChatState(persistedState),
+      }),
       migrate: (persistedState) => {
-        if (!persistedState || typeof persistedState !== 'object') {
-          return persistedState as AIChatStoreState;
-        }
-
-        const state = persistedState as AIChatStoreState;
-        return {
-          ...state,
-          projects: normalizeStoredProjects(state.projects || {}),
-        };
+        return normalizePersistedChatState(persistedState);
       },
     }
   )

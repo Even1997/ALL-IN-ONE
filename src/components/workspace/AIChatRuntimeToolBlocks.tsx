@@ -1,165 +1,280 @@
 import React from 'react';
-import type { RuntimeToolStep } from '../../modules/ai/runtime/agent-kernel/agentKernelTypes';
 import type { StoredChatRuntimeEvent } from '../../modules/ai/store/aiChatStore';
 import type { RuntimeEventRenderModel } from './runtimeEventRenderModel';
 import type { RuntimeStatus, RuntimeToolHelpers } from './AIChatRuntimeToolTypes';
 
-type ToolBlockProps = {
-  toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>;
-  renderModel: RuntimeEventRenderModel;
-  indexLabel?: string;
-  compact?: boolean;
-  renderApprovalEvent: (event: Extract<StoredChatRuntimeEvent, { kind: 'approval' }>) => React.ReactNode;
-  renderQuestionEvent: (event: Extract<StoredChatRuntimeEvent, { kind: 'question' }>) => React.ReactNode;
-  renderRuntimeFileChanges: (
-    fileChanges: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']>
-  ) => React.ReactNode;
-  helpers: RuntimeToolHelpers;
+const WRAPPER_TOOL_NAMES = new Set(['project_file_flow', 'project_file_apply']);
+
+const getToolUseStatus = (
+  toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>,
+  renderModel: RuntimeEventRenderModel
+): RuntimeStatus => (renderModel.resultMap.get(toolUse.toolCallId)?.status || toolUse.status) as RuntimeStatus;
+
+const getGroupRuntimeStatus = (
+  toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>,
+  renderModel: RuntimeEventRenderModel
+): RuntimeStatus => {
+  if (toolUses.some((toolUse) => getToolUseStatus(toolUse, renderModel) === 'failed')) {
+    return 'failed';
+  }
+  if (toolUses.some((toolUse) => getToolUseStatus(toolUse, renderModel) === 'blocked')) {
+    return 'blocked';
+  }
+  if (toolUses.some((toolUse) => getToolUseStatus(toolUse, renderModel) === 'running')) {
+    return 'running';
+  }
+  return 'completed';
 };
 
-const StepCopy: React.FC<{
-  headline: string;
-  previewText?: string;
-  dotStatus: RuntimeStatus;
-  prefix?: string;
-}> = ({ headline, previewText, dotStatus, prefix }) => (
-  <>
-    <span className={`chat-tool-step-dot ${dotStatus}`} aria-hidden="true" />
-    <div className="chat-tool-trace-summary-copy">
-      <strong>{prefix ? `${prefix}${headline}` : headline}</strong>
-      {previewText ? <span>{previewText}</span> : null}
-    </div>
-  </>
-);
-
-export const RuntimeToolTree = React.memo(function RuntimeToolTree(props: ToolBlockProps) {
-  return <RuntimeToolBlock {...props} />;
-});
-
-const RuntimeToolBlock: React.FC<ToolBlockProps> = ({
-  toolUse,
-  renderModel,
-  indexLabel,
-  compact = false,
-  renderApprovalEvent,
-  renderQuestionEvent,
-  renderRuntimeFileChanges,
+const buildCollapsedGroupHeadline = ({
+  status,
+  groupLabel,
+  itemCount,
+  singleHeadline,
   helpers,
+}: {
+  status: RuntimeStatus;
+  groupLabel?: string;
+  itemCount: number;
+  singleHeadline?: string;
+  helpers: RuntimeToolHelpers;
 }) => {
+  if (status === 'running') {
+    return '执行中';
+  }
+  if (status === 'blocked') {
+    return singleHeadline === '等待输入' ? singleHeadline : '等待确认';
+  }
+  if (status === 'failed') {
+    return '执行失败';
+  }
+  if (itemCount === 1 && singleHeadline) {
+    return singleHeadline;
+  }
+  if (groupLabel) {
+    return groupLabel;
+  }
+  return helpers.getRuntimeCommandCountLabel(itemCount);
+};
+
+const buildGroupMetaText = ({
+  status,
+  groupLabel,
+  itemCount,
+  previewText,
+  helpers,
+}: {
+  status: RuntimeStatus;
+  groupLabel?: string;
+  itemCount: number;
+  previewText?: string;
+  helpers: RuntimeToolHelpers;
+}) => {
+  if (previewText) {
+    return previewText;
+  }
+  if (status !== 'completed') {
+    return groupLabel || helpers.getRuntimeCommandCountLabel(itemCount);
+  }
+  if (groupLabel && itemCount > 1) {
+    return `共 ${itemCount} 步`;
+  }
+  return '';
+};
+
+const shouldCollapseRuntimeWrapper = (input: {
+  toolName: string;
+  childCount: number;
+  approvalCount: number;
+  questionCount: number;
+  hasFileChanges: boolean;
+  hasOutput: boolean;
+}) =>
+  WRAPPER_TOOL_NAMES.has(input.toolName) &&
+  input.childCount === 1 &&
+  input.approvalCount === 0 &&
+  input.questionCount === 0 &&
+  !input.hasFileChanges &&
+  !input.hasOutput;
+
+const getToolUseContext = (
+  toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>,
+  renderModel: RuntimeEventRenderModel
+) => {
   const resultEvent = renderModel.resultMap.get(toolUse.toolCallId);
   const approvalEvents = renderModel.approvalsByToolCallId.get(toolUse.toolCallId) || [];
   const questionEvents = renderModel.questionsByToolCallId.get(toolUse.toolCallId) || [];
   const childToolUses = renderModel.childToolUsesByParent.get(toolUse.toolCallId) || [];
-  const effectiveStatus = (resultEvent?.status || toolUse.status) as RuntimeStatus;
-  const requestSummary = helpers.summarizeRuntimeToolCall(toolUse.toolName, toolUse.input);
-  const headline = helpers.getRuntimeToolHeadline(toolUse.toolName, toolUse.input);
-  const previewText = helpers.buildRuntimeToolStepPreview({
-    status: effectiveStatus,
-    summary: requestSummary,
-    output: resultEvent?.output,
-    fileChanges: resultEvent?.fileChanges,
+  const status = getToolUseStatus(toolUse, renderModel);
+
+  return {
+    resultEvent,
+    approvalEvents,
+    questionEvents,
+    childToolUses,
+    status,
+    hasOutput: Boolean(resultEvent?.output?.trim()),
+    hasFileChanges: Boolean(resultEvent?.fileChanges?.length),
+  };
+};
+
+const isCollapsibleWrapperToolUse = (
+  toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>,
+  renderModel: RuntimeEventRenderModel
+) => {
+  const { approvalEvents, questionEvents, childToolUses, hasFileChanges, hasOutput } = getToolUseContext(toolUse, renderModel);
+  return shouldCollapseRuntimeWrapper({
+    toolName: toolUse.toolName,
+    childCount: childToolUses.length,
     approvalCount: approvalEvents.length,
     questionCount: questionEvents.length,
-    childCount: childToolUses.length,
+    hasFileChanges,
+    hasOutput,
   });
-  const hasBrief = helpers.shouldShowRuntimeToolBrief(toolUse.toolName, requestSummary, headline);
-  const hasTechnicalDetails = helpers.shouldShowRuntimeToolTechnicalDetails({
-    toolName: toolUse.toolName,
-    status: effectiveStatus,
-    toolInput: toolUse.input,
-    output: resultEvent?.output,
-  });
-  const hasDetails =
-    hasBrief ||
-    approvalEvents.length > 0 ||
-    questionEvents.length > 0 ||
-    childToolUses.length > 0 ||
-    Boolean(resultEvent?.fileChanges?.length) ||
-    hasTechnicalDetails;
+};
 
-  if (!hasDetails) {
-    return (
-      <article className={`chat-tool-trace-step ${effectiveStatus}`} data-has-details="false">
-        <div className="chat-tool-step-shell static">
-          <StepCopy
-            dotStatus={effectiveStatus}
-            headline={headline}
-            previewText={previewText && previewText !== headline ? previewText : undefined}
-            prefix={indexLabel ? `${indexLabel}. ` : undefined}
-          />
-        </div>
-      </article>
-    );
+const getVisibleToolUse = (
+  toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>,
+  renderModel: RuntimeEventRenderModel
+): Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }> => {
+  if (!isCollapsibleWrapperToolUse(toolUse, renderModel)) {
+    return toolUse;
   }
 
+  const childToolUse = (renderModel.childToolUsesByParent.get(toolUse.toolCallId) || [])[0];
+  return childToolUse ? getVisibleToolUse(childToolUse, renderModel) : toolUse;
+};
+
+const buildToolUsePreviewText = (
+  toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>,
+  renderModel: RuntimeEventRenderModel,
+  helpers: RuntimeToolHelpers
+) => {
+  const { resultEvent, approvalEvents, questionEvents, status } = getToolUseContext(toolUse, renderModel);
+  const headline = helpers.getRuntimeToolHeadline(toolUse.toolName, toolUse.input);
+  const summary = helpers.summarizeRuntimeToolCall(toolUse.toolName, toolUse.input).trim();
+
+  if (questionEvents.length > 0) {
+    return `${questionEvents.length} 个问题等待补充`;
+  }
+  if (approvalEvents.length > 0 && status !== 'completed') {
+    return `${approvalEvents.length} 个权限确认待处理`;
+  }
+  if (summary && summary !== headline) {
+    return summary;
+  }
+  if (resultEvent?.fileChanges?.length) {
+    return helpers.summarizeRuntimeFileChanges(resultEvent.fileChanges);
+  }
+  if ((status === 'failed' || status === 'blocked') && resultEvent?.output) {
+    return helpers.summarizeRuntimeOutput(resultEvent.output, 140);
+  }
+  return '';
+};
+
+const shouldRenderToolResultDetail = (
+  event: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>
+) => Boolean(event.fileChanges?.length) || event.status === 'failed' || event.status === 'blocked';
+
+const collectGroupToolCallIds = (
+  toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>,
+  renderModel: RuntimeEventRenderModel
+) => {
+  const groupToolCallIds = new Set<string>();
+
+  const visit = (toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>) => {
+    if (groupToolCallIds.has(toolUse.toolCallId)) {
+      return;
+    }
+
+    groupToolCallIds.add(toolUse.toolCallId);
+    const childToolUses = renderModel.childToolUsesByParent.get(toolUse.toolCallId) || [];
+    childToolUses.forEach(visit);
+  };
+
+  toolUses.forEach(visit);
+  return groupToolCallIds;
+};
+
+const buildGroupTimelineEvents = (
+  toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>,
+  renderModel: RuntimeEventRenderModel
+) => {
+  const groupToolCallIds = collectGroupToolCallIds(toolUses, renderModel);
+
+  return renderModel.orderedRuntimeEvents.filter((event) => {
+    if (event.kind === 'tool_use') {
+      return groupToolCallIds.has(event.toolCallId) && !isCollapsibleWrapperToolUse(event, renderModel);
+    }
+    if (event.kind === 'tool_result') {
+      return groupToolCallIds.has(event.toolCallId) && shouldRenderToolResultDetail(event);
+    }
+    if (event.kind === 'approval') {
+      return Boolean(event.toolCallId && groupToolCallIds.has(event.toolCallId));
+    }
+    return Boolean(event.payload.toolCallId && groupToolCallIds.has(event.payload.toolCallId));
+  });
+};
+
+const TraceLineCopy: React.FC<{
+  headline: string;
+  previewText?: string;
+}> = ({ headline, previewText }) => (
+  <div className="chat-tool-trace-line-copy">
+    <strong title={headline}>{headline}</strong>
+    {previewText ? <span title={previewText}>{previewText}</span> : null}
+  </div>
+);
+
+const ToolUseTimelineLine: React.FC<{
+  toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>;
+  renderModel: RuntimeEventRenderModel;
+  helpers: RuntimeToolHelpers;
+}> = ({ toolUse, renderModel, helpers }) => {
+  const visibleToolUse = getVisibleToolUse(toolUse, renderModel);
+  const status = getToolUseStatus(visibleToolUse, renderModel);
+  const headline = helpers.getRuntimeToolHeadline(visibleToolUse.toolName, visibleToolUse.input);
+  const previewText = buildToolUsePreviewText(visibleToolUse, renderModel, helpers);
+
   return (
-    <details
-      key={toolUse.id}
-      className={`chat-tool-trace-step ${effectiveStatus}`}
-      data-has-details="true"
-      open={helpers.shouldOpenRuntimeToolStep({
-        status: effectiveStatus,
-        approvalCount: approvalEvents.length,
-        questionCount: questionEvents.length,
-      })}
-    >
-      <summary className="chat-tool-step-shell">
-        <StepCopy
-          dotStatus={effectiveStatus}
-          headline={headline}
-          previewText={previewText && previewText !== headline ? previewText : undefined}
-          prefix={indexLabel ? `${indexLabel}. ` : undefined}
-        />
-      </summary>
-      <div className="chat-tool-step-detail">
-        {hasBrief ? (
-          <div className="chat-tool-trace-brief">
-            <span>{requestSummary}</span>
-          </div>
-        ) : null}
-        {approvalEvents.length > 0 ? (
-          <div className="chat-tool-trace-attached-list">
-            {approvalEvents.map((event) => renderApprovalEvent(event))}
-          </div>
-        ) : null}
-        {questionEvents.length > 0 ? (
-          <div className="chat-tool-trace-attached-list">
-            {questionEvents.map((event) => renderQuestionEvent(event))}
-          </div>
-        ) : null}
-        {childToolUses.length > 0 ? (
-          <div className={`chat-tool-trace-children ${compact ? 'compact' : ''}`}>
-            {childToolUses.map((childToolUse) => (
-              <RuntimeToolTree
-                key={childToolUse.id}
-                toolUse={childToolUse}
-                renderModel={renderModel}
-                compact
-                renderApprovalEvent={renderApprovalEvent}
-                renderQuestionEvent={renderQuestionEvent}
-                renderRuntimeFileChanges={renderRuntimeFileChanges}
-                helpers={helpers}
-              />
-            ))}
-          </div>
-        ) : null}
-        {resultEvent?.fileChanges?.length ? renderRuntimeFileChanges(resultEvent.fileChanges) : null}
-        {hasTechnicalDetails ? (
-          <details className="chat-tool-trace-detail-toggle">
-            <summary>更多细节</summary>
-            {Object.keys(toolUse.input).length > 0 ? <pre>{JSON.stringify(toolUse.input, null, 2)}</pre> : null}
-            {resultEvent?.output?.trim() ? <pre className="chat-tool-trace-result">{resultEvent.output}</pre> : null}
-          </details>
-        ) : null}
-      </div>
-    </details>
+    <article className={`chat-tool-trace-detail-line ${status}`} data-runtime-line="tool">
+      <span className={`chat-tool-step-dot ${status}`} aria-hidden="true" />
+      <TraceLineCopy headline={headline} previewText={previewText ? `· ${previewText}` : undefined} />
+    </article>
+  );
+};
+
+const ToolResultTimelineLine: React.FC<{
+  event: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>;
+  renderRuntimeFileChanges: (
+    fileChanges: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']>
+  ) => React.ReactNode;
+  helpers: RuntimeToolHelpers;
+}> = ({ event, renderRuntimeFileChanges, helpers }) => {
+  const headline = event.fileChanges?.length ? '文件变更' : helpers.getRuntimeStatusLabel(event.status as RuntimeStatus);
+  const previewText = event.fileChanges?.length
+    ? helpers.summarizeRuntimeFileChanges(event.fileChanges)
+    : helpers.summarizeRuntimeOutput(event.output, 140);
+
+  return (
+    <div className="chat-tool-trace-detail-stack" data-runtime-line="result">
+      <article className={`chat-tool-trace-detail-line ${event.status}`} data-runtime-line="result-summary">
+        <span className={`chat-tool-step-dot ${event.status as RuntimeStatus}`} aria-hidden="true" />
+        <TraceLineCopy headline={headline} previewText={previewText ? `· ${previewText}` : undefined} />
+      </article>
+      {event.fileChanges?.length ? (
+        <div className="chat-tool-trace-detail-card">{renderRuntimeFileChanges(event.fileChanges)}</div>
+      ) : null}
+      {!event.fileChanges?.length && event.output?.trim() ? (
+        <pre className="chat-tool-trace-detail-pre">{event.output}</pre>
+      ) : null}
+    </div>
   );
 };
 
 export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
   toolUses,
   renderModel,
-  index,
   groupId,
   groupLabel,
   renderApprovalEvent,
@@ -169,7 +284,6 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
 }: {
   toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>;
   renderModel: RuntimeEventRenderModel;
-  index: number;
   groupId: string;
   groupLabel?: string;
   renderApprovalEvent: (event: Extract<StoredChatRuntimeEvent, { kind: 'approval' }>) => React.ReactNode;
@@ -179,50 +293,82 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
   ) => React.ReactNode;
   helpers: RuntimeToolHelpers;
 }) {
-  if (toolUses.length === 1) {
-    return (
-      <RuntimeToolTree
-        toolUse={toolUses[0]!}
-        renderModel={renderModel}
-        indexLabel={String(index + 1)}
-        renderApprovalEvent={renderApprovalEvent}
-        renderQuestionEvent={renderQuestionEvent}
-        renderRuntimeFileChanges={renderRuntimeFileChanges}
-        helpers={helpers}
-      />
-    );
-  }
-
-  const groupSummary = helpers.buildRuntimeEventGroupSummary(toolUses, renderModel.resultMap);
+  const visibleFirstToolUse = toolUses[0] ? getVisibleToolUse(toolUses[0], renderModel) : null;
+  const groupStatus = getGroupRuntimeStatus(toolUses, renderModel);
+  const groupHeadline = buildCollapsedGroupHeadline({
+    status: groupStatus,
+    groupLabel,
+    itemCount: toolUses.length,
+    singleHeadline: visibleFirstToolUse ? helpers.getRuntimeToolHeadline(visibleFirstToolUse.toolName, visibleFirstToolUse.input) : '',
+    helpers,
+  });
+  const groupPreviewText =
+    toolUses.length === 1 && visibleFirstToolUse
+      ? buildToolUsePreviewText(visibleFirstToolUse, renderModel, helpers)
+      : '';
+  const groupMetaText = buildGroupMetaText({
+    status: groupStatus,
+    groupLabel,
+    itemCount: toolUses.length,
+    previewText: groupPreviewText,
+    helpers,
+  });
+  const detailEvents = buildGroupTimelineEvents(toolUses, renderModel);
 
   return (
     <details
       key={groupId}
-      className="chat-tool-trace-phase"
-      data-has-details="true"
+      className={`chat-tool-trace-group ${groupStatus}`}
       open={helpers.shouldOpenRuntimeToolGroup(toolUses, renderModel)}
     >
-      <summary className="chat-tool-step-shell">
-        <StepCopy
-          dotStatus="completed"
-          headline={groupLabel || `${index + 1}. 执行步骤`}
-          previewText={groupSummary}
-        />
-      </summary>
-      <div className="chat-tool-step-detail">
-        <div className="chat-tool-trace-members">
-          {toolUses.map((toolUse) => (
-            <RuntimeToolTree
-              key={toolUse.id}
-              toolUse={toolUse}
-              renderModel={renderModel}
-              renderApprovalEvent={renderApprovalEvent}
-              renderQuestionEvent={renderQuestionEvent}
-              renderRuntimeFileChanges={renderRuntimeFileChanges}
-              helpers={helpers}
-            />
-          ))}
+      <summary className="chat-inline-disclosure chat-tool-trace-group-summary">
+        <div className="chat-tool-trace-group-main">
+          <span className={`chat-tool-step-dot ${groupStatus}`} aria-hidden="true" />
+          <div className="chat-tool-trace-group-copy">
+            <strong title={groupHeadline}>{groupHeadline}</strong>
+            {groupMetaText ? <span className="chat-tool-trace-group-meta" title={groupMetaText}>{groupMetaText}</span> : null}
+          </div>
         </div>
+        <span className="chat-tool-trace-caret" aria-hidden="true" />
+      </summary>
+      <div className="chat-tool-trace-group-detail">
+        {detailEvents.map((event) => {
+          if (event.kind === 'tool_use') {
+            return (
+              <ToolUseTimelineLine
+                key={event.id}
+                toolUse={event}
+                renderModel={renderModel}
+                helpers={helpers}
+              />
+            );
+          }
+
+          if (event.kind === 'tool_result') {
+            return (
+              <ToolResultTimelineLine
+                key={event.id}
+                event={event}
+                renderRuntimeFileChanges={renderRuntimeFileChanges}
+                helpers={helpers}
+              />
+            );
+          }
+
+          if (event.kind === 'approval') {
+            return (
+              <div key={event.id} className="chat-tool-trace-detail-card">
+                {renderApprovalEvent(event)}
+              </div>
+            );
+          }
+
+          return (
+            <div key={event.id} className="chat-tool-trace-detail-card">
+              {renderQuestionEvent(event)}
+            </div>
+          );
+        })}
       </div>
     </details>
   );
@@ -230,158 +376,14 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
 
 export const RuntimeStandaloneResultBlock: React.FC<{
   event: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>;
-  index: number;
   renderRuntimeFileChanges: (
     fileChanges: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']>
   ) => React.ReactNode;
   helpers: RuntimeToolHelpers;
-}> = ({ event, index, renderRuntimeFileChanges, helpers }) => {
-  const preview =
-    helpers.summarizeRuntimeFileChanges(event.fileChanges) ||
-    helpers.summarizeRuntimeOutput(event.output) ||
-    helpers.getRuntimeStatusLabel(event.status as RuntimeStatus);
-  const hasDetails = Boolean(event.fileChanges?.length) || Boolean(event.output?.trim());
-
-  if (!hasDetails) {
-    return (
-      <article className={`chat-tool-trace-step ${event.status}`} data-has-details="false">
-        <div className="chat-tool-step-shell static">
-          <StepCopy
-            dotStatus={event.status as RuntimeStatus}
-            headline={`${index + 1}. ${helpers.getRuntimeStatusLabel(event.status as RuntimeStatus)}`}
-            previewText={preview}
-          />
-        </div>
-      </article>
-    );
-  }
-
-  return (
-    <details
-      key={event.id}
-      className={`chat-tool-trace-step ${event.status}`}
-      data-has-details="true"
-      open={event.status === 'failed' || event.status === 'blocked'}
-    >
-      <summary className="chat-tool-step-shell">
-        <StepCopy
-          dotStatus={event.status as RuntimeStatus}
-          headline={`${index + 1}. ${helpers.getRuntimeStatusLabel(event.status as RuntimeStatus)}`}
-          previewText={preview}
-        />
-      </summary>
-      <div className="chat-tool-step-detail">
-        {event.fileChanges?.length ? renderRuntimeFileChanges(event.fileChanges) : null}
-        {event.output?.trim() ? (
-          <details className="chat-tool-trace-detail-toggle">
-            <summary>更多细节</summary>
-            <pre className="chat-tool-trace-result">{event.output}</pre>
-          </details>
-        ) : null}
-      </div>
-    </details>
-  );
-};
-
-const FallbackToolTreeInner: React.FC<{
-  toolCall: RuntimeToolStep;
-  indexLabel?: string;
-  compact?: boolean;
-  childToolCallsByParent: Map<string, RuntimeToolStep[]>;
-  helpers: RuntimeToolHelpers;
-}> = ({ toolCall, indexLabel, compact = false, childToolCallsByParent, helpers }) => {
-  const childToolCalls = childToolCallsByParent.get(toolCall.id) || [];
-  const headline = helpers.getRuntimeToolHeadline(toolCall.name, toolCall.input);
-  const requestSummary = helpers.summarizeRuntimeToolCall(toolCall.name, toolCall.input);
-  const previewText =
-    toolCall.fileChanges?.length
-      ? helpers.summarizeRuntimeFileChanges(toolCall.fileChanges)
-      : toolCall.resultPreview || toolCall.resultContent
-        ? helpers.summarizeRuntimeOutput(toolCall.resultPreview || toolCall.resultContent || '')
-        : requestSummary;
-  const hasDetails =
-    childToolCalls.length > 0 ||
-    Boolean(toolCall.fileChanges?.length) ||
-    Boolean(toolCall.resultContent || toolCall.resultPreview) ||
-    Object.keys(toolCall.input).length > 0;
-
-  if (!hasDetails) {
-    return (
-      <article className={`chat-tool-trace-step ${toolCall.status}`} data-has-details="false">
-        <div className="chat-tool-step-shell static">
-          <StepCopy
-            dotStatus={toolCall.status}
-            headline={headline}
-            previewText={previewText && previewText !== headline ? previewText : undefined}
-            prefix={indexLabel ? `${indexLabel}. ` : undefined}
-          />
-        </div>
-      </article>
-    );
-  }
-
-  return (
-    <details
-      key={toolCall.id}
-      className={`chat-tool-trace-step ${toolCall.status}`}
-      data-has-details="true"
-      open={toolCall.status === 'failed' || toolCall.status === 'blocked'}
-    >
-      <summary className="chat-tool-step-shell">
-        <StepCopy
-          dotStatus={toolCall.status}
-          headline={headline}
-          previewText={previewText && previewText !== headline ? previewText : undefined}
-          prefix={indexLabel ? `${indexLabel}. ` : undefined}
-        />
-      </summary>
-      <div className="chat-tool-step-detail">
-        {requestSummary && requestSummary !== headline ? (
-          <div className="chat-tool-trace-brief">
-            <span>{requestSummary}</span>
-          </div>
-        ) : null}
-        {childToolCalls.length > 0 ? (
-          <div className={`chat-tool-trace-children ${compact ? 'compact' : ''}`}>
-            {childToolCalls.map((childToolCall) => (
-              <RuntimeFallbackToolTree
-                key={childToolCall.id}
-                toolCall={childToolCall}
-                compact
-                childToolCallsByParent={childToolCallsByParent}
-                helpers={helpers}
-              />
-            ))}
-          </div>
-        ) : null}
-        {toolCall.fileChanges && toolCall.fileChanges.length > 0 ? (
-          <div className="chat-tool-trace-file-list">
-            {toolCall.fileChanges.map((change) => (
-              <div key={`${toolCall.id}-${change.path}`} className="chat-tool-trace-file-item">
-                <strong>{helpers.summarizeProjectFilePath(change.path)}</strong>
-                <span>
-                  {change.beforeContent === null && change.afterContent !== null
-                    ? '新建'
-                    : change.beforeContent !== null && change.afterContent === null
-                      ? '删除'
-                      : '修改'}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {Object.keys(toolCall.input).length > 0 || toolCall.resultContent || toolCall.resultPreview ? (
-          <details className="chat-tool-trace-detail-toggle">
-            <summary>更多细节</summary>
-            {Object.keys(toolCall.input).length > 0 ? <pre>{JSON.stringify(toolCall.input, null, 2)}</pre> : null}
-            {toolCall.resultContent || toolCall.resultPreview ? (
-              <pre className="chat-tool-trace-result">{toolCall.resultContent || toolCall.resultPreview}</pre>
-            ) : null}
-          </details>
-        ) : null}
-      </div>
-    </details>
-  );
-};
-
-export const RuntimeFallbackToolTree = React.memo(FallbackToolTreeInner);
+}> = ({ event, renderRuntimeFileChanges, helpers }) => (
+  <ToolResultTimelineLine
+    event={event}
+    renderRuntimeFileChanges={renderRuntimeFileChanges}
+    helpers={helpers}
+  />
+);

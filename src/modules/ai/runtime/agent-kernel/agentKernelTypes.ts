@@ -18,8 +18,10 @@ export type RuntimeToolStep = {
   resultContent?: string;
   fileChanges?: Array<{
     path: string;
+    operation?: 'write' | 'edit' | 'delete';
     beforeContent: string | null;
     afterContent: string | null;
+    verified?: boolean;
   }>;
 };
 

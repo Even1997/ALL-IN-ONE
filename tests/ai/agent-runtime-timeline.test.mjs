@@ -43,7 +43,7 @@ test('GN agent runtime panels prefer latest turn session state for timeline, too
   assert.match(timelinePanelSource, /latestTurnSession/);
   assert.match(timelinePanelSource, /latestTurnSession\?\.status \|\| 'idle'/);
   assert.match(toolCallPanelSource, /toolStatusLabels\[toolCall\.status\]/);
-  assert.match(toolCallPanelSource, /toolCalls\.length} calls/);
+  assert.match(toolCallPanelSource, /formatToolCounter\(toolCalls, mcpToolCalls\)/);
   assert.doesNotMatch(toolCallPanelSource, /step-linked/);
   assert.doesNotMatch(toolCallPanelSource, /executionSteps\[index\]/);
   assert.match(statusPanelSource, /latestTurnSession/);
@@ -267,13 +267,13 @@ test('agent turn runner builds a queued runtime turn shell', async () => {
   const toolUseAssembler = createRuntimeStreamingMessageAssembler();
   assert.equal(
     toolUseAssembler.append({ kind: 'text', delta: 'Before\n<tool_use><tool name="ls">\n<tool_params>\n<parameter name="path">.</parameter>\n</tool_params>\n</tool>\n</tool_use>\nAfter' }).content,
-    'Before\n\nAfter',
+    '<think>Before\n\nAfter',
   );
 
   const toolResultAssembler = createRuntimeStreamingMessageAssembler();
   assert.equal(
     toolResultAssembler.append({ kind: 'text', delta: 'Done\n<tool_result name="ls" status="success">\nfile1.ts\nfile2.ts\n</tool_result>\nEnd' }).content,
-    'Done\n\nEnd',
+    '<think>Done\n\nEnd',
   );
 
   const responseOnlyAssembler = createRuntimeStreamingMessageAssembler();

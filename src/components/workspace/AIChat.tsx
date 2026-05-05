@@ -26,7 +26,7 @@ import { PROVIDER_PRESETS, type ProviderPreset } from '../../modules/ai/provider
 import type { ActivityEntry } from '../../modules/ai/skills/activityLog';
 import {
   getDefaultRuntimeSkillDefinitions,
-  loadRuntimeSkillDefinitions,
+  loadRuntimeSkillCatalog,
 } from '../../modules/ai/skills/skillLibrary';
 import type { RuntimeSkillDefinition } from '../../modules/ai/runtime/skills/runtimeSkillTypes';
 import { type AIConfigEntry, hasUsableAIConfigEntry } from '../../modules/ai/store/aiConfigState';
@@ -65,11 +65,20 @@ import type { RuntimeToolStep } from '../../modules/ai/runtime/agent-kernel/agen
 import {
   buildRuntimeEventId,
   buildSyntheticRuntimeToolCallId,
-  syncRuntimeEventsWithToolCalls,
   syncTeamRunRuntimeEvents,
   upsertRuntimeToolResultEvent,
   upsertRuntimeToolUseEvent,
 } from '../../modules/ai/runtime/dispatch/agentEvents';
+import {
+  buildCapabilityApprovalLifecycleDescriptor,
+  buildMemoryReadLifecycleDescriptor,
+  buildMemoryRollbackLifecycleDescriptor,
+  buildMcpLifecycleStartDescriptor,
+  buildSkillDiscoveryLifecycleDescriptor,
+  buildSkillHookLifecycleDescriptor,
+  buildSkillLoadLifecycleDescriptor,
+  buildSkillActivationLifecycleDescriptor,
+} from '../../modules/ai/runtime/dispatch/runtimeCapabilityLifecycle.ts';
 import { executeRuntimeBuiltInAgentTurn } from '../../modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn';
 import { executeRuntimeMcpTurn } from '../../modules/ai/runtime/orchestration/executeRuntimeMcpTurn';
 import { runRuntimeLocalAgentExecution } from '../../modules/ai/runtime/orchestration/runRuntimeLocalAgentExecution';
@@ -136,11 +145,27 @@ import {
   getLatestReplaySkillSnapshot,
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
 import { buildRuntimeReplayTurnStartPayload } from '../../modules/ai/runtime/replay/runtimeReplayPayload';
+import {
+  createExecutionRunRecord,
+  createExecutionTaskId,
+  createExecutionTaskRecord,
+  createLocalAgentExecutionAgentRunId,
+  createLocalAgentExecutionRunId,
+  createRootExecutionRunId,
+  createExecutionAgentRunRecord,
+  deriveTaskStatusFromRuns,
+  patchExecutionRunStatus,
+  syncTeamExecutionGraph,
+  syncWorkflowExecutionGraph,
+} from '../../modules/ai/runtime/execution/agentExecutionGraph';
 import { decideAgentTurnMode } from '../../modules/ai/runtime/session/agentSessionController';
-import { getLatestTurnSession } from '../../modules/ai/runtime/session/agentSessionSelectors';
 import { reduceAgentTurnSession } from '../../modules/ai/runtime/session/agentSessionStateMachine';
 import { createEmptyAgentTurnSession, type AgentTurnSession } from '../../modules/ai/runtime/session/agentSessionTypes';
 import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
+import {
+  reconcileRuntimeThreadsWithSessions,
+} from '../../modules/ai/runtime/conversation/runtimeConversationGateway.ts';
+import { useRuntimeConversationGateway } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
 import { runAgentTeamTurn } from '../../modules/ai/runtime/teams/teamOrchestrator';
@@ -155,13 +180,31 @@ import {
   type StoredChatMessage,
   useAIChatStore,
 } from '../../modules/ai/store/aiChatStore';
+import {
+  answerAssistantRuntimeQuestionEvent,
+  buildAssistantStreamingTimeline,
+  buildAssistantTimelineUpdate,
+  getAssistantRuntimeTimelineEvents,
+  getAssistantTimelineReasoning,
+  getAssistantTimelineText,
+  mapAssistantRuntimeTimelineEvents,
+  replaceAssistantRuntimeTimelineEvents,
+  syncAssistantTimelineWithToolCalls,
+  upsertAssistantRuntimeApprovalEvent,
+  upsertAssistantRuntimeQuestionEvent,
+  upsertAssistantRuntimeToolResultEvent,
+  upsertAssistantRuntimeToolUseEvent,
+  type AssistantTimelineEvent,
+} from '../../modules/ai/store/assistantTimeline.ts';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 import { useAIWorkflowStore } from '../../modules/ai/store/workflowStore';
 import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
 import { resolveSkillIntent, type SkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
+  buildProjectFileOperationFromToolCall,
   findLatestPendingProjectFileProposalAction,
+  isProjectFileWriteAccessFailure,
   isShortPendingActionAffirmation,
   isShortPendingActionRejection,
   parseProjectFileOperationsPlan,
@@ -199,13 +242,9 @@ import {
   getChatViewportClassName,
   getComposerPlaceholder,
 } from './aiChatViewState';
-import {
-  buildAssistantStructuredContentState,
-  parseAIChatMessageParts,
-  type AIChatMessagePart,
-} from './aiChatMessageParts';
+import { parseAIChatMessageParts, type AIChatMessagePart } from './aiChatMessageParts';
 import { AssistantTextBlock, AssistantThinkingBlock } from './AIChatAssistantParts';
-import { AIChatRuntimeToolExecutionCard } from './AIChatRuntimeToolExecutionCard';
+import { buildRuntimeExecutionTimelineCards } from './AIChatRuntimeToolExecutionCard';
 import type { RuntimeEventRenderModel } from './runtimeEventRenderModel';
 import './AIChat.css';
 
@@ -249,10 +288,7 @@ type RunDiffState = {
 };
 
 type StreamingDraftState = {
-  content: string;
-  thinkingContent: string;
-  answerContent: string;
-  assistantParts: AIChatMessagePart[];
+  timeline: AssistantTimelineEvent[];
 };
 
 const EMPTY_MESSAGES: StoredChatMessage[] = [];
@@ -301,6 +337,8 @@ const PROJECT_FILE_READ_ONLY_TOOLS = ['glob', 'grep', 'ls', 'view'];
 const BUILT_IN_EXECUTION_TOOLS = ['glob', 'grep', 'ls', 'view', 'write', 'edit', 'bash', 'fetch', ASK_USER_TOOL_NAME];
 const PROJECT_INSTRUCTION_FILE_NAMES = ['GOODNIGHT.md', 'CLAUDE.md'];
 const RISKY_BUILT_IN_TOOLS = new Set(['write', 'edit', 'bash', 'fetch']);
+const MISSING_PROJECT_FILE_PATTERN =
+  /(?:not found|no such file|cannot find the file|\u627e\u4e0d\u5230|\u4e0d\u5b58\u5728|os error 2)/i;
 
 const WORKFLOW_STAGE_LABELS: Record<string, string> = {
   project_brief: 'Project Brief',
@@ -821,8 +859,9 @@ const summarizeRuntimeToolCall = (toolName: string, input: Record<string, unknow
     return input.command;
   }
 
-  if ((toolName === 'write' || toolName === 'edit' || toolName === 'view') && typeof input.file_path === 'string') {
-    return summarizeProjectFilePath(input.file_path);
+  const filePathInput = input.file_path ?? input.path ?? input.file;
+  if ((toolName === 'write' || toolName === 'edit' || toolName === 'view') && typeof filePathInput === 'string') {
+    return summarizeProjectFilePath(filePathInput);
   }
 
   if (toolName === 'project_file_flow' && typeof input.summary === 'string') {
@@ -1099,6 +1138,9 @@ const getFileChangeTypeLabel = (change: { beforeContent: string | null; afterCon
   }
   if (change.beforeContent !== null && change.afterContent === null) {
     return '删除';
+  }
+  if (change.beforeContent === null && change.afterContent === null) {
+    return '写入';
   }
   return '修改';
 };
@@ -1400,13 +1442,12 @@ const groupTurnCheckpointsByRunId = (entries: AgentTurnCheckpointRecord[]) =>
 
 const createWelcomeSession = (
   projectId: string,
-  projectName?: string | null,
   providerId: AgentProviderId = 'built-in'
 ) => {
   const session = createChatSession(projectId, '新对话', providerId);
   return {
     ...session,
-    messages: [buildWelcomeMessage(projectName)],
+    messages: [buildWelcomeMessage()],
   };
 };
 
@@ -1580,6 +1621,13 @@ const SendIcon = () => (
   </svg>
 );
 
+const PauseIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+    <rect x="5" y="3" width="3" height="14" rx="1" fill="currentColor" />
+    <rect x="12" y="3" width="3" height="14" rx="1" fill="currentColor" />
+  </svg>
+);
+
 const normalizeSearchToken = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
 const summarizeReferencePath = (value: string) => {
   const normalized = value.replace(/\\/g, '/');
@@ -1617,17 +1665,23 @@ const renderMessagePart = (
   }
 
   if (part.type === 'tool') {
-    if ((message.runtimeEvents || []).some((event) => event.kind === 'tool_use' || event.kind === 'tool_result')) {
+    if (
+      message.role === 'assistant' &&
+      getAssistantRuntimeTimelineEvents(message.timeline).some(
+        (event) => event.kind === 'tool_use' || event.kind === 'tool_result'
+      )
+    ) {
       return null;
     }
     return (
       <details className={`chat-tool-card ${part.status}`} key={`${messageId}-tool-${index}`}>
         <summary className="chat-tool-card-header chat-tool-card-summary">
           <span className="chat-tool-icon" aria-hidden="true" />
-          <div>
+          <div className="chat-inline-disclosure-copy">
             <strong>{part.title}</strong>
             <span>{part.status === 'running' ? '正在执行' : part.status === 'error' ? '执行失败' : '已完成'}</span>
           </div>
+          <span className="chat-inline-disclosure-caret" aria-hidden="true" />
         </summary>
         {part.command ? (
           <div className="chat-tool-section">
@@ -1685,34 +1739,54 @@ const buildSettingsDraft = (config: AIConfigEntry | null): AISettingsDraft => ({
 const createRuntimeEventId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+const buildSkillCatalogLifecycleSignature = (input: {
+  sessionId: string;
+  replayThreadId: string;
+  projectRoot: string;
+  discoveredSkills: Array<{ id: string; source: string }>;
+  loadedSkills: Array<{ id: string; source: string }>;
+}) =>
+  JSON.stringify({
+    sessionId: input.sessionId,
+    replayThreadId: input.replayThreadId,
+    projectRoot: input.projectRoot,
+    discoveredSkills: input.discoveredSkills
+      .map((skill) => `${skill.source}:${skill.id}`)
+      .sort(),
+    loadedSkills: input.loadedSkills
+      .map((skill) => `${skill.source}:${skill.id}`)
+      .sort(),
+  });
+
+const getStoredMessageConversationContent = (message: StoredChatMessage) =>
+  message.role === 'assistant'
+    ? getAssistantTimelineText(message.timeline) || getAssistantTimelineReasoning(message.timeline)
+    : message.content;
+
+const toConversationHistoryMessages = (messages: StoredChatMessage[] = []) =>
+  messages.map((message) => ({
+    role: message.role,
+    content: getStoredMessageConversationContent(message),
+  }));
+
 const buildAssistantContentState = (
   content: string,
   fallbackThinkingContent?: string,
   preferredAssistantParts?: AIChatMessagePart[]
 ) => {
-  const structured = buildAssistantStructuredContentState({
-    content,
+  const timeline = buildAssistantTimelineUpdate(content, [], {
     fallbackThinkingContent,
     preferredAssistantParts,
     thinkingCollapsed: true,
   });
 
-  if (structured.assistantParts.length > 0) {
-    return structured;
-  }
-
   return {
-    content: structured.content,
-    thinkingContent: structured.thinkingContent,
-    answerContent: structured.answerContent,
-    assistantParts: structured.assistantParts,
+    timeline,
   };
 };
 
 const clearAssistantContentState = () => ({
-  thinkingContent: undefined,
-  answerContent: undefined,
-  assistantParts: undefined,
+  timeline: [],
 });
 
 function useStallDetector(isRunning: boolean, activityFingerprint: unknown, thresholdMs = 10000) {
@@ -1809,9 +1883,13 @@ export const AIChat: React.FC<AIChatProps> = ({
   const streamingFlushFrameRef = useRef<number | null>(null);
   const pendingApprovalActionsRef = useRef<Record<string, RuntimePendingApprovalAction>>({});
   const pendingQuestionActionsRef = useRef<Record<string, RuntimePendingQuestionAction>>({});
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const stopRequestedRef = useRef(false);
+  const runningSubmissionRef = useRef<{ assistantMessageId: string; runtimeStoreThreadId: string } | null>(null);
   const runtimeSkillRegistryRef = useRef(
     createRuntimeSkillRegistry(getDefaultRuntimeSkillDefinitions())
   );
+  const skillCatalogLifecycleSignatureRef = useRef('');
 
   const setCollapsedState = (nextValue: boolean) => {
     if (!isControlledCollapse) {
@@ -1885,9 +1963,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     };
   }, []);
 
-  const projectChatState = useAIChatStore((state) =>
-    currentProject ? state.projects[currentProject.id] : undefined
-  );
   const {
     ensureProjectState,
     upsertSession,
@@ -1899,6 +1974,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     updateMessage,
     queueComposerPrefill,
     clearComposerPrefill,
+    syncSessionReplayState,
     replaceSessionMessages,
     renameSession,
     removeSession,
@@ -1914,6 +1990,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       updateMessage: state.updateMessage,
       queueComposerPrefill: state.queueComposerPrefill,
       clearComposerPrefill: state.clearComposerPrefill,
+      syncSessionReplayState: state.syncSessionReplayState,
       replaceSessionMessages: state.replaceSessionMessages,
       renameSession: state.renameSession,
       removeSession: state.removeSession,
@@ -1924,6 +2001,11 @@ export const AIChat: React.FC<AIChatProps> = ({
     setRuntimeBinding,
     submitTurn: submitRuntimeTurn,
     appendTimelineEvent: appendRuntimeTimelineEvent,
+    upsertExecutionTask,
+    upsertExecutionRun,
+    setExecutionRuns,
+    upsertExecutionAgentRun,
+    setExecutionAgentRuns,
     setMemoryEntries: setRuntimeMemoryEntries,
     setReplayEvents: setRuntimeReplayEvents,
     appendReplayEvent: appendRuntimeReplayEventToStore,
@@ -1950,6 +2032,11 @@ export const AIChat: React.FC<AIChatProps> = ({
       setRuntimeBinding: state.setRuntimeBinding,
       submitTurn: state.submitTurn,
       appendTimelineEvent: state.appendTimelineEvent,
+      upsertExecutionTask: state.upsertExecutionTask,
+      upsertExecutionRun: state.upsertExecutionRun,
+      setExecutionRuns: state.setExecutionRuns,
+      upsertExecutionAgentRun: state.upsertExecutionAgentRun,
+      setExecutionAgentRuns: state.setExecutionAgentRuns,
       setMemoryEntries: state.setMemoryEntries,
       setReplayEvents: state.setReplayEvents,
       appendReplayEvent: state.appendReplayEvent,
@@ -1981,6 +2068,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       appendRuntimeMcpToolCall: state.appendToolCall,
     }))
     );
+  const conversation = useRuntimeConversationGateway({
+    projectId: currentProject?.id || null,
+  });
   const {
     approvalsByThread,
     permissionMode,
@@ -2029,8 +2119,6 @@ export const AIChat: React.FC<AIChatProps> = ({
 
     let alive = true;
     const projectId = currentProject.id;
-    const projectName = currentProject.name;
-
     void (async () => {
       ensureProjectState(projectId);
 
@@ -2044,30 +2132,19 @@ export const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
-      let projectState = useAIChatStore.getState().projects[projectId];
-      let existingSessions = projectState?.sessions || [];
-
-      persistedThreads.forEach((thread) => {
-        const existingSession = existingSessions.find((session) => session.runtimeThreadId === thread.id) || null;
-        const session =
-          existingSession ||
-          createChatSession(projectId, thread.title || '新对话', thread.providerId as AgentProviderId);
-
-        const syncedSession = {
-          ...session,
-          title: thread.title || session.title,
+      const projectState = useAIChatStore.getState().projects[projectId];
+      const existingSessions = projectState?.sessions || [];
+      const reconciled = reconcileRuntimeThreadsWithSessions({
+        projectId,
+        sessions: existingSessions,
+        runtimeThreads: persistedThreads.map((thread) => ({
+          ...thread,
           providerId: thread.providerId as AgentProviderId,
-          runtimeThreadId: thread.id,
-          createdAt: existingSession?.createdAt || thread.createdAt,
-          updatedAt: Math.max(thread.updatedAt, existingSession?.updatedAt || 0),
-        };
+        })),
+      });
 
-        upsertSession(projectId, syncedSession);
-        existingSessions = [
-          syncedSession,
-          ...existingSessions.filter((item) => item.id !== syncedSession.id),
-        ];
-
+      reconciled.bindings.forEach(({ thread, session }) => {
+        upsertSession(projectId, session);
         recordRuntimeThread(projectId, {
           id: session.id,
           providerId: thread.providerId as AgentProviderId,
@@ -2077,13 +2154,13 @@ export const AIChat: React.FC<AIChatProps> = ({
         });
       });
 
-      projectState = useAIChatStore.getState().projects[projectId];
-      const sessions = projectState?.sessions || [];
+      const nextProjectState = useAIChatStore.getState().projects[projectId];
+      const sessions = nextProjectState?.sessions || [];
       if (sessions.length === 0 && persistedThreads.length === 0) {
-        const session = createWelcomeSession(projectId, projectName, runtimeProviderId);
+        const session = createWelcomeSession(projectId, runtimeProviderId);
         upsertSession(projectId, session);
         setActiveSession(projectId, session.id);
-      } else if (!projectState?.activeSessionId && sessions[0]) {
+      } else if (!nextProjectState?.activeSessionId && sessions[0]) {
         setActiveSession(projectId, sessions[0].id);
       }
     })();
@@ -2117,27 +2194,22 @@ export const AIChat: React.FC<AIChatProps> = ({
     };
   }, [setRuntimeMcpServers]);
 
-  const sessions = projectChatState?.sessions || EMPTY_SESSIONS;
-  const activeSessionId = projectChatState?.activeSessionId || sessions[0]?.id || null;
-  const activeSession = useMemo(
-    () => sessions.find((session) => session.id === activeSessionId) || null,
-    [activeSessionId, sessions]
-  );
-  const activeApprovalThreadId = activeSession?.runtimeThreadId || activeSessionId || null;
-  const activeCheckpointThreadId = activeSession?.runtimeThreadId || activeSession?.id || null;
-  const activeTaskThreadId = activeSession?.runtimeThreadId || null;
-  const activeLiveThreadId = activeSessionId;
-  const messages = activeSession?.messages || EMPTY_MESSAGES;
-  const activityEntries = projectChatState?.activityEntries || EMPTY_ACTIVITY_ENTRIES;
-  const pendingApprovals = useMemo(
-    () =>
-      activeApprovalThreadId
-        ? (approvalsByThread[activeApprovalThreadId] || []).filter(
-            (approval) => approval.status === 'pending',
-          )
-        : EMPTY_PENDING_APPROVALS,
-    [activeApprovalThreadId, approvalsByThread]
-  );
+  const sessions = conversation.sessions.length > 0 ? conversation.sessions : EMPTY_SESSIONS;
+  const activeSessionId = conversation.activeSessionId;
+  const activeSession = conversation.activeSession;
+  const activeApprovalThreadId = conversation.approvalThreadId;
+  const activeCheckpointThreadId = conversation.checkpointThreadId;
+  const activeTaskThreadId = conversation.taskThreadId;
+  const activeLiveThreadId = conversation.liveThreadId;
+  const messages = conversation.messages.length > 0 ? conversation.messages : EMPTY_MESSAGES;
+  const activityEntries =
+    conversation.activityEntries.length > 0
+      ? conversation.activityEntries
+      : EMPTY_ACTIVITY_ENTRIES;
+  const pendingApprovals =
+    conversation.pendingApprovals.length > 0
+      ? conversation.pendingApprovals
+      : EMPTY_PENDING_APPROVALS;
   useEffect(() => {
     if (!activeApprovalThreadId) {
       return;
@@ -2155,36 +2227,40 @@ export const AIChat: React.FC<AIChatProps> = ({
             : state.statusVerb,
     }));
   }, [activeApprovalThreadId, patchLiveState, pendingApprovals]);
-  const activeSkills = useMemo(
-    () =>
-      activeSessionId
+  const activeSkills =
+    conversation.activeSkills.length > 0
+      ? conversation.activeSkills
+      : activeSessionId
         ? activeSkillsByThread[activeSessionId] || EMPTY_RUNTIME_SKILLS
-        : EMPTY_RUNTIME_SKILLS,
-    [activeSessionId, activeSkillsByThread]
-  );
-  const latestTurnSession = useAgentRuntimeStore((state) =>
-    activeSessionId ? getLatestTurnSession(state.sessionsByThread[activeSessionId]) : null
-  );
-  const activeReplayResumeRequest = useAgentRuntimeStore((state) =>
-    activeSessionId ? state.resumeRequestsByThread[activeSessionId] || null : null
-  );
-  const activeRuntimeLiveState = useAgentRuntimeStore((state) =>
-    activeLiveThreadId ? state.liveStateByThread[activeLiveThreadId] || null : null
-  );
-  const activeBackgroundTasks = useAgentRuntimeStore((state) =>
-    activeLiveThreadId
-      ? state.backgroundTasksByThread[activeLiveThreadId] || EMPTY_BACKGROUND_TASKS
-      : EMPTY_BACKGROUND_TASKS
-  );
+        : EMPTY_RUNTIME_SKILLS;
+  const latestTurnSession = conversation.latestTurnSession;
+  const activeReplayResumeRequest = conversation.replayResumeRequest;
+  const activeRuntimeLiveState = conversation.liveState;
+  const activeBackgroundTasks =
+    conversation.backgroundTasks.length > 0
+      ? conversation.backgroundTasks
+      : EMPTY_BACKGROUND_TASKS;
   const replayRecoveryController = useMemo(
     () =>
       createReplayRecoveryController({
         appendReplayEvent: appendRuntimeReplayEvent,
         appendReplayEventToStore: appendRuntimeReplayEventToStore,
         getReplayEvents: (threadId) => useAgentRuntimeStore.getState().replayEventsByThread[threadId] || [],
-        setRecoveryState: setRuntimeRecoveryState,
+        setRecoveryState: (threadId, recoveryState) => {
+          setRuntimeRecoveryState(threadId, recoveryState);
+          if (!currentProject) {
+            return;
+          }
+          syncSessionReplayState(
+            currentProject.id,
+            threadId,
+            recoveryState.replayThreadId,
+            useAgentRuntimeStore.getState().replayEventsByThread[recoveryState.replayThreadId] || [],
+            recoveryState
+          );
+        },
       }),
-    [appendRuntimeReplayEventToStore, setRuntimeRecoveryState]
+    [appendRuntimeReplayEventToStore, currentProject, setRuntimeRecoveryState, syncSessionReplayState]
   );
 
   useEffect(() => {
@@ -2262,6 +2338,36 @@ export const AIChat: React.FC<AIChatProps> = ({
   }, [activeApprovalThreadId, setThreadApprovals]);
 
   useEffect(() => {
+    if (!activeSession?.id || !activeSession.runtimeThreadId) {
+      return;
+    }
+
+    if (activeSession.replayEvents.length > 0) {
+      setRuntimeReplayEvents(activeSession.runtimeThreadId, activeSession.replayEvents);
+    }
+    if (activeSession.recoveryState) {
+      setRuntimeRecoveryState(activeSession.id, activeSession.recoveryState);
+      const latestSkillSnapshot = getLatestReplaySkillSnapshot(activeSession.recoveryState);
+      if (latestSkillSnapshot?.activeSkillIds) {
+        setActiveSkills(
+          activeSession.id,
+          runtimeSkillRegistryRef.current.restoreActiveSkills(
+            activeSession.id,
+            latestSkillSnapshot.activeSkillIds,
+          ),
+        );
+      }
+    }
+  }, [
+    activeSession?.id,
+    activeSession?.runtimeThreadId,
+    activeSession?.recoveryState,
+    activeSession?.replayEvents,
+    setActiveSkills,
+    setRuntimeRecoveryState,
+    setRuntimeReplayEvents,
+  ]);
+  useEffect(() => {
     const runtimeThreadId = activeSession?.runtimeThreadId;
     if (!runtimeThreadId) {
       return;
@@ -2303,6 +2409,15 @@ export const AIChat: React.FC<AIChatProps> = ({
           runtimeThreadId,
           replayEvents,
         );
+        if (currentProject) {
+          syncSessionReplayState(
+            currentProject.id,
+            activeSession.id,
+            runtimeThreadId,
+            replayEvents,
+            recoveryState
+          );
+        }
         const latestSkillSnapshot = getLatestReplaySkillSnapshot(recoveryState);
         setActiveSkills(
           activeSession.id,
@@ -2317,7 +2432,15 @@ export const AIChat: React.FC<AIChatProps> = ({
     return () => {
       alive = false;
     };
-  }, [activeSession?.id, activeSession?.runtimeThreadId, replayRecoveryController, setActiveSkills, setRuntimeReplayEvents]);
+  }, [
+    activeSession?.id,
+    activeSession?.runtimeThreadId,
+    currentProject,
+    replayRecoveryController,
+    setActiveSkills,
+    setRuntimeReplayEvents,
+    syncSessionReplayState,
+  ]);
   useEffect(() => {
     if (!activeCheckpointThreadId) {
       setTurnCheckpoints([]);
@@ -2370,16 +2493,39 @@ export const AIChat: React.FC<AIChatProps> = ({
       alive = false;
     };
   }, [activeSessionId, activeTaskThreadId, setThreadBackgroundTasks, upsertTeamRun]);
-  const appendRuntimeEventToMessage = useCallback(
-    (messageId: string, runtimeEvent: StoredChatRuntimeEvent) => {
+  const updateAssistantMessageTimeline = useCallback(
+    (
+      messageId: string,
+      updater: (timeline: AssistantTimelineEvent[]) => AssistantTimelineEvent[]
+    ) => {
       if (!currentProject || !activeSessionId) {
         return;
       }
 
       updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
         ...message,
-        runtimeEvents: [...(message.runtimeEvents || []), runtimeEvent],
+        ...(message.role === 'assistant'
+          ? {
+              timeline: updater(message.timeline),
+            }
+          : {}),
       }));
+      const currentDraft = streamingDraftBufferRef.current[messageId];
+      if (currentDraft) {
+        streamingDraftBufferRef.current = {
+          ...streamingDraftBufferRef.current,
+          [messageId]: {
+            ...currentDraft,
+            timeline: updater(currentDraft.timeline),
+          },
+        };
+        if (streamingFlushFrameRef.current === null) {
+          streamingFlushFrameRef.current = requestAnimationFrame(() => {
+            streamingFlushFrameRef.current = null;
+            setStreamingDraftContents({ ...streamingDraftBufferRef.current });
+          });
+        }
+      }
     },
     [activeSessionId, currentProject, updateMessage]
   );
@@ -2389,16 +2535,11 @@ export const AIChat: React.FC<AIChatProps> = ({
       matcher: (event: StoredChatRuntimeEvent) => boolean,
       updater: (event: StoredChatRuntimeEvent) => StoredChatRuntimeEvent
     ) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        runtimeEvents: (message.runtimeEvents || []).map((event) => (matcher(event) ? updater(event) : event)),
-      }));
+      updateAssistantMessageTimeline(messageId, (timeline) =>
+        mapAssistantRuntimeTimelineEvents(timeline, matcher, updater)
+      );
     },
-    [activeSessionId, currentProject, updateMessage]
+    [updateAssistantMessageTimeline]
   );
   const upsertRuntimeToolUseInMessage = useCallback(
     (
@@ -2411,16 +2552,11 @@ export const AIChat: React.FC<AIChatProps> = ({
         status: RuntimeToolStep['status'];
       }
     ) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        runtimeEvents: upsertRuntimeToolUseEvent(message.runtimeEvents, input),
-      }));
+      updateAssistantMessageTimeline(messageId, (timeline) =>
+        upsertAssistantRuntimeToolUseEvent(timeline, input)
+      );
     },
-    [activeSessionId, currentProject, updateMessage]
+    [updateAssistantMessageTimeline]
   );
   const upsertRuntimeToolResultInMessage = useCallback(
     (
@@ -2434,20 +2570,18 @@ export const AIChat: React.FC<AIChatProps> = ({
         fileChanges?: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges'];
       }
     ) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        runtimeEvents: upsertRuntimeToolResultEvent(message.runtimeEvents, input),
-      }));
+      updateAssistantMessageTimeline(messageId, (timeline) =>
+        upsertAssistantRuntimeToolResultEvent(timeline, input)
+      );
     },
-    [activeSessionId, currentProject, updateMessage]
+    [updateAssistantMessageTimeline]
   );
   const requestRuntimeApproval = useCallback(
     async ({
       threadId,
+      runtimeStoreThreadId,
+      replayThreadId,
+      providerId,
       actionType,
       riskLevel,
       summary,
@@ -2458,6 +2592,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       display,
     }: {
       threadId: string;
+      runtimeStoreThreadId: string;
+      replayThreadId: string;
+      providerId: AgentProviderId;
       actionType: string;
       riskLevel: 'low' | 'medium' | 'high';
       summary: string;
@@ -2476,10 +2613,14 @@ export const AIChat: React.FC<AIChatProps> = ({
       }));
       const approval = await requestRuntimeApprovalFlow({
         threadId,
+        runtimeStoreThreadId,
+        replayThreadId,
+        providerId,
         actionType,
         riskLevel,
         summary,
         messageId,
+        toolCallId,
         onApprove,
         onDeny,
         display,
@@ -2487,23 +2628,58 @@ export const AIChat: React.FC<AIChatProps> = ({
         enqueueApproval,
         pendingApprovalActions: pendingApprovalActionsRef.current,
       });
+      const approvalLifecycle = buildCapabilityApprovalLifecycleDescriptor({
+        approvalId: approval.id,
+        actionType,
+        riskLevel,
+        summary,
+        status: 'pending',
+        toolCallId,
+      });
+      appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+        id: createRuntimeEventId('approval'),
+        threadId: runtimeStoreThreadId,
+        providerId,
+        summary: approvalLifecycle.timelineSummary,
+        createdAt: Date.now(),
+      });
+      await persistRuntimeTimelineEvent({
+        threadId: replayThreadId,
+        providerId,
+        summary: approvalLifecycle.timelineSummary,
+      });
+      await replayRecoveryController.appendAndSync({
+        runtimeStoreThreadId,
+        replayThreadId,
+        eventType: approvalLifecycle.replayEventType,
+        payload: approvalLifecycle.replayPayload,
+      });
       if (messageId) {
-        appendRuntimeEventToMessage(messageId, {
-          id: buildRuntimeEventId('approval', approval.id),
-          kind: 'approval',
-          approvalId: approval.id,
-          toolCallId,
-          actionType,
-          summary,
-          riskLevel,
-          status: 'pending',
-          display,
-          createdAt: Date.now(),
-        });
+        updateAssistantMessageTimeline(messageId, (timeline) =>
+          upsertAssistantRuntimeApprovalEvent(timeline, {
+            id: buildRuntimeEventId('approval', approval.id),
+            kind: 'approval',
+            approvalId: approval.id,
+            toolCallId,
+            actionType,
+            summary,
+            riskLevel,
+            status: 'pending',
+            display,
+            createdAt: Date.now(),
+          })
+        );
       }
       return approval;
     },
-    [appendRuntimeEventToMessage, enqueueAgentApproval, enqueueApproval, patchLiveState]
+    [
+      appendRuntimeTimelineEvent,
+      enqueueAgentApproval,
+      enqueueApproval,
+      patchLiveState,
+      replayRecoveryController,
+      updateAssistantMessageTimeline,
+    ]
   );
   const handleApproveRuntimeApproval = useCallback(
     async (approvalId: string) => {
@@ -2521,11 +2697,52 @@ export const AIChat: React.FC<AIChatProps> = ({
           (event) => (event.kind === 'approval' ? { ...event, status: 'approved' } : event)
         );
       }
+      if (
+        pendingAction?.actionType &&
+        pendingAction.riskLevel &&
+        pendingAction.summary &&
+        pendingAction.runtimeStoreThreadId &&
+        pendingAction.replayThreadId &&
+        pendingAction.providerId
+      ) {
+        const lifecycle = buildCapabilityApprovalLifecycleDescriptor({
+          approvalId,
+          actionType: pendingAction.actionType,
+          riskLevel: pendingAction.riskLevel,
+          summary: pendingAction.summary,
+          status: 'approved',
+          toolCallId: pendingAction.toolCallId,
+        });
+        appendRuntimeTimelineEvent(pendingAction.runtimeStoreThreadId, {
+          id: createRuntimeEventId('approval'),
+          threadId: pendingAction.runtimeStoreThreadId,
+          providerId: pendingAction.providerId as AgentProviderId,
+          summary: lifecycle.timelineSummary,
+          createdAt: Date.now(),
+        });
+        await persistRuntimeTimelineEvent({
+          threadId: pendingAction.replayThreadId,
+          providerId: pendingAction.providerId as AgentProviderId,
+          summary: lifecycle.timelineSummary,
+        });
+        await replayRecoveryController.appendAndSync({
+          runtimeStoreThreadId: pendingAction.runtimeStoreThreadId,
+          replayThreadId: pendingAction.replayThreadId,
+          eventType: lifecycle.replayEventType,
+          payload: lifecycle.replayPayload,
+        });
+      }
       if (pendingAction) {
         await pendingAction.onApprove();
       }
     },
-    [patchRuntimeEventInMessage, resolveAgentApproval, resolveStoredApproval]
+    [
+      appendRuntimeTimelineEvent,
+      patchRuntimeEventInMessage,
+      replayRecoveryController,
+      resolveAgentApproval,
+      resolveStoredApproval,
+    ]
   );
   const handleDenyRuntimeApproval = useCallback(
     async (approvalId: string) => {
@@ -2543,40 +2760,61 @@ export const AIChat: React.FC<AIChatProps> = ({
           (event) => (event.kind === 'approval' ? { ...event, status: 'denied' } : event)
         );
       }
+      if (
+        pendingAction?.actionType &&
+        pendingAction.riskLevel &&
+        pendingAction.summary &&
+        pendingAction.runtimeStoreThreadId &&
+        pendingAction.replayThreadId &&
+        pendingAction.providerId
+      ) {
+        const lifecycle = buildCapabilityApprovalLifecycleDescriptor({
+          approvalId,
+          actionType: pendingAction.actionType,
+          riskLevel: pendingAction.riskLevel,
+          summary: pendingAction.summary,
+          status: 'denied',
+          toolCallId: pendingAction.toolCallId,
+        });
+        appendRuntimeTimelineEvent(pendingAction.runtimeStoreThreadId, {
+          id: createRuntimeEventId('approval'),
+          threadId: pendingAction.runtimeStoreThreadId,
+          providerId: pendingAction.providerId as AgentProviderId,
+          summary: lifecycle.timelineSummary,
+          createdAt: Date.now(),
+        });
+        await persistRuntimeTimelineEvent({
+          threadId: pendingAction.replayThreadId,
+          providerId: pendingAction.providerId as AgentProviderId,
+          summary: lifecycle.timelineSummary,
+        });
+        await replayRecoveryController.appendAndSync({
+          runtimeStoreThreadId: pendingAction.runtimeStoreThreadId,
+          replayThreadId: pendingAction.replayThreadId,
+          eventType: lifecycle.replayEventType,
+          payload: lifecycle.replayPayload,
+        });
+      }
       if (pendingAction?.onDeny) {
         await pendingAction.onDeny();
       }
     },
-    [patchRuntimeEventInMessage, resolveAgentApproval, resolveStoredApproval]
+    [
+      appendRuntimeTimelineEvent,
+      patchRuntimeEventInMessage,
+      replayRecoveryController,
+      resolveAgentApproval,
+      resolveStoredApproval,
+    ]
   );
   const handleAnswerRuntimeQuestion = useCallback(
     async (messageId: string, question: RuntimeQuestionPayload, answers: Record<string, string>) => {
-      if (!currentProject || !activeSessionId) {
+      if (!activeSessionId) {
         return;
       }
-
-      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
-        ...message,
-        runtimeQuestion: message.runtimeQuestion
-          ? {
-              ...message.runtimeQuestion,
-              status: 'answered',
-              answers,
-            }
-          : message.runtimeQuestion,
-        runtimeEvents: (message.runtimeEvents || []).map((event) =>
-          event.kind === 'question' && event.questionId === question.id
-            ? {
-                ...event,
-                payload: {
-                  ...event.payload,
-                  status: 'answered',
-                  answers,
-                },
-              }
-            : event
-        ),
-      }));
+      updateAssistantMessageTimeline(messageId, (timeline) =>
+        answerAssistantRuntimeQuestionEvent(timeline, question.id, answers)
+      );
       patchLiveState(activeSessionId, (state) => ({
         ...state,
         pendingQuestionSummary: null,
@@ -2591,7 +2829,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         pendingAction.resolve(answers);
       }
     },
-    [activeSessionId, currentProject, patchLiveState, updateMessage]
+    [activeSessionId, patchLiveState, updateAssistantMessageTimeline]
   );
 const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     const oldLines = oldStr.split('\n');
@@ -2641,8 +2879,11 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   };
 
   const renderRuntimeApprovalCard = useCallback(
-    (message: { id: string; role: StoredChatMessage['role']; projectFileProposal?: ProjectFileProposal; runtimeEvents?: StoredChatRuntimeEvent[] }) => {
-      if ((message.runtimeEvents || []).some((event) => event.kind === 'approval')) {
+    (message: StoredChatMessage) => {
+      if (
+        message.role === 'assistant' &&
+        getAssistantRuntimeTimelineEvents(message.timeline).some((event) => event.kind === 'approval')
+      ) {
         return null;
       }
       if (!activeApprovalThreadId || message.role !== 'assistant' || message.projectFileProposal) {
@@ -2727,48 +2968,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     [activeApprovalThreadId, approvalsByThread, handleApproveRuntimeApproval, handleDenyRuntimeApproval]
   );
   const renderRuntimeQuestionCard = useCallback(
-    (message: StoredChatMessage) => {
-      if ((message.runtimeEvents || []).some((event) => event.kind === 'question')) {
-        return null;
-      }
-      const question = message.runtimeQuestion;
-      if (message.role !== 'assistant' || !question) {
-        return null;
-      }
-
-      const isAnswered = question.status === 'answered';
-      const answers = question.answers || {};
-
-      return (
-        <section className={`chat-runtime-question-card ${isAnswered ? 'answered' : 'pending'}`}>
-          <div className="chat-runtime-question-head">
-            <strong>需要你的确认</strong>
-            <span>{isAnswered ? '已回答' : '等待输入'}</span>
-          </div>
-          <div className="chat-runtime-question-list">
-            {question.questions.map((item, index) => {
-              const answerKey = item.question;
-              const answeredValue = answers[answerKey] || '';
-              return (
-                <RuntimeQuestionBlock
-                  key={`${question.id}-${index}`}
-                  item={item}
-                  answered={isAnswered}
-                  answeredValue={answeredValue}
-                  onSubmit={(value) =>
-                    handleAnswerRuntimeQuestion(message.id, question, {
-                      ...answers,
-                      [answerKey]: value,
-                    })
-                  }
-                />
-              );
-            })}
-          </div>
-        </section>
-      );
-    },
-    [handleAnswerRuntimeQuestion]
+    (_message: StoredChatMessage) => null,
+    []
   );
   const renderStructuredCards = useCallback(
     (message: { structuredCards?: ChatStructuredCard[] }) => {
@@ -2831,6 +3032,87 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       return projectDir;
     },
     [currentProject]
+  );
+  const resolveRecoveryTargetFileExists = useCallback(
+    async (targetPath: string) => {
+      if (!currentProject) {
+        return null;
+      }
+
+      try {
+        const projectRoot = await resolveProjectRootById(currentProject.id);
+        const absolutePath = resolveProjectOperationPath(projectRoot, targetPath);
+        const viewResult = await invoke<RuntimeProjectFileToolResponse>('tool_view', {
+          params: {
+            file_path: absolutePath,
+            offset: 0,
+            limit: 1,
+          },
+        });
+
+        if (viewResult.success) {
+          return true;
+        }
+
+        const resultText = `${viewResult.error || ''} ${viewResult.content || ''}`.trim();
+        if (MISSING_PROJECT_FILE_PATTERN.test(resultText)) {
+          return false;
+        }
+        if (isProjectFileWriteAccessFailure(resultText)) {
+          return true;
+        }
+
+        const persistedContent = await readProjectTextFile(absolutePath);
+        return persistedContent !== null ? true : null;
+      } catch {
+        return null;
+      }
+    },
+    [currentProject, resolveProjectRootById]
+  );
+  const buildRuntimeWriteRecoveryProposal = useCallback(
+    async (toolCalls: RuntimeToolStep[]) => {
+      const failedWriteToolCall = [...toolCalls].reverse().find((toolCall) => {
+        if ((toolCall.name !== 'write' && toolCall.name !== 'edit') || toolCall.status !== 'failed') {
+          return false;
+        }
+
+        const failureText = `${toolCall.resultContent || ''} ${toolCall.resultPreview || ''}`.trim();
+        return isProjectFileWriteAccessFailure(failureText);
+      });
+
+      if (!failedWriteToolCall) {
+        return null;
+      }
+
+      const rawTargetPath = failedWriteToolCall.input.file_path;
+      if (typeof rawTargetPath !== 'string' || !rawTargetPath.trim()) {
+        return null;
+      }
+
+      const fileExists =
+        failedWriteToolCall.name === 'edit' ? true : await resolveRecoveryTargetFileExists(rawTargetPath);
+      const operation = buildProjectFileOperationFromToolCall({
+        toolName: failedWriteToolCall.name,
+        toolInput: failedWriteToolCall.input,
+        fileExists,
+      });
+
+      if (!operation) {
+        return null;
+      }
+
+      return {
+        id: `proposal_recovery_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        mode: 'manual',
+        status: 'pending',
+        summary: `重试写入 ${operation.targetPath}`,
+        assistantMessage: '检测到系统拒绝写入，我已整理好恢复写入提案。',
+        executionMessage: '目标文件可能被占用、只读或权限受限。确认后可再次尝试写入原文件。',
+        operations: [operation],
+      } satisfies ProjectFileProposal;
+    },
+    [resolveRecoveryTargetFileExists]
   );
   const persistTurnCheckpointForRun = useCallback(
     async (input: {
@@ -3170,13 +3452,14 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   useEffect(() => {
     let cancelled = false;
 
-    void loadRuntimeSkillDefinitions({
+    void loadRuntimeSkillCatalog({
       projectRoot: currentProject?.vaultPath || null,
-    }).then((skills) => {
+    }).then(async (catalog) => {
       if (cancelled) {
         return;
       }
 
+      const { skills, discoveredSkills, loadedSkills } = catalog;
       runtimeSkillRegistryRef.current = createRuntimeSkillRegistry(skills);
       setAvailableSlashCommands(
         skills
@@ -3188,12 +3471,83 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           }))
           .sort((left, right) => left.name.localeCompare(right.name))
       );
+
+      if (!currentProject || !activeSession?.id || !activeSession.runtimeThreadId) {
+        return;
+      }
+
+      if (discoveredSkills.length === 0 && loadedSkills.length === 0) {
+        return;
+      }
+
+      const replayThreadId = activeSession.runtimeThreadId;
+      const lifecycleSignature = buildSkillCatalogLifecycleSignature({
+        sessionId: activeSession.id,
+        replayThreadId,
+        projectRoot: currentProject.vaultPath || '',
+        discoveredSkills: discoveredSkills.map((skill) => ({
+          id: skill.id,
+          source: skill.imported ? 'local' : 'project',
+        })),
+        loadedSkills: loadedSkills.map((skill) => ({
+          id: skill.id,
+          source: skill.source,
+        })),
+      });
+
+      if (skillCatalogLifecycleSignatureRef.current === lifecycleSignature) {
+        return;
+      }
+      skillCatalogLifecycleSignatureRef.current = lifecycleSignature;
+
+      const discoveryLifecycle = buildSkillDiscoveryLifecycleDescriptor({
+        toolCallId: createRuntimeEventId('skill-discover'),
+        discoveredSkills: discoveredSkills.map((skill) => ({
+          id: skill.id,
+          name: skill.name,
+          source: skill.imported ? 'local' : 'project',
+        })),
+      });
+      const loadLifecycle = buildSkillLoadLifecycleDescriptor({
+        toolCallId: createRuntimeEventId('skill-load'),
+        loadedSkills,
+      });
+      const timelineEvents = [discoveryLifecycle, loadLifecycle];
+
+      for (const lifecycleEvent of timelineEvents) {
+        appendRuntimeTimelineEvent(activeSession.id, {
+          id: createRuntimeEventId(lifecycleEvent.toolName),
+          threadId: activeSession.id,
+          providerId: activeSession.providerId,
+          summary: lifecycleEvent.timelineSummary,
+          createdAt: Date.now(),
+        });
+        await persistRuntimeTimelineEvent({
+          threadId: replayThreadId,
+          providerId: activeSession.providerId,
+          summary: lifecycleEvent.timelineSummary,
+        });
+        await replayRecoveryController.appendAndSync({
+          runtimeStoreThreadId: activeSession.id,
+          replayThreadId,
+          eventType: lifecycleEvent.replayEventType,
+          payload: lifecycleEvent.replayPayload,
+        });
+      }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [currentProject?.vaultPath]);
+  }, [
+    activeSession?.id,
+    activeSession?.providerId,
+    activeSession?.runtimeThreadId,
+    currentProject,
+    replayRecoveryController,
+    setAvailableSlashCommands,
+    appendRuntimeTimelineEvent,
+  ]);
 
   const filteredConfigs = useMemo(() => {
     const keyword = providerSearch.trim().toLowerCase();
@@ -3443,7 +3797,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       currentProjectName: currentProject?.name,
       contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
       skillIntent: null,
-      conversationHistory: activeSession?.messages || [],
+      conversationHistory: toConversationHistoryMessages(activeSession?.messages || []),
       referenceContext: previewReferenceContext,
       contextLabels: [
         selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
@@ -3748,13 +4102,41 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           )
         );
         pruneThreadHistorySince(activeSessionId, checkpoint.createdAt);
-        setRuntimeRecoveryState(
+        const replayEvents = await listRuntimeReplayEvents(activeCheckpointThreadId);
+        setRuntimeReplayEvents(activeCheckpointThreadId, replayEvents);
+        const recoveryState = buildReplayRecoveryState(activeCheckpointThreadId, replayEvents);
+        setRuntimeRecoveryState(activeSessionId, recoveryState);
+        syncSessionReplayState(
+          currentProject.id,
           activeSessionId,
-          buildReplayRecoveryState(
-            activeCheckpointThreadId,
-            useAgentRuntimeStore.getState().replayEventsByThread[activeSessionId] || []
-          )
+          activeCheckpointThreadId,
+          replayEvents,
+          recoveryState
         );
+        const rollbackLifecycle = buildMemoryRollbackLifecycleDescriptor({
+          threadId: activeCheckpointThreadId,
+          runId: checkpoint.runId,
+          restoredPaths: result.restoredPaths,
+          removedRunIds: result.removedRunIds,
+        });
+        appendRuntimeTimelineEvent(activeSessionId, {
+          id: createRuntimeEventId('memory-rollback'),
+          threadId: activeSessionId,
+          providerId: activeSession?.providerId || runtimeProviderId,
+          summary: rollbackLifecycle.timelineSummary,
+          createdAt: Date.now(),
+        });
+        await persistRuntimeTimelineEvent({
+          threadId: activeCheckpointThreadId,
+          providerId: activeSession?.providerId || runtimeProviderId,
+          summary: rollbackLifecycle.timelineSummary,
+        });
+        await replayRecoveryController.appendAndSync({
+          runtimeStoreThreadId: activeSessionId,
+          replayThreadId: activeCheckpointThreadId,
+          eventType: rollbackLifecycle.replayEventType,
+          payload: rollbackLifecycle.replayPayload,
+        });
         if (expandedDiffTarget && removedRunIds.has(expandedDiffTarget.runId)) {
           setExpandedRunDiffKey(null);
         }
@@ -3773,16 +4155,21 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     },
     [
       activeCheckpointThreadId,
+      activeSession?.providerId,
       activeSession?.messages,
       activeSessionId,
       activityEntries,
+      appendRuntimeTimelineEvent,
       currentProject,
       expandedDiffTarget,
       isRewindingRunId,
       pruneThreadHistorySince,
+      replayRecoveryController,
       replaceSessionMessages,
       setActivityEntries,
       setRuntimeRecoveryState,
+      setRuntimeReplayEvents,
+      syncSessionReplayState,
     ]
   );
   const renderRunSummaryCard = useCallback(
@@ -3898,47 +4285,57 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     ]
   );
   const renderToolExecutionCard = useCallback((message: StoredChatMessage) => {
-    const toolCalls = message.toolCalls || [];
-    const runtimeEvents = message.runtimeEvents || [];
+    const runtimeEvents = message.role === 'assistant' ? getAssistantRuntimeTimelineEvents(message.timeline) : [];
     const teamRun = message.teamRun || null;
 
-    if (toolCalls.length === 0 && runtimeEvents.length === 0 && !teamRun) {
+    if (runtimeEvents.length === 0 && !teamRun) {
       return null;
     }
 
     if (teamRun && runtimeEvents.length === 0) {
-      return (
-        <section className="chat-tool-trace-card">
-          <div className="chat-tool-trace-head">
-            <strong>多 Agent 执行轨迹</strong>
-            <span>{teamRun.phases.length} phases / {teamRun.members.length} agents</span>
-          </div>
-          <div className="chat-tool-trace-list">
-            {teamRun.phases.map((phase) => {
-              const phaseMembers = teamRun.members.filter((member) => member.phaseId === phase.id);
-              return (
-                <details key={phase.id} className="chat-tool-trace-phase" open={phase.status === 'running'}>
-                  <summary>
-                    <strong>{phase.title}</strong>
-                    <span>{phase.status}</span>
-                  </summary>
-                  <div className="chat-tool-trace-members">
-                    {phaseMembers.map((member) => (
-                      <details key={member.id} className="chat-tool-trace-member">
-                        <summary>
-                          <strong>{member.title}</strong>
-                          <span>{member.agentId} / {member.status}</span>
-                        </summary>
-                        <pre>{member.error || member.result || 'No output yet.'}</pre>
-                      </details>
-                    ))}
-                  </div>
-                </details>
-              );
-            })}
-          </div>
-        </section>
-      );
+      return [
+        {
+          node: (
+            <section className="chat-tool-trace-card">
+              <div className="chat-tool-trace-head">
+                <strong>多 Agent 执行轨迹</strong>
+                <span>{teamRun.phases.length} phases / {teamRun.members.length} agents</span>
+              </div>
+              <div className="chat-tool-trace-list">
+                {teamRun.phases.map((phase) => {
+                  const phaseMembers = teamRun.members.filter((member) => member.phaseId === phase.id);
+                  return (
+                    <details key={phase.id} className="chat-tool-trace-phase" open={phase.status === 'running'}>
+                      <summary className="chat-inline-disclosure chat-tool-trace-phase-summary">
+                        <div className="chat-inline-disclosure-copy">
+                          <strong>{phase.title}</strong>
+                          <span>{phase.status}</span>
+                        </div>
+                        <span className="chat-inline-disclosure-caret" aria-hidden="true" />
+                      </summary>
+                      <div className="chat-tool-trace-members">
+                        {phaseMembers.map((member) => (
+                          <details key={member.id} className="chat-tool-trace-member">
+                            <summary className="chat-inline-disclosure chat-tool-trace-member-summary">
+                              <div className="chat-inline-disclosure-copy">
+                                <strong>{member.title}</strong>
+                                <span>{member.agentId} / {member.status}</span>
+                              </div>
+                              <span className="chat-inline-disclosure-caret" aria-hidden="true" />
+                            </summary>
+                            <pre>{member.error || member.result || 'No output yet.'}</pre>
+                          </details>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            </section>
+          ),
+          createdAt: message.createdAt,
+        },
+      ];
     }
 
     const renderApprovalEvent = (event: Extract<StoredChatRuntimeEvent, { kind: 'approval' }>) => (
@@ -4043,30 +4440,30 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       </div>
     );
 
-    return (
-      <AIChatRuntimeToolExecutionCard
-        toolCalls={toolCalls}
-        runtimeEvents={runtimeEvents}
-        renderApprovalEvent={renderApprovalEvent}
-        renderQuestionEvent={renderQuestionEvent}
-        renderRuntimeFileChanges={renderRuntimeFileChanges}
-        helpers={{
-          summarizeRuntimeToolCall,
-          getRuntimeToolHeadline,
-          buildRuntimeToolStepPreview,
-          shouldOpenRuntimeToolStep,
-          shouldOpenRuntimeToolGroup,
-          shouldShowRuntimeToolBrief,
-          shouldShowRuntimeToolTechnicalDetails,
-          summarizeRuntimeFileChanges,
-          summarizeRuntimeOutput,
-          getRuntimeStatusLabel,
-          getRuntimeCommandCountLabel,
-          buildRuntimeEventGroupSummary,
-          summarizeProjectFilePath,
-        }}
-      />
-    );
+    return buildRuntimeExecutionTimelineCards({
+      runtimeEvents,
+      renderApprovalEvent,
+      renderQuestionEvent,
+      renderRuntimeFileChanges,
+      helpers: {
+        summarizeRuntimeToolCall,
+        getRuntimeToolHeadline,
+        buildRuntimeToolStepPreview,
+        shouldOpenRuntimeToolStep,
+        shouldOpenRuntimeToolGroup,
+        shouldShowRuntimeToolBrief,
+        shouldShowRuntimeToolTechnicalDetails,
+        summarizeRuntimeFileChanges,
+        summarizeRuntimeOutput,
+        getRuntimeStatusLabel,
+        getRuntimeCommandCountLabel,
+        buildRuntimeEventGroupSummary,
+        summarizeProjectFilePath,
+      },
+    }).map((card) => ({
+      node: card.node,
+      createdAt: card.createdAt,
+    }));
   }, [
     handleAnswerRuntimeQuestion,
     handleApproveRuntimeApproval,
@@ -4342,7 +4739,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       return;
     }
 
-    const session = createWelcomeSession(currentProject.id, currentProject.name, runtimeProviderId);
+    const session = createWelcomeSession(currentProject.id, runtimeProviderId);
     upsertSession(currentProject.id, session);
     setActiveSession(currentProject.id, session.id);
     setInput('');
@@ -4358,7 +4755,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       let targetSessionId = activeSessionId;
       let targetSession = activeSession;
       if (!targetSessionId) {
-        const session = createWelcomeSession(currentProject.id, currentProject.name, runtimeProviderId);
+        const session = createWelcomeSession(currentProject.id, runtimeProviderId);
         upsertSession(currentProject.id, session);
         setActiveSession(currentProject.id, session.id);
         targetSessionId = session.id;
@@ -4426,13 +4823,12 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         renameSession(currentProject.id, targetSessionId, summarizeSessionTitle(rawContent));
       }
 
-      const assistantMessage = createStoredChatMessage('assistant', '', 'default', {
-        runId,
-        thinkingContent: '',
-        answerContent: '',
-      });
+      const assistantMessage = createStoredChatMessage('assistant', '', 'default', { runId });
+      const assistantBaseTimeline = assistantMessage.role === 'assistant' ? assistantMessage.timeline : [];
       appendMessage(currentProject.id, targetSessionId, assistantMessage);
       setIsLoading(true);
+      stopRequestedRef.current = false;
+      abortControllerRef.current = new AbortController();
 
       if (selectedRuntimeConfig && !providerExecutionMode) {
         aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
@@ -4444,6 +4840,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       let executionController: ReturnType<typeof createRuntimeReplayExecutionController> | null = null;
 
       try {
+        runningSubmissionRef.current = { assistantMessageId: assistantMessage.id, runtimeStoreThreadId };
         const projectMemoryEntries = (memory?.memoryEntries || []).map((entry) =>
           buildProjectMemoryEntry(entry)
         );
@@ -4472,6 +4869,83 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           externalThreadId: runtimeThreadId,
         });
         const replayThreadId = runtimeThreadId || targetSessionId;
+        let memoryReadLogged = false;
+        const emitLifecycleToolEvent = async (input: {
+          toolCallId: string;
+          toolName: string;
+          toolInput: Record<string, unknown>;
+          output: string;
+          timelineSummary: string;
+          replayEventType: string;
+          replayPayload: string;
+          status?: RuntimeToolStep['status'];
+        }) => {
+          const status = input.status || 'completed';
+          upsertRuntimeToolUseInMessage(assistantMessage.id, {
+            toolCallId: input.toolCallId,
+            toolName: input.toolName,
+            toolInput: input.toolInput,
+            status,
+          });
+          upsertRuntimeToolResultInMessage(assistantMessage.id, {
+            toolCallId: input.toolCallId,
+            toolName: input.toolName,
+            status,
+            output: input.output,
+          });
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId(input.toolName),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: input.timelineSummary,
+            createdAt: Date.now(),
+          });
+          await persistRuntimeTimelineEvent({
+            threadId: replayThreadId,
+            providerId: runtimeProviderId,
+            summary: input.timelineSummary,
+          });
+          await replayRecoveryController.appendAndSync({
+            runtimeStoreThreadId,
+            replayThreadId,
+            eventType: input.replayEventType,
+            payload: input.replayPayload,
+          });
+        };
+        const emitMemoryReadLifecycle = async () => {
+          if (memoryReadLogged) {
+            return;
+          }
+          memoryReadLogged = true;
+          const lifecycle = buildMemoryReadLifecycleDescriptor({
+            threadId: runtimeStoreThreadId,
+            memoryEntries: projectMemoryEntries.map((entry) => ({
+              id: entry.id,
+              title: entry.title || entry.label,
+              kind: entry.kind,
+            })),
+          });
+          await emitLifecycleToolEvent(lifecycle);
+        };
+        const emitSkillHookLifecycle = async (event: Parameters<
+          NonNullable<Parameters<typeof executeRuntimeBuiltInAgentTurn>[0]['onSkillHookEvent']>
+        >[0]) => {
+          const lifecycle = buildSkillHookLifecycleDescriptor({
+            toolCallId: createRuntimeEventId('skill-hook'),
+            skillId: event.skillId,
+            skillName: event.skillName,
+            eventName: event.eventName,
+            toolName: event.toolName,
+            matcher: event.matcher,
+            command: event.command,
+            status: event.status,
+            error: event.error,
+          });
+          await emitLifecycleToolEvent({
+            ...lifecycle,
+            status: event.status === 'failed' ? 'failed' : 'completed',
+          });
+        };
         appendRuntimeTimelineEvent(runtimeStoreThreadId, {
           id: createRuntimeEventId('user'),
           threadId: runtimeStoreThreadId,
@@ -4570,7 +5044,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           return;
         }
         const contextProjectRoot = await resolveProjectRootById(currentProject.id);
-        const conversationHistory = targetSession?.messages || activeSession?.messages || [];
+        const conversationHistory = toConversationHistoryMessages(targetSession?.messages || activeSession?.messages || []);
         const projectInstructionReferences = await loadProjectInstructionReferences(contextProjectRoot);
         const agentInstructions = [
           contextSnapshot.primaryLabel,
@@ -4629,6 +5103,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         }
         const activeExecutionController = executionController;
         runtimeTurnSessionId = `turn_${runId}`;
+        const executionTaskId = createExecutionTaskId(runId);
+        const rootExecutionRunId = createRootExecutionRunId(executionTaskId);
         upsertTurnSession(
           runtimeStoreThreadId,
           createEmptyAgentTurnSession({
@@ -4638,6 +5114,61 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             userPrompt: cleanedContent,
           })
         );
+        upsertExecutionTask(
+          runtimeStoreThreadId,
+          createExecutionTaskRecord({
+            runId,
+            threadId: runtimeStoreThreadId,
+            turnId: runtimeTurnSessionId,
+            providerId: runtimeProviderId,
+            title: cleanedContent.slice(0, 80) || 'AI task',
+            prompt: cleanedContent,
+            summary: rawContent.slice(0, 160) || cleanedContent.slice(0, 160),
+            status: 'planning',
+          })
+        );
+        upsertExecutionRun(
+          runtimeStoreThreadId,
+          createExecutionRunRecord({
+            id: rootExecutionRunId,
+            threadId: runtimeStoreThreadId,
+            taskId: executionTaskId,
+            turnId: runtimeTurnSessionId,
+            providerId: runtimeProviderId,
+            kind: 'turn',
+            title: cleanedContent.slice(0, 80) || 'Turn run',
+            summary: 'Preparing execution',
+            status: 'planning',
+          })
+        );
+        const patchExecutionTaskFromRuns = () => {
+          const currentTask = (useAgentRuntimeStore.getState().tasksByThread[runtimeStoreThreadId] || []).find(
+            (task) => task.id === executionTaskId
+          );
+          const currentRuns = useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || [];
+          if (!currentTask) {
+            return;
+          }
+          upsertExecutionTask(runtimeStoreThreadId, deriveTaskStatusFromRuns(currentTask, currentRuns));
+        };
+        const patchRootExecutionRun = (status: 'planning' | 'running' | 'completed' | 'failed' | 'blocked', summary: string) => {
+          const currentRun = (useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || []).find(
+            (run) => run.id === rootExecutionRunId
+          );
+          if (!currentRun) {
+            return;
+          }
+          upsertExecutionRun(runtimeStoreThreadId, patchExecutionRunStatus(currentRun, status, summary));
+          patchExecutionTaskFromRuns();
+        };
+        const syncExecutionGraph = (input: {
+          runs: ReturnType<typeof useAgentRuntimeStore.getState>['runsByThread'][string];
+          agentRuns: ReturnType<typeof useAgentRuntimeStore.getState>['agentRunsByThread'][string];
+        }) => {
+          setExecutionRuns(runtimeStoreThreadId, input.runs || []);
+          setExecutionAgentRuns(runtimeStoreThreadId, input.agentRuns || []);
+          patchExecutionTaskFromRuns();
+        };
         const patchCurrentTurnSession = (updater: (session: AgentTurnSession) => AgentTurnSession) => {
           patchTurnSession(runtimeStoreThreadId, runtimeTurnSessionId!, updater);
         };
@@ -4677,6 +5208,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           );
         };
         const markTurnExecuting = (title: string, detail: string, toolName: string | null = null) => {
+          patchRootExecutionRun('running', detail || title);
           patchCurrentTurnSession((session) =>
             applyRuntimeTurnExecuting({
               session,
@@ -4688,6 +5220,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           );
         };
         const completeTurnSession = async (finalContent: string) => {
+          patchRootExecutionRun('completed', finalContent);
           patchCurrentTurnSession((session) =>
             applyRuntimeTurnCompleted({
               session,
@@ -4698,6 +5231,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           await activeExecutionController.completeWithReplay(finalContent);
         };
         const failTurnSession = async (message: string) => {
+          patchRootExecutionRun('failed', message);
           patchCurrentTurnSession((session) =>
             applyRuntimeTurnFailed({
               session,
@@ -4708,6 +5242,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           await activeExecutionController.failWithReplay(message);
         };
         const blockTurnSession = async (reason: string, replaySummary: string, actionLabel: string | null = null) => {
+          patchRootExecutionRun('blocked', reason);
           patchCurrentTurnSession((session) =>
             applyRuntimeTurnBlocked({
               session,
@@ -4753,16 +5288,57 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           }));
         }
 
+        if (invokedRuntimeSkill) {
+          const activatedSkillDescriptor = buildSkillActivationLifecycleDescriptor({
+            sourceId: buildSyntheticRuntimeToolCallId('skill-activate', runId, invokedRuntimeSkill.id),
+            skill: invokedRuntimeSkill,
+            invocationKind: skillIntent?.invocationKind || 'tag',
+            prompt: cleanedContent,
+          });
+          upsertRuntimeToolUseInMessage(assistantMessage.id, {
+            toolCallId: activatedSkillDescriptor.toolCallId,
+            toolName: activatedSkillDescriptor.toolName,
+            toolInput: activatedSkillDescriptor.toolInput,
+            status: 'completed',
+          });
+          upsertRuntimeToolResultInMessage(assistantMessage.id, {
+            toolCallId: activatedSkillDescriptor.toolCallId,
+            toolName: activatedSkillDescriptor.toolName,
+            status: 'completed',
+            output: activatedSkillDescriptor.output,
+          });
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId('assistant'),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: activatedSkillDescriptor.timelineSummary,
+            createdAt: Date.now(),
+          });
+          await persistRuntimeTimelineEvent({
+            threadId: replayThreadId,
+            providerId: runtimeProviderId,
+            summary: activatedSkillDescriptor.timelineSummary,
+          });
+          await replayRecoveryController.appendAndSync({
+            runtimeStoreThreadId,
+            replayThreadId,
+            eventType: activatedSkillDescriptor.replayEventType,
+            payload: activatedSkillDescriptor.replayPayload,
+          });
+        }
+
         if (mcpCommand) {
           const mcpToolEventKey = `mcp:${mcpCommand.serverId}:${mcpCommand.toolName}:${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
+          const mcpLifecycleStart = buildMcpLifecycleStartDescriptor({
             toolCallId: mcpToolEventKey,
-            toolName: `${mcpCommand.serverId}/${mcpCommand.toolName}`,
-            toolInput: {
-              serverId: mcpCommand.serverId,
-              toolName: mcpCommand.toolName,
-              arguments: mcpCommand.argumentsText || '',
-            },
+            serverId: mcpCommand.serverId,
+            toolName: mcpCommand.toolName,
+            argumentsText: mcpCommand.argumentsText || '',
+          });
+          upsertRuntimeToolUseInMessage(assistantMessage.id, {
+            toolCallId: mcpLifecycleStart.toolCallId,
+            toolName: mcpLifecycleStart.toolName,
+            toolInput: mcpLifecycleStart.toolInput,
             status: 'running',
           });
           const mcpToolDefinition = findRuntimeMcpToolDefinition(
@@ -4794,6 +5370,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               const approved = await new Promise<boolean>(async (resolve) => {
                 await requestRuntimeApproval({
                   threadId: runtimeThreadId || targetSessionId,
+                  runtimeStoreThreadId,
+                  replayThreadId,
+                  providerId: runtimeProviderId,
                   actionType: 'mcp_tool_call',
                   riskLevel: 'medium',
                   summary: `允许执行 MCP 工具: ${mcpCommand.serverId}/${mcpCommand.toolName}`,
@@ -4847,21 +5426,28 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             mcpCommand.toolName
           );
           upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: mcpToolEventKey,
-            toolName: `${mcpCommand.serverId}/${mcpCommand.toolName}`,
-            toolInput: {
-              serverId: mcpCommand.serverId,
-              toolName: mcpCommand.toolName,
-              arguments: mcpCommand.argumentsText || '',
-            },
+            toolCallId: mcpLifecycleStart.toolCallId,
+            toolName: mcpLifecycleStart.toolName,
+            toolInput: mcpLifecycleStart.toolInput,
             status: 'running',
           });
           appendRuntimeTimelineEvent(runtimeStoreThreadId, {
             id: createRuntimeEventId('mcp-start'),
             threadId: runtimeStoreThreadId,
             providerId: runtimeProviderId,
-            summary: `MCP started: ${mcpCommand.serverId}/${mcpCommand.toolName}`,
+            summary: mcpLifecycleStart.timelineSummary,
             createdAt: Date.now(),
+          });
+          await persistRuntimeTimelineEvent({
+            threadId: replayThreadId,
+            providerId: runtimeProviderId,
+            summary: mcpLifecycleStart.timelineSummary,
+          });
+          await replayRecoveryController.appendAndSync({
+            runtimeStoreThreadId,
+            replayThreadId,
+            eventType: mcpLifecycleStart.replayEventType,
+            payload: mcpLifecycleStart.replayPayload,
           });
 
           const mcpResult = await executeRuntimeMcpTurn({
@@ -4905,20 +5491,36 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             status: toolCall.error ? 'failed' : 'completed',
             output: toolCall.error || toolCall.resultPreview || mcpResult.content,
           });
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
-            ...currentMessage,
-            role: toolCall.error ? 'system' : currentMessage.role,
-            tone: toolCall.error ? 'error' : currentMessage.tone,
-            ...(toolCall.error ? { content: mcpResult.content } : buildAssistantContentState(mcpResult.content)),
-            runtimeEvents: (currentMessage.runtimeEvents || []).map((event) =>
-              event.kind === 'tool_use' && event.toolCallId === mcpToolEventKey
-                ? {
-                    ...event,
-                    status: toolCall.error ? ('failed' as const) : ('completed' as const),
-                  }
-                : event
-            ),
-          }));
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => {
+            if (toolCall.error) {
+              return {
+                id: currentMessage.id,
+                role: 'system',
+                content: mcpResult.content,
+                tone: 'error',
+                runId: currentMessage.runId,
+                teamRun: currentMessage.teamRun,
+                structuredCards: currentMessage.structuredCards,
+                knowledgeProposal: currentMessage.knowledgeProposal,
+                projectFileProposal: currentMessage.projectFileProposal,
+                createdAt: currentMessage.createdAt,
+              };
+            }
+
+            return currentMessage.role === 'assistant'
+              ? {
+                  ...currentMessage,
+                  timeline: buildAssistantTimelineUpdate(mcpResult.content, currentMessage.timeline).map((event) =>
+                    event.kind === 'tool_use' && event.toolCallId === mcpToolEventKey
+                      ? {
+                          ...event,
+                          status: 'completed' as const,
+                        }
+                      : event
+                  ),
+                }
+              : currentMessage;
+          });
           appendRuntimeTimelineEvent(runtimeStoreThreadId, {
             id: createRuntimeEventId(toolCall.error ? 'mcp-error' : 'mcp-complete'),
             threadId: runtimeStoreThreadId,
@@ -4929,7 +5531,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           await persistRuntimeTimelineEvent({
             threadId: replayThreadId,
             providerId: runtimeProviderId,
-            summary: mcpResult.replaySummary,
+            summary: mcpResult.timelineSummary,
           });
           await replayRecoveryController.appendAndSync({
             runtimeStoreThreadId,
@@ -4961,6 +5563,23 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
 
           const targetWorkflowPackage = skillIntent.package;
           const workflowToolCallId = buildSyntheticRuntimeToolCallId('workflow', assistantMessage.id);
+          const workflowPackageRunId = `run_${executionTaskId}_workflow_package_${targetWorkflowPackage}`;
+          upsertExecutionRun(
+            runtimeStoreThreadId,
+            createExecutionRunRecord({
+              id: workflowPackageRunId,
+              threadId: runtimeStoreThreadId,
+              taskId: executionTaskId,
+              turnId: runtimeTurnSessionId,
+              parentRunId: rootExecutionRunId,
+              providerId: 'built-in',
+              kind: 'workflow_package',
+              title: targetWorkflowPackage,
+              summary: buildSessionPreview(cleanedContent) || cleanedContent,
+              status: 'running',
+            })
+          );
+          patchExecutionTaskFromRuns();
           upsertRuntimeToolUseInMessage(assistantMessage.id, {
             toolCallId: workflowToolCallId,
             toolName: 'workflow_package',
@@ -4996,18 +5615,43 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                   stageSummaries: { ...run.stageSummaries },
                   skillExecutions: [...run.skillExecutions],
                 });
-                updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-                  ...message,
-                  runtimeEvents: syncWorkflowRuntimeEvents(
-                    message.runtimeEvents,
-                    workflowToolCallId,
-                    Array.from(workflowRunSnapshots.values())
-                  ),
-                }));
+                updateAssistantMessageTimeline(assistantMessage.id, (timeline) =>
+                  replaceAssistantRuntimeTimelineEvents(
+                    timeline,
+                    syncWorkflowRuntimeEvents(
+                      getAssistantRuntimeTimelineEvents(timeline),
+                      workflowToolCallId,
+                      Array.from(workflowRunSnapshots.values())
+                    )
+                  )
+                );
+                syncExecutionGraph(
+                  syncWorkflowExecutionGraph(
+                    useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || [],
+                    useAgentRuntimeStore.getState().agentRunsByThread[runtimeStoreThreadId] || [],
+                    {
+                      threadId: runtimeStoreThreadId,
+                      taskId: executionTaskId,
+                      turnId: runtimeTurnSessionId!,
+                      parentRunId: rootExecutionRunId,
+                      workflowRuns: Array.from(workflowRunSnapshots.values()),
+                    }
+                  )
+                );
               },
             });
           } catch (error) {
             const message = normalizeErrorMessage(error);
+            const currentWorkflowRun = (useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || []).find(
+              (run) => run.id === workflowPackageRunId
+            );
+            if (currentWorkflowRun) {
+              upsertExecutionRun(
+                runtimeStoreThreadId,
+                patchExecutionRunStatus(currentWorkflowRun, 'failed', message)
+              );
+              patchExecutionTaskFromRuns();
+            }
             upsertRuntimeToolResultInMessage(assistantMessage.id, {
               toolCallId: workflowToolCallId,
               toolName: 'workflow_package',
@@ -5022,14 +5666,29 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             status: 'completed',
             output: workflowCompletion.finalContent,
           });
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            runtimeEvents: syncWorkflowRuntimeEvents(
-              message.runtimeEvents,
-              workflowToolCallId,
-              Array.from(workflowRunSnapshots.values())
-            ),
-          }));
+          updateAssistantMessageTimeline(assistantMessage.id, (timeline) =>
+            replaceAssistantRuntimeTimelineEvents(
+              timeline,
+              syncWorkflowRuntimeEvents(
+                getAssistantRuntimeTimelineEvents(timeline),
+                workflowToolCallId,
+                Array.from(workflowRunSnapshots.values())
+              )
+            )
+          );
+          syncExecutionGraph(
+            syncWorkflowExecutionGraph(
+              useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || [],
+              useAgentRuntimeStore.getState().agentRunsByThread[runtimeStoreThreadId] || [],
+              {
+                threadId: runtimeStoreThreadId,
+                taskId: executionTaskId,
+                turnId: runtimeTurnSessionId!,
+                parentRunId: rootExecutionRunId,
+                workflowRuns: Array.from(workflowRunSnapshots.values()),
+              }
+            )
+          );
 
           updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
             ...message,
@@ -5079,6 +5738,40 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             summary: localAgentFlow.summary,
           });
           const localAgentToolCallId = buildSyntheticRuntimeToolCallId('local-agent', assistantMessage.id);
+          const localAgentExecutionRunId = createLocalAgentExecutionRunId(executionTaskId, localExecutionAgentId);
+          upsertExecutionRun(
+            runtimeStoreThreadId,
+            createExecutionRunRecord({
+              id: localAgentExecutionRunId,
+              threadId: runtimeStoreThreadId,
+              taskId: executionTaskId,
+              turnId: runtimeTurnSessionId!,
+              parentRunId: rootExecutionRunId,
+              providerId: localExecutionAgentId === 'team' ? 'team' : localExecutionAgentId,
+              kind: localExecutionAgentId === 'team' ? 'team' : 'local_agent',
+              title: localAgentFlow.summary,
+              summary: localAgentFlow.summary,
+              status: localAgentFlow.decision === 'blocked' ? 'blocked' : 'planning',
+            })
+          );
+          if (localExecutionAgentId !== 'team') {
+            upsertExecutionAgentRun(
+              runtimeStoreThreadId,
+              createExecutionAgentRunRecord({
+                id: createLocalAgentExecutionAgentRunId(localAgentExecutionRunId, localExecutionAgentId),
+                threadId: runtimeStoreThreadId,
+                taskId: executionTaskId,
+                runId: localAgentExecutionRunId,
+                kind: 'local_agent',
+                agentId: localExecutionAgentId,
+                role: shouldRunForkSkill ? 'fork_skill' : 'executor',
+                title: localAgentFlow.summary,
+                summary: localAgentFlow.summary,
+                status: localAgentFlow.decision === 'blocked' ? 'blocked' : 'planning',
+              })
+            );
+          }
+          patchExecutionTaskFromRuns();
           upsertRuntimeToolUseInMessage(assistantMessage.id, {
             toolCallId: localAgentToolCallId,
             toolName: localExecutionAgentId === 'team' ? 'run_agent_team' : 'run_local_agent',
@@ -5096,6 +5789,28 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             }),
           }));
           const executeLocalAgentFlow = async (finalizeReplay = true) => {
+            const currentLocalExecutionRun = (useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || []).find(
+              (run) => run.id === localAgentExecutionRunId
+            );
+            if (currentLocalExecutionRun) {
+              upsertExecutionRun(
+                runtimeStoreThreadId,
+                patchExecutionRunStatus(currentLocalExecutionRun, 'running', localAgentFlow.summary)
+              );
+            }
+            if (localExecutionAgentId !== 'team') {
+              const currentAgentRun = (
+                useAgentRuntimeStore.getState().agentRunsByThread[runtimeStoreThreadId] || []
+              ).find((run) => run.id === createLocalAgentExecutionAgentRunId(localAgentExecutionRunId, localExecutionAgentId));
+              if (currentAgentRun) {
+                upsertExecutionAgentRun(runtimeStoreThreadId, {
+                  ...currentAgentRun,
+                  status: 'running',
+                  updatedAt: Date.now(),
+                });
+              }
+            }
+            patchExecutionTaskFromRuns();
             markTurnExecuting(
               localExecutionAgentId === 'team'
                 ? 'Run multi-agent team'
@@ -5123,6 +5838,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                   prompt,
                 },
               });
+            await emitMemoryReadLifecycle();
             const executionResult =
               localExecutionAgentId === 'team'
                 ? await (async () => {
@@ -5182,12 +5898,30 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
                           ...message,
                           teamRun,
-                          runtimeEvents: syncTeamRunRuntimeEvents(
-                            message.runtimeEvents,
-                            localAgentToolCallId,
-                            teamRun
-                          ),
                         }));
+                        updateAssistantMessageTimeline(assistantMessage.id, (timeline) =>
+                          replaceAssistantRuntimeTimelineEvents(
+                            timeline,
+                            syncTeamRunRuntimeEvents(
+                              getAssistantRuntimeTimelineEvents(timeline),
+                              localAgentToolCallId,
+                              teamRun
+                            )
+                          )
+                        );
+                        syncExecutionGraph(
+                          syncTeamExecutionGraph(
+                            useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || [],
+                            useAgentRuntimeStore.getState().agentRunsByThread[runtimeStoreThreadId] || [],
+                            {
+                              threadId: runtimeStoreThreadId,
+                              taskId: executionTaskId,
+                              turnId: runtimeTurnSessionId!,
+                              parentRunId: rootExecutionRunId,
+                              teamRun,
+                            }
+                          )
+                        );
                       },
                       runPrompt,
                     });
@@ -5241,6 +5975,30 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                   });
 
             if (executionResult.status === 'completed') {
+              const currentLocalExecutionRun = (useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || []).find(
+                (run) => run.id === localAgentExecutionRunId
+              );
+              if (currentLocalExecutionRun) {
+                upsertExecutionRun(
+                  runtimeStoreThreadId,
+                  patchExecutionRunStatus(currentLocalExecutionRun, 'completed', executionResult.finalContent)
+                );
+              }
+              if (localExecutionAgentId !== 'team') {
+                const currentAgentRun = (
+                  useAgentRuntimeStore.getState().agentRunsByThread[runtimeStoreThreadId] || []
+                ).find((run) => run.id === createLocalAgentExecutionAgentRunId(localAgentExecutionRunId, localExecutionAgentId));
+                if (currentAgentRun) {
+                  upsertExecutionAgentRun(runtimeStoreThreadId, {
+                    ...currentAgentRun,
+                    status: 'completed',
+                    summary: executionResult.finalContent,
+                    updatedAt: Date.now(),
+                    completedAt: currentAgentRun.completedAt || Date.now(),
+                  });
+                }
+              }
+              patchExecutionTaskFromRuns();
               patchLiveState(runtimeStoreThreadId, (state) => ({
                 ...state,
                 connectionState: 'connected',
@@ -5303,6 +6061,30 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               streamingToolInput: '',
               streamingText: '',
             }));
+            const failedLocalExecutionRun = (useAgentRuntimeStore.getState().runsByThread[runtimeStoreThreadId] || []).find(
+              (run) => run.id === localAgentExecutionRunId
+            );
+            if (failedLocalExecutionRun) {
+              upsertExecutionRun(
+                runtimeStoreThreadId,
+                patchExecutionRunStatus(failedLocalExecutionRun, 'failed', executionResult.message)
+              );
+            }
+            if (localExecutionAgentId !== 'team') {
+              const currentAgentRun = (
+                useAgentRuntimeStore.getState().agentRunsByThread[runtimeStoreThreadId] || []
+              ).find((run) => run.id === createLocalAgentExecutionAgentRunId(localAgentExecutionRunId, localExecutionAgentId));
+              if (currentAgentRun) {
+                upsertExecutionAgentRun(runtimeStoreThreadId, {
+                  ...currentAgentRun,
+                  status: 'failed',
+                  summary: executionResult.message,
+                  updatedAt: Date.now(),
+                  completedAt: currentAgentRun.completedAt || Date.now(),
+                });
+              }
+            }
+            patchExecutionTaskFromRuns();
             upsertRuntimeToolResultInMessage(assistantMessage.id, {
               toolCallId: localAgentToolCallId,
               toolName: localExecutionAgentId === 'team' ? 'run_agent_team' : 'run_local_agent',
@@ -5391,6 +6173,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               }));
               await requestRuntimeApproval({
                 threadId: approvalThreadId,
+                runtimeStoreThreadId,
+                replayThreadId,
+                providerId: runtimeProviderId,
                 actionType: localAgentFlow.actionType,
                 riskLevel: localAgentFlow.riskLevel,
                 summary: localAgentFlow.summary,
@@ -5455,6 +6240,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         const projectFileRequestKind = resolveProjectFileRequestKind({
           rawInput: rawContent,
           cleanedInput: cleanedContent,
+          conversationHistory,
         });
 
         if (projectFileRequestKind === 'read') {
@@ -5762,20 +6548,15 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             createdAt: Date.now(),
           };
 
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            runtimeQuestion: payload,
-            runtimeEvents: [
-              ...(message.runtimeEvents || []),
-              {
-                id: buildRuntimeEventId('question', questionId),
-                kind: 'question',
-                questionId,
-                payload,
-                createdAt: Date.now(),
-              },
-            ],
-          }));
+          updateAssistantMessageTimeline(assistantMessage.id, (timeline) =>
+            upsertAssistantRuntimeQuestionEvent(timeline, {
+              id: buildRuntimeEventId('question', questionId),
+              kind: 'question',
+              questionId,
+              payload,
+              createdAt: Date.now(),
+            })
+          );
           patchLiveState(runtimeStoreThreadId, (state) => ({
             ...state,
             connectionState: 'connected',
@@ -5807,6 +6588,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           const approved = await new Promise<boolean>(async (resolve) => {
             await requestRuntimeApproval({
               threadId: runtimeThreadId || targetSessionId,
+              runtimeStoreThreadId,
+              replayThreadId,
+              providerId: runtimeProviderId,
               actionType: buildBuiltInToolApprovalActionType(call.name),
               riskLevel: call.name === 'bash' || call.name === 'fetch' ? 'high' : 'medium',
               summary: buildBuiltInToolApprovalSummary(call.name, call.input),
@@ -5830,6 +6614,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         let toolStartTime = 0;
         let toolTimerInterval: ReturnType<typeof setInterval> | null = null;
         const streamingAssembler = createRuntimeStreamingMessageAssembler();
+        await emitMemoryReadLifecycle();
         const agentTurn = await executeRuntimeBuiltInAgentTurn({
           projectId: currentProject.id,
           projectName: currentProject.name,
@@ -5846,6 +6631,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           skillIntent,
           contextLabels,
           allowedTools: builtInAllowedTools,
+          onSkillHookEvent: emitSkillHookLifecycle,
           onToolCallsChange: (toolCalls) => {
             setStallFP((n) => n + 1);
             setThreadToolCalls(targetSessionId, toolCalls);
@@ -5878,19 +6664,20 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                 ? `Running ${runningToolCall.name}${toolStartTime && Date.now() - toolStartTime > 3000 ? ` (${Math.floor((Date.now() - toolStartTime) / 1000)}s)` : ''}`
                 : state.statusVerb,
             }));
-            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-              ...message,
-              runtimeEvents: syncRuntimeEventsWithToolCalls(message.runtimeEvents, toolCalls),
-            }));
+            updateAssistantMessageTimeline(assistantMessage.id, (timeline) =>
+              syncAssistantTimelineWithToolCalls(timeline, toolCalls)
+            );
           },
           onModelEvent: (event) => {
             setStallFP((n) => n + 1);
             const draftState = streamingAssembler.append(event);
+            const currentDraftTimeline =
+              streamingDraftBufferRef.current[assistantMessage.id]?.timeline || assistantBaseTimeline;
             const draft = {
-              content: draftState.content,
-              thinkingContent: draftState.thinkingContent,
-              answerContent: draftState.answerContent,
-              assistantParts: draftState.assistantParts,
+              timeline: buildAssistantStreamingTimeline(draftState.content, currentDraftTimeline, {
+                fallbackThinkingContent: draftState.thinkingContent,
+                preferredAssistantParts: draftState.assistantParts,
+              }),
             };
             patchLiveState(runtimeStoreThreadId, (state) => ({
               ...state,
@@ -5908,26 +6695,36 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             pushStreamingDraft(assistantMessage.id, draft);
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
-              content: draft.content,
-              thinkingContent: draft.thinkingContent,
-              answerContent: draft.answerContent,
-              assistantParts: draft.assistantParts,
+              ...(message.role === 'assistant'
+                ? {
+                    timeline: buildAssistantTimelineUpdate(draftState.content, message.timeline, {
+                      fallbackThinkingContent: draftState.thinkingContent,
+                      preferredAssistantParts: draftState.assistantParts,
+                    }),
+                  }
+                : {}),
             }));
           },
           beforeToolCall: async (call) => {
             const boundaryDraft = streamingAssembler.markToolBoundary();
+            const currentDraftTimeline =
+              streamingDraftBufferRef.current[assistantMessage.id]?.timeline || assistantBaseTimeline;
             pushStreamingDraft(assistantMessage.id, {
-              content: boundaryDraft.content,
-              thinkingContent: boundaryDraft.thinkingContent,
-              answerContent: boundaryDraft.answerContent,
-              assistantParts: boundaryDraft.assistantParts as AIChatMessagePart[],
+              timeline: buildAssistantStreamingTimeline(boundaryDraft.content, currentDraftTimeline, {
+                fallbackThinkingContent: boundaryDraft.thinkingContent,
+                preferredAssistantParts: boundaryDraft.assistantParts as AIChatMessagePart[],
+              }),
             });
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
-              content: boundaryDraft.content,
-              thinkingContent: boundaryDraft.thinkingContent,
-              answerContent: boundaryDraft.answerContent,
-              assistantParts: boundaryDraft.assistantParts,
+              ...(message.role === 'assistant'
+                ? {
+                    timeline: buildAssistantTimelineUpdate(boundaryDraft.content, message.timeline, {
+                      fallbackThinkingContent: boundaryDraft.thinkingContent,
+                      preferredAssistantParts: boundaryDraft.assistantParts,
+                    }),
+                  }
+                : {}),
             }));
             await requestBuiltInToolApproval(call);
           },
@@ -5945,6 +6742,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               systemPrompt,
               prompt,
               onEvent,
+              signal: abortControllerRef.current?.signal,
             }),
           executeTool: (call) =>
             call.name === ASK_USER_TOOL_NAME ? runBuiltInQuestionTool(call) : toolExecutor.execute(call),
@@ -5952,6 +6750,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
 
         const finalDraft = streamingAssembler.buildFinal(agentTurn.finalContent);
         const normalizedFinalContent = finalDraft.content;
+        const recoveryProposal = await buildRuntimeWriteRecoveryProposal(agentTurn.toolCalls);
         if (toolTimerInterval) clearInterval(toolTimerInterval);
         clearStreamingDraft(assistantMessage.id);
         patchLiveState(runtimeStoreThreadId, (state) => ({
@@ -5965,12 +6764,21 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         }));
         updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
           ...message,
-          ...buildAssistantContentState(
-            normalizedFinalContent,
-            message.thinkingContent,
-            finalDraft.assistantParts as AIChatMessagePart[]
-          ),
-          toolCalls: agentTurn.toolCalls,
+          ...(message.role === 'assistant'
+            ? {
+                timeline: buildAssistantTimelineUpdate(
+                  recoveryProposal && !normalizedFinalContent.trim()
+                    ? recoveryProposal.assistantMessage
+                    : normalizedFinalContent,
+                  syncAssistantTimelineWithToolCalls(message.timeline, agentTurn.toolCalls),
+                  {
+                    fallbackThinkingContent: getAssistantTimelineReasoning(message.timeline),
+                    preferredAssistantParts: finalDraft.assistantParts as AIChatMessagePart[],
+                  }
+                ),
+              }
+            : {}),
+          projectFileProposal: message.projectFileProposal ?? recoveryProposal ?? undefined,
         }));
         setThreadMemoryCandidates(targetSessionId, agentTurn.memoryCandidates);
         const checkpointFilesFromToolCalls = extractCheckpointFilesFromToolCalls(agentTurn.toolCalls);
@@ -6016,53 +6824,68 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         });
         await completeTurnSession(normalizedFinalContent);
       } catch (error) {
-        const message = normalizeErrorMessage(error);
-        clearStreamingDraft(assistantMessage.id);
-        patchLiveState(runtimeStoreThreadId, (state) => ({
-          ...state,
-          connectionState: 'connected',
-          statusVerb: 'Failed',
-          activeThinking: false,
-          activeToolName: null,
-          streamingToolInput: '',
-          streamingText: '',
-        }));
-        updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
-          ...currentMessage,
-          role: 'system',
-          tone: 'error',
-          content: message,
-          ...clearAssistantContentState(),
-        }));
-        appendActivityEntry(currentProject.id, {
-          id: createActivityEntryId(),
-          runId,
-          type: 'failed',
-          summary: message,
-          changedPaths: [],
-          runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
-          skill: resolvedSkill,
-          createdAt: Date.now(),
-        });
-        if (executionController) {
-          if (runtimeTurnSessionId) {
-            patchTurnSession(runtimeStoreThreadId, runtimeTurnSessionId, (session) =>
-              reduceAgentTurnSession(session, { type: 'execution_failed', reason: message })
-            );
-          }
-          await executionController.failWithReplay(message);
+        if (stopRequestedRef.current) {
+          clearStreamingDraft(assistantMessage.id);
+          patchLiveState(runtimeStoreThreadId, (state) => ({
+            ...state,
+            connectionState: 'connected',
+            statusVerb: '',
+            activeThinking: false,
+            activeToolName: null,
+            streamingToolInput: '',
+            streamingText: '',
+          }));
         } else {
-          failRuntimeRun(runtimeStoreThreadId, message);
+          const message = normalizeErrorMessage(error);
+          clearStreamingDraft(assistantMessage.id);
+          patchLiveState(runtimeStoreThreadId, (state) => ({
+            ...state,
+            connectionState: 'connected',
+            statusVerb: 'Failed',
+            activeThinking: false,
+            activeToolName: null,
+            streamingToolInput: '',
+            streamingText: '',
+          }));
+          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (currentMessage) => ({
+            ...currentMessage,
+            role: 'system',
+            tone: 'error',
+            content: message,
+            ...clearAssistantContentState(),
+          }));
+          appendActivityEntry(currentProject.id, {
+            id: createActivityEntryId(),
+            runId,
+            type: 'failed',
+            summary: message,
+            changedPaths: [],
+            runtime: effectiveChatAgentId === 'built-in' ? 'built-in' : 'local',
+            skill: resolvedSkill,
+            createdAt: Date.now(),
+          });
+          if (executionController) {
+            if (runtimeTurnSessionId) {
+              patchTurnSession(runtimeStoreThreadId, runtimeTurnSessionId, (session) =>
+                reduceAgentTurnSession(session, { type: 'execution_failed', reason: message })
+              );
+            }
+            await executionController.failWithReplay(message);
+          } else {
+            failRuntimeRun(runtimeStoreThreadId, message);
+          }
+          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+            id: createRuntimeEventId('error'),
+            threadId: runtimeStoreThreadId,
+            providerId: runtimeProviderId,
+            summary: `Error: ${buildSessionPreview(message)}`,
+            createdAt: Date.now(),
+          });
         }
-        appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-          id: createRuntimeEventId('error'),
-          threadId: runtimeStoreThreadId,
-          providerId: runtimeProviderId,
-          summary: `Error: ${buildSessionPreview(message)}`,
-          createdAt: Date.now(),
-        });
       } finally {
         setIsLoading(false);
+        runningSubmissionRef.current = null;
+        abortControllerRef.current = null;
       }
     },
     [
@@ -6075,6 +6898,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       appendRuntimeMcpToolCall,
       appendRuntimeTimelineEvent,
       bindRuntimeThread,
+      buildRuntimeWriteRecoveryProposal,
       clearStreamingDraft,
       pushStreamingDraft,
       contextSnapshot.currentFileLabel,
@@ -6144,6 +6968,26 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     },
     [input, submitPrompt]
   );
+
+  const handleStopGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
+    stopRequestedRef.current = true;
+    const submission = runningSubmissionRef.current;
+    if (submission) {
+      clearStreamingDraft(submission.assistantMessageId);
+      patchLiveState(submission.runtimeStoreThreadId, (state) => ({
+        ...state,
+        connectionState: 'connected',
+        statusVerb: '',
+        activeThinking: false,
+        activeToolName: null,
+        streamingToolInput: '',
+        streamingText: '',
+      }));
+      runningSubmissionRef.current = null;
+    }
+    setIsLoading(false);
+  }, [clearStreamingDraft, patchLiveState, setIsLoading]);
 
   useEffect(() => {
     const handleExternalCommand = (event: Event) => {
@@ -6677,11 +7521,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                     runStateLabel={isGNAgentEmbedded ? runStateLabel : undefined}
                     runStateTone={isGNAgentEmbedded ? runStateTone : undefined}
                     isLoading={isLoading}
-                    disabled={!input.trim() || isLoading}
-                    onSubmit={() => {
-                      void handleSubmit();
-                    }}
-                    SendIcon={SendIcon}
+                    disabled={!input.trim() && !isLoading}
+                    onSubmit={isLoading ? handleStopGeneration : () => { void handleSubmit(); }}
+                    SendIcon={isLoading ? PauseIcon : SendIcon}
                   />
                 </>
               ) : (
@@ -6738,13 +7580,14 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                           rows={1}
                         />
                         <button
-                          type="submit"
+                          type={isLoading ? 'button' : 'submit'}
                           className="chat-send-btn"
-                          aria-label={isLoading ? '\u53d1\u9001\u4e2d' : '\u53d1\u9001'}
-                          title={isLoading ? '\u53d1\u9001\u4e2d' : '\u53d1\u9001'}
-                          disabled={!input.trim() || isLoading}
+                          aria-label={isLoading ? '\u7ec8\u6b62' : '\u53d1\u9001'}
+                          title={isLoading ? '\u7ec8\u6b62' : '\u53d1\u9001'}
+                          disabled={!input.trim() && !isLoading}
+                          onClick={isLoading ? handleStopGeneration : undefined}
                         >
-                          <SendIcon />
+                          {isLoading ? <PauseIcon /> : <SendIcon />}
                         </button>
                       </div>
 

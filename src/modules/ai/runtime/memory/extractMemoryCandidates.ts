@@ -57,12 +57,12 @@ const createCandidate = (
 export const extractMemoryCandidates = ({
   threadId,
   userInput,
-  assistantContent,
+  assistantContent: _assistantContent,
   createdAt = 0,
 }: ExtractMemoryCandidatesInput): AgentMemoryCandidate[] => {
   const candidates: AgentMemoryCandidate[] = [];
   const seen = new Set<string>();
-  const sourceText = [userInput, assistantContent].filter(Boolean).join('\n');
+  const sourceText = normalizeText(userInput);
 
   for (const match of sourceText.matchAll(projectFactPattern)) {
     const content = normalizeText(match[1] || '');

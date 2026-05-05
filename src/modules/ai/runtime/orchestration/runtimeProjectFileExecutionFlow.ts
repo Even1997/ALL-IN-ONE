@@ -11,8 +11,10 @@ export type RuntimeProjectFileExecutionResult = {
   changedPaths: string[];
   fileChanges: Array<{
     path: string;
+    operation: 'write' | 'edit' | 'delete';
     beforeContent: string | null;
     afterContent: string | null;
+    verified: boolean;
   }>;
   message: string;
 };
@@ -106,8 +108,10 @@ export const executeRuntimeProjectFileOperations = async (input: {
       changedPaths.push(operation.targetPath);
       fileChanges.push({
         path: operation.targetPath,
+        operation: 'write',
         beforeContent: null,
         afterContent: operation.content,
+        verified: true,
       });
       continue;
     }
@@ -157,8 +161,10 @@ export const executeRuntimeProjectFileOperations = async (input: {
       changedPaths.push(operation.targetPath);
       fileChanges.push({
         path: operation.targetPath,
+        operation: 'edit',
         beforeContent: existingContent,
         afterContent: await input.readProjectTextFile(absolutePath),
+        verified: true,
       });
       continue;
     }
@@ -188,8 +194,10 @@ export const executeRuntimeProjectFileOperations = async (input: {
     changedPaths.push(operation.targetPath);
     fileChanges.push({
       path: operation.targetPath,
+      operation: 'delete',
       beforeContent: existingContent,
       afterContent: null,
+      verified: true,
     });
   }
 

@@ -169,25 +169,37 @@ test('GN agent chat page wires memory inbox to active session candidates', async
   assert.match(source, /listProjectMemoryEntries/);
   assert.match(source, /setMemoryEntries\(\s*currentProject\.id/);
   assert.match(source, /resolveMemoryCandidate\(activeSessionId/);
+  assert.match(source, /appendAgentTimelineEvent/);
+  assert.match(source, /appendRuntimeReplayEvent/);
+  assert.match(source, /syncSessionReplayState/);
+  assert.match(source, /buildMemoryWriteLifecycleDescriptor/);
+  assert.match(source, /action:\s*'save'/);
+  assert.match(source, /action:\s*'overwrite'/);
+  assert.match(source, /action:\s*'rename'/);
+  assert.match(source, /发现同名记忆/);
+  assert.match(source, /自动改名保存/);
+  assert.match(source, /覆盖原条目/);
 });
 
 test('AI chat produces memory candidates after final assistant content', async () => {
   const source = await readFile(aiChatPath, 'utf8');
 
-  assert.match(source, /extractMemoryCandidates/);
   assert.match(source, /setThreadMemoryCandidates/);
-  assert.match(source, /setThreadMemoryCandidates\(targetSessionId, candidates\)/);
+  assert.match(source, /setThreadMemoryCandidates\(targetSessionId, agentTurn\.memoryCandidates\)/);
+  assert.match(source, /buildMemoryReadLifecycleDescriptor/);
+  assert.match(source, /buildMemoryRollbackLifecycleDescriptor/);
+  assert.match(source, /handleRewindRun/);
 });
 
 test('AI chat wires built-in agent turns to the kernel and tool call store', async () => {
   const source = await readFile(aiChatPath, 'utf8');
 
-  assert.match(source, /runAgentTurn/);
+  assert.match(source, /executeRuntimeBuiltInAgentTurn/);
   assert.match(source, /ToolExecutor/);
   assert.match(source, /setThreadToolCalls/);
   assert.match(source, /onToolCallsChange:\s*\(toolCalls\)/);
   assert.match(source, /setThreadToolCalls\(targetSessionId, toolCalls\)/);
-  assert.match(source, /allowedTools:\s*READ_ONLY_CHAT_TOOLS/);
+  assert.match(source, /allowedTools:\s*builtInAllowedTools/);
 });
 
 test('agent runtime store exports AgentMemoryCandidate lifecycle fields', async () => {

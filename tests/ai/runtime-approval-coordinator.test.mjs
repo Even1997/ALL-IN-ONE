@@ -14,10 +14,14 @@ test('runtime approval coordinator registers pending actions and resolves them t
 
   const approval = await requestRuntimeApproval({
     threadId: 'thread-1',
+    runtimeStoreThreadId: 'session-1',
+    replayThreadId: 'thread-1',
+    providerId: 'built-in',
     actionType: 'tool_edit',
     riskLevel: 'medium',
     summary: 'Edit file',
     messageId: 'message-1',
+    toolCallId: 'tool-1',
     onApprove: async () => undefined,
     onDeny: async () => undefined,
     enqueueAgentApproval: async (payload) => ({
@@ -38,6 +42,11 @@ test('runtime approval coordinator registers pending actions and resolves them t
 
   assert.equal(approval.id, 'approval-1');
   assert.equal(typeof pendingApprovalActions['approval-1']?.onApprove, 'function');
+  assert.equal(pendingApprovalActions['approval-1']?.runtimeStoreThreadId, 'session-1');
+  assert.equal(pendingApprovalActions['approval-1']?.replayThreadId, 'thread-1');
+  assert.equal(pendingApprovalActions['approval-1']?.providerId, 'built-in');
+  assert.equal(pendingApprovalActions['approval-1']?.toolCallId, 'tool-1');
+  assert.equal(pendingApprovalActions['approval-1']?.summary, 'Edit file');
   assert.equal(frontendApprovals.length, 1);
 
   const pendingAction = await resolveRuntimeApproval({

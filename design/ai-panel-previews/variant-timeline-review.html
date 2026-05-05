@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Panel - Timeline Review</title>
+    <style>
+      :root {
+        --bg: #f7f3ee;
+        --paper: #fffdfa;
+        --paper-soft: #f2ebe3;
+        --ink: #191615;
+        --muted: #6c625c;
+        --line: rgba(64, 50, 40, 0.14);
+        --accent: #1d4ed8;
+        --accent-soft: rgba(29, 78, 216, 0.1);
+        --danger: #b91c1c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top right, rgba(29, 78, 216, 0.1), transparent 22%),
+          linear-gradient(180deg, #faf7f2, var(--bg));
+      }
+
+      .page {
+        width: min(1460px, calc(100% - 30px));
+        margin: 16px auto;
+        border-radius: 28px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: rgba(255, 253, 250, 0.88);
+        box-shadow: 0 24px 80px rgba(72, 52, 36, 0.14);
+      }
+
+      .header {
+        padding: 18px 22px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .header h1,
+      .lane h2,
+      .card h3,
+      .chat-card strong {
+        margin: 0;
+      }
+
+      .header p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      .header-badges,
+      .badge-row,
+      .action-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .badge {
+        padding: 7px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--paper);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+      }
+
+      .rail {
+        padding: 20px;
+        border-right: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.35);
+      }
+
+      .main {
+        padding: 20px;
+      }
+
+      .lane {
+        margin-bottom: 18px;
+      }
+
+      .lane-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .lane-head h2 {
+        font-size: 14px;
+      }
+
+      .lane-head span,
+      .meta,
+      .mini {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .card,
+      .chat-card,
+      .summary,
+      .composer {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: var(--paper);
+      }
+
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .card,
+      .summary,
+      .chat-card,
+      .composer {
+        padding: 16px;
+      }
+
+      .card p,
+      .summary p,
+      .chat-card p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .summary {
+        background: linear-gradient(180deg, rgba(29, 78, 216, 0.06), rgba(255, 253, 250, 0.98));
+      }
+
+      .timeline-list {
+        position: relative;
+        display: grid;
+        gap: 12px;
+        padding-left: 24px;
+      }
+
+      .timeline-list::before {
+        content: "";
+        position: absolute;
+        left: 8px;
+        top: 4px;
+        bottom: 4px;
+        width: 2px;
+        background: linear-gradient(180deg, rgba(29, 78, 216, 0.28), rgba(29, 78, 216, 0.06));
+      }
+
+      .timeline-node {
+        position: relative;
+      }
+
+      .timeline-node::before {
+        content: "";
+        position: absolute;
+        left: -20px;
+        top: 18px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 6px var(--accent-soft);
+      }
+
+      .chat-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .chat-card header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+
+      .chat-card.assistant {
+        border-color: rgba(29, 78, 216, 0.18);
+      }
+
+      .inline-block {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 14px;
+        background: var(--paper-soft);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .composer textarea {
+        width: 100%;
+        min-height: 84px;
+        border: 0;
+        outline: 0;
+        resize: vertical;
+        border-radius: 14px;
+        padding: 14px;
+        background: #fff;
+        font: inherit;
+        color: var(--ink);
+      }
+
+      .composer footer {
+        margin-top: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font: inherit;
+      }
+
+      .primary {
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .danger {
+        background: rgba(185, 28, 28, 0.08);
+        color: var(--danger);
+      }
+
+      .ghost {
+        background: rgba(25, 22, 21, 0.06);
+      }
+
+      @media (max-width: 1180px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .rail {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+
+      @media (max-width: 760px) {
+        .summary-grid,
+        .detail-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <div>
+          <h1>AI Panel / Timeline Review</h1>
+          <p>这一版把“这轮 AI 到底做了什么”讲清楚，适合强调可回放、可审核、可恢复。</p>
+        </div>
+        <div class="header-badges">
+          <span class="badge">18 timeline events</span>
+          <span class="badge">4 replay records</span>
+          <span class="badge">2 approvals waiting</span>
+        </div>
+      </header>
+
+      <section class="layout">
+        <aside class="rail">
+          <section class="lane">
+            <div class="lane-head"><h2>Thread Overview</h2><span>active</span></div>
+            <div class="stack">
+              <article class="card">
+                <h3>AI 面板显示整理</h3>
+                <p>provider: codex · updated 14:21 · recovery available</p>
+              </article>
+              <article class="card">
+                <h3>Session Runtime</h3>
+                <p>connected / shell_command / 46s / ~2300 in / ~4600 out</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="lane">
+            <div class="lane-head"><h2>Plan</h2><span>medium</span></div>
+            <div class="stack">
+              <article class="card">
+                <h3>Step 1</h3>
+                <p>读取 GNAgentChatPage、Timeline、Status、Context、Tools、Memory 组件。</p>
+              </article>
+              <article class="card">
+                <h3>Step 2</h3>
+                <p>将现状逻辑转译成三种不同阅读路径的静态稿。</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="lane">
+            <div class="lane-head"><h2>Memory</h2><span>6 entries</span></div>
+            <div class="badge-row">
+              <span class="badge">right rail = audit info</span>
+              <span class="badge">chat center = primary flow</span>
+              <span class="badge">memory inbox pending 2</span>
+            </div>
+          </section>
+        </aside>
+
+        <main class="main">
+          <section class="summary-grid">
+            <article class="summary">
+              <h3>Status</h3>
+              <p>executing · active session present · permission mode active</p>
+            </article>
+            <article class="summary">
+              <h3>Turn Summary</h3>
+              <p>输出几个样式 HTML，方便直接比较而不是先讨论抽象方案。</p>
+            </article>
+            <article class="summary">
+              <h3>Review Angle</h3>
+              <p>突出 timeline、tool call、context 和 recovery，不让这些信息淹没在右栏里。</p>
+            </article>
+          </section>
+
+          <section class="lane">
+            <div class="lane-head"><h2>Execution Timeline</h2><span>latest first</span></div>
+            <div class="timeline-list">
+              <div class="timeline-node">
+                <article class="card">
+                  <h3>14:24 · Drafting HTML variants</h3>
+                  <p>开始生成 3 套不同视觉方向的静态预览文件，保持当前逻辑但重排视觉优先级。</p>
+                </article>
+              </div>
+              <div class="timeline-node">
+                <article class="card">
+                  <h3>14:20 · Logic extracted</h3>
+                  <p>确认主骨架为：左 Threads / Timeline，中 Chat，右 Team / Plan / Context / Tools / Memory。</p>
+                </article>
+              </div>
+              <div class="timeline-node">
+                <article class="card">
+                  <h3>14:17 · Source reading</h3>
+                  <p>读取 GNAgentStatusPanel、TurnSummaryCards、Context、ToolCall、ThreadList 等组件。</p>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <section class="lane">
+            <div class="lane-head"><h2>Conversation + Inline Audit</h2><span>message-centric</span></div>
+            <div class="chat-grid">
+              <article class="chat-card">
+                <header><strong>你</strong><span class="meta">14:11</span></header>
+                <p>NO，生成几个样式HTML给我看下</p>
+              </article>
+
+              <article class="chat-card assistant">
+                <header><strong>Agent</strong><span class="meta">14:18</span></header>
+                <p>
+                  我直接做静态预览，不改你当前实现。会保留现有逻辑的核心信息块，只改变它们的视觉组织方式。
+                </p>
+                <div class="inline-block">
+                  Inline audit:
+                  tool reads 7 · context sections 9 · pending memory suggestions 2 · replay recovery available
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="lane">
+            <div class="lane-head"><h2>Details</h2><span>context / tools / approvals</span></div>
+            <div class="detail-grid">
+              <article class="card">
+                <h3>Context Snapshot</h3>
+                <p>AGENTS.md、GNAgentChatPage.tsx、AIPanel.css 已纳入；预算 13,420 / 32,000 tokens。</p>
+              </article>
+              <article class="card">
+                <h3>Tool Calls</h3>
+                <p>shell_command 读取主容器、状态、时间线、上下文、工具、记忆组件，均已完成。</p>
+              </article>
+              <article class="card">
+                <h3>Recovery</h3>
+                <p>如果这轮被中断，可以从最近输入继续，避免从头再跑。</p>
+              </article>
+              <article class="card">
+                <h3>Memory Inbox</h3>
+                <p>建议保留“显示逻辑不清晰”与“右栏信息过重”两条记忆作为后续改版依据。</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="composer">
+            <textarea>下一步如果继续真实改版，我会优先把“Status + Turn Summary + Chat + Inline artifacts”做成更统一的一块。</textarea>
+            <footer>
+              <span class="mini">Review-first layout · connected · approvals 2</span>
+              <div class="action-row">
+                <button class="ghost">Resume turn</button>
+                <button class="danger">Pause turn</button>
+                <button class="primary">Send guidance</button>
+              </div>
+            </footer>
+          </section>
+        </main>
+      </section>
+    </div>
+  </body>
+</html>

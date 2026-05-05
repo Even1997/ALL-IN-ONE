@@ -94,6 +94,21 @@ interface AIRequestRecord {
 
 export type { GlobalAIState, AIRequestRecord };
 
+type PersistedGlobalAIState = Pick<
+  GlobalAIState,
+  | 'aiConfigs'
+  | 'selectedConfigId'
+  | 'provider'
+  | 'apiKey'
+  | 'baseURL'
+  | 'model'
+  | 'contextWindowTokens'
+  | 'customHeaders'
+  | 'isConfigured'
+  | 'isPanelOpen'
+  | 'panelPosition'
+>;
+
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
 const DEFAULT_RUNTIME_STATE = {
@@ -164,6 +179,20 @@ const applyRuntimeConfig = (state: Pick<GlobalAIState, 'provider' | 'apiKey' | '
     customHeaders: state.customHeaders,
   });
 };
+
+const buildPersistedGlobalAIState = (state: GlobalAIState): PersistedGlobalAIState => ({
+  aiConfigs: state.aiConfigs,
+  selectedConfigId: state.selectedConfigId,
+  provider: state.provider,
+  apiKey: state.apiKey,
+  baseURL: state.baseURL,
+  model: state.model,
+  contextWindowTokens: state.contextWindowTokens,
+  customHeaders: state.customHeaders,
+  isConfigured: state.isConfigured,
+  isPanelOpen: state.isPanelOpen,
+  panelPosition: state.panelPosition,
+});
 
 export const useGlobalAIStore = create<GlobalAIState>()(
   persist(
@@ -410,8 +439,10 @@ export const useGlobalAIStore = create<GlobalAIState>()(
     }),
     {
       name: 'goodnight-ai-store',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => buildPersistedGlobalAIState(state),
+      migrate: (persistedState) => persistedState as GlobalAIState,
       onRehydrateStorage: () => (state) => {
         if (!state) {
           return;

@@ -1,4 +1,5 @@
 import type { RuntimeMcpServer, RuntimeMcpToolCall } from './runtimeMcpTypes';
+import { buildMcpLifecycleOutcomeDescriptor } from '../dispatch/runtimeCapabilityLifecycle.ts';
 
 export const DEFAULT_RUNTIME_MCP_SERVER_ID = 'goodnight-skills';
 
@@ -57,18 +58,8 @@ export const parseRuntimeMcpCommand = (
   };
 };
 
-export const formatRuntimeMcpToolCallResult = (toolCall: RuntimeMcpToolCall) => {
-  if (toolCall.error) {
-    return `MCP ${toolCall.serverId}/${toolCall.toolName} 调用失败。\n\n${toolCall.error}`;
-  }
-
-  const preview = toolCall.resultPreview.trim();
-  if (!preview) {
-    return `MCP ${toolCall.serverId}/${toolCall.toolName} 已完成。\n\n${toolCall.summary}`;
-  }
-
-  return `MCP ${toolCall.serverId}/${toolCall.toolName}\n\n${toolCall.summary}\n\n${preview}`;
-};
+export const formatRuntimeMcpToolCallResult = (toolCall: RuntimeMcpToolCall) =>
+  buildMcpLifecycleOutcomeDescriptor(toolCall).output;
 
 export const buildRuntimeMcpReplayPayload = (toolCall: RuntimeMcpToolCall) =>
   `${toolCall.serverId}/${toolCall.toolName}: ${toolCall.summary}`;

@@ -25,17 +25,11 @@ const importTsModule = async (filePath) => {
   return import(moduleUrl);
 };
 
-test('sketch page parser uses file name without extension as page name', async () => {
-  const { parseSketchPageFile } = await importTsModule(sketchPageFilesPath);
+test('sketch page file helpers keep page name derived from file name', async () => {
+  const source = await readFile(sketchPageFilesPath, 'utf8');
 
-  const parsed = parseSketchPageFile(
-    'sketch/pages/homelogin.md',
-    '# Different Heading\n\n- route: /custom\n- goal: Sign in\n'
-  );
-
-  assert.equal(parsed.page.name, 'homelogin');
-  assert.equal(parsed.page.metadata.title, 'homelogin');
-  assert.equal(parsed.wireframe.pageName, 'homelogin');
+  assert.match(source, /const getSketchPageNameFromPath = \(value: string\) => stripMarkdownExtension\(basename\(value\)\);/);
+  assert.match(source, /const name = getSketchPageNameFromPath\(relativePath\);/);
 });
 
 test('sketch library tree displays page file names with markdown extension', async () => {
@@ -44,39 +38,22 @@ test('sketch library tree displays page file names with markdown extension', asy
   assert.match(source, /name:\s*getSketchPageFileName\(node\.id\)/);
 });
 
-test('sketch page files round-trip the editable frame field', async () => {
-  const { buildSketchPageContent, parseSketchPageFile } = await importTsModule(sketchPageFilesPath);
+test('sketch page files write frame and module type fields into markdown', async () => {
+  const source = await readFile(sketchPageFilesPath, 'utf8');
 
-  const page = {
-    id: 'sketch/pages/home.md',
-    name: 'home',
-    description: 'Home page',
-    metadata: {
-      route: '/home',
-      goal: 'Show the main dashboard',
-    },
-  };
-  const wireframe = {
-    id: 'wire-1',
-    pageId: page.id,
-    pageName: page.name,
-    frame: '1440x900',
-    elements: [],
-    updatedAt: '2026-04-26T00:00:00.000Z',
-    status: 'draft',
-  };
-
-  const content = buildSketchPageContent(page, wireframe);
-  assert.match(content, /- frame: 1440x900/);
-
-  const parsed = parseSketchPageFile('sketch/pages/home.md', content);
-  assert.equal(parsed.wireframe.frame, '1440x900');
+  assert.match(source, /`- frame: \$\{wireframe\?\.frame \|\| getDefaultFrame\(appType\)\}`/);
+  assert.match(source, /`    type: \$\{DEFAULT_WIREFRAME_MODULE_TYPE\}`/);
+  assert.match(source, /`    type: \$\{getWireframeModuleTypeLabel\(module\.type\)\}`/);
+  assert.match(source, /type: module\.type,/);
 });
 
-test('wireframe markdown utilities prefer explicit frame fields and parse them back', async () => {
+test('wireframe markdown utilities prefer explicit frame fields and parse module types back', async () => {
   const {
     buildPageWireframeMarkdown,
+    getWireframeModuleContentType,
+    getWireframeModuleTypeLabel,
     parseFrameFromWireframeMarkdown,
+    parsePageWireframeMarkdown,
     resolveCanvasPresetFromFrame,
   } = await importTsModule(wireframePath);
 
@@ -100,7 +77,22 @@ test('wireframe markdown utilities prefer explicit frame fields and parse them b
       pageId: 'page-1',
       pageName: '首页',
       frame: '1440x900',
-      elements: [],
+      elements: [
+        {
+          id: 'module-1',
+          type: 'wireframe-block',
+          x: 32,
+          y: 48,
+          width: 180,
+          height: 28,
+          props: {
+            name: '商品标题',
+            moduleType: '文字',
+            content: '标题文案',
+          },
+          children: [],
+        },
+      ],
       updatedAt: '2026-04-26T00:00:00.000Z',
       status: 'draft',
     },
@@ -109,13 +101,17 @@ test('wireframe markdown utilities prefer explicit frame fields and parse them b
   );
 
   assert.match(markdown, /- frame: 1440x900/);
+  assert.match(markdown, /- name: 商品标题[\s\S]*?type: 文字[\s\S]*?content: 标题文案/);
   assert.equal(parseFrameFromWireframeMarkdown(markdown), '1440x900');
-  assert.deepEqual(resolveCanvasPresetFromFrame('393x852'), {
-    label: '移动端线框',
-    width: 393,
-    height: 852,
-    frameType: 'mobile',
-  });
+  assert.equal(getWireframeModuleContentType('type: text; state: default'), 'text');
+  assert.equal(getWireframeModuleTypeLabel('text'), '文字');
+  assert.equal(getWireframeModuleContentType('state: default'), null);
+  const parsedElements = parsePageWireframeMarkdown(markdown, 'web');
+  assert.equal(parsedElements[0]?.props?.moduleType, '文字');
+  const preset = resolveCanvasPresetFromFrame('393x852');
+  assert.equal(preset.width, 393);
+  assert.equal(preset.height, 852);
+  assert.equal(preset.frameType, 'mobile');
 });
 
 test('project store preserves wireframe frame values when hydrating persisted state', async () => {

@@ -1,0 +1,103 @@
+<h2>统一时间线 v6</h2>
+<p class="subtitle">继续收敛成更接近 Codex 的感觉：去掉大部分线框和卡片边界，只保留文本层级、状态点、留白和轻 hover。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Borderless Dark</div>
+    <div class="mockup-body" style="background:#181818;border-radius:18px;padding:18px 16px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px;color:#efefef;font-weight:700">
+        <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+        思考过程
+        <span style="color:#8f8f8f;font-weight:500">默认折叠</span>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#efefef;font-weight:700">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <span style="width:8px;height:8px;border-radius:999px;background:#6ebd72;display:inline-block"></span>
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">已编辑 3 个文件，已运行 2 条命令</span>
+        </div>
+        <span style="color:#8f8f8f;font-weight:500">展开</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;padding-left:18px">
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          规划修改<span style="color:#8f8f8f;font-weight:500"> · 先确认原因，再补测试，再改实现</span>
+        </div>
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          读取文件<span style="color:#8f8f8f;font-weight:500"> · src/components/workspace/runtimeEventRenderModel.ts</span>
+        </div>
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          修改文件<span style="color:#8f8f8f;font-weight:500"> · tests/ai/ai-chat-runtime-output-flow.test.mjs</span>
+        </div>
+        <div style="color:#f1f1f1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          运行命令<span style="color:#8f8f8f;font-weight:500"> · node --test tests\\ai\\ai-chat-runtime-output-flow.test.mjs ...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Borderless Light</div>
+    <div class="mockup-body" style="background:#f5f2eb;border-radius:18px;padding:18px 16px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:10px;color:#1f1c17;font-weight:700">
+        <span style="width:8px;height:8px;border-radius:999px;background:#4b9b55;display:inline-block"></span>
+        思考过程
+        <span style="color:#8b8073;font-weight:500">默认折叠</span>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#1f1c17;font-weight:700">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <span style="width:8px;height:8px;border-radius:999px;background:#4b9b55;display:inline-block"></span>
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">已编辑 3 个文件，已运行 2 条命令</span>
+        </div>
+        <span style="color:#8b8073;font-weight:500">展开</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;padding-left:18px">
+        <div style="color:#1f1c17;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          规划修改<span style="color:#8b8073;font-weight:500"> · 先确认原因，再补测试，再改实现</span>
+        </div>
+        <div style="color:#1f1c17;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          读取文件<span style="color:#8b8073;font-weight:500"> · src/components/workspace/runtimeEventRenderModel.ts</span>
+        </div>
+        <div style="color:#1f1c17;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          修改文件<span style="color:#8b8073;font-weight:500"> · tests/ai/ai-chat-runtime-output-flow.test.mjs</span>
+        </div>
+        <div style="color:#1f1c17;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          运行命令<span style="color:#8b8073;font-weight:500"> · node --test tests\\ai\\ai-chat-runtime-output-flow.test.mjs ...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>拿掉线框后保留什么</h4>
+      <ul>
+        <li>状态点：区分思考、运行、失败、等待确认。</li>
+        <li>缩进：只用一级缩进表达“展开后的操作列表”。</li>
+        <li>灰色副信息：承载路径、命令、摘要。</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>真正需要代码里补的细节</h4>
+      <ul>
+        <li>hover 态要轻，不要重新长出卡片边框。</li>
+        <li>失败 / blocked 项要靠状态色和字体权重显出来。</li>
+        <li>审批 / 提问项也要并进同一列表语言。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="borderless-codex-like" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>无边框列表</h3>
+      <p>这版最接近你说的 Codex 感觉。如果你认可，我就把它作为最终设计方向收口。</p>
+    </div>
+  </div>
+</div>
