@@ -13,6 +13,6 @@ test('direct chat prompt tells the AI not to claim file saves without real verif
   assert.match(source, /FILE_OPERATION_TRUTHFULNESS_POLICY/);
   assert.match(source, /Unless a real file operation succeeded/);
   assert.match(source, /created, saved, edited, or deleted/);
-  assert.match(source, /short affirmative confirmation/);
-  assert.match(source, /\u786e\u8ba4/);
+  assert.doesNotMatch(source, /pending_user_confirmation/);
+  assert.doesNotMatch(source, /SHORT_AFFIRMATIVE_PATTERN/);
 });

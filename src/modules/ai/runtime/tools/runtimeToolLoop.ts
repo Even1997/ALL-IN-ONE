@@ -136,6 +136,7 @@ export async function runRuntimeToolLoop(
   const toolCalls: RuntimeToolStep[] = [];
   const allowedTools = new Set(options.allowedTools);
   let finalContent = '';
+  const visibleTextPerRound: string[] = [];
   const agentEvents = createAgentEventDispatcher(options.onAgentEvent);
 
   const wrapOnModelEvent = (onEvent?: (event: AITextStreamEvent) => void) => {
@@ -367,7 +368,11 @@ export async function runRuntimeToolLoop(
     // Wait for any in-flight stream-detected tool executions
     await Promise.all(streamExecutionPromises);
 
-    finalContent = sanitizeAgentVisibleText(assistantContent);
+    const roundVisibleText = sanitizeAgentVisibleText(assistantContent);
+    if (roundVisibleText) {
+      visibleTextPerRound.push(roundVisibleText);
+    }
+    finalContent = roundVisibleText;
     messages.push({
       role: 'assistant',
       content: assistantContent,
@@ -404,9 +409,10 @@ export async function runRuntimeToolLoop(
     // No tool calls found in either stream or full parse
     if (containsToolProtocolMarkers(assistantContent)) {
       if (finalContent && !REPAIRABLE_TOOL_PROTOCOL_PATTERN.test(assistantContent)) {
+        const accumulatedVisibleText = visibleTextPerRound.join('\n\n');
         agentEvents.emit({ type: 'final_text', text: finalContent });
         return {
-          finalContent,
+          finalContent: accumulatedVisibleText || finalContent,
           transcript: messages,
           toolCalls,
         };
@@ -426,16 +432,17 @@ export async function runRuntimeToolLoop(
       continue;
     }
 
+    const accumulatedVisibleText = visibleTextPerRound.join('\n\n');
     agentEvents.emit({ type: 'final_text', text: finalContent });
     return {
-      finalContent,
+      finalContent: accumulatedVisibleText || finalContent,
       transcript: messages,
       toolCalls,
     };
   }
 
   return {
-    finalContent: createExhaustedMessage(options.maxRounds),
+    finalContent: visibleTextPerRound.join('\n\n') || createExhaustedMessage(options.maxRounds),
     transcript: messages,
     toolCalls,
   };

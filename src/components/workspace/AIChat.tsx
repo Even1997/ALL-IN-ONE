@@ -88,6 +88,10 @@ import { executeRuntimeMcpTurn } from '../../modules/ai/runtime/orchestration/ex
 import { runRuntimeLocalAgentExecution } from '../../modules/ai/runtime/orchestration/runRuntimeLocalAgentExecution';
 import { buildAgentContext } from '../../modules/ai/runtime/context/buildAgentContext';
 import {
+  buildRuntimeAgentToolResult,
+  resolveRuntimeAgentToolInput,
+} from '../../modules/ai/runtime/tools/agentTool';
+import {
   buildRuntimeLocalAgentPlan,
   buildRuntimeLocalAgentDecisionState,
   denyRuntimeLocalAgentApproval,
@@ -107,12 +111,6 @@ import {
   executeRuntimeProjectFileOperations,
   type RuntimeProjectFileToolResponse,
 } from '../../modules/ai/runtime/orchestration/runtimeProjectFileExecutionFlow';
-import {
-  executeRuntimeProjectFilePlanning,
-  executeRuntimeProjectFileRead,
-  prepareProjectFileProposalFlow,
-  requestRuntimeProjectFileApproval,
-} from '../../modules/ai/runtime/orchestration/runtimeProjectFileFlow';
 import {
   buildRuntimeChangedPathActivityEntry,
 } from '../../modules/ai/runtime/orchestration/runtimeTurnOutcomeFlow';
@@ -209,12 +207,9 @@ import {
   isProjectFileWriteAccessFailure,
   isShortPendingActionAffirmation,
   isShortPendingActionRejection,
-  parseProjectFileOperationsPlan,
   type ProjectFileOperation,
   type ProjectFileProposal,
-  resolveProjectFileRequestKind,
   resolveProjectOperationPath,
-  shouldForceProjectFileProposal,
   isSupportedProjectTextFilePath,
 } from '../../modules/ai/chat/projectFileOperations';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
@@ -332,10 +327,9 @@ const normalizeErrorMessage = (error: unknown) => {
 
 const ASK_USER_TOOL_NAME = 'AskUserQuestion';
 const READ_ONLY_CHAT_TOOLS = ['glob', 'grep', 'ls', 'view', ASK_USER_TOOL_NAME];
-const PROJECT_FILE_READ_ONLY_TOOLS = ['glob', 'grep', 'ls', 'view'];
 const BUILT_IN_EXECUTION_TOOLS = [...getBuiltInRuntimeToolNames()];
 const PROJECT_INSTRUCTION_FILE_NAMES = ['GOODNIGHT.md', 'CLAUDE.md'];
-const RISKY_BUILT_IN_TOOLS = new Set(['write', 'edit', 'bash', 'powershell', 'fetch']);
+const RISKY_BUILT_IN_TOOLS = new Set(['write', 'edit', 'bash', 'powershell', 'fetch', 'agent']);
 const MISSING_PROJECT_FILE_PATTERN =
   /(?:not found|no such file|cannot find the file|\u627e\u4e0d\u5230|\u4e0d\u5b58\u5728|os error 2)/i;
 
@@ -731,6 +725,7 @@ const approvalActionLabelMap: Record<string, string> = {
   tool_write: '写入操作',
   tool_edit: '编辑操作',
   tool_fetch: '网络访问',
+  tool_agent: '多 Agent 协作',
   mcp_tool_call: 'MCP 工具',
 };
 
@@ -759,6 +754,7 @@ const RUNTIME_TOOL_GROUP_LABELS: Record<string, string> = {
   bash: '命令',
   powershell: 'PowerShell',
   fetch: '抓取',
+  agent: '多 Agent',
   project_file_flow: '处理文件请求',
   project_file_read: '读取项目文件',
   project_file_plan: '整理改动方案',
@@ -1267,70 +1263,6 @@ const resolveProjectFileProposalNote = (proposal: ProjectFileProposal) => {
   }
 
   return proposal.executionMessage || '';
-};
-
-const buildProjectFileApprovalDisplay = (
-  proposal: ProjectFileProposal
-): RuntimePendingApprovalAction['display'] => {
-  const summarizeOperation = (operation: ProjectFileOperation) => ({
-    type: projectFileOperationTypeLabel[operation.type],
-    path: operation.targetPath,
-    summary: operation.summary || '',
-    preview: summarizeProjectFileOperationPreview(operation) || undefined,
-  });
-
-  if (proposal.operations.length === 1) {
-    const [operation] = proposal.operations;
-    const inputJson = JSON.stringify(
-      {
-        summary: proposal.summary,
-        operation: summarizeOperation(operation),
-      },
-      null,
-      2
-    );
-
-    if (operation.type === 'delete_file') {
-      return {
-        toolName: 'remove',
-        filePath: operation.targetPath,
-        inputJson,
-      };
-    }
-
-    if (typeof operation.oldString === 'string' && typeof operation.newString === 'string') {
-      return {
-        toolName: 'edit',
-        filePath: operation.targetPath,
-        oldString: operation.oldString,
-        newString: operation.newString,
-        inputJson,
-      };
-    }
-
-    return {
-      toolName: 'write',
-      filePath: operation.targetPath,
-      content: operation.content || operation.newString || operation.summary,
-      inputJson,
-    };
-  }
-
-  return {
-    toolName: proposal.operations.some((operation) => operation.type === 'delete_file')
-      ? 'remove'
-      : proposal.operations.some((operation) => operation.type === 'edit_file')
-        ? 'edit'
-        : 'write',
-    inputJson: JSON.stringify(
-      {
-        summary: proposal.summary,
-        operations: proposal.operations.map((operation) => summarizeOperation(operation)),
-      },
-      null,
-      2
-    ),
-  };
 };
 
 const groupActivityEntriesByRunId = (entries: ActivityEntry[]) =>
@@ -5178,9 +5110,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         const turnModeDecision = decideAgentTurnMode({
           prompt: cleanedContent,
           suggestedPlanMode: Boolean(skillIntent),
-          riskyWriteDetected: runtimeExecutionAgentId !== 'built-in',
+          riskyWriteDetected: false,
           bashDetected: Boolean(mcpCommand),
-          multiStepDetected: Boolean(mcpCommand || runtimeExecutionAgentId !== 'built-in'),
+          multiStepDetected: Boolean(mcpCommand),
         });
         if (turnModeDecision.mode === 'plan_then_execute') {
           patchCurrentTurnSession((session) => ({
@@ -5992,336 +5924,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         }
 
         const projectRoot = await resolveProjectRootById(currentProject.id);
-        const projectFileRequestKind = resolveProjectFileRequestKind({
-          rawInput: rawContent,
-          cleanedInput: cleanedContent,
-          conversationHistory,
-        });
-
-        if (projectFileRequestKind === 'read') {
-          const projectFileFlowToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id);
-          const projectFileReadToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id, 'read');
-
-          markTurnExecuting('Read project files', buildSessionPreview(cleanedContent), 'project_file_read');
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_flow',
-            toolInput: {
-              summary: buildSessionPreview(cleanedContent) || cleanedContent,
-            },
-            status: 'running',
-          });
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: projectFileReadToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_read',
-            toolInput: {
-              request: cleanedContent,
-            },
-            status: 'running',
-          });
-
-          const readContent = await executeRuntimeProjectFileRead({
-            userInput: cleanedContent,
-            conversationHistory,
-            projectName: currentProject.name,
-            projectRoot,
-            allowedTools: PROJECT_FILE_READ_ONLY_TOOLS,
-            readFiles: ({ prompt, systemPrompt, allowedTools, onChunk }) =>
-              aiService.chatWithTools({
-                prompt,
-                systemPrompt,
-                allowedTools,
-                onChunk,
-              }),
-          });
-
-          patchLiveState(runtimeStoreThreadId, (state) => ({
-            ...state,
-            connectionState: 'connected',
-            statusVerb: '',
-            activeThinking: false,
-            activeToolName: null,
-            streamingToolInput: '',
-            streamingText: '',
-          }));
-          upsertRuntimeToolResultInMessage(assistantMessage.id, {
-            toolCallId: projectFileReadToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_read',
-            status: 'completed',
-            output: readContent,
-          });
-          upsertRuntimeToolResultInMessage(assistantMessage.id, {
-            toolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_flow',
-            status: 'completed',
-            output: readContent,
-          });
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            ...buildAssistantContentState(readContent),
-          }));
-          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-            id: createRuntimeEventId('assistant'),
-            threadId: runtimeStoreThreadId,
-            providerId: runtimeProviderId,
-            summary: `Assistant: ${buildSessionPreview(readContent)}`,
-            createdAt: Date.now(),
-          });
-          await persistRuntimeTimelineEvent({
-            threadId: replayThreadId,
-            providerId: runtimeProviderId,
-            summary: `Assistant: ${buildSessionPreview(readContent)}`,
-          });
-          await completeTurnSession(readContent);
-          return;
-        }
-
-        if (projectFileRequestKind === 'write') {
-          const projectFileFlowToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id);
-          const projectFilePlanToolCallId = buildSyntheticRuntimeToolCallId('project-file', assistantMessage.id, 'plan');
-          const projectFileMode = shouldForceProjectFileProposal(rawContent) ? 'manual' : 'auto';
-
-          markTurnExecuting('Plan project file changes', buildSessionPreview(cleanedContent), 'project_file_flow');
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_flow',
-            toolInput: {
-              summary: buildSessionPreview(cleanedContent) || cleanedContent,
-            },
-            status: 'running',
-          });
-          upsertRuntimeToolUseInMessage(assistantMessage.id, {
-            toolCallId: projectFilePlanToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_plan',
-            toolInput: {
-              request: cleanedContent,
-            },
-            status: 'running',
-          });
-
-          const planningResult = await executeRuntimeProjectFilePlanning({
-            userInput: cleanedContent,
-            conversationHistory,
-            projectName: currentProject.name,
-            projectRoot,
-            allowedTools: PROJECT_FILE_READ_ONLY_TOOLS,
-            executePlanning: ({ prompt, systemPrompt, allowedTools }) =>
-              aiService.chatWithTools({
-                prompt,
-                systemPrompt,
-                allowedTools,
-              }),
-            parsePlan: parseProjectFileOperationsPlan,
-          });
-
-          if (planningResult.status !== 'ready') {
-            const clarificationMessage = planningResult.message;
-
-            patchLiveState(runtimeStoreThreadId, (state) => ({
-              ...state,
-              connectionState: 'connected',
-              statusVerb: '',
-              activeThinking: false,
-              activeToolName: null,
-              streamingToolInput: '',
-              streamingText: '',
-            }));
-            upsertRuntimeToolResultInMessage(assistantMessage.id, {
-              toolCallId: projectFilePlanToolCallId,
-              parentToolCallId: projectFileFlowToolCallId,
-              toolName: 'project_file_plan',
-              status: 'completed',
-              output: clarificationMessage,
-            });
-            upsertRuntimeToolResultInMessage(assistantMessage.id, {
-              toolCallId: projectFileFlowToolCallId,
-              toolName: 'project_file_flow',
-              status: 'completed',
-              output: clarificationMessage,
-            });
-            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-              ...message,
-              ...buildAssistantContentState(clarificationMessage),
-            }));
-            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-              id: createRuntimeEventId('assistant'),
-              threadId: runtimeStoreThreadId,
-              providerId: runtimeProviderId,
-              summary: `Assistant: ${buildSessionPreview(clarificationMessage)}`,
-              createdAt: Date.now(),
-            });
-            await persistRuntimeTimelineEvent({
-              threadId: replayThreadId,
-              providerId: runtimeProviderId,
-              summary: `Assistant: ${buildSessionPreview(clarificationMessage)}`,
-            });
-            await completeTurnSession(clarificationMessage);
-            return;
-          }
-
-          const preparedProjectFileFlow = prepareProjectFileProposalFlow({
-            proposalId: `proposal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            mode: projectFileMode,
-            plan: planningResult.plan,
-            sandboxPolicy,
-          });
-
-          upsertRuntimeToolResultInMessage(assistantMessage.id, {
-            toolCallId: projectFilePlanToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_plan',
-            status: 'completed',
-            output: preparedProjectFileFlow.proposal.summary,
-          });
-
-          if (preparedProjectFileFlow.decision === 'auto-execute') {
-            const executionOutcome = await handleExecuteProjectFileProposal(
-              assistantMessage.id,
-              preparedProjectFileFlow.proposal
-            );
-
-            patchLiveState(runtimeStoreThreadId, (state) => ({
-              ...state,
-              connectionState: 'connected',
-              statusVerb: '',
-              activeThinking: false,
-              activeToolName: null,
-              streamingToolInput: '',
-              streamingText: '',
-            }));
-
-            if (!executionOutcome.ok) {
-              updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-                ...message,
-                role: 'system',
-                tone: 'error',
-                content: executionOutcome.message,
-                ...clearAssistantContentState(),
-              }));
-              appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-                id: createRuntimeEventId('error'),
-                threadId: runtimeStoreThreadId,
-                providerId: runtimeProviderId,
-                summary: `Error: ${buildSessionPreview(executionOutcome.message)}`,
-                createdAt: Date.now(),
-              });
-              await failTurnSession(executionOutcome.message);
-              return;
-            }
-
-            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-              id: createRuntimeEventId('assistant'),
-              threadId: runtimeStoreThreadId,
-              providerId: runtimeProviderId,
-              summary: `Assistant: ${buildSessionPreview(executionOutcome.message)}`,
-              createdAt: Date.now(),
-            });
-            await persistRuntimeTimelineEvent({
-              threadId: replayThreadId,
-              providerId: runtimeProviderId,
-              summary: `Assistant: ${buildSessionPreview(executionOutcome.message)}`,
-            });
-            await completeTurnSession(executionOutcome.message);
-            return;
-          }
-
-          const proposalMessage =
-            preparedProjectFileFlow.proposal.executionMessage || preparedProjectFileFlow.proposal.summary;
-
-          patchLiveState(runtimeStoreThreadId, (state) => ({
-            ...state,
-            connectionState: 'connected',
-            statusVerb: '',
-            activeThinking: false,
-            activeToolName: null,
-            streamingToolInput: '',
-            streamingText: '',
-          }));
-          upsertRuntimeToolResultInMessage(assistantMessage.id, {
-            toolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_flow',
-            status: preparedProjectFileFlow.decision === 'blocked' ? 'blocked' : 'completed',
-            output: proposalMessage,
-          });
-          updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-            ...message,
-            ...buildAssistantContentState(preparedProjectFileFlow.proposal.assistantMessage),
-            projectFileProposal: preparedProjectFileFlow.proposal,
-          }));
-
-          if (preparedProjectFileFlow.decision === 'blocked') {
-            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-              id: createRuntimeEventId('error'),
-              threadId: runtimeStoreThreadId,
-              providerId: runtimeProviderId,
-              summary: `Error: ${buildSessionPreview(proposalMessage)}`,
-              createdAt: Date.now(),
-            });
-            await blockTurnSession(proposalMessage, proposalMessage, 'Revise file changes');
-            return;
-          }
-
-          if (preparedProjectFileFlow.decision === 'approval-required') {
-            await requestRuntimeProjectFileApproval({
-              threadId: runtimeThreadId || targetSessionId,
-              runtimeStoreThreadId,
-              replayThreadId,
-              providerId: runtimeProviderId,
-              actionType: preparedProjectFileFlow.approvalActionType,
-              riskLevel: preparedProjectFileFlow.riskLevel,
-              summary: preparedProjectFileFlow.proposal.summary,
-              messageId: assistantMessage.id,
-              toolCallId: projectFileFlowToolCallId,
-              onApprove: async () => {
-                await handleExecuteProjectFileProposal(
-                  assistantMessage.id,
-                  preparedProjectFileFlow.proposal
-                );
-              },
-              onDeny: async () => {
-                await handleCancelProjectFileProposal(assistantMessage.id);
-              },
-              display: buildProjectFileApprovalDisplay(preparedProjectFileFlow.proposal),
-              requestApproval: (payload) =>
-                requestRuntimeApproval({
-                  threadId: payload.threadId,
-                  runtimeStoreThreadId: payload.runtimeStoreThreadId || runtimeStoreThreadId,
-                  replayThreadId: payload.replayThreadId || replayThreadId,
-                  providerId: (payload.providerId as AgentProviderId) || runtimeProviderId,
-                  actionType: payload.actionType,
-                  riskLevel: payload.riskLevel,
-                  summary: payload.summary,
-                  messageId: payload.messageId,
-                  toolCallId: payload.toolCallId,
-                  onApprove: payload.onApprove,
-                  onDeny: payload.onDeny,
-                  display: payload.display,
-                }),
-              enqueueAgentApproval,
-              enqueueApproval,
-              pendingApprovalActions: pendingApprovalActionsRef.current,
-            });
-          }
-
-          appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-            id: createRuntimeEventId('assistant'),
-            threadId: runtimeStoreThreadId,
-            providerId: runtimeProviderId,
-            summary: `Assistant: ${buildSessionPreview(preparedProjectFileFlow.proposal.assistantMessage)}`,
-            createdAt: Date.now(),
-          });
-          await persistRuntimeTimelineEvent({
-            threadId: replayThreadId,
-            providerId: runtimeProviderId,
-            summary: `Assistant: ${buildSessionPreview(preparedProjectFileFlow.proposal.assistantMessage)}`,
-          });
-          await completeTurnSession(preparedProjectFileFlow.proposal.assistantMessage);
-          return;
-        }
-
         markTurnExecuting('Run built-in agent turn', buildSessionPreview(cleanedContent));
         const toolExecutor = new ToolExecutor(projectRoot);
         const builtInAllowedTools =
@@ -6376,6 +5978,91 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             type: 'text',
             content: `User answers:\n${JSON.stringify(answers, null, 2)}`,
           };
+        };
+        const runBuiltInAgentTool = async (call: ToolCall): Promise<ToolResult> => {
+          const delegatedInput = resolveRuntimeAgentToolInput(call.input);
+          if (!delegatedInput) {
+            return {
+              type: 'text',
+              content: 'agent requires a prompt/task/request string and optional preferred_agent of codex or claude.',
+              is_error: true,
+            };
+          }
+
+          const preferredTeamAgent =
+            delegatedInput.preferredAgent ||
+            (preferredForkAgentId === 'claude' || preferredForkAgentId === 'codex'
+              ? preferredForkAgentId
+              : agentAvailability.codex.ready
+                ? 'codex'
+                : 'claude');
+          const runPrompt = async ({
+            agent,
+            projectRoot,
+            prompt,
+          }: {
+            agent: string;
+            projectRoot: string;
+            prompt: string;
+          }) =>
+            invoke<LocalAgentCommandResult>('run_local_agent_prompt', {
+              params: {
+                agent,
+                projectRoot,
+                prompt,
+              },
+            });
+
+          const teamResult = await runAgentTeamTurn({
+            projectId: currentProject.id,
+            projectName: currentProject.name,
+            threadId: runtimeStoreThreadId,
+            turnId: runtimeTurnSessionId || `turn_${runId}`,
+            userInput: delegatedInput.prompt,
+            projectRoot,
+            preferredAgent: preferredTeamAgent,
+            contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
+            conversationHistory,
+            agentInstructions,
+            referenceFiles: resolvedReferenceContextFiles.map((file) => ({
+              path: file.path,
+              summary: file.summary,
+              content: file.content || file.summary || file.title,
+            })),
+            memoryEntries: projectMemoryEntries,
+            onTeamRunUpdate: (teamRun) => {
+              patchLiveState(runtimeStoreThreadId, (state) => ({
+                ...state,
+                connectionState: 'connected',
+                statusVerb:
+                  teamRun.status === 'running'
+                    ? 'Running team tasks'
+                    : teamRun.status === 'failed'
+                      ? 'Team run failed'
+                      : '',
+                activeThinking: false,
+                activeToolName: 'agent',
+                streamingToolInput: summarizeLiveToolInput(call.input),
+              }));
+              upsertTeamRun(runtimeStoreThreadId, teamRun);
+              updateAssistantMessageTimeline(assistantMessage.id, (timeline) =>
+                replaceAssistantRuntimeTimelineEvents(
+                  timeline,
+                  syncTeamRunRuntimeEvents(
+                    getAssistantRuntimeTimelineEvents(timeline),
+                    call.id,
+                    teamRun
+                  )
+                )
+              );
+            },
+            runPrompt,
+          });
+
+          return buildRuntimeAgentToolResult({
+            finalContent: teamResult.finalContent,
+            changedPaths: teamResult.changedPaths,
+          });
         };
         const requestBuiltInToolApproval = async (call: ToolCall) => {
           if (!RISKY_BUILT_IN_TOOLS.has(call.name)) {
@@ -6560,7 +6247,11 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               signal: abortControllerRef.current?.signal,
             }),
           executeTool: (call) =>
-            call.name === ASK_USER_TOOL_NAME ? runBuiltInQuestionTool(call) : toolExecutor.execute(call),
+            call.name === 'agent'
+              ? runBuiltInAgentTool(call)
+              : call.name === ASK_USER_TOOL_NAME
+                ? runBuiltInQuestionTool(call)
+                : toolExecutor.execute(call),
         });
 
         const finalDraft = streamingAssembler.buildFinal(agentTurn.finalContent);

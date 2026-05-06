@@ -229,11 +229,14 @@ LIMITATIONS:
   },
   {
     name: 'write',
-    description: `File writing tool that creates or updates files.
+    description: `File writing tool that creates or overwrites files.
 
 WHEN TO USE THIS TOOL:
-- Use when you need to create a new file
-- Use when you need to update an existing file
+- Use only when the user asked to create, save, or fully rewrite a concrete file.
+- For existing files, read the file first with view before writing.
+- Prefer edit for targeted changes.
+- Never create documentation files (*.md) or README files unless explicitly requested by the user.
+- Do not use this tool to answer questions about saving problems; answer those normally unless a concrete file write is needed.
 
 PARAMETERS:
 - file_path: path to the file to write
@@ -253,6 +256,9 @@ NOTE: Will create parent directories if they don't exist.`,
 WHEN TO USE THIS TOOL:
 - Use when you need to make small, targeted changes
 - Specify the exact location and new content
+- Use only after you have enough exact context to provide old_string.
+- Prefer view first when editing an existing file.
+- Do not use this tool merely because the user mentioned "save" or "保存" in a question.
 
 PARAMETERS:
 - file_path: path to the file to edit
@@ -329,6 +335,31 @@ PARAMETERS:
       format: { type: 'string', description: 'Response format: text or json' },
     },
     required: ['url', 'format'],
+  },
+  {
+    name: 'agent',
+    description: `Delegate a task to the built-in multi-agent runtime.
+
+WHEN TO USE THIS TOOL:
+- Use when the task benefits from staged multi-agent analysis and implementation
+- Best for larger refactors, workflow changes, or requests that need product, implementation, and QA perspectives
+- The runtime will coordinate the existing multi-agent team and return an integrated result
+
+PARAMETERS:
+- prompt: the delegated task request
+- preferred_agent: optional execution preference, either 'codex' or 'claude'
+
+ALIASES:
+- prompt may also appear as task or request
+- preferred_agent may also appear as preferredAgent or agent`,
+    parameters: {
+      prompt: { type: 'string', description: 'The task to delegate to the multi-agent runtime' },
+      preferred_agent: {
+        type: 'string',
+        description: "Optional preferred execution agent: 'codex' or 'claude'",
+      },
+    },
+    required: ['prompt'],
   },
   {
     name: 'AskUserQuestion',

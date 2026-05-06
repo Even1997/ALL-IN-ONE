@@ -94,6 +94,28 @@ test('agent visible text sanitizer strips legacy bash command blocks', () => {
   assert.doesNotMatch(cleaned, /<bash>|<cmd>|Get-ChildItem sketch/);
 });
 
+test('agent visible text sanitizer keeps explanatory lines that mention protocol markers inline', () => {
+  const raw = [
+    'The literal <tool name="edit"> marker is part of this explanation.',
+    'You can also mention </tool> inline when documenting the XML format.',
+  ].join('\n');
+
+  const cleaned = sanitizeAgentVisibleText(raw);
+
+  assert.equal(cleaned, raw);
+});
+
+test('agent visible text sanitizer keeps explanatory lines that start with protocol markers', () => {
+  const raw = [
+    '<tool name="edit"> is the opening tag used in the legacy XML protocol.',
+    '<tool_result status="success"> can appear in docs as an example line.',
+  ].join('\n');
+
+  const cleaned = sanitizeAgentVisibleText(raw);
+
+  assert.equal(cleaned, raw);
+});
+
 test('agent runtime event helpers upsert tool use and result records', () => {
   const started = upsertRuntimeToolUseEvent(undefined, {
     toolCallId: 'call-1',

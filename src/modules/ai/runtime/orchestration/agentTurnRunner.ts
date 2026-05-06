@@ -331,7 +331,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
   };
 
   const buildDraft = (completeThinking: boolean): RuntimeStreamingAssistantDraft => {
-    const visibleAnswerContent = sanitizeStreamingVisibleText(state === 'answer' ? answerContentRaw : '');
+    const visibleAnswerContent = sanitizeStreamingVisibleText(answerContentRaw);
     const visibleThinkingContent = sanitizeStreamingThinkingText(thinkingContent);
     const visibleParts = assistantParts
       .map((part) => {
@@ -376,13 +376,16 @@ export const createRuntimeStreamingMessageAssembler = () => {
         answerContentRaw += event.delta;
         appendAssistantPartContent('answer', event.delta, false);
       } else {
-        pendingText += event.delta;
+        flushPendingText('answer');
+        state = 'answer';
+        answerContentRaw += event.delta;
+        appendAssistantPartContent('answer', event.delta, false);
       }
 
       return buildDraft(false);
     },
     markToolBoundary: (): RuntimeStreamingAssistantDraft => {
-      discardPendingText();
+      flushPendingText('answer');
       state = 'answer';
       forceNewPart = true;
       return buildDraft(false);
@@ -398,10 +401,10 @@ export const createRuntimeStreamingMessageAssembler = () => {
       let answerContent = draft.answerContent;
       let finalParts = draft.assistantParts;
 
-      if (sanitizedResponse && !answerContent.trim()) {
+      if (sanitizedResponse && sanitizedResponse !== answerContent) {
         answerContent = sanitizedResponse;
         finalParts = [
-          ...draft.assistantParts,
+          ...draft.assistantParts.filter((part) => part.type === 'thinking'),
           {
             type: 'text',
             content: sanitizedResponse,

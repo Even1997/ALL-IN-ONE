@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent 架构能力对比分析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'SF Pro Text', 'PingFang SC', sans-serif; background: #f5f5f7; color: #1d1d1f; padding: 40px 20px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.5px; }
+  .subtitle { font-size: 14px; color: #86868b; margin-bottom: 40px; }
+
+  /* Core Architecture Diagram */
+  .arch-section { background: #fff; border-radius: 16px; padding: 32px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .arch-section h2 { font-size: 20px; font-weight: 600; margin-bottom: 24px; }
+
+  .arch-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .arch-card { background: #f5f5f7; border-radius: 10px; padding: 16px; text-align: center; }
+  .arch-card .icon { font-size: 24px; margin-bottom: 8px; }
+  .arch-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .arch-card p { font-size: 11px; color: #86868b; line-height: 1.4; }
+  .arch-arrow { display: flex; align-items: center; justify-content: center; color: #86868b; font-size: 18px; }
+
+  /* Capability Table */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  thead th { background: #f5f5f7; padding: 12px 16px; text-align: left; font-weight: 600; font-size: 12px; color: #86868b; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; }
+  thead th:first-child { border-radius: 10px 0 0 0; }
+  thead th:last-child { border-radius: 0 10px 0 0; }
+  tbody td { padding: 14px 16px; border-bottom: 1px solid #e8e8ed; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafafa; }
+
+  .cap-name { font-weight: 600; white-space: nowrap; width: 120px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+  .badge-yes { background: #e3f7ec; color: #1a7d36; }
+  .badge-partial { background: #fff4e5; color: #b45a00; }
+  .badge-no { background: #fce8e8; color: #b91c1c; }
+  .code-path { font-family: 'SF Mono', 'Menlo', monospace; font-size: 11px; color: #6b7280; display: block; margin-top: 4px; }
+
+  .section-label { font-size: 14px; font-weight: 600; color: #1d1d1f; margin-top: 8px; margin-bottom: 6px; }
+
+  /* Flow Diagram */
+  .flow { display: flex; align-items: center; gap: 0; margin: 20px 0; flex-wrap: wrap; }
+  .flow-step { background: #f5f5f7; border-radius: 10px; padding: 12px 16px; text-align: center; min-width: 100px; flex: 1; }
+  .flow-step .step-num { font-size: 11px; color: #86868b; margin-bottom: 4px; }
+  .flow-step .step-label { font-size: 12px; font-weight: 500; }
+  .flow-arrow { padding: 0 6px; color: #c7c7cc; font-size: 16px; }
+
+  /* Comparison Columns */
+  .compare-row { display: grid; grid-template-columns: 180px 1fr 1fr; gap: 16px; padding: 16px 0; border-bottom: 1px solid #e8e8ed; align-items: start; }
+  .compare-row:last-child { border-bottom: none; }
+  .compare-label { font-weight: 600; font-size: 13px; padding-top: 2px; }
+  .compare-col { font-size: 12px; line-height: 1.6; }
+  .compare-col strong { color: #1d1d1f; }
+
+  .capability-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+
+  .capability-item { background: #f5f5f7; border-radius: 10px; padding: 20px; }
+  .capability-item h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .capability-item h3 .tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 500; }
+  .capability-item p { font-size: 12px; color: #515154; line-height: 1.6; margin-bottom: 8px; }
+  .capability-item ul { list-style: none; font-size: 11px; }
+  .capability-item ul li { padding: 2px 0; color: #6b7280; }
+  .capability-item ul li::before { content: "› "; color: #007aff; }
+
+  @media (max-width: 768px) {
+    .arch-grid { grid-template-columns: repeat(2, 1fr); }
+    .compare-row { grid-template-columns: 1fr; }
+    .capability-grid { grid-template-columns: 1fr; }
+    .flow { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🤖 AI Agent 架构能力分析</h1>
+<p class="subtitle">基于 cc-haha 与 gnagent 的对比分析 · 2026-05</p>
+
+<!-- 核心能力定义 -->
+<div class="arch-section">
+  <h2>一个完整的 AI Agent 需要哪些核心能力？</h2>
+  <div class="arch-grid">
+    <div class="arch-card">
+      <div class="icon">🧠</div>
+      <h3>LLM 集成</h3>
+      <p>接入大语言模型，支持多 provider 切换、流式响应</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">🛠</div>
+      <h3>工具系统</h3>
+      <p>注册、调用、编排各种工具（文件、Shell、网络等）</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">🔁</div>
+      <h3>执行循环</h3>
+      <p>Think → Act → Observe 循环，支持流式检测、并行执行</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">🧩</div>
+      <h3>规划能力</h3>
+      <p>任务分解、分步执行、Plan & Execute 模式</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">💾</div>
+      <h3>记忆系统</h3>
+      <p>短期（对话历史）+ 长期（持久化）记忆</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">🔒</div>
+      <h3>安全护栏</h3>
+      <p>权限控制、风险分级、审批流</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">🧵</div>
+      <h3>上下文管理</h3>
+      <p>Token 预算分配、上下文压缩、窗口管理</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">👥</div>
+      <h3>多 Agent 协作</h3>
+      <p>子 Agent 分发、团队协作、角色分工</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">🔌</div>
+      <h3>可扩展性</h3>
+      <p>MCP 协议、Skills 插件系统、自定义工具</p>
+    </div>
+    <div class="arch-card">
+      <div class="icon">🔄</div>
+      <h3>容错恢复</h3>
+      <p>重试机制、断点恢复、Replay 系统</p>
+    </div>
+  </div>
+</div>
+
+<!-- 执行流程对比 -->
+<div class="arch-section">
+  <h2>执行流程对比</h2>
+  <div class="capability-grid">
+    <div>
+      <h3 style="font-size:14px;margin-bottom:12px;">cc-haha 执行流</h3>
+      <div class="flow">
+        <div class="flow-step"><div class="step-num">Step 1</div><div class="step-label">用户输入</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><div class="step-num">Step 2</div><div class="step-label">API 调用</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><div class="step-num">Step 3</div><div class="step-label">流式工具检测</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><div class="step-num">Step 4</div><div class="step-label">并行工具执行</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><div class="step-num">Step 5</div><div class="step-label">结果回传</div></div>
+        <div class="flow-arrow">↻</div>
+        <div class="flow-step"><div class="step-num">Loop</div><div class="step-label">end_turn 或超轮</div></div>
+      </div>
+      <div style="font-size:11px;color:#86868b;margin-top:8px;">关键文件: <code>src/query.ts</code> → <code>src/services/tools/toolOrchestration.ts</code></div>
+    </div>
+    <div>
+      <h3 style="font-size:14px;margin-bottom:12px;">gnagent 执行流</h3>
+      <div class="flow">
+        <div class="flow-step"><div class="step-num">Step 1</div><div class="step-label">会话分类</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><div class="step-num">Step 2</div><div class="step-label">风险判定</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><div class="step-num">Step 3</div><div class="step-label">审批/放行</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><div class="step-num">Step 4</div><div class="step-label">Agent Turn</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><div class="step-num">Step 5</div><div class="step-label">工具循环</div></div>
+        <div class="flow-arrow">↻</div>
+        <div class="flow-step"><div class="step-num">Loop</div><div class="step-label">结果输出</div></div>
+      </div>
+      <div style="font-size:11px;color:#86868b;margin-top:8px;">关键文件: <code>executeRuntimeBuiltInAgentTurn.ts</code> → <code>runAgentTurn.ts</code> → <code>runtimeToolLoop.ts</code></div>
+    </div>
+  </div>
+</div>
+
+<!-- 详细能力对比表 -->
+<div class="arch-section">
+  <h2>详细能力对比</h2>
+
+  <div class="compare-row">
+    <div class="compare-label">🧠 LLM 集成</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      支持 Anthropic、Bedrock、Vertex、Azure、OpenAI、DeepSeek 等 10+ 平台<br>
+      <span class="code-path">src/services/api/client.ts · src/server/config/providerPresets.json</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      支持 Claude (Anthropic) + Codex (OpenAI-compatible)<br>
+      <span class="code-path">gn-agent/providers/ · gn-agent/runtime/claude/ · gn-agent/runtime/codex/</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">🛠 工具系统</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      60+ 内置工具（文件、Shell、Web、MCP、Agent 分发等），强大的 Tool 类型系统<br>
+      <span class="code-path">src/Tool.ts · src/tools/</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      通过文件操作 + MCP 工具系统 + Skills 扩展。工具数较少，但可扩展<br>
+      <span class="code-path">runtime/tools/runtimeToolLoop.ts · runtime/mcp/</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">🔁 执行循环</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      流式工具检测（边生成边执行只读工具）、并行执行、上下文压缩<br>
+      <span class="code-path">src/services/tools/StreamingToolExecutor.ts · src/services/tools/toolOrchestration.ts</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      支持流式检测只读工具、并行/串行执行、Tool 协议修复、Length 续推<br>
+      <span class="code-path">runtime/tools/runtimeToolLoop.ts</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">🧩 规划能力</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      内置 Plan Agent（只读架构分析）、EnterPlanMode/ExitPlanMode 工具<br>
+      <span class="code-path">src/tools/AgentTool/built-in/planAgent.ts</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      会话状态机：direct / plan_then_execute 模式自动切换，风险触发规划<br>
+      <span class="code-path">runtime/session/agentSessionController.ts · agentSessionStateMachine.ts</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">💾 记忆系统</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      三层 Agent Memory（user/project/local）+ Session Memory + 自动梦境合并<br>
+      <span class="code-path">src/tools/AgentTool/agentMemory.ts · src/services/SessionMemory/</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      Project Memory + Thread Memory + 自动候选提取，通过 Tauri 后端持久化<br>
+      <span class="code-path">runtime/memory/extractMemoryCandidates.ts · projectMemoryRuntime.ts</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">🔒 安全护栏</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      Permission hooks + Tool 级别权限检查 + Sandbox 隔离<br>
+      <span class="code-path">src/hooks/useCanUseTool.ts</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      风险分级（高/中/低）+ SandboxPolicy + 审批协调 + Claim Guard<br>
+      <span class="code-path">runtime/approval/riskPolicy.ts · runtimeApprovalCoordinator.ts</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">🧵 上下文管理</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      Auto Compact + Micro Compact + Snip 压缩策略<br>
+      <span class="code-path">src/services/compact/</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      Token Budget 分配 + 目标压缩 + Tool Result 修剪<br>
+      <span class="code-path">runtime/context/contextBudgetAllocator.ts · runtime/compaction/compactToolResults.ts</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">👥 多 Agent</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      成熟 Agent 分发系统：Sub-agent、Fork、Teams、背景任务、远程触发<br>
+      <span class="code-path">src/tools/AgentTool/AgentTool.tsx · src/tools/shared/spawnMultiAgent.ts</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      团队编排：4 角色（架构/UI/实现/QA）+ 依赖图执行 + 协调者合成<br>
+      <span class="code-path">runtime/teams/teamOrchestrator.ts · teamPlanner.ts</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">🔌 可扩展性</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      MCP 全支持 + Skill 插件 + Agent 定义文件 (Markdown frontmatter)<br>
+      <span class="code-path">src/services/mcp/ · src/tools/SkillTool/ · src/tools/AgentTool/loadAgentsDir.ts</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      MCP 客户端 + Skills 注册系统（路径激活 + Hook）+ Inline/Fork 执行上下文<br>
+      <span class="code-path">runtime/mcp/runtimeMcpClient.ts · runtime/skills/runtimeSkillRegistry.ts</span>
+    </div>
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-label">🔄 容错恢复</div>
+    <div class="compare-col">
+      <strong>cc-haha</strong><br>
+      Context Length 错误重试 + 背景任务监控 + 超时管理<br>
+      <span class="code-path">src/query.ts · src/Task.ts</span>
+    </div>
+    <div class="compare-col">
+      <strong>gnagent</strong><br>
+      Replay 事件溯源系统 + 中断恢复 + 自动 Resume Prompt 生成<br>
+      <span class="code-path">runtime/replay/runtimeReplayRecovery.ts · withRetry.ts</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- 能力雷达摘要 -->
+<div class="arch-section">
+  <h2>能力总评</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>能力</th>
+        <th>cc-haha</th>
+        <th>gnagent</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="cap-name">LLM 多 Provider</td>
+        <td><span class="badge badge-yes">✅ 丰富</span><span class="code-path">10+ 平台</span></td>
+        <td><span class="badge badge-partial">⚠️ 基础</span><span class="code-path">Claude + Codex</span></td>
+        <td>cc-haha 支持极其广泛；gnagent 够用但较少</td>
+      </tr>
+      <tr>
+        <td class="cap-name">工具数量与类型</td>
+        <td><span class="badge badge-yes">✅ 丰富</span><span class="code-path">60+ 工具</span></td>
+        <td><span class="badge badge-partial">⚠️ 精简</span><span class="code-path">核心工具集</span></td>
+        <td>cc-haha 工具生态更成熟；gnagent 聚焦核心</td>
+      </tr>
+      <tr>
+        <td class="cap-name">执行循环</td>
+        <td><span class="badge badge-yes">✅ 成熟</span></td>
+        <td><span class="badge badge-yes">✅ 成熟</span></td>
+        <td>两者都支持流式检测、并行执行、上下文压缩</td>
+      </tr>
+      <tr>
+        <td class="cap-name">规划能力</td>
+        <td><span class="badge badge-yes">✅ 强</span></td>
+        <td><span class="badge badge-yes">✅ 强</span></td>
+        <td>cc-haha 偏 Plan Agent；gnagent 偏状态机+风险触发</td>
+      </tr>
+      <tr>
+        <td class="cap-name">记忆系统</td>
+        <td><span class="badge badge-yes">✅ 完善</span></td>
+        <td><span class="badge badge-partial">⚠️ 基础</span></td>
+        <td>cc-haha 有自动梦境合并；gnagent 有候选提取但较简单</td>
+      </tr>
+      <tr>
+        <td class="cap-name">安全/审批</td>
+        <td><span class="badge badge-partial">⚠️ 基础</span></td>
+        <td><span class="badge badge-yes">✅ 完善</span></td>
+        <td>gnagent 的风险分级+审批流更严谨</td>
+      </tr>
+      <tr>
+        <td class="cap-name">上下文管理</td>
+        <td><span class="badge badge-yes">✅ 成熟</span></td>
+        <td><span class="badge badge-yes">✅ 成熟</span></td>
+        <td>两者都有完善的压缩和预算分配机制</td>
+      </tr>
+      <tr>
+        <td class="cap-name">多 Agent 协作</td>
+        <td><span class="badge badge-yes">✅ 强大</span></td>
+        <td><span class="badge badge-partial">⚠️ 有基础</span></td>
+        <td>cc-haha 的 AgentTool 系统更成熟；gnagent 团队编排可用</td>
+      </tr>
+      <tr>
+        <td class="cap-name">可扩展性</td>
+        <td><span class="badge badge-yes">✅ 强大</span></td>
+        <td><span class="badge badge-yes">✅ 良好</span></td>
+        <td>两者都支持 MCP + Skills，cc-haha 的 Agent 定义更灵活</td>
+      </tr>
+      <tr>
+        <td class="cap-name">容错恢复</td>
+        <td><span class="badge badge-partial">⚠️ 基础</span></td>
+        <td><span class="badge badge-yes">✅ 完善</span></td>
+        <td>gnagent 的 Replay 事件溯源+自动恢复更完整</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 代码模块索引 -->
+<div class="arch-section">
+  <h2>gnagent 能力 → 代码模块索引</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>能力</th>
+        <th>核心文件</th>
+        <th>模块路径</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>🧠 LLM 集成</td>
+        <td>ClaudeRuntime.ts / CodexRuntime.ts</td>
+        <td>gn-agent/runtime/claude|codex/</td>
+        <td>Provider 注册 + Config 解析 + 流式调用</td>
+      </tr>
+      <tr>
+        <td>🛠 工具循环</td>
+        <td>runtimeToolLoop.ts</td>
+        <td>runtime/tools/</td>
+        <td>流式检测、并行执行、协议修复、Length 续推</td>
+      </tr>
+      <tr>
+        <td>🧩 Agent 内核</td>
+        <td>runAgentTurn.ts</td>
+        <td>runtime/agent-kernel/</td>
+        <td>System Prompt + Context 组装 → 启动工具循环</td>
+      </tr>
+      <tr>
+        <td>🧵 上下文组装</td>
+        <td>buildAgentContext.ts</td>
+        <td>runtime/context/</td>
+        <td>多 Section 合并 + Token 预算分配</td>
+      </tr>
+      <tr>
+        <td>🧩 会话规划</td>
+        <td>agentSessionController.ts</td>
+        <td>runtime/session/</td>
+        <td>direct / plan_then_execute 模式决策</td>
+      </tr>
+      <tr>
+        <td>🔒 安全审批</td>
+        <td>riskPolicy.ts / runtimeApprovalCoordinator.ts</td>
+        <td>runtime/approval/</td>
+        <td>风险分级 + SandboxPolicy + 审批协调</td>
+      </tr>
+      <tr>
+        <td>🔌 MCP 集成</td>
+        <td>runtimeMcpClient.ts / runtimeMcpFlow.ts</td>
+        <td>runtime/mcp/</td>
+        <td>MCP Server 管理 + Tool 调用</td>
+      </tr>
+      <tr>
+        <td>🧩 Skills 系统</td>
+        <td>runtimeSkillRegistry.ts</td>
+        <td>runtime/skills/</td>
+        <td>路径激活 + Hook + Inline/Fork 上下文</td>
+      </tr>
+      <tr>
+        <td>💾 记忆系统</td>
+        <td>extractMemoryCandidates.ts</td>
+        <td>runtime/memory/</td>
+        <td>自动提取 + Project/Thread 记忆</td>
+      </tr>
+      <tr>
+        <td>👥 团队协作</td>
+        <td>teamOrchestrator.ts / teamPlanner.ts</td>
+        <td>runtime/teams/</td>
+        <td>4 角色分工 + 依赖图执行</td>
+      </tr>
+      <tr>
+        <td>🔄 编排层</td>
+        <td>executeRuntimeBuiltInAgentTurn.ts</td>
+        <td>runtime/orchestration/</td>
+        <td>完整的 Turn 生命周期编排</td>
+      </tr>
+      <tr>
+        <td>🔄 容错恢复</td>
+        <td>runtimeReplayRecovery.ts</td>
+        <td>runtime/replay/</td>
+        <td>事件溯源 + 中断自动恢复</td>
+      </tr>
+      <tr>
+        <td>⏱ 审批协调</td>
+        <td>runtimeLocalAgentFlow.ts</td>
+        <td>runtime/orchestration/</td>
+        <td>Local Agent 审批/风险/决策流</td>
+      </tr>
+      <tr>
+        <td>📂 文件操作</td>
+        <td>runtimeProjectFileExecutionFlow.ts</td>
+        <td>runtime/orchestration/</td>
+        <td>Plan → Approve → Execute → Verify</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 结论 -->
+<div class="arch-section" style="background:linear-gradient(135deg,#f5f5f7,#fff);">
+  <h2>结论</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+    <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.06);">
+      <h3 style="font-size:15px;font-weight:600;margin-bottom:8px;">cc-haha 优势</h3>
+      <ul style="list-style:none;font-size:13px;line-height:1.8;">
+        <li>✅ 工具生态极其丰富（60+ 工具）</li>
+        <li>✅ 多 Provider 支持广泛</li>
+        <li>✅ Agent 分发系统成熟</li>
+        <li>✅ Agent 记忆系统更完善</li>
+        <li>✅ 社区活跃、迭代快</li>
+      </ul>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.06);">
+      <h3 style="font-size:15px;font-weight:600;margin-bottom:8px;">gnagent 优势</h3>
+      <ul style="list-style:none;font-size:13px;line-height:1.8;">
+        <li>✅ 安全审批体系更严谨（风险分级）</li>
+        <li>✅ 容错恢复更完整（Replay 事件溯源）</li>
+        <li>✅ 会话状态机设计清晰</li>
+        <li>✅ 与 Tauri 桌面深度集成</li>
+        <li>✅ 代码架构更模块化、易于理解</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:20px;padding:16px;background:#007aff0d;border-radius:10px;font-size:13px;line-height:1.6;color:#515154;">
+    <strong>💡 总结：</strong>gnagent 已经具备了一个完整 AI Agent 所需的<strong>所有核心能力</strong>（LLM 集成、工具循环、规划、记忆、安全、MCP、Skills、多 Agent、容错）。与 cc-haha 相比，主要差距在于<strong>工具生态数量</strong>和<strong>多 Provider 支持广度</strong>，但在<strong>安全架构</strong>和<strong>容错恢复</strong>方面甚至更有优势。如果后续需要增强，重点方向是：扩充工具集、增加更多 LLM Provider 支持、强化记忆系统的自动合并能力。
+  </div>
+</div>
+
+</div>
+</body>
+</html>

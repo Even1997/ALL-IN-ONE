@@ -23,3 +23,20 @@ test('chat delegates direct-chat execution to orchestration entry points and run
   assert.doesNotMatch(source, /const runtimeContext = assembleAgentContext\(/);
   assert.doesNotMatch(source, /const runtimePrompt = buildThreadPrompt\(/);
 });
+
+test('chat does not force non-built-in agents into plan mode before the model chooses it', async () => {
+  const source = await readFile(chatPath, 'utf8');
+
+  assert.match(source, /suggestedPlanMode:\s*Boolean\(skillIntent\)/);
+  assert.match(source, /riskyWriteDetected:\s*false/);
+  assert.match(source, /multiStepDetected:\s*Boolean\(mcpCommand\)/);
+  assert.doesNotMatch(source, /riskyWriteDetected:\s*runtimeExecutionAgentId !== 'built-in'/);
+  assert.doesNotMatch(source, /multiStepDetected:\s*Boolean\(mcpCommand \|\| runtimeExecutionAgentId !== 'built-in'\)/);
+});
+
+test('chat built-in execution path can dispatch the agent tool to the team runtime', async () => {
+  const source = await readFile(chatPath, 'utf8');
+
+  assert.match(source, /const runBuiltInAgentTool = async \(call: ToolCall\): Promise<ToolResult> =>/);
+  assert.match(source, /call\.name === 'agent'\s*\?\s*runBuiltInAgentTool\(call\)/);
+});

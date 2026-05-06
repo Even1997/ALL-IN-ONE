@@ -48,6 +48,38 @@ test('runtime tool loop executes an XML view tool call before returning final co
   assert.match(modelMessages[1][2].content, /console\.log/);
 });
 
+test('runtime tool loop preserves visible text across multiple tool rounds', async () => {
+  const modelResponses = [
+    `I will inspect the file first.\n${toolUse('view', { file_path: 'src/app.ts', limit: 20 })}`,
+    `I found the issue and will patch it.\n${toolUse('edit', {
+      file_path: 'src/app.ts',
+      old_string: 'bad()',
+      new_string: 'good()',
+    })}`,
+    'The patch is in place.',
+  ];
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 4,
+    initialPrompt: 'Fix the app file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['view', 'edit'],
+    callModel: async () => modelResponses.shift(),
+    executeTool: async (call) => ({
+      type: 'text',
+      content:
+        call.name === 'view'
+          ? '1: bad()'
+          : 'File successfully edited: src/app.ts',
+    }),
+  });
+
+  assert.equal(
+    result.finalContent,
+    'I will inspect the file first.\n\nI found the issue and will patch it.\n\nThe patch is in place.',
+  );
+});
+
 test('runtime tool loop normalizes read tool aliases to view before allowlist checks', async () => {
   const executedCalls = [];
 
@@ -94,6 +126,28 @@ test('runtime tool loop returns an exhausted message instead of raw XML tool cal
   assert.match(result.finalContent, /exhausted/i);
   assert.equal(result.toolCalls.length, 1);
   assert.equal(result.toolCalls[0].status, 'completed');
+});
+
+test('runtime tool loop keeps accumulated visible text when max rounds are exhausted', async () => {
+  const modelResponses = [
+    `I will inspect the app file first.\n${toolUse('view', { file_path: 'src/app.ts' })}`,
+    toolUse('view', { file_path: 'src/app.ts', limit: 10 }),
+  ];
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Inspect the app file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['view'],
+    callModel: async () => modelResponses.shift(),
+    executeTool: async () => ({
+      type: 'text',
+      content: '1: console.log("app");',
+    }),
+  });
+
+  assert.doesNotMatch(result.finalContent, /<tool_use>/);
+  assert.equal(result.finalContent, 'I will inspect the app file first.');
 });
 
 test('runtime tool loop blocks disallowed tools and feeds the result as a user message', async () => {
@@ -297,7 +351,10 @@ test('runtime tool loop asks the model to repair malformed tool protocol even wi
     },
   });
 
-  assert.equal(result.finalContent, 'The tool call was malformed, so I will answer directly.');
+  assert.equal(
+    result.finalContent,
+    'I will inspect first.\n\nThe tool call was malformed, so I will answer directly.',
+  );
   assert.equal(modelMessages.length, 2);
   assert.match(modelMessages[1].at(-1).content, /not in a parseable format/);
 });

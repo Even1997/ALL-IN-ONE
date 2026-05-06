@@ -11,6 +11,16 @@ const servicePath = path.resolve(testDir, '../../src/modules/ai/core/AIService.t
 const helperPath = path.resolve(testDir, '../../src/modules/ai/chat/projectFileOperations.ts');
 const cssPath = path.resolve(testDir, '../../src/components/workspace/AIChat.css');
 
+test('AIChat does not pre-route free text through project file intent regex', async () => {
+  const chatSource = await readFile(chatPath, 'utf8');
+
+  assert.doesNotMatch(
+    chatSource,
+    /const\s+projectFileRequestKind\s*=\s*resolveProjectFileRequestKind\(/,
+    'free text should enter the runtime tool loop; project file intent must be model/tool driven'
+  );
+});
+
 test('AI chat routes project file requests through read/planning helpers and proposal UI', async () => {
   const chatSource = await readFile(chatPath, 'utf8');
   const messageListSource = await readFile(messageListPath, 'utf8');
@@ -20,27 +30,23 @@ test('AI chat routes project file requests through read/planning helpers and pro
   assert.match(chatSource, /projectFileProposal/);
   assert.match(chatSource, /renderProjectFileProposal/);
   assert.match(chatSource, /renderRuntimeApproval/);
-  assert.match(chatSource, /resolveProjectFileRequestKind/);
-  assert.match(chatSource, /shouldForceProjectFileProposal/);
+  assert.doesNotMatch(chatSource, /resolveProjectFileRequestKind/);
   assert.match(chatSource, /findLatestPendingProjectFileProposalAction/);
   assert.match(chatSource, /isShortPendingActionAffirmation/);
   assert.match(chatSource, /handleExecuteProjectFileProposal\(\s*pendingProjectFileAction\.messageId/);
   assert.match(chatSource, /handleCancelProjectFileProposal\(pendingProjectFileAction\.messageId\)/);
-  assert.match(chatSource, /parseProjectFileOperationsPlan/);
-  assert.match(chatSource, /executeRuntimeProjectFileRead/);
-  assert.match(chatSource, /executeRuntimeProjectFilePlanning/);
-  assert.match(chatSource, /prepareProjectFileProposalFlow/);
-  assert.match(chatSource, /requestRuntimeProjectFileApproval/);
+  assert.doesNotMatch(chatSource, /parseProjectFileOperationsPlan/);
+  assert.doesNotMatch(chatSource, /executeRuntimeProjectFileRead/);
+  assert.doesNotMatch(chatSource, /executeRuntimeProjectFilePlanning/);
+  assert.doesNotMatch(chatSource, /prepareProjectFileProposalFlow/);
+  assert.doesNotMatch(chatSource, /requestRuntimeProjectFileApproval/);
   assert.match(chatSource, /conversationHistory/);
-  assert.match(chatSource, /conversationHistory,\s*projectName: currentProject\.name/);
   assert.match(chatSource, /executeProjectFileOperations/);
   assert.match(chatSource, /notifyProjectFilesChanged/);
-  assert.match(chatSource, /projectFileRequestKind === 'read'/);
-  assert.match(chatSource, /projectFileRequestKind === 'write'/);
-  assert.match(chatSource, /projectFileMode = shouldForceProjectFileProposal/);
-  assert.match(chatSource, /resolveProjectFileRequestKind\(\{\s*rawInput: rawContent,\s*cleanedInput: cleanedContent,\s*conversationHistory,/);
+  assert.doesNotMatch(chatSource, /projectFileRequestKind/);
+  assert.doesNotMatch(chatSource, /projectFileMode = shouldForceProjectFileProposal/);
+  assert.doesNotMatch(chatSource, /resolveProjectFileRequestKind\(\{\s*rawInput: rawContent,\s*cleanedInput: cleanedContent,\s*conversationHistory,/);
   assert.match(chatSource, /notifyProjectFilesChanged\(result\.changedPaths\)/);
-  assert.match(chatSource, /notifyProjectFilesChanged\(executionResult\.successOutcome\.activityEntry\.changedPaths\)/);
   assert.match(chatSource, /notifyProjectFilesChanged\(checkpointFilesFromToolCalls\.map\(\(file\) => file\.path\)\)/);
 
   assert.match(messageListSource, /renderProjectFileProposal/);
@@ -50,8 +56,11 @@ test('AI chat routes project file requests through read/planning helpers and pro
   assert.match(helperSource, /isSupportedProjectTextFilePath/);
   assert.match(helperSource, /findLatestPendingProjectFileProposalAction/);
   assert.match(helperSource, /SHORT_PENDING_ACTION_AFFIRMATIVE_PATTERN/);
-  assert.match(helperSource, /resolveProjectFileRequestKind/);
-  assert.match(helperSource, /shouldForceProjectFileProposal/);
+  assert.doesNotMatch(helperSource, /resolveProjectFileRequestKind/);
+  assert.doesNotMatch(helperSource, /detectProjectFileWriteIntent/);
+  assert.doesNotMatch(helperSource, /detectProjectFileReadIntent/);
+  assert.doesNotMatch(helperSource, /detectTaskAuthorizedProjectWriteIntent/);
+  assert.doesNotMatch(helperSource, /shouldForceProjectFileProposal/);
 
   assert.match(cssSource, /\.chat-project-file-proposal-card/);
   assert.match(cssSource, /\.chat-runtime-approval-card/);

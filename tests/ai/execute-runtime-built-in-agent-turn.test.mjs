@@ -66,6 +66,23 @@ test('agent kernel prompt prefers direct drafting when project files are unneces
   );
 });
 
+test('agent kernel prompt treats file tools as model-chosen actions, not keyword routes', async () => {
+  const source = await readFile(agentKernelPath, 'utf8');
+
+  assert.match(
+    source,
+    /Free text is not authorization by keyword\. Decide whether a tool is needed from the user meaning and current state\./
+  );
+  assert.match(
+    source,
+    /If the user asks why something cannot be saved, explain or inspect as needed; do not call write\/edit unless the user asks to create or change a concrete file\./
+  );
+  assert.match(
+    source,
+    /A file mutation is successful only after a write\/edit tool result reports success and verification\./
+  );
+});
+
 test('agent kernel prompt suppresses visible preambles before the first tool result', async () => {
   const source = await readFile(agentKernelPath, 'utf8');
   const directChatSource = await readFile(directChatPromptPath, 'utf8');
@@ -178,7 +195,7 @@ test('file mutation guard preserves substantive artifact content when save claim
   assert.match(guarded, /未确认|文件变更结果/);
 });
 
-test('built-in runtime asks for the actual artifact body when tool inspection ends with process-only narration', async () => {
+test('built-in runtime asks for a complete answer when tool inspection ends with process-only narration', async () => {
   const { executeRuntimeBuiltInAgentTurn } = await loadBuiltInTurn();
 
   let callCount = 0;
@@ -205,7 +222,7 @@ test('built-in runtime asks for the actual artifact body when tool inspection en
       if (callCount === 2) {
         return '好的，我看到项目里已经有一份初版需求文档。现在我来把它扩展为一份结构完整的真正产品需求文档。';
       }
-      assert.match(prompt, /Output the full artifact body now/i);
+      assert.match(prompt, /Return the complete user-facing answer or requested artifact body now/i);
       return '# 动漫 APP 需求文档\n\n## 1. 产品定位\n\n面向动漫用户的内容社区。';
     },
     executeTool: async () => ({

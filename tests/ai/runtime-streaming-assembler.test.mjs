@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { createRuntimeStreamingMessageAssembler } from '../../src/modules/ai/runtime/orchestration/agentTurnRunner.ts';
 
-test('runtime streaming assembler hides provisional text before the model confirms answer or native thinking', () => {
+test('runtime streaming assembler keeps pre-tool visible text when a tool boundary starts', () => {
   const assembler = createRuntimeStreamingMessageAssembler();
 
   const firstDraft = assembler.append({
@@ -11,17 +11,39 @@ test('runtime streaming assembler hides provisional text before the model confir
     delta: 'Let me inspect the workspace first.',
   });
 
-  assert.equal(firstDraft.answerContent, '');
+  assert.equal(firstDraft.answerContent, 'Let me inspect the workspace first.');
   assert.equal(firstDraft.thinkingContent, '');
-  assert.deepEqual(firstDraft.assistantParts, []);
-  assert.equal(firstDraft.content, '正在思考...');
+  assert.equal(firstDraft.assistantParts.at(-1)?.type, 'text');
+  assert.equal(firstDraft.assistantParts.at(-1)?.content, 'Let me inspect the workspace first.');
+  assert.match(firstDraft.content, /Let me inspect the workspace first\./);
 
   const secondDraft = assembler.markToolBoundary();
 
-  assert.equal(secondDraft.answerContent, '');
+  assert.equal(secondDraft.answerContent, 'Let me inspect the workspace first.');
   assert.equal(secondDraft.thinkingContent, '');
-  assert.deepEqual(secondDraft.assistantParts, []);
-  assert.equal(secondDraft.content, '正在思考...');
+  assert.equal(secondDraft.assistantParts.at(-1)?.type, 'text');
+  assert.equal(secondDraft.assistantParts.at(-1)?.content, 'Let me inspect the workspace first.');
+  assert.match(secondDraft.content, /Let me inspect the workspace first\./);
+});
+
+test('runtime streaming assembler flushes initial visible text before direct answer streaming continues', () => {
+  const assembler = createRuntimeStreamingMessageAssembler();
+
+  assembler.append({
+    kind: 'text',
+    delta: 'Checking the current implementation. ',
+  });
+  const draft = assembler.append({
+    kind: 'text',
+    delta: 'Here is the answer.',
+  });
+
+  assert.equal(draft.answerContent, 'Checking the current implementation. Here is the answer.');
+  assert.equal(draft.thinkingContent, '');
+  assert.equal(
+    draft.assistantParts.at(-1)?.content,
+    'Checking the current implementation. Here is the answer.',
+  );
 });
 
 test('runtime streaming assembler keeps native thinking stream collapsed', () => {
@@ -42,6 +64,23 @@ test('runtime streaming assembler keeps native thinking stream collapsed', () =>
       createdAt: thinkingDraft.assistantParts[0]?.createdAt,
     },
   ]);
+});
+
+test('runtime streaming assembler keeps accumulated answer text visible when a later thinking phase starts', () => {
+  const assembler = createRuntimeStreamingMessageAssembler();
+
+  assembler.append({
+    kind: 'text',
+    delta: 'I found the relevant file.',
+  });
+  const draft = assembler.append({
+    kind: 'thinking',
+    delta: 'Now I will verify whether another tool call is needed.',
+  });
+
+  assert.equal(draft.answerContent, 'I found the relevant file.');
+  assert.equal(draft.thinkingContent, 'Now I will verify whether another tool call is needed.');
+  assert.match(draft.content, /I found the relevant file\./);
 });
 
 test('runtime streaming assembler keeps final answer body after tool inspection reasoning', () => {
@@ -69,7 +108,7 @@ test('runtime streaming assembler keeps direct final text when no tool boundary 
     delta: 'Final answer without any tool use.',
   });
 
-  assert.equal(draft.answerContent, '');
+  assert.equal(draft.answerContent, 'Final answer without any tool use.');
   assert.equal(draft.thinkingContent, '');
 
   const finalDraft = assembler.buildFinal('Final answer without any tool use.');

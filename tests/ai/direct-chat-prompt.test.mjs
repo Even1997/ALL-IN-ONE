@@ -99,7 +99,7 @@ test('buildDirectChatPrompt includes recent conversation history before the new 
   assert.match(result.prompt, /user_request:\nNow connect that to the right pane behavior/);
 });
 
-test('buildDirectChatPrompt carries short affirmative replies over pending save questions', () => {
+test('buildDirectChatPrompt does not turn short affirmative replies into save authorization', () => {
   const result = buildDirectChatPrompt({
     userInput: '好',
     currentProjectName: 'PM Workspace',
@@ -114,8 +114,8 @@ test('buildDirectChatPrompt carries short affirmative replies over pending save 
     ],
   });
 
-  assert.match(result.prompt, /pending_user_confirmation:/);
-  assert.match(result.prompt, /authorization to execute the previously proposed low-risk file action/);
+  assert.doesNotMatch(result.prompt, /pending_user_confirmation:/);
+  assert.doesNotMatch(result.prompt, /authorization to execute the previously proposed low-risk file action/);
   assert.match(result.prompt, /user_request:\n好/);
 });
 

@@ -6,6 +6,7 @@ const HIGH_RISK_ACTIONS = new Set([
   'tool_bash',
   'tool_powershell',
   'tool_fetch',
+  'tool_agent',
   'run_local_agent_prompt',
 ]);
 const MEDIUM_RISK_ACTIONS = new Set(['tool_edit', 'tool_write', 'project_file_write', 'mcp_tool_call']);

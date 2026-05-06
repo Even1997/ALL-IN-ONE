@@ -14,6 +14,7 @@ const GOODNIGHT_AGENT_SYSTEM_PROMPT = [
   'Answer as a user-facing assistant, not as an internal runtime log.',
   'Do not mention internal operating files or folders such as .goodnight, _goodnight, .ai, GOODNIGHT.md, or CLAUDE.md unless the user explicitly asks about them.',
   'For project-specific factual answers, prefer canonical source files, docs, tests, and package scripts over temporary, cache, hidden, worktree, or log files.',
+  'If the answer depends on current-project facts that are not already in context, inspect the project with read-only tools before answering.',
   'When summarizing a project, prioritize user-facing features, pages, documents, and deliverables over internal assistant infrastructure.',
   'Only call tools using this exact XML format:',
   '<tool_use>',
@@ -23,6 +24,9 @@ const GOODNIGHT_AGENT_SYSTEM_PROMPT = [
   '</tool_use>',
   'After receiving tool results, continue the task instead of stopping at the tool output.',
   'Never claim you changed files unless a write/edit tool actually succeeded.',
+  'Free text is not authorization by keyword. Decide whether a tool is needed from the user meaning and current state.',
+  'If the user asks why something cannot be saved, explain or inspect as needed; do not call write/edit unless the user asks to create or change a concrete file.',
+  'A file mutation is successful only after a write/edit tool result reports success and verification.',
   'For straightforward writing, drafting, brainstorming, or requirements/spec requests that do not depend on project files, answer directly without calling tools first.',
   'Before a tool batch, either call the tool immediately or give at most one short progress sentence.',
   'Do not emit repeated process narration such as "让我先...", "好的，我来...", or "现在我来..." across multiple consecutive replies.',
@@ -44,6 +48,7 @@ const GOODNIGHT_AGENT_SYSTEM_PROMPT = [
 const DEFAULT_ALLOWED_TOOLS = [...AVAILABLE_RUNTIME_TOOLS];
 
 export type RunAgentTurnInput = AgentContextBuildInput & {
+  maxRounds?: number;
   allowedTools?: string[];
   beforeToolCall?: RuntimeToolLoopOptions['beforeToolCall'];
   afterToolCall?: RuntimeToolLoopOptions['afterToolCall'];
@@ -70,7 +75,7 @@ const renderModelPrompt = (messages: RuntimeToolMessage[]) =>
 export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTurnResult> {
   const context = buildAgentContext(input);
   const result = await runRuntimeToolLoop({
-    maxRounds: 8,
+    maxRounds: input.maxRounds ?? 100,
     contextWindowTokens: input.contextWindowTokens,
     initialPrompt: context.prompt,
     systemPrompt: GOODNIGHT_AGENT_SYSTEM_PROMPT,

@@ -89,8 +89,8 @@ test('bypass mode requires an explicit confirmation path in chat UI', async () =
 
 test('built-in runtime has enough tool rounds for inspect-edit-verify flows', async () => {
   const source = await readFile(runAgentTurnPath, 'utf8');
-  const match = source.match(/maxRounds:\s*(\d+)/);
+  const match = source.match(/maxRounds:\s*input\.maxRounds\s*\?\?\s*(\d+)/);
 
-  assert.ok(match, 'runAgentTurn should set maxRounds explicitly');
-  assert.ok(Number(match[1]) >= 8, 'built-in tool loop should allow at least 8 rounds');
+  assert.ok(match, 'runAgentTurn should set maxRounds with a default fallback');
+  assert.ok(Number(match[1]) >= 50, 'default maxRounds should allow at least 50 rounds (matching cc-haha unlimited model-driven approach)');
 });

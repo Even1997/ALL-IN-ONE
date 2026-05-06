@@ -24,17 +24,9 @@ const PROJECT_ACCESS_FAILURE_PATTERNS = [
   /Cannot access (?:file|directory) outside the current project\./i,
   /Current project root is unavailable\./i,
 ];
-const ARTIFACT_REQUEST_PATTERN =
-  /(?:requirements?\s*doc|requirements?|需求文档|PRD|spec|规格文档|设计文档|方案文档|草图|wireframe|ui direction)/i;
-const SUBSTANTIVE_ARTIFACT_PATTERN =
-  /(?:^|\n)\s{0,3}(?:#|##|\d+\.\s|[-*]\s)|(?:产品定位|目标用户|核心功能|用户故事|信息架构|交互流程|非功能需求|验收标准|里程碑|risk|scope|requirements?)/i;
 const PROCESS_ONLY_REPLY_PATTERN =
   /^(?:我先|我来先|让我先|先看(?:一|一下)?|我先看|我来看看|好的，我看到|现在我来|接下来我来|我会先|我将先|let me|first[, ]+i(?:'| wi)?ll|now i(?:'| wi)?ll)/i;
 
-const PROJECT_FACT_REQUEST_PATTERN =
-  /(?:\b(?:this|current)\s+project\b|\b(?:repo|repository|codebase)\b|这个项目|当前项目|项目里|项目中|代码库|仓库)/i;
-const PROJECT_FACT_TARGET_PATTERN =
-  /(?:\b(?:path|paths|file|files|script|scripts|entry|entrypoint|where|which|list|summary|summarize|what does|test|tests|structure)\b|路径|文件|脚本|入口|在哪|哪里|列出|总结|做什么|结构|测试)/i;
 const NON_STANDALONE_FINAL_REPLY_PATTERN =
   /^(?:上面|以上|前面|刚才|如上|前文|前述|the above|as above|as summarized above|the summary above|previously)\b/i;
 
@@ -94,33 +86,16 @@ const shouldRetryWithoutProjectTools = (input: {
   );
 };
 
-const looksLikeArtifactRequest = (value: string) => ARTIFACT_REQUEST_PATTERN.test(value);
-
-const looksLikeProjectFactRequest = (value: string) =>
-  PROJECT_FACT_REQUEST_PATTERN.test(value) &&
-  PROJECT_FACT_TARGET_PATTERN.test(value) &&
-  !looksLikeArtifactRequest(value);
-
-const looksLikeSubstantiveArtifact = (value: string) => {
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return false;
-  }
-
-  return normalized.length >= 120 || SUBSTANTIVE_ARTIFACT_PATTERN.test(value);
-};
-
-const shouldRetryArtifactDraftAfterTooling = (input: {
-  userInput: string;
+const shouldRetryProcessOnlyFinalAfterTooling = (input: {
   finalContent: string;
   toolCalls: RuntimeToolStep[];
 }) => {
-  if (!looksLikeArtifactRequest(input.userInput) || input.toolCalls.length === 0) {
+  if (input.toolCalls.length === 0) {
     return false;
   }
 
   const normalized = input.finalContent.replace(/\s+/g, ' ').trim();
-  if (!normalized || looksLikeSubstantiveArtifact(input.finalContent)) {
+  if (!normalized) {
     return false;
   }
 
@@ -139,6 +114,7 @@ export type ExecuteRuntimeBuiltInAgentTurnInput = {
   projectRoot: string;
   userInput: string;
   rawUserInput: string;
+  maxRounds?: number;
   contextWindowTokens?: number;
   conversationHistory: AgentContextConversationMessage[];
   agentInstructions: string[];
@@ -207,6 +183,7 @@ export async function executeRuntimeBuiltInAgentTurn(
 
   const executeAgentTurn = (extraInstructions: string[] = []) =>
     runAgentTurn({
+      maxRounds: input.maxRounds,
       projectId: input.projectId,
       projectName: input.projectName,
       threadId: input.threadId,
@@ -238,27 +215,6 @@ export async function executeRuntimeBuiltInAgentTurn(
     });
 
   let agentTurn = await executeAgentTurn();
-
-  if (
-    looksLikeProjectFactRequest(input.rawUserInput) &&
-    agentTurn.toolCalls.length === 0 &&
-    input.referenceFiles.length === 0
-  ) {
-    agentTurn = await executeAgentTurn([
-      'This request asks for current-project facts.',
-      'Inspect the project with read-only tools such as glob, grep, ls, or view before answering unless the needed facts are already present in loaded references.',
-      'Do not answer from prior assumptions about common repo layouts, frameworks, or unrelated projects.',
-    ]);
-
-    if (agentTurn.toolCalls.length === 0) {
-      agentTurn = await executeAgentTurn([
-        'This request asks for current-project facts.',
-        'Your previous reply still did not inspect the project.',
-        'You must call at least one read-only tool such as glob, grep, ls, or view before answering.',
-        'Do not answer until after you inspect the project.',
-      ]);
-    }
-  }
 
   let finalContent = normalizeRuntimeDirectChatResponse({
     response: agentTurn.finalContent,
@@ -315,8 +271,7 @@ export async function executeRuntimeBuiltInAgentTurn(
   }
 
   if (
-    shouldRetryArtifactDraftAfterTooling({
-      userInput: input.rawUserInput,
+    shouldRetryProcessOnlyFinalAfterTooling({
       finalContent,
       toolCalls: agentTurn.toolCalls,
     })
@@ -325,11 +280,10 @@ export async function executeRuntimeBuiltInAgentTurn(
       [
         directChat.prompt,
         'Runtime note:',
-        'You already inspected the relevant project files for this request.',
-        `The last assistant reply stopped at process narration instead of delivering the requested artifact: ${finalContent}`,
+        'You already used tools for this request.',
+        `The last assistant reply stopped at process narration instead of delivering a complete answer: ${finalContent}`,
         'Do not call any more tools.',
-        'The user asked for the artifact directly in chat.',
-        'Output the full artifact body now.',
+        'Return the complete user-facing answer or requested artifact body now.',
         'Do not describe what you will do next.',
       ].join('\n\n'),
       directChat.systemPrompt,

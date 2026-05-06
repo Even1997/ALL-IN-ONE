@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
+  TOOLS,
   buildVerifiedFileChange,
   resolveEditStrings,
   resolveRustToolResultText,
@@ -11,6 +15,30 @@ import {
   verifyWriteFileMutation,
   shouldCaptureFileChangeSnapshot,
 } from '../../src/components/workspace/tools.ts';
+import { getBuiltInRuntimeToolNames } from '../../src/utils/hostPlatform.ts';
+
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const toolsPath = path.resolve(testDir, '../../src/components/workspace/tools.ts');
+
+test('write and edit tools tell the model not to mutate files from save-like questions', async () => {
+  const source = await readFile(toolsPath, 'utf8');
+
+  assert.match(source, /Use only when the user asked to create, save, or fully rewrite a concrete file\./);
+  assert.match(source, /For existing files, read the file first with view before writing\./);
+  assert.match(source, /Never create documentation files \(\*\.md\) or README files unless explicitly requested by the user\./);
+  assert.match(source, /Do not use this tool to answer questions about saving problems/);
+  assert.match(source, /Do not use this tool merely because the user mentioned "save" or "保存" in a question\./);
+});
+
+test('runtime tool catalog exposes the built-in multi-agent delegation tool', async () => {
+  const source = await readFile(toolsPath, 'utf8');
+  const agentTool = TOOLS.find((tool) => tool.name === 'agent');
+
+  assert.ok(agentTool, 'expected an agent tool definition');
+  assert.ok(getBuiltInRuntimeToolNames().includes('agent'));
+  assert.match(source, /name:\s*'agent'/);
+  assert.match(source, /multi-agent/i);
+});
 
 test('resolveRustToolResultText preserves successful tool content', () => {
   assert.equal(

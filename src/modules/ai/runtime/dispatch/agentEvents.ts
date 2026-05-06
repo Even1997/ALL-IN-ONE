@@ -101,7 +101,7 @@ export type AgentStoredRuntimeEvent<ApprovalDisplay = unknown, QuestionPayload =
 
 const RAW_DSML_BLOCK_PATTERN = /<\s*\|\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
 const RAW_TOOL_USE_BLOCK_PATTERN = /<tool_use\b[^>]*>[\s\S]*?<\/tool_use>/gi;
-const RAW_BARE_TOOL_BLOCK_PATTERN = /<tool name="[^"]+">[\s\S]*?<\/tool>/gi;
+const RAW_BARE_TOOL_BLOCK_PATTERN = /^\s*<tool name="[^"]+">[\s\S]*?^\s*<\/tool>\s*$/gim;
 const RAW_TOOL_RESULT_BLOCK_PATTERN =
   /<tool_result\b[^>]*>[\s\S]*?<\/tool_result>/gi;
 const RAW_LEGACY_BASH_BLOCK_PATTERN = /<bash\b[^>]*>[\s\S]*?<\/bash>/gi;
@@ -110,12 +110,24 @@ const RAW_TRANSCRIPT_TOOL_RESULT_PATTERN =
 const RAW_TRANSCRIPT_ROLE_LINE_PATTERN = /^\s*(?:user|assistant|system):\s*$/gim;
 const RAW_XML_DECLARATION_LINE_PATTERN = /^\s*<\?xml\b[^>]*\?>\s*$/gim;
 const RAW_PROTOCOL_LINE_PATTERN =
-  /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=|<\/tool>|<tool_params>|<\/tool_params>|<tool_use>|<\/tool_use>|<tool_result|<\/tool_result>|<bash>|<\/bash>|<cmd>|<\/cmd>).*\s*$/gim;
+  /^\s*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=[^>]*>|<\/tool>|<tool_params>|<\/tool_params>|<tool_use>|<\/tool_use>|<tool_result\b[^>]*>|<\/tool_result>|<bash>|<\/bash>|<cmd>|<\/cmd>)\s*$/gim;
 const RAW_FRAGMENTED_TOOL_PROTOCOL_LINE_PATTERN =
   /^\s*(?:<\/?\s*tool_?|_?use\s*>|<\/?\s*tool\s*|_tool_use\s*>|tool_use\s*>|<\/?\s*tool_result_?|_result\s*>)\s*$/gim;
+const PROTOCOL_FRAGMENT_LINE_START_PATTERN =
+  /^\s*(?:<tool_use>|<tool name=[^>]*>|<tool_params>|<\/tool>|<\/tool_params>|<\/tool_use>|<tool_result\b[^>]*>|<\/tool_result>|<bash>|<\/bash>|<cmd>|<\/cmd>)/i;
+const PROTOCOL_FRAGMENT_TOKEN_PATTERN =
+  /<tool_use>|<tool name=[^>]*>|<tool_params>|<\/tool>|<\/tool_params>|<\/tool_use>|<tool_result\b[^>]*>|<\/tool_result>|<bash>|<\/bash>|<cmd>|<\/cmd>/gi;
 
-export const sanitizeAgentVisibleText = (value: string) =>
-  value
+const isProtocolFragmentLine = (line: string) => {
+  if (!PROTOCOL_FRAGMENT_LINE_START_PATTERN.test(line)) return false;
+  const withoutMarkers = line.replace(PROTOCOL_FRAGMENT_TOKEN_PATTERN, ' ').trim();
+  if (!withoutMarkers) return true;
+  const withoutQuotedStrings = withoutMarkers.replace(/"[^"\n]*"/g, '').trim();
+  return /^[\[\]\{\}:,\s]*$/.test(withoutQuotedStrings);
+};
+
+export const sanitizeAgentVisibleText = (value: string) => {
+  const cleaned = value
     .replace(RAW_DSML_BLOCK_PATTERN, '')
     .replace(RAW_TOOL_USE_BLOCK_PATTERN, '')
     .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
@@ -126,9 +138,14 @@ export const sanitizeAgentVisibleText = (value: string) =>
     .replace(RAW_XML_DECLARATION_LINE_PATTERN, '')
     .replace(RAW_PROTOCOL_LINE_PATTERN, '')
     .replace(RAW_FRAGMENTED_TOOL_PROTOCOL_LINE_PATTERN, '')
+    .split(/\r?\n/)
+    .filter((line) => !isProtocolFragmentLine(line))
+    .join('\n')
     .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .replace(/\n{3,}/g, '\n\n');
+
+  return cleaned.trim();
+};
 
 const appendVisibleText = (current: string, next: string) => {
   const cleaned = sanitizeAgentVisibleText(next);

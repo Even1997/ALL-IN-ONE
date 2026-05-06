@@ -33,5 +33,6 @@ export const getBuiltInRuntimeToolNames = () =>
     'bash',
     ...(isWindowsHost() ? ['powershell'] : []),
     'fetch',
+    'agent',
     'AskUserQuestion',
   ] as const;
