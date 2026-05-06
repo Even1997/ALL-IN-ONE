@@ -3,6 +3,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { readProjectTextFile } from '../../utils/projectPersistence.ts';
+import { isWindowsHost } from '../../utils/hostPlatform.ts';
 
 export interface Tool {
   name: string;
@@ -47,9 +48,29 @@ export interface RustToolResult {
 export const resolveRustToolResultText = (result: RustToolResult) =>
   result.success ? result.content : result.error || result.content || 'Tool execution failed.';
 
-export const resolveViewFilePathParam = (params: Record<string, unknown>) => {
-  const candidate = params.file_path ?? params.path ?? params.file;
+const resolveToolFilePathParam = (params: Record<string, unknown>) => {
+  const candidate = params.file_path ?? params.filePath ?? params.path ?? params.target ?? params.file;
   return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+};
+
+export const resolveViewFilePathParam = (params: Record<string, unknown>) =>
+  resolveToolFilePathParam(params);
+
+export const resolveWriteFilePathParam = (params: Record<string, unknown>) =>
+  resolveToolFilePathParam(params);
+
+export const resolveEditStrings = (params: Record<string, unknown>) => {
+  const oldCandidate = params.old_string ?? params.oldString ?? params.pattern;
+  const newCandidate = params.new_string ?? params.newString ?? params.replace ?? params.replacement;
+
+  if (typeof oldCandidate !== 'string' || typeof newCandidate !== 'string') {
+    return null;
+  }
+
+  return {
+    oldString: oldCandidate,
+    newString: newCandidate,
+  };
 };
 
 const SLOW_SNAPSHOT_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.rst']);
@@ -258,13 +279,40 @@ PARAMETERS:
 
 TIPS:
 - Try to use absolute paths
-- Avoid 'cd' commands to maintain context`,
+- Avoid 'cd' commands to maintain context
+- On Windows, use PowerShell-compatible syntax by default`,
     parameters: {
       command: { type: 'string', description: 'The shell command to execute' },
       timeout: { type: 'number', description: 'Timeout in milliseconds' },
     },
     required: ['command'],
   },
+  ...(isWindowsHost()
+    ? [
+        {
+          name: 'powershell',
+          description: `Execute PowerShell commands in a persistent session.
+
+WHEN TO USE THIS TOOL:
+- Use when you need to run terminal commands on Windows with PowerShell syntax
+- Commands share the same shell session
+
+PARAMETERS:
+- command: the PowerShell command to execute
+- timeout: timeout in milliseconds (max 600000)
+
+TIPS:
+- Try to use absolute paths
+- Avoid 'cd' commands to maintain context
+- Use PowerShell syntax such as Get-Location, Get-ChildItem, and $env:NAME`,
+          parameters: {
+            command: { type: 'string', description: 'The PowerShell command to execute' },
+            timeout: { type: 'number', description: 'Timeout in milliseconds' },
+          },
+          required: ['command'],
+        } satisfies Tool,
+      ]
+    : []),
   {
     name: 'fetch',
     description: `Fetch data from URLs.
@@ -396,6 +444,14 @@ export class ToolExecutor {
           return await this.edit(input as unknown as EditParams);
         case 'bash':
           return await this.bash(input as unknown as BashParams);
+        case 'powershell':
+          return await this.bash(
+            {
+              ...(input as unknown as BashParams),
+              shell: 'powershell',
+            },
+            'PowerShell'
+          );
         case 'fetch':
           return await this.fetchUrl(input as unknown as FetchParams);
         default:
@@ -491,6 +547,7 @@ export class ToolExecutor {
       const filePath = this.ensureProjectPath(requestedFilePath, 'file');
       const result = await invoke<RustToolResult>('tool_view', {
         params: {
+          project_root: this.projectRoot,
           file_path: filePath,
           offset: params.offset || 0,
           limit: params.limit || 2000,
@@ -513,20 +570,26 @@ export class ToolExecutor {
 
   private async write(params: WriteParams): Promise<ToolResult> {
     try {
-      const filePath = this.ensureProjectPath(params.file_path, 'file');
-      const captureSnapshot = shouldCaptureFileChangeSnapshot(filePath, params.content.length);
+      const requestedFilePath = resolveWriteFilePathParam(params as unknown as Record<string, unknown>);
+      if (!requestedFilePath) {
+        throw new Error('write requires a file_path parameter.');
+      }
+      const filePath = this.ensureProjectPath(requestedFilePath, 'file');
+      const content = String(params.content ?? '');
+      const captureSnapshot = shouldCaptureFileChangeSnapshot(filePath, content.length);
       const beforeContent = captureSnapshot ? await this.readTextFileSnapshot(filePath) : null;
       const result = await invoke<RustToolResult>('tool_write', {
         params: {
+          project_root: this.projectRoot,
           file_path: filePath,
-          content: params.content,
+          content,
         },
       });
       const verified =
         result.success &&
         (await verifyWriteFileMutation({
           filePath,
-          expectedContent: params.content,
+          expectedContent: content,
           readTextFile: (path) => this.readTextFileSnapshot(path),
         }));
 
@@ -545,7 +608,7 @@ export class ToolExecutor {
                   path: this.toProjectRelativePath(filePath),
                   operation: 'write',
                   beforeContent,
-                  afterContent: captureSnapshot ? params.content : null,
+                  afterContent: captureSnapshot ? content : null,
                 }),
               ],
             }
@@ -562,17 +625,26 @@ export class ToolExecutor {
 
   private async edit(params: EditParams): Promise<ToolResult> {
     try {
-      const filePath = this.ensureProjectPath(params.file_path, 'file');
+      const requestedFilePath = resolveToolFilePathParam(params as unknown as Record<string, unknown>);
+      if (!requestedFilePath) {
+        throw new Error('edit requires a file_path parameter.');
+      }
+      const editStrings = resolveEditStrings(params as unknown as Record<string, unknown>);
+      if (!editStrings) {
+        throw new Error('edit requires old_string and new_string parameters.');
+      }
+      const filePath = this.ensureProjectPath(requestedFilePath, 'file');
       const captureSnapshot = shouldCaptureFileChangeSnapshot(
         filePath,
-        params.old_string.length + params.new_string.length
+        editStrings.oldString.length + editStrings.newString.length
       );
       const beforeContent = captureSnapshot ? await this.readTextFileSnapshot(filePath) : null;
       const result = await invoke<RustToolResult>('tool_edit', {
         params: {
+          project_root: this.projectRoot,
           file_path: filePath,
-          old_string: params.old_string,
-          new_string: params.new_string,
+          old_string: editStrings.oldString,
+          new_string: editStrings.newString,
         },
       });
 
@@ -584,7 +656,7 @@ export class ToolExecutor {
         (await verifyEditFileMutation({
           filePath,
           beforeContent,
-          newString: params.new_string,
+          newString: editStrings.newString,
           readTextFile: (path) => this.readTextFileSnapshot(path),
         }));
 
@@ -618,11 +690,12 @@ export class ToolExecutor {
     }
   }
 
-  private async bash(params: BashParams): Promise<ToolResult> {
+  private async bash(params: BashParams, toolLabel = 'Bash'): Promise<ToolResult> {
     try {
       const cwd = this.ensureProjectPath(params.cwd, 'directory');
       const result = await invoke<RustToolResult>('tool_bash', {
         params: {
+          project_root: this.projectRoot,
           command: params.command,
           timeout: params.timeout || 60000,
           cwd,
@@ -638,7 +711,7 @@ export class ToolExecutor {
     } catch (e) {
       return {
         type: 'text',
-        content: `Bash error: ${e}`,
+        content: `${toolLabel} error: ${e}`,
         is_error: true,
       };
     }
@@ -670,9 +743,14 @@ const normalizeParsedToolInput = (value: unknown): Record<string, unknown> | nul
   return value as Record<string, unknown>;
 };
 
+const normalizeParsedToolName = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed.toLowerCase() === 'read' ? 'view' : trimmed;
+};
+
 const createParsedToolCall = (name: string, input: Record<string, unknown>): ToolCall => ({
   id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-  name,
+  name: normalizeParsedToolName(name),
   input,
 });
 
@@ -843,9 +921,7 @@ const parseXmlToolCalls = (text: string): ToolCall[] => {
       }
 
       calls.push({
-        id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name,
-        input: normalizedInput,
+        ...createParsedToolCall(name, normalizedInput),
       });
     } catch {
       // Skip malformed params
@@ -914,11 +990,7 @@ export const createStreamingToolDetector = (): StreamingToolDetector => {
           const normalizedInput = normalizeParsedToolInput(input);
           if (!normalizedInput) continue;
 
-          detected.push({
-            id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            name,
-            input: normalizedInput,
-          });
+          detected.push(createParsedToolCall(name, normalizedInput));
         } catch {
           // Skip malformed params
         }

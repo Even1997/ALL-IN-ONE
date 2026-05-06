@@ -385,33 +385,73 @@ export const updateRuntimeProjectFilePlanApprovalStatus = (
 export const buildRuntimeProjectFileAutoExecuteSummary = (requestSummary: string) =>
   `File operation flow completed: ${requestSummary}`;
 
+const isDeleteOnlyProposal = (operations: ProjectFileOperation[]) =>
+  operations.length > 0 && operations.every((operation) => operation.type === 'delete_file');
+
+const buildDeleteOperationPathSummary = (operations: ProjectFileOperation[]) => {
+  const paths = operations.map((operation) => operation.targetPath.trim()).filter(Boolean);
+  if (paths.length === 0) {
+    return '目标文件';
+  }
+
+  if (paths.length === 1) {
+    return paths[0];
+  }
+
+  return `${paths.length} 个文件（${paths.join('、')}）`;
+};
+
+const buildProjectFileProposalCopy = (plan: ProjectFileOperationPlan) => {
+  if (isDeleteOnlyProposal(plan.operations)) {
+    const pathSummary = buildDeleteOperationPathSummary(plan.operations);
+    return {
+      summary: `删除 ${pathSummary}`,
+      assistantMessage: `我已整理好删除 ${pathSummary} 的操作。`,
+      executionMessage: `确认后将删除 ${pathSummary}。`,
+      autoExecutionMessage: `系统已自动确认，正在删除 ${pathSummary}。`,
+    };
+  }
+
+  return {
+    summary: plan.summary.trim() || `Planned ${plan.operations.length} file operation(s)`,
+    assistantMessage: plan.assistantMessage.trim() || plan.summary.trim() || '我已经整理好这次文件操作计划。',
+    executionMessage: '需要审批后执行。',
+    autoExecutionMessage: '系统已根据当前 sandbox policy 自动确认，正在执行。',
+  };
+};
+
 export const prepareProjectFileProposalFlow = (input: {
   proposalId: string;
   mode: ProjectFileOperationMode;
   plan: ProjectFileOperationPlan;
   sandboxPolicy: SandboxPolicy;
 }): PreparedProjectFileProposalFlow => {
+  const proposalCopy = buildProjectFileProposalCopy(input.plan);
   const proposal: ProjectFileProposal = {
     id: input.proposalId,
     mode: input.mode,
     status: 'pending',
-    summary: input.plan.summary.trim() || `Planned ${input.plan.operations.length} file operation(s)`,
+    summary: proposalCopy.summary,
     assistantMessage: input.plan.assistantMessage.trim() || input.plan.summary.trim() || '我已经整理好这次文件操作计划。',
     operations: input.plan.operations,
     executionMessage: '请确认后执行。',
   };
-  const approvalActionType = buildProjectFileApprovalActionType(proposal.operations);
-  const riskLevel = classifyProjectFileOperationsRisk(proposal.operations);
+  const normalizedProposal: ProjectFileProposal = {
+    ...proposal,
+    assistantMessage: proposalCopy.assistantMessage,
+    executionMessage: proposalCopy.executionMessage,
+  };
+  const approvalActionType = buildProjectFileApprovalActionType(normalizedProposal.operations);
+  const riskLevel = classifyProjectFileOperationsRisk(normalizedProposal.operations);
   const blockedBySandbox = shouldDenyRuntimeAction({ riskLevel, sandboxPolicy: input.sandboxPolicy });
   const canAutoExecute =
     input.mode === 'auto' &&
-    riskLevel === 'low' &&
     shouldAutoApproveRuntimeAction({ riskLevel, sandboxPolicy: input.sandboxPolicy });
 
   if (blockedBySandbox) {
     return {
       proposal: {
-        ...proposal,
+        ...normalizedProposal,
         status: 'cancelled',
         executionMessage: `Current sandbox policy is ${input.sandboxPolicy}, so this higher-risk file operation was blocked.`,
       },
@@ -424,7 +464,20 @@ export const prepareProjectFileProposalFlow = (input: {
   if (!canAutoExecute) {
     return {
       proposal: {
-        ...proposal,
+        ...normalizedProposal,
+        status: 'pending',
+        executionMessage: proposalCopy.executionMessage,
+      },
+      approvalActionType,
+      riskLevel,
+      decision: 'approval-required',
+    };
+  }
+
+  if (!canAutoExecute) {
+    return {
+      proposal: {
+        ...normalizedProposal,
         status: 'pending',
         executionMessage: '需要审批后执行。',
       },
@@ -436,7 +489,18 @@ export const prepareProjectFileProposalFlow = (input: {
 
   return {
     proposal: {
-      ...proposal,
+      ...normalizedProposal,
+      status: 'executing',
+      executionMessage: proposalCopy.autoExecutionMessage,
+    },
+    approvalActionType,
+    riskLevel,
+    decision: 'auto-execute',
+  };
+
+  return {
+    proposal: {
+        ...normalizedProposal,
       status: 'executing',
       executionMessage: '系统已根据当前 sandbox policy 自动确认，正在执行。',
     },

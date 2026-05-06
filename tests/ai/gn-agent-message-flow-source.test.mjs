@@ -9,18 +9,22 @@ const __dirname = path.dirname(__filename);
 const messageListPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx');
 const messageItemPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/GNAgentMessageItem.tsx');
 const messageFlowPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/GNAgentMessageFlow.ts');
+const messageOrderingPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/messageTimelineOrdering.ts');
 
 test('GN Agent message flow carries bubble card timestamps instead of forcing one shared runtime time', async () => {
   const messageListSource = await readFile(messageListPath, 'utf8');
   const messageItemSource = await readFile(messageItemPath, 'utf8');
+  const messageOrderingSource = await readFile(messageOrderingPath, 'utf8');
 
   assert.match(messageListSource, /type MessageBubbleCard =/);
   assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(message\);/);
   assert.match(messageListSource, /\.\.\.toolExecutionCards\.map\(\(card\) => \(\{/);
   assert.match(messageListSource, /createdAt: card\.createdAt \?\? earliestRuntimeEventTime \?\? message\.createdAt,/);
   assert.match(messageItemSource, /createdAt: bubbleCard\.createdAt,/);
-  assert.match(messageItemSource, /const timelineItems = \[\.\.\.partRenderItems, \.\.\.bubbleRenderItems\]/);
-  assert.match(messageItemSource, /leftTime - rightTime \|\| left\.timelineIndex - right\.timelineIndex/);
+  assert.match(messageItemSource, /sortMessageRenderItems\(partRenderItems, bubbleRenderItems/);
+  assert.doesNotMatch(messageItemSource, /pinNarrativeFirst:/);
+  assert.match(messageOrderingSource, /return leftTime - rightTime \|\| left\.timelineIndex - right\.timelineIndex/);
+  assert.doesNotMatch(messageOrderingSource, /if \(left\.source !== right\.source\)/);
   assert.doesNotMatch(messageListSource, /areMessageListPropsEqual/);
   assert.doesNotMatch(messageItemSource, /areMessageItemPropsEqual/);
   assert.doesNotMatch(messageItemSource, /buildGNAgentMessageFlow/);

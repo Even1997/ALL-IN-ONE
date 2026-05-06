@@ -83,6 +83,24 @@ test('buildAssistantStructuredContentState preserves preferred assistant part or
   ]);
 });
 
+test('buildAssistantStructuredContentState keeps streamed narrative segments when final content only contains the latest answer text', () => {
+  const state = buildAssistantStructuredContentState({
+    content: 'Now fix the second issue.',
+    preferredAssistantParts: [
+      { type: 'thinking', content: 'Check the first issue.', collapsed: true, createdAt: 10 },
+      { type: 'text', content: 'The first check is done.', createdAt: 20 },
+      { type: 'text', content: 'Now fix the second issue.', createdAt: 30 },
+    ],
+    thinkingCollapsed: true,
+  });
+
+  assert.deepEqual(state.assistantParts, [
+    { type: 'thinking', content: 'Check the first issue.', collapsed: true, createdAt: 10 },
+    { type: 'text', content: 'The first check is done.', createdAt: 20 },
+    { type: 'text', content: 'Now fix the second issue.', createdAt: 30 },
+  ]);
+});
+
 test('buildAssistantStructuredContentState strips legacy transcript tool echoes', () => {
   const state = buildAssistantStructuredContentState({
     content: [

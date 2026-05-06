@@ -85,6 +85,10 @@ export type AssistantTimelineEvent =
   | AssistantTimelineErrorEvent
   | StoredChatRuntimeEvent;
 
+type AssistantNarrativeTimelineEvent =
+  | AssistantTimelineTextEvent
+  | AssistantTimelineReasoningEvent;
+
 const createTimelineEventId = (kind: AssistantTimelineEvent['kind'], index = 0) =>
   `assistant-timeline_${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`;
 
@@ -95,6 +99,11 @@ export const isAssistantRuntimeTimelineEvent = (
   event.kind === 'tool_result' ||
   event.kind === 'approval' ||
   event.kind === 'question';
+
+const isAssistantNarrativeTimelineEvent = (
+  event: AssistantTimelineEvent
+): event is AssistantNarrativeTimelineEvent =>
+  event.kind === 'text' || event.kind === 'reasoning';
 
 export const buildAssistantTimelineFromParts = (
   parts: AIChatMessagePart[],
@@ -162,7 +171,54 @@ export const buildAssistantTimelineUpdate = (
   }
 ) => {
   const runtimeEvents = currentTimeline.filter(isAssistantRuntimeTimelineEvent);
-  const textEvents = buildAssistantTimelineFromContent(content, options);
+  const existingNarrativeEvents = currentTimeline.filter(isAssistantNarrativeTimelineEvent);
+  const nextNarrativeEvents = buildAssistantTimelineFromContent(content, options);
+  const shouldPreferExplicitNarrativeTimestamps = Boolean(
+    options?.preferredAssistantParts?.some((part) => typeof part.createdAt === 'number')
+  );
+  const narrativeCreatedAtBuckets = {
+    text: existingNarrativeEvents
+      .filter((event): event is AssistantTimelineTextEvent => event.kind === 'text')
+      .map((event) => event.createdAt),
+    reasoning: existingNarrativeEvents
+      .filter((event): event is AssistantTimelineReasoningEvent => event.kind === 'reasoning')
+      .map((event) => event.createdAt),
+  };
+  let nextCreatedAt =
+    currentTimeline.reduce((maxCreatedAt, event) => Math.max(maxCreatedAt, event.createdAt), 0) + 1;
+  let textIndex = 0;
+  let reasoningIndex = 0;
+  const textEvents = nextNarrativeEvents.map((event) => {
+    if (event.kind === 'text') {
+      const reusedCreatedAt = narrativeCreatedAtBuckets.text[textIndex];
+      textIndex += 1;
+      return {
+        ...event,
+        createdAt:
+          shouldPreferExplicitNarrativeTimestamps && typeof event.createdAt === 'number'
+            ? event.createdAt
+            : typeof reusedCreatedAt === 'number'
+              ? reusedCreatedAt
+              : nextCreatedAt++,
+      };
+    }
+
+    if (event.kind === 'reasoning') {
+      const reusedCreatedAt = narrativeCreatedAtBuckets.reasoning[reasoningIndex];
+      reasoningIndex += 1;
+      return {
+        ...event,
+        createdAt:
+          shouldPreferExplicitNarrativeTimestamps && typeof event.createdAt === 'number'
+            ? event.createdAt
+            : typeof reusedCreatedAt === 'number'
+              ? reusedCreatedAt
+              : nextCreatedAt++,
+      };
+    }
+
+    return event;
+  });
   return [...textEvents, ...runtimeEvents].sort((left, right) => left.createdAt - right.createdAt);
 };
 

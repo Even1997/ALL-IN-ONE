@@ -3815,6 +3815,7 @@ dependencies = [
 name = "tauri-app"
 version = "0.1.0"
 dependencies = [
+ "encoding_rs",
  "regex",
  "reqwest 0.12.28",
  "serde",

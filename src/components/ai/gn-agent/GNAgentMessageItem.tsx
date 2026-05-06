@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { StoredChatMessage } from '../../../modules/ai/store/aiChatStore.ts';
 import { buildAssistantRenderModel, type AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
+import { sortMessageRenderItems } from './messageTimelineOrdering.ts';
 
 type MessagePartRenderer = (
   message: StoredChatMessage,
@@ -123,13 +124,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     });
   }
 
-  const timelineItems = [...partRenderItems, ...bubbleRenderItems]
-    .map((item, index) => ({ ...item, timelineIndex: index }))
-    .sort((left, right) => {
-      const leftTime = typeof left.createdAt === 'number' ? left.createdAt : Number.MAX_SAFE_INTEGER;
-      const rightTime = typeof right.createdAt === 'number' ? right.createdAt : Number.MAX_SAFE_INTEGER;
-      return leftTime - rightTime || left.timelineIndex - right.timelineIndex;
-    });
+  const timelineItems = sortMessageRenderItems(partRenderItems, bubbleRenderItems);
   const hasVisibleContent = timelineItems.length > 0;
 
   return (

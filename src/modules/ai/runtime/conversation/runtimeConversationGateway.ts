@@ -92,7 +92,16 @@ export const reconcileRuntimeThreadsWithSessions = (input: {
   sessions: ChatSession[];
   runtimeThreads: AgentThreadRecord[];
 }) => {
-  let sessions = [...(input.sessions || [])];
+  const runtimeThreadIds = new Set(input.runtimeThreads.map((thread) => thread.id));
+  let sessions = [...(input.sessions || [])].map((session) =>
+    session.runtimeThreadId && !runtimeThreadIds.has(session.runtimeThreadId)
+      ? {
+          ...session,
+          runtimeThreadId: null,
+          eventLog: [],
+        }
+      : session
+  );
   const bindings: Array<{ thread: AgentThreadRecord; session: ChatSession }> = [];
 
   input.runtimeThreads.forEach((thread) => {

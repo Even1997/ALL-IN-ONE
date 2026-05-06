@@ -23,13 +23,17 @@ use agent_shell::commands::{
     create_agent_shell_session, get_agent_shell_settings, list_agent_shell_sessions,
     update_agent_shell_settings,
 };
+#[cfg(target_os = "windows")]
+use encoding_rs::{Encoding, BIG5, EUC_KR, GBK, SHIFT_JIS, UTF_8};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::io::ErrorKind;
+use std::path::{Component, Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::menu::{AboutMetadataBuilder, Menu, MenuBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
@@ -50,6 +54,57 @@ const GOODNIGHT_BUILTIN_SKILL_IDS: &[&str] = &[
 fn read_file_as_string(file_path: &Path) -> std::io::Result<String> {
     let bytes = fs::read(file_path)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+fn normalize_boundary_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
+}
+
+fn canonical_or_normalized_path(path: &Path) -> PathBuf {
+    path.canonicalize()
+        .unwrap_or_else(|_| normalize_boundary_path(path))
+}
+
+fn path_stays_under_root(path: &Path, root: &Path) -> bool {
+    let normalized_path = canonical_or_normalized_path(path);
+    let normalized_root = canonical_or_normalized_path(root);
+    let path_text = normalized_path.to_string_lossy().replace('\\', "/").to_lowercase();
+    let root_text = normalized_root
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_lowercase();
+
+    path_text == root_text || path_text.starts_with(&format!("{}/", root_text))
+}
+
+fn ensure_project_path(project_root: Option<&String>, target_path: &str) -> Result<(), ToolResult> {
+    let Some(project_root) = project_root else {
+        return Ok(());
+    };
+
+    if !path_stays_under_root(Path::new(target_path), Path::new(project_root)) {
+        return Err(ToolResult {
+            success: false,
+            content: String::new(),
+            error: Some(format!(
+                "Cannot access path outside the current project: {}",
+                target_path
+            )),
+        });
+    }
+
+    Ok(())
 }
 
 fn parse_git_status_paths(output: &str) -> HashSet<String> {
@@ -106,19 +161,150 @@ pub struct ToolResult {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ViewParams {
+    pub project_root: Option<String>,
     pub file_path: String,
     pub offset: Option<usize>,
     pub limit: Option<usize>,
 }
 
+fn run_command_with_timeout(mut process: Command, timeout: Option<u64>) -> std::io::Result<Output> {
+    let timeout_ms = timeout.unwrap_or(60_000).clamp(1, 600_000);
+    process.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = process.spawn()?;
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    let poll_interval = Duration::from_millis(50);
+
+    loop {
+        if child.try_wait()?.is_some() {
+            return child.wait_with_output();
+        }
+
+        let now = Instant::now();
+        if now >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("Command timed out after {} ms", timeout_ms),
+            ));
+        }
+
+        let remaining = deadline.saturating_duration_since(now);
+        thread::sleep(std::cmp::min(poll_interval, remaining));
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" {
+    fn GetOEMCP() -> u32;
+}
+
+#[cfg(target_os = "windows")]
+fn windows_console_encoding() -> Option<&'static Encoding> {
+    match unsafe { GetOEMCP() } {
+        65001 => Some(UTF_8),
+        936 => Some(GBK),
+        950 => Some(BIG5),
+        932 => Some(SHIFT_JIS),
+        949 => Some(EUC_KR),
+        874 => Encoding::for_label(b"windows-874"),
+        1250 => Encoding::for_label(b"windows-1250"),
+        1251 => Encoding::for_label(b"windows-1251"),
+        1252 => Encoding::for_label(b"windows-1252"),
+        1253 => Encoding::for_label(b"windows-1253"),
+        1254 => Encoding::for_label(b"windows-1254"),
+        1255 => Encoding::for_label(b"windows-1255"),
+        1256 => Encoding::for_label(b"windows-1256"),
+        1257 => Encoding::for_label(b"windows-1257"),
+        1258 => Encoding::for_label(b"windows-1258"),
+        _ => None,
+    }
+}
+
+fn decode_command_output(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+
+    if let Ok(text) = String::from_utf8(bytes.to_vec()) {
+        return text;
+    }
+
+    #[cfg(target_os = "windows")]
+    if let Some(encoding) = windows_console_encoding() {
+        let (decoded, _, _) = encoding.decode(bytes);
+        return decoded.into_owned();
+    }
+
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+fn format_write_error(file_path: &str, error: &std::io::Error) -> String {
+    if error.kind() == ErrorKind::PermissionDenied {
+        #[cfg(target_os = "windows")]
+        {
+            return format!(
+                "Error writing file: Access denied for {}. The path is inside the current project, but Windows blocked the write. Check whether the file or folder is read-only, open in another app, or protected by Controlled Folder Access. Original error: {}",
+                file_path, error
+            );
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            return format!(
+                "Error writing file: Access denied for {}. The path is inside the current project, but the operating system blocked the write. Check file permissions or whether another app is locking it. Original error: {}",
+                file_path, error
+            );
+        }
+    }
+
+    format!("Error writing file: {}", error)
+}
+
+#[cfg(target_os = "windows")]
+fn build_powershell_process(executable: &str, command: &str) -> Command {
+    let mut process = Command::new(executable);
+    process
+        .arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-Command")
+        .arg(command);
+    process
+}
+
+#[cfg(target_os = "windows")]
+fn run_windows_powershell_command(
+    command: &str,
+    cwd: Option<&String>,
+    timeout: Option<u64>,
+) -> std::io::Result<Output> {
+    let mut preferred = build_powershell_process("pwsh", command);
+    if let Some(cwd) = cwd {
+        preferred.current_dir(cwd);
+    }
+
+    match run_command_with_timeout(preferred, timeout) {
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            let mut fallback = build_powershell_process("powershell", command);
+            if let Some(cwd) = cwd {
+                fallback.current_dir(cwd);
+            }
+            run_command_with_timeout(fallback, timeout)
+        }
+        other => other,
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WriteParams {
+    pub project_root: Option<String>,
     pub file_path: String,
     pub content: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EditParams {
+    pub project_root: Option<String>,
     pub file_path: String,
     pub old_string: String,
     pub new_string: String,
@@ -144,6 +330,7 @@ pub struct GlobParams {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BashParams {
+    pub project_root: Option<String>,
     pub command: String,
     pub timeout: Option<u64>,
     pub cwd: Option<String>,
@@ -152,11 +339,13 @@ pub struct BashParams {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RemoveParams {
+    pub project_root: Option<String>,
     pub file_path: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RenameParams {
+    pub project_root: Option<String>,
     pub from_path: String,
     pub to_path: String,
 }
@@ -1550,6 +1739,10 @@ fn delete_library_skill(
 // View tool - read file contents with line numbers
 #[tauri::command]
 fn tool_view(params: ViewParams) -> ToolResult {
+    if let Err(result) = ensure_project_path(params.project_root.as_ref(), &params.file_path) {
+        return result;
+    }
+
     let file_path = Path::new(&params.file_path);
 
     if !file_path.exists() {
@@ -1615,6 +1808,10 @@ fn tool_view(params: ViewParams) -> ToolResult {
 // Write tool - create or overwrite file
 #[tauri::command]
 fn tool_write(params: WriteParams) -> ToolResult {
+    if let Err(result) = ensure_project_path(params.project_root.as_ref(), &params.file_path) {
+        return result;
+    }
+
     let file_path = Path::new(&params.file_path);
 
     // Create parent directories if they don't exist
@@ -1640,13 +1837,17 @@ fn tool_write(params: WriteParams) -> ToolResult {
         Err(e) => ToolResult {
             success: false,
             content: String::new(),
-            error: Some(format!("Error writing file: {}", e)),
+            error: Some(format_write_error(&params.file_path, &e)),
         },
     }
 }
 
 #[tauri::command]
 fn tool_remove(params: RemoveParams) -> ToolResult {
+    if let Err(result) = ensure_project_path(params.project_root.as_ref(), &params.file_path) {
+        return result;
+    }
+
     let file_path = Path::new(&params.file_path);
 
     if !file_path.exists() {
@@ -1679,6 +1880,10 @@ fn tool_remove(params: RemoveParams) -> ToolResult {
 
 #[tauri::command]
 fn tool_mkdir(params: RemoveParams) -> ToolResult {
+    if let Err(result) = ensure_project_path(params.project_root.as_ref(), &params.file_path) {
+        return result;
+    }
+
     let dir_path = Path::new(&params.file_path);
 
     match fs::create_dir_all(dir_path) {
@@ -1697,6 +1902,13 @@ fn tool_mkdir(params: RemoveParams) -> ToolResult {
 
 #[tauri::command]
 fn tool_rename(params: RenameParams) -> ToolResult {
+    if let Err(result) = ensure_project_path(params.project_root.as_ref(), &params.from_path) {
+        return result;
+    }
+    if let Err(result) = ensure_project_path(params.project_root.as_ref(), &params.to_path) {
+        return result;
+    }
+
     let from_path = Path::new(&params.from_path);
     let to_path = Path::new(&params.to_path);
 
@@ -1775,6 +1987,10 @@ fn copy_dir_all(from_path: &Path, to_path: &Path) -> std::io::Result<()> {
 // Edit tool - replace old_string with new_string in file
 #[tauri::command]
 fn tool_edit(params: EditParams) -> ToolResult {
+    if let Err(result) = ensure_project_path(params.project_root.as_ref(), &params.file_path) {
+        return result;
+    }
+
     let file_path = Path::new(&params.file_path);
 
     if !file_path.exists() {
@@ -2061,6 +2277,11 @@ fn tool_grep(params: GrepParams) -> ToolResult {
 #[tauri::command]
 fn tool_bash(params: BashParams) -> ToolResult {
     let command = &params.command;
+    if let Some(cwd) = params.cwd.as_ref() {
+        if let Err(result) = ensure_project_path(params.project_root.as_ref(), cwd) {
+            return result;
+        }
+    }
 
     // Basic security check - block dangerous commands
     let dangerous = ["rm -rf /", "mkfs", "dd if="];
@@ -2074,24 +2295,21 @@ fn tool_bash(params: BashParams) -> ToolResult {
         }
     }
 
-    let mut process = if cfg!(target_os = "windows") {
+    let output = if cfg!(target_os = "windows") {
         let shell = params
             .shell
             .as_deref()
             .unwrap_or("powershell")
             .to_lowercase();
         if shell == "powershell" {
-            let mut command_process = Command::new("powershell");
-            command_process
-                .arg("-NoProfile")
-                .arg("-NonInteractive")
-                .arg("-Command")
-                .arg(command);
-            command_process
+            run_windows_powershell_command(command, params.cwd.as_ref(), params.timeout)
         } else {
-            let mut command_process = Command::new("cmd");
-            command_process.arg("/C").arg(command);
-            command_process
+            let mut process = Command::new("cmd");
+            process.arg("/C").arg(command);
+            if let Some(cwd) = params.cwd.as_ref() {
+                process.current_dir(cwd);
+            }
+            run_command_with_timeout(process, params.timeout)
         }
     } else {
         let shell = params
@@ -2099,7 +2317,7 @@ fn tool_bash(params: BashParams) -> ToolResult {
             .as_deref()
             .unwrap_or("bash")
             .to_lowercase();
-        if shell == "powershell" {
+        let mut process = if shell == "powershell" {
             let mut command_process = Command::new("pwsh");
             command_process
                 .arg("-NoProfile")
@@ -2115,19 +2333,19 @@ fn tool_bash(params: BashParams) -> ToolResult {
             let mut command_process = Command::new("bash");
             command_process.arg("-lc").arg(command);
             command_process
+        };
+
+        if let Some(cwd) = params.cwd.as_ref() {
+            process.current_dir(cwd);
         }
+
+        run_command_with_timeout(process, params.timeout)
     };
-
-    if let Some(cwd) = params.cwd.as_ref() {
-        process.current_dir(cwd);
-    }
-
-    let output = process.output();
 
     match output {
         Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+            let stdout = decode_command_output(&out.stdout);
+            let stderr = decode_command_output(&out.stderr);
 
             if out.status.success() {
                 ToolResult {
@@ -2521,7 +2739,7 @@ mod tests {
     use super::{
         display_project_storage_path, normalize_project_storage_root_path,
         normalize_saved_project_storage_root_path,
-        resolve_project_storage_root_path,
+        path_stays_under_root, resolve_project_storage_root_path,
     };
     use std::path::PathBuf;
 
@@ -2558,6 +2776,24 @@ mod tests {
             resolve_project_storage_root_path(default_path.clone(), None),
             (default_path, true)
         );
+    }
+
+    #[test]
+    fn project_tool_boundary_rejects_paths_outside_root() {
+        let root = PathBuf::from("C:/repo/demo");
+
+        assert!(path_stays_under_root(
+            &PathBuf::from("C:/repo/demo/docs/spec.md"),
+            &root
+        ));
+        assert!(!path_stays_under_root(
+            &PathBuf::from("C:/repo/demo/../secret.txt"),
+            &root
+        ));
+        assert!(!path_stays_under_root(
+            &PathBuf::from("C:/repo-other/demo.txt"),
+            &root
+        ));
     }
 
     #[cfg(target_os = "windows")]

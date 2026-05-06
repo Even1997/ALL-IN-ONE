@@ -16,6 +16,10 @@ export const sandboxPolicyToPermissionMode = (policy: SandboxPolicy): Permission
     return 'auto';
   }
 
+  if (policy === 'bypass') {
+    return 'bypass';
+  }
+
   return 'ask';
 };
 
@@ -24,8 +28,12 @@ export const permissionModeToSandboxPolicy = (mode: PermissionMode): SandboxPoli
     return 'deny';
   }
 
-  if (mode === 'auto' || mode === 'bypass') {
+  if (mode === 'auto') {
     return 'allow';
+  }
+
+  if (mode === 'bypass') {
+    return 'bypass';
   }
 
   return 'ask';

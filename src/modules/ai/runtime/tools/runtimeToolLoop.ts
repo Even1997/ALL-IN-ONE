@@ -14,6 +14,7 @@ import type {
   RuntimeToolMessage,
   RuntimeToolStep,
 } from '../agent-kernel/agentKernelTypes.ts';
+import type { CompactionReason } from '../compaction/compactionTypes.ts';
 import { compactOldToolResults, isContextLengthError, removeOldestTurn } from '../compaction/compactToolResults.ts';
 import { createAgentEventDispatcher, sanitizeAgentVisibleText } from '../dispatch/agentEvents.ts';
 
@@ -90,9 +91,38 @@ const emitToolCallsChange = (options: RuntimeToolLoopOptions, toolCalls: Runtime
 };
 
 const READ_ONLY_TOOLS = new Set(['glob', 'grep', 'ls', 'view']);
+const STREAM_EXECUTION_TOOLS = READ_ONLY_TOOLS;
+const PROACTIVE_CONTEXT_COMPACTION_RATIO = 0.85;
+const REPAIRABLE_TOOL_PROTOCOL_PATTERN =
+  /<tool\s+name=|<tool_params>|"tool_calls"\s*:|tool_calls>|<apply_skill\b|<\s*\|\s*DSML\b|<bash\b|<cmd\b/i;
 
 const isSameToolCall = (a: ToolCall, b: ToolCall) =>
   a.name === b.name && JSON.stringify(a.input) === JSON.stringify(b.input);
+
+const estimateMessageTokens = (messages: RuntimeToolMessage[]) =>
+  Math.ceil(messages.reduce((total, message) => total + message.content.length + message.role.length + 2, 0) / 4);
+
+const compactMessagesForBudget = (
+  messages: RuntimeToolMessage[],
+  contextWindowTokens: number | undefined,
+): CompactionReason | null => {
+  if (!contextWindowTokens || !Number.isFinite(contextWindowTokens) || contextWindowTokens <= 0) {
+    return null;
+  }
+
+  const targetTokens = Math.floor(contextWindowTokens * PROACTIVE_CONTEXT_COMPACTION_RATIO);
+  if (estimateMessageTokens(messages) <= targetTokens) {
+    return null;
+  }
+
+  const compaction = compactOldToolResults(messages, {
+    keepRecentRounds: 0,
+    maxResultChars: 1200,
+    previewChars: 400,
+  });
+
+  return compaction.compacted ? compaction.reason : null;
+};
 
 export async function runRuntimeToolLoop(
   options: RuntimeToolLoopOptions,
@@ -130,6 +160,28 @@ export async function runRuntimeToolLoop(
       resultPreview: '',
     };
 
+    if (!allowedTools.has(call.name)) {
+      const result: ToolResult = {
+        type: 'text',
+        content: `Tool "${call.name}" is not allowed.`,
+        is_error: true,
+      };
+      step.status = 'blocked';
+      step.resultPreview = previewResult(result);
+      step.resultContent = result.content;
+      agentEvents.emit({ type: 'tool_call_started', toolCall: { ...step } });
+      agentEvents.emit({
+        type: 'tool_result',
+        toolCallId: step.id,
+        name: step.name,
+        status: step.status,
+        content: result.content,
+        isError: true,
+      });
+      agentEvents.emit({ type: 'tool_call_completed', toolCall: { ...step } });
+      return { step, result };
+    }
+
     try {
       await options.beforeToolCall?.(call);
     } catch (error) {
@@ -156,27 +208,6 @@ export async function runRuntimeToolLoop(
 
     agentEvents.emit({ type: 'tool_call_started', toolCall: { ...step } });
     options.onToolCallsChange?.([...toolCalls, step].map((toolCall) => ({ ...toolCall })));
-
-    if (!allowedTools.has(call.name)) {
-      const result: ToolResult = {
-        type: 'text',
-        content: `Tool "${call.name}" is not allowed.`,
-        is_error: true,
-      };
-      step.status = 'blocked';
-      step.resultPreview = previewResult(result);
-      step.resultContent = result.content;
-      agentEvents.emit({
-        type: 'tool_result',
-        toolCallId: step.id,
-        name: step.name,
-        status: step.status,
-        content: result.content,
-        isError: true,
-      });
-      agentEvents.emit({ type: 'tool_call_completed', toolCall: { ...step } });
-      return { step, result };
-    }
 
     try {
       const result = await options.executeTool(call);
@@ -252,6 +283,11 @@ export async function runRuntimeToolLoop(
   for (let round = 0; round < options.maxRounds; round += 1) {
     let assistantContent: string;
     const { wrapped, getFinishReason } = wrapOnModelEvent(options.onModelEvent);
+    const proactiveCompaction = compactMessagesForBudget(messages, options.contextWindowTokens);
+    if (proactiveCompaction) {
+      options.onContextCompaction?.(proactiveCompaction);
+      agentEvents.emit({ type: 'context_compacted', reason: proactiveCompaction });
+    }
 
     // Phase 1a: Streaming tool detection — execute tools as soon as they appear in the stream
     const streamDetector = createStreamingToolDetector();
@@ -264,6 +300,9 @@ export async function runRuntimeToolLoop(
           if (event.kind === 'text' && event.delta) {
             const detectedCalls = streamDetector.feed(event.delta);
             for (const call of detectedCalls) {
+              if (!STREAM_EXECUTION_TOOLS.has(call.name)) {
+                continue;
+              }
               const promise = executeSingleTool(call).then(({ step, result }) => {
                 streamExecutedResults.push({ call, step, result });
                 toolCalls.push(step);
@@ -364,7 +403,7 @@ export async function runRuntimeToolLoop(
 
     // No tool calls found in either stream or full parse
     if (containsToolProtocolMarkers(assistantContent)) {
-      if (finalContent) {
+      if (finalContent && !REPAIRABLE_TOOL_PROTOCOL_PATTERN.test(assistantContent)) {
         agentEvents.emit({ type: 'final_text', text: finalContent });
         return {
           finalContent,

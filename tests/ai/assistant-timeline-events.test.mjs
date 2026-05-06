@@ -126,3 +126,97 @@ test('assistant streaming timeline keeps runtime events from the base timeline',
   assert.equal(getAssistantRuntimeTimelineEvents(draftTimeline).length, 1);
   assert.equal(getAssistantRuntimeTimelineEvents(draftTimeline)[0].toolName, 'bash');
 });
+
+test('assistant timeline update preserves narrative timestamps across streaming rebuilds', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+
+  const currentTimeline = [
+    {
+      id: 'reasoning-1',
+      kind: 'reasoning',
+      content: 'Check the first file.',
+      collapsed: true,
+      createdAt: 10,
+    },
+    {
+      id: 'tool-use-1',
+      kind: 'tool_use',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      input: { file_path: 'src/App.tsx' },
+      status: 'completed',
+      createdAt: 20,
+    },
+    {
+      id: 'text-1',
+      kind: 'text',
+      content: 'The first check is done.',
+      createdAt: 30,
+    },
+    {
+      id: 'tool-use-2',
+      kind: 'tool_use',
+      toolCallId: 'call-2',
+      parentToolCallId: null,
+      toolName: 'edit',
+      input: { file_path: 'src/App.tsx', new_string: 'next' },
+      status: 'running',
+      createdAt: 40,
+    },
+  ];
+
+  const updatedTimeline = buildAssistantTimelineUpdate(
+    '<think>Check the first file again</think>\n\nThe first check is still done.',
+    currentTimeline,
+  );
+
+  const reasoningEvent = updatedTimeline.find((event) => event.kind === 'reasoning');
+  const textEvent = updatedTimeline.find((event) => event.kind === 'text');
+
+  assert.equal(reasoningEvent?.createdAt, 10);
+  assert.equal(textEvent?.createdAt, 30);
+});
+
+test('assistant timeline update preserves preferred narrative timestamps around tool boundaries', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+
+  const currentTimeline = [
+    {
+      id: 'text-1',
+      kind: 'text',
+      content: 'Started the first step.',
+      createdAt: 30,
+    },
+    {
+      id: 'tool-use-1',
+      kind: 'tool_use',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'write',
+      input: { file_path: 'PRD.md' },
+      status: 'completed',
+      createdAt: 40,
+    },
+  ];
+
+  const updatedTimeline = buildAssistantTimelineUpdate(
+    'Finished the second step.',
+    currentTimeline,
+    {
+      preferredAssistantParts: [
+        { type: 'text', content: 'Started the first step.', createdAt: 30 },
+        { type: 'text', content: 'Finished the second step.', createdAt: 50 },
+      ],
+    },
+  );
+
+  assert.deepEqual(
+    updatedTimeline.map((event) => [event.kind, event.createdAt]),
+    [
+      ['text', 30],
+      ['tool_use', 40],
+      ['text', 50],
+    ],
+  );
+});

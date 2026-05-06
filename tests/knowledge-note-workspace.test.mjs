@@ -172,11 +172,55 @@ test('knowledge note workspace defaults to reading mode and exposes a code toggl
 test('knowledge note workspace previews unmapped markdown files inside the app instead of opening them as attachments', async () => {
   const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /type RawMarkdownPreview =/);
-  assert.match(source, /const isPreviewableKnowledgeFile = \(extension: string\)/);
-  assert.match(source, /else if \(isPreviewableKnowledgeFile\(file\.extension\)\) {\s*void handleOpenRawMarkdownPreview\(file\);\s*} else {\s*onOpenAttachment\(file\.absolutePath\);\s*}/s);
-  assert.match(source, /rawMarkdownPreview \? \(/);
+  assert.match(source, /type FilePreview =/);
+  assert.match(source, /PREVIEWABLE_MARKDOWN_FILE_EXTENSIONS/);
+  assert.match(source, /getKnowledgeFilePreviewKind\(file\.extension\)/);
+  assert.match(source, /void handleOpenFilePreview\(file\);/);
+  assert.match(source, /filePreview \? \(/);
   assert.match(source, /Markdown/);
+});
+
+test('knowledge note workspace previews every tree file without extension allowlists', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../src/App.css', import.meta.url), 'utf8');
+
+  assert.match(source, /type FilePreviewKind = 'markdown' \| 'code'/);
+  assert.doesNotMatch(source, /PREVIEWABLE_CODE_FILE_EXTENSIONS/);
+  assert.doesNotMatch(source, /OFFICE_FILE_EXTENSIONS/);
+  assert.match(source, /const getKnowledgeFilePreviewKind = \(extension: string\): FilePreviewKind/);
+  assert.match(source, /void handleOpenFilePreview\(file\);/);
+  assert.doesNotMatch(source, /onOpenAttachment\(file\.absolutePath\)/);
+  assert.match(source, /filePreview\?\.kind === 'markdown'/);
+  assert.match(source, /className="gn-note-file-preview-code"/);
+  assert.match(css, /\.gn-note-file-preview-code/);
+});
+
+test('knowledge note workspace lets text and code file previews be edited and saved', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /draftContent: string;/);
+  assert.match(source, /savedContent: string;/);
+  assert.match(source, /const isFilePreviewDirty =/);
+  assert.match(source, /const handleSaveFilePreview = useCallback/);
+  assert.match(source, /'tool_write'/);
+  assert.match(source, /file_path: filePreview\.path/);
+  assert.match(source, /content: filePreview\.draftContent/);
+  assert.match(source, /onRefreshFilesystem\(\);/);
+  assert.match(source, /value=\{filePreview\.draftContent\}/);
+  assert.match(source, /onChange=\{\(event\) =>/);
+  assert.doesNotMatch(source, /className="gn-note-file-preview-code"[\s\S]*?readOnly[\s\S]*?\/>/);
+  assert.match(source, /disabled=\{!isFilePreviewDirty \|\| filePreview\.state !== 'ready'\}/);
+});
+
+test('knowledge note workspace exposes ordinary file creation alongside note and folder actions', async () => {
+  const source = await readFile(new URL('../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(source, /onCreateFileAtPath: \(relativeDirectory: string \| null\) => void/);
+  assert.match(source, /onCreateFileAtPath\(null\)/);
+  assert.match(source, /title="新建文件"/);
+  assert.match(source, /aria-label="新建文件"/);
+  assert.match(source, /onCreateFileAtPath\(\s*contextMenuState\.isFolder === false && contextMenuState\.targetPath/s);
+  assert.match(source, />\s*新建文件\s*<\/button>/);
 });
 
 test('knowledge note workspace empty state stays vault-first', async () => {

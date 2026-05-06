@@ -1,4 +1,8 @@
 import type { StoredChatRuntimeEvent } from '../../modules/ai/store/aiChatStore';
+import {
+  isAssistantRuntimeTimelineEvent,
+  type AssistantTimelineEvent,
+} from '../../modules/ai/store/assistantTimeline.ts';
 
 export type RuntimeToolGroupType =
   | 'edit'
@@ -48,7 +52,7 @@ export type RuntimeEventRenderModel = {
 
 const ASK_USER_TOOL_NAME = 'AskUserQuestion';
 const WRITE_TOOL_NAMES = new Set(['write', 'edit', 'project_file_apply']);
-const COMMAND_TOOL_NAMES = new Set(['bash']);
+const COMMAND_TOOL_NAMES = new Set(['bash', 'powershell']);
 const FETCH_TOOL_NAMES = new Set(['fetch']);
 const SEARCH_TOOL_NAMES = new Set(['glob', 'grep']);
 const READ_TOOL_NAMES = new Set(['view', 'ls', 'project_file_read']);
@@ -222,10 +226,10 @@ const buildCombinedToolGroupLabel = (
   return segments.join(',');
 };
 
-export const buildRuntimeEventRenderModel = (
-  runtimeEvents: StoredChatRuntimeEvent[]
+const buildRuntimeEventRenderModelFromOrderedEvents = (
+  orderedRuntimeEvents: StoredChatRuntimeEvent[],
+  timelineEvents?: AssistantTimelineEvent[]
 ): RuntimeEventRenderModel => {
-  const orderedRuntimeEvents = sortRuntimeEventsByCreatedAt(runtimeEvents);
   const items: RuntimeEventRenderItem[] = [];
   const resultMap = new Map<string, Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>>();
   const approvalsByToolCallId = new Map<string, Array<Extract<StoredChatRuntimeEvent, { kind: 'approval' }>>>();
@@ -288,7 +292,18 @@ export const buildRuntimeEventRenderModel = (
     }
   }
 
-  for (const event of orderedRuntimeEvents) {
+  const orderedTimelineEvents = Array.isArray(timelineEvents)
+    ? [...timelineEvents].sort((left, right) => left.createdAt - right.createdAt)
+    : orderedRuntimeEvents;
+
+  for (const timelineEvent of orderedTimelineEvents) {
+    if (!isAssistantRuntimeTimelineEvent(timelineEvent)) {
+      flushToolGroup();
+      continue;
+    }
+
+    const event = timelineEvent;
+
     if (event.kind === 'tool_use') {
       if (event.parentToolCallId && toolUseIds.has(event.parentToolCallId)) {
         continue;
@@ -347,5 +362,17 @@ export const buildRuntimeEventRenderModel = (
     toolUseByToolCallId,
   };
 };
+
+export const buildRuntimeEventRenderModel = (
+  runtimeEvents: StoredChatRuntimeEvent[]
+): RuntimeEventRenderModel => buildRuntimeEventRenderModelFromOrderedEvents(sortRuntimeEventsByCreatedAt(runtimeEvents));
+
+export const buildRuntimeTimelineModelFromAssistantTimeline = (
+  timelineEvents: AssistantTimelineEvent[]
+): RuntimeEventRenderModel =>
+  buildRuntimeEventRenderModelFromOrderedEvents(
+    sortRuntimeEventsByCreatedAt(timelineEvents.filter(isAssistantRuntimeTimelineEvent)),
+    timelineEvents
+  );
 
 export const buildRuntimeToolStreamModel = buildRuntimeEventRenderModel;

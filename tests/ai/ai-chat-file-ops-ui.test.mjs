@@ -34,10 +34,14 @@ test('AI chat routes project file requests through read/planning helpers and pro
   assert.match(chatSource, /conversationHistory/);
   assert.match(chatSource, /conversationHistory,\s*projectName: currentProject\.name/);
   assert.match(chatSource, /executeProjectFileOperations/);
+  assert.match(chatSource, /notifyProjectFilesChanged/);
   assert.match(chatSource, /projectFileRequestKind === 'read'/);
   assert.match(chatSource, /projectFileRequestKind === 'write'/);
   assert.match(chatSource, /projectFileMode = shouldForceProjectFileProposal/);
   assert.match(chatSource, /resolveProjectFileRequestKind\(\{\s*rawInput: rawContent,\s*cleanedInput: cleanedContent,\s*conversationHistory,/);
+  assert.match(chatSource, /notifyProjectFilesChanged\(result\.changedPaths\)/);
+  assert.match(chatSource, /notifyProjectFilesChanged\(executionResult\.successOutcome\.activityEntry\.changedPaths\)/);
+  assert.match(chatSource, /notifyProjectFilesChanged\(checkpointFilesFromToolCalls\.map\(\(file\) => file\.path\)\)/);
 
   assert.match(messageListSource, /renderProjectFileProposal/);
   assert.match(messageListSource, /renderRuntimeApproval/);
@@ -63,4 +67,12 @@ test('AI service exposes a read-tools chat path for project file queries', async
   assert.match(serviceSource, /grep/);
   assert.match(serviceSource, /ls/);
   assert.match(serviceSource, /view/);
+});
+
+test('AI chat uses delete-specific proposal copy instead of generic write wording', async () => {
+  const chatSource = await readFile(chatPath, 'utf8');
+
+  assert.match(chatSource, /删除文件/);
+  assert.match(chatSource, /删除完成/);
+  assert.match(chatSource, /正在删除文件并校验结果/);
 });

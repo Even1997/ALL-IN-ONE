@@ -14,6 +14,10 @@ const agentKernelPath = path.resolve(
   __dirname,
   '../../src/modules/ai/runtime/agent-kernel/runAgentTurn.ts'
 );
+const directChatPromptPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/chat/directChatPrompt.ts'
+);
 const loadFileMutationClaimGuard = async () =>
   import(`../../src/modules/ai/runtime/orchestration/runtimeFileMutationClaimGuard.ts?test=${Date.now()}`);
 const loadBuiltInTurn = async () =>
@@ -34,10 +38,75 @@ test('built-in runtime has a direct-answer fallback for project access failures'
 
 test('agent kernel prompt prefers direct drafting when project files are unnecessary', async () => {
   const source = await readFile(agentKernelPath, 'utf8');
+  const directChatSource = await readFile(directChatPromptPath, 'utf8');
 
   assert.match(
     source,
     /For straightforward writing, drafting, brainstorming, or requirements\/spec requests that do not depend on project files, answer directly without calling tools first\./
+  );
+  assert.match(
+    source,
+    /On Windows hosts, prefer the powershell tool for command execution\./
+  );
+  assert.match(
+    source,
+    /Before a tool batch, either call the tool immediately or give at most one short progress sentence\./
+  );
+  assert.match(
+    source,
+    /Do not emit repeated process narration such as "让我先\.\.\.", "好的，我来\.\.\.", or "现在我来\.\.\." across multiple consecutive replies\./
+  );
+  assert.match(
+    directChatSource,
+    /Before a tool batch, either call the tool immediately or give at most one short progress sentence\./
+  );
+  assert.match(
+    directChatSource,
+    /Do not emit repeated process narration such as "让我先\.\.\.", "好的，我来\.\.\.", or "现在我来\.\.\." across multiple consecutive replies\./
+  );
+});
+
+test('agent kernel prompt suppresses visible preambles before the first tool result', async () => {
+  const source = await readFile(agentKernelPath, 'utf8');
+  const directChatSource = await readFile(directChatPromptPath, 'utf8');
+
+  assert.match(
+    source,
+    /When a tool is obviously needed, call it immediately without a user-facing preamble\./
+  );
+  assert.match(
+    source,
+    /Only give a short progress sentence before tools if the user explicitly asked for status updates or the task is genuinely long-running\./
+  );
+  assert.match(
+    source,
+    /Do not greet the user, announce that you will inspect files, or say "让我先\.\.\.", "好的，我来\.\.\.", or "现在我来\.\.\." before the first tool result\./
+  );
+  assert.match(
+    directChatSource,
+    /When a tool is obviously needed, call it immediately without a user-facing preamble\./
+  );
+  assert.match(
+    directChatSource,
+    /Only give a short progress sentence before tools if the user explicitly asked for status updates or the task is genuinely long-running\./
+  );
+  assert.match(
+    directChatSource,
+    /Do not greet the user, announce that you will inspect files, or say "让我先\.\.\.", "好的，我来\.\.\.", or "现在我来\.\.\." before the first tool result\./
+  );
+});
+
+test('agent kernel prompt forbids pre-tool visible copy unless the user asked for progress', async () => {
+  const source = await readFile(agentKernelPath, 'utf8');
+  const directChatSource = await readFile(directChatPromptPath, 'utf8');
+
+  assert.match(
+    source,
+    /Unless the user explicitly asked for progress updates, do not send any user-facing text before the first tool result\./
+  );
+  assert.match(
+    directChatSource,
+    /Unless the user explicitly asked for progress updates, do not send any user-facing text before the first tool result\./
   );
 });
 

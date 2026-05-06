@@ -47,6 +47,7 @@ type KnowledgeNoteWorkspaceProps = {
   onDelete: () => void;
   onCreateNote: () => void;
   onCreateNoteAtPath: (relativeDirectory: string | null) => void;
+  onCreateFileAtPath: (relativeDirectory: string | null) => void;
   onCreateFolderAtPath: (relativeDirectory: string | null) => void;
   onRenameTreePath: (relativePath: string, isFolder: boolean) => void;
   onDeleteTreePaths: (relativePaths: string[] | string, isFolder: boolean | null) => void;
@@ -109,16 +110,20 @@ type KnowledgeContextMenuState =
     }
   | null;
 
-type RawMarkdownPreview = {
+type FilePreviewKind = 'markdown' | 'code';
+
+type FilePreview = {
   path: string;
   title: string;
-  markdown: string;
+  draftContent: string;
+  savedContent: string;
+  kind: FilePreviewKind;
   state: 'loading' | 'ready' | 'error';
 };
 
 const NOTE_RAIL_WIDTH_BOUNDS = { min: 220, max: 420 };
 const NOTE_RAIL_DEFAULT_WIDTH = 280;
-const PREVIEWABLE_KNOWLEDGE_FILE_EXTENSIONS = new Set(['md', 'markdown']);
+const PREVIEWABLE_MARKDOWN_FILE_EXTENSIONS = new Set(['md', 'markdown']);
 const KNOWLEDGE_TREE_SORT_OPTIONS = [
   { value: 'name-asc', label: '文件名(A-Z)' },
   { value: 'name-desc', label: '文件名(Z-A)' },
@@ -182,8 +187,14 @@ const TEMPORARY_PREVIEW_STYLES = `
 const clampNoteRailWidth = (value: number) =>
   Math.min(NOTE_RAIL_WIDTH_BOUNDS.max, Math.max(NOTE_RAIL_WIDTH_BOUNDS.min, value));
 
-const isPreviewableKnowledgeFile = (extension: string) =>
-  PREVIEWABLE_KNOWLEDGE_FILE_EXTENSIONS.has(extension.toLowerCase());
+const getKnowledgeFilePreviewKind = (extension: string): FilePreviewKind => {
+  const normalizedExtension = extension.toLowerCase();
+  if (PREVIEWABLE_MARKDOWN_FILE_EXTENSIONS.has(normalizedExtension)) {
+    return 'markdown';
+  }
+
+  return 'code';
+};
 
 const normalizeToolViewContent = (content: string) =>
   content
@@ -201,6 +212,26 @@ const NoteAddIcon = () => (
       stroke="currentColor"
       strokeWidth="1.8"
       strokeLinecap="round"
+    />
+  </svg>
+);
+
+const FileAddIcon = () => (
+  <svg viewBox="0 0 20 20" aria-hidden="true">
+    <path
+      d="M6.5 3.75h5.25l3.75 3.75v8a1.75 1.75 0 0 1-1.75 1.75H6.5a1.75 1.75 0 0 1-1.75-1.75v-10A1.75 1.75 0 0 1 6.5 3.75Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M11.75 3.75v3.5h3.5M8 12.25h4.5M10.25 10v4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
   </svg>
 );
@@ -629,13 +660,13 @@ export const KnowledgeNoteWorkspace = ({
   onEditorChange,
   onCreateNote,
   onCreateNoteAtPath,
+  onCreateFileAtPath,
   onCreateFolderAtPath,
   onRenameTreePath,
   onDeleteTreePaths,
   onRefreshFilesystem,
-  onOpenAttachment,
 }: KnowledgeNoteWorkspaceProps) => {
-  const rawMarkdownRequestIdRef = useRef(0);
+  const filePreviewRequestIdRef = useRef(0);
   const [railWidth, setRailWidth] = useState(NOTE_RAIL_DEFAULT_WIDTH);
   const [isRailResizing, setIsRailResizing] = useState(false);
   const [treeSortMode, setTreeSortMode] = useState<KnowledgeTreeSortMode>('name-asc');
@@ -645,7 +676,7 @@ export const KnowledgeNoteWorkspace = ({
   const [activeTreePath, setActiveTreePath] = useState<string | null>(null);
   const [contextMenuState, setContextMenuState] = useState<KnowledgeContextMenuState>(null);
   const [viewMode, setViewMode] = useState<KnowledgeViewMode>('read');
-  const [rawMarkdownPreview, setRawMarkdownPreview] = useState<RawMarkdownPreview | null>(null);
+  const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const searchActive = searchValue.trim().length > 0;
   const visibleNotes = filteredNotes;
@@ -669,6 +700,7 @@ export const KnowledgeNoteWorkspace = ({
     () => collectAncestorFolderPaths(selectedTreeFilePath),
     [selectedTreeFilePath]
   );
+  const isFilePreviewDirty = Boolean(filePreview && filePreview.draftContent !== filePreview.savedContent);
   const readingMarkdown = useMemo(
     () => (selectedNote ? serializeKnowledgeNoteMarkdown(titleValue, editorValue) : ''),
     [editorValue, selectedNote, titleValue]
@@ -776,14 +808,18 @@ export const KnowledgeNoteWorkspace = ({
     setContextMenuState(null);
   }, []);
 
-  const handleOpenRawMarkdownPreview = useCallback(async (file: KnowledgeTreeFileNode) => {
-    const requestId = rawMarkdownRequestIdRef.current + 1;
-    rawMarkdownRequestIdRef.current = requestId;
+  const handleOpenFilePreview = useCallback(async (file: KnowledgeTreeFileNode) => {
+    const previewKind = getKnowledgeFilePreviewKind(file.extension);
+
+    const requestId = filePreviewRequestIdRef.current + 1;
+    filePreviewRequestIdRef.current = requestId;
     setViewMode('read');
-    setRawMarkdownPreview({
+    setFilePreview({
       path: file.absolutePath,
       title: file.name,
-      markdown: '正在载入 Markdown 预览...',
+      draftContent: previewKind === 'markdown' ? '正在载入 Markdown 预览...' : '正在载入文件预览...',
+      savedContent: '',
+      kind: previewKind,
       state: 'loading',
     });
 
@@ -796,7 +832,7 @@ export const KnowledgeNoteWorkspace = ({
         },
       });
 
-      if (rawMarkdownRequestIdRef.current !== requestId) {
+      if (filePreviewRequestIdRef.current !== requestId) {
         return;
       }
 
@@ -804,26 +840,69 @@ export const KnowledgeNoteWorkspace = ({
         throw new Error(result.error || `读取文件失败：${file.name}`);
       }
 
-      setRawMarkdownPreview({
+      setFilePreview({
         path: file.absolutePath,
         title: file.name,
-        markdown: normalizeToolViewContent(result.content),
+        draftContent: normalizeToolViewContent(result.content),
+        savedContent: normalizeToolViewContent(result.content),
+        kind: previewKind,
         state: 'ready',
       });
     } catch (error) {
-      if (rawMarkdownRequestIdRef.current !== requestId) {
+      if (filePreviewRequestIdRef.current !== requestId) {
         return;
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error);
-      setRawMarkdownPreview({
+      setFilePreview({
         path: file.absolutePath,
         title: file.name,
-        markdown: `> 无法读取这个 Markdown 文件。\n\n\`\`\`\n${errorMessage}\n\`\`\``,
+        draftContent:
+          previewKind === 'markdown'
+            ? `> 无法读取这个 Markdown 文件。\n\n\`\`\`\n${errorMessage}\n\`\`\``
+            : `无法读取这个文件。\n\n${errorMessage}`,
+        savedContent: '',
+        kind: previewKind,
         state: 'error',
       });
     }
   }, []);
+
+  const handleSaveFilePreview = useCallback(async () => {
+    if (!filePreview || filePreview.state !== 'ready' || !isFilePreviewDirty) {
+      return;
+    }
+
+    const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_write', {
+      params: {
+        file_path: filePreview.path,
+        content: filePreview.draftContent,
+      },
+    });
+
+    if (!result.success) {
+      setFilePreview((current) =>
+        current && current.path === filePreview.path
+          ? {
+              ...current,
+              draftContent: `无法保存这个文件。\n\n${result.error || '保存失败。'}`,
+              state: 'error',
+            }
+          : current
+      );
+      return;
+    }
+
+    setFilePreview((current) =>
+      current && current.path === filePreview.path
+        ? {
+            ...current,
+            savedContent: current.draftContent,
+          }
+        : current
+    );
+    onRefreshFilesystem();
+  }, [filePreview, isFilePreviewDirty, onRefreshFilesystem]);
 
   const handleOpenInternalMarkdownLink = useCallback(
     (target: KnowledgeInternalLinkTarget) => {
@@ -860,7 +939,7 @@ export const KnowledgeNoteWorkspace = ({
   }, [selectedAncestorFolderPaths]);
 
   useEffect(() => {
-    if (rawMarkdownPreview) {
+    if (filePreview) {
       return;
     }
 
@@ -870,11 +949,11 @@ export const KnowledgeNoteWorkspace = ({
     }
 
     setActiveTreePath((current) => (current && visibleTreePaths.includes(current) ? current : null));
-  }, [rawMarkdownPreview, selectedTreeFilePath, visibleTreePaths]);
+  }, [filePreview, selectedTreeFilePath, visibleTreePaths]);
 
   useEffect(() => {
     setViewMode('read');
-    setRawMarkdownPreview(null);
+    setFilePreview(null);
   }, [selectedNote?.id]);
 
   useEffect(() => {
@@ -905,6 +984,22 @@ export const KnowledgeNoteWorkspace = ({
       menu.style.top = `${Math.max(0, window.innerHeight - rect.height - 4)}px`;
     }
   }, [contextMenuState]);
+
+  useEffect(() => {
+    if (!filePreview) {
+      return;
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void handleSaveFilePreview();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filePreview, handleSaveFilePreview]);
 
   const handleRailResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1034,12 +1129,10 @@ export const KnowledgeNoteWorkspace = ({
                   setActiveTreePath(file.path);
                 }
                 if (file.note) {
-                  setRawMarkdownPreview(null);
+                  setFilePreview(null);
                   onSelectNote(file.note.id);
-                } else if (isPreviewableKnowledgeFile(file.extension)) {
-                  void handleOpenRawMarkdownPreview(file);
                 } else {
-                  onOpenAttachment(file.absolutePath);
+                  void handleOpenFilePreview(file);
                 }
               }}
               onContextMenu={(event) => {
@@ -1074,15 +1167,14 @@ export const KnowledgeNoteWorkspace = ({
     [
       collapsedFolderPaths,
       handleTreeSelection,
-      handleOpenRawMarkdownPreview,
+      handleOpenFilePreview,
       isMultiSelecting,
-      onOpenAttachment,
       onSelectNote,
       searchActive,
       activeTreePath,
       selectedAncestorFolderPaths,
       selectedTreePaths,
-      setRawMarkdownPreview,
+      setFilePreview,
       toggleFolderExpanded,
     ]
   );
@@ -1114,6 +1206,15 @@ export const KnowledgeNoteWorkspace = ({
             aria-label="新建笔记"
           >
             <NoteAddIcon />
+          </button>
+          <button
+            className="doc-action-btn gn-note-icon-btn"
+            type="button"
+            onClick={() => onCreateFileAtPath(null)}
+            title="新建文件"
+            aria-label="新建文件"
+          >
+            <FileAddIcon />
           </button>
           <button
             className="doc-action-btn gn-note-icon-btn"
@@ -1222,6 +1323,20 @@ export const KnowledgeNoteWorkspace = ({
               type="button"
               onClick={() => {
                 closeKnowledgeContextMenu();
+                onCreateFileAtPath(
+                  contextMenuState.isFolder === false && contextMenuState.targetPath
+                    ? contextMenuState.targetPath.replace(/\/[^/]+$/, '') || null
+                    : contextMenuState.targetPath
+                );
+              }}
+            >
+              新建文件
+            </button>
+            <button
+              className="pm-knowledge-context-action"
+              type="button"
+              onClick={() => {
+                closeKnowledgeContextMenu();
                 onCreateFolderAtPath(
                   contextMenuState.isFolder === false && contextMenuState.targetPath
                     ? contextMenuState.targetPath.replace(/\/[^/]+$/, '') || null
@@ -1316,16 +1431,51 @@ export const KnowledgeNoteWorkspace = ({
             <pre>{temporaryContentPreview.body}</pre>
           </section>
         ) : null}
-        {rawMarkdownPreview ? (
+        {filePreview ? (
           <>
             <div className="gn-note-editor-surface">
-              <div className="gn-note-editor-body">
-                <div className="gn-note-reading-surface">
-                  <KnowledgeMarkdownViewer
-                    markdown={rawMarkdownPreview.markdown}
-                    onOpenInternalLink={handleOpenInternalMarkdownLink}
-                  />
+              <div className="gn-note-editor-title-row gn-note-file-preview-title-row">
+                <div className="gn-note-file-preview-title">
+                  <strong>{filePreview.title}</strong>
+                  <span>{isFilePreviewDirty ? '未保存' : filePreview.kind === 'markdown' ? 'Markdown' : 'Code'}</span>
                 </div>
+                {filePreview.kind === 'code' ? (
+                  <button
+                    className="doc-action-btn"
+                    type="button"
+                    onClick={() => void handleSaveFilePreview()}
+                    disabled={!isFilePreviewDirty || filePreview.state !== 'ready'}
+                  >
+                    保存
+                  </button>
+                ) : null}
+              </div>
+              <div className="gn-note-editor-body">
+                {filePreview?.kind === 'markdown' ? (
+                  <div className="gn-note-reading-surface">
+                    <KnowledgeMarkdownViewer
+                      markdown={filePreview.draftContent}
+                      onOpenInternalLink={handleOpenInternalMarkdownLink}
+                    />
+                  </div>
+                ) : (
+                  <div className="gn-note-code-surface">
+                    <textarea
+                      className="gn-note-file-preview-code"
+                      value={filePreview.draftContent}
+                      onChange={(event) =>
+                        setFilePreview((current) =>
+                          current && current.path === filePreview.path
+                            ? { ...current, draftContent: event.target.value }
+                            : current
+                        )
+                      }
+                      aria-label={`${filePreview.title} 文件预览`}
+                      spellCheck={false}
+                      disabled={filePreview.state !== 'ready'}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </>

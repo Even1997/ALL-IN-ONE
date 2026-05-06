@@ -49,26 +49,11 @@ type ProjectFileRequestConversationMessage = {
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/;
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\\]+\\[^\\]+/;
 
-const SUPPORTED_TEXT_FILE_EXTENSIONS = new Set([
-  'css',
-  'html',
-  'js',
-  'json',
-  'jsx',
-  'markdown',
-  'md',
-  'txt',
-  'ts',
-  'tsx',
-  'yaml',
-  'yml',
-]);
-
 const WRITE_INTENT_PATTERN =
   /(?:\u65b0\u5efa|\u521b\u5efa|\u751f\u6210(?:\u4e00\u4e2a)?(?:\u6587\u4ef6|\u6587\u6863)?|\u5199\u5165|\u5199\u5230|\u4fdd\u5b58(?:\u6210|\u5230)?|\u53e6\u5b58\u4e3a|\u7f16\u8f91|\u4fee\u6539|\u66f4\u65b0|\u91cd\u5199|\u66ff\u6362|\u5220\u9664|\u79fb\u9664|remove|delete|create|write|edit|update|save)/i;
 
 const READ_INTENT_PATTERN =
-  /(?:\u67e5\u770b|\u8bfb\u53d6|\u8bfb\u4e00\u4e0b|\u6253\u5f00|\u5217\u51fa|\u770b\u770b|\u641c\u7d22|\u67e5\u627e|\u76ee\u5f55|\u6587\u4ef6\u5185\u5bb9|read|open|show|list|search|grep)/i;
+  /(?:\u67e5\u770b|\u8bfb\u53d6|\u8bfb\u4e00\u4e0b|\u6253\u5f00|\u5217\u51fa|\u770b\u770b|\u770b\u4e00\u4e0b|\u641c\u7d22|\u67e5\u627e|\u76ee\u5f55|\u6587\u4ef6\u5185\u5bb9|read|open|show|list|search|grep)/i;
 
 const TASK_WRITE_VERB_PATTERN =
   /(?:\u4fee\u590d|\u4fee\u6539|\u91cd\u5199|\u6539\u5199|\u7f16\u8f91|\u66f4\u65b0|\u5b8c\u5584|\u6574\u7406|\u4f18\u5316|\u8865\u5168|\u540c\u6b65|\u6539\u6389|fix|rewrite|refactor|update|edit|organize|sync)/i;
@@ -76,7 +61,7 @@ const TASK_WRITE_VERB_PATTERN =
 const TASK_WRITE_TARGET_PATTERN =
   /(?:\u6587\u4ef6|\u6587\u6863|\u4ee3\u7801|\u914d\u7f6e|\u9879\u76ee|\u9875\u9762|\u7ec4\u4ef6|\u6a21\u5757|README|PRD|docs[\\/]|src[\\/]|package\.json|tsconfig|\.md\b|\.tsx?\b|\.jsx?\b|\.json\b|\.ya?ml\b|\.css\b|\.html\b)/i;
 
-const QUESTION_ONLY_PATTERN = /(^|\s)(?:\u4e3a\u4ec0\u4e48|\u600e\u4e48|\u5982\u4f55|what|why|how|which)(\s|$)|\?/i;
+const QUESTION_ONLY_PATTERN = /(?:\u4e3a\u4ec0\u4e48|\u600e\u4e48|\u5982\u4f55|(^|\s)(?:what|why|how|which)(\s|$)|[?\uff1f])/i;
 
 const ANALYSIS_ONLY_PATTERN =
   /(?:\u603b\u7ed3|\u6982\u8981|\u5206\u6790|\u89e3\u91ca|\u8bf4\u660e|\u5bf9\u6bd4|\u6bd4\u8f83|\u68c0\u67e5|review|summary|summarize|analyze|analysis|compare|explain|inspect)/i;
@@ -88,7 +73,7 @@ const FILE_SAVE_TARGET_PATTERN =
   /(?:\u4fdd\u5b58(?:\u6210|\u5230)?|\u5199\u5165|\u5199\u5230|\u53e6\u5b58\u4e3a|\u843d\u76d8|save(?:\s+as|\s+to)?|write(?:\s+to)?)/i;
 
 const EXPLICIT_FILE_READ_PATTERN =
-  /(?:\u67e5\u770b|\u8bfb\u53d6|\u8bfb\u4e00\u4e0b|\u6253\u5f00|\u5217\u51fa|\u770b\u770b|\u6d4f\u89c8|\u641c\u7d22|\u67e5\u627e|\u68c0\u7d22|read|open|show|list|search|grep)/i;
+  /(?:\u67e5\u770b|\u8bfb\u53d6|\u8bfb\u4e00\u4e0b|\u6253\u5f00|\u5217\u51fa|\u770b\u770b|\u770b\u4e00\u4e0b|\u6d4f\u89c8|\u641c\u7d22|\u67e5\u627e|\u68c0\u7d22|read|open|show|list|search|grep)/i;
 
 const EXPLICIT_FILE_REFERENCE_PATTERN =
   /(?:README|package\.json|tsconfig|docs[\\/]|files?[\\/]|folders?[\\/]|directories?[\\/]|(?:^|[\s"'`(\[\u3008\u300a\uff08])(?:[A-Za-z]:[\\/]|\/|\.{1,2}[\\/])?(?:[^\\/\s"'`，。；：！？,.;:!?()\[\]\u3008\u3009\u300a\u300b\uff08\uff09]+[\\/])+[^\\/\s"'`，。；：！？,.;:!?()\[\]\u3008\u3009\u300a\u300b\uff08\uff09]+)/i;
@@ -109,7 +94,7 @@ const PENDING_SAVE_TARGET_PROMPT_PATTERN =
   /(?:(?:\u4fdd\u5b58|\u5199\u5165|\u843d\u76d8|\u53e6\u5b58\u4e3a|save|write).*(?:\u6587\u4ef6\u540d|\u8def\u5f84|\u5230|filename|file name|path)|(?:\u6587\u4ef6\u540d|\u8def\u5f84|filename|file name|path).*(?:\u4fdd\u5b58|\u5199\u5165|\u843d\u76d8|\u53e6\u5b58\u4e3a|save|write))/i;
 
 const FILE_TARGET_ONLY_REPLY_PATTERN =
-  /^[^<>:"|?*\r\n]+(?:\.(?:css|html|js|json|jsx|markdown|md|txt|ts|tsx|yaml|yml))[\s\u3002\uff01!.,]*$/i;
+  /^[^<>:"|?*\r\n]+\/?[^<>:"|?*\r\n]*\.[A-Za-z0-9][A-Za-z0-9._-]*[\s\u3002\uff01!.,]*$/i;
 
 const trimLeadingSeparators = (value: string) => value.replace(/^[\\/]+/, '');
 
@@ -198,13 +183,6 @@ const getRelativePathFromRoot = (absolutePath: string, rootPath: string) => {
   return normalizedAbsolutePath.slice(normalizedRootPath.length + 1);
 };
 
-const extractExtension = (value: string) => {
-  const normalized = value.replace(/[\\/]+/g, '/').trim();
-  const baseName = normalized.split('/').pop() || normalized;
-  const parts = baseName.split('.');
-  return parts.length > 1 ? parts.pop()?.toLowerCase() || '' : '';
-};
-
 const normalizeAbsolutePathForComparison = (value: string) => {
   const normalized = value.replace(/[\\/]+/g, '/').replace(/\/+$/g, '');
   return usesWindowsPathSemantics(value) ? normalized.toLowerCase() : normalized;
@@ -247,7 +225,11 @@ const containsExplicitFileReference = (value: string) =>
 const containsConcreteProjectFileReference = (value: string) =>
   EXPLICIT_FILE_REFERENCE_PATTERN.test(value);
 
+const looksLikeQuestionOnlyProjectFileRequest = (value: string) =>
+  QUESTION_ONLY_PATTERN.test(value) || ANALYSIS_ONLY_PATTERN.test(value);
+
 const looksLikeExplicitProjectFileWriteRequest = (value: string) =>
+  !looksLikeQuestionOnlyProjectFileRequest(value) &&
   FILE_MANAGEMENT_WRITE_PATTERN.test(value) &&
   (
     containsConcreteProjectFileReference(value) ||
@@ -294,8 +276,7 @@ const isReplyToPendingSaveTargetPrompt = (input: {
   return Boolean(latestAssistantContent && PENDING_SAVE_TARGET_PROMPT_PATTERN.test(latestAssistantContent));
 };
 
-export const isSupportedProjectTextFilePath = (value: string) =>
-  SUPPORTED_TEXT_FILE_EXTENSIONS.has(extractExtension(value));
+export const isSupportedProjectTextFilePath = (value: string) => value.trim().length > 0;
 
 export const detectProjectFileWriteIntent = (value: string) => WRITE_INTENT_PATTERN.test(value);
 
@@ -323,6 +304,10 @@ export const resolveProjectFileRequestKind = (input: {
   }
 
   if (candidates.some((value) => looksLikeExplicitProjectFileWriteRequest(value))) {
+    return 'write';
+  }
+
+  if (candidates.some((value) => detectTaskAuthorizedProjectWriteIntent(value))) {
     return 'write';
   }
 
@@ -404,10 +389,6 @@ export const detectTaskAuthorizedProjectWriteIntent = (value: string) => {
     return true;
   }
 
-  if (detectProjectFileWriteIntent(normalized)) {
-    return true;
-  }
-
   if (ANALYSIS_ONLY_PATTERN.test(normalized) && !hasTaskVerb) {
     return false;
   }
@@ -416,8 +397,12 @@ export const detectTaskAuthorizedProjectWriteIntent = (value: string) => {
     return false;
   }
 
-  if (QUESTION_ONLY_PATTERN.test(normalized) && !TASK_WRITE_VERB_PATTERN.test(normalized)) {
+  if (QUESTION_ONLY_PATTERN.test(normalized)) {
     return false;
+  }
+
+  if (detectProjectFileWriteIntent(normalized)) {
+    return true;
   }
 
   return hasTaskVerb && hasTaskTarget;

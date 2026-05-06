@@ -8,6 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test:builtin-ai-smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/test-builtin-ai-smoke.ps1",
+    "test:builtin-ai-file-ops": "powershell -ExecutionPolicy Bypass -File ./scripts/test-builtin-ai-file-ops.ps1",
+    "test:builtin-ai-turns": "powershell -ExecutionPolicy Bypass -File ./scripts/test-builtin-ai-turns.ps1",
     "package:win": "powershell -ExecutionPolicy Bypass -File ./scripts/package-win.ps1"
   },
   "dependencies": {

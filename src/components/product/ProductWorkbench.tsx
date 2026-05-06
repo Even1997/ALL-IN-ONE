@@ -74,7 +74,7 @@ type PendingDeleteRequest =
 
 type KnowledgePathDialogState =
   | {
-      mode: 'create-note' | 'create-folder' | 'rename-path';
+      mode: 'create-note' | 'create-file' | 'create-folder' | 'rename-path';
       targetDirectory: string | null;
       relativePath: string | null;
       isFolder: boolean;
@@ -1629,6 +1629,16 @@ export const ProductWorkbench = ({
     });
   }, []);
 
+  const handleCreateKnowledgeFileAtPath = useCallback((relativeDirectory: string | null) => {
+    setKnowledgePathDialog({
+      mode: 'create-file',
+      targetDirectory: normalizeRelativePath(relativeDirectory || ''),
+      relativePath: null,
+      isFolder: false,
+      inputValue: 'new-file.txt',
+    });
+  }, []);
+
   const handleRenameKnowledgeTreePath = useCallback((relativePath: string, isFolder: boolean) => {
     const normalizedPath = normalizeRelativePath(relativePath);
     setKnowledgePathDialog({
@@ -1713,6 +1723,9 @@ export const ProductWorkbench = ({
         setRequirementDraftTitle(nextTitle);
         setRequirementDraftContent('');
         setRequirementSaveMessage(`已创建 ${nextTitle}。`);
+      } else if (knowledgePathDialog.mode === 'create-file') {
+        await writeRequirementFile(nextAbsolutePath, '');
+        setRequirementSaveMessage(`已创建文件 ${normalizedName}。`);
       } else if (knowledgePathDialog.relativePath) {
         const previousRelativePath = normalizeRelativePath(knowledgePathDialog.relativePath);
         const previousAbsolutePath = joinDiskPath(projectRootDir, previousRelativePath);
@@ -2301,6 +2314,7 @@ export const ProductWorkbench = ({
           void handleCreateKnowledgeNote();
         }}
         onCreateNoteAtPath={handleCreateKnowledgeNoteAtPath}
+        onCreateFileAtPath={handleCreateKnowledgeFileAtPath}
         onCreateFolderAtPath={handleCreateKnowledgeFolderAtPath}
         onRenameTreePath={handleRenameKnowledgeTreePath}
         onDeleteTreePaths={handleDeleteKnowledgeTreePaths}
@@ -2504,6 +2518,8 @@ export const ProductWorkbench = ({
   const knowledgePathDialogTitle = knowledgePathDialog
     ? knowledgePathDialog.mode === 'create-note'
       ? '新建笔记'
+      : knowledgePathDialog.mode === 'create-file'
+        ? '新建文件'
       : knowledgePathDialog.mode === 'create-folder'
         ? '新建文件夹'
         : knowledgePathDialog.isFolder
@@ -2520,6 +2536,8 @@ export const ProductWorkbench = ({
   const knowledgePathDialogActionLabel = knowledgePathDialog
     ? knowledgePathDialog.mode === 'rename-path'
       ? '确认重命名'
+      : knowledgePathDialog.mode === 'create-file'
+        ? '创建文件'
       : knowledgePathDialog.mode === 'create-folder'
         ? '创建文件夹'
         : '创建笔记'

@@ -383,8 +383,20 @@ export const buildAssistantStructuredContentState = (input: {
     .join('\n\n')
     .trim();
 
-  const thinkingContent = parsedThinkingContent || preferredThinkingContent;
-  const answerContent = parsedAnswerContent || preferredAnswerContent;
+  const shouldPreservePreferredNarrative =
+    preferredParts.length > 0 &&
+    !!parsedAnswerContent &&
+    !!preferredAnswerContent &&
+    (preferredAnswerContent === parsedAnswerContent ||
+      preferredAnswerContent.endsWith(`\n\n${parsedAnswerContent}`)) &&
+    (!parsedThinkingContent || !preferredThinkingContent || parsedThinkingContent === preferredThinkingContent);
+
+  const thinkingContent = shouldPreservePreferredNarrative
+    ? preferredThinkingContent || parsedThinkingContent
+    : parsedThinkingContent || preferredThinkingContent;
+  const answerContent = shouldPreservePreferredNarrative
+    ? preferredAnswerContent
+    : parsedAnswerContent || preferredAnswerContent;
   const assistantParts = buildStoredAssistantParts({
     thinkingContent,
     answerContent,

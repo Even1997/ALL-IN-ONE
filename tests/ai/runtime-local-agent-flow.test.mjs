@@ -60,7 +60,13 @@ test('runtime local agent flow prepares approval decision, wraps prompt, and nor
     agentId: 'codex',
     sandboxPolicy: 'allow',
   });
-  assert.equal(autoExecute.decision, 'auto-execute');
+  assert.equal(autoExecute.decision, 'approval-required');
+
+  const bypassExecute = prepareRuntimeLocalAgentFlow({
+    agentId: 'codex',
+    sandboxPolicy: 'bypass',
+  });
+  assert.equal(bypassExecute.decision, 'auto-execute');
 
   const content = await executeRuntimeLocalAgentPrompt({
     agentId: 'codex',

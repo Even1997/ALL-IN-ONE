@@ -9335,6 +9335,34 @@ body.ai-chat-sidebar-collapsed .app-main {
   color: var(--mode-text, #0f172a);
 }
 
+.gn-note-file-preview-title-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.gn-note-file-preview-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--mode-text, #0f172a);
+}
+
+.gn-note-file-preview-title strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gn-note-file-preview-title span {
+  flex: 0 0 auto;
+  color: var(--mode-muted, #64748b);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
 
 .gn-note-editor-body {
   flex: 1 1 auto;
@@ -9378,7 +9406,8 @@ body.ai-chat-sidebar-collapsed .app-main {
   padding: 14px 22px 24px;
 }
 
-.gn-note-code-textarea {
+.gn-note-code-textarea,
+.gn-note-file-preview-code {
   display: block;
   width: min(100%, var(--atomic-editor-measure, 76ch));
   min-height: 100%;
@@ -9395,7 +9424,12 @@ body.ai-chat-sidebar-collapsed .app-main {
   white-space: pre;
 }
 
-.gn-note-code-textarea:focus {
+.gn-note-file-preview-code {
+  height: 100%;
+}
+
+.gn-note-code-textarea:focus,
+.gn-note-file-preview-code:focus {
   border-color: rgba(0, 122, 255, 0.46);
   box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.14);
 }

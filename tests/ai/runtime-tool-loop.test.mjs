@@ -48,6 +48,35 @@ test('runtime tool loop executes an XML view tool call before returning final co
   assert.match(modelMessages[1][2].content, /console\.log/);
 });
 
+test('runtime tool loop normalizes read tool aliases to view before allowlist checks', async () => {
+  const executedCalls = [];
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Read the app file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['view'],
+    callModel: async (messages) =>
+      messages.length === 1
+        ? toolUse('read', { path: 'src/app.ts', limit: 10 })
+        : 'The file was read successfully.',
+    executeTool: async (call) => {
+      executedCalls.push(call);
+      return {
+        type: 'text',
+        content: '1: console.log("app");',
+      };
+    },
+  });
+
+  assert.equal(result.finalContent, 'The file was read successfully.');
+  assert.equal(executedCalls.length, 1);
+  assert.equal(executedCalls[0].name, 'view');
+  assert.deepEqual(executedCalls[0].input, { path: 'src/app.ts', limit: 10 });
+  assert.equal(result.toolCalls[0].name, 'view');
+  assert.equal(result.toolCalls[0].status, 'completed');
+});
+
 test('runtime tool loop returns an exhausted message instead of raw XML tool calls', async () => {
   const result = await runRuntimeToolLoop({
     maxRounds: 1,
@@ -191,4 +220,118 @@ test('runtime tool loop preserves verified file mutation metadata from tool resu
       verified: true,
     },
   ]);
+});
+
+test('runtime tool loop defers streamed write tools until the model response completes', async () => {
+  let modelFinished = false;
+  const executedAfterModel = [];
+
+  await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Update the config file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['write'],
+    callModel: async (messages, _systemPrompt, onEvent) => {
+      if (messages.length > 1) {
+        return 'Saved.';
+      }
+      onEvent?.({
+        kind: 'text',
+        delta: toolUse('write', { file_path: 'src/config.ts', content: 'export const ok = true;\n' }),
+      });
+      await Promise.resolve();
+      modelFinished = true;
+      return toolUse('write', { file_path: 'src/config.ts', content: 'export const ok = true;\n' });
+    },
+    executeTool: async () => {
+      executedAfterModel.push(modelFinished);
+      return {
+        type: 'text',
+        content: 'File successfully written: src/config.ts',
+      };
+    },
+  });
+
+  assert.deepEqual(executedAfterModel, [true]);
+});
+
+test('runtime tool loop checks allowed tools before approval hooks', async () => {
+  let beforeToolCallCount = 0;
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Run a shell command.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['view'],
+    callModel: async (messages) =>
+      messages.length === 1 ? toolUse('bash', { command: 'echo hi' }) : 'I cannot run that command.',
+    beforeToolCall: async () => {
+      beforeToolCallCount += 1;
+    },
+    executeTool: async () => {
+      throw new Error('executeTool should not be called for blocked tools');
+    },
+  });
+
+  assert.equal(result.finalContent, 'I cannot run that command.');
+  assert.equal(beforeToolCallCount, 0);
+  assert.equal(result.toolCalls[0].status, 'blocked');
+});
+
+test('runtime tool loop asks the model to repair malformed tool protocol even with visible text', async () => {
+  const modelMessages = [];
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Inspect the app file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['view'],
+    callModel: async (messages) => {
+      modelMessages.push(messages.map((message) => ({ ...message })));
+      return modelMessages.length === 1
+        ? 'I will inspect first.\n<tool_use><tool name="view"><tool_params>{"file_path":"src/app.ts"}</tool>'
+        : 'The tool call was malformed, so I will answer directly.';
+    },
+    executeTool: async () => {
+      throw new Error('Malformed tool call should not execute');
+    },
+  });
+
+  assert.equal(result.finalContent, 'The tool call was malformed, so I will answer directly.');
+  assert.equal(modelMessages.length, 2);
+  assert.match(modelMessages[1].at(-1).content, /not in a parseable format/);
+});
+
+test('runtime tool loop proactively compacts large old tool results before the next model call', async () => {
+  const largeToolOutput = 'x'.repeat(5000);
+  let secondModelMessages = null;
+  let modelCallCount = 0;
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    contextWindowTokens: 400,
+    initialPrompt: 'Inspect the app file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['view'],
+    callModel: async (messages) => {
+      modelCallCount += 1;
+      if (modelCallCount === 1) {
+        return toolUse('view', { file_path: 'src/app.ts' });
+      }
+      secondModelMessages = messages.map((message) => ({ ...message }));
+      return 'Done.';
+    },
+    executeTool: async () => ({
+      type: 'text',
+      content: largeToolOutput,
+    }),
+  });
+
+  assert.equal(result.finalContent, 'Done.');
+  assert.ok(secondModelMessages, 'expected a second model call');
+  const compactedToolResult = secondModelMessages.find((message) =>
+    message.content.includes('Tool "view" completed. Output')
+  );
+  assert.ok(compactedToolResult, 'expected the old tool result to be summarized');
+  assert.doesNotMatch(compactedToolResult.content, new RegExp(`x{2000}`));
 });

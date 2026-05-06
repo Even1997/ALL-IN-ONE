@@ -33,6 +33,7 @@ export type RuntimeToolLoopResult = {
 
 export type RuntimeToolLoopOptions = {
   maxRounds: number;
+  contextWindowTokens?: number;
   initialPrompt: string;
   systemPrompt: string;
   allowedTools: string[];

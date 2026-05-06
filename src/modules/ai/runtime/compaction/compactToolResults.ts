@@ -28,7 +28,8 @@ export const compactOldToolResults = (
     return { compacted: false, reason: 'tool_results_trimmed', trimmedCount: 0 };
   }
 
-  const protectFrom = userIndices[userIndices.length - keepRecentRounds]!;
+  const protectFrom =
+    keepRecentRounds > 0 ? userIndices[userIndices.length - keepRecentRounds]! : Number.POSITIVE_INFINITY;
   let trimmedCount = 0;
 
   for (const idx of userIndices) {

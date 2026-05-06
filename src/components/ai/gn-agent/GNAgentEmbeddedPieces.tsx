@@ -5,7 +5,6 @@ import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
 import type { AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
 import {
   getAssistantRuntimeTimelineEvents,
-  getAssistantTimelineReasoning,
   getAssistantTimelineText,
 } from '../../../modules/ai/store/assistantTimeline.ts';
 import { GNAgentMessageItem } from './GNAgentMessageItem';
@@ -47,7 +46,7 @@ export const GNAgentHistoryMenu: React.FC<{
         const lastMessage = session.messages?.[session.messages.length - 1];
         const lastPreviewSource =
           lastMessage?.role === 'assistant'
-            ? getAssistantTimelineText(lastMessage.timeline) || getAssistantTimelineReasoning(lastMessage.timeline)
+            ? getAssistantTimelineText(lastMessage.timeline)
             : lastMessage?.content || '';
         return (
           <div

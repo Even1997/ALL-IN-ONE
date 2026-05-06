@@ -32,6 +32,8 @@ test('risk policy classifies destructive runtime actions', async () => {
   );
   assert.equal(shouldAutoApproveRuntimeAction({ riskLevel: 'medium', sandboxPolicy: 'ask' }), false);
   assert.equal(shouldAutoApproveRuntimeAction({ riskLevel: 'medium', sandboxPolicy: 'allow' }), true);
+  assert.equal(shouldAutoApproveRuntimeAction({ riskLevel: 'high', sandboxPolicy: 'allow' }), false);
+  assert.equal(shouldAutoApproveRuntimeAction({ riskLevel: 'high', sandboxPolicy: 'bypass' }), true);
 });
 
 test('AIChat wires approval gating and inline approval cards into the existing shell', async () => {

@@ -20,3 +20,13 @@ test('chat delegates approval pending-action bookkeeping to the runtime approval
   assert.match(source, /replayRecoveryController\.appendAndSync/);
   assert.doesNotMatch(source, /pendingApprovalActionsRef\.current\[approval\.id\] = \{ onApprove, onDeny \}/);
 });
+
+test('chat stop handler cancels pending built-in approvals and questions', async () => {
+  const source = await readFile(chatPath, 'utf8');
+  const stopHandler = source.match(/const handleStopGeneration = useCallback\(\(\) => \{[\s\S]*?\n\s*\}, \[/)?.[0] || '';
+
+  assert.match(stopHandler, /pendingQuestionActionsRef\.current/);
+  assert.match(stopHandler, /\.reject\(/);
+  assert.match(stopHandler, /pendingApprovalActionsRef\.current/);
+  assert.match(stopHandler, /\.onDeny\?\.\(/);
+});

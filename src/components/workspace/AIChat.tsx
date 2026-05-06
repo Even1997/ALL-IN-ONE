@@ -2,6 +2,7 @@
 import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
+import { getBuiltInRuntimeToolNames, isCommandToolName } from '../../utils/hostPlatform.ts';
 import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
 import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
 import { ToolExecutor, type ToolCall, type ToolResult } from './tools';
@@ -56,6 +57,11 @@ import {
   permissionModeToSandboxPolicy,
   sandboxPolicyToPermissionMode,
 } from '../../modules/ai/runtime/approval/permissionMode';
+import {
+  classifyRuntimeActionRisk,
+  shouldAutoApproveRuntimeAction,
+  shouldDenyRuntimeAction,
+} from '../../modules/ai/runtime/approval/riskPolicy';
 import { buildProjectMemoryEntry } from '../../modules/ai/runtime/memory/projectMemoryRuntime';
 import {
   createRuntimeStreamingMessageAssembler,
@@ -219,7 +225,6 @@ import {
   getProjectDir,
   readProjectTextFile,
   resolveProjectRuntimeRootPath,
-  writeProjectTextFile,
 } from '../../utils/projectPersistence';
 import { getDirectoryPath, joinFileSystemPath } from '../../utils/fileSystemPaths';
 import {
@@ -328,9 +333,9 @@ const normalizeErrorMessage = (error: unknown) => {
 const ASK_USER_TOOL_NAME = 'AskUserQuestion';
 const READ_ONLY_CHAT_TOOLS = ['glob', 'grep', 'ls', 'view', ASK_USER_TOOL_NAME];
 const PROJECT_FILE_READ_ONLY_TOOLS = ['glob', 'grep', 'ls', 'view'];
-const BUILT_IN_EXECUTION_TOOLS = ['glob', 'grep', 'ls', 'view', 'write', 'edit', 'bash', 'fetch', ASK_USER_TOOL_NAME];
+const BUILT_IN_EXECUTION_TOOLS = [...getBuiltInRuntimeToolNames()];
 const PROJECT_INSTRUCTION_FILE_NAMES = ['GOODNIGHT.md', 'CLAUDE.md'];
-const RISKY_BUILT_IN_TOOLS = new Set(['write', 'edit', 'bash', 'fetch']);
+const RISKY_BUILT_IN_TOOLS = new Set(['write', 'edit', 'bash', 'powershell', 'fetch']);
 const MISSING_PROJECT_FILE_PATTERN =
   /(?:not found|no such file|cannot find the file|\u627e\u4e0d\u5230|\u4e0d\u5b58\u5728|os error 2)/i;
 
@@ -417,6 +422,8 @@ const ChatSandboxPolicySelector: React.FC<{
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const confirmBypass = () =>
+    window.confirm('完全放行会减少写入、命令和网络操作的拦截。确认切换到完全放行？');
 
   useEffect(() => {
     if (!open) {
@@ -475,6 +482,11 @@ const ChatSandboxPolicySelector: React.FC<{
                 className={`chat-sandbox-selector-item ${isActive ? 'active' : ''}`}
                 onClick={() => {
                   if (option.value === 'custom' || option.value === value) {
+                    return;
+                  }
+
+                  if (option.value === 'bypass' && !confirmBypass()) {
+                    setOpen(false);
                     return;
                   }
 
@@ -714,6 +726,7 @@ const approvalRiskLabelMap: Record<ApprovalRecord['riskLevel'], string> = {
 const approvalActionLabelMap: Record<string, string> = {
   run_local_agent_prompt: '本地 Agent',
   tool_bash: '命令执行',
+  tool_powershell: 'PowerShell 命令',
   tool_remove: '删除操作',
   tool_write: '写入操作',
   tool_edit: '编辑操作',
@@ -740,9 +753,11 @@ const RUNTIME_TOOL_GROUP_LABELS: Record<string, string> = {
   ls: '列目录',
   grep: '检索',
   glob: '匹配',
+  memory_read: '加载记忆',
   write: '写入',
   edit: '编辑',
   bash: '命令',
+  powershell: 'PowerShell',
   fetch: '抓取',
   project_file_flow: '处理文件请求',
   project_file_read: '读取项目文件',
@@ -825,7 +840,7 @@ const summarizeRuntimeToolCall = (toolName: string, input: Record<string, unknow
     }
   }
 
-  if (toolName === 'bash' && typeof input.command === 'string') {
+  if (isCommandToolName(toolName) && typeof input.command === 'string') {
     return input.command;
   }
 
@@ -883,7 +898,7 @@ const buildBuiltInToolApprovalActionType = (toolName: string) => `tool_${toolNam
 const buildBuiltInToolApprovalSummary = (toolName: string, input: Record<string, unknown>) => {
   const detail = summarizeRuntimeToolCall(toolName, input);
 
-  if (toolName === 'bash') {
+  if (isCommandToolName(toolName)) {
     return detail ? `允许执行命令: ${detail}` : '允许执行命令';
   }
 
@@ -904,7 +919,7 @@ const buildBuiltInToolApprovalSummary = (toolName: string, input: Record<string,
 
 const buildBuiltInToolApprovalDisplay = (toolName: string, input: Record<string, unknown>) => ({
   toolName,
-  command: toolName === 'bash' && typeof input.command === 'string' ? input.command : null,
+  command: isCommandToolName(toolName) && typeof input.command === 'string' ? input.command : null,
   filePath:
     'file_path' in input && typeof input.file_path === 'string' ? String(input.file_path) : null,
   oldString:
@@ -1081,6 +1096,10 @@ const getRuntimeToolHeadline = (toolName: string, input: Record<string, unknown>
     return '读取文件';
   }
 
+  if (toolName === 'memory_read') {
+    return '加载记忆';
+  }
+
   if (toolName === 'grep' || toolName === 'glob') {
     return '搜索代码';
   }
@@ -1093,7 +1112,7 @@ const getRuntimeToolHeadline = (toolName: string, input: Record<string, unknown>
     return '修改文件';
   }
 
-  if (toolName === 'bash') {
+  if (isCommandToolName(toolName)) {
     return '运行命令';
   }
 
@@ -1197,6 +1216,9 @@ const extractCheckpointFilesFromToolCalls = (toolCalls: RuntimeToolStep[] | null
 
 
 const buildProjectFileStageItems = (proposal: ProjectFileProposal) => {
+  const isDeleteOnlyProposal =
+    proposal.operations.length > 0 &&
+    proposal.operations.every((operation) => operation.type === 'delete_file');
   const analysisState: 'done' | 'current' | 'pending' = 'done';
   const reviewState: 'done' | 'current' | 'pending' =
     proposal.status === 'pending'
@@ -1213,14 +1235,31 @@ const buildProjectFileStageItems = (proposal: ProjectFileProposal) => {
 
   return [
     { key: 'analysis', label: '分析文件', state: analysisState },
-    { key: 'review', label: proposal.mode === 'auto' ? '确认范围' : '等待确认', state: reviewState },
-    { key: 'apply', label: proposal.status === 'executed' ? '写入完成' : '写入文件', state: applyState },
+    {
+      key: 'review',
+      label: proposal.mode === 'auto' ? (isDeleteOnlyProposal ? '确认删除' : '确认范围') : '等待确认',
+      state: reviewState,
+    },
+    {
+      key: 'apply',
+      label: isDeleteOnlyProposal
+        ? proposal.status === 'executed'
+          ? '删除完成'
+          : '删除文件'
+        : proposal.status === 'executed'
+          ? '写入完成'
+          : '写入文件',
+      state: applyState,
+    },
   ];
 };
 
 const resolveProjectFileProposalNote = (proposal: ProjectFileProposal) => {
+  const isDeleteOnlyProposal =
+    proposal.operations.length > 0 &&
+    proposal.operations.every((operation) => operation.type === 'delete_file');
   if (proposal.status === 'executing') {
-    return '正在写入文件并校验结果...';
+    return isDeleteOnlyProposal ? '正在删除文件并校验结果...' : '正在写入文件并校验结果...';
   }
 
   if (proposal.status === 'cancelled') {
@@ -1632,7 +1671,7 @@ const buildSkillCatalogLifecycleSignature = (input: {
 
 const getStoredMessageConversationContent = (message: StoredChatMessage) =>
   message.role === 'assistant'
-    ? getAssistantTimelineText(message.timeline) || getAssistantTimelineReasoning(message.timeline)
+    ? getAssistantTimelineText(message.timeline)
     : message.content;
 
 const toConversationHistoryMessages = (messages: StoredChatMessage[] = []) =>
@@ -2015,8 +2054,11 @@ export const AIChat: React.FC<AIChatProps> = ({
         })),
       });
 
-      reconciled.bindings.forEach(({ thread, session }) => {
+      reconciled.sessions.forEach((session) => {
         upsertSession(projectId, session);
+      });
+
+      reconciled.bindings.forEach(({ thread, session }) => {
         recordRuntimeThread(projectId, {
           id: session.id,
           providerId: thread.providerId as AgentProviderId,
@@ -2780,8 +2822,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               typeof pendingDisplay.newString === 'string';
             const showWritePreview =
               pendingDisplay?.toolName === 'write' && typeof pendingDisplay.content === 'string';
+            const pendingCommand = typeof pendingDisplay?.command === 'string' ? pendingDisplay.command : null;
             const showCommand =
-              pendingDisplay?.toolName === 'bash' && typeof pendingDisplay.command === 'string';
+              isCommandToolName(pendingDisplay?.toolName || '') && pendingCommand !== null;
             const showFilePath = !!pendingDisplay?.filePath;
             return (
               <section key={approval.id} className={`chat-runtime-approval-card ${approval.riskLevel}`}>
@@ -2817,7 +2860,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                     {pendingDisplay.content!.length > 800 ? '\n...' : ''}
                   </pre>
                 ) : showCommand ? (
-                  <pre className="chat-runtime-approval-command">{pendingDisplay.command}</pre>
+                  <pre className="chat-runtime-approval-command">{pendingCommand}</pre>
                 ) : pendingDisplay?.inputJson ? (
                   <pre className="chat-runtime-approval-pre">{pendingDisplay.inputJson}</pre>
                 ) : null}
@@ -2859,6 +2902,28 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     [setInput]
   );
 
+  const notifyProjectFilesChanged = useCallback(
+    (changedPaths: string[]) => {
+      if (!currentProject || changedPaths.length === 0) {
+        return;
+      }
+
+      emitKnowledgeFilesystemChanged({
+        projectId: currentProject.id,
+        changedPaths,
+      });
+
+      if (activeSessionId) {
+        const nextActiveSkills = runtimeSkillRegistryRef.current.activateSkillsForPaths(
+          activeSessionId,
+          changedPaths
+        );
+        setActiveSkills(activeSessionId, nextActiveSkills);
+      }
+    },
+    [activeSessionId, currentProject, setActiveSkills]
+  );
+
   const executeProjectFileOperations = useCallback(
     async (projectRoot: string, operations: ProjectFileOperation[]) => {
       const result = await executeRuntimeProjectFileOperations({
@@ -2867,32 +2932,23 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         resolveProjectOperationPath,
         isSupportedProjectTextFilePath,
         readProjectTextFile,
-        writeProjectTextFile,
         getDirectoryPath,
         invokeTool: async (command, params) =>
           invoke<RuntimeProjectFileToolResponse>(command, {
-            params,
+            params: {
+              project_root: projectRoot,
+              ...params,
+            },
           }),
       });
 
-      if (currentProject && result.ok && result.changedPaths.length > 0) {
-        emitKnowledgeFilesystemChanged({
-          projectId: currentProject.id,
-          changedPaths: result.changedPaths,
-        });
-
-        if (activeSessionId) {
-          const nextActiveSkills = runtimeSkillRegistryRef.current.activateSkillsForPaths(
-            activeSessionId,
-            result.changedPaths
-          );
-          setActiveSkills(activeSessionId, nextActiveSkills);
-        }
+      if (result.ok) {
+        notifyProjectFilesChanged(result.changedPaths);
       }
 
       return result;
     },
-    [activeSessionId, currentProject, setActiveSkills]
+    [notifyProjectFilesChanged]
   );
   const resolveProjectRootById = useCallback(
     async (projectId: string) => {
@@ -2916,6 +2972,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         const absolutePath = resolveProjectOperationPath(projectRoot, targetPath);
         const viewResult = await invoke<RuntimeProjectFileToolResponse>('tool_view', {
           params: {
+            project_root: projectRoot,
             file_path: absolutePath,
             offset: 0,
             limit: 1,
@@ -4305,6 +4362,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
 
     return buildRuntimeExecutionTimelineCards({
       runtimeEvents,
+      timelineEvents: message.role === 'assistant' ? message.timeline : undefined,
       renderApprovalEvent,
       renderQuestionEvent,
       renderRuntimeFileChanges,
@@ -5210,8 +5268,11 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             mcpCommand.toolName
           );
           if (mcpToolDefinition?.requiresApproval) {
-            if (sandboxPolicy === 'deny') {
-              const blockedMessage = `当前 sandbox policy 为 deny，已阻止 MCP 工具 ${mcpCommand.serverId}/${mcpCommand.toolName}。`;
+            const actionType = 'mcp_tool_call';
+            const riskLevel = classifyRuntimeActionRisk(actionType);
+
+            if (shouldDenyRuntimeAction({ riskLevel, sandboxPolicy })) {
+              const blockedMessage = `当前 sandbox policy 为 ${sandboxPolicy}，已阻止 MCP 工具 ${mcpCommand.serverId}/${mcpCommand.toolName}。`;
               upsertRuntimeToolResultInMessage(assistantMessage.id, {
                 toolCallId: mcpToolEventKey,
                 toolName: `${mcpCommand.serverId}/${mcpCommand.toolName}`,
@@ -5229,15 +5290,15 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               return;
             }
 
-            if (sandboxPolicy === 'ask') {
+            if (!shouldAutoApproveRuntimeAction({ riskLevel, sandboxPolicy })) {
               const approved = await new Promise<boolean>(async (resolve) => {
                 await requestRuntimeApproval({
                   threadId: runtimeThreadId || targetSessionId,
                   runtimeStoreThreadId,
                   replayThreadId,
                   providerId: runtimeProviderId,
-                  actionType: 'mcp_tool_call',
-                  riskLevel: 'medium',
+                  actionType,
+                  riskLevel,
                   summary: `允许执行 MCP 工具: ${mcpCommand.serverId}/${mcpCommand.toolName}`,
                   messageId: assistantMessage.id,
                   toolCallId: mcpToolEventKey,
@@ -5718,6 +5779,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               }));
               if (executionResult.successOutcome.activityEntry) {
                 appendActivityEntry(currentProject.id, executionResult.successOutcome.activityEntry);
+                notifyProjectFilesChanged(executionResult.successOutcome.activityEntry.changedPaths);
                 const checkpointFiles = await captureCheckpointFilesFromPaths(
                   currentProject.id,
                   executionResult.successOutcome.activityEntry.changedPaths
@@ -6316,7 +6378,18 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           };
         };
         const requestBuiltInToolApproval = async (call: ToolCall) => {
-          if (sandboxPolicy !== 'ask' || !RISKY_BUILT_IN_TOOLS.has(call.name)) {
+          if (!RISKY_BUILT_IN_TOOLS.has(call.name)) {
+            return;
+          }
+
+          const actionType = buildBuiltInToolApprovalActionType(call.name);
+          const riskLevel = classifyRuntimeActionRisk(actionType);
+
+          if (shouldDenyRuntimeAction({ riskLevel, sandboxPolicy })) {
+            throw new Error(`Current sandbox policy (${sandboxPolicy}) blocks ${call.name}.`);
+          }
+
+          if (shouldAutoApproveRuntimeAction({ riskLevel, sandboxPolicy })) {
             return;
           }
 
@@ -6326,8 +6399,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               runtimeStoreThreadId,
               replayThreadId,
               providerId: runtimeProviderId,
-              actionType: buildBuiltInToolApprovalActionType(call.name),
-              riskLevel: call.name === 'bash' || call.name === 'fetch' ? 'high' : 'medium',
+              actionType,
+              riskLevel,
               summary: buildBuiltInToolApprovalSummary(call.name, call.input),
               messageId: assistantMessage.id,
               toolCallId: call.id,
@@ -6349,6 +6422,11 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         let toolStartTime = 0;
         let toolTimerInterval: ReturnType<typeof setInterval> | null = null;
         const streamingAssembler = createRuntimeStreamingMessageAssembler();
+        pushStreamingDraft(assistantMessage.id, {
+          timeline: buildAssistantStreamingTimeline('', assistantBaseTimeline, {
+            fallbackThinkingContent: '正在思考...',
+          }),
+        });
         await emitMemoryReadLifecycle();
         // Provider-embedded pages intentionally keep the codex-like runAgentTurn shape:
         // executeModel: (prompt) => executeRuntimePrompt({ providerId: runtimeProviderId, ... }).
@@ -6519,6 +6597,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         }));
         setThreadMemoryCandidates(targetSessionId, agentTurn.memoryCandidates);
         const checkpointFilesFromToolCalls = extractCheckpointFilesFromToolCalls(agentTurn.toolCalls);
+        notifyProjectFilesChanged(checkpointFilesFromToolCalls.map((file) => file.path));
         const activityEntry = buildRuntimeChangedPathActivityEntry({
           createId: createActivityEntryId,
           runId,
@@ -6650,6 +6729,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       isLoading,
       isRuntimeConfigured,
       memory,
+      notifyProjectFilesChanged,
       persistRuntimeThread,
       persistRuntimeTimelineEvent,
       providerExecutionMode,
@@ -6709,6 +6789,16 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   const handleStopGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
     stopRequestedRef.current = true;
+    for (const [questionId, pendingQuestion] of Object.entries(pendingQuestionActionsRef.current)) {
+      pendingQuestion.reject('Generation stopped.');
+      delete pendingQuestionActionsRef.current[questionId];
+    }
+    for (const [approvalId, pendingApproval] of Object.entries(pendingApprovalActionsRef.current)) {
+      void pendingApproval.onDeny?.();
+      resolveStoredApproval(approvalId, 'denied');
+      void resolveAgentApproval({ approvalId, status: 'denied' });
+      delete pendingApprovalActionsRef.current[approvalId];
+    }
     const submission = runningSubmissionRef.current;
     if (submission) {
       clearStreamingDraft(submission.assistantMessageId);
@@ -6720,11 +6810,14 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         activeToolName: null,
         streamingToolInput: '',
         streamingText: '',
+        pendingQuestionSummary: null,
+        pendingApprovalSummary: null,
+        pendingPermissionCount: 0,
       }));
       runningSubmissionRef.current = null;
     }
     setIsLoading(false);
-  }, [clearStreamingDraft, patchLiveState, setIsLoading]);
+  }, [clearStreamingDraft, patchLiveState, resolveAgentApproval, resolveStoredApproval, setIsLoading]);
 
   useEffect(() => {
     const handleExternalCommand = (event: Event) => {

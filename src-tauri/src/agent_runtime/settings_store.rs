@@ -74,6 +74,7 @@ fn build_default_settings_store(app_data_dir: &Path) -> Result<RuntimeSettingsSt
     store.permission_mode = match store.sandbox_policy.as_str() {
         "deny" => "plan".to_string(),
         "allow" => "auto".to_string(),
+        "bypass" => "bypass".to_string(),
         _ => "ask".to_string(),
     };
 

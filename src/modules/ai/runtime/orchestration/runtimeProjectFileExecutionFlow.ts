@@ -25,6 +25,50 @@ export type RuntimeProjectFileToolResponse = {
   error: string | null;
 };
 
+const buildRuntimeProjectFileExecutionMessage = (input: {
+  changedPaths: string[];
+  fileChanges: RuntimeProjectFileExecutionResult['fileChanges'];
+  skippedNoopEdit?: boolean;
+}) => {
+  if (input.changedPaths.length === 0 && input.skippedNoopEdit) {
+    return '目标文件内容未变化，未写入任何更新。';
+  }
+
+  if (input.changedPaths.length === 0) {
+    return '没有执行任何文件操作。';
+  }
+
+  const deleteChanges = input.fileChanges.filter((change) => change.operation === 'delete');
+  const writeChanges = input.fileChanges.filter((change) => change.operation === 'write');
+  const editChanges = input.fileChanges.filter((change) => change.operation === 'edit');
+
+  if (deleteChanges.length === input.fileChanges.length) {
+    if (deleteChanges.length === 1) {
+      return `已删除 ${deleteChanges[0].path}。`;
+    }
+
+    return `已删除 ${deleteChanges.length} 个文件：${deleteChanges.map((change) => change.path).join('、')}。`;
+  }
+
+  if (writeChanges.length === input.fileChanges.length) {
+    if (writeChanges.length === 1) {
+      return `已新建 ${writeChanges[0].path}。`;
+    }
+
+    return `已新建 ${writeChanges.length} 个文件：${writeChanges.map((change) => change.path).join('、')}。`;
+  }
+
+  if (editChanges.length === input.fileChanges.length) {
+    if (editChanges.length === 1) {
+      return `已修改 ${editChanges[0].path}。`;
+    }
+
+    return `已修改 ${editChanges.length} 个文件：${editChanges.map((change) => change.path).join('、')}。`;
+  }
+
+  return `已执行 ${input.changedPaths.length} 项文件操作：${input.changedPaths.join('、')}`;
+};
+
 const verifyPersistedTextFile = async (input: {
   path: string;
   readProjectTextFile: (path: string) => Promise<string | null>;
@@ -60,15 +104,15 @@ export const executeRuntimeProjectFileOperations = async (input: {
   resolveProjectOperationPath: (projectRoot: string, targetPath: string) => string;
   isSupportedProjectTextFilePath: (path: string) => boolean;
   readProjectTextFile: (path: string) => Promise<string | null>;
-  writeProjectTextFile: (path: string, content: string) => Promise<void>;
   getDirectoryPath: (path: string) => string;
   invokeTool: (
-    command: 'tool_mkdir' | 'tool_edit' | 'tool_view' | 'tool_remove',
+    command: 'tool_mkdir' | 'tool_write' | 'tool_edit' | 'tool_view' | 'tool_remove',
     params: Record<string, unknown>,
   ) => Promise<RuntimeProjectFileToolResponse>;
 }): Promise<RuntimeProjectFileExecutionResult> => {
   const changedPaths: string[] = [];
   const fileChanges: RuntimeProjectFileExecutionResult['fileChanges'] = [];
+  let skippedNoopEdit = false;
 
   for (const operation of input.operations) {
     const absolutePath = input.resolveProjectOperationPath(input.projectRoot, operation.targetPath);
@@ -98,7 +142,13 @@ export const executeRuntimeProjectFileOperations = async (input: {
         }
       }
 
-      await input.writeProjectTextFile(absolutePath, operation.content);
+      const writeResult = await input.invokeTool('tool_write', {
+        file_path: absolutePath,
+        content: operation.content,
+      });
+      if (!writeResult.success) {
+        throw new Error(writeResult.error || `鏂板缓鏂囦欢澶辫触锛?{operation.targetPath}`);
+      }
       await verifyPersistedTextFile({
         path: absolutePath,
         readProjectTextFile: input.readProjectTextFile,
@@ -147,7 +197,18 @@ export const executeRuntimeProjectFileOperations = async (input: {
           throw new Error(`编辑后文件未出现预期变更：${operation.targetPath}`);
         }
       } else if (typeof operation.content === 'string') {
-        await input.writeProjectTextFile(absolutePath, operation.content);
+        if (existingContent === operation.content) {
+          skippedNoopEdit = true;
+          continue;
+        }
+
+        const writeResult = await input.invokeTool('tool_write', {
+          file_path: absolutePath,
+          content: operation.content,
+        });
+        if (!writeResult.success) {
+          throw new Error(writeResult.error || `缂栬緫鏂囦欢澶辫触锛?{operation.targetPath}`);
+        }
         await verifyPersistedTextFile({
           path: absolutePath,
           readProjectTextFile: input.readProjectTextFile,
@@ -200,6 +261,19 @@ export const executeRuntimeProjectFileOperations = async (input: {
       verified: true,
     });
   }
+
+  const message = buildRuntimeProjectFileExecutionMessage({
+    changedPaths,
+    fileChanges,
+    skippedNoopEdit,
+  });
+
+  return {
+    ok: true,
+    changedPaths,
+    fileChanges,
+    message,
+  };
 
   return {
     ok: true,
@@ -335,7 +409,9 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
           }
         : message.projectFileProposal,
     }));
-    input.appendActivityEntry(input.projectId, successOutcome.activityEntry);
+    if (successOutcome.activityEntry) {
+      input.appendActivityEntry(input.projectId, successOutcome.activityEntry);
+    }
     await input.onExecutionSuccess?.({
       runId: input.runId,
       messageId: input.messageId,

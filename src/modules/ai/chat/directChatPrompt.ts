@@ -6,6 +6,9 @@ import {
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes.ts';
 import type { SkillIntent } from '../workflow/skillRouting.ts';
 import { estimateTextTokens } from './contextBudget.ts';
+import { getBuiltInRuntimeToolNames } from '../../../utils/hostPlatform.ts';
+
+const AVAILABLE_RUNTIME_TOOLS = getBuiltInRuntimeToolNames().join(', ');
 
 type ConversationHistoryMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -26,6 +29,7 @@ const TASK_AUTHORIZATION_POLICY = [
 const INTERNAL_CONTEXT_DISCLOSURE_POLICY = [
   'Do not surface internal workspace plumbing unless the user explicitly asks for it.',
   'Treat directories or files such as .goodnight, _goodnight, .ai, GOODNIGHT.md, and CLAUDE.md as internal operating context, not user-facing project content.',
+  'For project-specific factual answers, prefer canonical source files, docs, tests, and package scripts over temporary, cache, hidden, worktree, or log files.',
   'Do not mention internal framework names, hidden folders, or assistant-operating documents in summaries unless they are directly relevant to the user request.',
 ].join(' ');
 
@@ -33,6 +37,13 @@ const RESPONSE_STYLE_POLICY = [
   'Prefer a direct answer over a project audit.',
   'Do not turn simple questions into multi-section reports unless the user asks for a full inventory or analysis.',
   'When summarizing project content, focus on user-facing product files, features, pages, and deliverables first.',
+  'Before a tool batch, either call the tool immediately or give at most one short progress sentence.',
+  'Do not emit repeated process narration such as "让我先...", "好的，我来...", or "现在我来..." across multiple consecutive replies.',
+  'When a tool is obviously needed, call it immediately without a user-facing preamble.',
+  'Only give a short progress sentence before tools if the user explicitly asked for status updates or the task is genuinely long-running.',
+  'Do not greet the user, announce that you will inspect files, or say "让我先...", "好的，我来...", or "现在我来..." before the first tool result.',
+  'Unless the user explicitly asked for progress updates, do not send any user-facing text before the first tool result.',
+  'If you are still gathering information or preparing an edit, keep that wording in thinking and reserve user-facing text for findings, decisions, or final content.',
 ].join(' ');
 
 const ARTIFACT_DRAFT_POLICY = [
@@ -47,7 +58,7 @@ const buildFreeChatSystemPrompt = (projectName?: string) =>
     `Current project: ${projectName || 'Unnamed project'}`,
     'Default to normal conversation unless the user explicitly invokes a specialized skill.',
     'Answer directly, naturally, and with awareness of current project context.',
-    'Available runtime tools: glob, grep, ls, view, write, edit, bash, fetch, AskUserQuestion.',
+    `Available runtime tools: ${AVAILABLE_RUNTIME_TOOLS}.`,
     'Only call tools using this exact XML format:',
     '<tool_use>',
     '<tool name="tool_name">',

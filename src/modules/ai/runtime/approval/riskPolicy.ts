@@ -1,8 +1,14 @@
 import type { ProjectFileOperation } from '../../chat/projectFileOperations';
 import type { ApprovalRiskLevel, SandboxPolicy } from './approvalTypes';
 
-const HIGH_RISK_ACTIONS = new Set(['tool_remove', 'tool_bash', 'run_local_agent_prompt']);
-const MEDIUM_RISK_ACTIONS = new Set(['tool_edit', 'tool_write', 'project_file_write']);
+const HIGH_RISK_ACTIONS = new Set([
+  'tool_remove',
+  'tool_bash',
+  'tool_powershell',
+  'tool_fetch',
+  'run_local_agent_prompt',
+]);
+const MEDIUM_RISK_ACTIONS = new Set(['tool_edit', 'tool_write', 'project_file_write', 'mcp_tool_call']);
 const HIGH_RISK_PATH_PATTERNS = [
   /^\.env/i,
   /^package(-lock)?\.json$/i,
@@ -69,4 +75,18 @@ export const shouldAutoApproveRuntimeAction = ({
 }: {
   riskLevel: ApprovalRiskLevel;
   sandboxPolicy: SandboxPolicy;
-}) => riskLevel === 'low' || sandboxPolicy === 'allow';
+}) => {
+  if (sandboxPolicy === 'deny') {
+    return false;
+  }
+
+  if (sandboxPolicy === 'bypass') {
+    return true;
+  }
+
+  if (sandboxPolicy === 'allow') {
+    return riskLevel !== 'high';
+  }
+
+  return riskLevel === 'low';
+};

@@ -69,7 +69,7 @@ test('runtime project file flow prepares proposal and approval decision from pla
   assert.equal(autoExecute.decision, 'auto-execute');
   assert.equal(autoExecute.proposal.status, 'executing');
 
-  const stillNeedsReview = prepareProjectFileProposalFlow({
+  const mediumRiskAutoExecute = prepareProjectFileProposalFlow({
     proposalId: 'proposal-2b',
     mode: 'auto',
     plan: {
@@ -80,8 +80,36 @@ test('runtime project file flow prepares proposal and approval decision from pla
     },
     sandboxPolicy: 'allow',
   });
-  assert.equal(stillNeedsReview.decision, 'approval-required');
-  assert.equal(stillNeedsReview.proposal.status, 'pending');
+  assert.equal(mediumRiskAutoExecute.decision, 'auto-execute');
+  assert.equal(mediumRiskAutoExecute.proposal.status, 'executing');
+
+  const highRiskStillNeedsReview = prepareProjectFileProposalFlow({
+    proposalId: 'proposal-2c',
+    mode: 'auto',
+    plan: {
+      status: 'ready',
+      assistantMessage: 'remove app',
+      summary: 'Remove src/app.ts',
+      operations: [{ id: '3', type: 'delete_file', targetPath: 'src/app.ts', summary: 'remove app' }],
+    },
+    sandboxPolicy: 'allow',
+  });
+  assert.equal(highRiskStillNeedsReview.decision, 'approval-required');
+  assert.equal(highRiskStillNeedsReview.proposal.status, 'pending');
+
+  const bypassAutoExecutesHighRisk = prepareProjectFileProposalFlow({
+    proposalId: 'proposal-2d',
+    mode: 'auto',
+    plan: {
+      status: 'ready',
+      assistantMessage: 'remove app',
+      summary: 'Remove src/app.ts',
+      operations: [{ id: '4', type: 'delete_file', targetPath: 'src/app.ts', summary: 'remove app' }],
+    },
+    sandboxPolicy: 'bypass',
+  });
+  assert.equal(bypassAutoExecutesHighRisk.decision, 'auto-execute');
+  assert.equal(bypassAutoExecutesHighRisk.proposal.status, 'executing');
 
   const blocked = prepareProjectFileProposalFlow({
     proposalId: 'proposal-3',
@@ -133,4 +161,26 @@ test('runtime project file read carries conversation history into the prompt', a
   assert.equal(result, 'ok');
   assert.match(capturedPrompt, /recent_conversation:/);
   assert.match(capturedPrompt, /docs\/prd\.md/);
+});
+
+test('runtime project file flow gives delete-only proposals user-facing delete wording', async () => {
+  const { prepareProjectFileProposalFlow } = await loadProjectFileFlow();
+
+  const deleteOnly = prepareProjectFileProposalFlow({
+    proposalId: 'proposal-delete-copy',
+    mode: 'manual',
+    plan: {
+      status: 'ready',
+      assistantMessage: '',
+      summary: '',
+      operations: [
+        { id: '1', type: 'delete_file', targetPath: 'notes/remove-me.txt', summary: 'delete note' },
+      ],
+    },
+    sandboxPolicy: 'ask',
+  });
+
+  assert.equal(deleteOnly.proposal.summary, '删除 notes/remove-me.txt');
+  assert.equal(deleteOnly.proposal.assistantMessage, '我已整理好删除 notes/remove-me.txt 的操作。');
+  assert.equal(deleteOnly.proposal.executionMessage, '确认后将删除 notes/remove-me.txt。');
 });

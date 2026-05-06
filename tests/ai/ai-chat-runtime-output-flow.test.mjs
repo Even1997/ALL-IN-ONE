@@ -12,6 +12,8 @@ const cssPath = path.resolve(testDir, '../../src/components/workspace/AIChat.css
 
 const loadRenderModel = async () =>
   import(`../../src/components/workspace/runtimeEventRenderModel.ts?test=${Date.now()}`);
+const loadAssistantTimeline = async () =>
+  import(`../../src/modules/ai/store/assistantTimeline.ts?test=${Date.now()}`);
 
 test('runtime event render model groups repeated file edits into a compact label', async () => {
   const { buildRuntimeToolStreamModel } = await loadRenderModel();
@@ -218,6 +220,194 @@ test('runtime event render model sorts nested tool steps by creation time', asyn
   );
 });
 
+test('runtime event render model splits tool groups when assistant reasoning or text appears between them', async () => {
+  const { buildRuntimeTimelineModelFromAssistantTimeline } = await loadRenderModel();
+  const model = buildRuntimeTimelineModelFromAssistantTimeline([
+    {
+      id: 'reasoning-1',
+      kind: 'reasoning',
+      content: 'Check the first file.',
+      collapsed: true,
+      createdAt: 1,
+    },
+    {
+      id: 'tool-use-1',
+      kind: 'tool_use',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      input: { file_path: 'src/App.tsx' },
+      status: 'completed',
+      createdAt: 2,
+    },
+    {
+      id: 'tool-result-1',
+      kind: 'tool_result',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      status: 'completed',
+      output: 'done',
+      createdAt: 3,
+    },
+    {
+      id: 'text-1',
+      kind: 'text',
+      content: 'The first check is done.',
+      createdAt: 4,
+    },
+    {
+      id: 'tool-use-2',
+      kind: 'tool_use',
+      toolCallId: 'call-2',
+      parentToolCallId: null,
+      toolName: 'edit',
+      input: { file_path: 'src/App.tsx', new_string: 'next' },
+      status: 'running',
+      createdAt: 5,
+    },
+  ]);
+
+  assert.equal(model.items.length, 2);
+  assert.equal(model.items[0]?.kind, 'tool_group');
+  assert.equal(model.items[1]?.kind, 'tool_group');
+  assert.deepEqual(model.items[0]?.toolUses.map((toolUse) => toolUse.toolCallId), ['call-1']);
+  assert.deepEqual(model.items[1]?.toolUses.map((toolUse) => toolUse.toolCallId), ['call-2']);
+});
+
+test('runtime event render model keeps tool groups split after assistant content is rebuilt during streaming', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+  const { buildRuntimeTimelineModelFromAssistantTimeline } = await loadRenderModel();
+
+  const currentTimeline = [
+    {
+      id: 'reasoning-1',
+      kind: 'reasoning',
+      content: 'Check the first file.',
+      collapsed: true,
+      createdAt: 1,
+    },
+    {
+      id: 'tool-use-1',
+      kind: 'tool_use',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      input: { file_path: 'src/App.tsx' },
+      status: 'completed',
+      createdAt: 2,
+    },
+    {
+      id: 'tool-result-1',
+      kind: 'tool_result',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      status: 'completed',
+      output: 'done',
+      createdAt: 3,
+    },
+    {
+      id: 'text-1',
+      kind: 'text',
+      content: 'The first check is done.',
+      createdAt: 4,
+    },
+    {
+      id: 'tool-use-2',
+      kind: 'tool_use',
+      toolCallId: 'call-2',
+      parentToolCallId: null,
+      toolName: 'edit',
+      input: { file_path: 'src/App.tsx', new_string: 'next' },
+      status: 'running',
+      createdAt: 5,
+    },
+  ];
+
+  const rebuiltTimeline = buildAssistantTimelineUpdate(
+    '<think>Check the first file again</think>\n\nThe first check is still done.',
+    currentTimeline,
+  );
+  const model = buildRuntimeTimelineModelFromAssistantTimeline(rebuiltTimeline);
+
+  assert.equal(model.items.length, 2);
+  assert.equal(model.items[0]?.kind, 'tool_group');
+  assert.equal(model.items[1]?.kind, 'tool_group');
+  assert.deepEqual(model.items[0]?.toolUses.map((toolUse) => toolUse.toolCallId), ['call-1']);
+  assert.deepEqual(model.items[1]?.toolUses.map((toolUse) => toolUse.toolCallId), ['call-2']);
+});
+
+test('runtime event render model keeps tool groups split when final content only includes the latest answer segment', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+  const { buildRuntimeTimelineModelFromAssistantTimeline } = await loadRenderModel();
+
+  const currentTimeline = [
+    {
+      id: 'reasoning-1',
+      kind: 'reasoning',
+      content: 'Check the first file.',
+      collapsed: true,
+      createdAt: 1,
+    },
+    {
+      id: 'tool-use-1',
+      kind: 'tool_use',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      input: { file_path: 'src/App.tsx' },
+      status: 'completed',
+      createdAt: 2,
+    },
+    {
+      id: 'tool-result-1',
+      kind: 'tool_result',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      status: 'completed',
+      output: 'done',
+      createdAt: 3,
+    },
+    {
+      id: 'text-1',
+      kind: 'text',
+      content: 'The first check is done.',
+      createdAt: 4,
+    },
+    {
+      id: 'tool-use-2',
+      kind: 'tool_use',
+      toolCallId: 'call-2',
+      parentToolCallId: null,
+      toolName: 'edit',
+      input: { file_path: 'src/App.tsx', new_string: 'next' },
+      status: 'running',
+      createdAt: 5,
+    },
+  ];
+
+  const rebuiltTimeline = buildAssistantTimelineUpdate(
+    'Now fix the second issue.',
+    currentTimeline,
+    {
+      preferredAssistantParts: [
+        { type: 'thinking', content: 'Check the first file.', collapsed: true, createdAt: 1 },
+        { type: 'text', content: 'The first check is done.', createdAt: 4 },
+        { type: 'text', content: 'Now fix the second issue.', createdAt: 6 },
+      ],
+    },
+  );
+  const model = buildRuntimeTimelineModelFromAssistantTimeline(rebuiltTimeline);
+
+  assert.equal(model.items.length, 2);
+  assert.equal(model.items[0]?.kind, 'tool_group');
+  assert.equal(model.items[1]?.kind, 'tool_group');
+  assert.deepEqual(model.items[0]?.toolUses.map((toolUse) => toolUse.toolCallId), ['call-1']);
+  assert.deepEqual(model.items[1]?.toolUses.map((toolUse) => toolUse.toolCallId), ['call-2']);
+});
+
 test('runtime tool blocks use compact grouped timeline markup without fallback rendering', async () => {
   const [chatSource, cardSource, blocksSource, cssSource] = await Promise.all([
     readFile(chatPath, 'utf8'),
@@ -265,4 +455,66 @@ test('runtime tool blocks use compact grouped timeline markup without fallback r
   assert.match(cssSource, /opacity:\s*0/);
   assert.match(cssSource, /:hover\s*>\s*\.chat-tool-trace-group-summary\s+\.chat-tool-trace-caret/);
   assert.match(cssSource, /\[open\]\s*>\s*\.chat-tool-trace-group-summary\s+\.chat-tool-trace-caret/);
+});
+
+test('runtime tool labels show user-facing copy for memory reads', async () => {
+  const chatSource = await readFile(chatPath, 'utf8');
+
+  assert.match(chatSource, /memory_read:\s*'加载记忆'/);
+  assert.match(chatSource, /if \(toolName === 'memory_read'\)\s*\{\s*return '加载记忆';/);
+});
+test('assistant narrative, thinking, and runtime cards share a unified surface language', async () => {
+  const cssSource = await readFile(cssPath, 'utf8');
+
+  assert.match(
+    cssSource,
+    /\.chat-answer-text\s*\{[\s\S]*padding:\s*14px 16px[\s\S]*border-radius:\s*16px[\s\S]*border:\s*1px solid/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-thinking-block\s*\{[\s\S]*padding:\s*10px 12px 12px[\s\S]*border-radius:\s*16px[\s\S]*border:\s*1px solid/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-group-summary\s*\{[\s\S]*padding:\s*10px 12px[\s\S]*border-radius:\s*14px[\s\S]*border:\s*1px solid/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-runtime-question-card,\s*\r?\n\.chat-runtime-approval-card\s*\{[\s\S]*border-radius:\s*16px[\s\S]*backdrop-filter:\s*blur\(14px\)/
+  );
+});
+
+test('assistant narrative and runtime cards use a consistent typography scale', async () => {
+  const cssSource = await readFile(cssPath, 'utf8');
+
+  assert.match(
+    cssSource,
+    /\.chat-answer-text\s*\{[\s\S]*font-size:\s*14px[\s\S]*line-height:\s*1\.72/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-thinking-block\s*\{[\s\S]*font-size:\s*13px[\s\S]*line-height:\s*1\.6/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-group-copy strong\s*\{[\s\S]*font-size:\s*13px/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-group-meta\s*\{[\s\S]*font-size:\s*12px[\s\S]*line-height:\s*1\.5/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-runtime-question-prompt,\s*\r?\n\.chat-runtime-question-answer[\s\S]*font-size:\s*13px[\s\S]*line-height:\s*1\.6/
+  );
+});
+
+test('built-in runtime seeds a visible thinking placeholder before the first model event', async () => {
+  const chatSource = await readFile(chatPath, 'utf8');
+
+  assert.match(
+    chatSource,
+    /pushStreamingDraft\(assistantMessage\.id,\s*\{\s*timeline:\s*buildAssistantStreamingTimeline\('',\s*assistantBaseTimeline,\s*\{\s*fallbackThinkingContent:\s*'正在思考\.\.\.'/ 
+  );
+  assert.match(chatSource, /await emitMemoryReadLifecycle\(\);/);
 });

@@ -6,8 +6,6 @@ import './GNAgentModeSwitch.css';
 const MODE_ITEMS: Array<{ id: GNAgentShellMode; label: string; title: string; glyph: string }> = [
   { id: 'config', label: '设置', title: 'GN Agent 设置', glyph: '设' },
   { id: 'skills', label: '技能页', title: '打开 GoodNight 技能页', glyph: '技' },
-  { id: 'claude', label: '本地', title: '本地 Claude 运行时', glyph: '本' },
-  { id: 'codex', label: 'Codex', title: 'Codex 运行时', glyph: 'C' },
   { id: 'classic', label: '聊天', title: 'GN Agent 聊天', glyph: '聊' },
 ];
 

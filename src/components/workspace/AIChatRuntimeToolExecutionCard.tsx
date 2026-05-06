@@ -1,8 +1,9 @@
 import React from 'react';
 import type { StoredChatRuntimeEvent } from '../../modules/ai/store/aiChatStore';
+import type { AssistantTimelineEvent } from '../../modules/ai/store/assistantTimeline.ts';
 import { RuntimeStandaloneResultBlock, RuntimeToolGroup } from './AIChatRuntimeToolBlocks';
 import type { RuntimeToolHelpers } from './AIChatRuntimeToolTypes';
-import { buildRuntimeToolStreamModel } from './runtimeEventRenderModel';
+import { buildRuntimeTimelineModelFromAssistantTimeline, buildRuntimeToolStreamModel } from './runtimeEventRenderModel';
 
 export type RuntimeExecutionTimelineCard = {
   key: string;
@@ -12,6 +13,7 @@ export type RuntimeExecutionTimelineCard = {
 
 type RuntimeExecutionRenderInput = {
   runtimeEvents: StoredChatRuntimeEvent[];
+  timelineEvents?: AssistantTimelineEvent[];
   renderApprovalEvent: (event: Extract<StoredChatRuntimeEvent, { kind: 'approval' }>) => React.ReactNode;
   renderQuestionEvent: (event: Extract<StoredChatRuntimeEvent, { kind: 'question' }>) => React.ReactNode;
   renderRuntimeFileChanges: (
@@ -22,6 +24,7 @@ type RuntimeExecutionRenderInput = {
 
 export const buildRuntimeExecutionTimelineCards = ({
   runtimeEvents,
+  timelineEvents,
   renderApprovalEvent,
   renderQuestionEvent,
   renderRuntimeFileChanges,
@@ -31,7 +34,9 @@ export const buildRuntimeExecutionTimelineCards = ({
     return [];
   }
 
-  const renderModel = buildRuntimeToolStreamModel(runtimeEvents);
+  const renderModel = Array.isArray(timelineEvents)
+    ? buildRuntimeTimelineModelFromAssistantTimeline(timelineEvents)
+    : buildRuntimeToolStreamModel(runtimeEvents);
 
   return renderModel.items.map((item) => {
     if (item.kind === 'tool_group') {

@@ -3,8 +3,10 @@ import test from 'node:test';
 
 import {
   buildVerifiedFileChange,
+  resolveEditStrings,
   resolveRustToolResultText,
   resolveViewFilePathParam,
+  resolveWriteFilePathParam,
   verifyEditFileMutation,
   verifyWriteFileMutation,
   shouldCaptureFileChangeSnapshot,
@@ -34,13 +36,80 @@ test('resolveRustToolResultText surfaces backend tool errors instead of blank co
 
 test('resolveViewFilePathParam accepts common model path aliases', () => {
   assert.equal(resolveViewFilePathParam({ file_path: 'docs/prd.md' }), 'docs/prd.md');
+  assert.equal(resolveViewFilePathParam({ filePath: 'docs/prd.md' }), 'docs/prd.md');
   assert.equal(resolveViewFilePathParam({ path: 'docs/prd.md' }), 'docs/prd.md');
+  assert.equal(resolveViewFilePathParam({ target: 'docs/prd.md' }), 'docs/prd.md');
   assert.equal(resolveViewFilePathParam({ file: 'docs/prd.md' }), 'docs/prd.md');
 });
 
 test('resolveViewFilePathParam rejects missing paths instead of falling back to project root', () => {
   assert.equal(resolveViewFilePathParam({}), null);
   assert.equal(resolveViewFilePathParam({ path: '   ' }), null);
+});
+
+test('resolveWriteFilePathParam accepts common model path aliases', () => {
+  assert.equal(resolveWriteFilePathParam({ file_path: 'docs/prd.md' }), 'docs/prd.md');
+  assert.equal(resolveWriteFilePathParam({ filePath: 'docs/prd.md' }), 'docs/prd.md');
+  assert.equal(resolveWriteFilePathParam({ path: 'docs/prd.md' }), 'docs/prd.md');
+  assert.equal(resolveWriteFilePathParam({ target: 'docs/prd.md' }), 'docs/prd.md');
+  assert.equal(resolveWriteFilePathParam({ file: 'docs/prd.md' }), 'docs/prd.md');
+});
+
+test('resolveWriteFilePathParam rejects missing paths', () => {
+  assert.equal(resolveWriteFilePathParam({}), null);
+  assert.equal(resolveWriteFilePathParam({ file: '   ' }), null);
+});
+
+test('resolveEditStrings accepts canonical and model-friendly edit aliases', () => {
+  assert.deepEqual(
+    resolveEditStrings({
+      old_string: 'Beta',
+      new_string: 'Gamma',
+    }),
+    {
+      oldString: 'Beta',
+      newString: 'Gamma',
+    }
+  );
+
+  assert.deepEqual(
+    resolveEditStrings({
+      pattern: 'Beta',
+      replacement: 'Gamma',
+    }),
+    {
+      oldString: 'Beta',
+      newString: 'Gamma',
+    }
+  );
+
+  assert.deepEqual(
+    resolveEditStrings({
+      pattern: 'Beta',
+      replace: 'Gamma',
+    }),
+    {
+      oldString: 'Beta',
+      newString: 'Gamma',
+    }
+  );
+
+  assert.deepEqual(
+    resolveEditStrings({
+      oldString: 'Beta',
+      newString: 'Gamma',
+    }),
+    {
+      oldString: 'Beta',
+      newString: 'Gamma',
+    }
+  );
+});
+
+test('resolveEditStrings rejects incomplete edit arguments', () => {
+  assert.equal(resolveEditStrings({ pattern: 'Beta' }), null);
+  assert.equal(resolveEditStrings({ replace: 'Gamma' }), null);
+  assert.equal(resolveEditStrings({ old_string: 'Beta' }), null);
 });
 
 test('shouldCaptureFileChangeSnapshot skips markdown documents and oversized content snapshots', () => {

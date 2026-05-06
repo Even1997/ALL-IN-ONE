@@ -22,13 +22,16 @@ const loadModule = async () => {
   return import(`data:text/javascript;charset=utf-8,${encodeURIComponent(transpiled.outputText)}`);
 };
 
-test('project file operations only allow supported text files for write flows', async () => {
+test('project file operations allow arbitrary project file paths for write flows', async () => {
   const { isSupportedProjectTextFilePath } = await loadModule();
 
   assert.equal(isSupportedProjectTextFilePath('docs/spec.md'), true);
   assert.equal(isSupportedProjectTextFilePath('src/app.tsx'), true);
-  assert.equal(isSupportedProjectTextFilePath('assets/logo.png'), false);
-  assert.equal(isSupportedProjectTextFilePath('docs/archive.pdf'), false);
+  assert.equal(isSupportedProjectTextFilePath('scripts/build.py'), true);
+  assert.equal(isSupportedProjectTextFilePath('src/main.rs'), true);
+  assert.equal(isSupportedProjectTextFilePath('queries/report.sql'), true);
+  assert.equal(isSupportedProjectTextFilePath('assets/logo.png'), true);
+  assert.equal(isSupportedProjectTextFilePath('docs/archive.pdf'), true);
 });
 
 test('project file operations detect write intent from natural language prompts', async () => {
@@ -111,7 +114,21 @@ test('project file operations resolve request kind and explicit review-first pro
       rawInput: '\u4fee\u6539 src/App.tsx \u652f\u6301\u62d6\u62fd\u4e0a\u4f20',
       cleanedInput: '\u4fee\u6539 src/App.tsx \u652f\u6301\u62d6\u62fd\u4e0a\u4f20',
     }),
-    'none'
+    'write'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u5e2e\u6211\u4fee\u4e00\u4e0b src/App.tsx \u8fd9\u4e2a bug',
+      cleanedInput: '\u5e2e\u6211\u4fee\u4e00\u4e0b src/App.tsx \u8fd9\u4e2a bug',
+    }),
+    'write'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u4f18\u5316\u767b\u5f55\u9875\u4ee3\u7801',
+      cleanedInput: '\u4f18\u5316\u767b\u5f55\u9875\u4ee3\u7801',
+    }),
+    'write'
   );
   assert.equal(
     resolveProjectFileRequestKind({
@@ -119,6 +136,27 @@ test('project file operations resolve request kind and explicit review-first pro
       cleanedInput: '\u4e3a\u4ec0\u4e48 login \u9875\u9762\u4f1a\u62a5\u9519\uff1f',
     }),
     'none'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u4e3a\u4ec0\u4e48\u4fdd\u5b58\u4e0d\u4e86',
+      cleanedInput: '\u4e3a\u4ec0\u4e48\u4fdd\u5b58\u4e0d\u4e86',
+    }),
+    'none'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u4e3a\u4ec0\u4e48\u4fdd\u5b58\u4e0d\u4e86 PRD.md',
+      cleanedInput: '\u4e3a\u4ec0\u4e48\u4fdd\u5b58\u4e0d\u4e86 PRD.md',
+    }),
+    'none'
+  );
+  assert.equal(
+    resolveProjectFileRequestKind({
+      rawInput: '\u4fdd\u5b58\u5230\u6839\u76ee\u5f55',
+      cleanedInput: '\u4fdd\u5b58\u5230\u6839\u76ee\u5f55',
+    }),
+    'write'
   );
 
   assert.equal(shouldForceProjectFileProposal('\u5148\u7ed9\u6211\u770b\u4e00\u4e0b\u8981\u600e\u4e48\u5199\uff0c\u518d\u786e\u8ba4'), true);
@@ -128,21 +166,32 @@ test('project file operations resolve request kind and explicit review-first pro
 
 test('project file operations route filename replies after save prompts to write flow', async () => {
   const { resolveProjectFileRequestKind } = await loadModule();
+  const conversationHistory = [
+    {
+      role: 'assistant',
+      content:
+        '\u6211\u5df2\u7ecf\u751f\u6210\u4e86\u9700\u6c42\u6587\u6863\u5ba1\u67e5\u610f\u89c1\uff0c\u8981\u4fdd\u5b58\u5230\u9879\u76ee\u6839\u76ee\u5f55\u5417\uff1f\u8bf7\u544a\u8bc9\u6211\u6587\u4ef6\u540d\u3002',
+    },
+  ];
 
   assert.equal(
     resolveProjectFileRequestKind({
       rawInput: '\u9700\u6c42\u6587\u6863\u5ba1\u67e5\u610f\u89c1.md',
       cleanedInput: '\u9700\u6c42\u6587\u6863\u5ba1\u67e5\u610f\u89c1.md',
-      conversationHistory: [
-        {
-          role: 'assistant',
-          content:
-            '\u6211\u5df2\u7ecf\u751f\u6210\u4e86\u9700\u6c42\u6587\u6863\u5ba1\u67e5\u610f\u89c1\uff0c\u8981\u4fdd\u5b58\u5230\u9879\u76ee\u6839\u76ee\u5f55\u5417\uff1f\u8bf7\u544a\u8bc9\u6211\u6587\u4ef6\u540d\u3002',
-        },
-      ],
+      conversationHistory,
     }),
     'write'
   );
+  for (const filename of ['build.py', 'server.go', 'main.rs', 'query.sql', 'config.toml']) {
+    assert.equal(
+      resolveProjectFileRequestKind({
+        rawInput: filename,
+        cleanedInput: filename,
+        conversationHistory,
+      }),
+      'write'
+    );
+  }
 });
 
 test('project file operations recognize short replies to pending file proposals', async () => {

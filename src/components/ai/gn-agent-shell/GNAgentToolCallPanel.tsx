@@ -23,7 +23,7 @@ const summarizeToolCall = (toolCall: RuntimeToolStep) => {
   if ((toolCall.name === 'write' || toolCall.name === 'edit') && typeof input.file_path === 'string') {
     return `${toolCall.name === 'write' ? 'Write' : 'Edit'} ${input.file_path}`;
   }
-  if (toolCall.name === 'bash' && typeof input.command === 'string') {
+  if ((toolCall.name === 'bash' || toolCall.name === 'powershell') && typeof input.command === 'string') {
     return input.command;
   }
   if (toolCall.name === 'fetch' && typeof input.url === 'string') {

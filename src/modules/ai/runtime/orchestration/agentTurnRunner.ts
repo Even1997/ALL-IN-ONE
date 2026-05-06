@@ -326,11 +326,13 @@ export const createRuntimeStreamingMessageAssembler = () => {
     pendingText = '';
   };
 
+  const discardPendingText = () => {
+    pendingText = '';
+  };
+
   const buildDraft = (completeThinking: boolean): RuntimeStreamingAssistantDraft => {
     const visibleAnswerContent = sanitizeStreamingVisibleText(state === 'answer' ? answerContentRaw : '');
-    const visibleThinkingContent = sanitizeStreamingThinkingText(
-      state === 'answer' ? thinkingContent : `${thinkingContent}${pendingText}`
-    );
+    const visibleThinkingContent = sanitizeStreamingThinkingText(thinkingContent);
     const visibleParts = assistantParts
       .map((part) => {
         const content =
@@ -347,18 +349,6 @@ export const createRuntimeStreamingMessageAssembler = () => {
       })
       .filter((part): part is RuntimeStreamingAssistantDraft['assistantParts'][number] => Boolean(part));
 
-    if (!completeThinking && pendingText && state !== 'answer') {
-      const sanitizedPending = sanitizeStreamingThinkingText(pendingText);
-      if (sanitizedPending) {
-        visibleParts.push({
-          type: 'thinking',
-          content: sanitizedPending,
-          collapsed: true,
-          createdAt: Date.now(),
-        });
-      }
-    }
-
     return {
       content: buildRuntimeStreamingMessage({
         thinkingContent: visibleThinkingContent,
@@ -374,7 +364,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
   return {
     append: (event: { kind: string; delta: string }) => {
       if (event.kind === 'thinking') {
-        flushPendingText('thinking');
+        discardPendingText();
         state = 'thinking';
         thinkingContent += event.delta;
         appendAssistantPartContent('thinking', event.delta, true);
@@ -392,9 +382,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
       return buildDraft(false);
     },
     markToolBoundary: (): RuntimeStreamingAssistantDraft => {
-      if (!thinkingContent.trim()) {
-        flushPendingText('thinking');
-      }
+      discardPendingText();
       state = 'answer';
       forceNewPart = true;
       return buildDraft(false);

@@ -127,3 +127,33 @@ test('runtime conversation gateway resolves active conversation and thread route
   assert.equal(projection.pendingApprovalCount, 1);
   assert.equal(projection.messages.length, 1);
 });
+
+test('runtime conversation gateway clears stale runtime thread bindings missing from persistence', async () => {
+  const { reconcileRuntimeThreadsWithSessions } = await loadGateway();
+
+  const sessions = [
+    {
+      id: 'session-stale',
+      projectId: 'project-1',
+      title: 'Stale session',
+      providerId: 'codex',
+      runtimeThreadId: 'thread-missing',
+      messages: [],
+      replayEvents: [],
+      recoveryState: null,
+      eventLog: [],
+      createdAt: 10,
+      updatedAt: 10,
+    },
+  ];
+
+  const result = reconcileRuntimeThreadsWithSessions({
+    projectId: 'project-1',
+    sessions,
+    runtimeThreads: [],
+  });
+
+  assert.equal(result.sessions.length, 1);
+  assert.equal(result.sessions[0].id, 'session-stale');
+  assert.equal(result.sessions[0].runtimeThreadId, null);
+});

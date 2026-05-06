@@ -3,23 +3,17 @@ import { invoke } from '@tauri-apps/api/core';
 import { GNAgentChatPage } from '../../../components/ai/gn-agent-shell/GNAgentChatPage';
 import { GNAgentConfigPage } from '../../../components/ai/gn-agent-shell/GNAgentConfigPage';
 import { GNAgentSkillsPage } from '../../../components/ai/gn-agent-shell/GNAgentSkillsPage';
-import type { LocalAgentConfigSnapshot } from '../../../modules/ai/gn-agent/localConfig';
-import { getLocalAgentConfigSnapshot } from '../../../modules/ai/gn-agent/localConfig';
 import './AgentShellPage.css';
 
-type AgentWorkspaceTabId = 'chat' | 'claude' | 'codex' | 'skills' | 'config';
-type AgentShellMode = 'classic' | 'claude' | 'codex' | 'skills' | 'config';
+type AgentWorkspaceTabId = 'chat' | 'skills' | 'config';
+type AgentShellMode = 'classic' | 'skills' | 'config';
 
 type AgentShellSettings = {
   mode?: string;
-  claudeConfigId?: string | null;
-  codexConfigId?: string | null;
 };
 
 const AGENT_WORKSPACE_TABS: Array<{ id: AgentWorkspaceTabId; label: string }> = [
   { id: 'chat', label: 'Chat' },
-  { id: 'claude', label: 'Claude' },
-  { id: 'codex', label: 'Codex' },
   { id: 'skills', label: 'Skills' },
   { id: 'config', label: 'Config' },
 ];
@@ -30,7 +24,7 @@ const modeToTab = (mode?: string): AgentWorkspaceTabId | null => {
   if (mode === 'classic') {
     return 'chat';
   }
-  if (mode === 'claude' || mode === 'codex' || mode === 'skills' || mode === 'config') {
+  if (mode === 'skills' || mode === 'config') {
     return mode;
   }
   return null;
@@ -38,16 +32,12 @@ const modeToTab = (mode?: string): AgentWorkspaceTabId | null => {
 
 export const AgentShellPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AgentWorkspaceTabId>('chat');
-  const [localSnapshot, setLocalSnapshot] = useState<LocalAgentConfigSnapshot | null>(null);
 
   useEffect(() => {
     let alive = true;
 
     void (async () => {
-      const [settings, snapshot] = await Promise.all([
-        invoke<AgentShellSettings>('get_agent_shell_settings').catch(() => null),
-        getLocalAgentConfigSnapshot(),
-      ]);
+      const settings = await invoke<AgentShellSettings>('get_agent_shell_settings').catch(() => null);
       if (!alive) {
         return;
       }
@@ -58,7 +48,6 @@ export const AgentShellPage: React.FC = () => {
           setActiveTab(persistedTab);
         }
       }
-      setLocalSnapshot(snapshot);
     })();
 
     return () => {
@@ -81,7 +70,7 @@ export const AgentShellPage: React.FC = () => {
         <div>
           <span className="gn-agent-context-badge">GN Agent</span>
           <h2>Agent Workspace</h2>
-          <p>Unified Claude, Codex, skills, and config surfaces behind one runtime shell.</p>
+          <p>Built-in chat, skills, and config surfaces behind one runtime shell.</p>
         </div>
       </header>
 
@@ -100,8 +89,6 @@ export const AgentShellPage: React.FC = () => {
 
       <div className="agent-workspace-content">
         {activeTab === 'chat' ? <GNAgentChatPage providerId="classic" /> : null}
-        {activeTab === 'claude' ? <GNAgentChatPage providerId="claude" localSnapshot={localSnapshot} /> : null}
-        {activeTab === 'codex' ? <GNAgentChatPage providerId="codex" localSnapshot={localSnapshot} /> : null}
         {activeTab === 'skills' ? <GNAgentSkillsPage /> : null}
         {activeTab === 'config' ? <GNAgentConfigPage /> : null}
       </div>

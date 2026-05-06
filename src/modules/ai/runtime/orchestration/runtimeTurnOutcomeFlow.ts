@@ -45,16 +45,19 @@ export const buildRuntimeProjectFileAutoExecuteSuccess = (input: {
 }) => ({
   proposalStatus: 'executed' as const,
   executionMessage: input.result.message,
-  activityEntry: {
-    id: input.createId(),
-    runId: input.runId,
-    type: 'run-summary' as const,
-    summary: input.result.message,
-    changedPaths: input.result.changedPaths,
-    runtime: 'built-in' as const,
-    skill: 'project-file-ops',
-    createdAt: input.createdAt ?? Date.now(),
-  },
+  activityEntry:
+    input.result.changedPaths.length > 0
+      ? {
+          id: input.createId(),
+          runId: input.runId,
+          type: 'run-summary' as const,
+          summary: input.result.message,
+          changedPaths: input.result.changedPaths,
+          runtime: 'built-in' as const,
+          skill: 'project-file-ops',
+          createdAt: input.createdAt ?? Date.now(),
+        }
+      : null,
   timelineSummary: `File operation flow completed: ${input.preview}`,
   replaySummary: `File operation flow completed: ${input.preview}`,
 });

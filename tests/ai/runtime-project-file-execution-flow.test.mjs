@@ -51,6 +51,9 @@ test('runtime project file execution flow executes create, edit, and delete oper
         const filePath = String(params.file_path);
         files.set(filePath, String(files.get(filePath)).replace(String(params.old_string), String(params.new_string)));
       }
+      if (command === 'tool_write') {
+        files.set(String(params.file_path), String(params.content));
+      }
       if (command === 'tool_remove') {
         files.delete(String(params.file_path));
       }
@@ -91,7 +94,35 @@ test('runtime project file execution flow executes create, edit, and delete oper
   assert.equal(files.get('C:\\repo\\demo\\docs\\readme.md'), '# Demo');
   assert.equal(files.get('C:\\repo\\demo\\src\\app.ts'), 'const a = 2;');
   assert.equal(files.has('C:\\repo\\demo\\obsolete.md'), false);
-  assert.deepEqual(toolCalls.map((call) => call.command), ['tool_mkdir', 'tool_edit', 'tool_view', 'tool_remove']);
+  assert.deepEqual(toolCalls.map((call) => call.command), ['tool_mkdir', 'tool_write', 'tool_edit', 'tool_view', 'tool_remove']);
+});
+
+test('runtime project file execution flow returns a direct delete message for one deleted file', async () => {
+  const { executeRuntimeProjectFileOperations } = await loadFlow();
+
+  const files = new Map([['C:\\repo\\demo\\obsolete.md', 'old']]);
+
+  const result = await executeRuntimeProjectFileOperations({
+    projectRoot: 'C:\\repo\\demo',
+    operations: [{ id: '1', type: 'delete_file', targetPath: 'obsolete.md', summary: 'delete obsolete' }],
+    resolveProjectOperationPath: (projectRoot, targetPath) => `${projectRoot}\\${targetPath.replace(/\//g, '\\')}`,
+    isSupportedProjectTextFilePath: () => true,
+    readProjectTextFile: async (filePath) => files.get(filePath) ?? null,
+    getDirectoryPath: (filePath) => filePath.split('\\').slice(0, -1).join('\\'),
+    invokeTool: async (command, params) => {
+      if (command === 'tool_remove') {
+        files.delete(String(params.file_path));
+      }
+      return {
+        success: true,
+        content: '',
+        error: null,
+      };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.message, '已删除 obsolete.md。');
 });
 
 test('runtime project file execution flow rejects unsupported operations', async () => {
@@ -136,6 +167,44 @@ test('runtime project file execution flow fails when created files cannot be ver
     }),
     /missing\.md/,
   );
+});
+
+test('runtime project file execution flow treats content-identical whole-file edits as no-op', async () => {
+  const { executeRuntimeProjectFileOperations } = await loadFlow();
+
+  const files = new Map([['C:\\repo\\demo\\PRD.md', '# PRD\nsame content\n']]);
+
+  const result = await executeRuntimeProjectFileOperations({
+    projectRoot: 'C:\\repo\\demo',
+    operations: [
+      {
+        id: '1',
+        type: 'edit_file',
+        targetPath: 'PRD.md',
+        summary: 'overwrite prd',
+        content: '# PRD\nsame content\n',
+      },
+    ],
+    resolveProjectOperationPath: (projectRoot, targetPath) => `${projectRoot}\\${targetPath.replace(/\//g, '\\')}`,
+    isSupportedProjectTextFilePath: () => true,
+    readProjectTextFile: async (filePath) => files.get(filePath) ?? null,
+    getDirectoryPath: (filePath) => filePath.split('\\').slice(0, -1).join('\\'),
+    invokeTool: async (command, params) => {
+      if (command === 'tool_write') {
+        files.set(String(params.file_path), String(params.content));
+      }
+      return {
+        success: true,
+        content: '',
+        error: null,
+      };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.changedPaths, []);
+  assert.deepEqual(result.fileChanges, []);
+  assert.match(result.message, /未变化|没有执行/);
 });
 
 test('runtime project file execution flow cancels pending proposals and resolves approval state', async () => {
@@ -269,4 +338,54 @@ test('runtime project file execution flow executes approved proposals and record
   assert.deepEqual(resolved, [{ approvalId: 'approval-1', status: 'approved' }]);
   assert.deepEqual(cleared, ['approval-1']);
   assert.deepEqual(backendResolved, [{ approvalId: 'approval-1', status: 'approved' }]);
+});
+
+test('runtime project file execution flow skips activity entries for approved no-op proposals', async () => {
+  const { executeRuntimeApprovedProjectFileProposal } = await loadFlow();
+
+  let currentMessage = {
+    content: 'assistant',
+    projectFileProposal: {
+      id: 'proposal-1',
+      mode: 'manual',
+      status: 'pending',
+      summary: 'Edit file',
+      assistantMessage: 'Applied the change',
+      operations: [{ id: 'op-1', type: 'edit_file', targetPath: 'PRD.md', summary: 'edit prd' }],
+      executionMessage: null,
+    },
+  };
+  const appendedEntries = [];
+
+  await executeRuntimeApprovedProjectFileProposal({
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    messageId: 'message-1',
+    proposal: currentMessage.projectFileProposal,
+    activeApprovalThreadId: null,
+    approvalsByThread: {},
+    updateMessage: (_projectId, _sessionId, _messageId, updater) => {
+      currentMessage = updater(currentMessage);
+    },
+    resolveStoredApproval: () => {},
+    clearPendingApprovalAction: () => {},
+    resolveAgentApproval: async () => undefined,
+    runId: 'run-1',
+    createActivityEntryId: () => 'activity-1',
+    getProjectDir: async () => 'C:\\repo\\demo',
+    executeProjectFileOperations: async () => ({
+      ok: true,
+      changedPaths: [],
+      fileChanges: [],
+      message: '目标文件内容未变化，未写入任何更新。',
+    }),
+    appendActivityEntry: (_projectId, entry) => {
+      appendedEntries.push(entry);
+    },
+    normalizeErrorMessage: (error) => String(error),
+  });
+
+  assert.equal(currentMessage.content, '目标文件内容未变化，未写入任何更新。');
+  assert.equal(currentMessage.projectFileProposal.status, 'executed');
+  assert.equal(appendedEntries.length, 0);
 });
