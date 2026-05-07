@@ -461,11 +461,47 @@ test('runtime tool blocks use compact grouped timeline markup without fallback r
   assert.match(cssSource, /\[open\]\s*>\s*\.chat-tool-trace-group-summary\s+\.chat-tool-trace-caret/);
 });
 
-test('runtime tool labels show user-facing copy for memory reads', async () => {
-  const chatSource = await readFile(chatPath, 'utf8');
+test('runtime event render model hides internal memory reads from visible tool cards', async () => {
+  const { buildRuntimeToolStreamModel } = await loadRenderModel();
+  const model = buildRuntimeToolStreamModel([
+    {
+      id: 'tool-use-memory',
+      kind: 'tool_use',
+      toolCallId: 'call-memory',
+      parentToolCallId: null,
+      toolName: 'memory_read',
+      input: { scope: 'project' },
+      status: 'completed',
+      createdAt: 1,
+    },
+    {
+      id: 'tool-result-memory',
+      kind: 'tool_result',
+      toolCallId: 'call-memory',
+      parentToolCallId: null,
+      toolName: 'memory_read',
+      status: 'completed',
+      output: 'loaded',
+      createdAt: 2,
+    },
+    {
+      id: 'tool-use-view',
+      kind: 'tool_use',
+      toolCallId: 'call-view',
+      parentToolCallId: null,
+      toolName: 'view',
+      input: { file_path: 'src/App.tsx' },
+      status: 'completed',
+      createdAt: 3,
+    },
+  ]);
 
-  assert.match(chatSource, /memory_read:\s*'加载记忆'/);
-  assert.match(chatSource, /if \(toolName === 'memory_read'\)\s*\{\s*return '加载记忆';/);
+  assert.equal(model.items.length, 1);
+  assert.equal(model.items[0]?.kind, 'tool_group');
+  assert.deepEqual(
+    model.items[0]?.kind === 'tool_group' ? model.items[0].toolUses.map((toolUse) => toolUse.toolCallId) : [],
+    ['call-view'],
+  );
 });
 test('assistant narrative, thinking, and runtime cards share a unified surface language', async () => {
   const cssSource = await readFile(cssPath, 'utf8');

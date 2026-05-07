@@ -51,6 +51,7 @@ export type RuntimeEventRenderModel = {
 };
 
 const ASK_USER_TOOL_NAME = 'AskUserQuestion';
+const HIDDEN_RUNTIME_TOOL_NAMES = new Set(['memory_read']);
 const WRITE_TOOL_NAMES = new Set(['write', 'edit', 'project_file_apply']);
 const COMMAND_TOOL_NAMES = new Set(['bash', 'powershell']);
 const FETCH_TOOL_NAMES = new Set(['fetch']);
@@ -61,6 +62,8 @@ const AGENT_TOOL_NAMES = new Set(['run_local_agent', 'run_agent_team', 'team_pha
 
 const sortRuntimeEventsByCreatedAt = (runtimeEvents: StoredChatRuntimeEvent[]) =>
   [...runtimeEvents].sort((left, right) => left.createdAt - right.createdAt);
+
+const shouldHideRuntimeTool = (toolName: string) => HIDDEN_RUNTIME_TOOL_NAMES.has(toolName);
 
 const classifyToolGroupType = (
   toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>
@@ -291,6 +294,10 @@ const buildRuntimeEventRenderModelFromOrderedEvents = (
     const event = timelineEvent;
 
     if (event.kind === 'tool_use') {
+      if (shouldHideRuntimeTool(event.toolName)) {
+        continue;
+      }
+
       if (event.parentToolCallId && toolUseIds.has(event.parentToolCallId)) {
         continue;
       }
@@ -300,6 +307,10 @@ const buildRuntimeEventRenderModelFromOrderedEvents = (
     }
 
     if (event.kind === 'tool_result' && toolUseIds.has(event.toolCallId)) {
+      continue;
+    }
+
+    if (event.kind === 'tool_result' && shouldHideRuntimeTool(event.toolName)) {
       continue;
     }
 

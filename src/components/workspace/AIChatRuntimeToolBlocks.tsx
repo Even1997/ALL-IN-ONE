@@ -1,9 +1,10 @@
 import React from 'react';
 import type { StoredChatRuntimeEvent } from '../../modules/ai/store/aiChatStore';
-import type { RuntimeEventRenderModel } from './runtimeEventRenderModel';
+import type { RuntimeEventRenderModel, RuntimeToolGroupType } from './runtimeEventRenderModel';
 import type { RuntimeStatus, RuntimeToolHelpers } from './AIChatRuntimeToolTypes';
 
 const WRAPPER_TOOL_NAMES = new Set(['project_file_flow', 'project_file_apply']);
+const OUTPUT_VISIBLE_TOOL_NAMES = new Set(['bash', 'powershell', 'ls', 'glob', 'grep']);
 
 const getToolUseStatus = (
   toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>,
@@ -28,12 +29,14 @@ const getGroupRuntimeStatus = (
 
 const buildCollapsedGroupHeadline = ({
   status,
+  groupType,
   groupLabel,
   itemCount,
   singleHeadline,
   helpers,
 }: {
   status: RuntimeStatus;
+  groupType: RuntimeToolGroupType;
   groupLabel?: string;
   itemCount: number;
   singleHeadline?: string;
@@ -48,8 +51,8 @@ const buildCollapsedGroupHeadline = ({
   if (status === 'failed') {
     return '执行失败';
   }
-  if (itemCount === 1 && singleHeadline) {
-    return singleHeadline;
+  if (itemCount === 1) {
+    return groupType === 'input' ? singleHeadline || '等待输入' : '工具执行';
   }
   if (groupLabel) {
     return groupLabel;
@@ -61,15 +64,23 @@ const buildGroupMetaText = ({
   status,
   groupLabel,
   itemCount,
+  singleHeadline,
   previewText,
   helpers,
 }: {
   status: RuntimeStatus;
   groupLabel?: string;
   itemCount: number;
+  singleHeadline?: string;
   previewText?: string;
   helpers: RuntimeToolHelpers;
 }) => {
+  if (status !== 'completed' && previewText) {
+    return previewText;
+  }
+  if (itemCount === 1 && singleHeadline) {
+    return singleHeadline;
+  }
   if (previewText) {
     return previewText;
   }
@@ -155,7 +166,7 @@ const buildToolUsePreviewText = (
   const summary = helpers.summarizeRuntimeToolCall(toolUse.toolName, toolUse.input).trim();
 
   if (questionEvents.length > 0) {
-    return `${questionEvents.length} 个问题等待补充`;
+    return `${questionEvents.length} 个问题等待你补充`;
   }
   if (approvalEvents.length > 0 && status !== 'completed') {
     return `${approvalEvents.length} 个权限确认待处理`;
@@ -173,8 +184,17 @@ const buildToolUsePreviewText = (
 };
 
 const shouldRenderToolResultDetail = (
-  event: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>
-) => Boolean(event.fileChanges?.length) || event.status === 'failed' || event.status === 'blocked';
+  event: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>,
+  renderModel: RuntimeEventRenderModel
+) => {
+  const toolName = renderModel.toolUseByToolCallId.get(event.toolCallId)?.toolName || event.toolName;
+  const hasVisibleOutput =
+    event.status === 'completed' &&
+    Boolean(event.output?.trim()) &&
+    Boolean(toolName && OUTPUT_VISIBLE_TOOL_NAMES.has(toolName));
+
+  return Boolean(event.fileChanges?.length) || event.status === 'failed' || event.status === 'blocked' || hasVisibleOutput;
+};
 
 const collectGroupToolCallIds = (
   toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>,
@@ -207,7 +227,7 @@ const buildGroupTimelineEvents = (
       return groupToolCallIds.has(event.toolCallId) && !isCollapsibleWrapperToolUse(event, renderModel);
     }
     if (event.kind === 'tool_result') {
-      return groupToolCallIds.has(event.toolCallId) && shouldRenderToolResultDetail(event);
+      return groupToolCallIds.has(event.toolCallId) && shouldRenderToolResultDetail(event, renderModel);
     }
     if (event.kind === 'approval') {
       return Boolean(event.toolCallId && groupToolCallIds.has(event.toolCallId));
@@ -255,13 +275,17 @@ const ToolResultTimelineLine: React.FC<{
   const previewText = event.fileChanges?.length
     ? helpers.summarizeRuntimeFileChanges(event.fileChanges)
     : helpers.summarizeRuntimeOutput(event.output, 140);
+  const shouldShowSummaryLine =
+    Boolean(event.fileChanges?.length) || event.status === 'failed' || event.status === 'blocked' || !event.output?.trim();
 
   return (
     <div className="chat-tool-trace-detail-stack" data-runtime-line="result">
-      <article className={`chat-tool-trace-detail-line ${event.status}`} data-runtime-line="result-summary">
-        <span className={`chat-tool-step-dot ${event.status as RuntimeStatus}`} aria-hidden="true" />
-        <TraceLineCopy headline={headline} previewText={previewText ? `· ${previewText}` : undefined} />
-      </article>
+      {shouldShowSummaryLine ? (
+        <article className={`chat-tool-trace-detail-line ${event.status}`} data-runtime-line="result-summary">
+          <span className={`chat-tool-step-dot ${event.status as RuntimeStatus}`} aria-hidden="true" />
+          <TraceLineCopy headline={headline} previewText={previewText ? `· ${previewText}` : undefined} />
+        </article>
+      ) : null}
       {event.fileChanges?.length ? (
         <div className="chat-tool-trace-detail-card">{renderRuntimeFileChanges(event.fileChanges)}</div>
       ) : null}
@@ -276,6 +300,7 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
   toolUses,
   renderModel,
   groupId,
+  groupType,
   groupLabel,
   renderApprovalEvent,
   renderQuestionEvent,
@@ -285,6 +310,7 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
   toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>;
   renderModel: RuntimeEventRenderModel;
   groupId: string;
+  groupType: RuntimeToolGroupType;
   groupLabel?: string;
   renderApprovalEvent: (event: Extract<StoredChatRuntimeEvent, { kind: 'approval' }>) => React.ReactNode;
   renderQuestionEvent: (event: Extract<StoredChatRuntimeEvent, { kind: 'question' }>) => React.ReactNode;
@@ -294,12 +320,16 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
   helpers: RuntimeToolHelpers;
 }) {
   const visibleFirstToolUse = toolUses[0] ? getVisibleToolUse(toolUses[0], renderModel) : null;
+  const singleHeadline = visibleFirstToolUse
+    ? helpers.getRuntimeToolHeadline(visibleFirstToolUse.toolName, visibleFirstToolUse.input)
+    : '';
   const groupStatus = getGroupRuntimeStatus(toolUses, renderModel);
   const groupHeadline = buildCollapsedGroupHeadline({
     status: groupStatus,
+    groupType,
     groupLabel,
     itemCount: toolUses.length,
-    singleHeadline: visibleFirstToolUse ? helpers.getRuntimeToolHeadline(visibleFirstToolUse.toolName, visibleFirstToolUse.input) : '',
+    singleHeadline,
     helpers,
   });
   const groupPreviewText =
@@ -310,6 +340,7 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
     status: groupStatus,
     groupLabel,
     itemCount: toolUses.length,
+    singleHeadline,
     previewText: groupPreviewText,
     helpers,
   });

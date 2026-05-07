@@ -1109,7 +1109,7 @@ const getRuntimeToolHeadline = (toolName: string, input: Record<string, unknown>
   }
 
   if (isCommandToolName(toolName)) {
-    return '运行命令';
+    return '执行命令';
   }
 
   if (toolName === 'fetch') {

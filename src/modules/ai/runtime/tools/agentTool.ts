@@ -1,6 +1,13 @@
-import type { ToolResult } from '../../../components/workspace/tools.ts';
+import type { ChatAgentId } from '../../chat/chatAgents.ts';
+import type { ToolResult } from '../../../../components/workspace/tools.ts';
 
-const resolvePreferredAgent = (value: unknown) =>
+type RuntimeAgentToolId = Extract<ChatAgentId, 'claude' | 'codex'>;
+type ResolvedRuntimeAgentToolInput = {
+  prompt: string;
+  preferredAgent?: RuntimeAgentToolId;
+};
+
+const resolvePreferredAgent = (value: unknown): RuntimeAgentToolId | null =>
   value === 'claude' || value === 'codex' ? value : null;
 
 const resolvePrompt = (input: Record<string, unknown>) => {
@@ -8,7 +15,9 @@ const resolvePrompt = (input: Record<string, unknown>) => {
   return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
 };
 
-export const resolveRuntimeAgentToolInput = (input: Record<string, unknown>) => {
+export const resolveRuntimeAgentToolInput = (
+  input: Record<string, unknown>
+): ResolvedRuntimeAgentToolInput | null => {
   const prompt = resolvePrompt(input);
   if (!prompt) {
     return null;

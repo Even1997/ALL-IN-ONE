@@ -58,6 +58,7 @@ export const buildRuntimeExecutionTimelineCards = ({
             toolUses={item.toolUses}
             renderModel={renderModel}
             groupId={item.id}
+            groupType={item.groupType}
             groupLabel={item.groupLabel}
             renderApprovalEvent={renderApprovalEvent}
             renderQuestionEvent={renderQuestionEvent}
