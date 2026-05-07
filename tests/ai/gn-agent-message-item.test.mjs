@@ -70,3 +70,31 @@ test('message item keeps chronological order once streaming pin is disabled', as
     ['tool-1', 'tool-2', 'text-1']
   );
 });
+
+test('message item breaks same-timestamp ties with original timeline order', async () => {
+  const { sortMessageRenderItems } = await loadMessageItem();
+
+  const items = sortMessageRenderItems(
+    [
+      {
+        key: 'text-1',
+        node: null,
+        createdAt: 20,
+        timelineOrder: 2,
+      },
+    ],
+    [
+      {
+        key: 'tool-1',
+        node: null,
+        createdAt: 20,
+        timelineOrder: 1,
+      },
+    ]
+  );
+
+  assert.deepEqual(
+    items.map((item) => item.key),
+    ['tool-1', 'text-1']
+  );
+});

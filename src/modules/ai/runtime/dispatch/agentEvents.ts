@@ -99,52 +99,139 @@ export type AgentStoredRuntimeEvent<ApprovalDisplay = unknown, QuestionPayload =
       createdAt: number;
     };
 
-const RAW_DSML_BLOCK_PATTERN = /<\s*\|\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
-const RAW_TOOL_USE_BLOCK_PATTERN = /<tool_use\b[^>]*>[\s\S]*?<\/tool_use>/gi;
-const RAW_BARE_TOOL_BLOCK_PATTERN = /^\s*<tool name="[^"]+">[\s\S]*?^\s*<\/tool>\s*$/gim;
-const RAW_TOOL_RESULT_BLOCK_PATTERN =
-  /<tool_result\b[^>]*>[\s\S]*?<\/tool_result>/gi;
-const RAW_LEGACY_BASH_BLOCK_PATTERN = /<bash\b[^>]*>[\s\S]*?<\/bash>/gi;
-const RAW_TRANSCRIPT_TOOL_RESULT_PATTERN =
-  /^[^\S\r\n]*Tool\s+\S+\s+result:[^\S\r\n]*(?:\r?\n[\s\S]*?(?=(?:\r?\n[^\S\r\n]*\r?\n)|$))?/gim;
-const RAW_TRANSCRIPT_ROLE_LINE_PATTERN = /^\s*(?:user|assistant|system):\s*$/gim;
-const RAW_XML_DECLARATION_LINE_PATTERN = /^\s*<\?xml\b[^>]*\?>\s*$/gim;
-const RAW_PROTOCOL_LINE_PATTERN =
-  /^\s*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=[^>]*>|<\/tool>|<tool_params>|<\/tool_params>|<tool_use>|<\/tool_use>|<tool_result\b[^>]*>|<\/tool_result>|<bash>|<\/bash>|<cmd>|<\/cmd>)\s*$/gim;
-const RAW_FRAGMENTED_TOOL_PROTOCOL_LINE_PATTERN =
-  /^\s*(?:<\/?\s*tool_?|_?use\s*>|<\/?\s*tool\s*|_tool_use\s*>|tool_use\s*>|<\/?\s*tool_result_?|_result\s*>)\s*$/gim;
-const PROTOCOL_FRAGMENT_LINE_START_PATTERN =
-  /^\s*(?:<tool_use>|<tool name=[^>]*>|<tool_params>|<\/tool>|<\/tool_params>|<\/tool_use>|<tool_result\b[^>]*>|<\/tool_result>|<bash>|<\/bash>|<cmd>|<\/cmd>)/i;
-const PROTOCOL_FRAGMENT_TOKEN_PATTERN =
-  /<tool_use>|<tool name=[^>]*>|<tool_params>|<\/tool>|<\/tool_params>|<\/tool_use>|<tool_result\b[^>]*>|<\/tool_result>|<bash>|<\/bash>|<cmd>|<\/cmd>/gi;
+export const sanitizeAgentVisibleText = (value: string) =>
+  value
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 
-const isProtocolFragmentLine = (line: string) => {
-  if (!PROTOCOL_FRAGMENT_LINE_START_PATTERN.test(line)) return false;
-  const withoutMarkers = line.replace(PROTOCOL_FRAGMENT_TOKEN_PATTERN, ' ').trim();
-  if (!withoutMarkers) return true;
-  const withoutQuotedStrings = withoutMarkers.replace(/"[^"\n]*"/g, '').trim();
-  return /^[\[\]\{\}:,\s]*$/.test(withoutQuotedStrings);
+export type StreamTextEvent = { kind: 'text'; delta: string };
+export type StreamToolCallEvent = {
+  kind: 'tool_call';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+};
+export type StreamSplitEvent = StreamTextEvent | StreamToolCallEvent;
+
+const TOOL_USE_OPEN_TAG = '<tool_use>';
+const TOOL_USE_CLOSE_TAG = '</tool_use>';
+
+const getPartialToolUsePrefixLength = (value: string) => {
+  const maxLength = Math.min(value.length, TOOL_USE_OPEN_TAG.length - 1);
+  for (let length = maxLength; length > 0; length -= 1) {
+    if (value.endsWith(TOOL_USE_OPEN_TAG.slice(0, length))) {
+      return length;
+    }
+  }
+  return 0;
 };
 
-export const sanitizeAgentVisibleText = (value: string) => {
-  const cleaned = value
-    .replace(RAW_DSML_BLOCK_PATTERN, '')
-    .replace(RAW_TOOL_USE_BLOCK_PATTERN, '')
-    .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
-    .replace(RAW_TOOL_RESULT_BLOCK_PATTERN, '')
-    .replace(RAW_LEGACY_BASH_BLOCK_PATTERN, '')
-    .replace(RAW_TRANSCRIPT_ROLE_LINE_PATTERN, '')
-    .replace(RAW_TRANSCRIPT_TOOL_RESULT_PATTERN, '')
-    .replace(RAW_XML_DECLARATION_LINE_PATTERN, '')
-    .replace(RAW_PROTOCOL_LINE_PATTERN, '')
-    .replace(RAW_FRAGMENTED_TOOL_PROTOCOL_LINE_PATTERN, '')
-    .split(/\r?\n/)
-    .filter((line) => !isProtocolFragmentLine(line))
-    .join('\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n');
+const createStreamToolCallId = () =>
+  `call_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
-  return cleaned.trim();
+const normalizeStreamToolName = (name: string) => {
+  const trimmed = name.trim();
+  return trimmed.toLowerCase() === 'read' ? 'view' : trimmed;
+};
+
+const parseToolCallFromProtocolBuffer = (protocolContent: string): StreamToolCallEvent[] => {
+  const events: StreamToolCallEvent[] = [];
+  const toolRegex = /<tool\s+name="([^"]+)">\s*(?:<tool_params>([\s\S]*?)<\/tool_params>)?\s*<\/tool>/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = toolRegex.exec(protocolContent)) !== null) {
+    const name = match[1]?.trim();
+    const paramsText = match[2];
+    if (!name || !paramsText) {
+      continue;
+    }
+
+    try {
+      const input = JSON.parse(paramsText);
+      if (input && typeof input === 'object' && !Array.isArray(input)) {
+        events.push({
+          kind: 'tool_call',
+          id: createStreamToolCallId(),
+          name: normalizeStreamToolName(name),
+          input: input as Record<string, unknown>,
+        });
+      }
+    } catch {
+      // Malformed tool params are ignored; the full response path can still request repair.
+    }
+  }
+
+  return events;
+};
+
+export const createStreamingTextSplitter = () => {
+  let buffer = '';
+  let mode: 'idle' | 'protocol' = 'idle';
+
+  const feed = (delta: string): StreamSplitEvent[] => {
+    const events: StreamSplitEvent[] = [];
+    buffer += delta;
+
+    while (buffer) {
+      if (mode === 'idle') {
+        const openIndex = buffer.indexOf(TOOL_USE_OPEN_TAG);
+        if (openIndex >= 0) {
+          const text = buffer.slice(0, openIndex);
+          if (text) {
+            events.push({ kind: 'text', delta: text });
+          }
+          buffer = buffer.slice(openIndex + TOOL_USE_OPEN_TAG.length);
+          mode = 'protocol';
+          continue;
+        }
+
+        const heldLength = getPartialToolUsePrefixLength(buffer);
+        const text = buffer.slice(0, buffer.length - heldLength);
+        if (text) {
+          events.push({ kind: 'text', delta: text });
+        }
+        buffer = buffer.slice(buffer.length - heldLength);
+        break;
+      }
+
+      const closeIndex = buffer.indexOf(TOOL_USE_CLOSE_TAG);
+      if (closeIndex < 0) {
+        break;
+      }
+
+      const protocolContent = buffer.slice(0, closeIndex);
+      events.push(...parseToolCallFromProtocolBuffer(protocolContent));
+      buffer = buffer.slice(closeIndex + TOOL_USE_CLOSE_TAG.length);
+      mode = 'idle';
+    }
+
+    return events;
+  };
+
+  return {
+    feed,
+    flush: (): StreamSplitEvent[] => {
+      if (mode === 'protocol') {
+        buffer = '';
+        mode = 'idle';
+        return [];
+      }
+
+      if (!buffer) {
+        return [];
+      }
+
+      const events: StreamSplitEvent[] = [{ kind: 'text', delta: buffer }];
+      buffer = '';
+      return events;
+    },
+    reset: () => {
+      buffer = '';
+      mode = 'idle';
+    },
+  };
 };
 
 const appendVisibleText = (current: string, next: string) => {

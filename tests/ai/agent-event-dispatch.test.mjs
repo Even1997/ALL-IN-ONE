@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildRuntimeEventId,
+  createStreamingTextSplitter,
   syncRuntimeEventsWithToolCalls,
   syncTeamRunRuntimeEvents,
   createAgentEventState,
@@ -47,51 +48,20 @@ test('agent event reducer keeps visible text, reasoning, tools, and results sepa
   assert.equal(state.toolResultsByCallId['call-1'].content, 'src\npackage.json');
 });
 
-test('agent visible text sanitizer removes legacy tool protocol and transcript echoes', () => {
+test('agent visible text sanitizer normalizes whitespace without protocol parsing', () => {
   const raw = [
-    '好的，我先看一下。',
-    '<tool_use>',
-    '</tool_use>',
-    'user:',
-    'Tool ls result:',
-    '<tool_result name="ls" status="success">',
-    'src',
-    '</tool_result>',
-    '可以继续了。',
+    'Visible answer.  ',
+    '',
+    '',
+    'The literal <tool_use> marker is preserved for upstream normalizers.',
   ].join('\n');
 
   const cleaned = sanitizeAgentVisibleText(raw);
 
-  assert.equal(cleaned, '好的，我先看一下。\n\n可以继续了。');
-  assert.doesNotMatch(cleaned, /tool_use|tool_result|Tool ls result|^user:/m);
-});
-
-test('agent visible text sanitizer strips standalone xml declaration lines', () => {
-  const raw = [
-    'I checked the asset file.',
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    'The SVG header should not show in chat.',
-  ].join('\n');
-
-  const cleaned = sanitizeAgentVisibleText(raw);
-
-  assert.equal(cleaned, 'I checked the asset file.\n\nThe SVG header should not show in chat.');
-  assert.doesNotMatch(cleaned, /<\?xml version=/i);
-});
-
-test('agent visible text sanitizer strips legacy bash command blocks', () => {
-  const raw = [
-    '好的，我先看一下当前 sketch 目录。',
-    '<bash>',
-    '<cmd>Get-ChildItem sketch</cmd>',
-    '</bash>',
-    '已经看完了。',
-  ].join('\n');
-
-  const cleaned = sanitizeAgentVisibleText(raw);
-
-  assert.equal(cleaned, '好的，我先看一下当前 sketch 目录。\n\n已经看完了。');
-  assert.doesNotMatch(cleaned, /<bash>|<cmd>|Get-ChildItem sketch/);
+  assert.equal(
+    cleaned,
+    'Visible answer.\n\nThe literal <tool_use> marker is preserved for upstream normalizers.',
+  );
 });
 
 test('agent visible text sanitizer keeps explanatory lines that mention protocol markers inline', () => {
@@ -114,6 +84,28 @@ test('agent visible text sanitizer keeps explanatory lines that start with proto
   const cleaned = sanitizeAgentVisibleText(raw);
 
   assert.equal(cleaned, raw);
+});
+
+test('streaming text splitter removes streamed tool protocol and emits tool call events', () => {
+  const splitter = createStreamingTextSplitter();
+  const events = [
+    ...splitter.feed('I will inspect '),
+    ...splitter.feed('<tool_use><tool name="view"><tool_params>{"file_path"'),
+    ...splitter.feed(':"src/app.ts"}</tool_params></tool></tool_use> now.'),
+    ...splitter.flush(),
+  ];
+
+  assert.deepEqual(events, [
+    { kind: 'text', delta: 'I will inspect ' },
+    {
+      kind: 'tool_call',
+      id: events[1].id,
+      name: 'view',
+      input: { file_path: 'src/app.ts' },
+    },
+    { kind: 'text', delta: ' now.' },
+  ]);
+  assert.match(events[1].id, /^call_/);
 });
 
 test('agent runtime event helpers upsert tool use and result records', () => {

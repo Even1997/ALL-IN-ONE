@@ -2,6 +2,7 @@ import type { ChangeScope, AIStreamChunk } from '../../../types/index.ts';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ToolExecutor,
+  TOOLS,
   containsToolProtocolMarkers,
   formatToolResult,
   parseToolCalls,
@@ -97,11 +98,24 @@ type RunAgentLoopResult = {
   transcript: string;
 };
 
-export type AITextStreamEvent = {
-  kind: 'thinking' | 'text';
-  delta: string;
-  finishReason?: 'stop' | 'length' | 'tool_use' | 'content_filter';
-};
+export type AITextStreamEvent =
+  | {
+      kind: 'thinking' | 'text';
+      delta: string;
+      finishReason?: 'stop' | 'length' | 'tool_use' | 'content_filter';
+    }
+  | {
+      kind: 'tool_call';
+      delta: '';
+      toolCall: {
+        id: string;
+        name: string;
+        input: Record<string, unknown>;
+      };
+      finishReason?: 'stop' | 'length' | 'tool_use' | 'content_filter';
+    };
+
+type AITextStreamTextEventKind = Extract<AITextStreamEvent['kind'], 'thinking' | 'text'>;
 
 const DEFAULT_PROJECT_ROOT = '.';
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
@@ -628,6 +642,7 @@ ${this.buildToolInstructions()}
           system: systemPrompt,
           stream: Boolean(onEvent),
           messages: anthropicMessages,
+          tools: this.buildAnthropicTools(),
         }),
         signal,
       });
@@ -671,6 +686,31 @@ ${this.buildToolInstructions()}
     } catch {
       return {};
     }
+  }
+
+  private buildAnthropicTools(): Array<{
+    name: string;
+    description: string;
+    input_schema: Record<string, unknown>;
+  }> {
+    return TOOLS.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: {
+        type: 'object',
+        properties: Object.fromEntries(
+          Object.entries(tool.parameters).map(([name, parameter]) => [
+            name,
+            {
+              type: parameter.type,
+              description: parameter.description,
+              ...(parameter.items ? { items: parameter.items } : {}),
+            },
+          ])
+        ),
+        required: tool.required,
+      },
+    }));
   }
 
   private joinUrl(baseURL: string, path: string) {
@@ -752,9 +792,15 @@ ${this.buildToolInstructions()}
     body: ReadableStream<Uint8Array>,
     onEvent: (event: AITextStreamEvent) => void
   ): Promise<string> {
+    const toolBlocks = new Map<
+      number,
+      { id: string; name: string; input?: Record<string, unknown>; partialJson: string }
+    >();
+
     const text = await this.readEventStream(body, onEvent, (data) => {
       const json = JSON.parse(data);
       const type = json?.type as string | undefined;
+      const index = typeof json?.index === 'number' ? json.index : 0;
 
       // message_delta carries stop_reason
       if (type === 'message_delta') {
@@ -765,7 +811,62 @@ ${this.buildToolInstructions()}
         return [];
       }
 
+      if (type === 'content_block_start') {
+        const block = json?.content_block;
+        if (block?.type === 'tool_use' && typeof block.id === 'string' && typeof block.name === 'string') {
+          const input =
+            block.input && typeof block.input === 'object' && !Array.isArray(block.input)
+              ? (block.input as Record<string, unknown>)
+              : undefined;
+          toolBlocks.set(index, {
+            id: block.id,
+            name: block.name,
+            input: input && Object.keys(input).length > 0 ? input : undefined,
+            partialJson: '',
+          });
+        }
+        return [];
+      }
+
       const delta = json?.delta;
+      if (type === 'content_block_delta') {
+        const block = toolBlocks.get(index);
+        if (block && delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+          block.partialJson += delta.partial_json;
+          return [];
+        }
+      }
+
+      if (type === 'content_block_stop') {
+        const block = toolBlocks.get(index);
+        if (!block) {
+          return [];
+        }
+        toolBlocks.delete(index);
+
+        let input = block.input || {};
+        if (!block.input && block.partialJson.trim()) {
+          try {
+            const parsed = JSON.parse(block.partialJson);
+            input = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+          } catch {
+            input = {};
+          }
+        }
+
+        return [
+          {
+            kind: 'tool_call',
+            delta: '',
+            toolCall: {
+              id: block.id,
+              name: block.name,
+              input,
+            },
+          },
+        ];
+      }
+
       if (!delta || typeof delta !== 'object') {
         return [];
       }
@@ -842,10 +943,10 @@ ${this.buildToolInstructions()}
           events.forEach((event) => {
             if (event.kind === 'thinking') {
               thinking += event.delta;
-            } else {
+            } else if (event.kind === 'text') {
               answer += event.delta;
             }
-            this.emitIfPresent(onEvent, event.kind, event.delta);
+            this.emitStreamEvent(onEvent, event);
           });
         }
       }
@@ -875,10 +976,10 @@ ${this.buildToolInstructions()}
           events.forEach((event) => {
             if (event.kind === 'thinking') {
               thinking += event.delta;
-            } else {
+            } else if (event.kind === 'text') {
               answer += event.delta;
             }
-            this.emitIfPresent(onEvent, event.kind, event.delta);
+            this.emitStreamEvent(onEvent, event);
           });
         }
       }
@@ -910,19 +1011,15 @@ ${this.buildToolInstructions()}
       .join('');
   }
 
-  private emitIfPresent(
-    onEvent: (event: AITextStreamEvent) => void,
-    kind: AITextStreamEvent['kind'],
-    delta: string
-  ) {
-    if (!delta) {
+  private emitStreamEvent(onEvent: (event: AITextStreamEvent) => void, event: AITextStreamEvent) {
+    if (event.kind !== 'tool_call' && !event.delta && !event.finishReason) {
       return;
     }
 
-    onEvent({ kind, delta });
+    onEvent(event);
   }
 
-  private buildEventList(kind: AITextStreamEvent['kind'], delta: string | null): AITextStreamEvent[] {
+  private buildEventList(kind: AITextStreamTextEventKind, delta: string | null): AITextStreamEvent[] {
     return delta ? [{ kind, delta }] : [];
   }
 }

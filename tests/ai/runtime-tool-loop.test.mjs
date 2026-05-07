@@ -216,7 +216,7 @@ test('runtime tool loop emits unified agent events for tools and final text', as
     callModel: async (messages) =>
       messages.length === 1
         ? toolUse('ls', { path: '.' })
-        : 'Done.\n<tool_use>\n</tool_use>\nuser:\nTool ls result:\ninternal',
+        : 'Done.',
     executeTool: async () => ({
       type: 'text',
       content: 'src\npackage.json',
@@ -307,6 +307,105 @@ test('runtime tool loop defers streamed write tools until the model response com
   });
 
   assert.deepEqual(executedAfterModel, [true]);
+});
+
+test('runtime tool loop filters streamed tool protocol from model events', async () => {
+  const streamedEvents = [];
+  const executedCalls = [];
+  let modelFinished = false;
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Inspect the app file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['view'],
+    callModel: async (messages, _systemPrompt, onEvent) => {
+      if (messages.length > 1) {
+        onEvent?.({ kind: 'text', delta: 'Done.' });
+        return 'Done.';
+      }
+
+      onEvent?.({ kind: 'text', delta: 'I will inspect ' });
+      onEvent?.({
+        kind: 'text',
+        delta: '<tool_use><tool name="view"><tool_params>{"file_path"',
+      });
+      onEvent?.({
+        kind: 'text',
+        delta: ':"src/app.ts"}</tool_params></tool></tool_use>',
+      });
+      await Promise.resolve();
+      modelFinished = true;
+      return `I will inspect ${toolUse('view', { file_path: 'src/app.ts' })}`;
+    },
+    executeTool: async (call) => {
+      executedCalls.push({ ...call, afterModel: modelFinished });
+      return {
+        type: 'text',
+        content: '1: console.log("app");',
+      };
+    },
+    onModelEvent: (event) => {
+      streamedEvents.push(event);
+    },
+  });
+
+  assert.equal(result.finalContent, 'I will inspect\n\nDone.');
+  assert.equal(executedCalls.length, 1);
+  assert.equal(executedCalls[0].name, 'view');
+  assert.equal(executedCalls[0].afterModel, false);
+  assert.doesNotMatch(
+    streamedEvents.map((event) => event.delta).join(''),
+    /<tool_use>|<tool name=|<tool_params>|<\/tool_use>/,
+  );
+});
+
+test('runtime tool loop executes structured tool_call stream events without text parsing', async () => {
+  const executedCalls = [];
+  const modelMessages = [];
+
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Inspect the app file.',
+    systemPrompt: 'Use structured tool events when available.',
+    allowedTools: ['view'],
+    callModel: async (messages, _systemPrompt, onEvent) => {
+      modelMessages.push(messages.map((message) => ({ ...message })));
+      if (messages.length > 1) {
+        onEvent?.({ kind: 'text', delta: 'Done.' });
+        return 'Done.';
+      }
+
+      onEvent?.({ kind: 'text', delta: 'I will inspect.' });
+      onEvent?.({
+        kind: 'tool_call',
+        delta: '',
+        toolCall: {
+          id: 'toolu_1',
+          name: 'view',
+          input: { file_path: 'src/app.ts' },
+        },
+      });
+      return 'I will inspect.';
+    },
+    executeTool: async (call) => {
+      executedCalls.push(call);
+      return {
+        type: 'text',
+        content: '1: console.log("app");',
+      };
+    },
+  });
+
+  assert.equal(result.finalContent, 'I will inspect.\n\nDone.');
+  assert.equal(executedCalls.length, 1);
+  assert.deepEqual(executedCalls[0], {
+    id: 'toolu_1',
+    name: 'view',
+    input: { file_path: 'src/app.ts' },
+  });
+  assert.equal(modelMessages[1].at(-1).role, 'user');
+  assert.match(modelMessages[1].at(-1).content, /console\.log/);
 });
 
 test('runtime tool loop checks allowed tools before approval hooks', async () => {

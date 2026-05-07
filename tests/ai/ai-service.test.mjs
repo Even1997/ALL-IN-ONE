@@ -137,3 +137,53 @@ test('completeText streams anthropic thinking and answer deltas separately', asy
     globalThis.fetch = originalFetch;
   }
 });
+
+test('completeText streams anthropic tool_use blocks as structured tool_call events', async () => {
+  aiService.setConfig({
+    provider: 'anthropic',
+    apiKey: 'sk-ant-test',
+    baseURL: 'https://api.anthropic.com/v1',
+    model: 'claude-test',
+  });
+
+  const originalFetch = globalThis.fetch;
+  const events = [];
+
+  globalThis.fetch = async () =>
+    createStreamResponse([
+      'event: content_block_delta\n',
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"I will inspect."}}\n\n',
+      'event: content_block_start\n',
+      'data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"view","input":{}}}\n\n',
+      'event: content_block_delta\n',
+      'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"file_path\\":"}}\n\n',
+      'event: content_block_delta\n',
+      'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\\"src/app.ts\\"}"}}\n\n',
+      'event: content_block_stop\n',
+      'data: {"type":"content_block_stop","index":1}\n\n',
+    ]);
+
+  try {
+    const result = await aiService.completeText({
+      systemPrompt: 'system',
+      prompt: 'prompt',
+      onEvent: (event) => events.push(event),
+    });
+
+    assert.equal(result, 'I will inspect.');
+    assert.deepEqual(events, [
+      { kind: 'text', delta: 'I will inspect.' },
+      {
+        kind: 'tool_call',
+        delta: '',
+        toolCall: {
+          id: 'toolu_1',
+          name: 'view',
+          input: { file_path: 'src/app.ts' },
+        },
+      },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -220,3 +220,203 @@ test('assistant timeline update preserves preferred narrative timestamps around 
     ],
   );
 });
+
+test('assistant timeline update keeps preferred text segments around tool boundaries when final text merges them', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+
+  const currentTimeline = [
+    {
+      id: 'tool-use-1',
+      kind: 'tool_use',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      input: { file_path: 'package.json' },
+      status: 'completed',
+      createdAt: 20,
+    },
+  ];
+
+  const updatedTimeline = buildAssistantTimelineUpdate(
+    'Let me inspect the project structure.',
+    currentTimeline,
+    {
+      preferredAssistantParts: [
+        { type: 'text', content: 'Let me inspect', createdAt: 10 },
+        { type: 'text', content: 'the project structure.', createdAt: 30 },
+      ],
+    },
+  );
+
+  assert.deepEqual(
+    updatedTimeline.map((event) => [event.kind, event.content, event.createdAt]),
+    [
+      ['text', 'Let me inspect', 10],
+      ['tool_use', undefined, 20],
+      ['text', 'the project structure.', 30],
+    ],
+  );
+});
+
+test('assistant timeline update preserves preferred streaming parts while the think tag is still open', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+
+  const updatedTimeline = buildAssistantTimelineUpdate(
+    '<think>Check the first file.\n\nDraft answer',
+    [],
+    {
+      preferredAssistantParts: [
+        { type: 'thinking', content: 'Check the first file.', collapsed: true, createdAt: 10 },
+        { type: 'text', content: 'Draft answer', createdAt: 20 },
+      ],
+    },
+  );
+
+  assert.deepEqual(
+    updatedTimeline.map((event) => [event.kind, event.content, event.createdAt]),
+    [
+      ['reasoning', 'Check the first file.', 10],
+      ['text', 'Draft answer', 20],
+    ],
+  );
+});
+
+test('assistant timeline update prefers explicit preferred timestamps over stale narrative buckets', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+
+  const currentTimeline = [
+    {
+      id: 'reasoning-1',
+      kind: 'reasoning',
+      content: 'Check the first file.',
+      collapsed: true,
+      createdAt: 10,
+    },
+    {
+      id: 'tool-use-1',
+      kind: 'tool_use',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      input: { file_path: 'src/App.tsx' },
+      status: 'completed',
+      createdAt: 20,
+    },
+    {
+      id: 'text-1',
+      kind: 'text',
+      content: 'The first check is done.',
+      createdAt: 30,
+    },
+  ];
+
+  const updatedTimeline = buildAssistantTimelineUpdate(
+    '<think>Check the first file again</think>\n\nThe first check is still done.',
+    currentTimeline,
+    {
+      preferredAssistantParts: [
+        { type: 'thinking', content: 'Check the first file again', collapsed: true, createdAt: 100 },
+        { type: 'text', content: 'The first check is still done.', createdAt: 110 },
+      ],
+    },
+  );
+
+  assert.deepEqual(
+    updatedTimeline.map((event) => [event.kind, event.createdAt]),
+    [
+      ['tool_use', 20],
+      ['reasoning', 100],
+      ['text', 110],
+    ],
+  );
+});
+
+test('assistant timeline update prefers structured narrative parts over legacy execution parsing', async () => {
+  const { buildAssistantTimelineUpdate, getAssistantTimelineReasoning } = await loadAssistantTimeline();
+
+  const updatedTimeline = buildAssistantTimelineUpdate(
+    `Preparing to inspect
+<tool_use>
+<tool name="view">
+<tool_params>{"file_path":"src/App.tsx"}</tool_params>
+</tool>
+</tool_use>
+Summarizing the result`,
+    [],
+    {
+      preferredAssistantParts: [
+        { type: 'text', content: 'Preparing to inspect', createdAt: 10 },
+        { type: 'text', content: 'Summarizing the result', createdAt: 20 },
+      ],
+    },
+  );
+
+  assert.equal(getAssistantTimelineReasoning(updatedTimeline), '');
+  assert.deepEqual(
+    updatedTimeline.map((event) => [event.kind, event.content, event.createdAt]),
+    [
+      ['text', 'Preparing to inspect', 10],
+      ['text', 'Summarizing the result', 20],
+    ],
+  );
+});
+
+test('assistant timeline update honors newer preferred text timestamps when they move past later tool events', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+
+  const currentTimeline = [
+    {
+      id: 'text-1',
+      kind: 'text',
+      content: 'Started the first step.',
+      createdAt: 10,
+    },
+    {
+      id: 'tool-use-1',
+      kind: 'tool_use',
+      toolCallId: 'call-1',
+      parentToolCallId: null,
+      toolName: 'view',
+      input: { file_path: 'docs/plan.md' },
+      status: 'completed',
+      createdAt: 20,
+    },
+    {
+      id: 'text-2',
+      kind: 'text',
+      content: 'Finished the second step.',
+      createdAt: 30,
+    },
+    {
+      id: 'tool-use-2',
+      kind: 'tool_use',
+      toolCallId: 'call-2',
+      parentToolCallId: null,
+      toolName: 'edit',
+      input: { file_path: 'docs/plan.md', new_string: 'done' },
+      status: 'completed',
+      createdAt: 40,
+    },
+  ];
+
+  const updatedTimeline = buildAssistantTimelineUpdate(
+    'Started the first step.\n\nFinished the second step.',
+    currentTimeline,
+    {
+      preferredAssistantParts: [
+        { type: 'text', content: 'Started the first step.', createdAt: 10 },
+        { type: 'text', content: 'Finished the second step.', createdAt: 50 },
+      ],
+    },
+  );
+
+  assert.deepEqual(
+    updatedTimeline.map((event) => [event.kind, event.content, event.createdAt]),
+    [
+      ['text', 'Started the first step.', 10],
+      ['tool_use', undefined, 20],
+      ['tool_use', undefined, 40],
+      ['text', 'Finished the second step.', 50],
+    ],
+  );
+});

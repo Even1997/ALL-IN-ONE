@@ -10,8 +10,8 @@ export type AssistantDraftState = {
 };
 
 export type AssistantRenderItem =
-  | { kind: 'thinking_lane'; key: string; part: AIChatMessagePart; index: number }
-  | { kind: 'bubble_part'; key: string; part: AIChatMessagePart; index: number };
+  | { kind: 'thinking_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number }
+  | { kind: 'bubble_part'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number };
 
 export type AssistantRenderModel = {
   content: string;
@@ -44,6 +44,7 @@ export const buildAssistantRenderModel = (
   draftState?: AssistantDraftState,
   bubbleCardCount = 0
 ): AssistantRenderModel => {
+  const timelineNarrativeItems: Array<{ part: AIChatMessagePart; timelineOrder: number }> = [];
   const timeline = Array.isArray(draftState?.timeline)
     ? draftState.timeline
     : message.role === 'assistant' && Array.isArray(message.timeline)
@@ -51,38 +52,40 @@ export const buildAssistantRenderModel = (
       : [];
   const content = getAssistantTimelineText(timeline);
   const isStreaming = Boolean(draftState);
-  const parts = timeline.flatMap((event): AIChatMessagePart[] => {
+  timeline.forEach((event, timelineOrder) => {
     if (event.kind === 'reasoning') {
-      return [
-        {
+      timelineNarrativeItems.push({
+        part: {
           type: 'thinking',
           content: event.content,
           collapsed: event.collapsed,
           createdAt: event.createdAt,
         },
-      ];
+        timelineOrder,
+      });
+      return;
     }
 
     if (event.kind === 'text') {
-      return [
-        {
+      timelineNarrativeItems.push({
+        part: {
           type: 'text',
           content: event.content,
           createdAt: event.createdAt,
         },
-      ];
+        timelineOrder,
+      });
     }
-
-    return [];
   });
 
-  const items = parts
-    .filter((part) => !shouldSuppressAssistantTextPart(message, part, bubbleCardCount))
-    .map((part, index) => ({
+  const items = timelineNarrativeItems
+    .filter(({ part }) => !shouldSuppressAssistantTextPart(message, part, bubbleCardCount))
+    .map(({ part, timelineOrder }, index) => ({
       kind: part.type === 'thinking' ? 'thinking_lane' : 'bubble_part',
       key: `${message.id}-part-${index}`,
       part,
       index,
+      timelineOrder,
     })) as AssistantRenderItem[];
 
   return {

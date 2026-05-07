@@ -1,8 +1,7 @@
 import type { AgentProviderId, AgentTurnRecord } from '../agentRuntimeTypes';
-import { sanitizeAgentVisibleText } from '../dispatch/agentEvents.ts';
 
 const createTurnId = () => `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const EMPTY_RUNTIME_RESPONSE_MESSAGE = '已收到请求，但这次没有返回内容。';
+const EMPTY_RUNTIME_RESPONSE_MESSAGE = 'No response content was returned.';
 
 const createRuntimeTurn = (input: {
   id?: string;
@@ -268,7 +267,7 @@ const buildRuntimeStreamingMessage = (input: {
     sections.push(input.answerContent);
   }
 
-  return sections.join('\n\n').trim() || '正在思考...';
+  return sections.join('\n\n').trim() || 'Thinking...';
 };
 
 export type RuntimeStreamingAssistantDraft = {
@@ -281,8 +280,107 @@ export type RuntimeStreamingAssistantDraft = {
   >;
 };
 
-const sanitizeStreamingVisibleText = sanitizeAgentVisibleText;
-const sanitizeStreamingThinkingText = sanitizeAgentVisibleText;
+const reconcileFinalAssistantParts = (
+  response: string,
+  parts: RuntimeStreamingAssistantDraft['assistantParts']
+): RuntimeStreamingAssistantDraft['assistantParts'] | null => {
+  const textPartIndexes = parts
+    .map((part, index) => (part.type === 'text' ? index : -1))
+    .filter((index) => index >= 0);
+
+  if (textPartIndexes.length <= 1) {
+    return null;
+  }
+
+  let cursor = 0;
+  const lastTextPartIndex = textPartIndexes[textPartIndexes.length - 1]!;
+  const reconciledParts: RuntimeStreamingAssistantDraft['assistantParts'] = [];
+
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]!;
+    if (part.type !== 'text') {
+      reconciledParts.push(part);
+      continue;
+    }
+
+    if (index !== lastTextPartIndex) {
+      if (!response.startsWith(part.content, cursor)) {
+        return null;
+      }
+
+      reconciledParts.push(part);
+      cursor += part.content.length;
+      continue;
+    }
+
+    const remainingContent = response.slice(cursor);
+    if (!remainingContent) {
+      return null;
+    }
+
+    reconciledParts.push({
+      ...part,
+      content: remainingContent,
+    });
+  }
+
+  return reconciledParts;
+};
+
+const splitResponseIntoParagraphSlices = (response: string, segmentCount: number) => {
+  if (segmentCount <= 1) {
+    return null;
+  }
+
+  const paragraphs = response.match(/[\s\S]+?(?:\n\s*\n|$)/g)?.filter(Boolean) || [];
+  if (paragraphs.length < segmentCount) {
+    return null;
+  }
+
+  const slices: string[] = [];
+  let cursor = 0;
+
+  for (let index = 0; index < segmentCount; index += 1) {
+    if (index < segmentCount - 1) {
+      const paragraph = paragraphs[index]!;
+      slices.push(paragraph);
+      cursor += paragraph.length;
+      continue;
+    }
+
+    const remainingContent = response.slice(cursor);
+    if (!remainingContent) {
+      return null;
+    }
+    slices.push(remainingContent);
+  }
+
+  return slices.join('') === response ? slices : null;
+};
+
+const reconcileFinalAssistantPartsByParagraph = (
+  response: string,
+  parts: RuntimeStreamingAssistantDraft['assistantParts']
+): RuntimeStreamingAssistantDraft['assistantParts'] | null => {
+  const textParts = parts.filter((part) => part.type === 'text');
+  const paragraphSlices = splitResponseIntoParagraphSlices(response, textParts.length);
+  if (!paragraphSlices) {
+    return null;
+  }
+
+  let textPartIndex = 0;
+  return parts.map((part) => {
+    if (part.type !== 'text') {
+      return part;
+    }
+
+    const nextContent = paragraphSlices[textPartIndex++];
+    return {
+      ...part,
+      content: nextContent || part.content,
+    };
+  });
+};
 
 export const createRuntimeStreamingMessageAssembler = () => {
   let state: 'initial' | 'thinking' | 'answer' = 'initial';
@@ -331,14 +429,11 @@ export const createRuntimeStreamingMessageAssembler = () => {
   };
 
   const buildDraft = (completeThinking: boolean): RuntimeStreamingAssistantDraft => {
-    const visibleAnswerContent = sanitizeStreamingVisibleText(answerContentRaw);
-    const visibleThinkingContent = sanitizeStreamingThinkingText(thinkingContent);
+    const visibleAnswerContent = answerContentRaw;
+    const visibleThinkingContent = thinkingContent;
     const visibleParts = assistantParts
       .map((part) => {
-        const content =
-          part.type === 'thinking'
-            ? sanitizeStreamingThinkingText(part.content)
-            : sanitizeStreamingVisibleText(part.content);
+        const content = part.content;
         return content
           ? {
               ...part,
@@ -397,25 +492,26 @@ export const createRuntimeStreamingMessageAssembler = () => {
       }
 
       const draft = buildDraft(true);
-      const sanitizedResponse = sanitizeStreamingVisibleText(response);
       let answerContent = draft.answerContent;
       let finalParts = draft.assistantParts;
 
-      if (sanitizedResponse && sanitizedResponse !== answerContent) {
-        answerContent = sanitizedResponse;
-        finalParts = [
-          ...draft.assistantParts.filter((part) => part.type === 'thinking'),
-          {
-            type: 'text',
-            content: sanitizedResponse,
-            createdAt: Date.now(),
-          },
-        ];
+      if (response && response !== answerContent) {
+        answerContent = response;
+        finalParts =
+          reconcileFinalAssistantParts(response, draft.assistantParts) ||
+          reconcileFinalAssistantPartsByParagraph(response, draft.assistantParts) || [
+            ...draft.assistantParts.filter((part) => part.type === 'thinking'),
+            {
+              type: 'text',
+              content: response,
+              createdAt: Date.now(),
+            },
+          ];
       }
 
       const content =
         !draft.thinkingContent.trim() && !answerContent.trim()
-          ? sanitizedResponse || EMPTY_RUNTIME_RESPONSE_MESSAGE
+          ? response || EMPTY_RUNTIME_RESPONSE_MESSAGE
           : buildRuntimeStreamingMessage({
               thinkingContent: draft.thinkingContent,
               answerContent,
@@ -423,7 +519,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
             });
 
       return {
-        content: content !== '正在思考...' ? content : sanitizedResponse || EMPTY_RUNTIME_RESPONSE_MESSAGE,
+        content: content !== 'Thinking...' ? content : response || EMPTY_RUNTIME_RESPONSE_MESSAGE,
         thinkingContent: draft.thinkingContent,
         answerContent,
         assistantParts: finalParts,

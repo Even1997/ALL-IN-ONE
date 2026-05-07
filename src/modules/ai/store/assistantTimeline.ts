@@ -173,7 +173,7 @@ export const buildAssistantTimelineUpdate = (
   const runtimeEvents = currentTimeline.filter(isAssistantRuntimeTimelineEvent);
   const existingNarrativeEvents = currentTimeline.filter(isAssistantNarrativeTimelineEvent);
   const nextNarrativeEvents = buildAssistantTimelineFromContent(content, options);
-  const shouldPreferExplicitNarrativeTimestamps = Boolean(
+  const hasExplicitPreferredNarrativeTimestamps = Boolean(
     options?.preferredAssistantParts?.some((part) => typeof part.createdAt === 'number')
   );
   const narrativeCreatedAtBuckets = {
@@ -195,11 +195,13 @@ export const buildAssistantTimelineUpdate = (
       return {
         ...event,
         createdAt:
-          shouldPreferExplicitNarrativeTimestamps && typeof event.createdAt === 'number'
+          hasExplicitPreferredNarrativeTimestamps && typeof event.createdAt === 'number'
             ? event.createdAt
             : typeof reusedCreatedAt === 'number'
               ? reusedCreatedAt
-              : nextCreatedAt++,
+              : typeof event.createdAt === 'number'
+                ? event.createdAt
+                : nextCreatedAt++,
       };
     }
 
@@ -209,7 +211,7 @@ export const buildAssistantTimelineUpdate = (
       return {
         ...event,
         createdAt:
-          shouldPreferExplicitNarrativeTimestamps && typeof event.createdAt === 'number'
+          hasExplicitPreferredNarrativeTimestamps && typeof event.createdAt === 'number'
             ? event.createdAt
             : typeof reusedCreatedAt === 'number'
               ? reusedCreatedAt
@@ -219,7 +221,19 @@ export const buildAssistantTimelineUpdate = (
 
     return event;
   });
-  return [...textEvents, ...runtimeEvents].sort((left, right) => left.createdAt - right.createdAt);
+  return [...textEvents, ...runtimeEvents].sort((left, right) => {
+    if (left.createdAt !== right.createdAt) {
+      return left.createdAt - right.createdAt;
+    }
+
+    const leftIsRuntime = isAssistantRuntimeTimelineEvent(left);
+    const rightIsRuntime = isAssistantRuntimeTimelineEvent(right);
+    if (leftIsRuntime !== rightIsRuntime) {
+      return leftIsRuntime ? -1 : 1;
+    }
+
+    return 0;
+  });
 };
 
 export const getAssistantTimelineText = (timeline: AssistantTimelineEvent[] = []) =>

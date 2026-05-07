@@ -42,9 +42,6 @@ const RAW_BARE_TOOL_BLOCK_PATTERN = /<tool name="(\w+)">[\s\S]*?<\/tool>/gi;
 const RAW_LEGACY_BASH_BLOCK_PATTERN = /<bash\b[^>]*>[\s\S]*?<\/bash>/gi;
 const RAW_INTERNAL_SKILL_LINE_PATTERN =
   /^(?:让我先用|我先用)\s+[`'"]?[\w-]+[`'"]?\s+技能[:：]?\s*$/gim;
-const RAW_INTERNAL_PROTOCOL_LINE_PATTERN =
-  /^.*(?:DSML|tool_calls>|invoke name=|parameter name=|string="true"|string="false"|<tool name=|<\/tool>|<tool_params>|<\/tool_params>|<bash>|<\/bash>|<cmd>|<\/cmd>).*\s*$/gim;
-
 const RAW_ASSISTANT_EXECUTION_BLOCK_PATTERN =
   /<tool_use>\s*<tool name="(\w+)">([\s\S]*?)<\/tool>\s*<\/tool_use>|<tool name="(\w+)">([\s\S]*?)<\/tool>|<tool_result name="([^"]+)"\s+(success|error)>\s*([\s\S]*?)\s*<\/tool_result>|<apply_skill\b[^>]*>[\s\S]*?<\/apply_skill>|<bash\b[^>]*>[\s\S]*?<\/bash>|<\s*\|\s*DSML\b[\s\S]*?<\s*\|\/\s*DSML\b[\s\S]*?(?=(?:\n\s*\n)|$)/gi;
 
@@ -56,7 +53,6 @@ export const cleanVisibleAssistantText = (content: string) =>
       .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
       .replace(RAW_LEGACY_BASH_BLOCK_PATTERN, '')
       .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
-      .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
   );
 
 const EXECUTION_PLANNING_LINE_PATTERN =
@@ -120,8 +116,27 @@ const cleanThinkingAssistantText = (content: string) =>
       .replace(RAW_BARE_TOOL_BLOCK_PATTERN, '')
       .replace(RAW_LEGACY_BASH_BLOCK_PATTERN, '')
       .replace(RAW_INTERNAL_SKILL_LINE_PATTERN, '')
-      .replace(RAW_INTERNAL_PROTOCOL_LINE_PATTERN, '')
   );
+
+const normalizeNarrativeComparisonText = (content: string) =>
+  cleanVisibleAssistantText(content).replace(/\s+/g, '');
+
+const serializeAssistantPartsForComparison = (parts: AIChatMessagePart[]) =>
+  parts
+    .flatMap((part) => {
+      if (part.type === 'thinking' || part.type === 'text') {
+        return [part.content];
+      }
+
+      return [];
+    })
+    .join('')
+    .replace(/\s+/g, '');
+
+const hasUnfinishedThinkBlock = (content: string) => {
+  const unfinishedThinkIndex = content.lastIndexOf('<think>');
+  return unfinishedThinkIndex !== -1 && content.indexOf('</think>', unfinishedThinkIndex) === -1;
+};
 
 const buildCanonicalAssistantTextParts = (input: {
   thinkingContent?: string;
@@ -154,6 +169,46 @@ const buildCanonicalAssistantTextParts = (input: {
   return parts;
 };
 
+const normalizePreferredNarrativeParts = (
+  preferredAssistantParts: AIChatMessagePart[] | undefined,
+  thinkingCollapsed?: boolean
+) =>
+  (preferredAssistantParts || [])
+    .map((part) => {
+      if (part.type === 'thinking') {
+        const content = cleanThinkingAssistantText(part.content);
+        if (!content) {
+          return null;
+        }
+
+        return {
+          ...part,
+          content,
+          collapsed: thinkingCollapsed ?? part.collapsed,
+        } as Extract<AIChatMessagePart, { type: 'thinking' }>;
+      }
+
+      if (part.type === 'text') {
+        const content = cleanVisibleAssistantText(part.content);
+        if (!content) {
+          return null;
+        }
+
+        return {
+          ...part,
+          content,
+        } as Extract<AIChatMessagePart, { type: 'text' }>;
+      }
+
+      return null;
+    })
+    .filter(
+      (
+        part
+      ): part is Extract<AIChatMessagePart, { type: 'thinking' }> | Extract<AIChatMessagePart, { type: 'text' }> =>
+        Boolean(part)
+    );
+
 export const buildAssistantMessageParts = (input: {
   content?: string;
   thinkingContent?: string;
@@ -162,14 +217,7 @@ export const buildAssistantMessageParts = (input: {
   thinkingCollapsed?: boolean;
 }): AIChatMessagePart[] => {
   if (Array.isArray(input.assistantParts) && input.assistantParts.length > 0) {
-    return input.assistantParts.map((part) =>
-      part.type === 'thinking'
-        ? {
-            ...part,
-            collapsed: input.thinkingCollapsed ?? part.collapsed,
-          }
-        : part
-    );
+    return normalizePreferredNarrativeParts(input.assistantParts, input.thinkingCollapsed);
   }
 
   const parts: AIChatMessagePart[] = [];
@@ -221,7 +269,7 @@ export const extractAssistantMessageContent = (content: string) => {
   }
 
   const unfinishedThinkIndex = content.lastIndexOf('<think>');
-  if (unfinishedThinkIndex !== -1 && content.indexOf('</think>', unfinishedThinkIndex) === -1) {
+  if (hasUnfinishedThinkBlock(content)) {
     return {
       thinkingContent: cleanThinkingAssistantText(content.slice(unfinishedThinkIndex + '<think>'.length)),
       answerContent: cleanVisibleAssistantText(content.slice(0, unfinishedThinkIndex)),
@@ -285,44 +333,11 @@ export const extractAssistantMessageContent = (content: string) => {
 export const buildStoredAssistantParts = (input: {
   thinkingContent?: string;
   answerContent?: string;
+  hasExecutionBlocks?: boolean;
   thinkingCollapsed?: boolean;
   preferredAssistantParts?: AIChatMessagePart[];
 }) => {
-  const preferredParts = (input.preferredAssistantParts || [])
-    .map((part) => {
-      if (part.type === 'thinking') {
-        const content = cleanThinkingAssistantText(part.content);
-        if (!content) {
-          return null;
-        }
-
-        return {
-          ...part,
-          content,
-          collapsed: input.thinkingCollapsed ?? part.collapsed,
-        } as Extract<AIChatMessagePart, { type: 'thinking' }>;
-      }
-
-      if (part.type === 'text') {
-        const content = cleanVisibleAssistantText(part.content);
-        if (!content) {
-          return null;
-        }
-
-        return {
-          ...part,
-          content,
-        } as Extract<AIChatMessagePart, { type: 'text' }>;
-      }
-
-      return null;
-    })
-    .filter(
-      (
-        part
-      ): part is Extract<AIChatMessagePart, { type: 'thinking' }> | Extract<AIChatMessagePart, { type: 'text' }> =>
-        Boolean(part)
-    );
+  const preferredParts = normalizePreferredNarrativeParts(input.preferredAssistantParts, input.thinkingCollapsed);
 
   const canonicalParts = buildCanonicalAssistantTextParts({
     thinkingContent: input.thinkingContent,
@@ -331,8 +346,12 @@ export const buildStoredAssistantParts = (input: {
   });
 
   if (preferredParts.length > 0) {
-    const preferredContent = serializeAssistantMessageParts(preferredParts);
-    const canonicalContent = serializeAssistantMessageParts(canonicalParts);
+    if (input.hasExecutionBlocks) {
+      return preferredParts;
+    }
+
+    const preferredContent = serializeAssistantPartsForComparison(preferredParts);
+    const canonicalContent = serializeAssistantPartsForComparison(canonicalParts);
     if (!canonicalContent || preferredContent === canonicalContent) {
       return preferredParts;
     }
@@ -369,7 +388,7 @@ export const buildAssistantStructuredContentState = (input: {
     extracted.answerContent ||
     (!parsedThinkingContent && !extracted.hasExecutionBlocks ? cleanVisibleAssistantText(input.content || '') : '');
 
-  const preferredParts = Array.isArray(input.preferredAssistantParts) ? input.preferredAssistantParts : [];
+  const preferredParts = normalizePreferredNarrativeParts(input.preferredAssistantParts, input.thinkingCollapsed ?? true);
   const preferredThinkingContent = preferredParts
     .filter((part) => part.type === 'thinking')
     .map((part) => cleanThinkingAssistantText(part.content))
@@ -382,17 +401,29 @@ export const buildAssistantStructuredContentState = (input: {
     .filter(Boolean)
     .join('\n\n')
     .trim();
+  const parsedThinkingComparable = normalizeNarrativeComparisonText(parsedThinkingContent);
+  const preferredThinkingComparable = normalizeNarrativeComparisonText(preferredThinkingContent);
+  const parsedAnswerComparable = normalizeNarrativeComparisonText(parsedAnswerContent);
+  const preferredAnswerComparable = normalizeNarrativeComparisonText(preferredAnswerContent);
+  const contentHasUnfinishedThinkBlock = hasUnfinishedThinkBlock(input.content || '');
 
   const shouldPreservePreferredNarrative =
     preferredParts.length > 0 &&
-    !!parsedAnswerContent &&
-    !!preferredAnswerContent &&
-    (preferredAnswerContent === parsedAnswerContent ||
-      preferredAnswerContent.endsWith(`\n\n${parsedAnswerContent}`)) &&
-    (!parsedThinkingContent || !preferredThinkingContent || parsedThinkingContent === preferredThinkingContent);
+    (contentHasUnfinishedThinkBlock ||
+      extracted.hasExecutionBlocks ||
+      (!!parsedAnswerComparable &&
+        !!preferredAnswerComparable &&
+        (preferredAnswerComparable === parsedAnswerComparable ||
+          preferredAnswerComparable.endsWith(parsedAnswerComparable) ||
+          parsedAnswerComparable.endsWith(preferredAnswerComparable)) &&
+        (!parsedThinkingComparable ||
+          !preferredThinkingComparable ||
+          parsedThinkingComparable === preferredThinkingComparable)));
 
   const thinkingContent = shouldPreservePreferredNarrative
-    ? preferredThinkingContent || parsedThinkingContent
+    ? extracted.hasExecutionBlocks
+      ? preferredThinkingContent
+      : preferredThinkingContent || parsedThinkingContent
     : parsedThinkingContent || preferredThinkingContent;
   const answerContent = shouldPreservePreferredNarrative
     ? preferredAnswerContent
@@ -400,6 +431,7 @@ export const buildAssistantStructuredContentState = (input: {
   const assistantParts = buildStoredAssistantParts({
     thinkingContent,
     answerContent,
+    hasExecutionBlocks: extracted.hasExecutionBlocks,
     thinkingCollapsed: input.thinkingCollapsed ?? true,
     preferredAssistantParts: preferredParts,
   });

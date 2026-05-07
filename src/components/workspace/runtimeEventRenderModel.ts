@@ -237,27 +237,14 @@ const buildRuntimeEventRenderModelFromOrderedEvents = (
   const childToolUsesByParent = new Map<string, Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>>();
   const toolUseByToolCallId = new Map<string, Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>();
   const toolUseIds = new Set<string>();
-  let pendingGroup:
-    | {
-        groupType: RuntimeToolGroupType;
-        toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>;
-      }
-    | null = null;
-
-  const flushToolGroup = () => {
-    if (!pendingGroup || pendingGroup.toolUses.length === 0) {
-      pendingGroup = null;
-      return;
-    }
-
+  const pushToolGroup = (toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>) => {
     items.push({
       kind: 'tool_group',
-      id: `runtime-tool-group-${pendingGroup.toolUses[0]!.id}`,
-      groupType: pendingGroup.groupType,
-      toolUses: [...pendingGroup.toolUses],
-      groupLabel: buildCombinedToolGroupLabel(pendingGroup.toolUses, resultMap),
+      id: `runtime-tool-group-${toolUse.id}`,
+      groupType: classifyToolGroupType(toolUse),
+      toolUses: [toolUse],
+      groupLabel: buildCombinedToolGroupLabel([toolUse], resultMap),
     });
-    pendingGroup = null;
   };
 
   for (const event of orderedRuntimeEvents) {
@@ -298,7 +285,6 @@ const buildRuntimeEventRenderModelFromOrderedEvents = (
 
   for (const timelineEvent of orderedTimelineEvents) {
     if (!isAssistantRuntimeTimelineEvent(timelineEvent)) {
-      flushToolGroup();
       continue;
     }
 
@@ -309,15 +295,7 @@ const buildRuntimeEventRenderModelFromOrderedEvents = (
         continue;
       }
 
-      if (!pendingGroup) {
-        flushToolGroup();
-        pendingGroup = {
-          groupType: classifyToolGroupType(event),
-          toolUses: [event],
-        };
-      } else {
-        pendingGroup.toolUses.push(event);
-      }
+      pushToolGroup(event);
       continue;
     }
 
@@ -331,8 +309,6 @@ const buildRuntimeEventRenderModelFromOrderedEvents = (
     ) {
       continue;
     }
-
-    flushToolGroup();
 
     if (event.kind === 'tool_result') {
       items.push({
@@ -349,8 +325,6 @@ const buildRuntimeEventRenderModelFromOrderedEvents = (
       event,
     });
   }
-
-  flushToolGroup();
 
   return {
     items,

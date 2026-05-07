@@ -100,6 +100,82 @@ test('runtime streaming assembler keeps final answer body after tool inspection 
   assert.equal(finalDraft.assistantParts.at(-1)?.type, 'text');
 });
 
+test('runtime streaming assembler preserves interleaved thinking and feedback parts across tool boundaries in the final draft', () => {
+  const assembler = createRuntimeStreamingMessageAssembler();
+
+  assembler.append({
+    kind: 'thinking',
+    delta: 'First inspect the workspace structure.',
+  });
+  assembler.append({
+    kind: 'text',
+    delta: 'I checked the top-level folders.\n\n',
+  });
+  assembler.markToolBoundary();
+
+  assembler.append({
+    kind: 'thinking',
+    delta: 'Next inspect the remaining configuration files.',
+  });
+  assembler.append({
+    kind: 'text',
+    delta: 'I checked the remaining configuration files.',
+  });
+  assembler.markToolBoundary();
+
+  const finalDraft = assembler.buildFinal(
+    'I checked the top-level folders.\n\nI checked the remaining configuration files and summarized them.'
+  );
+
+  assert.deepEqual(
+    finalDraft.assistantParts.map((part) => [part.type, part.content]),
+    [
+      ['thinking', 'First inspect the workspace structure.'],
+      ['text', 'I checked the top-level folders.\n\n'],
+      ['thinking', 'Next inspect the remaining configuration files.'],
+      ['text', 'I checked the remaining configuration files and summarized them.'],
+    ],
+  );
+});
+
+test('runtime streaming assembler keeps multiple feedback segments when the final response rewrites earlier wording', () => {
+  const assembler = createRuntimeStreamingMessageAssembler();
+
+  assembler.append({
+    kind: 'thinking',
+    delta: 'First inspect the workspace structure.',
+  });
+  assembler.append({
+    kind: 'text',
+    delta: 'I checked the top-level folders.\n\n',
+  });
+  assembler.markToolBoundary();
+
+  assembler.append({
+    kind: 'thinking',
+    delta: 'Then inspect the remaining configuration files.',
+  });
+  assembler.append({
+    kind: 'text',
+    delta: 'I checked the remaining configuration files.',
+  });
+  assembler.markToolBoundary();
+
+  const finalDraft = assembler.buildFinal(
+    'I reviewed the top-level folders.\n\nI checked the remaining configuration files and summarized them.'
+  );
+
+  assert.deepEqual(
+    finalDraft.assistantParts.map((part) => [part.type, part.content]),
+    [
+      ['thinking', 'First inspect the workspace structure.'],
+      ['text', 'I reviewed the top-level folders.\n\n'],
+      ['thinking', 'Then inspect the remaining configuration files.'],
+      ['text', 'I checked the remaining configuration files and summarized them.'],
+    ],
+  );
+});
+
 test('runtime streaming assembler keeps direct final text when no tool boundary occurs', () => {
   const assembler = createRuntimeStreamingMessageAssembler();
 

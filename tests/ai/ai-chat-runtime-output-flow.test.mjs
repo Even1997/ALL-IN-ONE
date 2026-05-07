@@ -15,7 +15,7 @@ const loadRenderModel = async () =>
 const loadAssistantTimeline = async () =>
   import(`../../src/modules/ai/store/assistantTimeline.ts?test=${Date.now()}`);
 
-test('runtime event render model groups repeated file edits into a compact label', async () => {
+test('runtime event render model keeps repeated file edits as separate chronological steps', async () => {
   const { buildRuntimeToolStreamModel } = await loadRenderModel();
   const model = buildRuntimeToolStreamModel([
     {
@@ -67,14 +67,14 @@ test('runtime event render model groups repeated file edits into a compact label
     },
   ]);
 
-  assert.equal(model.items[0]?.kind, 'tool_group');
-  assert.equal(
-    model.items[0]?.groupLabel,
-    '\u5df2\u521b\u5efa 1 \u4e2a\u6587\u4ef6,\u5df2\u7f16\u8f91 2 \u4e2a\u6587\u4ef6'
+  assert.equal(model.items.length, 3);
+  assert.deepEqual(
+    model.items.map((item) => item.kind === 'tool_group' ? item.toolUses.map((toolUse) => toolUse.toolCallId) : []),
+    [['call-1'], ['call-2'], ['call-3']],
   );
 });
 
-test('runtime event render model keeps adjacent top-level tool steps in one chronological group', async () => {
+test('runtime event render model keeps adjacent top-level tool steps as separate chronological groups', async () => {
   const { buildRuntimeToolStreamModel } = await loadRenderModel();
   const model = buildRuntimeToolStreamModel([
     {
@@ -109,16 +109,18 @@ test('runtime event render model keeps adjacent top-level tool steps in one chro
     },
   ]);
 
-  assert.equal(model.items.length, 1);
+  assert.equal(model.items.length, 2);
   assert.equal(model.items[0]?.kind, 'tool_group');
-  assert.equal(model.items[0]?.toolUses.length, 2);
-  assert.equal(
-    model.items[0]?.groupLabel,
-    '\u5df2\u7f16\u8f91 1 \u4e2a\u6587\u4ef6,\u5df2\u8bfb\u53d6 1 \u9879\u5185\u5bb9'
+  assert.equal(model.items[0]?.toolUses.length, 1);
+  assert.equal(model.items[1]?.kind, 'tool_group');
+  assert.equal(model.items[1]?.toolUses.length, 1);
+  assert.deepEqual(
+    model.items.map((item) => item.kind === 'tool_group' ? item.toolUses.map((toolUse) => toolUse.toolCallId) : []),
+    [['call-1'], ['call-2']],
   );
 });
 
-test('runtime event render model keeps mixed action summaries in one combined group', async () => {
+test('runtime event render model keeps mixed action summaries as separate top-level groups', async () => {
   const { buildRuntimeToolStreamModel } = await loadRenderModel();
   const model = buildRuntimeToolStreamModel([
     {
@@ -170,11 +172,13 @@ test('runtime event render model keeps mixed action summaries in one combined gr
     },
   ]);
 
-  assert.equal(model.items.length, 1);
+  assert.equal(model.items.length, 3);
   assert.equal(model.items[0]?.kind, 'tool_group');
-  assert.equal(
-    model.items[0]?.groupLabel,
-    '\u5df2\u521b\u5efa 1 \u4e2a\u6587\u4ef6,\u5df2\u8fd0\u884c 2 \u6761\u547d\u4ee4'
+  assert.equal(model.items[1]?.kind, 'tool_group');
+  assert.equal(model.items[2]?.kind, 'tool_group');
+  assert.deepEqual(
+    model.items.map((item) => item.kind === 'tool_group' ? item.toolUses.map((toolUse) => toolUse.toolCallId) : []),
+    [['call-1'], ['call-2'], ['call-3']],
   );
 });
 

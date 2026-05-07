@@ -23,6 +23,7 @@ type MessageRenderItem = {
   key: string;
   node: React.ReactNode;
   createdAt?: number;
+  timelineOrder?: number;
 };
 
 type GNAgentMessageItemProps = {
@@ -34,6 +35,7 @@ type GNAgentMessageItemProps = {
   bubbleCards: Array<{
     node: React.ReactNode;
     createdAt?: number;
+    timelineOrder?: number;
   }>;
 };
 
@@ -80,6 +82,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     key: `${message.id}-card-${index}`,
     node: bubbleCard.node,
     createdAt: bubbleCard.createdAt,
+    timelineOrder: bubbleCard.timelineOrder,
   }));
   const assistantRenderModel =
     message.role === 'assistant' ? buildAssistantRenderModel(message, draftState, bubbleRenderItems.length) : null;
@@ -108,6 +111,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
               : undefined,
         }),
         createdAt: item.part.createdAt,
+        timelineOrder: item.timelineOrder,
       });
     });
   } else {
@@ -120,6 +124,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
           isStreaming: false,
         }),
         createdAt: part.createdAt,
+        timelineOrder: index,
       });
     });
   }

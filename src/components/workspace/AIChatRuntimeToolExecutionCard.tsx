@@ -9,6 +9,7 @@ export type RuntimeExecutionTimelineCard = {
   key: string;
   node: React.ReactNode;
   createdAt?: number;
+  timelineOrder?: number;
 };
 
 type RuntimeExecutionRenderInput = {
@@ -34,6 +35,10 @@ export const buildRuntimeExecutionTimelineCards = ({
     return [];
   }
 
+  const timelineOrderByEventId = new Map(
+    (timelineEvents || []).map((event, index) => [event.id, index] as const)
+  );
+
   const renderModel = Array.isArray(timelineEvents)
     ? buildRuntimeTimelineModelFromAssistantTimeline(timelineEvents)
     : buildRuntimeToolStreamModel(runtimeEvents);
@@ -43,6 +48,10 @@ export const buildRuntimeExecutionTimelineCards = ({
       return {
         key: item.id,
         createdAt: item.toolUses[0]?.createdAt,
+        timelineOrder: item.toolUses.reduce<number>(
+          (earliest, toolUse) => Math.min(earliest, timelineOrderByEventId.get(toolUse.id) ?? Number.MAX_SAFE_INTEGER),
+          Number.MAX_SAFE_INTEGER,
+        ),
         node: (
           <RuntimeToolGroup
             key={item.id}
@@ -63,6 +72,7 @@ export const buildRuntimeExecutionTimelineCards = ({
       return {
         key: item.event.id,
         createdAt: item.event.createdAt,
+        timelineOrder: timelineOrderByEventId.get(item.event.id),
         node: (
           <RuntimeStandaloneResultBlock
             key={item.event.id}
@@ -77,6 +87,7 @@ export const buildRuntimeExecutionTimelineCards = ({
     return {
       key: item.id,
       createdAt: item.event.createdAt,
+      timelineOrder: timelineOrderByEventId.get(item.event.id),
       node: item.event.kind === 'approval' ? renderApprovalEvent(item.event) : renderQuestionEvent(item.event),
     };
   });

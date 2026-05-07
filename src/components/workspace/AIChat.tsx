@@ -4316,6 +4316,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     }).map((card) => ({
       node: card.node,
       createdAt: card.createdAt,
+      timelineOrder: card.timelineOrder,
     }));
   }, [
     handleAnswerRuntimeQuestion,

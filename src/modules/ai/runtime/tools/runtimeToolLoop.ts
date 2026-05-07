@@ -1,6 +1,5 @@
 import {
   containsToolProtocolMarkers,
-  createStreamingToolDetector,
   formatToolResult,
   parseToolCalls,
   type ToolCall,
@@ -16,7 +15,12 @@ import type {
 } from '../agent-kernel/agentKernelTypes.ts';
 import type { CompactionReason } from '../compaction/compactionTypes.ts';
 import { compactOldToolResults, isContextLengthError, removeOldestTurn } from '../compaction/compactToolResults.ts';
-import { createAgentEventDispatcher, sanitizeAgentVisibleText } from '../dispatch/agentEvents.ts';
+import {
+  createAgentEventDispatcher,
+  createStreamingTextSplitter,
+  sanitizeAgentVisibleText,
+  type StreamSplitEvent,
+} from '../dispatch/agentEvents.ts';
 
 const previewResult = (result: ToolResult) => result.content.slice(0, 1000);
 
@@ -98,6 +102,24 @@ const REPAIRABLE_TOOL_PROTOCOL_PATTERN =
 
 const isSameToolCall = (a: ToolCall, b: ToolCall) =>
   a.name === b.name && JSON.stringify(a.input) === JSON.stringify(b.input);
+
+const splitAssistantContent = (content: string) => {
+  const splitter = createStreamingTextSplitter();
+  const splitEvents = [...splitter.feed(content), ...splitter.flush()];
+  const visibleText = splitEvents
+    .filter((event): event is Extract<StreamSplitEvent, { kind: 'text' }> => event.kind === 'text')
+    .map((event) => event.delta)
+    .join('');
+  const toolCalls = splitEvents
+    .filter((event): event is Extract<StreamSplitEvent, { kind: 'tool_call' }> => event.kind === 'tool_call')
+    .map((event): ToolCall => ({
+      id: event.id,
+      name: event.name,
+      input: event.input,
+    }));
+
+  return { visibleText, toolCalls };
+};
 
 const estimateMessageTokens = (messages: RuntimeToolMessage[]) =>
   Math.ceil(messages.reduce((total, message) => total + message.content.length + message.role.length + 2, 0) / 4);
@@ -291,29 +313,64 @@ export async function runRuntimeToolLoop(
     }
 
     // Phase 1a: Streaming tool detection — execute tools as soon as they appear in the stream
-    const streamDetector = createStreamingToolDetector();
+    const streamSplitter = createStreamingTextSplitter();
+    const eventToolCalls: ToolCall[] = [];
     const streamExecutedResults: Array<{ call: ToolCall; step: RuntimeToolStep; result: ToolResult }> = [];
     const streamExecutionPromises: Promise<void>[] = [];
+    const queueStreamToolExecution = (call: ToolCall) => {
+      const promise = executeSingleTool(call).then(({ step, result }) => {
+        streamExecutedResults.push({ call, step, result });
+        toolCalls.push(step);
+        emitToolCallsChange(options, toolCalls);
+      });
+      streamExecutionPromises.push(promise);
+    };
+    const handleSplitEvent = (splitEvent: StreamSplitEvent) => {
+      if (splitEvent.kind === 'text') {
+        wrapped?.({ kind: 'text', delta: splitEvent.delta });
+        return;
+      }
 
-    const streamAwareOnEvent = wrapped
-      ? (event: AITextStreamEvent) => {
-          wrapped(event);
-          if (event.kind === 'text' && event.delta) {
-            const detectedCalls = streamDetector.feed(event.delta);
-            for (const call of detectedCalls) {
-              if (!STREAM_EXECUTION_TOOLS.has(call.name)) {
-                continue;
-              }
-              const promise = executeSingleTool(call).then(({ step, result }) => {
-                streamExecutedResults.push({ call, step, result });
-                toolCalls.push(step);
-                emitToolCallsChange(options, toolCalls);
-              });
-              streamExecutionPromises.push(promise);
-            }
-          }
+      if (!STREAM_EXECUTION_TOOLS.has(splitEvent.name)) {
+        return;
+      }
+
+      const call: ToolCall = {
+        id: splitEvent.id,
+        name: splitEvent.name,
+        input: splitEvent.input,
+      };
+      eventToolCalls.push(call);
+      queueStreamToolExecution(call);
+    };
+    const flushStreamSplitter = () => {
+      for (const splitEvent of streamSplitter.flush()) {
+        handleSplitEvent(splitEvent);
+      }
+    };
+
+    const streamAwareOnEvent = (event: AITextStreamEvent) => {
+      if (event.kind === 'tool_call') {
+        const call: ToolCall = {
+          id: event.toolCall.id,
+          name: event.toolCall.name,
+          input: event.toolCall.input,
+        };
+        eventToolCalls.push(call);
+        if (STREAM_EXECUTION_TOOLS.has(call.name)) {
+          queueStreamToolExecution(call);
         }
-      : undefined;
+      } else if (event.kind === 'text' && event.delta) {
+        for (const splitEvent of streamSplitter.feed(event.delta)) {
+          handleSplitEvent(splitEvent);
+        }
+        if (event.finishReason) {
+          wrapped?.({ kind: 'text', delta: '', finishReason: event.finishReason });
+        }
+      } else {
+        wrapped?.(event);
+      }
+    };
 
     try {
       assistantContent = await options.callModel(
@@ -323,6 +380,7 @@ export async function runRuntimeToolLoop(
       );
     } catch (error) {
       if (!isContextLengthError(error)) throw error;
+      streamSplitter.reset();
 
       const compaction = compactOldToolResults(messages);
       if (compaction.compacted) {
@@ -336,6 +394,7 @@ export async function runRuntimeToolLoop(
           );
         } catch (retryError) {
           if (!isContextLengthError(retryError)) throw retryError;
+          streamSplitter.reset();
           const removal = removeOldestTurn(messages);
           if (removal.compacted) {
             options.onContextCompaction?.('old_turns_removed');
@@ -365,10 +424,13 @@ export async function runRuntimeToolLoop(
       }
     }
 
+    flushStreamSplitter();
+
     // Wait for any in-flight stream-detected tool executions
     await Promise.all(streamExecutionPromises);
 
-    const roundVisibleText = sanitizeAgentVisibleText(assistantContent);
+    const normalizedAssistantContent = splitAssistantContent(assistantContent);
+    const roundVisibleText = sanitizeAgentVisibleText(normalizedAssistantContent.visibleText);
     if (roundVisibleText) {
       visibleTextPerRound.push(roundVisibleText);
     }
@@ -379,7 +441,12 @@ export async function runRuntimeToolLoop(
     });
 
     // Determine which tools were executed during streaming vs. need execution now
-    const parsedCalls = parseToolCalls(assistantContent);
+    const parsedCalls =
+      eventToolCalls.length > 0
+        ? eventToolCalls
+        : normalizedAssistantContent.toolCalls.length > 0
+          ? normalizedAssistantContent.toolCalls
+          : parseToolCalls(assistantContent);
     const remainingCalls = parsedCalls.filter(
       (pc) => !streamExecutedResults.some((se) => isSameToolCall(se.call, pc)),
     );
