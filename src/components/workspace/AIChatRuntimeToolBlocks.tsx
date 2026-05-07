@@ -52,7 +52,7 @@ const buildCollapsedGroupHeadline = ({
     return '执行失败';
   }
   if (itemCount === 1) {
-    return groupType === 'input' ? singleHeadline || '等待输入' : '工具执行';
+    return singleHeadline || (groupType === 'input' ? '等待输入' : '工具执行');
   }
   if (groupLabel) {
     return groupLabel;
@@ -64,25 +64,20 @@ const buildGroupMetaText = ({
   status,
   groupLabel,
   itemCount,
-  singleHeadline,
   previewText,
   helpers,
 }: {
   status: RuntimeStatus;
   groupLabel?: string;
   itemCount: number;
-  singleHeadline?: string;
   previewText?: string;
   helpers: RuntimeToolHelpers;
 }) => {
-  if (status !== 'completed' && previewText) {
-    return previewText;
-  }
-  if (itemCount === 1 && singleHeadline) {
-    return singleHeadline;
-  }
   if (previewText) {
     return previewText;
+  }
+  if (itemCount === 1) {
+    return '';
   }
   if (status !== 'completed') {
     return groupLabel || helpers.getRuntimeCommandCountLabel(itemCount);
@@ -236,6 +231,19 @@ const buildGroupTimelineEvents = (
   });
 };
 
+const shouldHideToolUseDetailLine = (
+  toolUse: Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>,
+  renderModel: RuntimeEventRenderModel
+) => {
+  const visibleToolUse = getVisibleToolUse(toolUse, renderModel);
+  const resultEvent = renderModel.resultMap.get(visibleToolUse.toolCallId);
+  if (!resultEvent || resultEvent.status !== 'completed') {
+    return false;
+  }
+
+  return Boolean(resultEvent.output?.trim()) && OUTPUT_VISIBLE_TOOL_NAMES.has(visibleToolUse.toolName);
+};
+
 const TraceLineCopy: React.FC<{
   headline: string;
   previewText?: string;
@@ -340,7 +348,6 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
     status: groupStatus,
     groupLabel,
     itemCount: toolUses.length,
-    singleHeadline,
     previewText: groupPreviewText,
     helpers,
   });
@@ -365,6 +372,10 @@ export const RuntimeToolGroup = React.memo(function RuntimeToolGroup({
       <div className="chat-tool-trace-group-detail">
         {detailEvents.map((event) => {
           if (event.kind === 'tool_use') {
+            if (shouldHideToolUseDetailLine(event, renderModel)) {
+              return null;
+            }
+
             return (
               <ToolUseTimelineLine
                 key={event.id}

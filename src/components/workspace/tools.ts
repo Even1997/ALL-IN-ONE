@@ -271,28 +271,6 @@ PARAMETERS:
     },
     required: ['file_path', 'old_string', 'new_string'],
   },
-  {
-    name: 'bash',
-    description: `Execute shell commands in a persistent session.
-
-WHEN TO USE THIS TOOL:
-- Use when you need to run terminal commands
-- Commands share the same shell session
-
-PARAMETERS:
-- command: the shell command to execute
-- timeout: timeout in milliseconds (max 600000)
-
-TIPS:
-- Try to use absolute paths
-- Avoid 'cd' commands to maintain context
-- On Windows, use PowerShell-compatible syntax by default`,
-    parameters: {
-      command: { type: 'string', description: 'The shell command to execute' },
-      timeout: { type: 'number', description: 'Timeout in milliseconds' },
-    },
-    required: ['command'],
-  },
   ...(isWindowsHost()
     ? [
         {
@@ -319,6 +297,28 @@ TIPS:
         } satisfies Tool,
       ]
     : []),
+  {
+    name: 'bash',
+    description: `Execute shell commands in a persistent session.
+
+WHEN TO USE THIS TOOL:
+- Use when you need to run terminal commands
+- Commands share the same shell session
+
+PARAMETERS:
+- command: the shell command to execute
+- timeout: timeout in milliseconds (max 600000)
+
+TIPS:
+- Try to use absolute paths
+- Avoid 'cd' commands to maintain context
+- On Windows, use PowerShell-compatible syntax by default`,
+    parameters: {
+      command: { type: 'string', description: 'The shell command to execute' },
+      timeout: { type: 'number', description: 'Timeout in milliseconds' },
+    },
+    required: ['command'],
+  },
   {
     name: 'fetch',
     description: `Fetch data from URLs.

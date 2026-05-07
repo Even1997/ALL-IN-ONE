@@ -182,6 +182,7 @@ import {
   useAIChatStore,
 } from '../../modules/ai/store/aiChatStore';
 import {
+  applyAssistantReasoningProgress,
   answerAssistantRuntimeQuestionEvent,
   buildAssistantStreamingTimeline,
   buildAssistantTimelineUpdate,
@@ -291,6 +292,7 @@ const EMPTY_SESSIONS: ChatSession[] = [];
 const EMPTY_PENDING_APPROVALS: ApprovalRecord[] = [];
 const EMPTY_RUNTIME_SKILLS: RuntimeSkillDefinition[] = [];
 const EMPTY_BACKGROUND_TASKS: AgentBackgroundTaskRecord[] = [];
+const STREAMING_DRAFT_FLUSH_MS = 50;
 
 const GNAgentSkillsEntryButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <button
@@ -334,6 +336,11 @@ const MISSING_PROJECT_FILE_PATTERN =
   /(?:not found|no such file|cannot find the file|\u627e\u4e0d\u5230|\u4e0d\u5b58\u5728|os error 2)/i;
 
 const estimateTokenCount = (value: string) => Math.max(0, Math.ceil(value.trim().length / 4));
+
+const getElapsedSecondsSince = (startedAt: number | null | undefined, fallback = 0) =>
+  typeof startedAt === 'number'
+    ? Math.max(0.1, Math.round(Math.max(0, Date.now() - startedAt) / 100) / 10)
+    : fallback;
 
 const summarizeLiveToolInput = (input: Record<string, unknown> | null | undefined) => {
   if (!input || Object.keys(input).length === 0) {
@@ -880,6 +887,10 @@ const summarizeRuntimeToolCall = (toolName: string, input: Record<string, unknow
 
   if ((toolName === 'glob' || toolName === 'grep') && typeof input.pattern === 'string') {
     return input.pattern;
+  }
+
+  if (toolName === 'ls' && typeof input.path === 'string') {
+    return summarizeProjectFilePath(input.path);
   }
 
   if (toolName === 'fetch' && typeof input.url === 'string') {
@@ -1552,7 +1563,6 @@ const renderMessagePart = (
     <AssistantTextBlock
       key={`${messageId}-text-${index}`}
       content={part.content}
-      isStreaming={Boolean(options?.isStreaming && message.role === 'assistant' && part.type === 'text')}
     />
   );
 };
@@ -1723,7 +1733,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const shouldAutoScrollRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamingDraftBufferRef = useRef<Record<string, StreamingDraftState>>({});
-  const streamingFlushFrameRef = useRef<number | null>(null);
+  const streamingFlushTimerRef = useRef<number | null>(null);
   const pendingApprovalActionsRef = useRef<Record<string, RuntimePendingApprovalAction>>({});
   const pendingQuestionActionsRef = useRef<Record<string, RuntimePendingQuestionAction>>({});
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -2132,9 +2142,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     const timer = window.setInterval(() => {
       patchLiveState(activeLiveThreadId, (state) => ({
         ...state,
-        elapsedSeconds: state.startedAt
-          ? Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000))
-          : state.elapsedSeconds,
+        elapsedSeconds: getElapsedSecondsSince(state.startedAt, state.elapsedSeconds),
       }));
     }, 1000);
 
@@ -2142,6 +2150,29 @@ export const AIChat: React.FC<AIChatProps> = ({
       window.clearInterval(timer);
     };
   }, [activeLiveThreadId, activeRuntimeLiveState?.startedAt, patchLiveState]);
+
+  const effectiveStreamingDraftContents = useMemo(() => {
+    if (!activeRuntimeLiveState?.activeThinking) {
+      return streamingDraftContents;
+    }
+    const reasoningReferenceTime = Date.now();
+
+    return Object.fromEntries(
+      Object.entries(streamingDraftContents).map(([messageId, draft]) => [
+        messageId,
+        {
+          ...draft,
+          timeline: applyAssistantReasoningProgress(draft.timeline, {
+            active: true,
+            referenceTime: reasoningReferenceTime,
+          }),
+        },
+      ])
+    );
+  }, [
+    activeRuntimeLiveState?.activeThinking,
+    streamingDraftContents,
+  ]);
 
   useEffect(() => {
     if (!activeReplayResumeRequest) {
@@ -2365,11 +2396,11 @@ export const AIChat: React.FC<AIChatProps> = ({
             timeline: updater(currentDraft.timeline),
           },
         };
-        if (streamingFlushFrameRef.current === null) {
-          streamingFlushFrameRef.current = requestAnimationFrame(() => {
-            streamingFlushFrameRef.current = null;
+        if (streamingFlushTimerRef.current === null) {
+          streamingFlushTimerRef.current = window.setTimeout(() => {
+            streamingFlushTimerRef.current = null;
             setStreamingDraftContents({ ...streamingDraftBufferRef.current });
-          });
+          }, STREAMING_DRAFT_FLUSH_MS);
         }
       }
     },
@@ -3284,8 +3315,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
 
   useEffect(
     () => () => {
-      if (streamingFlushFrameRef.current !== null) {
-        cancelAnimationFrame(streamingFlushFrameRef.current);
+      if (streamingFlushTimerRef.current !== null) {
+        window.clearTimeout(streamingFlushTimerRef.current);
       }
     },
     []
@@ -3790,9 +3821,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     const nextDrafts = { ...streamingDraftBufferRef.current };
     delete nextDrafts[messageId];
     streamingDraftBufferRef.current = nextDrafts;
-    if (streamingFlushFrameRef.current !== null) {
-      cancelAnimationFrame(streamingFlushFrameRef.current);
-      streamingFlushFrameRef.current = null;
+    if (streamingFlushTimerRef.current !== null) {
+      window.clearTimeout(streamingFlushTimerRef.current);
+      streamingFlushTimerRef.current = null;
     }
     setStreamingDraftContents(nextDrafts);
   }, []);
@@ -3802,15 +3833,33 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       [messageId]: draft,
     };
 
-    if (streamingFlushFrameRef.current !== null) {
+    if (streamingFlushTimerRef.current !== null) {
       return;
     }
 
-    streamingFlushFrameRef.current = requestAnimationFrame(() => {
-      streamingFlushFrameRef.current = null;
+    streamingFlushTimerRef.current = window.setTimeout(() => {
+      streamingFlushTimerRef.current = null;
       setStreamingDraftContents({ ...streamingDraftBufferRef.current });
-    });
+    }, STREAMING_DRAFT_FLUSH_MS);
   }, []);
+  const commitStreamingDraft = useCallback(
+    (messageId: string) => {
+      const draft = streamingDraftBufferRef.current[messageId];
+      if (!draft || !currentProject || !activeSessionId) {
+        return;
+      }
+
+      const timeline = applyAssistantReasoningProgress(draft.timeline, {
+        active: false,
+        referenceTime: Date.now(),
+      });
+      updateMessage(currentProject.id, activeSessionId, messageId, (message) => ({
+        ...message,
+        ...(message.role === 'assistant' ? { timeline } : {}),
+      }));
+    },
+    [activeSessionId, currentProject, updateMessage]
+  );
   const loadCheckpointDiff = useCallback(
     async (runId: string, relativePath: string) => {
       if (!activeCheckpointThreadId) {
@@ -6111,9 +6160,15 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         let toolTimerInterval: ReturnType<typeof setInterval> | null = null;
         const streamingAssembler = createRuntimeStreamingMessageAssembler();
         pushStreamingDraft(assistantMessage.id, {
-          timeline: buildAssistantStreamingTimeline('', assistantBaseTimeline, {
-            fallbackThinkingContent: '正在思考...',
-          }),
+          timeline: applyAssistantReasoningProgress(
+            buildAssistantStreamingTimeline('', assistantBaseTimeline, {
+              fallbackThinkingContent: '正在思考...',
+            }),
+            {
+              active: true,
+              referenceTime: Date.now(),
+            }
+          ),
         });
         await emitMemoryReadLifecycle();
         // Provider-embedded pages intentionally keep the codex-like runAgentTurn shape:
@@ -6176,11 +6231,19 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             const draftState = streamingAssembler.append(event);
             const currentDraftTimeline =
               streamingDraftBufferRef.current[assistantMessage.id]?.timeline || assistantBaseTimeline;
+            const reasoningReferenceTime = Date.now();
+            const reasoningProgress = {
+              active: event.kind === 'thinking',
+              referenceTime: reasoningReferenceTime,
+            };
             const draft = {
-              timeline: buildAssistantStreamingTimeline(draftState.content, currentDraftTimeline, {
-                fallbackThinkingContent: draftState.thinkingContent,
-                preferredAssistantParts: draftState.assistantParts,
-              }),
+              timeline: applyAssistantReasoningProgress(
+                buildAssistantStreamingTimeline(draftState.content, currentDraftTimeline, {
+                  fallbackThinkingContent: draftState.thinkingContent,
+                  preferredAssistantParts: draftState.assistantParts,
+                }),
+                reasoningProgress
+              ),
             };
             patchLiveState(runtimeStoreThreadId, (state) => ({
               ...state,
@@ -6196,36 +6259,38 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
               },
             }));
             pushStreamingDraft(assistantMessage.id, draft);
-            updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
-              ...message,
-              ...(message.role === 'assistant'
-                ? {
-                    timeline: buildAssistantTimelineUpdate(draftState.content, message.timeline, {
-                      fallbackThinkingContent: draftState.thinkingContent,
-                      preferredAssistantParts: draftState.assistantParts,
-                    }),
-                  }
-                : {}),
-            }));
           },
           beforeToolCall: async (call) => {
             const boundaryDraft = streamingAssembler.markToolBoundary();
             const currentDraftTimeline =
               streamingDraftBufferRef.current[assistantMessage.id]?.timeline || assistantBaseTimeline;
+            const reasoningReferenceTime = Date.now();
             pushStreamingDraft(assistantMessage.id, {
-              timeline: buildAssistantStreamingTimeline(boundaryDraft.content, currentDraftTimeline, {
-                fallbackThinkingContent: boundaryDraft.thinkingContent,
-                preferredAssistantParts: boundaryDraft.assistantParts as AIChatMessagePart[],
-              }),
+              timeline: applyAssistantReasoningProgress(
+                buildAssistantStreamingTimeline(boundaryDraft.content, currentDraftTimeline, {
+                  fallbackThinkingContent: boundaryDraft.thinkingContent,
+                  preferredAssistantParts: boundaryDraft.assistantParts as AIChatMessagePart[],
+                }),
+                {
+                  active: false,
+                  referenceTime: reasoningReferenceTime,
+                }
+              ),
             });
             updateMessage(currentProject.id, targetSessionId, assistantMessage.id, (message) => ({
               ...message,
               ...(message.role === 'assistant'
                 ? {
-                    timeline: buildAssistantTimelineUpdate(boundaryDraft.content, message.timeline, {
-                      fallbackThinkingContent: boundaryDraft.thinkingContent,
-                      preferredAssistantParts: boundaryDraft.assistantParts,
-                    }),
+                    timeline: applyAssistantReasoningProgress(
+                      buildAssistantTimelineUpdate(boundaryDraft.content, message.timeline, {
+                        fallbackThinkingContent: boundaryDraft.thinkingContent,
+                        preferredAssistantParts: boundaryDraft.assistantParts,
+                      }),
+                      {
+                        active: false,
+                        referenceTime: reasoningReferenceTime,
+                      }
+                    ),
                   }
                 : {}),
             }));
@@ -6260,6 +6325,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         const recoveryProposal = await buildRuntimeWriteRecoveryProposal(agentTurn.toolCalls);
         if (toolTimerInterval) clearInterval(toolTimerInterval);
         clearStreamingDraft(assistantMessage.id);
+        const reasoningReferenceTime = Date.now();
         patchLiveState(runtimeStoreThreadId, (state) => ({
           ...state,
           connectionState: 'connected',
@@ -6273,14 +6339,20 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           ...message,
           ...(message.role === 'assistant'
             ? {
-                timeline: buildAssistantTimelineUpdate(
-                  recoveryProposal && !normalizedFinalContent.trim()
-                    ? recoveryProposal.assistantMessage
-                    : normalizedFinalContent,
-                  syncAssistantTimelineWithToolCalls(message.timeline, agentTurn.toolCalls),
+                timeline: applyAssistantReasoningProgress(
+                  buildAssistantTimelineUpdate(
+                    recoveryProposal && !normalizedFinalContent.trim()
+                      ? recoveryProposal.assistantMessage
+                      : normalizedFinalContent,
+                    syncAssistantTimelineWithToolCalls(message.timeline, agentTurn.toolCalls),
+                    {
+                      fallbackThinkingContent: getAssistantTimelineReasoning(message.timeline),
+                      preferredAssistantParts: finalDraft.assistantParts as AIChatMessagePart[],
+                    }
+                  ),
                   {
-                    fallbackThinkingContent: getAssistantTimelineReasoning(message.timeline),
-                    preferredAssistantParts: finalDraft.assistantParts as AIChatMessagePart[],
+                    active: false,
+                    referenceTime: reasoningReferenceTime,
                   }
                 ),
               }
@@ -6333,6 +6405,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         await completeTurnSession(normalizedFinalContent);
       } catch (error) {
         if (stopRequestedRef.current) {
+          commitStreamingDraft(assistantMessage.id);
           clearStreamingDraft(assistantMessage.id);
           patchLiveState(runtimeStoreThreadId, (state) => ({
             ...state,
@@ -6408,6 +6481,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       bindRuntimeThread,
       buildRuntimeWriteRecoveryProposal,
       clearStreamingDraft,
+      commitStreamingDraft,
       pushStreamingDraft,
       contextSnapshot.currentFileLabel,
       contextSnapshot.primaryLabel,
@@ -6493,6 +6567,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     }
     const submission = runningSubmissionRef.current;
     if (submission) {
+      commitStreamingDraft(submission.assistantMessageId);
       clearStreamingDraft(submission.assistantMessageId);
       patchLiveState(submission.runtimeStoreThreadId, (state) => ({
         ...state,
@@ -6509,7 +6584,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       runningSubmissionRef.current = null;
     }
     setIsLoading(false);
-  }, [clearStreamingDraft, patchLiveState, resolveAgentApproval, resolveStoredApproval, setIsLoading]);
+  }, [clearStreamingDraft, commitStreamingDraft, patchLiveState, resolveAgentApproval, resolveStoredApproval, setIsLoading]);
 
   useEffect(() => {
     const handleExternalCommand = (event: Event) => {
@@ -6833,7 +6908,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   const agentChatContent = (
     <GNAgentMessageList
       messages={messages}
-      draftContents={streamingDraftContents}
+      draftContents={effectiveStreamingDraftContents}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseAIChatMessageParts}
       renderMessagePart={renderMessagePart}

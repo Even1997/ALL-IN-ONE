@@ -59,6 +59,8 @@ export const buildAssistantRenderModel = (
           type: 'thinking',
           content: event.content,
           collapsed: event.collapsed,
+          status: event.status,
+          elapsedSeconds: event.elapsedSeconds,
           createdAt: event.createdAt,
         },
         timelineOrder,

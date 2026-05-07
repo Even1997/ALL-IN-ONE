@@ -60,6 +60,12 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Project Rules
+
+- Every task starts with a brief note about what will change, and work begins only after approval.
+- Prefer the smallest possible change that fixes the root cause and stays stable long term.
+- After code changes, remove old legacy code or dead paths directly related to the change.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

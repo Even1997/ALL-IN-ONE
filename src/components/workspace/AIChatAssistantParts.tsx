@@ -1,4 +1,5 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { memo, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -10,7 +11,21 @@ export type AIChatMessagePartRenderOptions = {
   onToggleThinking?: () => void;
 };
 
-export const AssistantThinkingBlock = ({
+const formatThinkingDuration = (elapsedSeconds: number) => `${Math.max(0.1, elapsedSeconds).toFixed(1)}s`;
+const getLiveThinkingElapsedSeconds = (startedAt: number, referenceTime: number) =>
+  Math.max(0.1, Math.round(Math.max(0, referenceTime - startedAt) / 100) / 10);
+const resolveDisplayThinkingElapsedSeconds = (
+  elapsedSeconds: number | undefined,
+  lastDisplayedElapsedSeconds: number | null
+) => {
+  if (typeof elapsedSeconds !== 'number') {
+    return lastDisplayedElapsedSeconds ?? undefined;
+  }
+
+  return Math.max(elapsedSeconds, lastDisplayedElapsedSeconds ?? elapsedSeconds);
+};
+
+export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
   part,
   isStreaming,
   thinkingExpanded,
@@ -20,15 +35,54 @@ export const AssistantThinkingBlock = ({
   isStreaming: boolean;
   thinkingExpanded?: boolean;
   onToggleThinking?: () => void;
-}) => {
+}) {
   const isExpanded = thinkingExpanded ?? !part.collapsed;
+  const isThinkingActive = part.status === 'streaming' || (isStreaming && part.status !== 'completed');
+  const [referenceTime, setReferenceTime] = useState(() => Date.now());
+  const lastDisplayedElapsedSecondsRef = useRef<number | null>(null);
+  useEffect(() => {
+    lastDisplayedElapsedSecondsRef.current =
+      typeof part.elapsedSeconds === 'number' ? Math.max(0.1, part.elapsedSeconds) : null;
+  }, [part.createdAt]);
+  useEffect(() => {
+    if (!isThinkingActive || typeof part.createdAt !== 'number') {
+      return;
+    }
+
+    setReferenceTime(Date.now());
+    const timer = window.setInterval(() => setReferenceTime(Date.now()), 100);
+    return () => window.clearInterval(timer);
+  }, [isThinkingActive, part.createdAt]);
+
+  const rawDisplayedElapsedSeconds =
+    isThinkingActive && typeof part.createdAt === 'number'
+      ? getLiveThinkingElapsedSeconds(part.createdAt, referenceTime)
+      : part.elapsedSeconds;
+  const displayedElapsedSeconds = resolveDisplayThinkingElapsedSeconds(
+    rawDisplayedElapsedSeconds,
+    lastDisplayedElapsedSecondsRef.current
+  );
+  useEffect(() => {
+    if (typeof displayedElapsedSeconds !== 'number') {
+      return;
+    }
+
+    lastDisplayedElapsedSecondsRef.current = Math.max(
+      lastDisplayedElapsedSecondsRef.current ?? displayedElapsedSeconds,
+      displayedElapsedSeconds
+    );
+  }, [displayedElapsedSeconds]);
+  const durationLabel =
+    typeof displayedElapsedSeconds === 'number' ? formatThinkingDuration(displayedElapsedSeconds) : '';
   const previewLine =
     part.content
       .split('\n')
       .map((line) => line.replace(/\s+/g, ' ').trim())
       .find(Boolean) || '';
-  const summaryLabel = isStreaming ? '思考中' : '思考过程';
-  const summaryPreview = !isExpanded ? previewLine || (isStreaming ? '正在实时更新推理内容' : '') : '';
+  const summaryLabel = isThinkingActive ? '\u601d\u8003\u4e2d' : '\u601d\u8003\u8fc7\u7a0b';
+  const summaryPreview = !isExpanded
+    ? previewLine || (isThinkingActive ? '\u6b63\u5728\u5b9e\u65f6\u66f4\u65b0\u63a8\u7406\u5185\u5bb9' : '')
+    : '';
 
   return (
     <div className={`chat-thinking-block ${isExpanded ? 'expanded' : 'collapsed'}`}>
@@ -41,10 +95,13 @@ export const AssistantThinkingBlock = ({
       >
         <span className="chat-thinking-pulse" aria-hidden="true" />
         <span className="chat-thinking-copy">
-          <strong>{summaryLabel}</strong>
+          <strong>
+            {summaryLabel}
+            {durationLabel ? ` ${durationLabel}` : ''}
+          </strong>
           {summaryPreview ? <span className="chat-thinking-preview">{summaryPreview}</span> : null}
         </span>
-        {isStreaming ? (
+        {isThinkingActive ? (
           <span className="chat-thinking-dots" aria-hidden="true">
             <span />
             <span />
@@ -58,21 +115,19 @@ export const AssistantThinkingBlock = ({
           {part.content ? (
             <pre>{part.content}</pre>
           ) : (
-            <div className="chat-thinking-empty">{'等待模型输出思考内容...'}</div>
+            <div className="chat-thinking-empty">{'\u7b49\u5f85\u6a21\u578b\u8f93\u51fa\u601d\u8003\u5185\u5bb9...'}</div>
           )}
         </div>
       </div>
     </div>
   );
-};
+});
 
-export const AssistantTextBlock = ({
+export const AssistantTextBlock = memo(function AssistantTextBlock({
   content,
-  isStreaming,
 }: {
   content: string;
-  isStreaming: boolean;
-}) => {
+}) {
   const inlineImagePaths = extractInlineImagePaths(content);
 
   return (
@@ -100,10 +155,9 @@ export const AssistantTextBlock = ({
           })}
         </div>
       ) : null}
-      {isStreaming ? <span className="chat-answer-stream-cursor" aria-hidden="true" /> : null}
     </div>
   );
-};
+});
 
 const MARKDOWN_COMPONENTS: Components = {
   table: ({ node, children, ...props }) => {

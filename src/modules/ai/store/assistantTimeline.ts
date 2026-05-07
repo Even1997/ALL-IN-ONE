@@ -61,6 +61,8 @@ export type AssistantTimelineReasoningEvent = {
   kind: 'reasoning';
   content: string;
   collapsed: boolean;
+  status: 'streaming' | 'completed';
+  elapsedSeconds?: number;
   createdAt: number;
 };
 
@@ -105,6 +107,33 @@ const isAssistantNarrativeTimelineEvent = (
 ): event is AssistantNarrativeTimelineEvent =>
   event.kind === 'text' || event.kind === 'reasoning';
 
+const sortAssistantTimelineEvents = (timeline: AssistantTimelineEvent[] = []) =>
+  [...timeline].sort((left, right) => left.createdAt - right.createdAt);
+
+const sortAssistantTimelineEntries = (
+  entries: Array<{
+    event: AssistantTimelineEvent;
+    orderHint: number;
+    arrayIndex: number;
+  }>
+) =>
+  [...entries].sort((left, right) => {
+    if (left.event.createdAt !== right.event.createdAt) {
+      return left.event.createdAt - right.event.createdAt;
+    }
+
+    if (left.orderHint !== right.orderHint) {
+      return left.orderHint - right.orderHint;
+    }
+
+    return left.arrayIndex - right.arrayIndex;
+  });
+
+const resolveElapsedSeconds = (startedAt: number, referenceTime: number) => {
+  const elapsedMs = Math.max(0, referenceTime - startedAt);
+  return Math.max(0.1, Math.round(elapsedMs / 100) / 10);
+};
+
 export const buildAssistantTimelineFromParts = (
   parts: AIChatMessagePart[],
   options?: { createdAt?: number }
@@ -120,6 +149,8 @@ export const buildAssistantTimelineFromParts = (
           kind: 'reasoning',
           content: part.content,
           collapsed: part.collapsed,
+          status: part.status ?? 'completed',
+          elapsedSeconds: part.elapsedSeconds,
           createdAt,
         },
       ];
@@ -176,64 +207,86 @@ export const buildAssistantTimelineUpdate = (
   const hasExplicitPreferredNarrativeTimestamps = Boolean(
     options?.preferredAssistantParts?.some((part) => typeof part.createdAt === 'number')
   );
+  const existingOrderById = new Map(currentTimeline.map((event, index) => [event.id, index] as const));
   const narrativeCreatedAtBuckets = {
-    text: existingNarrativeEvents
-      .filter((event): event is AssistantTimelineTextEvent => event.kind === 'text')
-      .map((event) => event.createdAt),
-    reasoning: existingNarrativeEvents
-      .filter((event): event is AssistantTimelineReasoningEvent => event.kind === 'reasoning')
-      .map((event) => event.createdAt),
+    text: existingNarrativeEvents.filter(
+      (event): event is AssistantTimelineTextEvent => event.kind === 'text'
+    ),
+    reasoning: existingNarrativeEvents.filter(
+      (event): event is AssistantTimelineReasoningEvent => event.kind === 'reasoning'
+    ),
   };
   let nextCreatedAt =
     currentTimeline.reduce((maxCreatedAt, event) => Math.max(maxCreatedAt, event.createdAt), 0) + 1;
+  let nextOrderHint = currentTimeline.length;
   let textIndex = 0;
   let reasoningIndex = 0;
-  const textEvents = nextNarrativeEvents.map((event) => {
+  const timelineEntries = nextNarrativeEvents.map((event, index) => {
     if (event.kind === 'text') {
-      const reusedCreatedAt = narrativeCreatedAtBuckets.text[textIndex];
+      const reusedTextEvent = narrativeCreatedAtBuckets.text[textIndex];
       textIndex += 1;
-      return {
+      const nextEvent = {
         ...event,
         createdAt:
           hasExplicitPreferredNarrativeTimestamps && typeof event.createdAt === 'number'
             ? event.createdAt
-            : typeof reusedCreatedAt === 'number'
-              ? reusedCreatedAt
+            : typeof reusedTextEvent?.createdAt === 'number'
+              ? reusedTextEvent.createdAt
               : typeof event.createdAt === 'number'
                 ? event.createdAt
                 : nextCreatedAt++,
       };
+      return {
+        event: nextEvent,
+        orderHint:
+          typeof reusedTextEvent?.id === 'string'
+            ? (existingOrderById.get(reusedTextEvent.id) ?? nextOrderHint++)
+            : nextOrderHint++,
+        arrayIndex: index,
+      };
     }
 
     if (event.kind === 'reasoning') {
-      const reusedCreatedAt = narrativeCreatedAtBuckets.reasoning[reasoningIndex];
+      const reusedReasoningEvent = narrativeCreatedAtBuckets.reasoning[reasoningIndex];
       reasoningIndex += 1;
-      return {
+      const nextEvent = {
         ...event,
         createdAt:
           hasExplicitPreferredNarrativeTimestamps && typeof event.createdAt === 'number'
             ? event.createdAt
-            : typeof reusedCreatedAt === 'number'
-              ? reusedCreatedAt
+            : typeof reusedReasoningEvent?.createdAt === 'number'
+              ? reusedReasoningEvent.createdAt
               : nextCreatedAt++,
+        status: event.status ?? reusedReasoningEvent?.status ?? 'completed',
+        elapsedSeconds:
+          typeof event.elapsedSeconds === 'number'
+            ? event.elapsedSeconds
+            : reusedReasoningEvent?.elapsedSeconds,
+      };
+      return {
+        event: nextEvent,
+        orderHint:
+          typeof reusedReasoningEvent?.id === 'string'
+            ? (existingOrderById.get(reusedReasoningEvent.id) ?? nextOrderHint++)
+            : nextOrderHint++,
+        arrayIndex: index,
       };
     }
 
-    return event;
+    return {
+      event,
+      orderHint: nextOrderHint++,
+      arrayIndex: index,
+    };
   });
-  return [...textEvents, ...runtimeEvents].sort((left, right) => {
-    if (left.createdAt !== right.createdAt) {
-      return left.createdAt - right.createdAt;
-    }
-
-    const leftIsRuntime = isAssistantRuntimeTimelineEvent(left);
-    const rightIsRuntime = isAssistantRuntimeTimelineEvent(right);
-    if (leftIsRuntime !== rightIsRuntime) {
-      return leftIsRuntime ? -1 : 1;
-    }
-
-    return 0;
-  });
+  const runtimeEntries = runtimeEvents.map((event, index) => ({
+    event,
+    orderHint: existingOrderById.get(event.id) ?? nextOrderHint++,
+    arrayIndex: timelineEntries.length + index,
+  }));
+  return sortAssistantTimelineEntries([...timelineEntries, ...runtimeEntries]).map(
+    ({ event }) => event
+  );
 };
 
 export const getAssistantTimelineText = (timeline: AssistantTimelineEvent[] = []) =>
@@ -259,9 +312,10 @@ export const replaceAssistantRuntimeTimelineEvents = (
   timeline: AssistantTimelineEvent[] = [],
   runtimeEvents: StoredChatRuntimeEvent[]
 ) =>
-  [...timeline.filter((event) => !isAssistantRuntimeTimelineEvent(event)), ...runtimeEvents].sort(
-    (left, right) => left.createdAt - right.createdAt
-  );
+  sortAssistantTimelineEvents([
+    ...timeline.filter((event) => !isAssistantRuntimeTimelineEvent(event)),
+    ...runtimeEvents,
+  ]);
 
 export const appendAssistantRuntimeTimelineEvent = (
   timeline: AssistantTimelineEvent[] = [],
@@ -361,6 +415,57 @@ export const buildAssistantStreamingTimeline = (
     thinkingCollapsed?: boolean;
   }
 ) => buildAssistantTimelineUpdate(content, currentTimeline, options);
+
+export const applyAssistantReasoningProgress = (
+  timeline: AssistantTimelineEvent[] = [],
+  input: {
+    active: boolean;
+    referenceTime?: number;
+  }
+): AssistantTimelineEvent[] => {
+  let latestReasoningIndex = -1;
+  timeline.forEach((event, index) => {
+    if (event.kind === 'reasoning') {
+      latestReasoningIndex = index;
+    }
+  });
+
+  if (latestReasoningIndex === -1) {
+    return timeline;
+  }
+
+  const resolveReasoningElapsedSeconds = (event: AssistantTimelineReasoningEvent) => {
+    if (typeof input.referenceTime === 'number') {
+      const elapsedSeconds = resolveElapsedSeconds(event.createdAt, input.referenceTime);
+      return Math.max(elapsedSeconds, event.elapsedSeconds ?? elapsedSeconds);
+    }
+
+    return event.elapsedSeconds;
+  };
+
+  return timeline.map((event, index): AssistantTimelineEvent => {
+    if (event.kind !== 'reasoning') {
+      return event;
+    }
+
+    const isLatestReasoning = index === latestReasoningIndex;
+    const status: AssistantTimelineReasoningEvent['status'] =
+      isLatestReasoning && input.active ? 'streaming' : 'completed';
+    const nextElapsedSeconds = isLatestReasoning
+      ? input.active
+        ? resolveReasoningElapsedSeconds(event)
+        : event.status === 'streaming' || typeof event.elapsedSeconds !== 'number'
+          ? resolveReasoningElapsedSeconds(event)
+          : event.elapsedSeconds
+      : event.elapsedSeconds;
+    return {
+      ...event,
+      status,
+      elapsedSeconds:
+        typeof nextElapsedSeconds === 'number' ? Math.max(0.1, nextElapsedSeconds) : event.elapsedSeconds,
+    };
+  });
+};
 
 export const syncAssistantTimelineWithToolCalls = (
   timeline: AssistantTimelineEvent[] = [],

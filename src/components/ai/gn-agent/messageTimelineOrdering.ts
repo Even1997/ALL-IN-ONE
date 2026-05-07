@@ -15,12 +15,10 @@ export const sortMessageRenderItems = (
     ...partRenderItems.map((item, index) => ({
       ...item,
       timelineIndex: index,
-      source: 'part' as const,
     })),
     ...bubbleRenderItems.map((item, index) => ({
       ...item,
       timelineIndex: partRenderItems.length + index,
-      source: 'bubble' as const,
     })),
   ];
 

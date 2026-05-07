@@ -6,9 +6,14 @@ import {
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes.ts';
 import type { SkillIntent } from '../workflow/skillRouting.ts';
 import { estimateTextTokens } from './contextBudget.ts';
-import { getBuiltInRuntimeToolNames } from '../../../utils/hostPlatform.ts';
+import { getBuiltInRuntimeToolNames, isWindowsHost } from '../../../utils/hostPlatform.ts';
 
 const AVAILABLE_RUNTIME_TOOLS = getBuiltInRuntimeToolNames().join(', ');
+const WINDOWS_COMMAND_TOOL_POLICY = [
+  'On Windows hosts, prefer the powershell tool for command execution.',
+  'Use read-only tools such as ls, view, glob, and grep for directory and file inspection before using shell commands.',
+  'Use commands such as Get-Location and Get-ChildItem instead of bash-only syntax like pwd && ls -la.',
+].join(' ');
 
 type ConversationHistoryMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -59,6 +64,7 @@ const buildFreeChatSystemPrompt = (projectName?: string) =>
     'Default to normal conversation unless the user explicitly invokes a specialized skill.',
     'Answer directly, naturally, and with awareness of current project context.',
     `Available runtime tools: ${AVAILABLE_RUNTIME_TOOLS}.`,
+    isWindowsHost() ? WINDOWS_COMMAND_TOOL_POLICY : null,
     'Only call tools using this exact XML format:',
     '<tool_use>',
     '<tool name="tool_name">',
@@ -84,6 +90,7 @@ const buildSkillSystemPrompt = (projectName: string | undefined, skillName: stri
     INTERNAL_CONTEXT_DISCLOSURE_POLICY,
     RESPONSE_STYLE_POLICY,
     ARTIFACT_DRAFT_POLICY,
+    isWindowsHost() ? WINDOWS_COMMAND_TOOL_POLICY : null,
     `<skill_playbook>\n${skillPrompt}\n</skill_playbook>`,
     skillName === 'UI Design'
       ? 'Preserve the validated shell structure and information hierarchy unless you clearly explain why a change is needed.'

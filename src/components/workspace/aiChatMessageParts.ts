@@ -2,7 +2,14 @@ import { sanitizeAgentVisibleText } from '../../modules/ai/runtime/dispatch/agen
 
 export type AIChatMessagePart =
   | { type: 'text'; content: string; createdAt?: number }
-  | { type: 'thinking'; content: string; collapsed: boolean; createdAt?: number }
+  | {
+      type: 'thinking';
+      content: string;
+      collapsed: boolean;
+      status?: 'streaming' | 'completed';
+      elapsedSeconds?: number;
+      createdAt?: number;
+    }
   | {
       type: 'tool';
       name: string;
@@ -336,6 +343,7 @@ export const buildStoredAssistantParts = (input: {
   hasExecutionBlocks?: boolean;
   thinkingCollapsed?: boolean;
   preferredAssistantParts?: AIChatMessagePart[];
+  preservePreferredNarrative?: boolean;
 }) => {
   const preferredParts = normalizePreferredNarrativeParts(input.preferredAssistantParts, input.thinkingCollapsed);
 
@@ -346,6 +354,10 @@ export const buildStoredAssistantParts = (input: {
   });
 
   if (preferredParts.length > 0) {
+    if (input.preservePreferredNarrative) {
+      return preferredParts;
+    }
+
     if (input.hasExecutionBlocks) {
       return preferredParts;
     }
@@ -434,6 +446,7 @@ export const buildAssistantStructuredContentState = (input: {
     hasExecutionBlocks: extracted.hasExecutionBlocks,
     thinkingCollapsed: input.thinkingCollapsed ?? true,
     preferredAssistantParts: preferredParts,
+    preservePreferredNarrative: shouldPreservePreferredNarrative,
   });
   const content = assistantParts.length > 0 ? serializeAssistantMessageParts(assistantParts) : cleanVisibleAssistantText(input.content || '');
 
