@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "GoodNight - 可视化软件开发平台",
+        "title": "",
         "width": 1280,
         "height": 800,
         "minWidth": 1280,
@@ -20,7 +20,7 @@
         "center": true,
         "resizable": true,
         "fullscreen": false,
-        "decorations": true
+        "decorations": false
       }
     ],
     "security": {

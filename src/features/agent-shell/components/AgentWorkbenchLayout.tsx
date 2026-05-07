@@ -1,0 +1,35 @@
+import React from 'react';
+
+type AgentWorkbenchLayoutProps = {
+  sidebar: React.ReactNode;
+  centerStage: React.ReactNode;
+  floatingOverlay?: React.ReactNode;
+  rightInspector?: React.ReactNode;
+  inspectorCollapsed: boolean;
+};
+
+export const AgentWorkbenchLayout: React.FC<AgentWorkbenchLayoutProps> = ({
+  sidebar,
+  centerStage,
+  floatingOverlay,
+  rightInspector,
+  inspectorCollapsed,
+}) => (
+  <section
+    className="agent-workbench-shell"
+    data-inspector-collapsed={inspectorCollapsed}
+  >
+    <aside className="agent-workbench-sidebar-shell">{sidebar}</aside>
+    <main className="agent-workbench-center">
+      <div className="agent-workbench-center-body">
+        {centerStage}
+        {floatingOverlay ? (
+          <div className="agent-workbench-floating-overlay">{floatingOverlay}</div>
+        ) : null}
+      </div>
+    </main>
+    {!inspectorCollapsed && rightInspector ? (
+      <aside className="agent-workbench-right-panel">{rightInspector}</aside>
+    ) : null}
+  </section>
+);

@@ -1,47 +1,7 @@
 .agent-workspace-page {
-  display: flex;
+  box-sizing: border-box;
   flex: 1 1 auto;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 100%;
-}
-
-.agent-workspace-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.agent-workspace-tabs {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.agent-workspace-tab {
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #0f172a;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-
-.agent-workspace-tab.active {
-  background: #0f172a;
-  color: #f8fafc;
-}
-
-.agent-workspace-content {
+  height: 100%;
   min-height: 0;
-  display: flex;
-  flex: 1 1 auto;
-}
-
-.gn-agent-shell-config-card {
-  width: 100%;
+  overflow: hidden;
 }

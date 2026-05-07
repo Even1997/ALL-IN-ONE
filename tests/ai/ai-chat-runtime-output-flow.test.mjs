@@ -507,6 +507,14 @@ test('runtime event render model hides internal memory reads from visible tool c
     ['call-view'],
   );
 });
+
+test('runtime event render model tolerates malformed assistant timeline values', async () => {
+  const { buildRuntimeTimelineModelFromAssistantTimeline } = await loadRenderModel();
+  const model = buildRuntimeTimelineModelFromAssistantTimeline(/** @type {any} */ ({ kind: 'oops' }));
+
+  assert.deepEqual(model.items, []);
+  assert.deepEqual(model.orderedRuntimeEvents, []);
+});
 test('assistant narrative, thinking, and runtime cards share a unified surface language', async () => {
   const cssSource = await readFile(cssPath, 'utf8');
 

@@ -356,8 +356,8 @@ export const buildRuntimeTimelineModelFromAssistantTimeline = (
   timelineEvents: AssistantTimelineEvent[]
 ): RuntimeEventRenderModel =>
   buildRuntimeEventRenderModelFromOrderedEvents(
-    sortRuntimeEventsByCreatedAt(timelineEvents.filter(isAssistantRuntimeTimelineEvent)),
-    timelineEvents
+    sortRuntimeEventsByCreatedAt((Array.isArray(timelineEvents) ? timelineEvents : []).filter(isAssistantRuntimeTimelineEvent)),
+    Array.isArray(timelineEvents) ? timelineEvents : []
   );
 
 export const buildRuntimeToolStreamModel = buildRuntimeEventRenderModel;

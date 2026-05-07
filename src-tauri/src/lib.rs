@@ -34,11 +34,9 @@ use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::menu::{AboutMetadataBuilder, Menu, MenuBuilder, SubmenuBuilder};
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 
-const NATIVE_MENU_EVENT_NAME: &str = "native-menu-event";
 const GOODNIGHT_SKILLS_DIR_NAME: &str = "goodnight-skills";
 const GOODNIGHT_BUILTIN_SKILLS_DIR_NAME: &str = "built-in";
 const GOODNIGHT_IMPORTED_SKILLS_DIR_NAME: &str = "imported";
@@ -144,12 +142,6 @@ fn collect_git_status_paths(project_root: &Path) -> Option<HashSet<String>> {
     Some(parse_git_status_paths(
         String::from_utf8_lossy(&output.stdout).as_ref(),
     ))
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct NativeMenuEventPayload {
-    id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -2549,81 +2541,6 @@ fn open_path_in_shell(app_handle: tauri::AppHandle, path: String) -> Result<(), 
         .map_err(|error| format!("Failed to open path: {}", error))
 }
 
-fn build_native_app_menu<R: tauri::Runtime>(
-    app_handle: &tauri::AppHandle<R>,
-) -> tauri::Result<Menu<R>> {
-    let about_metadata = AboutMetadataBuilder::new()
-        .name(Some("GoodNight".to_string()))
-        .version(Some(env!("CARGO_PKG_VERSION").to_string()))
-        .comments(Some(
-            "\u{53ef}\u{89c6}\u{5316}\u{8f6f}\u{4ef6}\u{5f00}\u{53d1}\u{5e73}\u{53f0}".to_string(),
-        ))
-        .build();
-
-    let file_menu = SubmenuBuilder::new(app_handle, "\u{6587}\u{4ef6}")
-        .text("file.new_project", "\u{65b0}\u{5efa}\u{9879}\u{76ee}")
-        .text("file.project_manager", "\u{9879}\u{76ee}\u{5217}\u{8868}")
-        .separator()
-        .quit()
-        .build()?;
-
-    let edit_menu = SubmenuBuilder::new(app_handle, "\u{7f16}\u{8f91}")
-        .cut()
-        .copy()
-        .paste()
-        .select_all()
-        .build()?;
-
-    let view_menu = SubmenuBuilder::new(app_handle, "\u{67e5}\u{770b}")
-        .text("view.knowledge", "\u{77e5}\u{8bc6}\u{5e93}")
-        .text("view.wiki", "Wiki \u{56fe}\u{8c31}")
-        .text("view.page", "\u{9875}\u{9762}")
-        .text("view.design", "\u{8bbe}\u{8ba1}")
-        .text("view.agent", "Agent")
-        .text("view.develop", "\u{5f00}\u{53d1}")
-        .text("view.test", "\u{6d4b}\u{8bd5}")
-        .text("view.operations", "\u{53d1}\u{5e03}")
-        .separator()
-        .text("view.toggle_theme", "\u{5207}\u{6362}\u{4e3b}\u{9898}")
-        .build()?;
-
-    let window_menu = SubmenuBuilder::new(app_handle, "\u{7a97}\u{53e3}")
-        .minimize()
-        .maximize()
-        .separator()
-        .close_window()
-        .build()?;
-
-    let help_menu = SubmenuBuilder::new(app_handle, "\u{5e2e}\u{52a9}")
-        .about_with_text("\u{5173}\u{4e8e} GoodNight", Some(about_metadata))
-        .separator()
-        .text(
-            "help.layout_overview",
-            "\u{5f53}\u{524d}\u{5e03}\u{5c40}\u{8bf4}\u{660e}",
-        )
-        .text(
-            "help.knowledge_overview",
-            "\u{77e5}\u{8bc6}\u{5e93}\u{8bf4}\u{660e}",
-        )
-        .text("help.page_overview", "\u{9875}\u{9762}\u{8bf4}\u{660e}")
-        .build()?;
-
-    MenuBuilder::new(app_handle)
-        .item(&file_menu)
-        .item(&edit_menu)
-        .item(&view_menu)
-        .item(&window_menu)
-        .item(&help_menu)
-        .build()
-}
-
-fn emit_native_menu_event<R: tauri::Runtime>(app_handle: &tauri::AppHandle<R>, id: &str) {
-    let _ = app_handle.emit(
-        NATIVE_MENU_EVENT_NAME,
-        NativeMenuEventPayload { id: id.to_string() },
-    );
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -2637,23 +2554,6 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
-        .on_menu_event(|app_handle, event| match event.id().as_ref() {
-            "file.new_project"
-            | "file.project_manager"
-            | "view.knowledge"
-            | "view.wiki"
-            | "view.page"
-            | "view.design"
-            | "view.agent"
-            | "view.develop"
-            | "view.test"
-            | "view.operations"
-            | "view.toggle_theme"
-            | "help.layout_overview"
-            | "help.knowledge_overview"
-            | "help.page_overview" => emit_native_menu_event(app_handle, event.id().as_ref()),
-            _ => {}
-        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
@@ -2665,11 +2565,6 @@ pub fn run() {
             fs::create_dir_all(&app_data_dir)
                 .map_err(|error| format!("Failed to create app data directory: {}", error))?;
             ensure_builtin_skills_installed(&app_data_dir)?;
-            let native_menu = build_native_app_menu(&app.handle())
-                .map_err(|error| format!("Failed to build native app menu: {}", error))?;
-
-            app.set_menu(native_menu)
-                .map_err(|error| format!("Failed to install native app menu: {}", error))?;
 
             Ok(())
         })

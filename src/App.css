@@ -4,10 +4,14 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+}
+
 :root {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.55;
   color: #1d1d1f;
   background-color: #f5f5f7;
   -webkit-font-smoothing: antialiased;
@@ -20,16 +24,20 @@
 body {
   margin: 0;
   padding: 0;
+  height: 100%;
   min-height: 100vh;
-}
-
-body,
-body :where(*) {
-  font-size: 13px !important;
+  font-size: 14px;
 }
 
 #root {
+  height: 100%;
   min-height: 100vh;
+}
+
+body.desktop-workbench-mode,
+body.desktop-workbench-mode #root {
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Project Setup */
@@ -38,19 +46,21 @@ body :where(*) {
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   background:
-    radial-gradient(circle at top left, rgba(0, 122, 255, 0.18), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(48, 209, 88, 0.14), transparent 28%),
-    linear-gradient(135deg, #eef4ff 0%, #f7f8fb 45%, #eef8f1 100%);
+    radial-gradient(circle at 12% 10%, rgba(37, 99, 235, 0.18), transparent 30%),
+    radial-gradient(circle at 82% 14%, rgba(15, 118, 110, 0.14), transparent 24%),
+    radial-gradient(circle at 68% 88%, rgba(249, 115, 22, 0.08), transparent 22%),
+    linear-gradient(135deg, #eef5ff 0%, #f5f8fb 48%, #edf8f5 100%);
 }
 
 .project-setup-card {
   margin: 40px;
   padding: 28px;
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(24px);
-  box-shadow: 0 24px 70px rgba(28, 45, 86, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 24px 72px rgba(28, 45, 86, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.62);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -105,9 +115,9 @@ body :where(*) {
 .app-type-card {
   padding: 14px;
   text-align: left;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.74);
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
   display: flex;
@@ -158,13 +168,14 @@ body :where(*) {
 .setup-field select {
   width: 100%;
   padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: rgba(255, 255, 255, 0.92);
+  border-radius: 11px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
   font-size: 14px;
   color: #1d1d1f;
   outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 .setup-field input:focus,
@@ -208,12 +219,13 @@ body :where(*) {
 .primary-action {
   padding: 12px 18px;
   border: none;
-  border-radius: 12px;
+  border-radius: 11px;
   background: linear-gradient(135deg, #007aff, #005bd3);
   color: white;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 12px 28px rgba(0, 91, 211, 0.22);
 }
 
 .primary-action:disabled {
@@ -223,13 +235,14 @@ body :where(*) {
 
 .secondary-action {
   padding: 12px 18px;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.92);
+  border-radius: 11px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.88);
   color: #1d1d1f;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
 }
 
 .secondary-action:disabled {
@@ -4259,32 +4272,35 @@ body,
 
 :root:not([data-theme]),
 :root[data-theme='dark'] {
-  --mode-surface: #141518;
-  --mode-surface-dot: rgba(255, 255, 255, 0.14);
-  --mode-header-bg: rgba(10, 10, 12, 0.88);
-  --mode-header-border: rgba(255, 255, 255, 0.06);
+  --mode-surface: #10151b;
+  --mode-surface-dot: rgba(255, 255, 255, 0.06);
+  --mode-header-bg: rgba(10, 16, 24, 0.7);
+  --mode-header-border: rgba(148, 163, 184, 0.1);
   --mode-text: #f8fafc;
   --mode-muted: rgba(255, 255, 255, 0.58);
   --mode-soft-text: rgba(255, 255, 255, 0.78);
-  --mode-panel: rgba(28, 29, 32, 0.9);
-  --mode-panel-alt: rgba(17, 18, 21, 0.88);
-  --mode-panel-lite: rgba(255, 255, 255, 0.05);
-  --mode-border: rgba(255, 255, 255, 0.08);
-  --mode-chip: rgba(255, 255, 255, 0.06);
-  --mode-chip-strong: rgba(255, 255, 255, 0.1);
-  --mode-input: rgba(255, 255, 255, 0.05);
+  --mode-panel: rgba(17, 24, 33, 0.76);
+  --mode-panel-alt: rgba(11, 18, 28, 0.9);
+  --mode-panel-lite: rgba(255, 255, 255, 0.04);
+  --mode-border: rgba(148, 163, 184, 0.12);
+  --mode-chip: rgba(255, 255, 255, 0.045);
+  --mode-chip-strong: rgba(125, 211, 252, 0.12);
+  --mode-input: rgba(255, 255, 255, 0.055);
   --mode-button: rgba(255, 255, 255, 0.92);
   --mode-button-text: #111318;
   --mode-accent: #8be9d6;
   --style-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-  --style-radius-sm: 12px;
-  --style-radius-md: 18px;
-  --style-radius-lg: 28px;
+  --style-radius-sm: 10px;
+  --style-radius-md: 14px;
+  --style-radius-lg: 18px;
   --style-border-width: 1px;
-  --style-shadow-card: 0 14px 36px rgba(0, 0, 0, 0.18);
+  --style-shadow-card: 0 20px 48px rgba(2, 8, 23, 0.24);
   --style-button-shadow: none;
-  --style-header-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
-  --style-surface-overlay: linear-gradient(transparent, transparent);
+  --style-header-shadow: 0 16px 42px rgba(2, 8, 23, 0.2);
+  --style-surface-overlay:
+    radial-gradient(circle at 14% 10%, rgba(59, 130, 246, 0.12), transparent 28%),
+    radial-gradient(circle at 84% 12%, rgba(20, 184, 166, 0.1), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0));
   --style-selection-bg: var(--mode-chip-strong);
   --canvas-bg: #1c1d20;
   --canvas-dot: rgba(255, 255, 255, 0.16);
@@ -4304,32 +4320,35 @@ body,
 }
 
 :root[data-theme='light'] {
-  --mode-surface: #eef1f4;
-  --mode-surface-dot: rgba(15, 23, 42, 0.09);
-  --mode-header-bg: rgba(255, 255, 255, 0.78);
-  --mode-header-border: rgba(15, 23, 42, 0.08);
+  --mode-surface: #edf2f8;
+  --mode-surface-dot: rgba(100, 116, 139, 0.05);
+  --mode-header-bg: rgba(255, 255, 255, 0.66);
+  --mode-header-border: rgba(100, 116, 139, 0.1);
   --mode-text: #101828;
   --mode-muted: rgba(15, 23, 42, 0.58);
   --mode-soft-text: rgba(15, 23, 42, 0.82);
-  --mode-panel: rgba(255, 255, 255, 0.72);
-  --mode-panel-alt: rgba(255, 255, 255, 0.86);
-  --mode-panel-lite: rgba(255, 255, 255, 0.58);
-  --mode-border: rgba(15, 23, 42, 0.08);
-  --mode-chip: rgba(15, 23, 42, 0.05);
-  --mode-chip-strong: rgba(15, 23, 42, 0.08);
-  --mode-input: rgba(255, 255, 255, 0.72);
+  --mode-panel: rgba(255, 255, 255, 0.74);
+  --mode-panel-alt: rgba(255, 255, 255, 0.88);
+  --mode-panel-lite: rgba(255, 255, 255, 0.56);
+  --mode-border: rgba(100, 116, 139, 0.09);
+  --mode-chip: rgba(15, 23, 42, 0.045);
+  --mode-chip-strong: rgba(59, 130, 246, 0.1);
+  --mode-input: rgba(255, 255, 255, 0.78);
   --mode-button: #111318;
   --mode-button-text: #ffffff;
   --mode-accent: #0f766e;
   --style-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-  --style-radius-sm: 12px;
-  --style-radius-md: 18px;
-  --style-radius-lg: 28px;
+  --style-radius-sm: 10px;
+  --style-radius-md: 14px;
+  --style-radius-lg: 18px;
   --style-border-width: 1px;
-  --style-shadow-card: 0 14px 36px rgba(15, 23, 42, 0.08);
+  --style-shadow-card: 0 18px 44px rgba(71, 85, 105, 0.12);
   --style-button-shadow: none;
-  --style-header-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
-  --style-surface-overlay: linear-gradient(transparent, transparent);
+  --style-header-shadow: 0 16px 40px rgba(71, 85, 105, 0.1);
+  --style-surface-overlay:
+    radial-gradient(circle at 12% 8%, rgba(59, 130, 246, 0.1), transparent 28%),
+    radial-gradient(circle at 86% 14%, rgba(20, 184, 166, 0.09), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0));
   --style-selection-bg: var(--mode-chip-strong);
   --canvas-bg: #edf1f5;
   --canvas-dot: rgba(15, 23, 42, 0.12);
@@ -4408,19 +4427,19 @@ body,
 :root[data-style='workbench'][data-theme='dark'],
 :root[data-style='workbench']:not([data-theme]) {
   color-scheme: dark;
-  --mode-surface: #0f0f10;
-  --mode-surface-dot: rgba(255, 255, 255, 0.04);
-  --mode-header-bg: rgba(17, 17, 17, 0.84);
-  --mode-header-border: rgba(255, 255, 255, 0.08);
+  --mode-surface: #101419;
+  --mode-surface-dot: rgba(255, 255, 255, 0.028);
+  --mode-header-bg: rgba(16, 21, 28, 0.72);
+  --mode-header-border: rgba(148, 163, 184, 0.08);
   --mode-text: #f5f5f4;
   --mode-muted: rgba(214, 211, 209, 0.58);
   --mode-soft-text: rgba(245, 245, 244, 0.82);
-  --mode-panel: rgba(24, 24, 27, 0.9);
-  --mode-panel-alt: rgba(30, 30, 33, 0.94);
-  --mode-panel-lite: rgba(255, 255, 255, 0.04);
-  --mode-border: rgba(255, 255, 255, 0.09);
-  --mode-chip: rgba(255, 255, 255, 0.05);
-  --mode-chip-strong: rgba(255, 255, 255, 0.08);
+  --mode-panel: rgba(16, 22, 29, 0.76);
+  --mode-panel-alt: rgba(12, 18, 26, 0.88);
+  --mode-panel-lite: rgba(255, 255, 255, 0.035);
+  --mode-border: rgba(148, 163, 184, 0.09);
+  --mode-chip: rgba(255, 255, 255, 0.04);
+  --mode-chip-strong: rgba(125, 211, 252, 0.1);
   --mode-input: rgba(255, 255, 255, 0.05);
   --mode-button: #f5f5f4;
   --mode-button-text: #111111;
@@ -4430,13 +4449,16 @@ body,
   --mode-success: #34d399;
   --mode-warning: #fbbf24;
   --mode-danger: #fb7185;
-  --mode-shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.16);
-  --mode-shadow-strong: 0 18px 40px rgba(0, 0, 0, 0.28);
+  --mode-shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.22);
+  --mode-shadow-strong: 0 24px 56px rgba(0, 0, 0, 0.34);
   --style-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --style-radius-sm: 8px;
-  --style-radius-md: 10px;
-  --style-radius-lg: 12px;
-  --style-surface-overlay: linear-gradient(transparent, transparent);
+  --style-radius-sm: 9px;
+  --style-radius-md: 12px;
+  --style-radius-lg: 16px;
+  --style-surface-overlay:
+    radial-gradient(circle at 12% 10%, rgba(59, 130, 246, 0.1), transparent 28%),
+    radial-gradient(circle at 86% 12%, rgba(20, 184, 166, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0));
   --canvas-bg: #141416;
   --canvas-dot: rgba(255, 255, 255, 0.08);
   --canvas-toolbar-bg: rgba(24, 24, 27, 0.92);
@@ -4464,20 +4486,20 @@ body,
 
 :root[data-style='workbench'][data-theme='light'] {
   color-scheme: light;
-  --mode-surface: #f7f7f5;
-  --mode-surface-dot: rgba(28, 25, 23, 0.04);
-  --mode-header-bg: rgba(255, 255, 253, 0.88);
-  --mode-header-border: rgba(28, 25, 23, 0.08);
+  --mode-surface: #edf2f8;
+  --mode-surface-dot: rgba(100, 116, 139, 0.035);
+  --mode-header-bg: rgba(255, 255, 255, 0.72);
+  --mode-header-border: rgba(100, 116, 139, 0.08);
   --mode-text: #111111;
   --mode-muted: rgba(87, 83, 78, 0.62);
   --mode-soft-text: rgba(28, 25, 23, 0.82);
-  --mode-panel: rgba(255, 255, 253, 0.92);
-  --mode-panel-alt: rgba(255, 255, 255, 0.97);
-  --mode-panel-lite: rgba(28, 25, 23, 0.04);
-  --mode-border: rgba(28, 25, 23, 0.1);
-  --mode-chip: rgba(28, 25, 23, 0.04);
-  --mode-chip-strong: rgba(28, 25, 23, 0.07);
-  --mode-input: rgba(255, 255, 255, 0.96);
+  --mode-panel: rgba(255, 255, 255, 0.78);
+  --mode-panel-alt: rgba(255, 255, 255, 0.9);
+  --mode-panel-lite: rgba(255, 255, 255, 0.54);
+  --mode-border: rgba(100, 116, 139, 0.08);
+  --mode-chip: rgba(15, 23, 42, 0.038);
+  --mode-chip-strong: rgba(59, 130, 246, 0.09);
+  --mode-input: rgba(255, 255, 255, 0.88);
   --mode-button: #111111;
   --mode-button-text: #fafaf9;
   --mode-accent: #292524;
@@ -4486,13 +4508,16 @@ body,
   --mode-success: #16a34a;
   --mode-warning: #d97706;
   --mode-danger: #dc2626;
-  --mode-shadow-soft: 0 10px 24px rgba(28, 25, 23, 0.08);
-  --mode-shadow-strong: 0 18px 40px rgba(28, 25, 23, 0.14);
+  --mode-shadow-soft: 0 14px 30px rgba(71, 85, 105, 0.1);
+  --mode-shadow-strong: 0 22px 52px rgba(71, 85, 105, 0.14);
   --style-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --style-radius-sm: 8px;
-  --style-radius-md: 10px;
-  --style-radius-lg: 12px;
-  --style-surface-overlay: linear-gradient(transparent, transparent);
+  --style-radius-sm: 9px;
+  --style-radius-md: 12px;
+  --style-radius-lg: 16px;
+  --style-surface-overlay:
+    radial-gradient(circle at 10% 8%, rgba(59, 130, 246, 0.1), transparent 28%),
+    radial-gradient(circle at 88% 12%, rgba(20, 184, 166, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
   --canvas-bg: #f1f1ef;
   --canvas-dot: rgba(28, 25, 23, 0.08);
   --canvas-toolbar-bg: rgba(255, 255, 253, 0.94);
@@ -10444,19 +10469,17 @@ body.ai-chat-sidebar-collapsed .app-main {
 /* ========== Desktop Workbench Shell ========== */
 
 :root {
-  --desktop-topbar-height: 68px;
+  --desktop-topbar-height: 40px;
   --desktop-workbench-gutter: 12px;
   --desktop-workbench-radius: 18px;
 }
 
 .app-shell-desktop {
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  min-width: 1280px;
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow: visible;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: var(--mode-surface, #0f1115);
 }
 
@@ -10473,6 +10496,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   gap: 8px;
   width: 100%;
   height: 100%;
+  overflow: hidden;
   padding: 8px 10px 10px 8px;
 }
 
@@ -10531,7 +10555,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .desktop-primary-nav {
@@ -10815,8 +10839,96 @@ body.ai-chat-sidebar-collapsed .app-main {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+}
+
+.app-menu-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.app-menu-group {
+  position: relative;
+}
+
+.app-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--desktop-titlebar-fg);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.app-menu-group.open .app-menu-trigger,
+.app-menu-trigger:hover {
+  background: var(--desktop-titlebar-hover-bg);
+  border-color: transparent;
+  color: var(--desktop-titlebar-fg-strong);
+}
+
+.app-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 90;
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--desktop-titlebar-menu-border);
+  background: var(--desktop-titlebar-menu-bg);
+  box-shadow: var(--desktop-titlebar-menu-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.app-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--desktop-titlebar-fg);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.app-menu-item em {
+  color: var(--macos-text-tertiary);
+  font-style: normal;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.app-menu-item:hover,
+.app-menu-item.active {
+  background: var(--desktop-titlebar-hover-bg);
+  border-color: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 16%, var(--desktop-titlebar-menu-border));
+  color: var(--desktop-titlebar-fg-strong);
 }
 
 .desktop-workbench-topbar {
@@ -10827,7 +10939,7 @@ body.ai-chat-sidebar-collapsed .app-main {
   padding: 2px 4px 8px;
   border-radius: 0;
   background: transparent;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--desktop-titlebar-divider);
   box-shadow: none;
 }
 
@@ -10837,6 +10949,14 @@ body.ai-chat-sidebar-collapsed .app-main {
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+.desktop-workbench-tools {
+  gap: 6px;
+}
+
+.desktop-titlebar-menu {
+  flex: 0 0 auto;
 }
 
 .desktop-workbench-title div {
@@ -10894,13 +11014,112 @@ body.ai-chat-sidebar-collapsed .app-main {
   min-width: 140px;
 }
 
+.desktop-window-drag-region {
+  flex: 1 1 auto;
+  min-width: 120px;
+  user-select: none;
+}
+
+.desktop-workbench-title.desktop-window-drag-region {
+  justify-content: center;
+}
+
+.desktop-workbench-drag-spacer {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 24px;
+}
+
+.desktop-window-controls {
+  display: inline-flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin-left: 0;
+}
+
+.app-header-window-controls {
+  margin-left: 6px;
+}
+
+.app-window-drag-region {
+  user-select: none;
+}
+
+.desktop-window-control {
+  position: relative;
+  width: 36px;
+  min-width: 36px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--desktop-titlebar-fg);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.desktop-window-control:hover {
+  background: var(--desktop-titlebar-hover-bg);
+  color: var(--desktop-titlebar-fg-strong);
+}
+
+.desktop-window-control.close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.desktop-window-control-glyph {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+}
+
+.desktop-window-control-glyph.minimize::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 2px;
+  height: 1.5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.desktop-window-control-glyph.maximize::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border: 1.5px solid currentColor;
+}
+
+.desktop-window-control-glyph.close::before,
+.desktop-window-control-glyph.close::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 0;
+  width: 12px;
+  height: 1.5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.desktop-window-control-glyph.close::before {
+  transform: rotate(45deg);
+}
+
+.desktop-window-control-glyph.close::after {
+  transform: rotate(-45deg);
+}
+
 .desktop-workbench-panels {
   display: flex;
   flex: 1 1 auto;
   gap: 0;
   min-width: 0;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .desktop-ai-resize-handle {
@@ -11188,8 +11407,11 @@ body.ai-chat-sidebar-collapsed .app-main {
 
 .app-workbench-main-shell {
   flex: 1 1 auto;
+  display: flex;
+  height: 100%;
   min-width: 0;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .app-workbench-ai-shell {
@@ -11316,10 +11538,6 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 @media (max-width: 1280px) {
-  .app-shell-desktop {
-    min-height: 800px;
-  }
-
   .desktop-shell-frame {
     grid-template-columns: 52px minmax(0, 1fr);
     gap: 8px;
@@ -11516,175 +11734,48 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   overflow: auto;
 }
 
-.app-menu-bar {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-
-.app-menu-group {
-  position: relative;
-}
-
-.app-menu-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
-  transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
-}
-
-.app-menu-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 90;
-  display: grid;
-  gap: 4px;
-  min-width: 220px;
-  padding: 8px;
-  border-radius: 16px;
-  backdrop-filter: blur(18px);
-}
-
-.app-menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
-}
-
-.app-menu-item em {
-  font-style: normal;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.app-header .app-menu-bar.standard {
-  margin-left: 6px;
-}
-
-.app-header .app-menu-trigger {
-  color: var(--mode-soft-text);
-}
-
-.app-header .app-menu-group.open .app-menu-trigger,
-.app-header .app-menu-trigger:hover {
-  background: color-mix(in srgb, var(--mode-chip-strong) 86%, transparent);
-  border-color: color-mix(in srgb, var(--mode-accent) 18%, var(--mode-border));
-  color: var(--mode-text);
-}
-
-.app-header .app-menu-panel {
-  background: color-mix(in srgb, var(--mode-panel) 96%, transparent);
-  border: 1px solid var(--mode-border);
-  box-shadow: var(--mode-shadow-soft);
-}
-
-.app-header .app-menu-item {
-  color: var(--mode-soft-text);
-}
-
-.app-header .app-menu-item em {
-  color: var(--mode-muted);
-}
-
-.app-header .app-menu-item:hover,
-.app-header .app-menu-item.active {
-  background: color-mix(in srgb, var(--mode-accent) 10%, transparent);
-  border-color: color-mix(in srgb, var(--mode-accent) 24%, var(--mode-border));
-  color: var(--mode-text);
-}
-
 .desktop-workbench-menubar {
-  min-height: 44px;
-  padding: 0 0 6px;
+  min-height: 32px;
+  padding: 0 0 4px;
 }
 
 .desktop-workbench-leading {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
 .desktop-workbench-menubar .desktop-workbench-title {
+  flex: 0 1 220px;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 1px;
+  min-width: 0;
 }
 
 .desktop-workbench-menubar .desktop-workbench-title h1 {
-  font-size: 13px;
+  font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .desktop-workbench-menubar .desktop-workbench-title p {
-  font-size: 10px;
-}
-
-.desktop-workbench-menubar .app-menu-trigger {
-  min-height: 28px;
-  padding: 0 6px;
-  border-radius: 6px;
-  color: rgba(228, 228, 231, 0.88);
-}
-
-.desktop-workbench-menubar .app-menu-group.open .app-menu-trigger,
-.desktop-workbench-menubar .app-menu-trigger:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: transparent;
-  color: #ffffff;
-}
-
-.desktop-workbench-menubar .app-menu-panel {
-  background: rgba(24, 24, 27, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.34);
-}
-
-.desktop-workbench-menubar .app-menu-item {
-  color: rgba(228, 228, 231, 0.92);
-}
-
-.desktop-workbench-menubar .app-menu-item em {
-  color: rgba(161, 161, 170, 0.82);
-}
-
-.desktop-workbench-menubar .app-menu-item:hover,
-.desktop-workbench-menubar .app-menu-item.active {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(148, 245, 220, 0.14);
-  color: #ffffff;
+  font-size: 9px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .desktop-topbar-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 0 10px;
+  min-height: 28px;
+  padding: 0 8px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
@@ -11712,17 +11803,17 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .desktop-topbar-btn.icon {
-  width: 32px;
+  width: 28px;
   padding: 0;
 }
 
 .desktop-topbar-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 @media (max-width: 1200px) {
-  .app-menu-bar.standard {
+  .desktop-titlebar-menu {
     flex-wrap: wrap;
   }
 
@@ -11731,30 +11822,33 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   }
 }
 
-@media (max-width: 900px) {
-  .app-menu-bar.standard {
-    width: 100%;
-    margin-left: 0;
-  }
-}
-
 /* macOS workbench UI foundation */
 :root,
 :root[data-theme='light'] {
-  --macos-window-bg: #eef1f5;
-  --macos-window-glow: radial-gradient(circle at top left, rgba(255, 255, 255, 0.88), transparent 42%);
-  --macos-chrome-bg: rgba(255, 255, 255, 0.78);
-  --macos-chrome-border: rgba(15, 23, 42, 0.08);
-  --macos-panel-bg: rgba(255, 255, 255, 0.88);
-  --macos-panel-bg-strong: rgba(255, 255, 255, 0.96);
-  --macos-panel-border: rgba(15, 23, 42, 0.08);
-  --macos-input-bg: rgba(255, 255, 255, 0.96);
+  --macos-window-bg: #edf2f8;
+  --macos-window-glow:
+    radial-gradient(circle at 14% 10%, rgba(59, 130, 246, 0.14), transparent 30%),
+    radial-gradient(circle at 86% 12%, rgba(20, 184, 166, 0.1), transparent 24%),
+    radial-gradient(circle at 60% 90%, rgba(249, 115, 22, 0.06), transparent 24%);
+  --macos-chrome-bg: rgba(255, 255, 255, 0.68);
+  --macos-chrome-border: rgba(100, 116, 139, 0.08);
+  --macos-panel-bg: rgba(255, 255, 255, 0.72);
+  --macos-panel-bg-strong: rgba(255, 255, 255, 0.86);
+  --macos-panel-border: rgba(100, 116, 139, 0.08);
+  --macos-input-bg: rgba(255, 255, 255, 0.84);
   --macos-text-primary: #111827;
   --macos-text-secondary: #4b5563;
   --macos-text-tertiary: #6b7280;
-  --macos-shadow-panel: 0 14px 30px rgba(15, 23, 42, 0.08);
-  --macos-shadow-floating: 0 24px 48px rgba(15, 23, 42, 0.12);
+  --macos-shadow-panel: 0 18px 40px rgba(71, 85, 105, 0.12);
+  --macos-shadow-floating: 0 28px 64px rgba(71, 85, 105, 0.16);
   --macos-focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  --desktop-titlebar-fg: rgba(31, 41, 55, 0.86);
+  --desktop-titlebar-fg-strong: #111827;
+  --desktop-titlebar-hover-bg: rgba(15, 23, 42, 0.05);
+  --desktop-titlebar-menu-bg: rgba(255, 255, 255, 0.88);
+  --desktop-titlebar-menu-border: rgba(100, 116, 139, 0.08);
+  --desktop-titlebar-menu-shadow: 0 22px 48px rgba(71, 85, 105, 0.14);
+  --desktop-titlebar-divider: rgba(100, 116, 139, 0.08);
   --role-knowledge-accent: #2563eb;
   --role-wiki-accent: #0f766e;
   --role-page-accent: #4f46e5;
@@ -11765,20 +11859,29 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 :root[data-theme='dark'] {
-  --macos-window-bg: #111317;
-  --macos-window-glow: radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 32%);
-  --macos-chrome-bg: rgba(28, 31, 38, 0.82);
-  --macos-chrome-border: rgba(255, 255, 255, 0.08);
-  --macos-panel-bg: rgba(22, 24, 30, 0.9);
-  --macos-panel-bg-strong: rgba(28, 31, 38, 0.96);
-  --macos-panel-border: rgba(255, 255, 255, 0.08);
-  --macos-input-bg: rgba(255, 255, 255, 0.06);
+  --macos-window-bg: #101419;
+  --macos-window-glow:
+    radial-gradient(circle at 14% 10%, rgba(59, 130, 246, 0.12), transparent 28%),
+    radial-gradient(circle at 86% 12%, rgba(20, 184, 166, 0.1), transparent 22%);
+  --macos-chrome-bg: rgba(15, 21, 29, 0.72);
+  --macos-chrome-border: rgba(148, 163, 184, 0.08);
+  --macos-panel-bg: rgba(15, 21, 29, 0.78);
+  --macos-panel-bg-strong: rgba(11, 18, 26, 0.88);
+  --macos-panel-border: rgba(148, 163, 184, 0.08);
+  --macos-input-bg: rgba(255, 255, 255, 0.05);
   --macos-text-primary: #f3f4f6;
   --macos-text-secondary: rgba(243, 244, 246, 0.78);
   --macos-text-tertiary: rgba(243, 244, 246, 0.56);
-  --macos-shadow-panel: 0 18px 36px rgba(0, 0, 0, 0.28);
-  --macos-shadow-floating: 0 24px 56px rgba(0, 0, 0, 0.4);
+  --macos-shadow-panel: 0 22px 48px rgba(0, 0, 0, 0.32);
+  --macos-shadow-floating: 0 28px 68px rgba(0, 0, 0, 0.42);
   --macos-focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.24);
+  --desktop-titlebar-fg: rgba(228, 228, 231, 0.88);
+  --desktop-titlebar-fg-strong: #ffffff;
+  --desktop-titlebar-hover-bg: rgba(255, 255, 255, 0.06);
+  --desktop-titlebar-menu-bg: rgba(16, 22, 29, 0.9);
+  --desktop-titlebar-menu-border: rgba(148, 163, 184, 0.08);
+  --desktop-titlebar-menu-shadow: 0 22px 48px rgba(0, 0, 0, 0.36);
+  --desktop-titlebar-divider: rgba(148, 163, 184, 0.08);
 }
 
 .app[data-role='knowledge'] {
@@ -11810,8 +11913,10 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .mac-panel {
-  backdrop-filter: blur(22px);
-  background: var(--macos-panel-bg);
+  border-radius: 16px;
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  background: color-mix(in srgb, var(--macos-panel-bg) 92%, transparent);
   border: 1px solid var(--macos-panel-border);
   box-shadow: var(--macos-shadow-panel);
   color: var(--macos-text-primary);
@@ -11819,20 +11924,21 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
 .mac-toolbar {
   min-height: 56px;
-  padding: 10px 14px;
+  padding: 12px 16px;
 }
 
 .mac-button {
   appearance: none;
   border: 1px solid transparent;
-  border-radius: 10px;
-  min-height: 32px;
-  padding: 0 12px;
+  border-radius: 11px;
+  min-height: 34px;
+  padding: 0 14px;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--macos-text-primary);
   cursor: pointer;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
   transition:
     background 0.18s ease,
     border-color 0.18s ease,
@@ -11851,7 +11957,8 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 .mac-textarea:focus-visible,
 .project-manager-open:focus-visible,
 .app-menu-trigger:focus-visible,
-.app-menu-item:focus-visible {
+.app-menu-item:focus-visible,
+.desktop-window-control:focus-visible {
   outline: none;
   box-shadow: var(--macos-focus-ring);
 }
@@ -11863,7 +11970,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .mac-button-secondary {
-  background: color-mix(in srgb, var(--macos-panel-bg-strong) 88%, transparent);
+  background: color-mix(in srgb, var(--macos-panel-bg-strong) 82%, transparent);
   border-color: var(--macos-panel-border);
 }
 
@@ -11879,13 +11986,13 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .mac-button-sm {
-  min-height: 30px;
+  min-height: 32px;
   padding: 0 10px;
 }
 
 .mac-button-icon {
-  width: 32px;
-  min-width: 32px;
+  width: 34px;
+  min-width: 34px;
   padding: 0;
 }
 
@@ -11897,9 +12004,9 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .mac-field-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: var(--macos-text-tertiary);
   text-transform: uppercase;
 }
@@ -11909,19 +12016,21 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .mac-field-hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--macos-text-tertiary);
 }
 
 .mac-input,
 .mac-select-shell {
   width: 100%;
-  min-height: 36px;
-  border-radius: 10px;
+  min-height: 38px;
+  border-radius: 11px;
   border: 1px solid var(--macos-panel-border);
-  background: var(--macos-input-bg);
+  background: color-mix(in srgb, var(--macos-input-bg) 88%, transparent);
   color: var(--macos-text-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .mac-input {
@@ -11930,7 +12039,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .mac-textarea {
-  min-height: 132px;
+  min-height: 140px;
   padding: 10px 12px;
   resize: vertical;
 }
@@ -11938,7 +12047,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 .mac-select-shell {
   display: inline-flex;
   align-items: center;
-  padding: 0 12px;
+  padding: 0 14px;
 }
 
 .mac-select {
@@ -12000,13 +12109,14 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .desktop-shell-frame {
-  gap: 10px;
-  padding: 10px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px;
+  padding: 5px;
 }
 
 .desktop-primary-rail.mac-sidebar-panel {
   justify-content: space-between;
-  padding: 8px 6px 10px;
+  padding: 3px 1px 5px;
   border-radius: 0;
   background: transparent;
   border: 0;
@@ -12016,14 +12126,21 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
 .desktop-brand-chip,
 .desktop-rail-icon-btn {
-  border-radius: 11px;
+  border-radius: 12px;
 }
 
 .desktop-brand-chip.mac-button {
-  min-width: 34px;
-  width: 34px;
+  min-width: 26px;
+  width: 26px;
+  min-height: 26px;
+  height: 26px;
   padding: 0;
   color: var(--macos-text-primary);
+}
+
+.desktop-brand-chip img {
+  width: 21px;
+  height: 21px;
 }
 
 .desktop-brand-chip.mac-button,
@@ -12032,11 +12149,21 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .desktop-rail-icon-btn.mac-button {
+  min-width: 32px;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
   color: var(--macos-text-secondary);
 }
 
+.desktop-rail-icon-btn.mac-button svg {
+  width: 20px;
+  height: 20px;
+}
+
 .desktop-rail-icon-btn.mac-button:hover,
-.desktop-rail-icon-btn.mac-button.active,
 .desktop-brand-chip.mac-button:hover {
   background: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 11%, var(--macos-panel-bg-strong));
   border-color: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 18%, var(--macos-panel-border));
@@ -12044,18 +12171,28 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .desktop-rail-icon-btn.mac-button.active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 14%, white) 0%,
+    color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 22%, var(--macos-panel-bg-strong)) 100%
+  );
+  border-color: color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 34%, var(--macos-panel-border));
+  color: var(--macos-text-primary);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 16px color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 18%, transparent),
     0 0 0 1px color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 22%, transparent);
 }
 
 .desktop-workbench-topbar.mac-toolbar.mac-panel {
-  padding: 10px 14px;
-  border-radius: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  backdrop-filter: none;
+  min-height: 32px;
+  padding: 2px 4px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--macos-chrome-bg) 84%, transparent);
+  border: 1px solid var(--macos-chrome-border);
+  box-shadow: var(--macos-shadow-panel);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
 }
 
 .desktop-workbench-title.compact h1,
@@ -12076,8 +12213,8 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   align-items: center;
   flex-direction: row;
   gap: 8px;
-  min-height: 36px;
-  padding: 0 10px;
+  min-height: 28px;
+  padding: 0 7px;
   border-radius: 11px;
   background: color-mix(in srgb, var(--macos-panel-bg-strong) 84%, transparent);
   border: 1px solid var(--macos-panel-border);
@@ -12096,7 +12233,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
 .desktop-project-switcher .mac-select-shell,
 .project-switcher .mac-select-shell {
-  min-height: 30px;
+  min-height: 26px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -12105,11 +12242,11 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
 .desktop-project-switcher .mac-select,
 .project-switcher .mac-select {
-  min-width: 120px;
+  min-width: 108px;
 }
 
 .desktop-topbar-btn.mac-button {
-  min-height: 32px;
+  min-height: 28px;
   border-radius: 10px;
 }
 
@@ -12119,22 +12256,12 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .app-workbench-pane {
-  border-radius: 14px;
+  border-radius: 16px;
   border: 1px solid var(--macos-panel-border);
   background: var(--macos-panel-bg);
   box-shadow: var(--macos-shadow-panel);
 }
 
-.app-menu-panel {
-  border-radius: 14px;
-  border: 1px solid var(--macos-panel-border);
-  background: var(--macos-panel-bg-strong);
-  box-shadow: var(--macos-shadow-floating);
-  backdrop-filter: blur(20px);
-}
-
-.app-menu-trigger,
-.app-menu-item,
 .reset-project-btn,
 .theme-mode-btn,
 .doc-action-btn,

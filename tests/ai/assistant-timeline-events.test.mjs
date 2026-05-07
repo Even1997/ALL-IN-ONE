@@ -420,3 +420,14 @@ test('assistant timeline update honors newer preferred text timestamps when they
     ],
   );
 });
+
+test('assistant timeline update tolerates malformed current timeline values', async () => {
+  const { buildAssistantTimelineUpdate } = await loadAssistantTimeline();
+
+  const updatedTimeline = buildAssistantTimelineUpdate('Ready.', /** @type {any} */ ({ kind: 'oops' }));
+
+  assert.deepEqual(
+    updatedTimeline.map((event) => [event.kind, event.content]),
+    [['text', 'Ready.']],
+  );
+});

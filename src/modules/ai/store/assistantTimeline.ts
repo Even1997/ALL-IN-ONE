@@ -107,6 +107,9 @@ const isAssistantNarrativeTimelineEvent = (
 ): event is AssistantNarrativeTimelineEvent =>
   event.kind === 'text' || event.kind === 'reasoning';
 
+const normalizeAssistantTimeline = (timeline: AssistantTimelineEvent[] | unknown): AssistantTimelineEvent[] =>
+  Array.isArray(timeline) ? timeline : [];
+
 const sortAssistantTimelineEvents = (timeline: AssistantTimelineEvent[] = []) =>
   [...timeline].sort((left, right) => left.createdAt - right.createdAt);
 
@@ -201,13 +204,14 @@ export const buildAssistantTimelineUpdate = (
     thinkingCollapsed?: boolean;
   }
 ) => {
-  const runtimeEvents = currentTimeline.filter(isAssistantRuntimeTimelineEvent);
-  const existingNarrativeEvents = currentTimeline.filter(isAssistantNarrativeTimelineEvent);
+  const normalizedTimeline = normalizeAssistantTimeline(currentTimeline);
+  const runtimeEvents = normalizedTimeline.filter(isAssistantRuntimeTimelineEvent);
+  const existingNarrativeEvents = normalizedTimeline.filter(isAssistantNarrativeTimelineEvent);
   const nextNarrativeEvents = buildAssistantTimelineFromContent(content, options);
   const hasExplicitPreferredNarrativeTimestamps = Boolean(
     options?.preferredAssistantParts?.some((part) => typeof part.createdAt === 'number')
   );
-  const existingOrderById = new Map(currentTimeline.map((event, index) => [event.id, index] as const));
+  const existingOrderById = new Map(normalizedTimeline.map((event, index) => [event.id, index] as const));
   const narrativeCreatedAtBuckets = {
     text: existingNarrativeEvents.filter(
       (event): event is AssistantTimelineTextEvent => event.kind === 'text'
@@ -217,8 +221,8 @@ export const buildAssistantTimelineUpdate = (
     ),
   };
   let nextCreatedAt =
-    currentTimeline.reduce((maxCreatedAt, event) => Math.max(maxCreatedAt, event.createdAt), 0) + 1;
-  let nextOrderHint = currentTimeline.length;
+    normalizedTimeline.reduce((maxCreatedAt, event) => Math.max(maxCreatedAt, event.createdAt), 0) + 1;
+  let nextOrderHint = normalizedTimeline.length;
   let textIndex = 0;
   let reasoningIndex = 0;
   const timelineEntries = nextNarrativeEvents.map((event, index) => {
@@ -290,7 +294,7 @@ export const buildAssistantTimelineUpdate = (
 };
 
 export const getAssistantTimelineText = (timeline: AssistantTimelineEvent[] = []) =>
-  timeline
+  normalizeAssistantTimeline(timeline)
     .filter((event): event is AssistantTimelineTextEvent => event.kind === 'text')
     .map((event) => event.content.trim())
     .filter(Boolean)
@@ -298,7 +302,7 @@ export const getAssistantTimelineText = (timeline: AssistantTimelineEvent[] = []
     .trim();
 
 export const getAssistantTimelineReasoning = (timeline: AssistantTimelineEvent[] = []) =>
-  timeline
+  normalizeAssistantTimeline(timeline)
     .filter((event): event is AssistantTimelineReasoningEvent => event.kind === 'reasoning')
     .map((event) => event.content.trim())
     .filter(Boolean)
@@ -306,14 +310,14 @@ export const getAssistantTimelineReasoning = (timeline: AssistantTimelineEvent[]
     .trim();
 
 export const getAssistantRuntimeTimelineEvents = (timeline: AssistantTimelineEvent[] = []) =>
-  timeline.filter(isAssistantRuntimeTimelineEvent);
+  normalizeAssistantTimeline(timeline).filter(isAssistantRuntimeTimelineEvent);
 
 export const replaceAssistantRuntimeTimelineEvents = (
   timeline: AssistantTimelineEvent[] = [],
   runtimeEvents: StoredChatRuntimeEvent[]
 ) =>
   sortAssistantTimelineEvents([
-    ...timeline.filter((event) => !isAssistantRuntimeTimelineEvent(event)),
+    ...normalizeAssistantTimeline(timeline).filter((event) => !isAssistantRuntimeTimelineEvent(event)),
     ...runtimeEvents,
   ]);
 
@@ -423,15 +427,16 @@ export const applyAssistantReasoningProgress = (
     referenceTime?: number;
   }
 ): AssistantTimelineEvent[] => {
+  const normalizedTimeline = normalizeAssistantTimeline(timeline);
   let latestReasoningIndex = -1;
-  timeline.forEach((event, index) => {
+  normalizedTimeline.forEach((event, index) => {
     if (event.kind === 'reasoning') {
       latestReasoningIndex = index;
     }
   });
 
   if (latestReasoningIndex === -1) {
-    return timeline;
+    return normalizedTimeline;
   }
 
   const resolveReasoningElapsedSeconds = (event: AssistantTimelineReasoningEvent) => {
@@ -443,7 +448,7 @@ export const applyAssistantReasoningProgress = (
     return event.elapsedSeconds;
   };
 
-  return timeline.map((event, index): AssistantTimelineEvent => {
+  return normalizedTimeline.map((event, index): AssistantTimelineEvent => {
     if (event.kind !== 'reasoning') {
       return event;
     }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm, open } from '@tauri-apps/plugin-dialog';
 import { AIWorkspace } from './components/ai/AIWorkspace';
 import { Workspace } from './components/workspace';
@@ -174,9 +174,75 @@ type PersistedProjectSnapshot = {
   workspace: ProjectWorkspaceSnapshot;
   featureTree: ReturnType<typeof useFeatureTreeStore.getState>['tree'];
 };
-type NativeMenuEventPayload = {
+type DesktopMenuAction =
+  | { kind: 'native'; id: string }
+  | { kind: 'edit'; command: 'cut' | 'copy' | 'paste' | 'selectAll' }
+  | { kind: 'window'; command: 'minimize' | 'toggleMaximize' | 'close' };
+
+type DesktopMenuGroup = {
   id: string;
+  label: string;
+  items: Array<{
+    label: string;
+    hint?: string;
+    action: DesktopMenuAction;
+  }>;
 };
+
+const DESKTOP_APP_MENUS: DesktopMenuGroup[] = [
+  {
+    id: 'file',
+    label: '文件',
+    items: [
+      { label: '新建项目', hint: 'Ctrl+N', action: { kind: 'native', id: 'file.new_project' } },
+      { label: '项目列表', hint: 'Ctrl+O', action: { kind: 'native', id: 'file.project_manager' } },
+    ],
+  },
+  {
+    id: 'edit',
+    label: '编辑',
+    items: [
+      { label: '剪切', hint: 'Ctrl+X', action: { kind: 'edit', command: 'cut' } },
+      { label: '复制', hint: 'Ctrl+C', action: { kind: 'edit', command: 'copy' } },
+      { label: '粘贴', hint: 'Ctrl+V', action: { kind: 'edit', command: 'paste' } },
+      { label: '全选', hint: 'Ctrl+A', action: { kind: 'edit', command: 'selectAll' } },
+    ],
+  },
+  {
+    id: 'view',
+    label: '查看',
+    items: [
+      { label: '知识库', action: { kind: 'native', id: 'view.knowledge' } },
+      { label: 'Wiki 图谱', action: { kind: 'native', id: 'view.wiki' } },
+      { label: '页面', action: { kind: 'native', id: 'view.page' } },
+      { label: '设计', action: { kind: 'native', id: 'view.design' } },
+      { label: 'Agent', action: { kind: 'native', id: 'view.agent' } },
+      { label: '开发', action: { kind: 'native', id: 'view.develop' } },
+      { label: '测试', action: { kind: 'native', id: 'view.test' } },
+      { label: '发布', action: { kind: 'native', id: 'view.operations' } },
+      { label: '切换主题', action: { kind: 'native', id: 'view.toggle_theme' } },
+    ],
+  },
+  {
+    id: 'window',
+    label: '窗口',
+    items: [
+      { label: '最小化', action: { kind: 'window', command: 'minimize' } },
+      { label: '切换最大化', action: { kind: 'window', command: 'toggleMaximize' } },
+      { label: '关闭窗口', action: { kind: 'window', command: 'close' } },
+    ],
+  },
+  {
+    id: 'help',
+    label: '帮助',
+    items: [
+      { label: '关于 GoodNight', action: { kind: 'native', id: 'help.about' } },
+      { label: '布局说明', action: { kind: 'native', id: 'help.layout_overview' } },
+      { label: '知识库说明', action: { kind: 'native', id: 'help.knowledge_overview' } },
+      { label: '页面说明', action: { kind: 'native', id: 'help.page_overview' } },
+    ],
+  },
+];
 
 const readProjectIndex = (): ProjectConfig[] => {
   if (typeof window === 'undefined') {
@@ -824,7 +890,7 @@ const SketchLibraryTreeItem: React.FC<SketchLibraryTreeItemProps> = ({
 };
 
 const App: React.FC = () => {
-  const [currentRole, setCurrentRole] = useState<RoleView>('knowledge');
+  const [currentRole, setCurrentRole] = useState<RoleView>('agent');
   const [desktopAiPaneWidth, setDesktopAiPaneWidth] = useState(() => {
     const nextWidth = readLayoutSize(
       LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
@@ -900,6 +966,7 @@ const App: React.FC = () => {
   const [styleInspectorMode, setStyleInspectorMode] = useState<'fields' | 'markdown'>('fields');
   const [styleMarkdownDraft, setStyleMarkdownDraft] = useState('');
   const [expandedSketchLibraryNodeIds, setExpandedSketchLibraryNodeIds] = useState<Set<string>>(() => new Set());
+  const [openDesktopMenuId, setOpenDesktopMenuId] = useState<string | null>(null);
   const designBoardScrollRef = useRef<HTMLDivElement | null>(null);
   const designContextMenuRef = useRef<HTMLDivElement | null>(null);
   const desktopAiTransitionTimerRef = useRef<number | null>(null);
@@ -2224,7 +2291,7 @@ const App: React.FC = () => {
     setTree(starterFeatureTree);
     clearCanvas();
     setSelectedFeature(starterFeatureTree.children[0] || null);
-    setCurrentRole('knowledge');
+    setCurrentRole('agent');
     setIsProjectManagerOpen(false);
     setProjectVaultDraftOverride(null);
     void ensureProjectFilesystemStructure(project.id)
@@ -2276,7 +2343,7 @@ const App: React.FC = () => {
     }
 
     clearCanvas();
-    setCurrentRole('knowledge');
+    setCurrentRole('agent');
     setIsProjectManagerOpen(false);
     void ensureProjectFilesystemStructure(targetProject.id).catch(() => undefined);
     if (targetProject.vaultPath) {
@@ -2354,7 +2421,7 @@ const App: React.FC = () => {
     clearTree();
     clearCanvas();
     setSelectedFeature(null);
-    setCurrentRole('knowledge');
+    setCurrentRole('agent');
     setIsProjectManagerOpen(true);
   }, [clearCanvas, clearProject, clearTree, currentProject]);
 
@@ -2378,6 +2445,9 @@ const App: React.FC = () => {
       case 'view.design':
         setCurrentRole('design');
         break;
+      case 'view.agent':
+        setCurrentRole('agent');
+        break;
       case 'view.develop':
         setCurrentRole('develop');
         break;
@@ -2399,39 +2469,123 @@ const App: React.FC = () => {
       case 'help.page_overview':
         window.alert('页面用于维护页面结构、页面草图和画布模块。');
         break;
+      case 'help.about':
+        window.alert('GoodNight · 可视化软件开发平台');
+        break;
       default:
         break;
     }
   }, [handleResetProject, toggleThemeMode]);
 
-  useEffect(() => {
-    if (!isTauriRuntimeAvailable()) {
+  const handleDesktopMenuAction = useCallback(
+    async (action: DesktopMenuAction) => {
+      setOpenDesktopMenuId(null);
+
+      if (action.kind === 'native') {
+        handleNativeMenuEvent(action.id);
+        return;
+      }
+
+      if (action.kind === 'edit') {
+        try {
+          document.execCommand(action.command);
+        } catch {
+          // Ignore clipboard restrictions in the webview.
+        }
+        return;
+      }
+
+      if (!isTauriRuntimeAvailable()) {
+        return;
+      }
+
+      const appWindow = getCurrentWindow();
+
+      try {
+        switch (action.command) {
+          case 'minimize':
+            await appWindow.minimize();
+            break;
+          case 'toggleMaximize':
+            if (await appWindow.isMaximized()) {
+              await appWindow.unmaximize();
+            } else {
+              await appWindow.maximize();
+            }
+            break;
+          case 'close':
+            await appWindow.close();
+            break;
+          default:
+            break;
+        }
+      } catch (error) {
+        console.error(`Failed to run desktop window action: ${action.command}`, error);
+      }
+    },
+    [handleNativeMenuEvent]
+  );
+
+  const handleDesktopTopbarPointerDown = useCallback(async (event: React.PointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || !isTauriRuntimeAvailable()) {
       return;
     }
 
-    let isDisposed = false;
-    let unlisten: (() => void) | undefined;
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest(
+        'button, input, select, textarea, a, [role="menu"], [role="menuitem"], [data-app-menu-root="desktop"], .mac-field, .mac-select-shell, .desktop-window-controls'
+      )
+    ) {
+      return;
+    }
 
-    void listen<NativeMenuEventPayload>('native-menu-event', (event) => {
-      handleNativeMenuEvent(event.payload.id);
-    })
-      .then((dispose) => {
-        if (isDisposed) {
-          dispose();
-          return;
-        }
+    try {
+      await getCurrentWindow().startDragging();
+    } catch (error) {
+      console.error('Failed to start desktop topbar dragging', error);
+    }
+  }, []);
 
-        unlisten = dispose;
-      })
-      .catch(() => undefined);
+  const handleDesktopTopbarDoubleClick = useCallback(
+    async (event: React.MouseEvent<HTMLElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
 
-    return () => {
-      isDisposed = true;
-      if (unlisten) {
-        unlisten();
+      await handleDesktopMenuAction({ kind: 'window', command: 'toggleMaximize' });
+    },
+    [handleDesktopMenuAction]
+  );
+
+  useEffect(() => {
+    if (!openDesktopMenuId) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-app-menu-root="desktop"]')) {
+        return;
+      }
+
+      setOpenDesktopMenuId(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenDesktopMenuId(null);
       }
     };
-  }, [handleNativeMenuEvent]);
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openDesktopMenuId]);
 
   const handleGenerateDelivery = () => {
     generateDeliveryArtifacts(featureTree);
@@ -4987,11 +5141,57 @@ ${selectedContextPrompt}` : '',
           </MacPanel>
 
           <section className="desktop-workbench-column">
-            <MacPanel as="header" className="desktop-workbench-topbar mac-toolbar mac-panel desktop-workbench-menubar">
+            <MacPanel
+              as="header"
+              className="desktop-workbench-topbar mac-toolbar mac-panel desktop-workbench-menubar"
+            >
               <div className="desktop-workbench-leading">
-                <div className="desktop-workbench-title compact">
-                  <h1>{currentProject.name}</h1>
-                  <p>{activeDesktopRole.summary} · 统一工作台布局</p>
+                <nav className="app-menu-bar standard desktop-titlebar-menu" aria-label="应用菜单" data-app-menu-root="desktop">
+                  {DESKTOP_APP_MENUS.map((menu) => {
+                    const isOpen = openDesktopMenuId === menu.id;
+
+                    return (
+                      <div key={menu.id} className={`app-menu-group ${isOpen ? 'open' : ''}`}>
+                        <button
+                          className="app-menu-trigger"
+                          type="button"
+                          aria-haspopup="menu"
+                          aria-expanded={isOpen}
+                          onClick={() => setOpenDesktopMenuId((current) => (current === menu.id ? null : menu.id))}
+                          onMouseEnter={() => {
+                            setOpenDesktopMenuId((current) => (current ? menu.id : current));
+                          }}
+                        >
+                          {menu.label}
+                        </button>
+                        {isOpen ? (
+                          <div className="app-menu-panel" role="menu">
+                            {menu.items.map((item) => (
+                              <button
+                                key={item.label}
+                                className="app-menu-item"
+                                type="button"
+                                role="menuitem"
+                                onClick={() => void handleDesktopMenuAction(item.action)}
+                              >
+                                <span>{item.label}</span>
+                                {item.hint ? <em>{item.hint}</em> : null}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </nav>
+                <div
+                  className="desktop-workbench-title compact desktop-window-drag-region"
+                  data-tauri-drag-region
+                  onPointerDown={(event) => void handleDesktopTopbarPointerDown(event)}
+                  onDoubleClick={(event) => void handleDesktopTopbarDoubleClick(event)}
+                >
+                  <h1 data-tauri-drag-region>{currentProject.name}</h1>
+                  <p>{activeDesktopRole.label} 工作台</p>
                 </div>
               </div>
 
@@ -5022,6 +5222,42 @@ ${selectedContextPrompt}` : '',
                     <WorkbenchIcon name={isDesktopAiCollapsed ? 'panelRightOpen' : 'panelRightClose'} />
                   </MacIconButton>
                 ) : null}
+              </div>
+              <div
+                className="desktop-workbench-drag-spacer desktop-window-drag-region"
+                aria-hidden="true"
+                data-tauri-drag-region
+                onPointerDown={(event) => void handleDesktopTopbarPointerDown(event)}
+                onDoubleClick={(event) => void handleDesktopTopbarDoubleClick(event)}
+              />
+              <div className="desktop-window-controls" aria-label="窗口控制">
+                <button
+                  type="button"
+                  className="desktop-window-control"
+                  aria-label="最小化"
+                  title="最小化"
+                  onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'minimize' })}
+                >
+                  <span className="desktop-window-control-glyph minimize" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="desktop-window-control"
+                  aria-label="切换最大化"
+                  title="切换最大化"
+                  onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'toggleMaximize' })}
+                >
+                  <span className="desktop-window-control-glyph maximize" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="desktop-window-control close"
+                  aria-label="关闭"
+                  title="关闭"
+                  onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'close' })}
+                >
+                  <span className="desktop-window-control-glyph close" aria-hidden="true" />
+                </button>
               </div>
             </MacPanel>
 
@@ -5071,7 +5307,7 @@ ${selectedContextPrompt}` : '',
   return (
     <div className={`app app-shell-desktop ${isDesktopWorkbenchMode ? 'desktop-active' : ''}`} data-role={currentRole}>
       <header className="app-header">
-        <div className="header-left">
+        <div className="header-left app-window-drag-region" data-tauri-drag-region>
           <div className="app-brand">
             <img className="app-brand-logo" src="/branding/goodnight-logo-horizontal.svg" alt="GoodNight" />
           </div>
@@ -5122,6 +5358,35 @@ ${selectedContextPrompt}` : '',
           <MacButton className="reset-project-btn" variant="primary" onClick={handleResetProject}>
             新建项目
           </MacButton>
+          <div className="desktop-window-controls app-header-window-controls" aria-label="窗口控制">
+            <button
+              type="button"
+              className="desktop-window-control"
+              aria-label="最小化"
+              title="最小化"
+              onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'minimize' })}
+            >
+              <span className="desktop-window-control-glyph minimize" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="desktop-window-control"
+              aria-label="切换最大化"
+              title="切换最大化"
+              onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'toggleMaximize' })}
+            >
+              <span className="desktop-window-control-glyph maximize" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="desktop-window-control close"
+              aria-label="关闭"
+              title="关闭"
+              onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'close' })}
+            >
+              <span className="desktop-window-control-glyph close" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </header>
 

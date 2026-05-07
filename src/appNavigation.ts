@@ -35,4 +35,4 @@ export const DESKTOP_WORKBENCH_ROLES: Array<{
   { id: 'operations', label: 'Ops', summary: 'Deploy and release flow' },
 ];
 
-export const DESKTOP_PRIMARY_ROLES: RoleView[] = ['knowledge', 'page', 'agent', 'design'];
+export const DESKTOP_PRIMARY_ROLES: RoleView[] = ['agent', 'knowledge', 'page', 'design'];
