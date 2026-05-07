@@ -1,5 +1,5 @@
 import type { ChatAgentId } from '../../chat/chatAgents.ts';
-import type { ToolResult } from '../../../../components/workspace/tools.ts';
+import type { ToolResult } from './toolExecutor.ts';
 
 type RuntimeAgentToolId = Extract<ChatAgentId, 'claude' | 'codex'>;
 type ResolvedRuntimeAgentToolInput = {

@@ -1,4 +1,4 @@
-import type { ToolCall, ToolResult } from '../../../../components/workspace/tools.ts';
+import type { ToolCall, ToolResult } from '../tools/toolExecutor.ts';
 import type { ReferenceFile } from '../../../knowledge/referenceFiles.ts';
 import type { AITextStreamEvent } from '../../core/AIService.ts';
 import type { SkillIntent } from '../../workflow/skillRouting.ts';

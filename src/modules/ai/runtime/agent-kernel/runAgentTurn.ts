@@ -1,4 +1,4 @@
-import type { ToolCall, ToolResult } from '../../../../components/workspace/tools.ts';
+import type { ToolCall, ToolResult } from '../tools/toolExecutor.ts';
 import type { AITextStreamEvent } from '../../core/AIService.ts';
 import { buildAgentContext } from '../context/buildAgentContext.ts';
 import type { AgentContextBuildInput, AgentContextSnapshot } from '../context/agentContextTypes.ts';

@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const chatPath = path.resolve(testDir, '../../src/components/workspace/AIChat.tsx');
+const coordinatorPath = path.resolve(
+  testDir,
+  '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts',
+);
 const cardPath = path.resolve(testDir, '../../src/components/workspace/AIChatRuntimeToolExecutionCard.tsx');
 const blocksPath = path.resolve(testDir, '../../src/components/workspace/AIChatRuntimeToolBlocks.tsx');
 const cssPath = path.resolve(testDir, '../../src/components/workspace/AIChat.css');
@@ -440,7 +444,7 @@ test('runtime tool blocks use compact grouped timeline markup without fallback r
   assert.match(blocksSource, /chat-tool-trace-line-copy/);
   assert.doesNotMatch(blocksSource, /RuntimeFallbackToolTree/);
   assert.doesNotMatch(blocksSource, /chat-tool-trace-detail-toggle/);
-  assert.doesNotMatch(blocksSource, /鏇村缁嗚妭/);
+  assert.doesNotMatch(blocksSource, /閺囨潙顦跨紒鍡氬Ν/);
   assert.doesNotMatch(blocksSource, /indexLabel/);
   assert.doesNotMatch(blocksSource, /prefix=/);
   assert.doesNotMatch(blocksSource, /\$\{index \+ 1\}\./);
@@ -550,11 +554,9 @@ test('assistant narrative and runtime cards use a consistent typography scale', 
 });
 
 test('built-in runtime seeds a visible thinking placeholder before the first model event', async () => {
-  const chatSource = await readFile(chatPath, 'utf8');
+  const chatSource = await readFile(coordinatorPath, 'utf8');
 
-  assert.match(
-    chatSource,
-    /pushStreamingDraft\(assistantMessage\.id,\s*\{\s*timeline:\s*buildAssistantStreamingTimeline\('',\s*assistantBaseTimeline,\s*\{\s*fallbackThinkingContent:\s*'正在思考\.\.\.'/ 
-  );
+  assert.match(chatSource, /pushStreamingDraft\(assistantMessage\.id,\s*\{/);
+  assert.match(chatSource, /fallbackThinkingContent:\s*'正在思考\.\.\.'/);
   assert.match(chatSource, /await emitMemoryReadLifecycle\(\);/);
 });

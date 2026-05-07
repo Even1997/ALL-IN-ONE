@@ -6,7 +6,7 @@ import {
   containsToolProtocolMarkers,
   formatToolResult,
   parseToolCalls,
-} from '../../../components/workspace/tools.ts';
+} from '../runtime/tools/toolExecutor.ts';
 import { buildAIConfigurationError, hasUsableAIConfiguration, listModelsSupportMode } from './configStatus.ts';
 import { withRetry } from '../runtime/retry/withRetry.ts';
 

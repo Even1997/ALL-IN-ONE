@@ -5,7 +5,7 @@ import {
   type ToolCall,
   type ToolResult,
   type ToolResultFileChange,
-} from '../../../../components/workspace/tools.ts';
+} from './toolExecutor.ts';
 import type { AITextStreamEvent } from '../../core/AIService.ts';
 import type {
   RuntimeToolLoopOptions,
