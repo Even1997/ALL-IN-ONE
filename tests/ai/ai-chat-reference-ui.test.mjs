@@ -10,17 +10,19 @@ const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AICha
 const aiChatCssPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.css');
 const gnAgentPiecesPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx');
 
-test('AIChat keeps icon-first shell controls and GN Agent embedded entry support', async () => {
+test('AIChat keeps icon-first shell controls and routes management through settings tabs', async () => {
   const source = await readFile(aiChatPath, 'utf8');
   const pieces = await readFile(gnAgentPiecesPath, 'utf8');
 
   assert.match(source, /chat-shell-icon-btn/);
-  assert.match(source, /GNAgentSkillsEntryButton/);
   assert.match(source, /GNAgentSkillsPage/);
+  assert.match(source, /RuntimeMcpSettingsPage/);
+  assert.match(source, /activeSettingsTab/);
   assert.match(source, /resolveSkillIntent/);
   assert.match(source, /GNAgentHistoryMenu/);
   assert.match(pieces, /chat-composer-gn-agent-entry/);
   assert.match(pieces, /chat-composer-embedded-toolbar/);
+  assert.doesNotMatch(source, /GNAgentSkillsEntryButton/);
   assert.doesNotMatch(source, /GN_AGENT_SUGGESTIONS/);
   assert.doesNotMatch(source, /@绱㈠紩/);
   assert.doesNotMatch(source, /@闇€姹?/);

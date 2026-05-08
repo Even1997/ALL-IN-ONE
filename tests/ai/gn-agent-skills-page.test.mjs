@@ -29,8 +29,12 @@ test('gnAgent skills page exposes a global skill management surface', async () =
   assert.match(pageSource, /全部/);
   assert.match(pageSource, /gn-agent-skills-hero/);
   assert.match(pageSource, /gn-agent-skills-search/);
-  assert.match(pageSource, /gn-agent-skills-section/);
-  assert.match(pageSource, /gn-agent-skills-card-status/);
+  assert.match(pageSource, /gn-agent-skills-shell/);
+  assert.match(pageSource, /gn-agent-skills-list-panel/);
+  assert.match(pageSource, /gn-agent-skills-detail-panel/);
+  assert.match(pageSource, /gn-agent-skills-list-item/);
+  assert.match(pageSource, /gn-agent-skills-summary-card/);
+  assert.match(pageSource, /gn-agent-skills-detail-actions/);
   assert.match(pageSource, /MacDialog/);
   assert.match(pageSource, /readSkillFile/);
   assert.match(pageSource, /查看/);
@@ -40,6 +44,10 @@ test('gnAgent skills page exposes a global skill management surface', async () =
   assert.match(pageSource, /导入本地技能/);
   assert.match(pageSource, /GitHub 下载/);
   assert.match(pageSource, /移除/);
+  assert.match(pageSource, /技能详情/);
+  assert.match(pageSource, /当前选中/);
+  assert.match(pageSource, /查看全文/);
+  assert.match(pageSource, /已写入聊天框/);
   assert.match(pageSource, /\/skill/);
   assert.match(pageSource, /skill\.category === 'system'/);
   assert.match(pageSource, /skill\.source === 'GoodNight recommended'/);
@@ -64,6 +72,10 @@ test('gnAgent skills page styles follow the current light and dark theme system'
   assert.match(cssSource, /--gn-skills-border:\s*var\(--mode-border/);
   assert.match(cssSource, /--gn-skills-chip:\s*var\(--mode-chip/);
   assert.match(cssSource, /--gn-skills-input:\s*var\(--mode-input/);
+  assert.match(cssSource, /\.gn-agent-skills-shell\s*\{/);
+  assert.match(cssSource, /\.gn-agent-skills-list-panel\s*\{/);
+  assert.match(cssSource, /\.gn-agent-skills-detail-panel\s*\{/);
+  assert.match(cssSource, /\.gn-agent-skills-list-item\.active\s*\{/);
   assert.match(cssSource, /\.gn-agent-skills-preview\s*\{/);
   assert.match(cssSource, /\.gn-agent-skills-preview-body\s*\{/);
   assert.match(cssSource, /:root\[data-theme='light'\]\s+\.gn-agent-skills-page/);
@@ -88,4 +100,3 @@ test('gnAgent skills preview dialog can opt into a wider content width without o
   assert.match(cssSource, /\.gn-agent-skills-preview-body\s*\{[\s\S]*max-width:\s*100%;/);
   assert.match(cssSource, /\.gn-agent-skills-preview-body\s*\{[\s\S]*box-sizing:\s*border-box;/);
 });
-

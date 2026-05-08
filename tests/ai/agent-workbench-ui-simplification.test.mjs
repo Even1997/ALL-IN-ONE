@@ -13,6 +13,7 @@ const cssPath = path.resolve(__dirname, '../../src/features/agent-shell/componen
 
 test('agent workbench sidebar removes redundant first-level destinations and keeps conversation history as the body', async () => {
   const source = await readFile(sidebarPath, 'utf8');
+  const pageSource = await readFile(pagePath, 'utf8');
 
   assert.match(source, /label:\s*'新对话'/);
   assert.match(source, /label:\s*'搜索'/);
@@ -24,6 +25,8 @@ test('agent workbench sidebar removes redundant first-level destinations and kee
   assert.doesNotMatch(source, /agent-sidebar-actions-grid/);
   assert.match(source, /对话历史/);
   assert.doesNotMatch(source, /最近对话/);
+  assert.match(pageSource, /sessions=\{session\.sessions\}/);
+  assert.match(pageSource, /onDeleteSession=\{session\.statusActions\.deleteSession\}/);
 });
 
 test('agent workbench page opens search and skills in dialogs instead of sidebar pages', async () => {
@@ -74,6 +77,39 @@ test('agent workbench stage removes redundant connection-state pill and keeps on
   assert.match(source, /pendingApprovalCount/);
   assert.match(source, /审查和记忆面板/);
   assert.doesNotMatch(source, /审查、文件和记忆面板/);
+});
+
+test('agent workbench conversation history uses session entries with direct actions and readable Chinese labels', async () => {
+  const listPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentThreadList.tsx');
+  const source = await readFile(listPath, 'utf8');
+  const chatSource = await readFile(path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx'), 'utf8');
+  const embeddedSource = await readFile(
+    path.resolve(__dirname, '../../src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /ChatSession/);
+  assert.match(source, /空会话/);
+  assert.match(source, /right\.createdAt - left\.createdAt/);
+  assert.match(source, /formatThreadTime\(session\.createdAt\)/);
+  assert.match(source, /placeholder="搜索对话历史"/);
+  assert.match(source, /aria-label="搜索对话历史"/);
+  assert.match(source, /session\.title\.toLowerCase\(\)\.includes\(normalizedQuery\)/);
+  assert.match(source, /preview\.toLowerCase\(\)\.includes\(normalizedQuery\)/);
+  assert.match(source, /没有匹配的对话/);
+  assert.match(source, /gn-agent-runtime-card-delete/);
+  assert.match(source, /删除/);
+  assert.doesNotMatch(source, /查看/);
+  assert.doesNotMatch(source, /继续回复/);
+  assert.match(chatSource, /title="历史会话"/);
+  assert.match(chatSource, /title="新对话"/);
+  assert.match(chatSource, /title="设置"/);
+  assert.doesNotMatch(chatSource, /title="\\u5386\\u53f2\\u4f1a\\u8bdd"/);
+  assert.doesNotMatch(chatSource, /title="\\u65b0\\u5bf9\\u8bdd"/);
+  assert.doesNotMatch(chatSource, /title="\\u8bbe\\u7f6e"/);
+  assert.match(embeddedSource, /新建对话/);
+  assert.match(embeddedSource, /删除对话/);
+  assert.doesNotMatch(embeddedSource, /\\u65b0\\u5efa\\u5bf9\\u8bdd/);
 });
 
 test('agent workbench rail styles shrink the navigation footprint', async () => {

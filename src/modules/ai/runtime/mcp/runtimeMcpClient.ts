@@ -1,7 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getSystemRuntimeSkillDefinitions } from '../../skills/skillLibrary';
 import { isTauriRuntimeAvailable } from '../../../../utils/projectPersistence';
-import type { RuntimeMcpServer, RuntimeMcpToolCall } from './runtimeMcpTypes';
+import type {
+  RuntimeMcpDeleteResult,
+  RuntimeMcpServer,
+  RuntimeMcpToolCall,
+} from './runtimeMcpTypes';
 
 const DEFAULT_RUNTIME_MCP_SERVER: RuntimeMcpServer = {
   id: 'goodnight-skills',
@@ -11,6 +15,13 @@ const DEFAULT_RUNTIME_MCP_SERVER: RuntimeMcpServer = {
   description: 'Expose GoodNight local skills as a built-in MCP server.',
   enabled: true,
   toolNames: ['list-skills'],
+  command: null,
+  args: [],
+  env: {},
+  url: null,
+  headers: {},
+  headersHelper: null,
+  oauth: null,
   tools: [
     {
       name: 'list-skills',
@@ -29,6 +40,11 @@ export const upsertRuntimeMcpServer = (input: RuntimeMcpServer) =>
   isTauriRuntimeAvailable()
     ? invoke<RuntimeMcpServer>('upsert_runtime_mcp_server', { input })
     : Promise.resolve(input);
+
+export const deleteRuntimeMcpServer = (id: string) =>
+  isTauriRuntimeAvailable()
+    ? invoke<RuntimeMcpDeleteResult>('delete_runtime_mcp_server', { id })
+    : Promise.resolve({ id, deleted: true });
 
 export const listRuntimeMcpToolCalls = (threadId: string) =>
   isTauriRuntimeAvailable()

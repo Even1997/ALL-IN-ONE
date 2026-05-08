@@ -1,7 +1,7 @@
 use super::context_store::ensure_agent_runtime_dir;
 use super::types::{
-    InvokeRuntimeMcpToolInput, RuntimeMcpServerRecord, RuntimeMcpToolCallRecord,
-    RuntimeMcpToolRecord, UpsertRuntimeMcpServerInput,
+    DeleteRuntimeMcpServerResult, InvokeRuntimeMcpToolInput, RuntimeMcpServerRecord,
+    RuntimeMcpToolCallRecord, RuntimeMcpToolRecord, UpsertRuntimeMcpServerInput,
 };
 use crate::collect_skill_discovery_entries;
 use serde::{Deserialize, Serialize};
@@ -55,6 +55,13 @@ fn default_goodnight_skills_server() -> RuntimeMcpServerRecord {
         description: "Expose GoodNight local skills as a built-in MCP server.".to_string(),
         enabled: true,
         tool_names: vec![GOODNIGHT_SKILLS_TOOL_NAME.to_string()],
+        command: None,
+        args: vec![],
+        env: Default::default(),
+        url: None,
+        headers: Default::default(),
+        headers_helper: None,
+        oauth: None,
         tools: vec![RuntimeMcpToolRecord {
             name: GOODNIGHT_SKILLS_TOOL_NAME.to_string(),
             description: "List the currently discoverable GoodNight skills.".to_string(),
@@ -110,6 +117,13 @@ pub fn upsert_server(
         description: input.description,
         enabled: input.enabled,
         tool_names: input.tool_names,
+        command: input.command,
+        args: input.args,
+        env: input.env,
+        url: input.url,
+        headers: input.headers,
+        headers_helper: input.headers_helper,
+        oauth: input.oauth,
         tools: input.tools,
     };
 
@@ -117,6 +131,29 @@ pub fn upsert_server(
     store.servers.push(server.clone());
     save_mcp_store(app_data_dir, &store)?;
     Ok(server)
+}
+
+pub fn delete_server(
+    app_data_dir: &Path,
+    server_id: &str,
+) -> Result<DeleteRuntimeMcpServerResult, String> {
+    if server_id == GOODNIGHT_SKILLS_SERVER_ID {
+        return Err("The built-in GoodNight Skills MCP server cannot be deleted.".to_string());
+    }
+
+    let mut store = load_mcp_store(app_data_dir)?;
+    let initial_len = store.servers.len();
+    store.servers.retain(|server| server.id != server_id);
+    let deleted = store.servers.len() != initial_len;
+
+    if deleted {
+        save_mcp_store(app_data_dir, &store)?;
+    }
+
+    Ok(DeleteRuntimeMcpServerResult {
+        id: server_id.to_string(),
+        deleted,
+    })
 }
 
 pub fn list_tool_calls(

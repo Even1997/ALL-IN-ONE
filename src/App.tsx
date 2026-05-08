@@ -28,6 +28,7 @@ import {
   ROLE_TAB_ICONS,
   type RoleView,
 } from './appNavigation';
+import { AI_CHAT_SETTINGS_EVENT } from './modules/ai/chat/chatCommands';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type {
   AppType,
@@ -5121,6 +5122,20 @@ ${selectedContextPrompt}` : '',
             </nav>
 
             <div className="desktop-primary-foot">
+              <MacIconButton
+                className="desktop-rail-icon-btn"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent(AI_CHAT_SETTINGS_EVENT, {
+                      detail: { tab: 'skills' },
+                    }),
+                  );
+                }}
+                aria-label="设置"
+                title="设置"
+              >
+                <WorkbenchIcon name="settings" />
+              </MacIconButton>
               <MacIconButton
                 className="desktop-rail-icon-btn"
                 onClick={toggleThemeMode}

@@ -7,39 +7,23 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pagePath = path.resolve(__dirname, '../../src/features/agent-shell/pages/AgentShellPage.tsx');
-const cssPath = path.resolve(__dirname, '../../src/features/agent-shell/pages/AgentShellPage.css');
+const sidebarPath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentWorkbenchSidebar.tsx');
 
-test('agent workspace page composes the reusable GN agent pages behind a dedicated tab shell', async () => {
-  const source = await readFile(pagePath, 'utf8');
+test('agent workspace keeps search entry points but removes the skills management surface', async () => {
+  const pageSource = await readFile(pagePath, 'utf8');
+  const sidebarSource = await readFile(sidebarPath, 'utf8');
 
-  assert.match(source, /GNAgentChatPage/);
-  assert.match(source, /GNAgentConfigPage/);
-  assert.match(source, /GNAgentSkillsPage/);
-  assert.match(source, /const AGENT_WORKSPACE_TABS/);
-  assert.match(source, /id:\s*'chat'/);
-  assert.match(source, /id:\s*'claude'/);
-  assert.match(source, /id:\s*'codex'/);
-  assert.match(source, /id:\s*'skills'/);
-  assert.match(source, /id:\s*'config'/);
-  assert.match(source, /providerId="classic"/);
-  assert.match(source, /providerId="claude"/);
-  assert.match(source, /providerId="codex"/);
-  assert.match(source, /aria-label="Agent workspace sections"/);
-  assert.match(source, /get_agent_shell_settings/);
-  assert.match(source, /update_agent_shell_settings/);
-  assert.match(source, /modeToTab\(settings\.mode\)/);
-  assert.match(source, /input:\s*\{\s*mode:\s*tabToMode\(tabId\)/);
-  assert.doesNotMatch(source, /activeTab\?:/);
-  assert.doesNotMatch(source, /settings\?\.activeTab/);
-});
+  assert.match(pageSource, /AgentWorkbenchSidebar/);
+  assert.match(pageSource, /AgentChatStage/);
+  assert.match(pageSource, /AgentWorkbenchInspector/);
+  assert.match(pageSource, /onOpenSearch/);
+  assert.doesNotMatch(pageSource, /GNAgentSkillsPage/);
+  assert.doesNotMatch(pageSource, /isSkillsDialogOpen/);
+  assert.doesNotMatch(pageSource, /title="技能"/);
 
-test('agent workspace page includes first-pass shell styles for the dedicated workspace', async () => {
-  const source = await readFile(cssPath, 'utf8');
-
-  assert.match(source, /\.agent-workspace-page\s*\{/);
-  assert.match(source, /\.agent-workspace-hero\s*\{/);
-  assert.match(source, /\.agent-workspace-tabs\s*\{/);
-  assert.match(source, /\.agent-workspace-tab\.active\s*\{/);
-  assert.match(source, /\.agent-workspace-content\s*\{/);
-  assert.match(source, /\.gn-agent-shell-config-card\s*\{/);
+  assert.match(sidebarSource, /id:\s*'newThread'/);
+  assert.match(sidebarSource, /id:\s*'search'/);
+  assert.doesNotMatch(sidebarSource, /id:\s*'skills'/);
+  assert.doesNotMatch(sidebarSource, /onOpenSkills/);
+  assert.doesNotMatch(sidebarSource, /label:\s*'技能'/);
 });

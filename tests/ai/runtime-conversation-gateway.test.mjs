@@ -157,3 +157,249 @@ test('runtime conversation gateway clears stale runtime thread bindings missing 
   assert.equal(result.sessions[0].id, 'session-stale');
   assert.equal(result.sessions[0].runtimeThreadId, null);
 });
+
+test('runtime conversation gateway does not auto-create a welcome session during bootstrap', async () => {
+  const { resolveRuntimeConversationBootstrapAction } = await loadGateway();
+
+  const firstAttempt = resolveRuntimeConversationBootstrapAction({
+    sessions: [],
+    persistedThreadCount: 0,
+    activeSessionId: null,
+    welcomeSessionBootstrapAttempted: false,
+  });
+  const secondAttempt = resolveRuntimeConversationBootstrapAction({
+    sessions: [],
+    persistedThreadCount: 0,
+    activeSessionId: null,
+    welcomeSessionBootstrapAttempted: true,
+  });
+
+  assert.deepEqual(firstAttempt, { type: 'noop' });
+  assert.deepEqual(secondAttempt, { type: 'noop' });
+});
+
+test('runtime conversation gateway activates the first session instead of creating a duplicate welcome session', async () => {
+  const { resolveRuntimeConversationBootstrapAction } = await loadGateway();
+
+  const action = resolveRuntimeConversationBootstrapAction({
+    sessions: [
+      {
+        id: 'session-existing',
+        projectId: 'project-1',
+        title: 'Existing session',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        messages: [],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 10,
+        updatedAt: 10,
+      },
+    ],
+    persistedThreadCount: 0,
+    activeSessionId: null,
+    welcomeSessionBootstrapAttempted: false,
+  });
+
+  assert.deepEqual(action, {
+    type: 'select-existing-session',
+    sessionId: 'session-existing',
+  });
+});
+
+test('runtime conversation gateway collapses duplicate chat sessions bound to the same runtime thread', async () => {
+  const { reconcileRuntimeThreadsWithSessions } = await loadGateway();
+
+  const result = reconcileRuntimeThreadsWithSessions({
+    projectId: 'project-1',
+    sessions: [
+      {
+        id: 'session-older',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: 'thread-1',
+        messages: [],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 10,
+        updatedAt: 10,
+      },
+      {
+        id: 'session-newer',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: 'thread-1',
+        messages: [{ id: 'msg-1', role: 'user', content: 'hello', createdAt: 11 }],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 11,
+        updatedAt: 12,
+      },
+    ],
+    runtimeThreads: [
+      {
+        id: 'thread-1',
+        providerId: 'built-in',
+        title: '新对话',
+        createdAt: 10,
+        updatedAt: 12,
+      },
+    ],
+  });
+
+  assert.equal(result.sessions.length, 1);
+  assert.equal(result.sessions[0].id, 'session-newer');
+  assert.equal(result.sessions[0].runtimeThreadId, 'thread-1');
+  assert.deepEqual(result.removedSessionIds, ['session-older']);
+});
+
+test('runtime conversation gateway collapses duplicate placeholder welcome sessions', async () => {
+  const { reconcileRuntimeThreadsWithSessions } = await loadGateway();
+
+  const result = reconcileRuntimeThreadsWithSessions({
+    projectId: 'project-1',
+    sessions: [
+      {
+        id: 'session-placeholder-1',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        messages: [{ id: 'msg-1', role: 'assistant', timeline: [], createdAt: 10 }],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 10,
+        updatedAt: 10,
+      },
+      {
+        id: 'session-placeholder-2',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        messages: [{ id: 'msg-2', role: 'assistant', timeline: [], createdAt: 11 }],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 11,
+        updatedAt: 11,
+      },
+    ],
+    runtimeThreads: [],
+  });
+
+  assert.equal(result.sessions.length, 1);
+  assert.equal(result.sessions[0].id, 'session-placeholder-2');
+  assert.deepEqual(result.removedSessionIds, ['session-placeholder-1']);
+});
+
+test('runtime conversation gateway removes legacy empty draft sessions on bootstrap', async () => {
+  const { reconcileRuntimeThreadsWithSessions } = await loadGateway();
+
+  const result = reconcileRuntimeThreadsWithSessions({
+    projectId: 'project-1',
+    sessions: [
+      {
+        id: 'session-empty-1',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        messages: [],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 10,
+        updatedAt: 10,
+      },
+      {
+        id: 'session-empty-2',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        messages: [],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 11,
+        updatedAt: 11,
+      },
+      {
+        id: 'session-empty-3',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        messages: [],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 12,
+        updatedAt: 12,
+      },
+    ],
+    runtimeThreads: [],
+  });
+
+  assert.equal(result.sessions.length, 0);
+  assert.deepEqual(result.removedSessionIds, [
+    'session-empty-1',
+    'session-empty-2',
+    'session-empty-3',
+  ]);
+});
+
+test('runtime conversation gateway removes empty sessions after stale runtime thread bindings are cleared', async () => {
+  const { reconcileRuntimeThreadsWithSessions } = await loadGateway();
+
+  const result = reconcileRuntimeThreadsWithSessions({
+    projectId: 'project-1',
+    sessions: [
+      {
+        id: 'session-stale-empty',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: 'thread-pruned',
+        messages: [],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 10,
+        updatedAt: 10,
+      },
+    ],
+    runtimeThreads: [],
+  });
+
+  assert.equal(result.sessions.length, 0);
+  assert.deepEqual(result.removedSessionIds, ['session-stale-empty']);
+});
+
+test('runtime conversation gateway ignores legacy empty runtime threads from persistence', async () => {
+  const { reconcileRuntimeThreadsWithSessions } = await loadGateway();
+
+  const result = reconcileRuntimeThreadsWithSessions({
+    projectId: 'project-1',
+    sessions: [],
+    runtimeThreads: [
+      {
+        id: 'thread-empty',
+        providerId: 'built-in',
+        title: '新对话',
+        createdAt: 10,
+        updatedAt: 10,
+      },
+    ],
+  });
+
+  assert.equal(result.sessions.length, 0);
+  assert.equal(result.bindings.length, 0);
+});

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,6 +101,15 @@ pub struct RuntimeMcpToolRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RuntimeMcpOAuthRecord {
+    #[serde(default)]
+    pub client_id: Option<String>,
+    #[serde(default)]
+    pub callback_port: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RuntimeMcpServerRecord {
     pub id: String,
     pub name: String,
@@ -108,6 +118,21 @@ pub struct RuntimeMcpServerRecord {
     pub description: String,
     pub enabled: bool,
     pub tool_names: Vec<String>,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub headers_helper: Option<String>,
+    #[serde(default)]
+    pub oauth: Option<RuntimeMcpOAuthRecord>,
+    #[serde(default)]
     pub tools: Vec<RuntimeMcpToolRecord>,
 }
 
@@ -138,7 +163,34 @@ pub struct UpsertRuntimeMcpServerInput {
     pub enabled: bool,
     pub tool_names: Vec<String>,
     #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub headers_helper: Option<String>,
+    #[serde(default)]
+    pub oauth: Option<RuntimeMcpOAuthRecord>,
+    #[serde(default)]
     pub tools: Vec<RuntimeMcpToolRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteRuntimeMcpServerInput {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteRuntimeMcpServerResult {
+    pub id: String,
+    pub deleted: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

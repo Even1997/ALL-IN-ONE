@@ -52,7 +52,23 @@ pub fn list_threads(
     app_data_dir: &Path,
     project_id: &str,
 ) -> Result<Vec<AgentThreadRecord>, String> {
-    let mut threads = load_thread_store(app_data_dir)?
+    let mut store = load_thread_store(app_data_dir)?;
+    let empty_thread_ids = store
+        .threads
+        .iter()
+        .filter(|thread| thread.project_id == project_id && thread.title == "新对话")
+        .filter(|thread| !store.timeline.iter().any(|event| event.thread_id == thread.id))
+        .map(|thread| thread.id.clone())
+        .collect::<Vec<_>>();
+
+    if !empty_thread_ids.is_empty() {
+        store
+            .threads
+            .retain(|thread| !empty_thread_ids.iter().any(|id| id == &thread.id));
+        save_thread_store(app_data_dir, &store)?;
+    }
+
+    let mut threads = store
         .threads
         .into_iter()
         .filter(|thread| thread.project_id == project_id)
@@ -156,6 +172,52 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(thread_ids, vec!["thread-newer", "thread-older"]);
+
+        fs::remove_dir_all(&app_data_dir).ok();
+    }
+
+    #[test]
+    fn list_threads_prunes_empty_new_dialogue_threads() {
+        let app_data_dir = make_temp_dir("thread-store-prune-empty");
+        let empty_thread = AgentThreadRecord {
+            id: "thread-empty".into(),
+            project_id: "project-1".into(),
+            title: "新对话".into(),
+            provider_id: "built-in".into(),
+            created_at: 10,
+            updated_at: 10,
+        };
+        let active_thread = AgentThreadRecord {
+            id: "thread-active".into(),
+            project_id: "project-1".into(),
+            title: "新对话".into(),
+            provider_id: "built-in".into(),
+            created_at: 20,
+            updated_at: 20,
+        };
+
+        create_thread(&app_data_dir, empty_thread).expect("save empty thread");
+        create_thread(&app_data_dir, active_thread).expect("save active thread");
+        append_timeline_event(
+            &app_data_dir,
+            AgentTimelineEvent {
+                id: "event-active".into(),
+                thread_id: "thread-active".into(),
+                turn_id: "turn-active".into(),
+                kind: "message".into(),
+                payload: "hello".into(),
+                created_at: 30,
+            },
+        )
+        .expect("append timeline event");
+
+        let threads = list_threads(&app_data_dir, "project-1").expect("list threads");
+        let thread_ids = threads
+            .iter()
+            .map(|thread| thread.id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(thread_ids, vec!["thread-active"]);
 
         fs::remove_dir_all(&app_data_dir).ok();
     }

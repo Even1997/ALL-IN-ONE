@@ -89,7 +89,9 @@
   flex-wrap: wrap;
 }
 
-.gn-agent-skills-action-btn {
+.gn-agent-skills-action-btn,
+.gn-agent-skills-card-btn,
+.gn-agent-skills-list-item-quick-action {
   min-height: 38px;
   padding: 0 16px;
   border: 1px solid var(--gn-skills-border);
@@ -105,7 +107,9 @@
     transform 0.18s ease;
 }
 
-.gn-agent-skills-action-btn:hover:not(:disabled) {
+.gn-agent-skills-action-btn:hover:not(:disabled),
+.gn-agent-skills-card-btn:hover:not(:disabled),
+.gn-agent-skills-list-item-quick-action:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: var(--gn-skills-border-strong);
   background: color-mix(in srgb, var(--gn-skills-chip-strong) 84%, var(--gn-skills-input));
@@ -115,9 +119,14 @@
   color: var(--gn-skills-muted);
 }
 
+.gn-agent-skills-card-btn.danger:hover:not(:disabled) {
+  border-color: var(--gn-skills-danger-border);
+  background: color-mix(in srgb, var(--mode-danger, #dc2626) 14%, var(--gn-skills-input));
+}
+
 .gn-agent-skills-action-btn:disabled,
 .gn-agent-skills-card-btn:disabled,
-.gn-agent-skills-card-status:disabled {
+.gn-agent-skills-list-item-quick-action:disabled {
   opacity: 0.6;
   cursor: default;
 }
@@ -150,6 +159,50 @@
   color: var(--gn-skills-muted);
   font-size: 15px;
   line-height: 1.7;
+}
+
+.gn-agent-skills-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gn-agent-skills-summary-card {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--gn-skills-border);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #ffffff 12%, transparent), transparent 58%),
+    var(--gn-skills-surface);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 36%, transparent),
+    var(--gn-skills-shadow);
+}
+
+.gn-agent-skills-summary-card span,
+.gn-agent-skills-summary-card small {
+  color: var(--gn-skills-muted);
+}
+
+.gn-agent-skills-summary-card span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.gn-agent-skills-summary-card strong {
+  color: var(--gn-skills-accent);
+  font-size: 24px;
+  line-height: 1;
+  word-break: break-word;
+}
+
+.gn-agent-skills-summary-card small {
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .gn-agent-skills-search-row {
@@ -220,48 +273,22 @@
   border-color: var(--gn-skills-danger-border);
 }
 
-.gn-agent-skills-library {
+.gn-agent-skills-shell {
   display: grid;
-  gap: 26px;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.15fr);
+  gap: 18px;
   min-height: 0;
 }
 
-.gn-agent-skills-section {
+.gn-agent-skills-list-panel,
+.gn-agent-skills-detail-panel {
+  min-width: 0;
   display: grid;
-  gap: 14px;
-}
-
-.gn-agent-skills-section-header {
-  display: grid;
-  gap: 4px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--gn-skills-border) 74%, transparent);
-}
-
-.gn-agent-skills-section-header h4 {
-  margin: 0;
-  font-size: 17px;
-  color: var(--gn-skills-accent);
-}
-
-.gn-agent-skills-section-header span {
-  color: var(--gn-skills-muted);
-  font-size: 13px;
-}
-
-.gn-agent-skills-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 18px;
-}
-
-.gn-agent-skills-card {
-  display: grid;
-  gap: 14px;
-  min-height: 122px;
-  padding: 16px;
+  align-content: start;
+  gap: 16px;
+  padding: 18px;
   border: 1px solid var(--gn-skills-border);
-  border-radius: 22px;
+  border-radius: 24px;
   background:
     linear-gradient(180deg, color-mix(in srgb, #ffffff 14%, transparent), transparent 55%),
     var(--gn-skills-surface);
@@ -270,85 +297,164 @@
     var(--gn-skills-shadow);
 }
 
-.gn-agent-skills-card-empty {
-  min-height: 96px;
-  align-content: center;
+.gn-agent-skills-list-panel {
+  max-height: min(70vh, 920px);
+  overflow: auto;
 }
 
-.gn-agent-skills-card-header {
+.gn-agent-skills-detail-panel {
+  max-height: min(70vh, 920px);
+  overflow: auto;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--gn-skills-chip-strong) 48%, transparent), transparent 58%),
+    var(--gn-skills-surface-alt);
+}
+
+.gn-agent-skills-section {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+}
+
+.gn-agent-skills-section + .gn-agent-skills-section {
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--gn-skills-border) 74%, transparent);
+}
+
+.gn-agent-skills-section-header {
+  display: flex;
   align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.gn-agent-skills-section-header h4 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: var(--gn-skills-accent);
+}
+
+.gn-agent-skills-section-header span {
+  display: block;
+  color: var(--gn-skills-muted);
+  font-size: 13px;
+}
+
+.gn-agent-skills-section-header strong {
+  color: var(--gn-skills-accent);
+  font-size: 14px;
+}
+
+.gn-agent-skills-list {
+  display: grid;
   gap: 12px;
 }
 
-.gn-agent-skills-card-icon {
-  width: 48px;
-  height: 48px;
+.gn-agent-skills-list-item,
+.gn-agent-skills-list-empty,
+.gn-agent-skills-detail-preview-card {
+  min-width: 0;
+  border: 1px solid var(--gn-skills-border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--gn-skills-input) 88%, transparent);
+}
+
+.gn-agent-skills-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 12px;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.gn-agent-skills-list-item:hover {
+  transform: translateY(-1px);
+  border-color: var(--gn-skills-border-strong);
+}
+
+.gn-agent-skills-list-item.active {
+  border-color: var(--gn-skills-border-strong);
+  background: color-mix(in srgb, var(--gn-skills-chip-strong) 72%, var(--gn-skills-input));
+}
+
+.gn-agent-skills-list-item-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gn-agent-skills-list-item-icon {
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(135deg, #f5f5f4, #d6d3d1);
   color: #171717;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
+  flex-shrink: 0;
 }
 
-.gn-agent-skills-card-icon.system {
+.gn-agent-skills-list-item-icon.system {
   background: linear-gradient(135deg, #fde68a, #f59e0b);
 }
 
-.gn-agent-skills-card-icon.personal {
+.gn-agent-skills-list-item-icon.personal {
   background: linear-gradient(135deg, #c4b5fd, #8b5cf6);
 }
 
-.gn-agent-skills-card-copy {
+.gn-agent-skills-list-item-copy {
+  min-width: 0;
   display: grid;
   gap: 6px;
-  min-width: 0;
 }
 
-.gn-agent-skills-card-copy strong {
+.gn-agent-skills-list-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gn-agent-skills-list-item-copy strong,
+.gn-agent-skills-detail-title-row strong {
   color: var(--gn-skills-accent);
   font-size: 18px;
   line-height: 1.2;
 }
 
-.gn-agent-skills-card-copy span {
+.gn-agent-skills-list-item-copy span,
+.gn-agent-skills-detail-header p,
+.gn-agent-skills-detail-meta span {
   color: var(--gn-skills-muted);
   font-size: 13px;
   line-height: 1.6;
 }
 
-.gn-agent-skills-card-status {
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--gn-skills-border);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--gn-skills-input) 90%, transparent);
-  color: var(--gn-skills-accent);
-  font-size: 20px;
-  font-weight: 700;
+.gn-agent-skills-list-item-copy code,
+.gn-agent-skills-detail-preview-header code {
+  color: var(--gn-skills-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
-.gn-agent-skills-card-status.available {
-  cursor: pointer;
-}
-
-.gn-agent-skills-card-status.available:hover:not(:disabled) {
-  border-color: var(--gn-skills-border-strong);
-  background: color-mix(in srgb, var(--gn-skills-chip-strong) 84%, var(--gn-skills-input));
-}
-
-.gn-agent-skills-card-status.installed {
+.gn-agent-skills-list-item-status {
+  align-self: center;
   color: var(--gn-skills-soft-text);
-  background: color-mix(in srgb, var(--gn-skills-chip) 92%, transparent);
-}
-
-.gn-agent-skills-meta {
-  display: grid;
-  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .gn-agent-skills-source-badge {
@@ -365,109 +471,161 @@
   background: color-mix(in srgb, #f59e0b 18%, var(--gn-skills-chip));
 }
 
-.gn-agent-skills-meta code {
-  color: var(--gn-skills-muted);
-  font-size: 12px;
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.gn-agent-skills-actions {
-  display: flex;
-  justify-content: flex-end;
+.gn-agent-skills-list-empty {
+  display: grid;
   gap: 8px;
+  padding: 18px;
+  align-content: center;
 }
 
-.gn-agent-skills-card-btn {
-  min-height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--gn-skills-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--gn-skills-input) 92%, transparent);
-  color: var(--gn-skills-text);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
+.gn-agent-skills-list-empty strong {
+  color: var(--gn-skills-accent);
+  font-size: 16px;
 }
 
-.gn-agent-skills-card-btn.danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--mode-danger, #dc2626) 12%, var(--gn-skills-input));
-  border-color: color-mix(in srgb, var(--mode-danger, #dc2626) 26%, var(--gn-skills-border));
+.gn-agent-skills-list-empty span {
+  color: var(--gn-skills-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.gn-agent-skills-detail-header {
+  display: grid;
+  gap: 10px;
+}
+
+.gn-agent-skills-detail-eyebrow {
+  color: var(--gn-skills-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.gn-agent-skills-detail-header h4,
+.gn-agent-skills-detail-preview-header h5 {
+  margin: 0;
+  color: var(--gn-skills-accent);
+}
+
+.gn-agent-skills-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gn-agent-skills-detail-meta {
+  display: flex;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+}
+
+.gn-agent-skills-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gn-agent-skills-detail-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gn-agent-skills-detail-preview-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.gn-agent-skills-detail-preview-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .gn-agent-skills-preview {
-  display: grid;
-  gap: 12px;
   min-width: 0;
   width: min(72vw, 920px);
   max-width: 100%;
+  display: grid;
+  gap: 12px;
 }
 
 .gn-agent-skills-preview-state {
-  padding: 12px 14px;
-  border: 1px solid var(--gn-skills-border);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--gn-skills-input) 94%, transparent);
-  color: var(--gn-skills-soft-text);
+  min-width: 0;
+  padding: 14px;
+  border: 1px dashed var(--gn-skills-border);
+  border-radius: 16px;
+  color: var(--gn-skills-muted);
   font-size: 13px;
   line-height: 1.6;
 }
 
 .gn-agent-skills-preview-state.error {
-  border-color: var(--gn-skills-danger-border);
-  background: var(--gn-skills-danger-bg);
+  color: var(--mode-danger, #dc2626);
 }
 
 .gn-agent-skills-preview-body {
-  margin: 0;
   min-width: 0;
   max-width: 100%;
-  max-height: min(70vh, 760px);
+  margin: 0;
+  padding: 18px;
   overflow: auto;
-  box-sizing: border-box;
-  padding: 16px 18px;
   border: 1px solid var(--gn-skills-border);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--gn-skills-surface-alt) 96%, transparent);
-  color: var(--gn-skills-text);
-  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  border-radius: 18px;
+  background: color-mix(in srgb, #050505 92%, #101010);
+  color: #f5f5f4;
   font-size: 12px;
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
+  box-sizing: border-box;
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
+@media (max-width: 1200px) {
+  .gn-agent-skills-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .gn-agent-skills-list-panel,
+  .gn-agent-skills-detail-panel {
+    max-height: none;
+  }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 860px) {
+  .gn-agent-skills-summary-grid,
+  .gn-agent-skills-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
   .gn-agent-skills-page {
-    padding: 16px 14px 20px;
+    padding-inline: 14px;
   }
 
-  .gn-agent-skills-search-row,
-  .gn-agent-skills-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .gn-agent-skills-summary-grid,
+  .gn-agent-skills-detail-grid,
+  .gn-agent-skills-search-row {
+    grid-template-columns: 1fr;
   }
 
-  .gn-agent-skills-preview {
-    min-width: 0;
-    max-width: 100%;
+  .gn-agent-skills-list-item,
+  .gn-agent-skills-detail-preview-header,
+  .gn-agent-skills-section-header {
+    grid-template-columns: 1fr;
   }
 
-  .gn-agent-skills-hero {
-    padding: 20px 0 8px;
+  .gn-agent-skills-list-item {
+    display: grid;
   }
 
-  .gn-agent-skills-hero h3 {
-    font-size: 34px;
+  .gn-agent-skills-list-item-status,
+  .gn-agent-skills-list-item-quick-action {
+    justify-self: start;
   }
 }

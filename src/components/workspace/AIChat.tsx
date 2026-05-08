@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
@@ -161,6 +161,7 @@ import { createEmptyAgentTurnSession } from '../../modules/ai/runtime/session/ag
 import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
 import {
   reconcileRuntimeThreadsWithSessions,
+  resolveRuntimeConversationBootstrapAction,
 } from '../../modules/ai/runtime/conversation/runtimeConversationGateway.ts';
 import { useRuntimeConversationGateway } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
@@ -196,7 +197,12 @@ import {
 } from '../../modules/ai/store/assistantTimeline.ts';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
-import { AI_CHAT_COMMAND_EVENT, type AIChatCommandDetail } from '../../modules/ai/chat/chatCommands';
+import {
+  AI_CHAT_COMMAND_EVENT,
+  AI_CHAT_SETTINGS_EVENT,
+  type AIChatCommandDetail,
+  type AIChatSettingsDetail,
+} from '../../modules/ai/chat/chatCommands';
 import { resolveSkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
   buildProjectFileOperationFromToolCall,
@@ -227,6 +233,7 @@ import {
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import { AIChatReferenceSearchMenu } from './AIChatReferenceSearchMenu';
 import { AIChatSlashCommandMenu, type SlashCommandEntry } from './AIChatSlashCommandMenu';
+import { RuntimeMcpSettingsPage } from './RuntimeMcpSettingsPage';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -264,7 +271,10 @@ type AIChatProps = {
   providerExecutionMode?: 'claude' | 'codex' | null;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  headerActionSlot?: ReactNode;
 };
+
+type SettingsTabId = 'ai' | 'skills' | 'mcp';
 
 type ChatAgentAvailability = {
   ready: boolean;
@@ -289,19 +299,35 @@ const EMPTY_PENDING_APPROVALS: ApprovalRecord[] = [];
 const EMPTY_RUNTIME_SKILLS: RuntimeSkillDefinition[] = [];
 const EMPTY_BACKGROUND_TASKS: AgentBackgroundTaskRecord[] = [];
 const STREAMING_DRAFT_FLUSH_MS = 50;
-
-const GNAgentSkillsEntryButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <button
-    type="button"
-    className="chat-shell-icon-btn chat-skills-entry-btn"
-    aria-haspopup="dialog"
-    aria-label="打开技能页"
-    title="打开技能页"
-    onClick={onClick}
-  >
-    <SkillsIcon />
-  </button>
-);
+const SETTINGS_TABS: Array<{
+  id: SettingsTabId;
+  label: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+}> = [
+  {
+    id: 'ai',
+    label: 'AI',
+    eyebrow: 'Model Settings',
+    title: 'AI 设置',
+    description: '管理当前聊天使用的模型配置与 Provider。',
+  },
+  {
+    id: 'skills',
+    label: '技能',
+    eyebrow: 'Skills Library',
+    title: '技能设置',
+    description: '统一管理技能导入、查看与删除，不再放在 Agent 里单独维护。',
+  },
+  {
+    id: 'mcp',
+    label: 'MCP',
+    eyebrow: 'Runtime MCP',
+    title: 'MCP 设置',
+    description: '统一管理 MCP server 的查看、编辑、启停与运行记录。',
+  },
+];
 
 const formatTimestamp = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
@@ -1313,6 +1339,7 @@ const buildSessionPreview = (content: string) => {
 
 const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const runtimeConversationInitializationInFlight = new Set<string>();
 const KnowledgeTruthStructuredCards: React.FC<{
   cards: ChatStructuredCard[];
   onSelectNextStep: (prompt: string) => void;
@@ -1426,15 +1453,6 @@ const HistoryIcon = () => (
     <path d="M3.5 10A6.5 6.5 0 1 0 5.4 5.36" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     <path d="M3.5 4.75V7.75H6.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     <path d="M10 6.7V10L12.55 11.55" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-  </svg>
-);
-
-const SkillsIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M6.25 4.25H13.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    <path d="M5.25 8.25H14.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    <path d="M7.25 12.25H12.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    <path d="M8.5 16L10 14.5L11.5 16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -1675,6 +1693,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   providerExecutionMode = null,
   collapsed,
   onCollapsedChange,
+  headerActionSlot = null,
 }) => {
   const isProviderEmbedded = variant === 'provider-embedded';
   const isGNAgentEmbedded = variant === 'gn-agent-embedded';
@@ -1685,7 +1704,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [stallFP, setStallFP] = useState(0);
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTabId>('ai');
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [providerSearch, setProviderSearch] = useState('');
@@ -1893,6 +1912,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     }))
   );
   const runtimeProviderId = (providerExecutionMode || 'built-in') as AgentProviderId;
+  const currentProjectId = currentProject?.id || null;
 
   useEffect(() => {
     let alive = true;
@@ -1913,66 +1933,70 @@ export const AIChat: React.FC<AIChatProps> = ({
   }, [setPermissionMode, setSandboxPolicy]);
 
   useEffect(() => {
-    if (!currentProject) {
+    if (!currentProjectId || runtimeConversationInitializationInFlight.has(currentProjectId)) {
       return;
     }
 
-    let alive = true;
-    const projectId = currentProject.id;
+    const projectId = currentProjectId;
+    runtimeConversationInitializationInFlight.add(projectId);
     void (async () => {
-      ensureProjectState(projectId);
-
-      let persistedThreads: Awaited<ReturnType<typeof listAgentThreads>> = [];
       try {
-        persistedThreads = await listAgentThreads(projectId);
-      } catch (error) {
-        console.warn('Failed to load agent threads:', error);
-      }
-      if (!alive) {
-        return;
-      }
+        ensureProjectState(projectId);
 
-      const projectState = useAIChatStore.getState().projects[projectId];
-      const existingSessions = projectState?.sessions || [];
-      const reconciled = reconcileRuntimeThreadsWithSessions({
-        projectId,
-        sessions: existingSessions,
-        runtimeThreads: persistedThreads.map((thread) => ({
-          ...thread,
-          providerId: thread.providerId as AgentProviderId,
-        })),
-      });
+        let persistedThreads: Awaited<ReturnType<typeof listAgentThreads>> = [];
+        try {
+          persistedThreads = await listAgentThreads(projectId);
+        } catch (error) {
+          console.warn('Failed to load agent threads:', error);
+        }
 
-      reconciled.sessions.forEach((session) => {
-        upsertSession(projectId, session);
-      });
-
-      reconciled.bindings.forEach(({ thread, session }) => {
-        recordRuntimeThread(projectId, {
-          id: session.id,
-          providerId: thread.providerId as AgentProviderId,
-          title: thread.title,
-          createdAt: thread.createdAt,
-          updatedAt: thread.updatedAt,
+        const projectState = useAIChatStore.getState().projects[projectId];
+        const existingSessions = projectState?.sessions || [];
+        const reconciled = reconcileRuntimeThreadsWithSessions({
+          projectId,
+          sessions: existingSessions,
+          runtimeThreads: persistedThreads.map((thread) => ({
+            ...thread,
+            providerId: thread.providerId as AgentProviderId,
+          })),
         });
-      });
 
-      const nextProjectState = useAIChatStore.getState().projects[projectId];
-      const sessions = nextProjectState?.sessions || [];
-      if (sessions.length === 0 && persistedThreads.length === 0) {
-        const session = createWelcomeSession(projectId, runtimeProviderId);
-        upsertSession(projectId, session);
-        setActiveSession(projectId, session.id);
-      } else if (!nextProjectState?.activeSessionId && sessions[0]) {
-        setActiveSession(projectId, sessions[0].id);
+        reconciled.removedSessionIds.forEach((sessionId) => {
+          removeSession(projectId, sessionId);
+        });
+
+        reconciled.sessions.forEach((session) => {
+          upsertSession(projectId, session);
+        });
+
+        reconciled.bindings.forEach(({ thread, session }) => {
+          recordRuntimeThread(projectId, {
+            id: session.id,
+            providerId: thread.providerId as AgentProviderId,
+            title: thread.title,
+            createdAt: thread.createdAt,
+            updatedAt: thread.updatedAt,
+          });
+        });
+
+        const nextProjectState = useAIChatStore.getState().projects[projectId];
+        const sessions = nextProjectState?.sessions || [];
+        const bootstrapAction = resolveRuntimeConversationBootstrapAction({
+          sessions,
+          activeSessionId: nextProjectState?.activeSessionId || null,
+        });
+
+        if (bootstrapAction.type === 'select-existing-session') {
+          setActiveSession(projectId, bootstrapAction.sessionId);
+        }
+      } finally {
+        runtimeConversationInitializationInFlight.delete(projectId);
       }
     })();
 
-    return () => {
-      alive = false;
-    };
+    return undefined;
   }, [
-    currentProject,
+    currentProjectId,
     ensureProjectState,
     recordRuntimeThread,
     runtimeProviderId,
@@ -3448,6 +3472,10 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     () => findPresetByConfig(settingsDraft.provider, settingsDraft.baseURL) || CUSTOM_PROVIDER_PRESET,
     [settingsDraft.baseURL, settingsDraft.provider]
   );
+  const selectedSettingsTabMeta = useMemo(
+    () => SETTINGS_TABS.find((tab) => tab.id === activeSettingsTab) || SETTINGS_TABS[0],
+    [activeSettingsTab]
+  );
 
   const selectedProviderTypeOption = useMemo(
     () => AI_PROVIDER_TYPE_OPTIONS.find((item) => item.value === settingsDraft.provider) || AI_PROVIDER_TYPE_OPTIONS[0],
@@ -4608,13 +4636,10 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
 
   const closeSettings = useCallback(() => {
     setIsSettingsOpen(false);
+    setActiveSettingsTab('ai');
     setShowApiKey(false);
     setShowJsonImport(false);
     setJsonImportText('');
-  }, []);
-
-  const closeSkillsModal = useCallback(() => {
-    setIsSkillsModalOpen(false);
   }, []);
 
   const handleCreateSession = useCallback(() => {
@@ -5019,6 +5044,19 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   }, [activeSessionId, currentProject, queueComposerPrefill, submitPrompt]);
 
   useEffect(() => {
+    const handleOpenSettings = (event: Event) => {
+      const detail = (event as CustomEvent<AIChatSettingsDetail>).detail || {};
+      setActiveSettingsTab(detail.tab || SETTINGS_TABS[0].id);
+      setIsSettingsOpen(true);
+    };
+
+    window.addEventListener(AI_CHAT_SETTINGS_EVENT, handleOpenSettings as EventListener);
+    return () => {
+      window.removeEventListener(AI_CHAT_SETTINGS_EVENT, handleOpenSettings as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
     const composerPrefill = activeSession?.composerPrefill;
     if (!currentProject || !activeSessionId || !composerPrefill?.prompt) {
       return;
@@ -5334,21 +5372,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     }
   }, [agentAvailability, selectedChatAgentId]);
 
-  useEffect(() => {
-    if (!isSkillsModalOpen) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeSkillsModal();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [closeSkillsModal, isSkillsModalOpen]);
-
   return (
     <>
       <section
@@ -5403,8 +5426,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                     <button
                       className="chat-shell-icon-btn"
                       type="button"
-                      aria-label="\u5386\u53f2\u4f1a\u8bdd"
-                      title="\u5386\u53f2\u4f1a\u8bdd"
+                      aria-label="历史会话"
+                      title="历史会话"
                       onClick={() => {
                         setShowHistoryMenu((current) => !current);
                       }}
@@ -5413,14 +5436,11 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                     </button>
                     {historyMenu}
                   </div>
-                  {isGNAgentEmbedded ? (
-                    <GNAgentSkillsEntryButton onClick={() => setIsSkillsModalOpen(true)} />
-                  ) : null}
                   <button
                     className="chat-shell-icon-btn"
                     type="button"
-                    aria-label="\u65b0\u5bf9\u8bdd"
-                    title="\u65b0\u5bf9\u8bdd"
+                    aria-label="新对话"
+                    title="新对话"
                     onClick={handleCreateSession}
                   >
                     <ComposeIcon />
@@ -5428,12 +5448,13 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                   <button
                     className="chat-shell-icon-btn"
                     type="button"
-                    aria-label="\u8bbe\u7f6e"
-                    title="\u8bbe\u7f6e"
+                    aria-label="设置"
+                    title="设置"
                     onClick={() => setIsSettingsOpen(true)}
                   >
                     <SettingsIcon />
                   </button>
+                  {headerActionSlot}
                 </>
               ) : null}
 
@@ -5441,8 +5462,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                 <button
                   className="chat-shell-icon-btn"
                   type="button"
-                  aria-label={isCollapsed ? '\u5c55\u5f00\u804a\u5929\u680f' : '\u6536\u8d77\u804a\u5929\u680f'}
-                  title={isCollapsed ? '\u5c55\u5f00\u804a\u5929\u680f' : '\u6536\u8d77\u804a\u5929\u680f'}
+                  aria-label={isCollapsed ? '展开聊天栏' : '收起聊天栏'}
+                  title={isCollapsed ? '展开聊天栏' : '收起聊天栏'}
                   onClick={() => setCollapsedState(!isCollapsed)}
                 >
                   <CollapseIcon collapsed={isCollapsed} />
@@ -5584,8 +5605,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                         <button
                           type={isLoading ? 'button' : 'submit'}
                           className="chat-send-btn"
-                          aria-label={isLoading ? '\u7ec8\u6b62' : '\u53d1\u9001'}
-                          title={isLoading ? '\u7ec8\u6b62' : '\u53d1\u9001'}
+                          aria-label={isLoading ? '终止' : '发送'}
+                          title={isLoading ? '终止' : '发送'}
                           disabled={!input.trim() && !isLoading}
                           onClick={isLoading ? handleStopGeneration : undefined}
                         >
@@ -5619,37 +5640,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
           </div>
         )}
       </section>
-
-      {isSkillsModalOpen
-        ? createPortal(
-            <div className="chat-skills-modal-backdrop" onClick={closeSkillsModal}>
-              <section
-                className="chat-skills-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-label="GoodNight 技能页"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="chat-skills-modal-head">
-                  <strong>技能</strong>
-                  <button
-                    type="button"
-                    className="chat-skills-modal-close"
-                    aria-label="关闭技能页"
-                    title="关闭技能页"
-                    onClick={closeSkillsModal}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="chat-skills-modal-body">
-                  <GNAgentSkillsPage />
-                </div>
-              </section>
-            </div>,
-            document.body
-          )
-        : null}
 
       {rewindTargetRunId
         ? createPortal(
@@ -5770,13 +5760,14 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
                 className="chat-settings-drawer open"
                 role="dialog"
                 aria-modal="true"
-                aria-label="AI 设置"
+                aria-label={selectedSettingsTabMeta.title}
                 onClick={(event) => event.stopPropagation()}
               >
         <div className="chat-settings-drawer-header">
           <div>
-            <div className="chat-settings-eyebrow">Model Settings</div>
-            <strong>AI 设置</strong>
+            <div className="chat-settings-eyebrow">{selectedSettingsTabMeta.eyebrow}</div>
+            <strong>{selectedSettingsTabMeta.title}</strong>
+            <div className="chat-settings-header-description">{selectedSettingsTabMeta.description}</div>
           </div>
           <button className="chat-settings-close" type="button" aria-label="关闭 AI 设置" onClick={closeSettings}>
             ×
@@ -5784,49 +5775,68 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
         </div>
 
         <div className="chat-settings-drawer-body">
-          <aside className="chat-settings-provider-list">
-            <div className="chat-settings-provider-search">
-              <input
-                value={providerSearch}
-                onChange={(event) => setProviderSearch(event.target.value)}
-                placeholder="搜索 AI 配置"
-              />
-            </div>
-
-            <button className="chat-settings-apply-btn" type="button" onClick={handleCreateConfig}>
-              新增 AI 配置
-            </button>
-
-            <div className="chat-settings-provider-items">
-              {filteredConfigs.map((config) => {
-                const isActive = selectedSettingsConfig?.id === config.id;
-                const configPreset = findPresetByConfig(config.provider, config.baseURL) || CUSTOM_PROVIDER_PRESET;
-                return (
-                  <button
-                    key={config.id}
-                    className={`chat-settings-provider-item ${isActive ? 'active' : ''}`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSettingsConfigId(config.id);
-                      setTestState('idle');
-                      setTestMessage('');
-                    }}
-                  >
-                    <span className={`chat-settings-provider-badge ${configPreset.accent}`}>{config.name.slice(0, 2).toUpperCase()}</span>
-                    <span className="chat-settings-provider-copy">
-                      <strong>{config.name}</strong>
-                      <span>
-                        {providerTypeLabel(config.provider)}
-                        {config.enabled && hasUsableAIConfigEntry(config) ? ' · 已启用' : ' · 已关闭'}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
+          <aside className="chat-settings-sidebar">
+            <div className="chat-settings-tab-list">
+              {SETTINGS_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`chat-settings-tab${activeSettingsTab === tab.id ? ' active' : ''}`}
+                  onClick={() => setActiveSettingsTab(tab.id)}
+                >
+                  <strong>{tab.label}</strong>
+                  <span>{tab.description}</span>
+                </button>
+              ))}
             </div>
           </aside>
 
-          <div className="chat-settings-detail">
+          <div className="chat-settings-panel">
+            {activeSettingsTab === 'ai' ? (
+              <div className="chat-settings-ai-layout">
+                <aside className="chat-settings-provider-list">
+                  <div className="chat-settings-provider-search">
+                    <input
+                      value={providerSearch}
+                      onChange={(event) => setProviderSearch(event.target.value)}
+                      placeholder="搜索 AI 配置"
+                    />
+                  </div>
+
+                  <button className="chat-settings-apply-btn" type="button" onClick={handleCreateConfig}>
+                    新增 AI 配置
+                  </button>
+
+                  <div className="chat-settings-provider-items">
+                    {filteredConfigs.map((config) => {
+                      const isActive = selectedSettingsConfig?.id === config.id;
+                      const configPreset = findPresetByConfig(config.provider, config.baseURL) || CUSTOM_PROVIDER_PRESET;
+                      return (
+                        <button
+                          key={config.id}
+                          className={`chat-settings-provider-item ${isActive ? 'active' : ''}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSettingsConfigId(config.id);
+                            setTestState('idle');
+                            setTestMessage('');
+                          }}
+                        >
+                          <span className={`chat-settings-provider-badge ${configPreset.accent}`}>{config.name.slice(0, 2).toUpperCase()}</span>
+                          <span className="chat-settings-provider-copy">
+                            <strong>{config.name}</strong>
+                            <span>
+                              {providerTypeLabel(config.provider)}
+                              {config.enabled && hasUsableAIConfigEntry(config) ? ' · 已启用' : ' · 已关闭'}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </aside>
+
+                <div className="chat-settings-detail">
             <div className="chat-settings-detail-header">
               <div>
                 <strong>{settingsDraft.name || '未命名 AI'}</strong>
@@ -6091,6 +6101,21 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             ) : null}
 
             {testMessage ? <div className={`chat-settings-test-note ${testState}`}>{testMessage}</div> : null}
+                </div>
+              </div>
+            ) : null}
+
+            {activeSettingsTab === 'skills' ? (
+              <div className="chat-settings-surface chat-settings-panel-surface chat-settings-panel-surface-skills">
+                <GNAgentSkillsPage />
+              </div>
+            ) : null}
+
+            {activeSettingsTab === 'mcp' ? (
+              <div className="chat-settings-panel-surface">
+                <RuntimeMcpSettingsPage threadId={activeSession?.runtimeThreadId || null} />
+              </div>
+            ) : null}
           </div>
         </div>
               </section>

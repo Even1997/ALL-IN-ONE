@@ -1,43 +1,37 @@
 import React from 'react';
 import { GNAgentThreadList } from '../../../components/ai/gn-agent-shell/GNAgentThreadList';
 import { WorkbenchIcon } from '../../../components/ui/WorkbenchIcon';
-import type { AgentReplayRecoveryState } from '../../../modules/ai/runtime/replay/runtimeReplayRecovery';
-import type { AgentThreadRecord } from '../../../modules/ai/runtime/agentRuntimeTypes';
+import type { ChatSession } from '../../../modules/ai/store/aiChatStore';
 
 type AgentWorkbenchSidebarProps = {
   projectName?: string | null;
-  threads: AgentThreadRecord[];
+  sessions: ChatSession[];
   activeSessionId: string | null;
-  recoveryByThread: Record<string, AgentReplayRecoveryState | undefined>;
   onSelectThread: (threadId: string) => void;
-  onResumeThread: (threadId: string) => void;
+  onDeleteSession: (threadId: string) => void;
   onNewThread: () => void;
   onOpenSearch: () => void;
-  onOpenSkills: () => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 };
 
 const SIDEBAR_ITEMS: Array<{
-  id: 'newThread' | 'search' | 'skills';
+  id: 'newThread' | 'search';
   label: string;
   icon: React.ComponentProps<typeof WorkbenchIcon>['name'];
 }> = [
   { id: 'newThread', label: '新对话', icon: 'plus' },
   { id: 'search', label: '搜索', icon: 'search' },
-  { id: 'skills', label: '技能', icon: 'spark' },
 ];
 
 export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
   projectName = null,
-  threads,
+  sessions,
   activeSessionId,
-  recoveryByThread,
   onSelectThread,
-  onResumeThread,
+  onDeleteSession,
   onNewThread,
   onOpenSearch,
-  onOpenSkills,
   collapsed,
   onToggleCollapsed,
 }) => (
@@ -79,8 +73,6 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
                 onOpenSearch();
                 return;
               }
-
-              onOpenSkills();
             }}
             title={item.label}
             aria-label={item.label}
@@ -130,15 +122,10 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
 
         <section className="agent-sidebar-panel-body agent-sidebar-panel-body-threads">
           <GNAgentThreadList
-            threads={threads}
+            sessions={sessions}
             activeSessionId={activeSessionId}
-            recoveryByThread={recoveryByThread}
             onSelectThread={onSelectThread}
-            onResumeThread={(threadId) => {
-              if (recoveryByThread[threadId]) {
-                onResumeThread(threadId);
-              }
-            }}
+            onDeleteSession={onDeleteSession}
           />
         </section>
       </div>

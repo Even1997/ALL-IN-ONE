@@ -9,8 +9,8 @@ use super::turn_checkpoint_store;
 use super::types::{
     AgentThreadRecord, AgentTimelineEvent, AgentTurnCheckpointDiffRecord,
     AgentTurnCheckpointRecord, AgentTurnRewindResult, AppendAgentTimelineEventInput,
-    AppendRuntimeReplayEventInput, ApprovalRecord, CreateAgentThreadInput, EnqueueAgentApprovalInput,
-    InvokeRuntimeMcpToolInput, ProjectMemoryEntry, ResolveAgentApprovalInput,
+    AppendRuntimeReplayEventInput, ApprovalRecord, CreateAgentThreadInput, DeleteRuntimeMcpServerInput,
+    DeleteRuntimeMcpServerResult, EnqueueAgentApprovalInput, InvokeRuntimeMcpToolInput, ProjectMemoryEntry, ResolveAgentApprovalInput,
     RewindAgentTurnInput, RuntimeMcpServerRecord, RuntimeMcpToolCallRecord,
     RuntimeReplayEventRecord, RuntimeSettingsRecord, SaveAgentTurnCheckpointInput,
     SaveProjectMemoryEntryInput, UpdateRuntimeSettingsInput, UpsertRuntimeMcpServerInput,
@@ -217,6 +217,16 @@ pub fn upsert_runtime_mcp_server(
 ) -> Result<RuntimeMcpServerRecord, String> {
     let app_data_dir = resolve_app_data_dir(&app_handle)?;
     mcp_store::upsert_server(&app_data_dir, input)
+}
+
+#[tauri::command]
+pub fn delete_runtime_mcp_server(
+    app_handle: tauri::AppHandle,
+    id: String,
+) -> Result<DeleteRuntimeMcpServerResult, String> {
+    let app_data_dir = resolve_app_data_dir(&app_handle)?;
+    let input = DeleteRuntimeMcpServerInput { id };
+    mcp_store::delete_server(&app_data_dir, &input.id)
 }
 
 #[tauri::command]

@@ -61,6 +61,102 @@ export type RuntimeConversationProjection = RuntimeConversationSelection &
     latestTeamRun: AgentTeamRunRecord | null;
   };
 
+export type RuntimeConversationBootstrapAction =
+  | { type: 'select-existing-session'; sessionId: string }
+  | { type: 'noop' };
+
+const preferSessionForRuntimeThread = (left: ChatSession, right: ChatSession) => {
+  if (left.messages.length !== right.messages.length) {
+    return left.messages.length > right.messages.length ? left : right;
+  }
+
+  if (left.updatedAt !== right.updatedAt) {
+    return left.updatedAt > right.updatedAt ? left : right;
+  }
+
+  return left.createdAt <= right.createdAt ? left : right;
+};
+
+const isLegacyEmptyDraftSession = (session: ChatSession) =>
+  !session.runtimeThreadId && session.title === '新对话' && session.messages.length === 0;
+
+const isPlaceholderWelcomeSession = (session: ChatSession) =>
+  !session.runtimeThreadId &&
+  session.title === '新对话' &&
+  session.messages.length <= 1 &&
+  session.messages.every((message) => message.role === 'assistant');
+
+const isLegacyEmptyRuntimeThread = (thread: AgentThreadRecord) =>
+  thread.title === '新对话' && thread.createdAt === thread.updatedAt;
+
+const dedupeSessionsByRuntimeThreadId = (sessions: ChatSession[]) => {
+  const sessionsByRuntimeThread = new Map<string, ChatSession>();
+  const placeholderSessionsByProvider = new Map<string, ChatSession>();
+  const dedupedSessions: ChatSession[] = [];
+  const removedSessionIds: string[] = [];
+
+  sessions.forEach((session) => {
+    if (isLegacyEmptyDraftSession(session)) {
+      removedSessionIds.push(session.id);
+      return;
+    }
+
+    if (isPlaceholderWelcomeSession(session)) {
+      const placeholderKey = `placeholder:${session.providerId}`;
+      const existingPlaceholder = placeholderSessionsByProvider.get(placeholderKey);
+      if (!existingPlaceholder) {
+        placeholderSessionsByProvider.set(placeholderKey, session);
+        dedupedSessions.push(session);
+        return;
+      }
+
+      const preferred = preferSessionForRuntimeThread(existingPlaceholder, session);
+      if (preferred !== existingPlaceholder) {
+        removedSessionIds.push(existingPlaceholder.id);
+        placeholderSessionsByProvider.set(placeholderKey, preferred);
+        const existingIndex = dedupedSessions.findIndex((item) => item.id === existingPlaceholder.id);
+        if (existingIndex >= 0) {
+          dedupedSessions.splice(existingIndex, 1, preferred);
+        }
+        return;
+      }
+
+      removedSessionIds.push(session.id);
+      return;
+    }
+
+    if (!session.runtimeThreadId) {
+      dedupedSessions.push(session);
+      return;
+    }
+
+    const existing = sessionsByRuntimeThread.get(session.runtimeThreadId);
+    if (!existing) {
+      sessionsByRuntimeThread.set(session.runtimeThreadId, session);
+      dedupedSessions.push(session);
+      return;
+    }
+
+    const preferred = preferSessionForRuntimeThread(existing, session);
+    if (preferred !== existing) {
+      removedSessionIds.push(existing.id);
+      sessionsByRuntimeThread.set(session.runtimeThreadId, preferred);
+      const existingIndex = dedupedSessions.findIndex((item) => item.id === existing.id);
+      if (existingIndex >= 0) {
+        dedupedSessions.splice(existingIndex, 1, preferred);
+      }
+      return;
+    }
+
+    removedSessionIds.push(session.id);
+  });
+
+  return {
+    sessions: dedupedSessions,
+    removedSessionIds,
+  };
+};
+
 export const buildRuntimeConversationThreadIds = (
   activeSessionId: string | null,
   activeSession: ChatSession | null,
@@ -92,8 +188,10 @@ export const reconcileRuntimeThreadsWithSessions = (input: {
   sessions: ChatSession[];
   runtimeThreads: AgentThreadRecord[];
 }) => {
-  const runtimeThreadIds = new Set(input.runtimeThreads.map((thread) => thread.id));
-  let sessions = [...(input.sessions || [])].map((session) =>
+  const runtimeThreads = input.runtimeThreads.filter((thread) => !isLegacyEmptyRuntimeThread(thread));
+  const runtimeThreadIds = new Set(runtimeThreads.map((thread) => thread.id));
+  const initiallyDeduped = dedupeSessionsByRuntimeThreadId([...(input.sessions || [])]);
+  const sessionsWithClearedStaleBindings = initiallyDeduped.sessions.map((session) =>
     session.runtimeThreadId && !runtimeThreadIds.has(session.runtimeThreadId)
       ? {
           ...session,
@@ -102,9 +200,14 @@ export const reconcileRuntimeThreadsWithSessions = (input: {
         }
       : session
   );
+  const deduped = dedupeSessionsByRuntimeThreadId(sessionsWithClearedStaleBindings);
+  let sessions = deduped.sessions;
+  const removedSessionIds = Array.from(
+    new Set([...initiallyDeduped.removedSessionIds, ...deduped.removedSessionIds]),
+  );
   const bindings: Array<{ thread: AgentThreadRecord; session: ChatSession }> = [];
 
-  input.runtimeThreads.forEach((thread) => {
+  runtimeThreads.forEach((thread) => {
     const existingSession =
       sessions.find((session) => session.runtimeThreadId === thread.id) || null;
     const baseSession =
@@ -118,11 +221,25 @@ export const reconcileRuntimeThreadsWithSessions = (input: {
       updatedAt: Math.max(thread.updatedAt, existingSession?.updatedAt || 0, baseSession.updatedAt),
     };
 
-    sessions = [syncedSession, ...sessions.filter((session) => session.id !== syncedSession.id)];
+      sessions = [syncedSession, ...sessions.filter((session) => session.id !== syncedSession.id)];
     bindings.push({ thread, session: syncedSession });
   });
 
-  return { sessions, bindings };
+  return { sessions, bindings, removedSessionIds };
+};
+
+export const resolveRuntimeConversationBootstrapAction = (input: {
+  sessions: ChatSession[];
+  activeSessionId: string | null;
+}): RuntimeConversationBootstrapAction => {
+  if (!input.activeSessionId && input.sessions[0]) {
+    return {
+      type: 'select-existing-session',
+      sessionId: input.sessions[0].id,
+    };
+  }
+
+  return { type: 'noop' };
 };
 
 export const buildRuntimeConversationProjection = (input: {

@@ -4,7 +4,6 @@ import { CodexRuntime } from '../../../modules/ai/gn-agent/runtime/codex/CodexRu
 import { useGNAgentShellStore } from '../../../modules/ai/gn-agent/gnAgentShellStore';
 import { hasUsableAIConfigEntry } from '../../../modules/ai/store/aiConfigState';
 import { useGlobalAIStore } from '../../../modules/ai/store/globalAIStore';
-import { GNAgentTurnSummaryCards } from '../../../components/ai/gn-agent-shell/GNAgentTurnSummaryCards';
 import type { GNAgentWorkbenchSession } from '../../../components/ai/gn-agent-shell/useGNAgentWorkbenchSession';
 import { WorkbenchIcon } from '../../../components/ui/WorkbenchIcon';
 import { AIChat } from '../../../components/workspace/AIChat';
@@ -22,17 +21,10 @@ type AgentChatStageProps = {
   onToggleInspector?: () => void;
 };
 
-const PROVIDER_LABELS: Record<AgentChatStageProps['providerId'], string> = {
-  classic: 'Agent',
-  claude: 'Claude',
-  codex: 'Codex',
-};
-
 export const AgentChatStage: React.FC<AgentChatStageProps> = ({
   providerId,
   mode,
   session,
-  projectName = null,
   inspectorOpen = false,
   onToggleInspector,
 }) => {
@@ -66,65 +58,33 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
     return null;
   }, [boundConfig, providerId]);
 
-  const latestTurnSession = session.latestTurnSession;
-  const stageTitle = session.activeSession?.title || latestTurnSession?.plan?.summary || 'Agent';
-  const stageDescription =
-    latestTurnSession?.plan?.reason ||
-    latestTurnSession?.userPrompt ||
-    '在这里继续对话、查看执行状态，并从右侧切换审查和记忆面板。';
-  const stageStatus = session.activeLiveState?.statusVerb || latestTurnSession?.status || 'idle';
   const runtimeConfigIdOverride = usableBoundConfig?.id || preferredConfig?.id || null;
-  const runtimeLabel = usableBoundConfig?.name || preferredConfig?.name || '默认运行时';
-  const stageEyebrow = projectName || 'Agent Workspace';
 
   return (
     <section className={`agent-chat-stage agent-chat-stage-${mode}`}>
-      <header className="agent-chat-stage-header">
-        <div className="agent-chat-stage-copy">
-          <div className="agent-chat-stage-meta-row">
-            <span className="agent-chat-stage-eyebrow">{stageEyebrow}</span>
-            <span className="agent-chat-stage-runtime-mark">{PROVIDER_LABELS[providerId]}</span>
-          </div>
-          <h2>{stageTitle}</h2>
-          <p>{stageDescription}</p>
-        </div>
-        <div className="agent-chat-stage-actions">
-          <span className="agent-chat-stage-pill subtle">{runtimeLabel}</span>
-          <span className="agent-chat-stage-pill">{stageStatus}</span>
-          {session.pendingApprovalCount > 0 ? (
-            <span className="agent-chat-stage-pill warning">
-              approvals {session.pendingApprovalCount}
-            </span>
-          ) : null}
-          {onToggleInspector ? (
-            <button
-              type="button"
-              className="agent-chat-stage-toggle"
-              onClick={onToggleInspector}
-              aria-label={inspectorOpen ? '收起右侧面板' : '展开右侧面板'}
-              title={inspectorOpen ? '收起右侧面板' : '展开右侧面板'}
-            >
-              <WorkbenchIcon name={inspectorOpen ? 'panelRightClose' : 'panelRightOpen'} />
-            </button>
-          ) : null}
-        </div>
-      </header>
-
-      {mode !== 'stage-only' && latestTurnSession ? (
-        <GNAgentTurnSummaryCards
-          session={latestTurnSession}
-          onRetryTurn={(prompt) => session.statusActions.prefillChatPrompt(prompt, true)}
-          onResumeTurn={(prompt) => session.statusActions.prefillChatPrompt(prompt, true)}
-          onFeedTurn={session.statusActions.dispatchChatGuidance}
-          onPauseTurn={session.statusActions.dispatchPauseRequest}
-        />
-      ) : null}
-
       <div className="agent-chat-stage-body">
         <AIChat
           variant={providerId === 'classic' ? 'gn-agent-embedded' : 'provider-embedded'}
           runtimeConfigIdOverride={runtimeConfigIdOverride}
           providerExecutionMode={providerId === 'classic' ? null : providerId}
+          headerActionSlot={
+            onToggleInspector ? (
+              <button
+                type="button"
+                className="chat-shell-icon-btn agent-chat-stage-toggle"
+                onClick={onToggleInspector}
+                aria-label={inspectorOpen ? '收起右侧面板' : '展开右侧面板'}
+                title={inspectorOpen ? '收起右侧面板' : '展开右侧面板'}
+              >
+                <WorkbenchIcon name={inspectorOpen ? 'panelRightClose' : 'panelRightOpen'} />
+                {session.pendingApprovalCount > 0 ? (
+                  <span className="agent-chat-stage-toggle-badge" aria-hidden="true">
+                    {session.pendingApprovalCount}
+                  </span>
+                ) : null}
+              </button>
+            ) : null
+          }
         />
       </div>
     </section>

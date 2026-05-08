@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
 import type { ActivityEntry } from '../../../modules/ai/skills/activityLog';
 import { AI_CHAT_COMMAND_EVENT } from '../../../modules/ai/chat/chatCommands';
+import { buildWelcomeMessage } from '../../workspace/aiChatViewState';
 import { useApprovalStore } from '../../../modules/ai/runtime/approval/approvalStore';
 import type { PermissionMode } from '../../../modules/ai/runtime/approval/approvalTypes';
 import type { RuntimeToolStep } from '../../../modules/ai/runtime/agent-kernel/agentKernelTypes';
-import { useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
 import type { AgentMemoryCandidate, AgentRuntimeLiveState } from '../../../modules/ai/runtime/agentRuntimeStore';
 import type { AgentContextSnapshot } from '../../../modules/ai/runtime/context/agentContextTypes';
 import { useRuntimeConversationGateway } from '../../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
@@ -22,6 +22,7 @@ export type GNAgentWorkbenchSession = {
   currentProjectName: string | null;
   activeSessionId: string | null;
   activeSession: ChatSession | null;
+  sessions: ChatSession[];
   latestTurnSession: AgentTurnSession | null;
   threads: AgentThreadRecord[];
   recoveryByThread: Record<string, AgentReplayRecoveryState | undefined>;
@@ -41,7 +42,7 @@ export type GNAgentWorkbenchSession = {
     dispatchChatGuidance: (prompt: string, guidance: string) => void;
     dispatchPauseRequest: (prompt: string) => void;
     selectThread: (threadId: string) => void;
-    resumeThread: (threadId: string) => void;
+    deleteSession: (threadId: string) => void;
     createThread: () => void;
   };
 };
@@ -54,7 +55,7 @@ export const useGNAgentWorkbenchSession = (): GNAgentWorkbenchSession => {
   const permissionMode = useApprovalStore((state) => state.permissionMode);
   const setActiveSession = useAIChatStore((state) => state.setActiveSession);
   const upsertSession = useAIChatStore((state) => state.upsertSession);
-  const requestReplayResumeFromRecovery = useAgentRuntimeStore((state) => state.requestReplayResumeFromRecovery);
+  const removeSession = useAIChatStore((state) => state.removeSession);
 
   const prefillChatPrompt = useCallback((prompt: string, autoSubmit = false) => {
     window.dispatchEvent(
@@ -96,17 +97,15 @@ export const useGNAgentWorkbenchSession = (): GNAgentWorkbenchSession => {
     [currentProject, setActiveSession],
   );
 
-  const resumeThread = useCallback(
+  const deleteSession = useCallback(
     (threadId: string) => {
-      const recoveryState = conversation.recoveryByThread[threadId];
-      if (!currentProject || !recoveryState) {
+      if (!currentProject) {
         return;
       }
 
-      setActiveSession(currentProject.id, threadId);
-      requestReplayResumeFromRecovery(threadId, recoveryState);
+      removeSession(currentProject.id, threadId);
     },
-    [conversation.recoveryByThread, currentProject, requestReplayResumeFromRecovery, setActiveSession],
+    [currentProject, removeSession],
   );
 
   const createThread = useCallback(() => {
@@ -114,7 +113,10 @@ export const useGNAgentWorkbenchSession = (): GNAgentWorkbenchSession => {
       return;
     }
 
-    const session = createChatSession(currentProject.id, '新对话');
+    const session = {
+      ...createChatSession(currentProject.id, '新对话'),
+      messages: [buildWelcomeMessage()],
+    };
     upsertSession(currentProject.id, session);
     setActiveSession(currentProject.id, session.id);
   }, [currentProject, setActiveSession, upsertSession]);
@@ -124,6 +126,7 @@ export const useGNAgentWorkbenchSession = (): GNAgentWorkbenchSession => {
     currentProjectName: currentProject?.name || null,
     activeSessionId: conversation.activeSessionId,
     activeSession: conversation.activeSession,
+    sessions: conversation.sessions,
     latestTurnSession: conversation.latestTurnSession,
     threads: conversation.threads,
     recoveryByThread: conversation.recoveryByThread,
@@ -143,7 +146,7 @@ export const useGNAgentWorkbenchSession = (): GNAgentWorkbenchSession => {
       dispatchChatGuidance,
       dispatchPauseRequest,
       selectThread,
-      resumeThread,
+      deleteSession,
       createThread,
     },
   };

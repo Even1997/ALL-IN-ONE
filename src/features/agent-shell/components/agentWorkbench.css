@@ -224,13 +224,11 @@
 }
 
 .agent-sidebar-panel-head strong,
-.agent-chat-stage-copy h2,
 .agent-workbench-inspector-head strong {
   color: var(--agent-text);
 }
 
 .agent-sidebar-panel-head-copy > div span,
-.agent-chat-stage-copy p,
 .agent-workbench-inspector-head span,
 .agent-workbench-inspector-head p {
   color: var(--agent-text-soft);
@@ -333,108 +331,30 @@
   overflow: hidden;
 }
 
-.agent-chat-stage-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--agent-panel-border);
-}
-
-.agent-chat-stage-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.agent-chat-stage-meta-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.agent-chat-stage-copy h2 {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.12;
-  letter-spacing: -0.03em;
-}
-
-.agent-chat-stage-copy p {
-  margin: 0;
-  max-width: 720px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.agent-chat-stage-eyebrow,
-.agent-chat-stage-runtime-mark {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.agent-chat-stage-eyebrow {
-  background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
-}
-
-:root[data-theme='dark'] .agent-chat-stage-eyebrow {
-  color: #93c5fd;
-}
-
-.agent-chat-stage-runtime-mark {
-  background: var(--agent-chip-bg);
-  color: var(--agent-chip-fg);
-}
-
-.agent-chat-stage-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.agent-chat-stage-pill {
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: var(--agent-chip-bg);
-  color: var(--agent-chip-fg);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.agent-chat-stage-pill.warning {
-  background: rgba(245, 158, 11, 0.14);
-  color: #b45309;
-}
-
-:root[data-theme='dark'] .agent-chat-stage-pill.warning {
-  color: #fbbf24;
-}
-
-.agent-chat-stage-pill.subtle {
-  font-weight: 600;
-  letter-spacing: 0;
-}
-
 .agent-chat-stage-toggle svg {
   width: 18px;
   height: 18px;
 }
 
-.agent-chat-stage .gn-agent-turn-summary-cards {
-  padding: 14px 18px 0;
+.agent-chat-stage-toggle {
+  position: relative;
+}
+
+.agent-chat-stage-toggle-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--agent-panel-bg-strong);
 }
 
 .agent-chat-stage-body {
@@ -731,7 +651,7 @@
 }
 
 .agent-workbench-dialog {
-  width: min(760px, calc(100vw - 32px));
+  width: min(1040px, calc(100vw - 32px));
 }
 
 .agent-workbench-dialog .mac-dialog-body {
@@ -747,6 +667,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .agent-workbench-search-field {
@@ -780,6 +701,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: min(58vh, 640px);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .agent-workbench-search-result {
@@ -873,10 +797,6 @@
     min-width: 74px;
   }
 
-  .agent-chat-stage-header {
-    flex-direction: column;
-  }
-
   .agent-workbench-floating-overlay {
     position: static;
     width: 100%;
@@ -894,38 +814,12 @@
   .agent-workbench-inspector-tabs {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .agent-chat-stage-actions {
-    justify-content: flex-start;
-  }
 }
 
 @media (max-height: 860px) {
   .agent-workbench-shell {
     gap: 8px;
     padding: 8px;
-  }
-
-  .agent-chat-stage-header {
-    gap: 12px;
-    padding: 14px 16px 10px;
-  }
-
-  .agent-chat-stage-copy {
-    gap: 6px;
-  }
-
-  .agent-chat-stage-copy h2 {
-    font-size: 18px;
-  }
-
-  .agent-chat-stage-copy p {
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .agent-chat-stage .gn-agent-turn-summary-cards {
-    padding: 10px 14px 0;
   }
 
   .agent-workbench-floating-overlay {

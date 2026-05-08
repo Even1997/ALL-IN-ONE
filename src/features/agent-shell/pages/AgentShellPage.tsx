@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { GNAgentSkillsPage } from '../../../components/ai/gn-agent-shell/GNAgentSkillsPage';
 import { useGNAgentWorkbenchSession } from '../../../components/ai/gn-agent-shell/useGNAgentWorkbenchSession';
 import { MacDialog } from '../../../components/ui/MacDialog';
 import { useKnowledgeStore } from '../../../features/knowledge/store/knowledgeStore';
@@ -19,7 +18,6 @@ export const AgentShellPage: React.FC = () => {
   const [inspectorTab, setInspectorTab] = useState<AgentInspectorTab>('review');
   const [floatingPlanCollapsed, setFloatingPlanCollapsed] = useState(false);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
-  const [isSkillsDialogOpen, setIsSkillsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const notes = useKnowledgeStore((state) => state.notes);
   const notesError = useKnowledgeStore((state) => state.error);
@@ -62,14 +60,12 @@ export const AgentShellPage: React.FC = () => {
         sidebar={
           <AgentWorkbenchSidebar
             projectName={session.currentProjectName}
-            threads={session.threads}
+            sessions={session.sessions}
             activeSessionId={session.activeSessionId}
-            recoveryByThread={session.recoveryByThread}
             onSelectThread={session.statusActions.selectThread}
-            onResumeThread={session.statusActions.resumeThread}
+            onDeleteSession={session.statusActions.deleteSession}
             onNewThread={session.statusActions.createThread}
             onOpenSearch={() => setIsSearchDialogOpen(true)}
-            onOpenSkills={() => setIsSkillsDialogOpen(true)}
             collapsed={sidebarCollapsed}
             onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
           />
@@ -167,16 +163,6 @@ export const AgentShellPage: React.FC = () => {
             </div>
           ) : null}
         </div>
-      </MacDialog>
-
-      <MacDialog
-        open={isSkillsDialogOpen}
-        onOpenChange={setIsSkillsDialogOpen}
-        title="技能"
-        description="管理当前系统里的技能。"
-        contentClassName="agent-workbench-dialog agent-workbench-skills-dialog"
-      >
-        <GNAgentSkillsPage />
       </MacDialog>
     </section>
   );

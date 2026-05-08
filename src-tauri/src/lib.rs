@@ -6,6 +6,7 @@ mod agent_shell;
 
 use agent_runtime::commands::{
     append_agent_timeline_event, append_runtime_replay_event, create_agent_thread, enqueue_agent_approval,
+    delete_runtime_mcp_server,
     get_agent_turn_checkpoint_diff,
     get_agent_runtime_settings, get_agent_sandbox_policy,
     invoke_runtime_mcp_tool,
@@ -2616,6 +2617,7 @@ pub fn run() {
             update_agent_runtime_settings,
             list_runtime_mcp_servers,
             upsert_runtime_mcp_server,
+            delete_runtime_mcp_server,
             list_runtime_mcp_tool_calls,
             invoke_runtime_mcp_tool,
             append_runtime_replay_event,

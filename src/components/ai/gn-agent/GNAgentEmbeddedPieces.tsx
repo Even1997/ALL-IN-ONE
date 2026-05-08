@@ -40,7 +40,7 @@ export const GNAgentHistoryMenu: React.FC<{
 }> = ({ sessions, activeSessionId, onCreateSession, onSelectSession, onDeleteSession, buildSessionPreview }) => (
   <div className="chat-history-menu">
     <button className="chat-history-new-btn" type="button" onClick={onCreateSession}>
-      {'\u65b0\u5efa\u5bf9\u8bdd'}
+      新建对话
     </button>
     <div className="chat-history-menu-list">
       {sessions.map((session) => {
@@ -60,13 +60,13 @@ export const GNAgentHistoryMenu: React.FC<{
               onClick={() => onSelectSession(session.id)}
             >
               <strong>{session.title}</strong>
-              <span>{lastMessage ? buildSessionPreview(lastPreviewSource) : '\u7a7a\u4f1a\u8bdd'}</span>
+              <span>{lastMessage ? buildSessionPreview(lastPreviewSource) : '空会话'}</span>
             </button>
             {onDeleteSession && (
               <button
                 type="button"
                 className="chat-history-item-delete"
-                title="\u5220\u9664\u5bf9\u8bdd"
+                title="删除对话"
                 onClick={(event) => {
                   event.stopPropagation();
                   onDeleteSession(session.id);
@@ -279,8 +279,8 @@ export const GNAgentEmbeddedComposer: React.FC<{
           <button
             type="button"
             className="chat-send-btn"
-            aria-label={isLoading ? '\u7ec8\u6b62' : '\u53d1\u9001'}
-            title={isLoading ? '\u7ec8\u6b62' : '\u53d1\u9001'}
+            aria-label={isLoading ? '终止' : '发送'}
+            title={isLoading ? '终止' : '发送'}
             disabled={disabled}
             onClick={onSubmit}
           >
@@ -300,7 +300,7 @@ export const GNAgentActivityPanel: React.FC<{
   <div className="chat-activity-log">
     <div className="chat-panel-header">
       <strong>Activity Log</strong>
-      <span>{'\u53ea\u8bb0\u5f55\u771f\u5b9e\u6539\u52a8\u3001\u4ea7\u7269\u843d\u5730\u548c\u5931\u8d25\u8282\u70b9\u3002'}</span>
+      <span>只记录真实改动、产物落地和失败节点。</span>
     </div>
     <div className="chat-activity-list">
       {activityEntries.map((entry) => (
@@ -334,7 +334,7 @@ export const GNAgentActivityPanel: React.FC<{
           ) : null}
         </article>
       ))}
-      {activityEntries.length === 0 ? <div className="chat-panel-note">{'\u8fd8\u6ca1\u6709\u53ef\u8bb0\u5f55\u7684\u64cd\u4f5c\u65e5\u5fd7\u3002'}</div> : null}
+      {activityEntries.length === 0 ? <div className="chat-panel-note">还没有可记录的操作日志。</div> : null}
     </div>
   </div>
 );
