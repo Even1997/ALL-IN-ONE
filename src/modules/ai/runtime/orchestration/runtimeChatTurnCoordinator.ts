@@ -1452,7 +1452,7 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
             ...message,
             ...buildAssistantContentState(localAgentDecisionFeedback.messageContent),
           }));
-          await interactionPort.waitForApproval({
+          const approved = await interactionPort.waitForApproval({
             threadId: approvalThreadId,
             runtimeStoreThreadId,
             replayThreadId,
@@ -1501,6 +1501,31 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
               ),
             },
           });
+          if (!approved) {
+            const deniedApprovalSummary = `Approval denied: ${localAgentFlow.summary}`;
+            patchLiveState(runtimeStoreThreadId, (state: any) => ({
+              ...state,
+              connectionState: 'connected',
+              statusVerb: 'Blocked',
+              activeThinking: false,
+              activeToolName: null,
+              streamingToolInput: '',
+              streamingText: '',
+            }));
+            appendRuntimeTimelineEvent(runtimeStoreThreadId, {
+              id: createRuntimeEventId('local-agent-denied'),
+              threadId: runtimeStoreThreadId,
+              providerId: runtimeProviderId,
+              summary: deniedApprovalSummary,
+              createdAt: Date.now(),
+            });
+            await blockTurnSession(
+              localAgentDecisionFeedback.deniedReason,
+              deniedApprovalSummary,
+              localAgentDecisionFeedback.deniedActionLabel
+            );
+            return;
+          }
           appendRuntimeTimelineEvent(runtimeStoreThreadId, {
             id: createRuntimeEventId('local-agent-approval'),
             threadId: runtimeStoreThreadId,

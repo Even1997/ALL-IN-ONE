@@ -1,29 +1,23 @@
 import React, { useMemo } from 'react';
-import { GNAgentContextPanel } from '../../../components/ai/gn-agent-shell/GNAgentContextPanel';
 import { GNAgentMemoryPanel } from '../../../components/ai/gn-agent-shell/GNAgentMemoryPanel';
 import { GNAgentPlanPanel } from '../../../components/ai/gn-agent-shell/GNAgentPlanPanel';
 import { GNAgentTimelinePanel } from '../../../components/ai/gn-agent-shell/GNAgentTimelinePanel';
-import { GNAgentToolCallPanel } from '../../../components/ai/gn-agent-shell/GNAgentToolCallPanel';
 import { WorkbenchIcon } from '../../../components/ui/WorkbenchIcon';
 import type { AgentMemoryCandidate } from '../../../modules/ai/runtime/agentRuntimeStore';
 import type { RuntimeToolStep } from '../../../modules/ai/runtime/agent-kernel/agentKernelTypes';
-import type { AgentContextSnapshot } from '../../../modules/ai/runtime/context/agentContextTypes';
-import type { RuntimeMcpToolCall } from '../../../modules/ai/runtime/mcp/runtimeMcpTypes';
 import type { AgentTurnSession } from '../../../modules/ai/runtime/session/agentSessionTypes';
 
-export type AgentInspectorTab = 'review' | 'files' | 'tools' | 'memory' | 'context';
+export type AgentInspectorTab = 'review' | 'files' | 'memory';
 
 type AgentWorkbenchInspectorProps = {
   tab: AgentInspectorTab;
   onTabChange: (tab: AgentInspectorTab) => void;
   latestTurnSession: AgentTurnSession | null;
-  contextSnapshot: AgentContextSnapshot | null;
   toolCalls: RuntimeToolStep[];
-  mcpToolCalls: RuntimeMcpToolCall[];
   memoryCandidates: AgentMemoryCandidate[];
 };
 
-const INSPECTOR_TABS: AgentInspectorTab[] = ['review', 'files', 'tools', 'memory', 'context'];
+const INSPECTOR_TABS: AgentInspectorTab[] = ['review', 'files', 'memory'];
 const INSPECTOR_TAB_META: Record<
   AgentInspectorTab,
   {
@@ -42,20 +36,10 @@ const INSPECTOR_TAB_META: Record<
     description: '查看本轮代码变更',
     icon: 'files',
   },
-  tools: {
-    label: '工具',
-    description: '命令、MCP 与执行轨迹',
-    icon: 'terminal',
-  },
   memory: {
     label: '记忆',
     description: '候选记忆与已存上下文',
     icon: 'knowledge',
-  },
-  context: {
-    label: '上下文',
-    description: '线程上下文与引用快照',
-    icon: 'document',
   },
 };
 
@@ -73,9 +57,7 @@ export const AgentWorkbenchInspector: React.FC<AgentWorkbenchInspectorProps> = (
   tab,
   onTabChange,
   latestTurnSession,
-  contextSnapshot,
   toolCalls,
-  mcpToolCalls,
   memoryCandidates,
 }) => {
   const fileChanges = useMemo(
@@ -145,10 +127,6 @@ export const AgentWorkbenchInspector: React.FC<AgentWorkbenchInspectorProps> = (
           </section>
         ) : null}
 
-        {tab === 'tools' ? (
-          <GNAgentToolCallPanel toolCalls={toolCalls} mcpToolCalls={mcpToolCalls} />
-        ) : null}
-
         {tab === 'memory' ? (
           <>
             <section className="gn-agent-runtime-panel">
@@ -163,8 +141,6 @@ export const AgentWorkbenchInspector: React.FC<AgentWorkbenchInspectorProps> = (
             <GNAgentMemoryPanel />
           </>
         ) : null}
-
-        {tab === 'context' ? <GNAgentContextPanel context={contextSnapshot} /> : null}
       </div>
     </section>
   );

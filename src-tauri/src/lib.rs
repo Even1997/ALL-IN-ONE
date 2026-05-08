@@ -2266,6 +2266,59 @@ fn tool_grep(params: GrepParams) -> ToolResult {
 }
 
 // Bash tool - execute shell commands
+#[cfg(target_os = "windows")]
+fn run_shell_command(
+    command: &str,
+    shell: Option<&str>,
+    cwd: Option<&String>,
+    timeout: Option<u64>,
+) -> std::io::Result<Output> {
+    let shell = shell.unwrap_or("powershell").to_lowercase();
+    if shell == "powershell" {
+        run_windows_powershell_command(command, cwd, timeout)
+    } else {
+        let mut process = Command::new("cmd");
+        process.arg("/C").arg(command);
+        if let Some(cwd) = cwd {
+            process.current_dir(cwd);
+        }
+        run_command_with_timeout(process, timeout)
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn run_shell_command(
+    command: &str,
+    shell: Option<&str>,
+    cwd: Option<&String>,
+    timeout: Option<u64>,
+) -> std::io::Result<Output> {
+    let shell = shell.unwrap_or("bash").to_lowercase();
+    let mut process = if shell == "powershell" {
+        let mut command_process = Command::new("pwsh");
+        command_process
+            .arg("-NoProfile")
+            .arg("-NonInteractive")
+            .arg("-Command")
+            .arg(command);
+        command_process
+    } else if shell == "sh" {
+        let mut command_process = Command::new("sh");
+        command_process.arg("-c").arg(command);
+        command_process
+    } else {
+        let mut command_process = Command::new("bash");
+        command_process.arg("-lc").arg(command);
+        command_process
+    };
+
+    if let Some(cwd) = cwd {
+        process.current_dir(cwd);
+    }
+
+    run_command_with_timeout(process, timeout)
+}
+
 #[tauri::command]
 fn tool_bash(params: BashParams) -> ToolResult {
     let command = &params.command;
@@ -2287,52 +2340,7 @@ fn tool_bash(params: BashParams) -> ToolResult {
         }
     }
 
-    let output = if cfg!(target_os = "windows") {
-        let shell = params
-            .shell
-            .as_deref()
-            .unwrap_or("powershell")
-            .to_lowercase();
-        if shell == "powershell" {
-            run_windows_powershell_command(command, params.cwd.as_ref(), params.timeout)
-        } else {
-            let mut process = Command::new("cmd");
-            process.arg("/C").arg(command);
-            if let Some(cwd) = params.cwd.as_ref() {
-                process.current_dir(cwd);
-            }
-            run_command_with_timeout(process, params.timeout)
-        }
-    } else {
-        let shell = params
-            .shell
-            .as_deref()
-            .unwrap_or("bash")
-            .to_lowercase();
-        let mut process = if shell == "powershell" {
-            let mut command_process = Command::new("pwsh");
-            command_process
-                .arg("-NoProfile")
-                .arg("-NonInteractive")
-                .arg("-Command")
-                .arg(command);
-            command_process
-        } else if shell == "sh" {
-            let mut command_process = Command::new("sh");
-            command_process.arg("-c").arg(command);
-            command_process
-        } else {
-            let mut command_process = Command::new("bash");
-            command_process.arg("-lc").arg(command);
-            command_process
-        };
-
-        if let Some(cwd) = params.cwd.as_ref() {
-            process.current_dir(cwd);
-        }
-
-        run_command_with_timeout(process, params.timeout)
-    };
+    let output = run_shell_command(command, params.shell.as_deref(), params.cwd.as_ref(), params.timeout);
 
     match output {
         Ok(out) => {

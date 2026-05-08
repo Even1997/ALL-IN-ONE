@@ -408,6 +408,56 @@ test('runtime tool loop executes structured tool_call stream events without text
   assert.match(modelMessages[1].at(-1).content, /console\.log/);
 });
 
+test('runtime tool loop preserves original streamed read-only tool order when parallel calls finish out of order', async () => {
+  const modelMessages = [];
+
+  await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Inspect the app file and list the directory.',
+    systemPrompt: 'Use structured tool events when available.',
+    allowedTools: ['view', 'ls'],
+    callModel: async (messages, _systemPrompt, onEvent) => {
+      modelMessages.push(messages.map((message) => ({ ...message })));
+      if (messages.length > 1) {
+        return 'Done.';
+      }
+
+      onEvent?.({
+        kind: 'tool_call',
+        delta: '',
+        toolCall: {
+          id: 'toolu_view',
+          name: 'view',
+          input: { file_path: 'src/app.ts' },
+        },
+      });
+      onEvent?.({
+        kind: 'tool_call',
+        delta: '',
+        toolCall: {
+          id: 'toolu_ls',
+          name: 'ls',
+          input: { path: '.' },
+        },
+      });
+      return '';
+    },
+    executeTool: async (call) => {
+      await new Promise((resolve) => setTimeout(resolve, call.id === 'toolu_view' ? 20 : 0));
+      return {
+        type: 'text',
+        content: call.name === 'view' ? '1: console.log("app");' : 'src\npackage.json',
+      };
+    },
+  });
+
+  assert.equal(modelMessages.length, 2);
+  assert.equal(modelMessages[1][2].role, 'user');
+  assert.match(modelMessages[1][2].content, /console\.log/);
+  assert.equal(modelMessages[1][3].role, 'user');
+  assert.match(modelMessages[1][3].content, /package\.json/);
+});
+
 test('runtime tool loop checks allowed tools before approval hooks', async () => {
   let beforeToolCallCount = 0;
 

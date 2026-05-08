@@ -447,13 +447,29 @@ export async function runRuntimeToolLoop(
         : normalizedAssistantContent.toolCalls.length > 0
           ? normalizedAssistantContent.toolCalls
           : parseToolCalls(assistantContent);
-    const remainingCalls = parsedCalls.filter(
-      (pc) => !streamExecutedResults.some((se) => isSameToolCall(se.call, pc)),
-    );
+    const unmatchedStreamExecutedResults = [...streamExecutedResults];
+    const orderedStreamExecutedResults: Array<{ call: ToolCall; step: RuntimeToolStep; result: ToolResult }> = [];
+    const remainingCalls: ToolCall[] = [];
 
-    if (streamExecutedResults.length > 0 || remainingCalls.length > 0) {
+    for (const parsedCall of parsedCalls) {
+      const matchingStreamResultIndex = unmatchedStreamExecutedResults.findIndex((executed) =>
+        isSameToolCall(executed.call, parsedCall)
+      );
+
+      if (matchingStreamResultIndex === -1) {
+        remainingCalls.push(parsedCall);
+        continue;
+      }
+
+      const [matchedStreamResult] = unmatchedStreamExecutedResults.splice(matchingStreamResultIndex, 1);
+      if (matchedStreamResult) {
+        orderedStreamExecutedResults.push(matchedStreamResult);
+      }
+    }
+
+    if (orderedStreamExecutedResults.length > 0 || remainingCalls.length > 0) {
       // Append stream-executed results first
-      for (const { step, result } of streamExecutedResults) {
+      for (const { step, result } of orderedStreamExecutedResults) {
         messages.push(createToolResultMessage(step, result));
       }
 

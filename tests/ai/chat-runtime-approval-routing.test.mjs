@@ -29,3 +29,14 @@ test('chat delegates local agent approval feedback without direct project file p
   assert.doesNotMatch(source, /completeWithReplay\(`Sandbox denied: \$\{localAgentFlow\.summary\}`\)/);
   assert.doesNotMatch(source, /completeWithReplay\(`Approval required: \$\{localAgentFlow\.summary\}`\)/);
 });
+
+test('runtime coordinator branches on denied local-agent approvals before completing replay', async () => {
+  const coordinator = await readFile(coordinatorPath, 'utf8');
+  const localAgentApprovalBranch = coordinator.match(
+    /onApprovalRequired: async \(\) => \{[\s\S]*?\n\s*\},\n\s*onAutoExecute: async \(\) =>/
+  )?.[0];
+
+  assert.ok(localAgentApprovalBranch, 'expected to find the local-agent approval branch');
+  assert.match(localAgentApprovalBranch, /const approved = await interactionPort\.waitForApproval\(/);
+  assert.match(localAgentApprovalBranch, /if \(!approved\) \{[\s\S]*?return;\s*\}/);
+});

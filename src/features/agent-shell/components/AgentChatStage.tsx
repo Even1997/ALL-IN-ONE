@@ -71,7 +71,7 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
   const stageDescription =
     latestTurnSession?.plan?.reason ||
     latestTurnSession?.userPrompt ||
-    '在这里继续对话、查看执行状态，并从右侧切换审查与上下文面板。';
+    '在这里继续对话、查看执行状态，并从右侧切换审查、文件和记忆面板。';
   const stageStatus = session.activeLiveState?.statusVerb || latestTurnSession?.status || 'idle';
   const runtimeConfigIdOverride = usableBoundConfig?.id || preferredConfig?.id || null;
   const runtimeLabel = usableBoundConfig?.name || preferredConfig?.name || '默认运行时';
@@ -91,9 +91,6 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
         <div className="agent-chat-stage-actions">
           <span className="agent-chat-stage-pill subtle">{runtimeLabel}</span>
           <span className="agent-chat-stage-pill">{stageStatus}</span>
-          <span className="agent-chat-stage-pill subtle">
-            {session.activeLiveState?.connectionState || 'ready'}
-          </span>
           {session.pendingApprovalCount > 0 ? (
             <span className="agent-chat-stage-pill warning">
               approvals {session.pendingApprovalCount}

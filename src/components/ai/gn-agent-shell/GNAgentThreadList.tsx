@@ -20,14 +20,14 @@ export const GNAgentThreadList: React.FC<{
 }> = ({ threads, activeSessionId, recoveryByThread, onSelectThread, onResumeThread }) => (
   <section className="gn-agent-runtime-panel">
     <div className="gn-agent-runtime-panel-head">
-      <strong>Threads</strong>
-      <span>{threads.length} active</span>
+      <strong>最近对话</strong>
+      <span>{threads.length} 条</span>
     </div>
     {threads.length === 0 ? (
-      <p className="gn-agent-runtime-panel-empty">还没有 runtime thread。开始一次对话后会在这里出现。</p>
+      <p className="gn-agent-runtime-panel-empty">还没有对话。点击左上角的新对话后，这里会开始积累最近会话。</p>
     ) : (
       <div className="gn-agent-runtime-panel-list">
-        {threads.slice(0, 6).map((thread) => {
+        {threads.map((thread) => {
           const recoveryState = recoveryByThread[thread.id] || null;
           const isActive = thread.id === activeSessionId;
 
@@ -46,7 +46,6 @@ export const GNAgentThreadList: React.FC<{
               }}
             >
               <strong>{thread.title}</strong>
-              <span>{thread.providerId}</span>
               <code>{formatThreadTime(thread.updatedAt)}</code>
               {canResumeFromRecovery(recoveryState) ? (
                 <button

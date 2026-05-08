@@ -1,0 +1,116 @@
+<h2>Agent 工作台改版方向</h2>
+<p class="subtitle">目标是把聊天舞台做成主角，减少左中右同时抢注意力的问题。</p>
+
+<div class="cards">
+  <div class="card" data-choice="focus-docked" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. 聊天优先 + 右侧停靠审查</div>
+        <div class="mockup-body" style="display:grid;grid-template-columns:88px 260px 1fr 300px;gap:12px;min-height:320px;">
+          <div class="placeholder" style="border-radius:20px;">Rail</div>
+          <div class="placeholder" style="border-radius:24px;">Threads</div>
+          <div style="display:grid;grid-template-rows:auto 1fr auto;gap:12px;">
+            <div class="placeholder" style="border-radius:22px;">精简标题栏</div>
+            <div class="placeholder" style="border-radius:26px;background:linear-gradient(180deg,#f8fbff,#eef4ff);">主聊天区</div>
+            <div class="placeholder" style="border-radius:22px;">Composer</div>
+          </div>
+          <div class="placeholder" style="border-radius:24px;">Inspector</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>推荐：聊天优先 + 右侧停靠</h3>
+      <p>保留三栏能力，但把左侧缩成导航和线程，中间变成绝对主舞台，右侧默认保留审查。</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>优点</h4>
+          <ul>
+            <li>改动相对克制，风险低</li>
+            <li>仍然保留 Inspector 的工具价值</li>
+            <li>最容易把当前页面从“乱”拉回“专注”</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>代价</h4>
+          <ul>
+            <li>右侧仍会占一部分宽度</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="focus-overlay" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. 聊天优先 + 审查抽屉</div>
+        <div class="mockup-body" style="display:grid;grid-template-columns:88px 248px 1fr;gap:12px;min-height:320px;position:relative;">
+          <div class="placeholder" style="border-radius:20px;">Rail</div>
+          <div class="placeholder" style="border-radius:24px;">Threads</div>
+          <div style="display:grid;grid-template-rows:auto 1fr auto;gap:12px;position:relative;">
+            <div class="placeholder" style="border-radius:22px;">轻量标题栏</div>
+            <div class="placeholder" style="border-radius:26px;background:linear-gradient(180deg,#f8fbff,#eef4ff);">全宽主聊天区</div>
+            <div class="placeholder" style="border-radius:22px;">Composer</div>
+            <div style="position:absolute;top:18px;right:18px;width:34%;height:76%;border:1px solid #d5deee;border-radius:24px;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;font-size:13px;color:#516079;">浮层 Inspector</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>更激进：聊天全宽 + Inspector 抽屉</h3>
+      <p>默认几乎只看聊天，需要审查时再从右侧拉出，沉浸感最强。</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>优点</h4>
+          <ul>
+            <li>视觉最干净</li>
+            <li>最接近 Codex / Claude 工作流</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>代价</h4>
+          <ul>
+            <li>需要重新处理浮层与聊天的关系</li>
+            <li>交互改动更大</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="single-sidebar" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. 单侧边栏 + 聊天主舞台</div>
+        <div class="mockup-body" style="display:grid;grid-template-columns:100px 1fr;gap:12px;min-height:320px;">
+          <div class="placeholder" style="border-radius:22px;">合并导航 / 线程</div>
+          <div style="display:grid;grid-template-rows:auto 1fr auto;gap:12px;">
+            <div class="placeholder" style="border-radius:22px;">标题栏 + 状态</div>
+            <div class="placeholder" style="border-radius:26px;background:linear-gradient(180deg,#f8fbff,#eef4ff);">聊天区</div>
+            <div class="placeholder" style="border-radius:22px;">Composer</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>最简：只保留一侧边栏</h3>
+      <p>把 rail、threads、inspector 进一步合并，页面会更像一个单主舞台应用。</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>优点</h4>
+          <ul>
+            <li>结构最简单</li>
+            <li>页面会明显更清爽</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>代价</h4>
+          <ul>
+            <li>会触碰现有信息架构</li>
+            <li>开发范围最大</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
