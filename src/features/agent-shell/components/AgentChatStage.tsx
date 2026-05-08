@@ -71,7 +71,7 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
   const stageDescription =
     latestTurnSession?.plan?.reason ||
     latestTurnSession?.userPrompt ||
-    '在这里继续对话、查看执行状态，并从右侧切换审查、文件和记忆面板。';
+    '在这里继续对话、查看执行状态，并从右侧切换审查和记忆面板。';
   const stageStatus = session.activeLiveState?.statusVerb || latestTurnSession?.status || 'idle';
   const runtimeConfigIdOverride = usableBoundConfig?.id || preferredConfig?.id || null;
   const runtimeLabel = usableBoundConfig?.name || preferredConfig?.name || '默认运行时';

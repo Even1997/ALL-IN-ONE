@@ -113,7 +113,7 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
               <WorkbenchIcon name="page" />
             </span>
             <div>
-              <strong>最近对话</strong>
+              <strong>对话历史</strong>
               <span>{projectName || '当前项目会话'}</span>
             </div>
           </div>

@@ -99,9 +99,7 @@ export const AgentShellPage: React.FC = () => {
           <AgentWorkbenchInspector
             tab={inspectorTab}
             onTabChange={setInspectorTab}
-            latestTurnSession={session.latestTurnSession}
             toolCalls={session.toolCalls}
-            memoryCandidates={session.memoryCandidates}
           />
         }
         inspectorCollapsed={inspectorCollapsed}

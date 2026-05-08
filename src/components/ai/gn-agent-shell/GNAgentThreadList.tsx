@@ -20,11 +20,11 @@ export const GNAgentThreadList: React.FC<{
 }> = ({ threads, activeSessionId, recoveryByThread, onSelectThread, onResumeThread }) => (
   <section className="gn-agent-runtime-panel">
     <div className="gn-agent-runtime-panel-head">
-      <strong>最近对话</strong>
+      <strong>对话历史</strong>
       <span>{threads.length} 条</span>
     </div>
     {threads.length === 0 ? (
-      <p className="gn-agent-runtime-panel-empty">还没有对话。点击左上角的新对话后，这里会开始积累最近会话。</p>
+      <p className="gn-agent-runtime-panel-empty">还没有对话。点击左上角的新对话后，这里会开始积累对话历史。</p>
     ) : (
       <div className="gn-agent-runtime-panel-list">
         {threads.map((thread) => {

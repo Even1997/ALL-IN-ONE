@@ -16,8 +16,8 @@ export const GNAgentMemoryPanel: React.FC = () => {
   return (
     <section className="gn-agent-runtime-panel">
       <div className="gn-agent-runtime-panel-head">
-        <strong>Memory</strong>
-        <span>{entries.length} entries</span>
+        <strong>长期记忆</strong>
+        <span>{entries.length} 条</span>
       </div>
       {entries.length === 0 ? (
         <p className="gn-agent-runtime-panel-empty">当前项目还没有提炼出的长期记忆。</p>

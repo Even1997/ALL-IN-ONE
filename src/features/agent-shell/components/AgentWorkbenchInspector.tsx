@@ -1,23 +1,30 @@
 import React, { useMemo } from 'react';
 import { GNAgentMemoryPanel } from '../../../components/ai/gn-agent-shell/GNAgentMemoryPanel';
-import { GNAgentPlanPanel } from '../../../components/ai/gn-agent-shell/GNAgentPlanPanel';
-import { GNAgentTimelinePanel } from '../../../components/ai/gn-agent-shell/GNAgentTimelinePanel';
 import { WorkbenchIcon } from '../../../components/ui/WorkbenchIcon';
-import type { AgentMemoryCandidate } from '../../../modules/ai/runtime/agentRuntimeStore';
 import type { RuntimeToolStep } from '../../../modules/ai/runtime/agent-kernel/agentKernelTypes';
-import type { AgentTurnSession } from '../../../modules/ai/runtime/session/agentSessionTypes';
 
-export type AgentInspectorTab = 'review' | 'files' | 'memory';
+export type AgentInspectorTab = 'review' | 'memory';
 
 type AgentWorkbenchInspectorProps = {
   tab: AgentInspectorTab;
   onTabChange: (tab: AgentInspectorTab) => void;
-  latestTurnSession: AgentTurnSession | null;
   toolCalls: RuntimeToolStep[];
-  memoryCandidates: AgentMemoryCandidate[];
 };
 
-const INSPECTOR_TABS: AgentInspectorTab[] = ['review', 'files', 'memory'];
+type InspectorFileChange = {
+  id: string;
+  path: string;
+  status: string;
+  beforeContent: string | null;
+  afterContent: string | null;
+};
+
+type ReviewDiffLine = {
+  content: string;
+  kind: 'added' | 'removed' | 'unchanged';
+};
+
+const INSPECTOR_TABS: AgentInspectorTab[] = ['review', 'memory'];
 const INSPECTOR_TAB_META: Record<
   AgentInspectorTab,
   {
@@ -28,17 +35,12 @@ const INSPECTOR_TAB_META: Record<
 > = {
   review: {
     label: '审查',
-    description: '计划、状态和时间线',
+    description: '查看本轮文档改动与内容',
     icon: 'page',
-  },
-  files: {
-    label: '文件',
-    description: '查看本轮代码变更',
-    icon: 'files',
   },
   memory: {
     label: '记忆',
-    description: '候选记忆与已存上下文',
+    description: '查看已保存的长期记忆',
     icon: 'knowledge',
   },
 };
@@ -53,25 +55,95 @@ const summarizeFileChange = (change: NonNullable<RuntimeToolStep['fileChanges']>
   return '更新';
 };
 
+const buildReviewDiff = (beforeContent: string | null, afterContent: string | null): ReviewDiffLine[] => {
+  if (beforeContent === null && afterContent === null) {
+    return [{ content: '没有可展示的内容。', kind: 'unchanged' }];
+  }
+
+  if (beforeContent === null) {
+    return (afterContent || '没有可展示的内容。').split('\n').map((line) => ({
+      content: `+${line}`,
+      kind: 'added' as const,
+    }));
+  }
+
+  if (afterContent === null) {
+    return beforeContent.split('\n').map((line) => ({
+      content: `-${line}`,
+      kind: 'removed' as const,
+    }));
+  }
+
+  const beforeLines = beforeContent.split('\n');
+  const afterLines = afterContent.split('\n');
+
+  let prefixEnd = 0;
+  while (prefixEnd < beforeLines.length && prefixEnd < afterLines.length && beforeLines[prefixEnd] === afterLines[prefixEnd]) {
+    prefixEnd += 1;
+  }
+
+  let suffixStartBefore = beforeLines.length;
+  let suffixStartAfter = afterLines.length;
+  while (
+    suffixStartBefore > prefixEnd &&
+    suffixStartAfter > prefixEnd &&
+    beforeLines[suffixStartBefore - 1] === afterLines[suffixStartAfter - 1]
+  ) {
+    suffixStartBefore -= 1;
+    suffixStartAfter -= 1;
+  }
+
+  const lines: ReviewDiffLine[] = [];
+
+  for (let index = Math.max(0, prefixEnd - 2); index < prefixEnd; index += 1) {
+    lines.push({ content: ` ${beforeLines[index]}`, kind: 'unchanged' });
+  }
+
+  for (let index = prefixEnd; index < suffixStartBefore; index += 1) {
+    lines.push({ content: `-${beforeLines[index]}`, kind: 'removed' });
+  }
+
+  for (let index = prefixEnd; index < suffixStartAfter; index += 1) {
+    lines.push({ content: `+${afterLines[index]}`, kind: 'added' });
+  }
+
+  for (let index = suffixStartAfter; index < Math.min(suffixStartAfter + 2, afterLines.length); index += 1) {
+    lines.push({ content: ` ${afterLines[index]}`, kind: 'unchanged' });
+  }
+
+  return lines.length > 0 ? lines : [{ content: '没有可展示的内容。', kind: 'unchanged' }];
+};
+
 export const AgentWorkbenchInspector: React.FC<AgentWorkbenchInspectorProps> = ({
   tab,
   onTabChange,
-  latestTurnSession,
   toolCalls,
-  memoryCandidates,
 }) => {
   const fileChanges = useMemo(
-    () =>
-      toolCalls.flatMap((toolCall) =>
-        (toolCall.fileChanges || []).map((change) => ({
-          id: `${toolCall.id}:${change.path}`,
-          path: change.path,
-          status: summarizeFileChange(change),
-        })),
-      ),
+    () => {
+      const fileChangesByPath = new Map<string, InspectorFileChange>();
+
+      for (const toolCall of toolCalls) {
+        for (const change of toolCall.fileChanges || []) {
+          if (!change.path.trim()) {
+            continue;
+          }
+
+          const existing = fileChangesByPath.get(change.path);
+          fileChangesByPath.set(change.path, {
+            id: `${toolCall.id}:${change.path}`,
+            path: change.path,
+            status: summarizeFileChange(change),
+            beforeContent: existing ? existing.beforeContent : change.beforeContent ?? null,
+            afterContent: change.afterContent ?? existing?.afterContent ?? null,
+          });
+        }
+      }
+
+      return Array.from(fileChangesByPath.values());
+    },
     [toolCalls],
   );
-  const pendingMemoryCount = memoryCandidates.filter((candidate) => candidate.status === 'pending').length;
   const activeMeta = INSPECTOR_TAB_META[tab];
 
   return (
@@ -100,26 +172,38 @@ export const AgentWorkbenchInspector: React.FC<AgentWorkbenchInspectorProps> = (
 
       <div className="agent-workbench-inspector-body">
         {tab === 'review' ? (
-          <>
-            <GNAgentPlanPanel session={latestTurnSession} />
-            <GNAgentTimelinePanel latestTurnSession={latestTurnSession} />
-          </>
-        ) : null}
-
-        {tab === 'files' ? (
           <section className="gn-agent-runtime-panel">
             <div className="gn-agent-runtime-panel-head">
-              <strong>文件变更</strong>
+              <strong>变更内容</strong>
               <span>{fileChanges.length} 项</span>
             </div>
             {fileChanges.length === 0 ? (
-              <p className="gn-agent-runtime-panel-empty">当前线程还没有记录文件变化。</p>
+              <p className="gn-agent-runtime-panel-empty">当前线程还没有记录文档变动。</p>
             ) : (
-              <div className="gn-agent-runtime-panel-list">
+              <div className="agent-workbench-review-list">
                 {fileChanges.map((change) => (
-                  <article key={change.id} className="gn-agent-runtime-card">
-                    <strong>{change.path}</strong>
-                    <code>{change.status}</code>
+                  <article key={change.id} className="agent-workbench-review-card">
+                    <div className="agent-workbench-review-card-head">
+                      <strong>{change.path}</strong>
+                      <code>{change.status}</code>
+                    </div>
+                    <pre className="agent-workbench-review-diff">
+                      {buildReviewDiff(change.beforeContent, change.afterContent).map((line, index) => (
+                        <span
+                          key={`${change.id}-${index}`}
+                          className={
+                            line.kind === 'removed'
+                              ? 'diff-removed'
+                              : line.kind === 'added'
+                                ? 'diff-added'
+                                : 'diff-context'
+                          }
+                        >
+                          {line.content}
+                          {'\n'}
+                        </span>
+                      ))}
+                    </pre>
                   </article>
                 ))}
               </div>
@@ -127,20 +211,7 @@ export const AgentWorkbenchInspector: React.FC<AgentWorkbenchInspectorProps> = (
           </section>
         ) : null}
 
-        {tab === 'memory' ? (
-          <>
-            <section className="gn-agent-runtime-panel">
-              <div className="gn-agent-runtime-panel-head">
-                <strong>记忆收件箱</strong>
-                <span>{pendingMemoryCount} 条待处理</span>
-              </div>
-              <p className="gn-agent-runtime-panel-empty">
-                待保存记忆会在这里汇总，当前先保留展示与已存记忆查看入口。
-              </p>
-            </section>
-            <GNAgentMemoryPanel />
-          </>
-        ) : null}
+        {tab === 'memory' ? <GNAgentMemoryPanel /> : null}
       </div>
     </section>
   );
