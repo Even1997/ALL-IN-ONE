@@ -7,17 +7,27 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
+const productKnowledgePanePath = path.resolve(__dirname, '../src/components/product/ProductKnowledgeWorkspacePane.tsx');
+const productPagePanePath = path.resolve(__dirname, '../src/components/product/ProductPageWorkspacePane.tsx');
 const knowledgeWorkspacePath = path.resolve(__dirname, '../src/components/product/KnowledgeWorkspace.tsx');
 const noteWorkspacePath = path.resolve(__dirname, '../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
 
 test('product workbench delegates knowledge notes and page workspace responsibilities to focused workspaces', async () => {
-  const source = await readFile(productPath, 'utf8');
+  const [productSource, knowledgePaneSource, pagePaneSource] = await Promise.all([
+    readFile(productPath, 'utf8'),
+    readFile(productKnowledgePanePath, 'utf8'),
+    readFile(productPagePanePath, 'utf8'),
+  ]);
 
-  assert.match(source, /import\s+\{\s*KnowledgeNoteWorkspace/);
-  assert.match(source, /import\s+\{\s*PageWorkspace\s*\}\s+from '\.\/PageWorkspace'/);
-  assert.match(source, /<KnowledgeNoteWorkspace/);
-  assert.match(source, /<PageWorkspace/);
+  assert.match(productSource, /LazyProductKnowledgeWorkspacePane/);
+  assert.match(productSource, /LazyProductPageWorkspacePane/);
+  assert.match(productSource, /<LazyProductKnowledgeWorkspacePane/);
+  assert.match(productSource, /<LazyProductPageWorkspacePane/);
+  assert.match(knowledgePaneSource, /KnowledgeNoteWorkspace/);
+  assert.match(knowledgePaneSource, /<KnowledgeNoteWorkspace \{\.\.\.props\} \/>/);
+  assert.match(pagePaneSource, /import \{ PageWorkspace \} from '\.\/PageWorkspace';/);
+  assert.match(pagePaneSource, /<PageWorkspace/);
 });
 
 test('knowledge note workspace owns the compact note workbench layout and chrome classes', async () => {

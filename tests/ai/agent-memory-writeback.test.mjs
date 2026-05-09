@@ -14,6 +14,18 @@ const memoryInboxPath = path.resolve(
   __dirname,
   '../../src/components/ai/gn-agent-shell/GNAgentMemoryInbox.tsx',
 );
+const sessionHookPath = path.resolve(
+  __dirname,
+  '../../src/components/ai/gn-agent-shell/useGNAgentWorkbenchSession.ts',
+);
+const coordinatorPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts',
+);
+const builtInTurnPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn.ts',
+);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 const runtimeStorePath = path.resolve(__dirname, '../../src/modules/ai/runtime/agentRuntimeStore.ts');
 
@@ -160,47 +172,40 @@ test('GN agent memory inbox source exposes pending review actions', async () => 
   assert.match(source, /忽略/);
 });
 
-test('GN agent chat page wires memory inbox to active session candidates', async () => {
+test('GN agent compatibility shell delegates memory state through the workbench session', async () => {
   const source = await readFile(chatPagePath, 'utf8');
+  const sessionHook = await readFile(sessionHookPath, 'utf8');
 
-  assert.match(source, /GNAgentMemoryInbox/);
-  assert.match(source, /conversation\.memoryCandidates/);
-  assert.match(source, /candidates=\{memoryCandidates\}/);
-  assert.match(source, /saveProjectMemoryEntry/);
-  assert.match(source, /listProjectMemoryEntries/);
-  assert.match(source, /setMemoryEntries\(\s*currentProject\.id/);
-  assert.match(source, /resolveMemoryCandidate\(activeSessionId/);
-  assert.match(source, /appendAgentTimelineEvent/);
-  assert.match(source, /appendRuntimeReplayEvent/);
-  assert.match(source, /syncSessionReplayState/);
-  assert.match(source, /buildMemoryWriteLifecycleDescriptor/);
-  assert.match(source, /action:\s*'save'/);
-  assert.match(source, /action:\s*'overwrite'/);
-  assert.match(source, /action:\s*'rename'/);
-  assert.match(source, /发现同名记忆/);
-  assert.match(source, /自动改名保存/);
-  assert.match(source, /覆盖原条目/);
+  assert.match(source, /useGNAgentWorkbenchSession/);
+  assert.match(source, /AgentChatStage/);
+  assert.match(source, /session=\{session\}/);
+  assert.match(sessionHook, /useRuntimeConversationGateway/);
+  assert.match(sessionHook, /memoryCandidates:\s*conversation\.memoryCandidates/);
+  assert.match(sessionHook, /memoryEntries:\s*conversation\.memoryEntries/);
 });
 
-test('AI chat produces memory candidates after final assistant content', async () => {
-  const source = await readFile(aiChatPath, 'utf8');
+test('runtime turn coordination stores extracted memory candidates after final assistant content', async () => {
+  const coordinator = await readFile(coordinatorPath, 'utf8');
+  const builtInTurn = await readFile(builtInTurnPath, 'utf8');
 
-  assert.match(source, /setThreadMemoryCandidates/);
-  assert.match(source, /setThreadMemoryCandidates\(targetSessionId, agentTurn\.memoryCandidates\)/);
-  assert.match(source, /buildMemoryReadLifecycleDescriptor/);
-  assert.match(source, /buildMemoryRollbackLifecycleDescriptor/);
-  assert.match(source, /handleRewindRun/);
+  assert.match(coordinator, /setThreadMemoryCandidates/);
+  assert.match(coordinator, /setThreadMemoryCandidates\(targetSessionId,\s*agentTurn\.memoryCandidates\)/);
+  assert.match(coordinator, /buildMemoryReadLifecycleDescriptor/);
+  assert.match(aiChatPath ? await readFile(aiChatPath, 'utf8') : '', /buildMemoryRollbackLifecycleDescriptor/);
+  assert.match(aiChatPath ? await readFile(aiChatPath, 'utf8') : '', /handleRewindRun/);
+  assert.match(builtInTurn, /extractMemoryCandidates/);
+  assert.match(builtInTurn, /memoryCandidates/);
 });
 
-test('AI chat wires built-in agent turns to the kernel and tool call store', async () => {
-  const source = await readFile(aiChatPath, 'utf8');
+test('runtime turn coordination wires built-in agent turns to the kernel and tool call store', async () => {
+  const coordinator = await readFile(coordinatorPath, 'utf8');
 
-  assert.match(source, /executeRuntimeBuiltInAgentTurn/);
-  assert.match(source, /ToolExecutor/);
-  assert.match(source, /setThreadToolCalls/);
-  assert.match(source, /onToolCallsChange:\s*\(toolCalls\)/);
-  assert.match(source, /setThreadToolCalls\(targetSessionId, toolCalls\)/);
-  assert.match(source, /allowedTools:\s*builtInAllowedTools/);
+  assert.match(coordinator, /executeRuntimeBuiltInAgentTurn/);
+  assert.match(coordinator, /createRuntimeChatToolExecutor/);
+  assert.match(coordinator, /setThreadToolCalls/);
+  assert.match(coordinator, /onToolCallsChange:\s*\(toolCalls/);
+  assert.match(coordinator, /setThreadToolCalls\(targetSessionId,\s*toolCalls\)/);
+  assert.match(coordinator, /allowedTools:\s*builtInAllowedTools/);
 });
 
 test('agent runtime store exports AgentMemoryCandidate lifecycle fields', async () => {

@@ -7,8 +7,7 @@ import { fileURLToPath } from 'node:url';
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDir, '../..');
 const libPath = path.resolve(repoRoot, 'src-tauri/src/lib.rs');
-const toolExecutorPath = path.resolve(repoRoot, 'src/components/workspace/tools.ts');
-const chatPath = path.resolve(repoRoot, 'src/components/workspace/AIChat.tsx');
+const toolExecutorPath = path.resolve(repoRoot, 'src/modules/ai/runtime/tools/toolExecutor.ts');
 
 test('Tauri tool params carry project_root for backend boundary checks', async () => {
   const libSource = await readFile(libPath, 'utf8');
@@ -25,10 +24,8 @@ test('Tauri tool params carry project_root for backend boundary checks', async (
 
 test('built-in tool invocations pass projectRoot into Tauri tools', async () => {
   const toolExecutorSource = await readFile(toolExecutorPath, 'utf8');
-  const chatSource = await readFile(chatPath, 'utf8');
 
   assert.match(toolExecutorSource, /project_root:\s*this\.projectRoot/);
-  assert.match(chatSource, /project_root:\s*projectRoot/);
 });
 
 test('Tauri bash tool enforces timeout by spawning and killing long-running commands', async () => {

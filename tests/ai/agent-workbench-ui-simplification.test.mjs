@@ -17,7 +17,6 @@ test('agent workbench sidebar removes redundant first-level destinations and kee
 
   assert.match(source, /label:\s*'新对话'/);
   assert.match(source, /label:\s*'搜索'/);
-  assert.match(source, /label:\s*'技能'/);
   assert.doesNotMatch(source, /label:\s*'插件'/);
   assert.doesNotMatch(source, /label:\s*'自动化'/);
   assert.doesNotMatch(source, /label:\s*'设置'/);
@@ -29,19 +28,19 @@ test('agent workbench sidebar removes redundant first-level destinations and kee
   assert.match(pageSource, /onDeleteSession=\{session\.statusActions\.deleteSession\}/);
 });
 
-test('agent workbench page opens search and skills in dialogs instead of sidebar pages', async () => {
+test('agent workbench page opens search in a dialog instead of reviving sidebar mode routing', async () => {
   const source = await readFile(pagePath, 'utf8');
 
   assert.match(source, /MacDialog/);
   assert.match(source, /isSearchDialogOpen/);
-  assert.match(source, /isSkillsDialogOpen/);
   assert.doesNotMatch(source, /sidebarMode/);
+  assert.doesNotMatch(source, /isSkillsDialogOpen/);
 });
 
-test('agent workbench inspector keeps review focused on changed documents and content', async () => {
+test('agent workbench inspector keeps review focused on changed documents while exposing runtime tabs', async () => {
   const source = await readFile(inspectorPath, 'utf8');
 
-  assert.match(source, /'review', 'memory'/);
+  assert.match(source, /type AgentInspectorTab = 'review' \| 'tool' \| 'timeline' \| 'approval' \| 'memory'/);
   assert.doesNotMatch(source, /'files'/);
   assert.match(source, /查看本轮文档改动与内容/);
   assert.match(source, /变更内容/);
@@ -54,11 +53,11 @@ test('agent workbench inspector keeps review focused on changed documents and co
   assert.doesNotMatch(source, /变更后/);
   assert.doesNotMatch(source, /agent-workbench-review-section is-removed/);
   assert.doesNotMatch(source, /agent-workbench-review-section is-added/);
+  assert.match(source, /label:\s*'工具'/);
+  assert.match(source, /label:\s*'时间线'/);
+  assert.match(source, /label:\s*'审批'/);
   assert.doesNotMatch(source, /label:\s*'文件'/);
-  assert.doesNotMatch(source, /'tools'/);
   assert.doesNotMatch(source, /'context'/);
-  assert.doesNotMatch(source, /GNAgentPlanPanel/);
-  assert.doesNotMatch(source, /GNAgentTimelinePanel/);
 });
 
 test('agent workbench inspector keeps memory tab minimal and removes inbox placeholder', async () => {
@@ -75,7 +74,8 @@ test('agent workbench stage removes redundant connection-state pill and keeps on
 
   assert.doesNotMatch(source, /connectionState/);
   assert.match(source, /pendingApprovalCount/);
-  assert.match(source, /审查和记忆面板/);
+  assert.match(source, /收起右侧面板/);
+  assert.match(source, /展开右侧面板/);
   assert.doesNotMatch(source, /审查、文件和记忆面板/);
 });
 

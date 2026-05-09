@@ -19,11 +19,12 @@ test('tauri exposes agent shell session and settings commands', async () => {
   assert.match(libSource, /mod agent_shell;/);
   assert.ok(handlerMatch?.groups?.commands, 'Expected tauri::generate_handler![...] block in src-tauri/src/lib.rs');
   assert.match(modSource, /\bpub mod commands\b/);
+  assert.match(modSource, /\bpub mod context_store\b/);
   assert.match(modSource, /\bpub mod session_store\b/);
   assert.match(modSource, /\bpub mod settings_store\b/);
   assert.match(handlerMatch.groups.commands, /\bcreate_agent_shell_session\b/);
   assert.match(handlerMatch.groups.commands, /\blist_agent_shell_sessions\b/);
   assert.match(handlerMatch.groups.commands, /\bget_agent_shell_settings\b/);
   assert.match(handlerMatch.groups.commands, /\bupdate_agent_shell_settings\b/);
-  assert.match(libSource, /"view\.agent"/);
+  assert.doesNotMatch(libSource, /"view\.agent"/);
 });

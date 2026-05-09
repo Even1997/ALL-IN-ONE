@@ -28,18 +28,21 @@ test('app create-project flow initializes the real project filesystem', async ()
 });
 
 test('app design workspace loads and creates sketch pages through project files', async () => {
-  const source = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const [appSource, designWorkbenchSource] = await Promise.all([
+    readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/design/DesignWorkbenchScreen.tsx', import.meta.url), 'utf8'),
+  ]);
 
-  assert.match(source, /loadSketchPageArtifactsFromProjectDir/);
-  assert.match(source, /replacePageStructure\(sketchArtifacts\.pageStructure,\s*featureTree\)/);
-  assert.match(source, /replaceWireframes\(sketchArtifacts\.wireframes,\s*featureTree\)/);
-  assert.match(source, /await writeSketchPageFile\(currentProject\.id,\s*nextPage,\s*null,\s*currentProject\.appType\)/);
+  assert.match(appSource, /loadSketchPageArtifactsFromProjectDir/);
+  assert.match(appSource, /replacePageStructure\(sketchArtifacts\.pageStructure,\s*featureTree\)/);
+  assert.match(appSource, /replaceWireframes\(sketchArtifacts\.wireframes,\s*featureTree\)/);
+  assert.match(designWorkbenchSource, /const nextPageId = await writeSketchPageFile\(currentProjectId,\s*nextPage,\s*null,\s*currentProjectAppType\);/);
+  assert.match(designWorkbenchSource, /const sketchArtifacts = await refreshSketchArtifactsFromDisk\(\);/);
 });
 
 test('app design workspace falls back to store page creation when Tauri runtime is unavailable', async () => {
-  const source = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/components/design/DesignWorkbenchScreen.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /isTauriRuntimeAvailable/);
   assert.match(source, /if \(!canUseProjectFilesystem\) \{\s*const nextPage = addRootPage\(\);/s);
 });
 
@@ -71,7 +74,7 @@ test('createProject starts from an empty workspace instead of auto-generating pl
   assert.doesNotMatch(createProjectBlock, /const planningArtifacts = buildPlanningFiles\(/);
   assert.doesNotMatch(createProjectBlock, /const deliveryArtifacts = buildDeliveryArtifacts\(/);
   assert.match(createProjectBlock, /const rawRequirementInput = '';/);
-  assert.match(createProjectBlock, /const prd = null;/);
+  assert.match(createProjectBlock, /const brief = null;/);
   assert.match(createProjectBlock, /generatedFiles:\s*\[\],/);
   assert.match(createProjectBlock, /testPlan:\s*null,/);
   assert.match(createProjectBlock, /deployPlan:\s*null,/);

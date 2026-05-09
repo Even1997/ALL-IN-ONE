@@ -52,13 +52,13 @@ test('project output sync keeps only design prototypes and design-native files',
   ]);
 });
 
-test('project persistence prefers the bound vault path for runtime file access', () => {
+test('project persistence prefers the resolved project dir before falling back to vault path', () => {
   assert.equal(
     resolveProjectRuntimeRootPath(
       { id: 'project-1', vaultPath: 'C:\\workspace\\demo' },
       'C:\\internal\\project-1'
     ),
-    'C:\\workspace\\demo'
+    'C:\\internal\\project-1'
   );
   assert.equal(
     resolveProjectRuntimeRootPath(
@@ -121,7 +121,7 @@ test('project output sync maps sketch markdown into sketch/pages files', () => {
   assert.deepEqual(result, [
     {
       path: 'sketch/pages/page-1-login-page.md',
-      content: '# Login Page\n\n- route: /login\n- goal: Sign in\n- modules:\n  - name: 暂无模块\n    position: 0, 0\n    size: 80, 60\n    content: 无',
+      content: '# Login Page\n\n- route: /login\n- frame: 1280x800\n- goal: Sign in\n- modules:\n  - name: 暂无模块\n    type: 线框\n    position: 0, 0\n    size: 1, 1\n    content: 无',
     },
   ]);
 });

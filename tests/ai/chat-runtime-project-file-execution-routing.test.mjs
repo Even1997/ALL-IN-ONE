@@ -7,25 +7,36 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const chatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const coordinatorPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts',
+);
+const projectFileFlowPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/orchestration/runtimeProjectFileExecutionFlow.ts',
+);
 
 test('chat delegates runtime project-file execution to orchestration helpers', async () => {
-  const source = await readFile(chatPath, 'utf8');
+  const [chatSource, coordinatorSource, projectFileFlowSource] = await Promise.all([
+    readFile(chatPath, 'utf8'),
+    readFile(coordinatorPath, 'utf8'),
+    readFile(projectFileFlowPath, 'utf8'),
+  ]);
 
-  assert.match(source, /cancelRuntimeProjectFileProposal/);
-  assert.match(source, /executeRuntimeApprovedProjectFileProposal/);
-  assert.match(source, /executeRuntimeProjectFileOperations/);
-  assert.match(source, /type RuntimeProjectFileToolResponse/);
-  assert.match(source, /resolveProjectRuntimeRootPath/);
-  assert.match(source, /const resolveProjectRootById = useCallback\(/);
-  assert.match(source, /getProjectDir:\s*resolveProjectRootById/);
-  assert.match(source, /const executeProjectFileOperations = useCallback\(/);
-  assert.match(source, /executeRuntimeProjectFileOperations\(/);
-  assert.match(source, /await cancelRuntimeProjectFileProposal\(/);
-  assert.match(source, /executeRuntimeApprovedProjectFileProposal\(/);
-  assert.match(source, /completeTurnSession\(executionOutcome\.message\)/);
-  assert.match(source, /buildSessionPreview\(executionOutcome\.message\)/);
-  assert.doesNotMatch(source, /const changedPaths: string\[\] = \[\];/);
-  assert.doesNotMatch(source, /invoke<TauriToolResponse>\('tool_mkdir'/);
-  assert.doesNotMatch(source, /invoke<TauriToolResponse>\('tool_edit'/);
-  assert.doesNotMatch(source, /invoke<TauriToolResponse>\('tool_remove'/);
+  assert.match(projectFileFlowSource, /cancelRuntimeProjectFileProposal/);
+  assert.match(projectFileFlowSource, /executeRuntimeApprovedProjectFileProposal/);
+  assert.match(projectFileFlowSource, /executeRuntimeProjectFileOperations/);
+  assert.match(projectFileFlowSource, /type RuntimeProjectFileToolResponse/);
+  assert.match(chatSource, /resolveProjectRuntimeRootPath/);
+  assert.match(chatSource, /const resolveProjectRootById = useCallback\(/);
+  assert.match(coordinatorSource, /const projectRoot = await ports\.resolveProjectRootById\(request\.projectId\)/);
+  assert.match(projectFileFlowSource, /executeProjectFileOperations: \(/);
+  assert.match(projectFileFlowSource, /const result = await input\.executeProjectFileOperations\(projectRoot,\s*input\.proposal\.operations\)/);
+  assert.match(coordinatorSource, /await completeTurnSession\(executionResult\.successOutcome\.replaySummary\)/);
+  assert.match(coordinatorSource, /buildSessionPreview/);
+  assert.match(projectFileFlowSource, /const changedPaths: string\[\] = \[\];/);
+  assert.match(projectFileFlowSource, /const fileChanges: RuntimeProjectFileExecutionResult\['fileChanges'\] = \[\];/);
+  assert.doesNotMatch(projectFileFlowSource, /invoke<TauriToolResponse>\('tool_mkdir'/);
+  assert.doesNotMatch(projectFileFlowSource, /invoke<TauriToolResponse>\('tool_edit'/);
+  assert.doesNotMatch(projectFileFlowSource, /invoke<TauriToolResponse>\('tool_remove'/);
 });

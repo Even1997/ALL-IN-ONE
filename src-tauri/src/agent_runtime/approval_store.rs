@@ -39,7 +39,8 @@ fn load_approval_store(app_data_dir: &Path) -> Result<ApprovalStoreData, String>
     let content = fs::read_to_string(&store_path)
         .map_err(|error| format!("Failed to read approval store: {}", error))?;
 
-    serde_json::from_str(&content).map_err(|error| format!("Failed to parse approval store: {}", error))
+    serde_json::from_str(&content)
+        .map_err(|error| format!("Failed to parse approval store: {}", error))
 }
 
 fn save_approval_store(app_data_dir: &Path, store: &ApprovalStoreData) -> Result<(), String> {
@@ -56,7 +57,9 @@ pub fn enqueue_approval(
     approval: ApprovalRecord,
 ) -> Result<ApprovalRecord, String> {
     let mut store = load_approval_store(app_data_dir)?;
-    store.approvals.retain(|existing| existing.id != approval.id);
+    store
+        .approvals
+        .retain(|existing| existing.id != approval.id);
     store.approvals.push(approval.clone());
     save_approval_store(app_data_dir, &store)?;
     Ok(approval)
@@ -80,10 +83,7 @@ pub fn resolve_approval(
     Ok(result)
 }
 
-pub fn list_approvals(
-    app_data_dir: &Path,
-    thread_id: &str,
-) -> Result<Vec<ApprovalRecord>, String> {
+pub fn list_approvals(app_data_dir: &Path, thread_id: &str) -> Result<Vec<ApprovalRecord>, String> {
     let mut approvals = load_approval_store(app_data_dir)?
         .approvals
         .into_iter()

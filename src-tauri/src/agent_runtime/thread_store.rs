@@ -57,7 +57,12 @@ pub fn list_threads(
         .threads
         .iter()
         .filter(|thread| thread.project_id == project_id && thread.title == "新对话")
-        .filter(|thread| !store.timeline.iter().any(|event| event.thread_id == thread.id))
+        .filter(|thread| {
+            !store
+                .timeline
+                .iter()
+                .any(|event| event.thread_id == thread.id)
+        })
         .map(|thread| thread.id.clone())
         .collect::<Vec<_>>();
 
@@ -113,7 +118,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
-        let path = std::env::temp_dir().join(format!("goodnight-{}-{}-{}", prefix, timestamp, unique));
+        let path =
+            std::env::temp_dir().join(format!("goodnight-{}-{}-{}", prefix, timestamp, unique));
         fs::create_dir_all(&path).expect("create temp dir");
         path
     }

@@ -6,8 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const toolsPath = path.resolve(__dirname, '../../src/components/workspace/tools.ts');
-const chatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const toolsPath = path.resolve(__dirname, '../../src/modules/ai/runtime/tools/toolExecutor.ts');
+const hostPlatformPath = path.resolve(__dirname, '../../src/utils/hostPlatform.ts');
+const runtimeToolCatalogPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/orchestration/runtimeChatTurnTools.ts',
+);
 const riskPolicyPath = path.resolve(
   __dirname,
   '../../src/modules/ai/runtime/approval/riskPolicy.ts',
@@ -28,13 +32,14 @@ test('workspace tool executor exposes a PowerShell tool on Windows and routes it
 });
 
 test('built-in approvals and risk policy treat powershell like a command tool', async () => {
-  const [chatSource, riskPolicySource] = await Promise.all([
-    readFile(chatPath, 'utf8'),
+  const [hostPlatformSource, runtimeToolCatalogSource, riskPolicySource] = await Promise.all([
+    readFile(hostPlatformPath, 'utf8'),
+    readFile(runtimeToolCatalogPath, 'utf8'),
     readFile(riskPolicyPath, 'utf8'),
   ]);
 
-  assert.match(chatSource, /tool_powershell/);
-  assert.match(chatSource, /'bash', 'powershell', 'fetch'/);
+  assert.match(hostPlatformSource, /toolName === 'bash' \|\| toolName === 'powershell'/);
+  assert.match(runtimeToolCatalogSource, /'write', 'edit', 'bash', 'powershell', 'fetch', 'agent'/);
   assert.match(riskPolicySource, /tool_powershell/);
 });
 

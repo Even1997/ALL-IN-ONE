@@ -4,8 +4,8 @@ use super::types::{
     AgentTurnRewindResult, RewindAgentTurnInput, SaveAgentTurnCheckpointInput,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::cmp::max;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -69,7 +69,10 @@ fn split_lines(content: &str) -> Vec<&str> {
     }
 }
 
-fn build_line_diff(before_content: Option<&str>, after_content: Option<&str>) -> (String, u64, u64) {
+fn build_line_diff(
+    before_content: Option<&str>,
+    after_content: Option<&str>,
+) -> (String, u64, u64) {
     match (before_content, after_content) {
         (None, None) => (String::new(), 0, 0),
         (None, Some(after)) => {
@@ -99,11 +102,15 @@ fn build_line_diff(before_content: Option<&str>, after_content: Option<&str>) ->
 
             for before_index in (0..before_len).rev() {
                 for after_index in (0..after_len).rev() {
-                    lcs[before_index][after_index] = if before_lines[before_index] == after_lines[after_index] {
-                        lcs[before_index + 1][after_index + 1] + 1
-                    } else {
-                        max(lcs[before_index + 1][after_index], lcs[before_index][after_index + 1])
-                    };
+                    lcs[before_index][after_index] =
+                        if before_lines[before_index] == after_lines[after_index] {
+                            lcs[before_index + 1][after_index + 1] + 1
+                        } else {
+                            max(
+                                lcs[before_index + 1][after_index],
+                                lcs[before_index][after_index + 1],
+                            )
+                        };
                 }
             }
 
@@ -161,13 +168,15 @@ pub fn save_turn_checkpoint(
     let existing_created_at = store
         .checkpoints
         .iter()
-        .find(|checkpoint| checkpoint.thread_id == input.thread_id && checkpoint.run_id == input.run_id)
+        .find(|checkpoint| {
+            checkpoint.thread_id == input.thread_id && checkpoint.run_id == input.run_id
+        })
         .map(|checkpoint| checkpoint.created_at)
         .unwrap_or(now);
 
-    store
-        .checkpoints
-        .retain(|checkpoint| !(checkpoint.thread_id == input.thread_id && checkpoint.run_id == input.run_id));
+    store.checkpoints.retain(|checkpoint| {
+        !(checkpoint.thread_id == input.thread_id && checkpoint.run_id == input.run_id)
+    });
     store
         .file_changes
         .retain(|change| !(change.thread_id == input.thread_id && change.run_id == input.run_id));
@@ -262,7 +271,9 @@ pub fn get_turn_checkpoint_diff(
     let change = load_turn_checkpoint_store(app_data_dir)?
         .file_changes
         .into_iter()
-        .filter(|change| change.thread_id == thread_id && change.run_id == run_id && change.path == path)
+        .filter(|change| {
+            change.thread_id == thread_id && change.run_id == run_id && change.path == path
+        })
         .max_by_key(|change| change.created_at)
         .ok_or_else(|| {
             format!(
@@ -293,8 +304,13 @@ fn resolve_checkpoint_path(project_root: &Path, stored_path: &str) -> PathBuf {
 
 fn write_reverted_file(path: &Path, content: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("Failed to create parent directory for {}: {}", path.display(), error))?;
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Failed to create parent directory for {}: {}",
+                path.display(),
+                error
+            )
+        })?;
     }
 
     fs::write(path, content)
@@ -324,7 +340,9 @@ pub fn rewind_turn(
     let target_checkpoint = store
         .checkpoints
         .iter()
-        .find(|checkpoint| checkpoint.thread_id == input.thread_id && checkpoint.run_id == input.run_id)
+        .find(|checkpoint| {
+            checkpoint.thread_id == input.thread_id && checkpoint.run_id == input.run_id
+        })
         .cloned()
         .ok_or_else(|| {
             format!(
@@ -337,7 +355,8 @@ pub fn rewind_turn(
         .checkpoints
         .iter()
         .filter(|checkpoint| {
-            checkpoint.thread_id == input.thread_id && checkpoint.created_at >= target_checkpoint.created_at
+            checkpoint.thread_id == input.thread_id
+                && checkpoint.created_at >= target_checkpoint.created_at
         })
         .cloned()
         .collect::<Vec<_>>();
@@ -349,7 +368,9 @@ pub fn rewind_turn(
     let mut rewind_file_changes = store
         .file_changes
         .iter()
-        .filter(|change| change.thread_id == input.thread_id && rewind_run_ids.contains(&change.run_id))
+        .filter(|change| {
+            change.thread_id == input.thread_id && rewind_run_ids.contains(&change.run_id)
+        })
         .cloned()
         .collect::<Vec<_>>();
 
@@ -400,7 +421,9 @@ pub fn rewind_turn(
 
 #[cfg(test)]
 mod tests {
-    use super::{get_turn_checkpoint_diff, list_turn_checkpoints, rewind_turn, save_turn_checkpoint};
+    use super::{
+        get_turn_checkpoint_diff, list_turn_checkpoints, rewind_turn, save_turn_checkpoint,
+    };
     use crate::agent_runtime::types::{RewindAgentTurnInput, SaveAgentTurnCheckpointInput};
     use std::fs;
     use std::path::PathBuf;
@@ -415,7 +438,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
-        let path = std::env::temp_dir().join(format!("goodnight-{}-{}-{}", prefix, timestamp, unique));
+        let path =
+            std::env::temp_dir().join(format!("goodnight-{}-{}-{}", prefix, timestamp, unique));
         fs::create_dir_all(&path).expect("create temp dir");
         path
     }
@@ -431,11 +455,13 @@ mod tests {
                 run_id: "run-1".into(),
                 message_id: Some("message-1".into()),
                 summary: "Saved".into(),
-                files: vec![crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
-                    path: "src/app.ts".into(),
-                    before_content: Some("a".into()),
-                    after_content: Some("a\nb".into()),
-                }],
+                files: vec![
+                    crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
+                        path: "src/app.ts".into(),
+                        before_content: Some("a".into()),
+                        after_content: Some("a\nb".into()),
+                    },
+                ],
             },
             10,
         )
@@ -444,7 +470,8 @@ mod tests {
         assert_eq!(checkpoint.insertions, 1);
         assert_eq!(checkpoint.files_changed.len(), 1);
 
-        let checkpoints = list_turn_checkpoints(&app_data_dir, "thread-1").expect("list checkpoints");
+        let checkpoints =
+            list_turn_checkpoints(&app_data_dir, "thread-1").expect("list checkpoints");
         assert_eq!(checkpoints.len(), 1);
         assert_eq!(checkpoints[0].run_id, "run-1");
 
@@ -462,11 +489,13 @@ mod tests {
                 run_id: "run-1".into(),
                 message_id: None,
                 summary: "First".into(),
-                files: vec![crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
-                    path: "src/app.ts".into(),
-                    before_content: Some("one".into()),
-                    after_content: Some("one\ntwo".into()),
-                }],
+                files: vec![
+                    crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
+                        path: "src/app.ts".into(),
+                        before_content: Some("one".into()),
+                        after_content: Some("one\ntwo".into()),
+                    },
+                ],
             },
             10,
         )
@@ -480,18 +509,20 @@ mod tests {
                 run_id: "run-2".into(),
                 message_id: None,
                 summary: "Second".into(),
-                files: vec![crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
-                    path: "src/app.ts".into(),
-                    before_content: None,
-                    after_content: Some("one\ntwo\nthree".into()),
-                }],
+                files: vec![
+                    crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
+                        path: "src/app.ts".into(),
+                        before_content: None,
+                        after_content: Some("one\ntwo\nthree".into()),
+                    },
+                ],
             },
             20,
         )
         .expect("save second checkpoint");
 
-        let diff =
-            get_turn_checkpoint_diff(&app_data_dir, "thread-1", "run-2", "src/app.ts").expect("get diff");
+        let diff = get_turn_checkpoint_diff(&app_data_dir, "thread-1", "run-2", "src/app.ts")
+            .expect("get diff");
         assert_eq!(diff.before_content.as_deref(), Some("one\ntwo"));
         assert_eq!(diff.insertions, 1);
         assert!(diff.diff.contains("+three"));
@@ -514,16 +545,19 @@ mod tests {
                 run_id: "run-1".into(),
                 message_id: None,
                 summary: "First".into(),
-                files: vec![crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
-                    path: "src/app.ts".into(),
-                    before_content: Some("zero".into()),
-                    after_content: Some("one".into()),
-                }],
+                files: vec![
+                    crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
+                        path: "src/app.ts".into(),
+                        before_content: Some("zero".into()),
+                        after_content: Some("one".into()),
+                    },
+                ],
             },
             10,
         )
         .expect("save first checkpoint");
-        fs::write(project_root.join("src").join("app.ts"), "one").expect("write first file content");
+        fs::write(project_root.join("src").join("app.ts"), "one")
+            .expect("write first file content");
 
         save_turn_checkpoint(
             &app_data_dir,
@@ -533,16 +567,19 @@ mod tests {
                 run_id: "run-2".into(),
                 message_id: None,
                 summary: "Second".into(),
-                files: vec![crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
-                    path: "src/app.ts".into(),
-                    before_content: Some("one".into()),
-                    after_content: Some("two".into()),
-                }],
+                files: vec![
+                    crate::agent_runtime::types::SaveAgentTurnCheckpointFileInput {
+                        path: "src/app.ts".into(),
+                        before_content: Some("one".into()),
+                        after_content: Some("two".into()),
+                    },
+                ],
             },
             20,
         )
         .expect("save second checkpoint");
-        fs::write(project_root.join("src").join("app.ts"), "two").expect("write second file content");
+        fs::write(project_root.join("src").join("app.ts"), "two")
+            .expect("write second file content");
 
         let rewind_result = rewind_turn(
             &app_data_dir,
@@ -561,7 +598,8 @@ mod tests {
             "one"
         );
 
-        let checkpoints = list_turn_checkpoints(&app_data_dir, "thread-1").expect("list after rewind");
+        let checkpoints =
+            list_turn_checkpoints(&app_data_dir, "thread-1").expect("list after rewind");
         assert_eq!(checkpoints.len(), 1);
         assert_eq!(checkpoints[0].run_id, "run-1");
 

@@ -17,14 +17,15 @@ test('GN Agent message flow carries bubble card timestamps instead of forcing on
   const messageOrderingSource = await readFile(messageOrderingPath, 'utf8');
 
   assert.match(messageListSource, /type MessageBubbleCard =/);
-  assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(renderedMessage\);/);
+  assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(message\);/);
   assert.match(messageListSource, /\.\.\.toolExecutionCards\.map\(\(card\) => \(\{/);
   assert.match(messageListSource, /createdAt: card\.createdAt \?\? earliestRuntimeEventTime \?\? message\.createdAt,/);
   assert.match(messageItemSource, /createdAt: bubbleCard\.createdAt,/);
   assert.match(messageItemSource, /sortMessageRenderItems\(partRenderItems, bubbleRenderItems/);
   assert.doesNotMatch(messageItemSource, /pinNarrativeFirst:/);
-  assert.match(messageOrderingSource, /return leftTime - rightTime \|\| left\.timelineIndex - right\.timelineIndex/);
-  assert.doesNotMatch(messageOrderingSource, /if \(left\.source !== right\.source\)/);
+  assert.match(messageOrderingSource, /return leftTime - rightTime;/);
+  assert.match(messageOrderingSource, /return leftTimelineOrder - rightTimelineOrder;/);
+  assert.match(messageOrderingSource, /return left\.timelineIndex - right\.timelineIndex;/);
   assert.doesNotMatch(messageListSource, /areMessageListPropsEqual/);
   assert.doesNotMatch(messageItemSource, /areMessageItemPropsEqual/);
   assert.doesNotMatch(messageItemSource, /buildGNAgentMessageFlow/);
@@ -33,13 +34,13 @@ test('GN Agent message flow carries bubble card timestamps instead of forcing on
 test('GN Agent message flow derives runtime cards from the live draft timeline while streaming', async () => {
   const messageListSource = await readFile(messageListPath, 'utf8');
 
-  assert.match(messageListSource, /const renderedMessage =/);
-  assert.match(messageListSource, /draftContents\?\.\[message\.id\]\?\.timeline/);
-  assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(renderedMessage\);/);
-  assert.match(messageListSource, /const toolExecutionCards = renderToolExecutionCard\?\.\(renderedMessage\) \|\| \[\];/);
-  assert.match(messageListSource, /const runtimeApprovalNode = renderRuntimeApproval\?\.\(renderedMessage\) \|\| null;/);
-  assert.match(messageListSource, /const runtimeQuestionNode = renderRuntimeQuestion\?\.\(renderedMessage\) \|\| null;/);
-  assert.match(messageListSource, /\[\s*messages,\s*draftContents,/);
+  assert.match(messageListSource, /draftContents\?\.\[message\.id\]/);
+  assert.match(messageListSource, /draftState=\{draftContents\?\.\[message\.id\]\}/);
+  assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(message\);/);
+  assert.match(messageListSource, /const toolExecutionCards = renderToolExecutionCard\?\.\(message\) \|\| \[\];/);
+  assert.match(messageListSource, /const runtimeApprovalNode = renderRuntimeApproval\?\.\(message\) \|\| null;/);
+  assert.match(messageListSource, /const runtimeQuestionNode = renderRuntimeQuestion\?\.\(message\) \|\| null;/);
+  assert.match(messageListSource, /messages,\s*renderStructuredCards,/);
 });
 
 test('GN Agent message flow has no orphaned production helper module', async () => {

@@ -2,15 +2,23 @@ import { invoke } from '@tauri-apps/api/core';
 import type { AppType, FeatureTree, PageStructureNode, ProjectConfig, RequirementDoc, WireframeDocument } from '../types';
 import type { ProjectWorkspaceSnapshot } from '../store/projectStore';
 import type { ContextIndex } from '../modules/ai/chat/contextIndex';
-import {
-  getBuiltInStylePackFiles,
-  parseDesignStyleMarkdown,
-  type DesignStyleSeed,
-} from '../modules/design/stylePack.ts';
 import { buildSketchReferenceFile } from '../modules/knowledge/referenceFiles.ts';
 import { buildSketchPageContent, buildSketchPagePath, parseSketchPageFile } from '../modules/knowledge/sketchPageFiles.ts';
 import type { GeneratedFile } from '../types';
 import { joinFileSystemPath, stripWindowsExtendedLengthPathPrefix } from './fileSystemPaths.ts';
+
+type ProjectStylePackSeed = {
+  id: string;
+  title: string;
+  summary: string;
+  keywords: string[];
+  palette: string[];
+  prompt: string;
+  filePath?: string;
+};
+
+let stylePackModulePromise: Promise<typeof import('../modules/design/stylePack.ts')> | null = null;
+const loadStylePackModule = () => (stylePackModulePromise ??= import('../modules/design/stylePack.ts'));
 
 export interface PersistedProjectSnapshot {
   workspace: ProjectWorkspaceSnapshot;
@@ -352,6 +360,7 @@ export const ensureBuiltInStylePackFiles = async (projectId: string) => {
   await ensureDirectory(designDir);
   await ensureDirectory(styleDir);
 
+  const { getBuiltInStylePackFiles } = await loadStylePackModule();
   const files = getBuiltInStylePackFiles();
   await Promise.all(
     files.map(async (file) => {
@@ -366,9 +375,12 @@ export const ensureBuiltInStylePackFiles = async (projectId: string) => {
   );
 };
 
-export const loadProjectStylePackPresets = async (projectId: string): Promise<DesignStyleSeed[]> => {
+export const loadProjectStylePackPresets = async (projectId: string): Promise<ProjectStylePackSeed[]> => {
+  const { getBuiltInStylePackFiles, parseDesignStyleMarkdown } = await loadStylePackModule();
+  const builtInSeeds = getBuiltInStylePackFiles().map((file) => file.seed);
+
   if (!isTauriRuntimeAvailable()) {
-    return getBuiltInStylePackFiles().map((file) => file.seed);
+    return builtInSeeds;
   }
 
   await ensureBuiltInStylePackFiles(projectId);
@@ -380,7 +392,7 @@ export const loadProjectStylePackPresets = async (projectId: string): Promise<De
   try {
     entries = await listDirectory(styleDir);
   } catch {
-    return getBuiltInStylePackFiles().map((file) => file.seed);
+    return builtInSeeds;
   }
 
   const markdownEntries = entries
@@ -412,12 +424,12 @@ export const loadProjectStylePackPresets = async (projectId: string): Promise<De
         palette: seed.palette,
         prompt: seed.prompt,
         filePath: sanitizeProjectRelativePath(`design/styles/${fileName}`),
-      } satisfies DesignStyleSeed;
+      } satisfies ProjectStylePackSeed;
     })
   );
 
-  const validPresets: DesignStyleSeed[] = presets.filter((preset): preset is NonNullable<typeof preset> => Boolean(preset));
-  return validPresets.length > 0 ? validPresets : getBuiltInStylePackFiles().map((file) => file.seed);
+  const validPresets: ProjectStylePackSeed[] = presets.filter((preset): preset is NonNullable<typeof preset> => Boolean(preset));
+  return validPresets.length > 0 ? validPresets : builtInSeeds;
 };
 
 export const saveProjectStylePackFile = async (projectId: string, relativePath: string, content: string) => {

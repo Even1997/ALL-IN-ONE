@@ -7,14 +7,15 @@ use super::settings_store;
 use super::thread_store;
 use super::turn_checkpoint_store;
 use super::types::{
-    AgentThreadRecord, AgentTimelineEvent, AgentTurnCheckpointDiffRecord,
-    AgentTurnCheckpointRecord, AgentTurnRewindResult, AppendAgentTimelineEventInput,
-    AppendRuntimeReplayEventInput, ApprovalRecord, CreateAgentThreadInput, DeleteRuntimeMcpServerInput,
-    DeleteRuntimeMcpServerResult, EnqueueAgentApprovalInput, InvokeRuntimeMcpToolInput, ProjectMemoryEntry, ResolveAgentApprovalInput,
-    RewindAgentTurnInput, RuntimeMcpServerRecord, RuntimeMcpToolCallRecord,
-    RuntimeReplayEventRecord, RuntimeSettingsRecord, SaveAgentTurnCheckpointInput,
-    SaveProjectMemoryEntryInput, UpdateRuntimeSettingsInput, UpsertRuntimeMcpServerInput,
-    AgentBackgroundTaskRecord, UpsertAgentBackgroundTaskInput,
+    AgentBackgroundTaskRecord, AgentThreadRecord, AgentTimelineEvent,
+    AgentTurnCheckpointDiffRecord, AgentTurnCheckpointRecord, AgentTurnRewindResult,
+    AppendAgentTimelineEventInput, AppendRuntimeReplayEventInput, ApprovalRecord,
+    CreateAgentThreadInput, DeleteRuntimeMcpServerInput, DeleteRuntimeMcpServerResult,
+    EnqueueAgentApprovalInput, InvokeRuntimeMcpToolInput, ProjectMemoryEntry,
+    ResolveAgentApprovalInput, RewindAgentTurnInput, RuntimeMcpServerRecord,
+    RuntimeMcpToolCallRecord, RuntimeReplayEventRecord, RuntimeSettingsRecord,
+    SaveAgentTurnCheckpointInput, SaveProjectMemoryEntryInput, UpdateRuntimeSettingsInput,
+    UpsertAgentBackgroundTaskInput, UpsertRuntimeMcpServerInput,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -171,18 +172,16 @@ pub fn set_agent_sandbox_policy(
     policy: String,
 ) -> Result<String, String> {
     let app_data_dir = resolve_app_data_dir(&app_handle)?;
-    Ok(
-        settings_store::update_settings(
-            &app_data_dir,
-            UpdateRuntimeSettingsInput {
-                sandbox_policy: Some(policy),
-                permission_mode: None,
-                auto_resume_on_launch: None,
-                persist_resume_drafts: None,
-            },
-        )?
-        .sandbox_policy,
-    )
+    Ok(settings_store::update_settings(
+        &app_data_dir,
+        UpdateRuntimeSettingsInput {
+            sandbox_policy: Some(policy),
+            permission_mode: None,
+            auto_resume_on_launch: None,
+            persist_resume_drafts: None,
+        },
+    )?
+    .sandbox_policy)
 }
 
 #[tauri::command]

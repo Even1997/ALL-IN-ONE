@@ -8,7 +8,7 @@ import ts from 'typescript';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const sketchPageFilesPath = path.resolve(__dirname, '../src/modules/knowledge/sketchPageFiles.ts');
-const appPath = path.resolve(__dirname, '../src/App.tsx');
+const designWorkbenchViewPath = path.resolve(__dirname, '../src/components/design/DesignWorkbenchView.tsx');
 const wireframePath = path.resolve(__dirname, '../src/utils/wireframe.ts');
 const projectStorePath = path.resolve(__dirname, '../src/store/projectStore.ts');
 
@@ -33,7 +33,7 @@ test('sketch page file helpers keep page name derived from file name', async () 
 });
 
 test('sketch library tree displays page file names with markdown extension', async () => {
-  const source = await readFile(appPath, 'utf8');
+  const source = await readFile(designWorkbenchViewPath, 'utf8');
 
   assert.match(source, /name:\s*getSketchPageFileName\(node\.id\)/);
 });

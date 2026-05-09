@@ -18,7 +18,7 @@ import {
 import { getBuiltInRuntimeToolNames } from '../../src/utils/hostPlatform.ts';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
-const toolsPath = path.resolve(testDir, '../../src/components/workspace/tools.ts');
+const toolsPath = path.resolve(testDir, '../../src/modules/ai/runtime/tools/toolExecutor.ts');
 
 test('write and edit tools tell the model not to mutate files from save-like questions', async () => {
   const source = await readFile(toolsPath, 'utf8');

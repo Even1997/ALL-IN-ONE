@@ -23,8 +23,8 @@ test('desktop app shell exposes edge-to-edge workbench classes', async () => {
   assert.match(source, /app-shell-desktop/);
   assert.match(css, /\.app-shell-desktop\s*\{/);
   assert.match(css, /\.app-main-desktop\s*\{/);
-  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?width:\s*100vw;[\s\S]*?height:\s*100dvh;[\s\S]*?min-width:\s*1280px;[\s\S]*?min-height:\s*100dvh;/);
-  assert.match(css, /\.app-workbench-row\s*{[\s\S]*?height:\s*calc\(100dvh - var\(--desktop-topbar-height\)\);/);
+  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?width:\s*100%;[\s\S]*?height:\s*100%;[\s\S]*?min-width:\s*0;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden;/);
+  assert.match(css, /\.app-workbench-row\s*{[\s\S]*?min-height:\s*0;[\s\S]*?height:\s*100%;/);
 });
 
 test('workspace exposes horizontal and vertical resize splitters', async () => {
@@ -70,28 +70,25 @@ test('product knowledge view renders opened-file tab strip', async () => {
   const source = await readFile(productPath, 'utf8');
 
   assert.match(source, /openKnowledgeTabIds/);
-  assert.match(source, /pm-knowledge-open-tabs/);
-  assert.match(source, /handleCloseKnowledgeTab/);
-  assert.match(source, /setSelectedRequirementId\(tab\.id\)/);
+  assert.match(source, /openedKnowledgeEntryIds:\s*openKnowledgeTabIds/);
+  assert.match(source, /LazyProductKnowledgeWorkspacePane/);
 });
 
-test('product workbench renders a real divider between left nav and viewer', async () => {
+test('product workbench renders dedicated lazy workspace panes instead of inlining heavy shells', async () => {
   const source = await readFile(productPath, 'utf8');
-  const css = await readFile(appCssPath, 'utf8');
 
-  assert.match(source, /layoutPreferences/);
-  assert.match(source, /productWorkbenchLeftNavWidth/);
-  assert.match(source, /WorkbenchShell/);
-  assert.doesNotMatch(source, /pm-left-nav-divider/);
-  assert.match(css, /\.pm-workbench-shell-allotment\s*\{/);
-  assert.match(css, /\.pm-workbench-shell-allotment\s*{[\s\S]*?width:\s*100%;/);
+  assert.match(source, /const LazyProductKnowledgeWorkspacePane = lazy\(/);
+  assert.match(source, /const LazyProductPageWorkspacePane = lazy\(/);
+  assert.match(source, /const renderRequirementMain = \(\) =>/);
+  assert.match(source, /const renderPageLibraryMain = \(\) =>/);
 });
 
 test('product sidebar tabs render a full-height divider between knowledge and page', async () => {
   const source = await readFile(productPath, 'utf8');
   const css = await readFile(appCssPath, 'utf8');
 
-  assert.match(source, /pm-sidebar-tab-divider/);
+  assert.match(source, /sidebarTab === 'knowledge'/);
+  assert.match(source, /sidebarTab === 'page'/);
   assert.match(css, /\.pm-sidebar-tab-divider\s*\{/);
   assert.match(css, /\.pm-sidebar-tab-divider\s*{[\s\S]*?align-self:\s*stretch;/);
   assert.match(css, /\.pm-sidebar-tab-divider\s*{[\s\S]*?flex:\s*0 0 1px;/);
@@ -101,14 +98,15 @@ test('right app shell resizer only paints a one pixel line on hover', async () =
   const source = await readFile(appPath, 'utf8');
   const css = await readFile(appCssPath, 'utf8');
 
-  assert.match(source, /layoutPreferences/);
   assert.match(source, /desktopAiPaneWidth/);
   assert.match(source, /readLayoutSize/);
   assert.match(source, /writeLayoutSize/);
-  assert.match(source, /<Allotment className="app-workbench-allotment"/);
-  assert.match(css, /\.app-workbench-allotment\s*\{/);
-  assert.match(css, /\.app-workbench-allotment\s*{[\s\S]*?--sash-size:\s*8px;/);
-  assert.match(css, /\.app-workbench-allotment\s*{[\s\S]*?--sash-hover-size:\s*4px;/);
+  assert.match(source, /desktop-ai-resize-handle/);
+  assert.match(source, /aria-valuemin=\{DESKTOP_AI_PANE_WIDTH_BOUNDS\.min\}/);
+  assert.match(source, /aria-valuemax=\{DESKTOP_AI_PANE_WIDTH_BOUNDS\.max\}/);
+  assert.match(css, /\.desktop-ai-resize-handle\s*\{/);
+  assert.match(css, /\.desktop-ai-resize-handle::before\s*{[\s\S]*?width:\s*1px;/);
+  assert.match(css, /\.desktop-ai-resize-handle:hover::before,[\s\S]*?\.desktop-ai-resize-handle:focus-visible::before,[\s\S]*?\.is-resizing-ai \.desktop-ai-resize-handle::before\s*{[\s\S]*?opacity:\s*1;/);
   assert.match(css, /\.app-ai-activity-pane\s*\{/);
 });
 
@@ -136,8 +134,9 @@ test('desktop app shell is constrained to the 1280 by 800 design floor', async (
   assert.equal(mainWindow.height, 800);
   assert.equal(mainWindow.minWidth, 1280);
   assert.equal(mainWindow.minHeight, 800);
-  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?min-width:\s*1280px;/);
-  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?min-height:\s*800px;/);
+  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?min-width:\s*0;/);
+  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?min-height:\s*0;/);
+  assert.match(css, /@media\s*\(max-width:\s*1099px\)\s*{[\s\S]*?\.app-shell-desktop\s*{[\s\S]*?min-height:\s*100dvh;/);
 });
 
 test('desktop workbench has compact 1280px rules that preserve topbar controls', async () => {
@@ -190,16 +189,18 @@ test('desktop knowledge workspace lets ai push all three note columns left', asy
   const appSource = await readFile(appPath, 'utf8');
   const css = await readFile(appCssPath, 'utf8');
 
-  assert.match(appSource, /const DESKTOP_AI_PANE_WIDTH_BOUNDS = \{ min: 320, max: 420 \};/);
+  assert.match(appSource, /const DESKTOP_AI_PANE_WIDTH_BOUNDS = \{ min: 280, max: 560 \};/);
   assert.match(appSource, /const DEFAULT_DESKTOP_AI_PANE_WIDTH = 360;/);
   assert.match(css, /\.product-workbench-shell\s*{[\s\S]*?container-type:\s*inline-size;/);
   assert.match(css, /\.desktop-workbench-panels\s*{[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /\.app-workbench-main-shell\s*{[\s\S]*?flex:\s*1 1 auto;/);
   assert.match(css, /\.app-workbench-main-shell\s*{[\s\S]*?min-width:\s*0;/);
   assert.match(css, /\.desktop-active\s+\.gn-note-workspace\s*{[\s\S]*?min-width:\s*0;/);
-  assert.match(css, /\.gn-note-workspace\s*{[\s\S]*?grid-template-columns:\s*minmax\(190px,\s*0\.72fr\) minmax\(360px,\s*1\.45fr\) minmax\(220px,\s*0\.9fr\);/);
+  assert.match(css, /\.gn-note-workspace\s*{[\s\S]*?grid-template-columns:\s*var\(--gn-note-rail-width,\s*280px\) 8px minmax\(0,\s*1fr\) 8px 46px;/);
+  assert.match(css, /\.desktop-active\s+\.gn-note-workspace\s*{[\s\S]*?overflow-x:\s*auto;/);
+  assert.match(css, /\.desktop-active\s+\.gn-note-editor-column\s*{[\s\S]*?min-width:\s*320px;/);
   assert.match(css, /\.gn-note-editor-column::before,[\s\S]*?\.gn-note-side::before\s*{[\s\S]*?width:\s*1px;/);
-  assert.match(css, /\.app-workbench-ai-shell::before\s*{[\s\S]*?width:\s*1px;/);
+  assert.match(css, /\.app-workbench-ai-shell::before\s*{[\s\S]*?display:\s*none;/);
   assert.doesNotMatch(css, /\.desktop-workbench-panels \.desktop-ai-shell\s*{[\s\S]*?position:\s*absolute;/);
   assert.match(css, /@container\s*\(max-width:\s*760px\)\s*{[\s\S]*?\.gn-note-side\s*{[\s\S]*?display:\s*none;/);
 });
@@ -207,9 +208,10 @@ test('desktop knowledge workspace lets ai push all three note columns left', asy
 test('desktop product workbench uses dedicated shell and workspace files', async () => {
   const productSource = await readFile(productPath, 'utf8');
 
-  assert.match(productSource, /WorkbenchShell/);
-  assert.match(productSource, /KnowledgeWorkspace/);
-  assert.match(productSource, /PageWorkspace/);
+  assert.match(productSource, /LazyProductKnowledgeWorkspacePane/);
+  assert.match(productSource, /LazyProductPageWorkspacePane/);
+  assert.match(productSource, /ProductKnowledgeWorkspacePane/);
+  assert.match(productSource, /ProductPageWorkspacePane/);
 });
 
 test('knowledge and page workspaces share monochrome workbench shell classes', async () => {
@@ -237,11 +239,12 @@ test('workbench style remains user-selectable and its shared tokens are monochro
   assert.doesNotMatch(css, /:root\[data-style='workbench'\]\[data-theme='light'\]\s*{[\s\S]*?#3b82f6/);
 });
 
-test('desktop header drops legacy style switching and only keeps the monochrome workbench style', async () => {
+test('desktop header drops the inline style switcher while app styles stay storage-driven', async () => {
   const source = await readFile(appPath, 'utf8');
   const themeSource = await readFile(appThemePath, 'utf8');
 
   assert.doesNotMatch(source, /app-style-switcher/);
-  assert.doesNotMatch(source, /APP_STYLE_OPTIONS/);
-  assert.match(themeSource, /export type AppStyle = 'workbench';/);
+  assert.doesNotMatch(source, /<select[\s\S]*app-style-switcher/);
+  assert.match(themeSource, /export const APP_STYLE_OPTIONS/);
+  assert.match(themeSource, /getInitialAppStyle/);
 });

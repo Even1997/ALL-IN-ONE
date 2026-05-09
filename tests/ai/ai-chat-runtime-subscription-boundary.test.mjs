@@ -11,15 +11,14 @@ test('AIChat subscribes to runtime projection instead of owning runtime executio
   const source = await readFile(aiChatPath, 'utf8');
 
   assert.match(source, /useRuntimeConversationGateway/);
-  assert.match(source, /interactionPort:/);
-  assert.match(source, /waitForApproval:\s*waitForRuntimeApproval/);
+  assert.match(source, /useAIChatSidecarSessionActions/);
   assert.doesNotMatch(source, /executeRuntimeBuiltInAgentTurn/);
   assert.doesNotMatch(source, /executeRuntimeMcpTurn/);
   assert.doesNotMatch(source, /createRuntimeReplayExecutionController/);
   assert.doesNotMatch(source, /createRuntimeChatReplayExecutionController/);
   assert.doesNotMatch(source, /createRuntimeChatStreamingMessageAssembler/);
   assert.doesNotMatch(source, /new ToolExecutor\(/);
-  assert.doesNotMatch(source, /waitForApproval:\s*async\s*\(\)\s*=>\s*false/);
+  assert.doesNotMatch(source, /submitRuntimeChatTurn\(/);
   assert.doesNotMatch(source, /submitRuntimeChatTurn\(\{[\s\S]*?pendingQuestionActionsRef,/);
   assert.doesNotMatch(source, /submitRuntimeChatTurn\(\{[\s\S]*?BUILT_IN_EXECUTION_TOOLS,/);
   assert.doesNotMatch(source, /submitRuntimeChatTurn\(\{[\s\S]*?READ_ONLY_CHAT_TOOLS,/);

@@ -3,21 +3,17 @@
 
 mod agent_runtime;
 mod agent_shell;
+mod runtime_sidecar;
 
 use agent_runtime::commands::{
-    append_agent_timeline_event, append_runtime_replay_event, create_agent_thread, enqueue_agent_approval,
-    delete_runtime_mcp_server,
-    get_agent_turn_checkpoint_diff,
-    get_agent_runtime_settings, get_agent_sandbox_policy,
-    invoke_runtime_mcp_tool,
-    list_agent_background_tasks,
-    list_agent_approvals, list_agent_threads, list_project_memory_entries, list_runtime_replay_events,
-    list_agent_turn_checkpoints,
-    rewind_agent_turn,
-    list_runtime_mcp_servers, list_runtime_mcp_tool_calls, resolve_agent_approval, save_project_memory_entry,
-    save_agent_turn_checkpoint,
-    set_agent_sandbox_policy, update_agent_runtime_settings,
-    upsert_agent_background_task,
+    append_agent_timeline_event, append_runtime_replay_event, create_agent_thread,
+    delete_runtime_mcp_server, enqueue_agent_approval, get_agent_runtime_settings,
+    get_agent_sandbox_policy, get_agent_turn_checkpoint_diff, invoke_runtime_mcp_tool,
+    list_agent_approvals, list_agent_background_tasks, list_agent_threads,
+    list_agent_turn_checkpoints, list_project_memory_entries, list_runtime_mcp_servers,
+    list_runtime_mcp_tool_calls, list_runtime_replay_events, resolve_agent_approval,
+    rewind_agent_turn, save_agent_turn_checkpoint, save_project_memory_entry,
+    set_agent_sandbox_policy, update_agent_runtime_settings, upsert_agent_background_task,
     upsert_runtime_mcp_server,
 };
 use agent_shell::commands::{
@@ -26,6 +22,9 @@ use agent_shell::commands::{
 };
 #[cfg(target_os = "windows")]
 use encoding_rs::{Encoding, BIG5, EUC_KR, GBK, SHIFT_JIS, UTF_8};
+use runtime_sidecar::{
+    get_runtime_sidecar_status, start_runtime_sidecar, stop_runtime_sidecar, RuntimeSidecarManager,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
@@ -77,7 +76,10 @@ fn canonical_or_normalized_path(path: &Path) -> PathBuf {
 fn path_stays_under_root(path: &Path, root: &Path) -> bool {
     let normalized_path = canonical_or_normalized_path(path);
     let normalized_root = canonical_or_normalized_path(root);
-    let path_text = normalized_path.to_string_lossy().replace('\\', "/").to_lowercase();
+    let path_text = normalized_path
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_lowercase();
     let root_text = normalized_root
         .to_string_lossy()
         .replace('\\', "/")
@@ -622,7 +624,8 @@ fn build_project_storage_settings(
     fs::create_dir_all(&projects_root)
         .map_err(|e| format!("Failed to create projects directory: {}", e))?;
 
-    let root_path = display_project_storage_path(projects_root.canonicalize().unwrap_or(projects_root));
+    let root_path =
+        display_project_storage_path(projects_root.canonicalize().unwrap_or(projects_root));
 
     Ok(ProjectStorageSettings {
         root_path,
@@ -697,19 +700,34 @@ fn ensure_goodnight_skill_library_dirs(app_data_dir: &Path) -> Result<(), String
         get_goodnight_builtin_skill_root_from_data_dir(app_data_dir),
         get_goodnight_imported_skill_root_from_data_dir(app_data_dir),
     ] {
-        fs::create_dir_all(&dir)
-            .map_err(|error| format!("Failed to create skill library directory {}: {}", dir.display(), error))?;
+        fs::create_dir_all(&dir).map_err(|error| {
+            format!(
+                "Failed to create skill library directory {}: {}",
+                dir.display(),
+                error
+            )
+        })?;
     }
 
     Ok(())
 }
 
 fn copy_directory_contents(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
-    fs::create_dir_all(target_dir)
-        .map_err(|error| format!("Failed to create directory {}: {}", target_dir.display(), error))?;
+    fs::create_dir_all(target_dir).map_err(|error| {
+        format!(
+            "Failed to create directory {}: {}",
+            target_dir.display(),
+            error
+        )
+    })?;
 
-    let entries = fs::read_dir(source_dir)
-        .map_err(|error| format!("Failed to read directory {}: {}", source_dir.display(), error))?;
+    let entries = fs::read_dir(source_dir).map_err(|error| {
+        format!(
+            "Failed to read directory {}: {}",
+            source_dir.display(),
+            error
+        )
+    })?;
 
     for entry in entries {
         let entry = entry.map_err(|error| {
@@ -746,8 +764,13 @@ fn ensure_builtin_skills_installed(app_data_dir: &Path) -> Result<(), String> {
     let builtin_root = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir);
     let expected_skill_ids: HashSet<&str> = GOODNIGHT_BUILTIN_SKILL_IDS.iter().copied().collect();
 
-    let installed_entries = fs::read_dir(&builtin_root)
-        .map_err(|error| format!("Failed to read built-in skill directory {}: {}", builtin_root.display(), error))?;
+    let installed_entries = fs::read_dir(&builtin_root).map_err(|error| {
+        format!(
+            "Failed to read built-in skill directory {}: {}",
+            builtin_root.display(),
+            error
+        )
+    })?;
 
     for entry in installed_entries {
         let entry = entry.map_err(|error| {
@@ -803,10 +826,16 @@ fn parse_skill_frontmatter(markdown: &str) -> (Option<String>, Option<String>) {
         }
 
         if let Some((key, value)) = line.split_once(':') {
-            let normalized_value = value.trim().trim_matches('"').trim_matches('\'').to_string();
+            let normalized_value = value
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string();
             match key.trim() {
                 "name" if !normalized_value.is_empty() => name = Some(normalized_value),
-                "description" if !normalized_value.is_empty() => description = Some(normalized_value),
+                "description" if !normalized_value.is_empty() => {
+                    description = Some(normalized_value)
+                }
                 _ => {}
             }
         }
@@ -882,7 +911,10 @@ fn generate_skill_manifest(
     })
 }
 
-fn load_skill_descriptor(skill_dir: &Path, allow_seed_manifest: bool) -> Result<SkillDescriptor, String> {
+fn load_skill_descriptor(
+    skill_dir: &Path,
+    allow_seed_manifest: bool,
+) -> Result<SkillDescriptor, String> {
     let prompt_path = skill_dir.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME);
     if !prompt_path.is_file() {
         return Err(format!(
@@ -891,8 +923,13 @@ fn load_skill_descriptor(skill_dir: &Path, allow_seed_manifest: bool) -> Result<
         ));
     }
 
-    let prompt_source = read_file_as_string(&prompt_path)
-        .map_err(|error| format!("Failed to read skill prompt {}: {}", prompt_path.display(), error))?;
+    let prompt_source = read_file_as_string(&prompt_path).map_err(|error| {
+        format!(
+            "Failed to read skill prompt {}: {}",
+            prompt_path.display(),
+            error
+        )
+    })?;
     let manifest_path = skill_dir.join(GOODNIGHT_SKILL_MANIFEST_FILE_NAME);
     let (frontmatter_name, _) = parse_skill_frontmatter(&prompt_source);
     let fallback_id = skill_dir
@@ -969,9 +1006,13 @@ fn list_skill_directories_recursive(root_dir: &Path) -> Result<Vec<PathBuf>, Str
     let mut pending = vec![root_dir.to_path_buf()];
 
     while let Some(current_dir) = pending.pop() {
-        for entry in fs::read_dir(&current_dir)
-            .map_err(|error| format!("Failed to read skills directory {}: {}", current_dir.display(), error))?
-        {
+        for entry in fs::read_dir(&current_dir).map_err(|error| {
+            format!(
+                "Failed to read skills directory {}: {}",
+                current_dir.display(),
+                error
+            )
+        })? {
             let entry = entry.map_err(|error| {
                 format!(
                     "Failed to read skills directory entry in {}: {}",
@@ -1007,7 +1048,11 @@ fn is_system_skill(category: &str) -> bool {
 }
 
 fn is_skill_synced_to_codex(home_dir: &Path, skill_id: &str) -> bool {
-    home_dir.join(".codex").join("skills").join(skill_id).is_dir()
+    home_dir
+        .join(".codex")
+        .join("skills")
+        .join(skill_id)
+        .is_dir()
 }
 
 fn get_claude_command_path(home_dir: &Path, skill_id: &str) -> PathBuf {
@@ -1058,12 +1103,14 @@ fn build_skill_entry(
 }
 
 fn find_library_skill_dir(app_data_dir: &Path, skill_id: &str) -> Option<PathBuf> {
-    let imported_candidate = get_goodnight_imported_skill_root_from_data_dir(app_data_dir).join(skill_id);
+    let imported_candidate =
+        get_goodnight_imported_skill_root_from_data_dir(app_data_dir).join(skill_id);
     if imported_candidate.is_dir() {
         return Some(imported_candidate);
     }
 
-    let builtin_candidate = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir).join(skill_id);
+    let builtin_candidate =
+        get_goodnight_builtin_skill_root_from_data_dir(app_data_dir).join(skill_id);
     if builtin_candidate.is_dir() {
         if let Ok(descriptor) = load_skill_descriptor(&builtin_candidate, false) {
             if is_system_skill(&descriptor.category) {
@@ -1096,8 +1143,13 @@ fn download_github_contents(
     api_url: &str,
     target_dir: &Path,
 ) -> Result<(), String> {
-    fs::create_dir_all(target_dir)
-        .map_err(|error| format!("Failed to create GitHub import directory {}: {}", target_dir.display(), error))?;
+    fs::create_dir_all(target_dir).map_err(|error| {
+        format!(
+            "Failed to create GitHub import directory {}: {}",
+            target_dir.display(),
+            error
+        )
+    })?;
 
     let response = client
         .get(api_url)
@@ -1114,10 +1166,7 @@ fn download_github_contents(
     )
     .map_err(|error| format!("Failed to parse GitHub contents response: {}", error))?;
 
-    let entries = payload
-        .as_array()
-        .cloned()
-        .unwrap_or_else(|| vec![payload]);
+    let entries = payload.as_array().cloned().unwrap_or_else(|| vec![payload]);
 
     for entry in entries {
         let entry_type = entry
@@ -1134,15 +1183,32 @@ fn download_github_contents(
                 let download_url = entry
                     .get("download_url")
                     .and_then(|value| value.as_str())
-                    .ok_or_else(|| format!("GitHub file entry {} does not include a download URL.", name))?;
+                    .ok_or_else(|| {
+                        format!(
+                            "GitHub file entry {} does not include a download URL.",
+                            name
+                        )
+                    })?;
                 let bytes = client
                     .get(download_url)
                     .send()
-                    .map_err(|error| format!("Failed to download GitHub file {}: {}", download_url, error))?
+                    .map_err(|error| {
+                        format!("Failed to download GitHub file {}: {}", download_url, error)
+                    })?
                     .error_for_status()
-                    .map_err(|error| format!("GitHub file download failed for {}: {}", download_url, error))?
+                    .map_err(|error| {
+                        format!(
+                            "GitHub file download failed for {}: {}",
+                            download_url, error
+                        )
+                    })?
                     .bytes()
-                    .map_err(|error| format!("Failed to read GitHub file bytes {}: {}", download_url, error))?;
+                    .map_err(|error| {
+                        format!(
+                            "Failed to read GitHub file bytes {}: {}",
+                            download_url, error
+                        )
+                    })?;
 
                 fs::write(target_dir.join(name), &bytes).map_err(|error| {
                     format!(
@@ -1156,7 +1222,12 @@ fn download_github_contents(
                 let next_url = entry
                     .get("url")
                     .and_then(|value| value.as_str())
-                    .ok_or_else(|| format!("GitHub directory entry {} does not include an API URL.", name))?;
+                    .ok_or_else(|| {
+                        format!(
+                            "GitHub directory entry {} does not include an API URL.",
+                            name
+                        )
+                    })?;
                 download_github_contents(client, next_url, &target_dir.join(name))?;
             }
             _ => {}
@@ -1404,10 +1475,7 @@ fn run_local_agent_prompt(params: LocalAgentPromptParams) -> LocalAgentResult {
             };
             let changed_paths = match (before_changed_paths, after_changed_paths) {
                 (Some(before), Some(after)) => {
-                    let mut paths = after
-                        .difference(&before)
-                        .cloned()
-                        .collect::<Vec<String>>();
+                    let mut paths = after.difference(&before).cloned().collect::<Vec<String>>();
                     paths.sort();
                     paths
                 }
@@ -1493,7 +1561,10 @@ fn import_local_skill(
 
     let source_path = PathBuf::from(params.source_path.trim());
     if !source_path.exists() {
-        return Err(format!("Skill source path does not exist: {}", source_path.display()));
+        return Err(format!(
+            "Skill source path does not exist: {}",
+            source_path.display()
+        ));
     }
 
     let imported_root = get_goodnight_imported_skill_root_from_data_dir(&app_data_dir);
@@ -1506,8 +1577,13 @@ fn import_local_skill(
         copy_directory_contents(&source_path, &target_dir)?;
         target_dir
     } else {
-        let prompt_source = read_file_as_string(&source_path)
-            .map_err(|error| format!("Failed to read skill source {}: {}", source_path.display(), error))?;
+        let prompt_source = read_file_as_string(&source_path).map_err(|error| {
+            format!(
+                "Failed to read skill source {}: {}",
+                source_path.display(),
+                error
+            )
+        })?;
         let (frontmatter_name, _) = parse_skill_frontmatter(&prompt_source);
         let file_stem = source_path
             .file_stem()
@@ -1531,14 +1607,17 @@ fn import_local_skill(
         .map_err(|error| {
             format!(
                 "Failed to write imported skill prompt {}: {}",
-                target_dir.join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME).display(),
+                target_dir
+                    .join(GOODNIGHT_SKILL_MARKDOWN_FILE_NAME)
+                    .display(),
                 error
             )
         })?;
 
         let manifest = generate_skill_manifest(&skill_id, &skill_name, "imported");
-        let manifest_source = serde_json::to_string_pretty(&manifest)
-            .map_err(|error| format!("Failed to serialize generated imported manifest: {}", error))?;
+        let manifest_source = serde_json::to_string_pretty(&manifest).map_err(|error| {
+            format!("Failed to serialize generated imported manifest: {}", error)
+        })?;
         fs::write(
             target_dir.join(GOODNIGHT_SKILL_MANIFEST_FILE_NAME),
             manifest_source,
@@ -1546,7 +1625,9 @@ fn import_local_skill(
         .map_err(|error| {
             format!(
                 "Failed to write imported skill manifest {}: {}",
-                target_dir.join(GOODNIGHT_SKILL_MANIFEST_FILE_NAME).display(),
+                target_dir
+                    .join(GOODNIGHT_SKILL_MANIFEST_FILE_NAME)
+                    .display(),
                 error
             )
         })?;
@@ -1676,8 +1757,13 @@ fn sync_skill_to_runtime(
                     error
                 )
             })?;
-            fs::write(&command_path, prompt_source)
-                .map_err(|error| format!("Failed to write Claude command {}: {}", command_path.display(), error))?;
+            fs::write(&command_path, prompt_source).map_err(|error| {
+                format!(
+                    "Failed to write Claude command {}: {}",
+                    command_path.display(),
+                    error
+                )
+            })?;
             command_path
         }
     };
@@ -1714,13 +1800,19 @@ fn delete_library_skill(
         }
     }
 
-    let imported_dir = get_goodnight_imported_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
+    let imported_dir =
+        get_goodnight_imported_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
     if !imported_dir.is_dir() {
         return Err("Only imported GoodNight skills can be deleted.".to_string());
     }
 
-    fs::remove_dir_all(&imported_dir)
-        .map_err(|error| format!("Failed to delete skill {}: {}", imported_dir.display(), error))?;
+    fs::remove_dir_all(&imported_dir).map_err(|error| {
+        format!(
+            "Failed to delete skill {}: {}",
+            imported_dir.display(),
+            error
+        )
+    })?;
 
     Ok(SkillDeleteResult {
         skill_id,
@@ -2341,7 +2433,12 @@ fn tool_bash(params: BashParams) -> ToolResult {
         }
     }
 
-    let output = run_shell_command(command, params.shell.as_deref(), params.cwd.as_ref(), params.timeout);
+    let output = run_shell_command(
+        command,
+        params.shell.as_deref(),
+        params.cwd.as_ref(),
+        params.timeout,
+    );
 
     match output {
         Ok(out) => {
@@ -2565,6 +2662,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .manage(RuntimeSidecarManager::default())
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -2585,7 +2683,9 @@ pub fn run() {
                         color: None,
                     })
                     .ok();
-                window.set_background_color(Some(tauri::utils::config::Color(0, 0, 0, 0))).ok();
+                window
+                    .set_background_color(Some(tauri::utils::config::Color(0, 0, 0, 0)))
+                    .ok();
                 window.set_shadow(false).ok();
             }
 
@@ -2647,6 +2747,9 @@ pub fn run() {
             import_knowledge_assets,
             read_text_file,
             open_path_in_shell,
+            start_runtime_sidecar,
+            get_runtime_sidecar_status,
+            stop_runtime_sidecar,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -2657,8 +2760,8 @@ pub fn run() {
 mod tests {
     use super::{
         display_project_storage_path, normalize_project_storage_root_path,
-        normalize_saved_project_storage_root_path,
-        path_stays_under_root, resolve_project_storage_root_path,
+        normalize_saved_project_storage_root_path, path_stays_under_root,
+        resolve_project_storage_root_path,
     };
     use std::path::PathBuf;
 
@@ -2743,7 +2846,9 @@ mod tests {
     #[test]
     fn display_project_storage_path_hides_windows_extended_length_prefix() {
         assert_eq!(
-            display_project_storage_path(PathBuf::from(r"\\?\C:\Users\test\Documents\GoodNight\projects")),
+            display_project_storage_path(PathBuf::from(
+                r"\\?\C:\Users\test\Documents\GoodNight\projects"
+            )),
             r"C:\Users\test\Documents\GoodNight\projects"
         );
     }

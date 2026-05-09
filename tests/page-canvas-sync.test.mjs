@@ -6,9 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const appPath = path.resolve(__dirname, '../src/App.tsx');
+const designWorkbenchViewPath = path.resolve(__dirname, '../src/components/design/DesignWorkbenchView.tsx');
 const canvasPath = path.resolve(__dirname, '../src/components/canvas/Canvas.tsx');
-const productWorkbenchPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
+const productPageWorkspacePanePath = path.resolve(__dirname, '../src/components/product/ProductPageWorkspacePane.tsx');
 
 test('page canvas keeps board height tied to the selected frame', async () => {
   const source = await readFile(canvasPath, 'utf8');
@@ -24,36 +24,35 @@ test('page canvas keeps modules inside the frame coordinate system while zooming
 });
 
 test('page workspace keeps add-module action in the header instead of the canvas chrome', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const source = await readFile(productPageWorkspacePanePath, 'utf8');
   const canvasTag = source.match(/<Canvas[\s\S]*?\/>/)?.[0] ?? '';
 
-  assert.match(source, /<button className="doc-action-btn" type="button" onClick=\{handleAddModule\}>/);
-  assert.ok(canvasTag.length > 0, 'expected Canvas tag in ProductWorkbench');
-  assert.doesNotMatch(canvasTag, /onAddModule=\{handleAddModule\}/);
+  assert.match(source, /<button className="doc-action-btn" type="button" onClick=\{onAddModule\}>/);
+  assert.ok(canvasTag.length > 0, 'expected Canvas tag in ProductPageWorkspacePane');
+  assert.doesNotMatch(canvasTag, /onAddModule=\{onAddModule\}/);
 });
 
 test('page workspace exposes a floating frame editor and syncs frame presets into the current wireframe', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const source = await readFile(productPageWorkspacePanePath, 'utf8');
 
-  assert.match(source, /const \[isFrameEditorOpen, setIsFrameEditorOpen\] = useState\(false\);/);
-  assert.match(source, /const selectedPageFrame = selectedPageWireframe\?\.frame \|\| [^;]+;/);
-  assert.match(source, /const handleApplyFrameValue = useCallback\(\(nextFrame: string\) => \{/);
-  assert.match(source, /updateWireframeFrame\(selectedPage, nextFrame\);/);
-  assert.match(source, /onClick=\{\(\) => handleApplyFrameValue\('1280x800'\)\}/);
-  assert.match(source, /onClick=\{\(\) => handleApplyFrameValue\('390x844'\)\}/);
+  assert.match(source, /isFrameEditorOpen/);
+  assert.match(source, /frameEditorDraft/);
+  assert.match(source, /onApplyFrameValue/);
+  assert.match(source, /onClick=\{\(\) => onApplyFrameValue\('1280x800'\)\}/);
+  assert.match(source, /onClick=\{\(\) => onApplyFrameValue\('390x844'\)\}/);
   assert.match(source, /编辑 Frame/);
 });
 
 test('page canvas and sketch preview render text wireframe modules with dedicated text styling', async () => {
   const canvasSource = await readFile(canvasPath, 'utf8');
-  const appSource = await readFile(appPath, 'utf8');
-  const productWorkbenchSource = await readFile(productWorkbenchPath, 'utf8');
+  const designWorkbenchViewSource = await readFile(designWorkbenchViewPath, 'utf8');
+  const productPageWorkspacePaneSource = await readFile(productPageWorkspacePanePath, 'utf8');
 
   assert.match(canvasSource, /getWireframeModuleVisualType/);
   assert.match(canvasSource, /const isTextModule = getModuleContentType\(element\) === 'text';/);
-  assert.match(appSource, /getWireframeModuleVisualType/);
-  assert.match(appSource, /const isTextModule = getWireframeModuleVisualType\(element\.props\.moduleType, element\.props\.content\) === 'text';/);
-  assert.match(productWorkbenchSource, /<span>\{'模块类型'\}<\/span>/);
-  assert.match(productWorkbenchSource, /<option value="线框">线框<\/option>/);
-  assert.match(productWorkbenchSource, /<option value="文字">文字<\/option>/);
+  assert.match(designWorkbenchViewSource, /getWireframeModuleVisualType/);
+  assert.match(designWorkbenchViewSource, /const isTextModule = getWireframeModuleVisualType\(element\.props\.moduleType, element\.props\.content\) === 'text';/);
+  assert.match(productPageWorkspacePaneSource, /<span>模块类型<\/span>/);
+  assert.match(productPageWorkspacePaneSource, /<option value="线框">线框<\/option>/);
+  assert.match(productPageWorkspacePaneSource, /<option value="文字">文字<\/option>/);
 });

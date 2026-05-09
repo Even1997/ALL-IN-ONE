@@ -6,14 +6,18 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const coordinatorPath = path.resolve(__dirname, '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts');
+const helperPath = path.resolve(__dirname, '../../src/modules/ai/chat/projectFileOperations.ts');
 
 test('AI chat converts failed write or edit access errors into project file recovery proposals', async () => {
-  const source = await readFile(aiChatPath, 'utf8');
+  const [coordinatorSource, helperSource] = await Promise.all([
+    readFile(coordinatorPath, 'utf8'),
+    readFile(helperPath, 'utf8'),
+  ]);
 
-  assert.match(source, /buildRuntimeWriteRecoveryProposal/);
-  assert.match(source, /isProjectFileWriteAccessFailure/);
-  assert.match(source, /buildProjectFileOperationFromToolCall/);
-  assert.match(source, /const recoveryProposal = await buildRuntimeWriteRecoveryProposal\(/);
-  assert.match(source, /projectFileProposal:\s*message\.projectFileProposal\s*\?\?\s*recoveryProposal/);
+  assert.match(coordinatorSource, /buildRuntimeWriteRecoveryProposal/);
+  assert.match(coordinatorSource, /const recoveryProposal = await buildRuntimeWriteRecoveryProposal\(agentTurn\.toolCalls\);/);
+  assert.match(coordinatorSource, /projectFileProposal:\s*message\.projectFileProposal \?\? recoveryProposal \?\? undefined/);
+  assert.match(helperSource, /isProjectFileWriteAccessFailure/);
+  assert.match(helperSource, /buildProjectFileOperationFromToolCall/);
 });

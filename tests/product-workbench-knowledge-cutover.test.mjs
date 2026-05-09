@@ -7,7 +7,7 @@ const readProductWorkbenchSource = () =>
 
 test('product workbench source wires KnowledgeNoteWorkspace without retrieval-mode props', async () => {
   const source = await readProductWorkbenchSource();
-  const workspaceInvocation = source.match(/<KnowledgeNoteWorkspace[\s\S]*?\/>/)?.[0] ?? '';
+  const workspaceInvocation = source.match(/<LazyProductKnowledgeWorkspacePane[\s\S]*?\/>/)?.[0] ?? '';
 
   assert.ok(workspaceInvocation.length > 0);
   assert.doesNotMatch(workspaceInvocation, /knowledgeRetrievalMethod=\{/);

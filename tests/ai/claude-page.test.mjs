@@ -14,13 +14,13 @@ test('app routes Agent to a dedicated page and keeps legacy AI in supported role
 
   assert.doesNotMatch(source, /import\s+\{\s*ClaudePage\s*\}\s+from\s+'\.\/components\/ai\/ClaudePage';/);
   assert.doesNotMatch(source, /<ClaudePage\s*\/>/);
-  assert.match(source, /AgentShellPage/);
+  assert.match(source, /LazyAgentShellPage/);
   assert.match(source, /currentRole === 'agent'[\s\S]*renderAgentView\(\)/);
-  assert.match(source, /roleShowsLegacyAiWorkspace\(currentRole\)/);
-  assert.match(source, /<AIWorkspace collapsed=\{isDesktopAiCollapsed\} onCollapsedChange=\{setIsDesktopAiCollapsed\} \/>/);
-  assert.match(source, /<main className="app-main app-main-desktop">\{appDesktopContent\}<\/main>/);
-  assert.match(source, /<aside className="app-ai-activity-pane">\s*<AIWorkspace \/>\s*<\/aside>/);
-  assert.match(source, /\{canShowLegacyAiWorkspace \? <AIWorkspace \/> : null\}/);
+  assert.match(source, /showWorkspaceSidebar = currentRole !== 'agent'/);
+  assert.match(source, /<LazyAIWorkspace collapsed=\{isDesktopAiCollapsed\} onCollapsedChange=\{setIsDesktopAiCollapsed\} \/>/);
+  assert.match(source, /<main className="app-main app-main-desktop">\s*<Suspense fallback=\{WORKBENCH_LAZY_FALLBACK\}>\{appDesktopContent\}<\/Suspense>\s*<\/main>/);
+  assert.match(source, /<aside className="app-ai-activity-pane">\s*<Suspense fallback=\{WORKBENCH_LAZY_FALLBACK\}>\s*<LazyAIWorkspace \/>\s*<\/Suspense>\s*<\/aside>/);
+  assert.match(source, /\{showWorkspaceSidebar \? \(\s*<Suspense fallback=\{WORKBENCH_LAZY_FALLBACK\}>\s*<LazyAIWorkspace \/>\s*<\/Suspense>/);
 });
 
 test('ai chat no longer exposes a dedicated claude full-page variant', async () => {
@@ -28,4 +28,3 @@ test('ai chat no longer exposes a dedicated claude full-page variant', async () 
 
   assert.doesNotMatch(source, /gn-agent-full-page/);
 });
-

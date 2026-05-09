@@ -11,13 +11,18 @@ const coordinatorPath = path.resolve(
   __dirname,
   '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts',
 );
+const sidecarHookPath = path.resolve(__dirname, '../../src/components/workspace/useAIChatSidecarSessionActions.ts');
 
 test('chat delegates direct-chat execution to coordinator entry points and runtime session helpers', async () => {
-  const source = await readFile(chatPath, 'utf8');
-  const coordinator = await readFile(coordinatorPath, 'utf8');
+  const [source, coordinator, sidecarHook] = await Promise.all([
+    readFile(chatPath, 'utf8'),
+    readFile(coordinatorPath, 'utf8'),
+    readFile(sidecarHookPath, 'utf8'),
+  ]);
 
-  assert.match(source, /runtimeChatTurnCoordinator/);
-  assert.match(source, /submitRuntimeChatTurn/);
+  assert.match(source, /useAIChatSidecarSessionActions/);
+  assert.match(sidecarHook, /submitRuntimeSidecarTurn/);
+  assert.doesNotMatch(source, /submitRuntimeChatTurn/);
   assert.match(coordinator, /runRuntimeChatBuiltInAgentTurn/);
   assert.match(coordinator, /runRuntimeLocalAgentExecution/);
   assert.match(coordinator, /createEmptyAgentTurnSession/);

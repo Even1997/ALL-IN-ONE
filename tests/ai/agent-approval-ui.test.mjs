@@ -8,6 +8,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const riskPolicyPath = path.resolve(__dirname, '../../src/modules/ai/runtime/approval/riskPolicy.ts');
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const runtimeInteractionCardsPath = path.resolve(
+  __dirname,
+  '../../src/components/workspace/AIChatRuntimeInteractionCards.tsx',
+);
 const runtimeSummaryPath = path.resolve(
   __dirname,
   '../../src/components/ai/gn-agent-shell/GNAgentRuntimeSummary.tsx',
@@ -48,12 +52,14 @@ test('AIChat wires approval gating and inline approval cards into the existing s
   assert.match(source, /run_local_agent_prompt/);
 });
 
-test('AIChat and runtime summary expose approval state with approval-policy wording', async () => {
+test('approval cards and runtime summary expose approval actions and approval-policy wording', async () => {
   const chat = await readFile(aiChatPath, 'utf8');
+  const cards = await readFile(runtimeInteractionCardsPath, 'utf8');
   const summary = await readFile(runtimeSummaryPath, 'utf8');
 
-  assert.match(chat, /批准执行/);
-  assert.match(chat, /拒绝|取消/);
+  assert.match(chat, /LazyAIChatRuntimeApprovalList/);
+  assert.match(cards, /批准执行/);
+  assert.match(cards, /拒绝/);
   assert.match(summary, /approval:/i);
   assert.match(summary, /approval policy/i);
 });

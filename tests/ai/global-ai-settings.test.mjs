@@ -10,6 +10,8 @@ const cssPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.c
 const workspaceCssPath = path.resolve(__dirname, '../../src/components/ai/AIWorkspace.css');
 const storePath = path.resolve(__dirname, '../../src/modules/ai/store/globalAIStore.ts');
 const chatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const settingsTabPath = path.resolve(__dirname, '../../src/components/workspace/AIChatAISettingsTab.tsx');
+const settingsHookPath = path.resolve(__dirname, '../../src/components/workspace/useAIChatSettingsState.ts');
 
 test('global ai settings store persists config lists and selected config state', async () => {
   const source = await readFile(storePath, 'utf8');
@@ -48,25 +50,29 @@ test('ai chat exposes active AI name in the compact composer meta instead of an 
 });
 
 test('ai settings modal exposes one explicit save action while keeping model switching hooks', async () => {
-  const source = await readFile(chatPath, 'utf8');
+  const [chatSource, settingsTabSource, settingsHookSource] = await Promise.all([
+    readFile(chatPath, 'utf8'),
+    readFile(settingsTabPath, 'utf8'),
+    readFile(settingsHookPath, 'utf8'),
+  ]);
 
-  assert.equal((source.match(/onClick=\{handleApplySettings\}/g) || []).length, 1);
-  assert.match(source, /createPortal/);
-  assert.match(source, /document\.body/);
-  assert.match(source, /chat-settings-modal-backdrop/);
+  assert.equal((settingsTabSource.match(/onClick=\{handleApplySettings\}/g) || []).length, 1);
+  assert.match(chatSource, /createPortal/);
+  assert.match(chatSource, /document\.body/);
+  assert.match(chatSource, /chat-settings-modal-backdrop/);
   assert.match(
-    source,
+    chatSource,
     /<div className="chat-settings-modal-backdrop" onClick=\{closeSettings\}>\s*<section\s+className="chat-settings-drawer open"[\s\S]*?onClick=\{\(event\) => event\.stopPropagation\(\)\}/
   );
-  assert.match(source, /role="dialog"/);
-  assert.match(source, /value=\{settingsDraft\.model\}/);
-  assert.match(source, /model:\s*event\.target\.value/);
-  assert.match(source, /settingsModelOptions\.map\(\(candidate\)/);
-  assert.match(source, /model:\s*candidate/);
-  assert.match(source, /syncModelCatalog\(settingsDraft\.provider,\s*settingsDraft\.baseURL,\s*settingsModelOptions\)/);
-  assert.match(source, /contextWindowTokens:\s*config\?\.contextWindowTokens\s*\|\|\s*258000/);
-  assert.match(source, /value=\{Math\.round\(settingsDraft\.contextWindowTokens \/ 1000\)\}/);
-  assert.match(source, /contextWindowTokens:\s*Math\.max\(1000,\s*Number\.isFinite\(nextValue\)\s*\?\s*nextValue\s*:\s*258000\)/);
+  assert.match(chatSource, /role="dialog"/);
+  assert.match(settingsTabSource, /value=\{settingsDraft\.model\}/);
+  assert.match(settingsTabSource, /model:\s*event\.target\.value/);
+  assert.match(settingsTabSource, /settingsModelOptions\.map\(\(candidate\)/);
+  assert.match(settingsTabSource, /model:\s*candidate/);
+  assert.match(settingsHookSource, /syncModelCatalog\(settingsDraft\.provider,\s*settingsDraft\.baseURL,\s*settingsModelOptions\)/);
+  assert.match(chatSource, /contextWindowTokens:\s*config\?\.contextWindowTokens\s*\|\|\s*258000/);
+  assert.match(settingsTabSource, /value=\{Math\.round\(settingsDraft\.contextWindowTokens \/ 1000\)\}/);
+  assert.match(settingsTabSource, /contextWindowTokens:\s*Math\.max\(1000,\s*Number\.isFinite\(nextValue\)\s*\?\s*nextValue\s*:\s*258000\)/);
 });
 
 test('ai chat exposes direct new-session entry and context budget indicator near the composer', async () => {

@@ -30,8 +30,8 @@ test('runtime ui wiring references active skills and mcp state', async () => {
 
   assert.match(aiChat, /activeSkills|runtimeMcp/i);
   assert.match(aiChat, /createRuntimeSkillRegistry/);
-  assert.match(aiChat, /invokeRuntimeMcpTool/);
-  assert.match(aiChat, /parseRuntimeMcpCommand/);
+  assert.match(coordinator, /invokeRuntimeMcpTool/);
+  assert.match(coordinator, /parseRuntimeMcpCommand/);
   assert.match(coordinator, /runRuntimeChatMcpTurn/);
   assert.match(coordinator, /buildMcpLifecycleStartDescriptor/);
   assert.match(coordinator, /buildSkillActivationLifecycleDescriptor/);
@@ -46,5 +46,5 @@ test('runtime ui wiring references active skills and mcp state', async () => {
   assert.match(builtInTurn, /onSkillHookEvent/);
   assert.match(skillPreparation, /onHookEvent/);
   assert.match(summary, /skill|mcp/i);
-  assert.match(summary, /toolCallsByThread|mcpCalls/i);
+  assert.match(summary, /mcp calls:/i);
 });

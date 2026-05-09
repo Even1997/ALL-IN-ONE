@@ -56,7 +56,10 @@ fn settings_store_path(app_data_dir: &Path) -> Result<PathBuf, String> {
     Ok(ensure_agent_runtime_dir(app_data_dir)?.join("runtime-settings.json"))
 }
 
-fn save_settings_store(app_data_dir: &Path, store: &RuntimeSettingsStoreData) -> Result<(), String> {
+fn save_settings_store(
+    app_data_dir: &Path,
+    store: &RuntimeSettingsStoreData,
+) -> Result<(), String> {
     let store_path = settings_store_path(app_data_dir)?;
     let content = serde_json::to_string_pretty(store)
         .map_err(|error| format!("Failed to serialize runtime settings store: {}", error))?;

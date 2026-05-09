@@ -18,7 +18,9 @@ test('AIChat keeps icon-first shell controls and routes management through setti
   assert.match(source, /GNAgentSkillsPage/);
   assert.match(source, /RuntimeMcpSettingsPage/);
   assert.match(source, /activeSettingsTab/);
-  assert.match(source, /resolveSkillIntent/);
+  assert.match(source, /useAIChatSettingsState/);
+  assert.match(source, /useAIChatRuntimeInteractionState/);
+  assert.match(source, /useAIChatSidecarSessionActions/);
   assert.match(source, /GNAgentHistoryMenu/);
   assert.match(pieces, /chat-composer-gn-agent-entry/);
   assert.match(pieces, /chat-composer-embedded-toolbar/);

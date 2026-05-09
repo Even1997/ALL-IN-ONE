@@ -180,7 +180,11 @@ pub fn invoke_tool(
         .find(|server| server.id == input.server_id)
         .ok_or_else(|| format!("Runtime MCP server not found: {}", input.server_id))?;
 
-    if !server.tool_names.iter().any(|tool| tool == &input.tool_name) {
+    if !server
+        .tool_names
+        .iter()
+        .any(|tool| tool == &input.tool_name)
+    {
         return Err(format!(
             "Runtime MCP tool not found: {}/{}",
             input.server_id, input.tool_name
@@ -236,7 +240,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
-        let path = std::env::temp_dir().join(format!("goodnight-{}-{}-{}", prefix, timestamp, unique));
+        let path =
+            std::env::temp_dir().join(format!("goodnight-{}-{}-{}", prefix, timestamp, unique));
         fs::create_dir_all(&path).expect("create temp dir");
         path
     }
@@ -246,7 +251,9 @@ mod tests {
         let app_data_dir = make_temp_dir("runtime-mcp-servers");
         let servers = list_servers(&app_data_dir).expect("list servers");
 
-        assert!(servers.iter().any(|server| server.id == GOODNIGHT_SKILLS_SERVER_ID));
+        assert!(servers
+            .iter()
+            .any(|server| server.id == GOODNIGHT_SKILLS_SERVER_ID));
 
         fs::remove_dir_all(&app_data_dir).ok();
     }

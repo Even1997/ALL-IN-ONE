@@ -18,7 +18,18 @@ const chatPagePath = path.resolve(
   __dirname,
   '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx',
 );
-const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const sessionHookPath = path.resolve(
+  __dirname,
+  '../../src/components/ai/gn-agent-shell/useGNAgentWorkbenchSession.ts',
+);
+const coordinatorPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts',
+);
+const agentKernelPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/agent-kernel/runAgentTurn.ts',
+);
 const runtimeStorePath = path.resolve(__dirname, '../../src/modules/ai/runtime/agentRuntimeStore.ts');
 
 test('agent context panel surfaces context section status and budget fields', async () => {
@@ -30,12 +41,17 @@ test('agent context panel surfaces context section status and budget fields', as
   assert.match(source, /excluded/);
 });
 
-test('agent chat page wires the context panel into the runtime shell', async () => {
+test('agent compatibility page delegates context and tool-call state through the workbench session', async () => {
   const source = await readFile(chatPagePath, 'utf8');
+  const sessionHook = await readFile(sessionHookPath, 'utf8');
 
-  assert.match(source, /GNAgentContextPanel/);
-  assert.match(source, /conversation\.contextSnapshot/);
-  assert.match(source, /context=\{contextSnapshot\}/);
+  assert.match(source, /AgentChatStage/);
+  assert.match(source, /useGNAgentWorkbenchSession/);
+  assert.match(source, /session=\{session\}/);
+  assert.match(sessionHook, /useRuntimeConversationGateway/);
+  assert.match(sessionHook, /contextSnapshot:\s*conversation\.contextSnapshot/);
+  assert.match(sessionHook, /toolCalls:\s*conversation\.toolCalls/);
+  assert.match(sessionHook, /mcpToolCalls:\s*conversation\.mcpToolCalls/);
 });
 
 test('agent tool call panel surfaces tool call status and result fields', async () => {
@@ -47,13 +63,12 @@ test('agent tool call panel surfaces tool call status and result fields', async 
   assert.match(source, /blocked/);
 });
 
-test('agent chat page wires tool calls by active session into the runtime shell', async () => {
-  const source = await readFile(chatPagePath, 'utf8');
+test('runtime conversation gateway pulls tool calls for the active session', async () => {
+  const source = await readFile(sessionHookPath, 'utf8');
 
-  assert.match(source, /GNAgentToolCallPanel/);
-  assert.match(source, /conversation\.toolCalls/);
-  assert.match(source, /conversation\.mcpToolCalls/);
-  assert.match(source, /toolCalls=\{toolCalls\}/);
+  assert.match(source, /useRuntimeConversationGateway/);
+  assert.match(source, /toolCalls:\s*conversation\.toolCalls/);
+  assert.match(source, /mcpToolCalls:\s*conversation\.mcpToolCalls/);
 });
 
 test('agent runtime store tracks tool calls by thread', async () => {
@@ -63,10 +78,11 @@ test('agent runtime store tracks tool calls by thread', async () => {
   assert.match(source, /setThreadToolCalls/);
 });
 
-test('agent chat submit path produces context snapshots for the active session', async () => {
-  const source = await readFile(aiChatPath, 'utf8');
+test('runtime turn coordination produces and stores context snapshots for the active session', async () => {
+  const coordinator = await readFile(coordinatorPath, 'utf8');
+  const kernel = await readFile(agentKernelPath, 'utf8');
 
-  assert.match(source, /buildAgentContext/);
-  assert.match(source, /setThreadContext/);
-  assert.match(source, /setThreadContext\(targetSessionId,/);
+  assert.match(kernel, /buildAgentContext/);
+  assert.match(coordinator, /setThreadContext/);
+  assert.match(coordinator, /setThreadContext\(targetSessionId,\s*agentContextSnapshot\)/);
 });

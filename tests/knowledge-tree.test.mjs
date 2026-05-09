@@ -8,7 +8,7 @@ import ts from 'typescript';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const knowledgeTreePath = path.resolve(__dirname, '../src/modules/knowledge/knowledgeTree.ts');
-const productWorkbenchPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
+const noteWorkspacePath = path.resolve(__dirname, '../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
 const tauriLibPath = path.resolve(__dirname, '../src-tauri/src/lib.rs');
 
@@ -134,40 +134,41 @@ test('knowledge tree groups sketch and design markdown by relative path prefix',
 });
 
 test('product workbench renders grouped knowledge tree with folder actions', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const source = await readFile(noteWorkspacePath, 'utf8');
 
   assert.match(source, /buildKnowledgeTree/);
-  assert.match(source, /handleCreateKnowledgeFolder/);
-  assert.match(source, /handleDeleteKnowledgeNode/);
-  assert.match(source, /selectedKnowledgeNode/);
+  assert.match(source, /onCreateFolderAtPath/);
+  assert.match(source, /onDeleteTreePaths/);
+  assert.match(source, /selectedTreePaths/);
   assert.match(source, /新建文件夹/);
-  assert.match(source, /项目/);
-  assert.match(source, /草图/);
-  assert.match(source, /设计/);
 });
 
 test('product workbench infers sketch markdown kind from sketch path prefixes', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const source = await readFile(noteWorkspacePath, 'utf8');
 
-  assert.match(source, /item\.relativePath\.startsWith\('sketch\/'\)/);
-  assert.match(source, /kind:\s*isSketchPath \? 'sketch' as const : 'note' as const/);
+  assert.match(source, /const resolveNoteTreeFilePath =/);
+  assert.match(source, /const normalizedSourcePath = normalizeRelativeFileSystemPath\(note\.sourceUrl \|\| ''\);/);
+  assert.match(source, /const relativePath = getRelativePathFromRoot\(note\.sourceUrl \|\| '', projectRootPath\);/);
+  assert.match(source, /return normalizeRelativeFileSystemPath\(note\.title\.trim\(\) \|\| note\.id\);/);
 });
 
 test('knowledge tree groups are not forced open so top-level folders can collapse', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const source = await readFile(noteWorkspacePath, 'utf8');
 
-  assert.match(source, /const isExpanded = expandedKnowledgeNodeIds\.has\(node\.id\)/);
-  assert.doesNotMatch(source, /const isExpanded = expandedKnowledgeNodeIds\.has\(node\.id\) \|\| node\.type === 'group'/);
-  assert.doesNotMatch(source, /\(isExpanded \|\| node\.type === 'group'\) && node\.children\.length > 0/);
+  assert.match(source, /const isExpanded = !collapsedFolderPaths\.has\(childFolder\.path\);/);
+  assert.doesNotMatch(source, /const isExpanded = !collapsedFolderPaths\.has\(childFolder\.path\) \|\| childFolder\.path === ''/);
 });
 
 test('knowledge tree styling is text-first instead of card-like rows', async () => {
   const source = await readFile(appCssPath, 'utf8');
+  const rowBlock = source.match(/\.pm-knowledge-tree-row\s*{([^}]*)}/);
 
   assert.match(source, /\.pm-knowledge-tree/);
   assert.match(source, /\.pm-knowledge-tree-row/);
   assert.match(source, /\.pm-knowledge-tree-label/);
-  assert.doesNotMatch(source, /\.pm-knowledge-tree-row\s*{[\s\S]*border-radius:\s*14px/);
+  assert.ok(rowBlock, 'expected knowledge tree row block');
+  assert.match(rowBlock[1], /border:\s*0;/);
+  assert.match(rowBlock[1], /background:\s*transparent;/);
 });
 
 test('tauri file tools expose mkdir for real knowledge folders', async () => {

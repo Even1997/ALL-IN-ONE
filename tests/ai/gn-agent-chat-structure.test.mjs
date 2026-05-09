@@ -7,13 +7,20 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const chatPagePath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx');
+const agentShellPagePath = path.resolve(__dirname, '../../src/features/agent-shell/pages/AgentShellPage.tsx');
 const statusPanelPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentStatusPanel.tsx');
 const tabBadgesPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentTabBadges.tsx');
 
-test('gnAgent chat page includes a status panel above the chat shell', async () => {
-  const source = await readFile(chatPagePath, 'utf8');
-  assert.match(source, /GNAgentStatusPanel/);
-  assert.match(source, /className="[^"]*gn-agent-shell-chat-stack/);
+test('gnAgent compatibility page is a thin wrapper around the shared agent shell stage', async () => {
+  const [source, agentShellPageSource] = await Promise.all([
+    readFile(chatPagePath, 'utf8'),
+    readFile(agentShellPagePath, 'utf8'),
+  ]);
+  assert.match(source, /AgentChatStage/);
+  assert.match(source, /useGNAgentWorkbenchSession/);
+  assert.match(agentShellPageSource, /AgentWorkbenchLayout/);
+  assert.match(agentShellPageSource, /AgentWorkbenchSidebar/);
+  assert.match(agentShellPageSource, /AgentFloatingPlanCard/);
 });
 
 test('gnAgent status panel renders recent activity as a prop-driven shell view', async () => {

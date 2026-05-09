@@ -1,10 +1,8 @@
-﻿import React, { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { Suspense, lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { invoke } from '@tauri-apps/api/core';
 import { useShallow } from 'zustand/react/shallow';
 import { isCommandToolName } from '../../utils/hostPlatform.ts';
-import { buildAIConfigurationError, listModelsSupportMode } from '../../modules/ai/core/configStatus';
-import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
+import type { AIProviderType } from '../../modules/ai/core/AIService';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import type { ChatStructuredCard } from '../../modules/ai/chat/chatCards';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
@@ -28,25 +26,19 @@ import {
   loadRuntimeSkillCatalog,
 } from '../../modules/ai/skills/skillLibrary';
 import type { RuntimeSkillDefinition } from '../../modules/ai/runtime/skills/runtimeSkillTypes';
-import { type AIConfigEntry, hasUsableAIConfigEntry } from '../../modules/ai/store/aiConfigState';
-import { toRuntimeAIConfig } from '../../modules/ai/store/aiConfigState';
+import type { AIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../../modules/ai/gn-agent/localConfig';
 import {
   appendAgentTimelineEvent as persistRuntimeTimelineEvent,
-  createAgentThread as persistRuntimeThread,
-  executePrompt as executeRuntimePrompt,
   getAgentRuntimeSettings,
   getAgentTurnCheckpointDiff,
   enqueueAgentApproval,
   listAgentBackgroundTasks,
-  listAgentThreads,
   listAgentTurnCheckpoints,
   listAgentApprovals,
   rewindAgentTurn,
   resolveAgentApproval,
-  saveAgentTurnCheckpoint,
   setAgentPermissionMode,
-  upsertAgentBackgroundTask,
 } from '../../modules/ai/runtime/agentRuntimeClient';
 import { useApprovalStore } from '../../modules/ai/runtime/approval/approvalStore';
 import type { ApprovalRecord, PermissionMode } from '../../modules/ai/runtime/approval/approvalTypes';
@@ -55,69 +47,8 @@ import {
   permissionModeToSandboxPolicy,
   sandboxPolicyToPermissionMode,
 } from '../../modules/ai/runtime/approval/permissionMode';
-import {
-  classifyRuntimeActionRisk,
-  shouldAutoApproveRuntimeAction,
-  shouldDenyRuntimeAction,
-} from '../../modules/ai/runtime/approval/riskPolicy';
-import { buildProjectMemoryEntry } from '../../modules/ai/runtime/memory/projectMemoryRuntime';
-import type { RuntimeToolStep } from '../../modules/ai/runtime/agent-kernel/agentKernelTypes';
-import {
-  buildRuntimeEventId,
-  buildSyntheticRuntimeToolCallId,
-  syncTeamRunRuntimeEvents,
-} from '../../modules/ai/runtime/dispatch/agentEvents';
-import {
-  buildCapabilityApprovalLifecycleDescriptor,
-  buildMemoryReadLifecycleDescriptor,
-  buildMemoryRollbackLifecycleDescriptor,
-  buildMcpLifecycleStartDescriptor,
-  buildSkillDiscoveryLifecycleDescriptor,
-  buildSkillHookLifecycleDescriptor,
-  buildSkillLoadLifecycleDescriptor,
-  buildSkillActivationLifecycleDescriptor,
-} from '../../modules/ai/runtime/dispatch/runtimeCapabilityLifecycle.ts';
-import {
-  submitRuntimeChatTurn,
-} from '../../modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts';
+import { buildMemoryRollbackLifecycleDescriptor, buildSkillDiscoveryLifecycleDescriptor, buildSkillLoadLifecycleDescriptor } from '../../modules/ai/runtime/dispatch/runtimeCapabilityLifecycle.ts';
 import { ASK_USER_TOOL_NAME } from '../../modules/ai/runtime/orchestration/runtimeChatTurnTools.ts';
-import { runRuntimeLocalAgentExecution } from '../../modules/ai/runtime/orchestration/runRuntimeLocalAgentExecution';
-import { buildAgentContext } from '../../modules/ai/runtime/context/buildAgentContext';
-import {
-  buildRuntimeAgentToolResult,
-  resolveRuntimeAgentToolInput,
-} from '../../modules/ai/runtime/tools/agentTool';
-import {
-  buildRuntimeLocalAgentPlan,
-  buildRuntimeLocalAgentDecisionState,
-  denyRuntimeLocalAgentApproval,
-  handleRuntimeLocalAgentDecision,
-  prepareRuntimeLocalAgentFlow,
-  resolveRuntimeLocalAgentDecisionFeedback,
-  updateRuntimeLocalAgentPlanApprovalStatus,
-} from '../../modules/ai/runtime/orchestration/runtimeLocalAgentFlow';
-import {
-  resolveRuntimeApproval,
-  requestRuntimeApproval as requestRuntimeApprovalFlow,
-  type RuntimePendingApprovalAction,
-} from '../../modules/ai/runtime/orchestration/runtimeApprovalCoordinator';
-import {
-  cancelRuntimeProjectFileProposal,
-  executeRuntimeApprovedProjectFileProposal,
-  executeRuntimeProjectFileOperations,
-  type RuntimeProjectFileToolResponse,
-} from '../../modules/ai/runtime/orchestration/runtimeProjectFileExecutionFlow';
-import {
-  buildRuntimeChangedPathActivityEntry,
-} from '../../modules/ai/runtime/orchestration/runtimeTurnOutcomeFlow';
-import {
-  applyRuntimeTurnClassifying,
-  applyRuntimeTurnBlocked,
-  applyRuntimeTurnCompleted,
-  applyRuntimeTurnExecuting,
-  applyRuntimeTurnFailed,
-  buildRuntimeTurnReviewPlan,
-} from '../../modules/ai/runtime/orchestration/runtimeTurnSessionFlow';
 import type {
   AgentBackgroundTaskRecord,
   AgentProviderId,
@@ -125,14 +56,9 @@ import type {
   AgentTurnCheckpointRecord,
 } from '../../modules/ai/runtime/agentRuntimeTypes';
 import {
-  invokeRuntimeMcpTool,
   listRuntimeMcpServers,
   listRuntimeMcpToolCalls,
 } from '../../modules/ai/runtime/mcp/runtimeMcpClient';
-import type { RuntimeMcpServer } from '../../modules/ai/runtime/mcp/runtimeMcpTypes';
-import {
-  parseRuntimeMcpCommand,
-} from '../../modules/ai/runtime/mcp/runtimeMcpFlow';
 import {
   appendRuntimeReplayEvent,
   listRuntimeReplayEvents,
@@ -142,57 +68,22 @@ import {
   createReplayRecoveryController,
   getLatestReplaySkillSnapshot,
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
-import { buildRuntimeReplayTurnStartPayload } from '../../modules/ai/runtime/replay/runtimeReplayPayload';
-import {
-  createExecutionRunRecord,
-  createExecutionTaskId,
-  createExecutionTaskRecord,
-  createLocalAgentExecutionAgentRunId,
-  createLocalAgentExecutionRunId,
-  createRootExecutionRunId,
-  createExecutionAgentRunRecord,
-  deriveTaskStatusFromRuns,
-  patchExecutionRunStatus,
-  syncTeamExecutionGraph,
-} from '../../modules/ai/runtime/execution/agentExecutionGraph';
-import { decideAgentTurnMode } from '../../modules/ai/runtime/session/agentSessionController';
-import { reduceAgentTurnSession } from '../../modules/ai/runtime/session/agentSessionStateMachine';
-import { createEmptyAgentTurnSession } from '../../modules/ai/runtime/session/agentSessionTypes';
 import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
-import {
-  reconcileRuntimeThreadsWithSessions,
-  resolveRuntimeConversationBootstrapAction,
-} from '../../modules/ai/runtime/conversation/runtimeConversationGateway.ts';
 import { useRuntimeConversationGateway } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
-import { runAgentTeamTurn } from '../../modules/ai/runtime/teams/teamOrchestrator';
 import type { AgentTeamRunRecord } from '../../modules/ai/runtime/teams/teamTypes';
 import {
   type ChatSession,
   createChatSession,
-  createStoredChatMessage,
-  type RuntimeQuestionItem,
-  type RuntimeQuestionPayload,
   type StoredChatRuntimeEvent,
   type StoredChatMessage,
   useAIChatStore,
 } from '../../modules/ai/store/aiChatStore';
 import {
   applyAssistantReasoningProgress,
-  answerAssistantRuntimeQuestionEvent,
-  buildAssistantStreamingTimeline,
-  buildAssistantTimelineUpdate,
   getAssistantRuntimeTimelineEvents,
-  getAssistantTimelineReasoning,
   getAssistantTimelineText,
-  mapAssistantRuntimeTimelineEvents,
-  replaceAssistantRuntimeTimelineEvents,
-  syncAssistantTimelineWithToolCalls,
-  upsertAssistantRuntimeApprovalEvent,
-  upsertAssistantRuntimeQuestionEvent,
-  upsertAssistantRuntimeToolResultEvent,
-  upsertAssistantRuntimeToolUseEvent,
   type AssistantTimelineEvent,
 } from '../../modules/ai/store/assistantTimeline.ts';
 import { useAIContextStore } from '../../modules/ai/store/aiContextStore';
@@ -203,28 +94,21 @@ import {
   type AIChatCommandDetail,
   type AIChatSettingsDetail,
 } from '../../modules/ai/chat/chatCommands';
-import { resolveSkillIntent } from '../../modules/ai/workflow/skillRouting';
 import {
-  buildProjectFileOperationFromToolCall,
-  findLatestPendingProjectFileProposalAction,
-  isProjectFileWriteAccessFailure,
-  isShortPendingActionAffirmation,
-  isShortPendingActionRejection,
   type ProjectFileOperation,
   type ProjectFileProposal,
-  resolveProjectOperationPath,
-  isSupportedProjectTextFilePath,
 } from '../../modules/ai/chat/projectFileOperations';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
 import { emitKnowledgeFilesystemChanged } from '../../features/knowledge/workspace/knowledgeFilesystemEvents';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import {
+  initializeRuntimeSidecarProjectSessions,
+} from '../../modules/runtime-sidecar/runtimeSidecarSessionBridge.ts';
+import {
   getProjectDir,
-  readProjectTextFile,
   resolveProjectRuntimeRootPath,
 } from '../../utils/projectPersistence';
-import { getDirectoryPath, joinFileSystemPath } from '../../utils/fileSystemPaths';
 import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
@@ -244,7 +128,27 @@ import { parseAIChatMessageParts, type AIChatMessagePart } from './aiChatMessage
 import { AssistantTextBlock, AssistantThinkingBlock } from './AIChatAssistantParts';
 import { buildRuntimeExecutionTimelineCards } from './AIChatRuntimeToolExecutionCard';
 import type { RuntimeEventRenderModel } from './runtimeEventRenderModel';
+import { useAIChatSettingsState } from './useAIChatSettingsState';
+import { useAIChatRuntimeInteractionState } from './useAIChatRuntimeInteractionState';
+import { useAIChatSidecarSessionActions } from './useAIChatSidecarSessionActions';
 import './AIChat.css';
+
+let aiServiceModulePromise: Promise<typeof import('../../modules/ai/core/AIService')> | null = null;
+
+const loadAIServiceModule = () => (aiServiceModulePromise ??= import('../../modules/ai/core/AIService'));
+
+const LazyAIChatAISettingsTab = lazy(async () => {
+  const module = await import('./AIChatAISettingsTab');
+  return { default: module.AIChatAISettingsTab };
+});
+const LazyAIChatRuntimeApprovalList = lazy(async () => {
+  const module = await import('./AIChatRuntimeInteractionCards');
+  return { default: module.AIChatRuntimeApprovalList };
+});
+const LazyAIChatRuntimeTimelineInteractionEvent = lazy(async () => {
+  const module = await import('./AIChatRuntimeInteractionCards');
+  return { default: module.AIChatRuntimeTimelineInteractionEvent };
+});
 
 type AISettingsDraft = {
   id: string | null;
@@ -258,7 +162,6 @@ type AISettingsDraft = {
   enabled: boolean;
 };
 
-type ModelCatalog = Record<string, string[]>;
 type AIProviderTypeOption = {
   value: AIProviderType;
   label: string;
@@ -428,29 +331,10 @@ const normalizeErrorMessage = (error: unknown) => {
   return raw;
 };
 
-const PROJECT_INSTRUCTION_FILE_NAMES = ['GOODNIGHT.md', 'CLAUDE.md'];
-const MISSING_PROJECT_FILE_PATTERN =
-  /(?:not found|no such file|cannot find the file|\u627e\u4e0d\u5230|\u4e0d\u5b58\u5728|os error 2)/i;
-
-const estimateTokenCount = (value: string) => Math.max(0, Math.ceil(value.trim().length / 4));
-
 const getElapsedSecondsSince = (startedAt: number | null | undefined, fallback = 0) =>
   typeof startedAt === 'number'
     ? Math.max(0.1, Math.round(Math.max(0, Date.now() - startedAt) / 100) / 10)
     : fallback;
-
-const summarizeLiveToolInput = (input: Record<string, unknown> | null | undefined) => {
-  if (!input || Object.keys(input).length === 0) {
-    return '';
-  }
-
-  try {
-    const formatted = JSON.stringify(input, null, 2)?.trim() || '';
-    return formatted.length > 240 ? `${formatted.slice(0, 237)}...` : formatted;
-  } catch {
-    return '';
-  }
-};
 
 const findSlashTrigger = (value: string, cursorPos: number) => {
   for (let index = cursorPos - 1; index >= 0; index -= 1) {
@@ -620,185 +504,7 @@ const ChatSandboxPolicySelector: React.FC<{
   );
 };
 
-type RuntimePendingQuestionAction = {
-  messageId: string;
-  questionId: string;
-  resolve: (answers: Record<string, string>) => void;
-  reject: (reason?: string) => void;
-};
-
-const parseRuntimeQuestionInput = (input: Record<string, unknown>): RuntimeQuestionItem[] => {
-  const questionsValue = input.questions;
-  if (Array.isArray(questionsValue)) {
-    return questionsValue.flatMap((question) => {
-      if (!question || typeof question !== 'object') {
-        return [];
-      }
-
-      const questionText = typeof question.question === 'string' ? question.question.trim() : '';
-      if (!questionText) {
-        return [];
-      }
-
-      const optionsValue = Array.isArray(question.options)
-        ? question.options.flatMap((option: unknown) => {
-          if (!option || typeof option !== 'object') {
-            return [];
-          }
-          const optionRecord = option as { label?: unknown; description?: unknown };
-
-          const label = typeof optionRecord.label === 'string' ? optionRecord.label.trim() : '';
-          if (!label) {
-            return [];
-          }
-
-          return [
-            {
-              label,
-              description:
-                typeof optionRecord.description === 'string' && optionRecord.description.trim()
-                  ? optionRecord.description.trim()
-                  : undefined,
-            },
-          ];
-        })
-        : undefined;
-
-      return [
-        {
-          question: questionText,
-          header:
-            typeof question.header === 'string' && question.header.trim()
-              ? question.header.trim()
-              : undefined,
-          options: optionsValue && optionsValue.length > 0 ? optionsValue : undefined,
-        },
-      ];
-    });
-  }
-
-  if (typeof input.question === 'string' && input.question.trim()) {
-    const options = Array.isArray(input.options)
-      ? input.options.flatMap((option: unknown) => {
-          if (!option || typeof option !== 'object') {
-            return [];
-          }
-          const optionRecord = option as { label?: unknown; description?: unknown };
-          const label = typeof optionRecord.label === 'string' ? optionRecord.label.trim() : '';
-          if (!label) {
-            return [];
-          }
-          return [
-            {
-              label,
-              description:
-                typeof optionRecord.description === 'string' && optionRecord.description.trim()
-                  ? optionRecord.description.trim()
-                  : undefined,
-            },
-          ];
-        })
-      : undefined;
-
-    return [
-      {
-        question: input.question.trim(),
-        options: options && options.length > 0 ? options : undefined,
-      },
-    ];
-  }
-
-  return [];
-};
-
-const RuntimeQuestionBlock: React.FC<{
-  item: RuntimeQuestionItem;
-  answered: boolean;
-  answeredValue: string;
-  onSubmit: (value: string) => void;
-}> = ({ item, answered, answeredValue, onSubmit }) => {
-  const [selectedOption, setSelectedOption] = useState('');
-  const [freeText, setFreeText] = useState('');
-
-  const effectiveValue = answeredValue || freeText || selectedOption;
-
-  return (
-    <div className="chat-runtime-question-item">
-      {item.header ? <div className="chat-runtime-question-header">{item.header}</div> : null}
-      <div className="chat-runtime-question-prompt">{item.question}</div>
-      {item.options && item.options.length > 0 ? (
-        <div className="chat-runtime-question-options">
-          {item.options.map((option: NonNullable<RuntimeQuestionItem['options']>[number]) => (
-            <button
-              key={`${item.question}:${option.label}`}
-              type="button"
-              className={selectedOption === option.label || answeredValue === option.label ? 'active' : ''}
-              disabled={answered}
-              onClick={() => {
-                setSelectedOption(option.label);
-                setFreeText('');
-              }}
-            >
-              <strong>{option.label}</strong>
-              {option.description ? <span>{option.description}</span> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {answered ? (
-        <div className="chat-runtime-question-answer">{answeredValue}</div>
-      ) : (
-        <div className="chat-runtime-question-actions">
-          <input
-            className="chat-runtime-question-input"
-            type="text"
-            value={freeText}
-            placeholder="直接输入回复"
-            onChange={(event) => {
-              setFreeText(event.target.value);
-              if (event.target.value.trim()) {
-                setSelectedOption('');
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="chat-runtime-question-submit"
-            disabled={!effectiveValue.trim()}
-            onClick={() => onSubmit(effectiveValue.trim())}
-          >
-            提交
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
 const normalizeReferencePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '');
-const buildProjectInstructionSummary = (fileName: string) =>
-  fileName === 'GOODNIGHT.md'
-    ? 'Project runtime identity and working rules for GoodNight.'
-    : 'Project instructions inherited from Claude-style repository guidance.';
-
-const loadProjectInstructionReferences = async (projectRoot: string) => {
-  const references: Array<{ path: string; summary: string; content: string }> = [];
-
-  for (const fileName of PROJECT_INSTRUCTION_FILE_NAMES) {
-    const filePath = joinFileSystemPath(projectRoot, fileName);
-    const content = await readProjectTextFile(filePath);
-    if (!content?.trim()) {
-      continue;
-    }
-
-    references.push({
-      path: filePath,
-      summary: buildProjectInstructionSummary(fileName),
-      content: content.trim(),
-    });
-  }
-
-  return references;
-};
 
 const summarizeReferenceContent = (value: string, fallback = '', maxLength = 120) => {
   const normalized = (value || fallback).replace(/\s+/g, ' ').trim();
@@ -996,51 +702,6 @@ const summarizeRuntimeToolCall = (toolName: string, input: Record<string, unknow
 
   return '';
 };
-
-const buildBuiltInToolApprovalActionType = (toolName: string) => `tool_${toolName}`;
-
-const buildBuiltInToolApprovalSummary = (toolName: string, input: Record<string, unknown>) => {
-  const detail = summarizeRuntimeToolCall(toolName, input);
-
-  if (isCommandToolName(toolName)) {
-    return detail ? `允许执行命令: ${detail}` : '允许执行命令';
-  }
-
-  if (toolName === 'fetch') {
-    return detail ? `允许访问外部地址: ${detail}` : '允许访问外部地址';
-  }
-
-  if (toolName === 'write') {
-    return detail ? `允许写入文件: ${detail}` : '允许写入文件';
-  }
-
-  if (toolName === 'edit') {
-    return detail ? `允许编辑文件: ${detail}` : '允许编辑文件';
-  }
-
-  return detail ? `允许执行 ${toolName}: ${detail}` : `允许执行 ${toolName}`;
-};
-
-const buildBuiltInToolApprovalDisplay = (toolName: string, input: Record<string, unknown>) => ({
-  toolName,
-  command: isCommandToolName(toolName) && typeof input.command === 'string' ? input.command : null,
-  filePath:
-    'file_path' in input && typeof input.file_path === 'string' ? String(input.file_path) : null,
-  oldString:
-    toolName === 'edit' && typeof input.old_string === 'string' ? input.old_string : null,
-  newString:
-    toolName === 'edit' && typeof input.new_string === 'string' ? input.new_string : null,
-  content:
-    toolName === 'write' && typeof input.content === 'string' ? input.content : null,
-  inputJson: JSON.stringify(input, null, 2),
-});
-
-const findRuntimeMcpToolDefinition = (
-  servers: RuntimeMcpServer[],
-  serverId: string,
-  toolName: string
-) => servers.find((server) => server.id === serverId)?.tools?.find((tool) => tool.name === toolName) || null;
-
 
 const summarizeProjectFileOperationPreview = (operation: ProjectFileOperation, maxLength = 220) => {
   const raw =
@@ -1289,36 +950,6 @@ const shouldShowRuntimeToolTechnicalDetails = (input: {
   return Object.keys(input.toolInput).length > 0 || Boolean(input.output?.trim());
 };
 
-const extractCheckpointFilesFromToolCalls = (toolCalls: RuntimeToolStep[] | null | undefined) => {
-  const fileChangesByPath = new Map<
-    string,
-    {
-      path: string;
-      beforeContent: string | null;
-      afterContent: string | null;
-    }
-  >();
-
-  for (const toolCall of toolCalls || []) {
-    for (const change of toolCall.fileChanges || []) {
-      if (!change.path.trim()) {
-        continue;
-      }
-
-      const existing = fileChangesByPath.get(change.path);
-      fileChangesByPath.set(change.path, {
-        path: change.path,
-        beforeContent: existing ? existing.beforeContent : change.beforeContent ?? null,
-        afterContent: change.afterContent ?? existing?.afterContent ?? null,
-      });
-    }
-  }
-
-  return Array.from(fileChangesByPath.values());
-};
-
-
-
 const buildProjectFileStageItems = (proposal: ProjectFileProposal) => {
   const isDeleteOnlyProposal =
     proposal.operations.length > 0 &&
@@ -1402,22 +1033,11 @@ const createWelcomeSession = (
   };
 };
 
-const summarizeSessionTitle = (value: string) => {
-  const normalized = value.replace(/^@\S+\s*/, '').trim();
-  if (!normalized) {
-    return '新对话';
-  }
-
-  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
-};
-
 const buildSessionPreview = (content: string) => {
   const normalized = content.replace(/\s+/g, ' ').trim();
   return normalized.length > 32 ? `${normalized.slice(0, 32)}...` : normalized;
 };
 
-const createActivityEntryId = () => `activity_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const createRunId = () => `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const runtimeConversationInitializationInFlight = new Set<string>();
 const KnowledgeTruthStructuredCards: React.FC<{
   cards: ChatStructuredCard[];
@@ -1711,26 +1331,6 @@ const toConversationHistoryMessages = (messages: StoredChatMessage[] = []) =>
     content: getStoredMessageConversationContent(message),
   }));
 
-const buildAssistantContentState = (
-  content: string,
-  fallbackThinkingContent?: string,
-  preferredAssistantParts?: AIChatMessagePart[]
-) => {
-  const timeline = buildAssistantTimelineUpdate(content, [], {
-    fallbackThinkingContent,
-    preferredAssistantParts,
-    thinkingCollapsed: true,
-  });
-
-  return {
-    timeline,
-  };
-};
-
-const clearAssistantContentState = () => ({
-  timeline: [],
-});
-
 function useStallDetector(isRunning: boolean, activityFingerprint: unknown, thresholdMs = 10000) {
   const [stalled, setStalled] = useState(false);
   const [stallDuration, setStallDuration] = useState(0);
@@ -1780,23 +1380,13 @@ export const AIChat: React.FC<AIChatProps> = ({
   const lockExpandedForEmbedded = isProviderEmbedded;
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [stallFP, setStallFP] = useState(0);
+  const [stallFP] = useState(0);
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTabId>('ai');
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [providerSearch, setProviderSearch] = useState('');
-  const [testState, setTestState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [testMessage, setTestMessage] = useState('');
-  const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [modelCatalog, setModelCatalog] = useState<ModelCatalog>({});
-  const [selectedSettingsConfigId, setSelectedSettingsConfigId] = useState<string | null>(null);
   const [selectedChatAgentId, setSelectedChatAgentId] = useState<ChatAgentId>('built-in');
   const [localAgentSnapshot, setLocalAgentSnapshot] = useState<LocalAgentConfigSnapshot | null>(null);
-  const [settingsDraft, setSettingsDraft] = useState<AISettingsDraft>(buildSettingsDraft(null));
-  const [jsonImportText, setJsonImportText] = useState('');
-  const [showJsonImport, setShowJsonImport] = useState(false);
   const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, StreamingDraftState>>({});
 
   const [referenceSearchOpen, setReferenceSearchOpen] = useState(false);
@@ -1824,8 +1414,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamingDraftBufferRef = useRef<Record<string, StreamingDraftState>>({});
   const streamingFlushTimerRef = useRef<number | null>(null);
-  const pendingApprovalActionsRef = useRef<Record<string, RuntimePendingApprovalAction>>({});
-  const pendingQuestionActionsRef = useRef<Record<string, RuntimePendingQuestionAction>>({});
   const abortControllerRef = useRef<AbortController | null>(null);
   const stopRequestedRef = useRef(false);
   const runningSubmissionRef = useRef<{ assistantMessageId: string; runtimeStoreThreadId: string } | null>(null);
@@ -1863,19 +1451,17 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const {
     currentProject,
-    memory,
     requirementDocs,
     activeKnowledgeFileId,
     generatedFiles,
-    pageStructure,
+    pageStructure,
   } = useProjectStore(
     useShallow((state) => ({
       currentProject: state.currentProject,
-      memory: state.memory,
       requirementDocs: state.requirementDocs,
       activeKnowledgeFileId: state.activeKnowledgeFileId,
       generatedFiles: state.generatedFiles,
-      pageStructure: state.pageStructure,
+      pageStructure: state.pageStructure,
     }))
   );
   const projectRoot = currentProject?.vaultPath || '';
@@ -1908,7 +1494,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     ensureProjectState,
     upsertSession,
     setActiveSession,
-    appendActivityEntry,
     setActivityEntries,
     updateMessage,
     queueComposerPrefill,
@@ -1921,7 +1506,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       ensureProjectState: state.ensureProjectState,
       upsertSession: state.upsertSession,
       setActiveSession: state.setActiveSession,
-      appendActivityEntry: state.appendActivityEntry,
       setActivityEntries: state.setActivityEntries,
       updateMessage: state.updateMessage,
       queueComposerPrefill: state.queueComposerPrefill,
@@ -1932,8 +1516,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     }))
   );
   const {
-    createThread: recordRuntimeThread,
-    appendTimelineEvent: appendRuntimeTimelineEvent,
+    appendTimelineEvent: appendRuntimeTimelineEvent,
     setReplayEvents: setRuntimeReplayEvents,
     appendReplayEvent: appendRuntimeReplayEventToStore,
     setRecoveryState: setRuntimeRecoveryState,
@@ -1946,8 +1529,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     patchLiveState,
   } = useAgentRuntimeStore(
     useShallow((state) => ({
-      createThread: state.createThread,
-      appendTimelineEvent: state.appendTimelineEvent,
+      appendTimelineEvent: state.appendTimelineEvent,
       setReplayEvents: state.setReplayEvents,
       appendReplayEvent: state.appendReplayEvent,
       setRecoveryState: state.setRecoveryState,
@@ -2022,52 +1604,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       try {
         ensureProjectState(projectId);
 
-        let persistedThreads: Awaited<ReturnType<typeof listAgentThreads>> = [];
-        try {
-          persistedThreads = await listAgentThreads(projectId);
-        } catch (error) {
-          console.warn('Failed to load agent threads:', error);
-        }
-
-        const projectState = useAIChatStore.getState().projects[projectId];
-        const existingSessions = projectState?.sessions || [];
-        const reconciled = reconcileRuntimeThreadsWithSessions({
-          projectId,
-          sessions: existingSessions,
-          runtimeThreads: persistedThreads.map((thread) => ({
-            ...thread,
-            providerId: thread.providerId as AgentProviderId,
-          })),
-        });
-
-        reconciled.removedSessionIds.forEach((sessionId) => {
-          removeSession(projectId, sessionId);
-        });
-
-        reconciled.sessions.forEach((session) => {
-          upsertSession(projectId, session);
-        });
-
-        reconciled.bindings.forEach(({ thread, session }) => {
-          recordRuntimeThread(projectId, {
-            id: session.id,
-            providerId: thread.providerId as AgentProviderId,
-            title: thread.title,
-            createdAt: thread.createdAt,
-            updatedAt: thread.updatedAt,
-          });
-        });
-
-        const nextProjectState = useAIChatStore.getState().projects[projectId];
-        const sessions = nextProjectState?.sessions || [];
-        const bootstrapAction = resolveRuntimeConversationBootstrapAction({
-          sessions,
-          activeSessionId: nextProjectState?.activeSessionId || null,
-        });
-
-        if (bootstrapAction.type === 'select-existing-session') {
-          setActiveSession(projectId, bootstrapAction.sessionId);
-        }
+        await initializeRuntimeSidecarProjectSessions(projectId);
       } finally {
         runtimeConversationInitializationInFlight.delete(projectId);
       }
@@ -2077,10 +1614,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   }, [
     currentProjectId,
     ensureProjectState,
-    recordRuntimeThread,
     runtimeProviderId,
-    setActiveSession,
-    upsertSession,
   ]);
 
   useEffect(() => {
@@ -2456,393 +1990,24 @@ export const AIChat: React.FC<AIChatProps> = ({
     },
     [activeSessionId, currentProject, updateMessage]
   );
-  const patchRuntimeEventInMessage = useCallback(
-    (
-      messageId: string,
-      matcher: (event: StoredChatRuntimeEvent) => boolean,
-      updater: (event: StoredChatRuntimeEvent) => StoredChatRuntimeEvent
-    ) => {
-      updateAssistantMessageTimeline(messageId, (timeline) =>
-        mapAssistantRuntimeTimelineEvents(timeline, matcher, updater)
-      );
-    },
-    [updateAssistantMessageTimeline]
-  );
-  const upsertRuntimeToolUseInMessage = useCallback(
-    (
-      messageId: string,
-      input: {
-        toolCallId: string;
-        parentToolCallId?: string | null;
-        toolName: string;
-        toolInput: Record<string, unknown>;
-        status: RuntimeToolStep['status'];
-      }
-    ) => {
-      updateAssistantMessageTimeline(messageId, (timeline) =>
-        upsertAssistantRuntimeToolUseEvent(timeline, input)
-      );
-    },
-    [updateAssistantMessageTimeline]
-  );
-  const upsertRuntimeToolResultInMessage = useCallback(
-    (
-      messageId: string,
-      input: {
-        toolCallId: string;
-        parentToolCallId?: string | null;
-        toolName: string;
-        status: RuntimeToolStep['status'];
-        output: string;
-        fileChanges?: Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges'];
-      }
-    ) => {
-      updateAssistantMessageTimeline(messageId, (timeline) =>
-        upsertAssistantRuntimeToolResultEvent(timeline, input)
-      );
-    },
-    [updateAssistantMessageTimeline]
-  );
-  const waitForRuntimeApproval = useCallback(
-    async (input: RuntimePendingApprovalAction) => {
-      const {
-        threadId,
-        runtimeStoreThreadId,
-        replayThreadId,
-        providerId,
-        actionType,
-        riskLevel,
-        summary,
-        messageId,
-        toolCallId,
-        onApprove,
-        onDeny,
-        display,
-      } = input;
-      if (
-        !threadId ||
-        !runtimeStoreThreadId ||
-        !replayThreadId ||
-        !providerId ||
-        !actionType ||
-        !riskLevel ||
-        !summary
-      ) {
-        throw new Error('Runtime approval requests must include thread, provider, action, risk, and summary.');
-      }
-      let settled = false;
-      const resolveApproval = async (approved: boolean) => {
-        if (settled) {
-          return approved;
-        }
-        settled = true;
-        if (approved) {
-          await onApprove();
-          return true;
-        }
-        await onDeny?.();
-        return false;
-      };
-      patchLiveState(threadId, (state) => ({
-        ...state,
-        connectionState: 'connected',
-        statusVerb: 'Waiting for approval',
-        pendingApprovalSummary: summary,
-        pendingPermissionCount: state.pendingPermissionCount + 1,
-      }));
-      const approval = await requestRuntimeApprovalFlow({
-        threadId,
-        runtimeStoreThreadId,
-        replayThreadId,
-        providerId,
-        actionType,
-        riskLevel,
-        summary,
-        messageId,
-        toolCallId,
-        onApprove: async () => {
-          await resolveApproval(true);
-        },
-        onDeny: async () => {
-          await resolveApproval(false);
-        },
-        display,
-        enqueueAgentApproval,
-        enqueueApproval,
-        pendingApprovalActions: pendingApprovalActionsRef.current,
-      });
-      const approvalLifecycle = buildCapabilityApprovalLifecycleDescriptor({
-        approvalId: approval.id,
-        actionType,
-        riskLevel,
-        summary,
-        status: 'pending',
-        toolCallId,
-      });
-      appendRuntimeTimelineEvent(runtimeStoreThreadId, {
-        id: createRuntimeEventId('approval'),
-        threadId: runtimeStoreThreadId,
-        providerId: providerId as AgentProviderId,
-        summary: approvalLifecycle.timelineSummary,
-        createdAt: Date.now(),
-      });
-      await persistRuntimeTimelineEvent({
-        threadId: replayThreadId,
-        providerId: providerId as AgentProviderId,
-        summary: approvalLifecycle.timelineSummary,
-      });
-      await replayRecoveryController.appendAndSync({
-        runtimeStoreThreadId,
-        replayThreadId,
-        eventType: approvalLifecycle.replayEventType,
-        payload: approvalLifecycle.replayPayload,
-      });
-      if (messageId) {
-        updateAssistantMessageTimeline(messageId, (timeline) =>
-          upsertAssistantRuntimeApprovalEvent(timeline, {
-            id: buildRuntimeEventId('approval', approval.id),
-            kind: 'approval',
-            approvalId: approval.id,
-            toolCallId,
-            actionType,
-            summary,
-            riskLevel,
-            status: 'pending',
-            display,
-            createdAt: Date.now(),
-          })
-        );
-      }
-      return new Promise<boolean>((resolve) => {
-        pendingApprovalActionsRef.current[approval.id] = {
-          ...pendingApprovalActionsRef.current[approval.id],
-          onApprove: async () => {
-            resolve(await resolveApproval(true));
-          },
-          onDeny: async () => {
-            resolve(await resolveApproval(false));
-          },
-        };
-      });
-    },
-    [
-      enqueueAgentApproval,
-      replayRecoveryController,
-      updateAssistantMessageTimeline,
-    ]
-  );
-  const waitForRuntimeQuestionAnswer = useCallback(
-    async ({
-      assistantMessageId,
-      question,
-    }: {
-      assistantMessageId: string;
-      question: RuntimeQuestionPayload;
-    }) =>
-      new Promise<Record<string, string>>((resolve, reject) => {
-        pendingQuestionActionsRef.current[question.id] = {
-          messageId: assistantMessageId,
-          questionId: question.id,
-          resolve,
-          reject,
-        };
-      }),
-    []
-  );
-  const handleApproveRuntimeApproval = useCallback(
-    async (approvalId: string) => {
-      const pendingAction = await resolveRuntimeApproval({
-        approvalId,
-        status: 'approved',
-        pendingApprovalActions: pendingApprovalActionsRef.current,
-        resolveStoredApproval,
-        resolveAgentApproval,
-      });
-      if (pendingAction?.messageId) {
-        patchRuntimeEventInMessage(
-          pendingAction.messageId,
-          (event) => event.kind === 'approval' && event.approvalId === approvalId,
-          (event) => (event.kind === 'approval' ? { ...event, status: 'approved' } : event)
-        );
-      }
-      if (
-        pendingAction?.actionType &&
-        pendingAction.riskLevel &&
-        pendingAction.summary &&
-        pendingAction.runtimeStoreThreadId &&
-        pendingAction.replayThreadId &&
-        pendingAction.providerId
-      ) {
-        const lifecycle = buildCapabilityApprovalLifecycleDescriptor({
-          approvalId,
-          actionType: pendingAction.actionType,
-          riskLevel: pendingAction.riskLevel,
-          summary: pendingAction.summary,
-          status: 'approved',
-          toolCallId: pendingAction.toolCallId,
-        });
-        appendRuntimeTimelineEvent(pendingAction.runtimeStoreThreadId, {
-          id: createRuntimeEventId('approval'),
-          threadId: pendingAction.runtimeStoreThreadId,
-          providerId: pendingAction.providerId as AgentProviderId,
-          summary: lifecycle.timelineSummary,
-          createdAt: Date.now(),
-        });
-        await persistRuntimeTimelineEvent({
-          threadId: pendingAction.replayThreadId,
-          providerId: pendingAction.providerId as AgentProviderId,
-          summary: lifecycle.timelineSummary,
-        });
-        await replayRecoveryController.appendAndSync({
-          runtimeStoreThreadId: pendingAction.runtimeStoreThreadId,
-          replayThreadId: pendingAction.replayThreadId,
-          eventType: lifecycle.replayEventType,
-          payload: lifecycle.replayPayload,
-        });
-      }
-      if (pendingAction) {
-        await pendingAction.onApprove();
-      }
-    },
-    [
-      patchRuntimeEventInMessage,
-      replayRecoveryController,
-      resolveAgentApproval,
-      resolveStoredApproval,
-    ]
-  );
-  const handleDenyRuntimeApproval = useCallback(
-    async (approvalId: string) => {
-      const pendingAction = await resolveRuntimeApproval({
-        approvalId,
-        status: 'denied',
-        pendingApprovalActions: pendingApprovalActionsRef.current,
-        resolveStoredApproval,
-        resolveAgentApproval,
-      });
-      if (pendingAction?.messageId) {
-        patchRuntimeEventInMessage(
-          pendingAction.messageId,
-          (event) => event.kind === 'approval' && event.approvalId === approvalId,
-          (event) => (event.kind === 'approval' ? { ...event, status: 'denied' } : event)
-        );
-      }
-      if (
-        pendingAction?.actionType &&
-        pendingAction.riskLevel &&
-        pendingAction.summary &&
-        pendingAction.runtimeStoreThreadId &&
-        pendingAction.replayThreadId &&
-        pendingAction.providerId
-      ) {
-        const lifecycle = buildCapabilityApprovalLifecycleDescriptor({
-          approvalId,
-          actionType: pendingAction.actionType,
-          riskLevel: pendingAction.riskLevel,
-          summary: pendingAction.summary,
-          status: 'denied',
-          toolCallId: pendingAction.toolCallId,
-        });
-        appendRuntimeTimelineEvent(pendingAction.runtimeStoreThreadId, {
-          id: createRuntimeEventId('approval'),
-          threadId: pendingAction.runtimeStoreThreadId,
-          providerId: pendingAction.providerId as AgentProviderId,
-          summary: lifecycle.timelineSummary,
-          createdAt: Date.now(),
-        });
-        await persistRuntimeTimelineEvent({
-          threadId: pendingAction.replayThreadId,
-          providerId: pendingAction.providerId as AgentProviderId,
-          summary: lifecycle.timelineSummary,
-        });
-        await replayRecoveryController.appendAndSync({
-          runtimeStoreThreadId: pendingAction.runtimeStoreThreadId,
-          replayThreadId: pendingAction.replayThreadId,
-          eventType: lifecycle.replayEventType,
-          payload: lifecycle.replayPayload,
-        });
-      }
-      if (pendingAction?.onDeny) {
-        await pendingAction.onDeny();
-      }
-    },
-    [
-      patchRuntimeEventInMessage,
-      replayRecoveryController,
-      resolveAgentApproval,
-      resolveStoredApproval,
-    ]
-  );
-  const handleAnswerRuntimeQuestion = useCallback(
-    async (messageId: string, question: RuntimeQuestionPayload, answers: Record<string, string>) => {
-      if (!activeSessionId) {
-        return;
-      }
-      updateAssistantMessageTimeline(messageId, (timeline) =>
-        answerAssistantRuntimeQuestionEvent(timeline, question.id, answers)
-      );
-      patchLiveState(activeSessionId, (state) => ({
-        ...state,
-        pendingQuestionSummary: null,
-        statusVerb: state.pendingPermissionCount > 0 ? 'Waiting for approval' : '',
-        activeToolName: state.pendingPermissionCount > 0 ? state.activeToolName : null,
-        streamingToolInput: state.pendingPermissionCount > 0 ? state.streamingToolInput : '',
-      }));
-
-      const pendingAction = pendingQuestionActionsRef.current[question.id];
-      if (pendingAction) {
-        delete pendingQuestionActionsRef.current[question.id];
-        pendingAction.resolve(answers);
-      }
-    },
-    [activeSessionId, patchLiveState, updateAssistantMessageTimeline]
-  );
-const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
-    const oldLines = oldStr.split('\n');
-    const newLines = newStr.split('\n');
-
-    // Find common prefix
-    let prefixEnd = 0;
-    while (prefixEnd < oldLines.length && prefixEnd < newLines.length && oldLines[prefixEnd] === newLines[prefixEnd]) {
-      prefixEnd += 1;
-    }
-
-    // Find common suffix
-    let suffixStartOld = oldLines.length;
-    let suffixStartNew = newLines.length;
-    while (
-      suffixStartOld > prefixEnd &&
-      suffixStartNew > prefixEnd &&
-      oldLines[suffixStartOld - 1] === newLines[suffixStartNew - 1]
-    ) {
-      suffixStartOld -= 1;
-      suffixStartNew -= 1;
-    }
-
-    const result: string[] = [];
-
-    // Context before
-    for (let i = Math.max(0, prefixEnd - 2); i < prefixEnd; i += 1) {
-      result.push(` ${oldLines[i]}`);
-    }
-
-    // Removed lines
-    for (let i = prefixEnd; i < suffixStartOld; i += 1) {
-      result.push(`-${oldLines[i]}`);
-    }
-
-    // Added lines
-    for (let i = prefixEnd; i < suffixStartNew; i += 1) {
-      result.push(`+${newLines[i]}`);
-    }
-
-    // Context after
-    for (let i = suffixStartNew; i < Math.min(suffixStartNew + 2, newLines.length); i += 1) {
-      result.push(` ${newLines[i]}`);
-    }
-
-    return result;
-  };
+  const {
+    pendingApprovalActionsRef,
+    handleApproveRuntimeApproval,
+    handleDenyRuntimeApproval,
+    handleAnswerRuntimeQuestion,
+    stopPendingRuntimeInteractions,
+  } = useAIChatRuntimeInteractionState({
+    activeSessionId,
+    enqueueAgentApproval,
+    enqueueApproval,
+    resolveStoredApproval,
+    resolveAgentApproval,
+    patchLiveState,
+    appendRuntimeTimelineEvent,
+    persistRuntimeTimelineEvent,
+    replayRecoveryController,
+    updateAssistantMessageTimeline,
+  });
 
   const renderRuntimeApprovalCard = useCallback(
     (message: StoredChatMessage) => {
@@ -2864,72 +2029,20 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       }
 
       return (
-        <div className="chat-runtime-approval-list">
-          {messageApprovals.map((approval) => {
-            const actionLabel = approvalActionLabelMap[approval.actionType] || approval.actionType;
-            const pendingDisplay = pendingApprovalActionsRef.current[approval.id]?.display;
-            const showEditDiff =
-              pendingDisplay?.toolName === 'edit' &&
-              typeof pendingDisplay.oldString === 'string' &&
-              typeof pendingDisplay.newString === 'string';
-            const showWritePreview =
-              pendingDisplay?.toolName === 'write' && typeof pendingDisplay.content === 'string';
-            const pendingCommand = typeof pendingDisplay?.command === 'string' ? pendingDisplay.command : null;
-            const showCommand =
-              isCommandToolName(pendingDisplay?.toolName || '') && pendingCommand !== null;
-            const showFilePath = !!pendingDisplay?.filePath;
-            return (
-              <section key={approval.id} className={`chat-runtime-approval-card ${approval.riskLevel}`}>
-                <div className="chat-runtime-approval-head">
-                  <strong>{approval.summary}</strong>
-                  <span>{approvalStatusLabelMap[approval.status]}</span>
-                </div>
-                <div className="chat-runtime-approval-meta">
-                  <span>{actionLabel}</span>
-                  <span>{approvalRiskLabelMap[approval.riskLevel]}</span>
-                </div>
-                {showFilePath ? (
-                  <div className="chat-runtime-approval-file">
-                    <code>{summarizeProjectFilePath(pendingDisplay.filePath!)}</code>
-                  </div>
-                ) : null}
-                {showEditDiff ? (
-                  <pre className="chat-runtime-approval-diff">
-                    {buildInlineDiff(pendingDisplay.oldString!, pendingDisplay.newString!).map((line, i) => (
-                      <span
-                        key={i}
-                        className={
-                          line.startsWith('-') ? 'diff-removed' : line.startsWith('+') ? 'diff-added' : 'diff-context'
-                        }
-                      >
-                        {line}{'\n'}
-                      </span>
-                    ))}
-                  </pre>
-                ) : showWritePreview ? (
-                  <pre className="chat-runtime-approval-write-preview">
-                    {pendingDisplay.content!.slice(0, 800)}
-                    {pendingDisplay.content!.length > 800 ? '\n...' : ''}
-                  </pre>
-                ) : showCommand ? (
-                  <pre className="chat-runtime-approval-command">{pendingCommand}</pre>
-                ) : pendingDisplay?.inputJson ? (
-                  <pre className="chat-runtime-approval-pre">{pendingDisplay.inputJson}</pre>
-                ) : null}
-                {approval.status === 'pending' ? (
-                  <div className="chat-runtime-approval-actions">
-                    <button type="button" onClick={() => void handleApproveRuntimeApproval(approval.id)}>
-                      批准执行
-                    </button>
-                    <button type="button" onClick={() => void handleDenyRuntimeApproval(approval.id)}>
-                      拒绝
-                    </button>
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
-        </div>
+        <Suspense fallback={null}>
+          <LazyAIChatRuntimeApprovalList
+            approvals={messageApprovals}
+            pendingApprovalDisplays={Object.fromEntries(
+              messageApprovals.map((approval) => [approval.id, pendingApprovalActionsRef.current[approval.id]?.display])
+            )}
+            summarizeProjectFilePath={summarizeProjectFilePath}
+            onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
+            onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
+            approvalStatusLabelMap={approvalStatusLabelMap}
+            approvalRiskLabelMap={approvalRiskLabelMap}
+            approvalActionLabelMap={approvalActionLabelMap}
+          />
+        </Suspense>
       );
     },
     [activeApprovalThreadId, approvalsByThread, handleApproveRuntimeApproval, handleDenyRuntimeApproval]
@@ -2954,54 +2067,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     [setInput]
   );
 
-  const notifyProjectFilesChanged = useCallback(
-    (changedPaths: string[]) => {
-      if (!currentProject || changedPaths.length === 0) {
-        return;
-      }
-
-      emitKnowledgeFilesystemChanged({
-        projectId: currentProject.id,
-        changedPaths,
-      });
-
-      if (activeSessionId) {
-        const nextActiveSkills = runtimeSkillRegistryRef.current.activateSkillsForPaths(
-          activeSessionId,
-          changedPaths
-        );
-        setActiveSkills(activeSessionId, nextActiveSkills);
-      }
-    },
-    [activeSessionId, currentProject, setActiveSkills]
-  );
-
-  const executeProjectFileOperations = useCallback(
-    async (projectRoot: string, operations: ProjectFileOperation[]) => {
-      const result = await executeRuntimeProjectFileOperations({
-        projectRoot,
-        operations,
-        resolveProjectOperationPath,
-        isSupportedProjectTextFilePath,
-        readProjectTextFile,
-        getDirectoryPath,
-        invokeTool: async (command, params) =>
-          invoke<RuntimeProjectFileToolResponse>(command, {
-            params: {
-              project_root: projectRoot,
-              ...params,
-            },
-          }),
-      });
-
-      if (result.ok) {
-        notifyProjectFilesChanged(result.changedPaths);
-      }
-
-      return result;
-    },
-    [notifyProjectFilesChanged]
-  );
   const resolveProjectRootById = useCallback(
     async (projectId: string) => {
       const projectDir = await getProjectDir(projectId);
@@ -3013,297 +2078,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     },
     [currentProject]
   );
-  const resolveRecoveryTargetFileExists = useCallback(
-    async (targetPath: string) => {
-      if (!currentProject) {
-        return null;
-      }
-
-      try {
-        const projectRoot = await resolveProjectRootById(currentProject.id);
-        const absolutePath = resolveProjectOperationPath(projectRoot, targetPath);
-        const viewResult = await invoke<RuntimeProjectFileToolResponse>('tool_view', {
-          params: {
-            project_root: projectRoot,
-            file_path: absolutePath,
-            offset: 0,
-            limit: 1,
-          },
-        });
-
-        if (viewResult.success) {
-          return true;
-        }
-
-        const resultText = `${viewResult.error || ''} ${viewResult.content || ''}`.trim();
-        if (MISSING_PROJECT_FILE_PATTERN.test(resultText)) {
-          return false;
-        }
-        if (isProjectFileWriteAccessFailure(resultText)) {
-          return true;
-        }
-
-        const persistedContent = await readProjectTextFile(absolutePath);
-        return persistedContent !== null ? true : null;
-      } catch {
-        return null;
-      }
-    },
-    [currentProject, resolveProjectRootById]
-  );
-  const buildRuntimeWriteRecoveryProposal = useCallback(
-    async (toolCalls: RuntimeToolStep[]) => {
-      const failedWriteToolCall = [...toolCalls].reverse().find((toolCall) => {
-        if ((toolCall.name !== 'write' && toolCall.name !== 'edit') || toolCall.status !== 'failed') {
-          return false;
-        }
-
-        const failureText = `${toolCall.resultContent || ''} ${toolCall.resultPreview || ''}`.trim();
-        return isProjectFileWriteAccessFailure(failureText);
-      });
-
-      if (!failedWriteToolCall) {
-        return null;
-      }
-
-      const rawTargetPath = failedWriteToolCall.input.file_path;
-      if (typeof rawTargetPath !== 'string' || !rawTargetPath.trim()) {
-        return null;
-      }
-
-      const fileExists =
-        failedWriteToolCall.name === 'edit' ? true : await resolveRecoveryTargetFileExists(rawTargetPath);
-      const operation = buildProjectFileOperationFromToolCall({
-        toolName: failedWriteToolCall.name,
-        toolInput: failedWriteToolCall.input,
-        fileExists,
-      });
-
-      if (!operation) {
-        return null;
-      }
-
-      return {
-        id: `proposal_recovery_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        mode: 'manual',
-        status: 'pending',
-        summary: `重试写入 ${operation.targetPath}`,
-        assistantMessage: '检测到系统拒绝写入，我已整理好恢复写入提案。',
-        executionMessage: '目标文件可能被占用、只读或权限受限。确认后可再次尝试写入原文件。',
-        operations: [operation],
-      } satisfies ProjectFileProposal;
-    },
-    [resolveRecoveryTargetFileExists]
-  );
-  const persistTurnCheckpointForRun = useCallback(
-    async (input: {
-      threadId: string;
-      runId: string;
-      messageId?: string | null;
-      summary: string;
-      files: Array<{
-        path: string;
-        beforeContent?: string | null;
-        afterContent?: string | null;
-      }>;
-    }) => {
-      const normalizedFiles = input.files.filter((file) => file.path.trim().length > 0);
-      if (normalizedFiles.length === 0) {
-        return null;
-      }
-
-      const checkpoint = await saveAgentTurnCheckpoint({
-        threadId: input.threadId,
-        runId: input.runId,
-        messageId: input.messageId || null,
-        summary: input.summary,
-        files: normalizedFiles,
-      });
-
-      if (!checkpoint) {
-        return null;
-      }
-
-      setTurnCheckpoints((current) => {
-        const next = [checkpoint, ...current.filter((entry) => entry.id !== checkpoint.id && entry.runId !== checkpoint.runId)];
-        next.sort((left, right) => right.updatedAt - left.updatedAt);
-        return next;
-      });
-
-      return checkpoint;
-    },
-    []
-  );
-  const captureCheckpointFilesFromPaths = useCallback(
-    async (projectId: string, changedPaths: string[]) => {
-      if (changedPaths.length === 0) {
-        return [];
-      }
-
-      const uniquePaths = Array.from(new Set(changedPaths));
-      const projectRoot = await resolveProjectRootById(projectId);
-      const results = await Promise.all(
-        uniquePaths.map(async (relativePath) => {
-          try {
-            const absolutePath = resolveProjectOperationPath(projectRoot, relativePath);
-            const content = await readProjectTextFile(absolutePath);
-            return {
-              path: relativePath,
-              beforeContent: null,
-              afterContent: content,
-            };
-          } catch {
-            return {
-              path: relativePath,
-              beforeContent: null,
-              afterContent: null,
-            };
-          }
-        })
-      );
-
-      return results;
-    },
-    [resolveProjectRootById]
-  );
-
-  const handleCancelProjectFileProposal = useCallback(
-    async (messageId: string) => {
-      if (!currentProject || !activeSessionId) {
-        return;
-      }
-
-      await cancelRuntimeProjectFileProposal({
-        projectId: currentProject.id,
-        sessionId: activeSessionId,
-        messageId,
-        activeApprovalThreadId,
-        approvalsByThread,
-        updateMessage,
-        resolveStoredApproval,
-        clearPendingApprovalAction: (approvalId) => {
-          delete pendingApprovalActionsRef.current[approvalId];
-        },
-        resolveAgentApproval,
-      });
-    },
-    [
-      activeApprovalThreadId,
-      activeSessionId,
-      approvalsByThread,
-      currentProject,
-      resolveAgentApproval,
-      resolveStoredApproval,
-    ]
-  );
-
-  const handleExecuteProjectFileProposal = useCallback(
-    async (messageId: string, proposal: ProjectFileProposal) => {
-      if (!currentProject || !activeSessionId) {
-        return {
-          ok: false,
-          message: 'Project file execution is unavailable because there is no active project session.',
-        };
-      }
-      const targetMessage = activeSession?.messages.find((message) => message.id === messageId) || null;
-      const proposalRunId = targetMessage?.runId || createRunId();
-      const approvalThreadId = activeSession?.runtimeThreadId || activeSessionId;
-      const projectFileFlowToolCallId = buildSyntheticRuntimeToolCallId('project-file', messageId);
-      const projectFileApplyToolCallId = buildSyntheticRuntimeToolCallId('project-file', messageId, 'apply');
-      let executionMessage = proposal.summary;
-
-      const ok = await executeRuntimeApprovedProjectFileProposal({
-        projectId: currentProject.id,
-        sessionId: activeSessionId,
-        messageId,
-        proposal,
-        activeApprovalThreadId,
-        approvalsByThread,
-        updateMessage,
-        resolveStoredApproval,
-        clearPendingApprovalAction: (approvalId) => {
-          delete pendingApprovalActionsRef.current[approvalId];
-        },
-        resolveAgentApproval,
-        runId: proposalRunId,
-        createActivityEntryId,
-        getProjectDir: resolveProjectRootById,
-        executeProjectFileOperations,
-        appendActivityEntry,
-        normalizeErrorMessage,
-        onExecutionStart: () => {
-          upsertRuntimeToolUseInMessage(messageId, {
-            toolCallId: projectFileApplyToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_apply',
-            toolInput: {
-              mode: proposal.mode,
-              summary: proposal.summary,
-              paths: proposal.operations.map((operation) => operation.targetPath),
-            },
-            status: 'running',
-          });
-        },
-        onExecutionSuccess: async ({ runId, messageId: executedMessageId, summary, fileChanges }) => {
-          executionMessage = summary;
-          upsertRuntimeToolResultInMessage(messageId, {
-            toolCallId: projectFileApplyToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_apply',
-            status: 'completed',
-            output: summary,
-            fileChanges,
-          });
-          upsertRuntimeToolResultInMessage(messageId, {
-            toolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_flow',
-            status: 'completed',
-            output: summary,
-          });
-          await persistTurnCheckpointForRun({
-            threadId: approvalThreadId,
-            runId,
-            messageId: executedMessageId,
-            summary,
-            files: fileChanges,
-          });
-        },
-        onExecutionFailed: ({ message }) => {
-          executionMessage = message;
-          upsertRuntimeToolResultInMessage(messageId, {
-            toolCallId: projectFileApplyToolCallId,
-            parentToolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_apply',
-            status: 'failed',
-            output: message,
-          });
-          upsertRuntimeToolResultInMessage(messageId, {
-            toolCallId: projectFileFlowToolCallId,
-            toolName: 'project_file_flow',
-            status: 'failed',
-            output: message,
-          });
-        },
-      });
-
-      return {
-        ok,
-        message: executionMessage,
-      };
-    },
-    [
-      activeSession,
-      activeApprovalThreadId,
-      activeSessionId,
-      approvalsByThread,
-      currentProject,
-      executeProjectFileOperations,
-      persistTurnCheckpointForRun,
-      resolveAgentApproval,
-      resolveStoredApproval,
-    ]
-  );
-
   const renderProjectFileProposal = useCallback(
     (message: { id: string; projectFileProposal?: ProjectFileProposal }) => {
       const proposal = message.projectFileProposal;
@@ -3516,41 +2290,65 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     appendRuntimeTimelineEvent,
   ]);
 
-  const filteredConfigs = useMemo(() => {
-    const keyword = providerSearch.trim().toLowerCase();
-    if (!keyword) {
-      return aiConfigs;
-    }
+  const {
+    filteredConfigs,
+    selectedRuntimeConfig,
+    isRuntimeConfigured,
+    selectedSettingsConfig,
+    selectedSettingsPreset,
+    selectedProviderTypeOption,
+    settingsModelOptions,
+    selectedProviderListMode,
+    selectedProviderEndpoint,
+    isSettingsDraftComplete,
+    isSettingsDraftSelected,
+    customHeadersJsonValid,
+    showApiKey,
+    setShowApiKey,
+    providerSearch,
+    setProviderSearch,
+    testState,
+    setTestState,
+    testMessage,
+    setTestMessage,
+    isLoadingModels,
+    setSelectedSettingsConfigId,
+    settingsDraft,
+    setSettingsDraft,
+    jsonImportText,
+    setJsonImportText,
+    showJsonImport,
+    setShowJsonImport,
+    handleTestConnection,
+    handleLoadModels,
+    handleApplySettings,
+    handleToggleEnabled,
+    handleCreateConfig,
+    handleDeleteConfig,
+    handleSelectConfig,
+    handleExportConfigs,
+    handleImportConfigs,
+    resetSettingsTransientUi,
+  } = useAIChatSettingsState({
+    aiConfigs,
+    runtimeConfigIdOverride,
+    selectedConfigId,
+    addConfig,
+    updateConfig,
+    deleteConfig,
+    selectConfig,
+    setConfigEnabled,
+    buildSettingsDraft,
+    findPresetByConfig,
+    customProviderPreset: CUSTOM_PROVIDER_PRESET,
+    providerTypeOptions: AI_PROVIDER_TYPE_OPTIONS,
+    buildProviderKey,
+    mergeModelCandidates,
+    buildProviderEndpointPreview,
+    getSuggestedBaseURL,
+    loadAIServiceModule,
+  });
 
-    return aiConfigs.filter(
-      (item) =>
-        item.name.toLowerCase().includes(keyword) ||
-        item.provider.toLowerCase().includes(keyword) ||
-        item.baseURL.toLowerCase().includes(keyword) ||
-        item.model.toLowerCase().includes(keyword)
-    );
-  }, [aiConfigs, providerSearch]);
-
-  const selectedRuntimeConfig = useMemo(
-    () =>
-      (runtimeConfigIdOverride ? aiConfigs.find((item) => item.id === runtimeConfigIdOverride) : null) ||
-      aiConfigs.find((item) => item.id === selectedConfigId) ||
-      null,
-    [aiConfigs, runtimeConfigIdOverride, selectedConfigId]
-  );
-  const isRuntimeConfigured = Boolean(
-    selectedRuntimeConfig && selectedRuntimeConfig.enabled && hasUsableAIConfigEntry(selectedRuntimeConfig)
-  );
-
-  const selectedSettingsConfig = useMemo(
-    () => aiConfigs.find((item) => item.id === selectedSettingsConfigId) || aiConfigs[0] || null,
-    [aiConfigs, selectedSettingsConfigId]
-  );
-
-  const selectedSettingsPreset = useMemo(
-    () => findPresetByConfig(settingsDraft.provider, settingsDraft.baseURL) || CUSTOM_PROVIDER_PRESET,
-    [settingsDraft.baseURL, settingsDraft.provider]
-  );
   const selectedSettingsTabMeta = useMemo(
     () => SETTINGS_TABS.find((tab) => tab.id === activeSettingsTab) || SETTINGS_TABS[0],
     [activeSettingsTab]
@@ -3571,11 +2369,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       </div>
     ),
     [],
-  );
-
-  const selectedProviderTypeOption = useMemo(
-    () => AI_PROVIDER_TYPE_OPTIONS.find((item) => item.value === settingsDraft.provider) || AI_PROVIDER_TYPE_OPTIONS[0],
-    [settingsDraft.provider]
   );
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
@@ -3817,24 +2610,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     () => CHAT_AGENTS.find((agent) => agent.id === selectedChatAgentId) || CHAT_AGENTS[0],
     [selectedChatAgentId]
   );
-  const preferredForkAgentId = useMemo<Extract<ChatAgentId, 'claude' | 'codex'> | null>(() => {
-    if (
-      (selectedChatAgentId === 'claude' || selectedChatAgentId === 'codex') &&
-      agentAvailability[selectedChatAgentId].ready
-    ) {
-      return selectedChatAgentId;
-    }
-
-    if (agentAvailability.codex.ready) {
-      return 'codex';
-    }
-
-    if (agentAvailability.claude.ready) {
-      return 'claude';
-    }
-
-    return null;
-  }, [agentAvailability, selectedChatAgentId]);
   const latestActivityEntry = activityEntries[0] || null;
   const activityEntriesByRunId = useMemo(() => groupActivityEntriesByRunId(activityEntries), [activityEntries]);
   const turnCheckpointsByRunId = useMemo(() => groupTurnCheckpointsByRunId(turnCheckpoints), [turnCheckpoints]);
@@ -3931,21 +2706,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       streamingFlushTimerRef.current = null;
     }
     setStreamingDraftContents(nextDrafts);
-  }, []);
-  const pushStreamingDraft = useCallback((messageId: string, draft: StreamingDraftState) => {
-    streamingDraftBufferRef.current = {
-      ...streamingDraftBufferRef.current,
-      [messageId]: draft,
-    };
-
-    if (streamingFlushTimerRef.current !== null) {
-      return;
-    }
-
-    streamingFlushTimerRef.current = window.setTimeout(() => {
-      streamingFlushTimerRef.current = null;
-      setStreamingDraftContents({ ...streamingDraftBufferRef.current });
-    }, STREAMING_DRAFT_FLUSH_MS);
   }, []);
   const commitStreamingDraft = useCallback(
     (messageId: string) => {
@@ -4343,77 +3103,6 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       ];
     }
 
-    const renderApprovalEvent = (event: Extract<StoredChatRuntimeEvent, { kind: 'approval' }>) => (
-      <section key={event.id} className={`chat-runtime-approval-card ${event.riskLevel}`}>
-        <div className="chat-runtime-approval-head">
-          <strong>继续前想和你确认一下</strong>
-          <span>{approvalStatusLabelMap[event.status]}</span>
-        </div>
-        <div className="chat-runtime-approval-summary">{event.summary}</div>
-        <div className="chat-runtime-approval-meta">
-          <span>{approvalActionLabelMap[event.actionType] || event.actionType}</span>
-          <span>{approvalRiskLabelMap[event.riskLevel]}</span>
-        </div>
-        {event.display?.filePath ? (
-          <div className="chat-runtime-approval-preview">
-            <code>{summarizeProjectFilePath(event.display.filePath)}</code>
-          </div>
-        ) : null}
-        {event.display?.command ? <pre className="chat-runtime-approval-pre">{event.display.command}</pre> : null}
-        {event.display?.content && event.display.toolName === 'write' ? (
-          <pre className="chat-runtime-approval-pre">{event.display.content}</pre>
-        ) : null}
-        {event.display?.newString && event.display.toolName === 'edit' ? (
-          <pre className="chat-runtime-approval-pre">{event.display.newString}</pre>
-        ) : null}
-        {!event.display?.command && !event.display?.content && !event.display?.newString && event.display?.inputJson ? (
-          <pre className="chat-runtime-approval-pre">{event.display.inputJson}</pre>
-        ) : null}
-        {event.status === 'pending' ? (
-          <div className="chat-runtime-approval-actions">
-            <button type="button" onClick={() => void handleApproveRuntimeApproval(event.approvalId)}>
-              批准执行
-            </button>
-            <button type="button" onClick={() => void handleDenyRuntimeApproval(event.approvalId)}>
-              拒绝
-            </button>
-          </div>
-        ) : null}
-      </section>
-    );
-    const renderQuestionEvent = (event: Extract<StoredChatRuntimeEvent, { kind: 'question' }>) => {
-      const question = event.payload;
-      const isAnswered = question.status === 'answered';
-      const answers = question.answers || {};
-      return (
-        <section key={event.id} className={`chat-runtime-question-card ${isAnswered ? 'answered' : 'pending'}`}>
-          <div className="chat-runtime-question-head">
-            <strong>还需要你补充一点信息</strong>
-            <span>{isAnswered ? '已回答' : '等待输入'}</span>
-          </div>
-          <div className="chat-runtime-question-list">
-            {question.questions.map((item, questionIndex) => {
-              const answerKey = item.question;
-              const answeredValue = answers[answerKey] || '';
-              return (
-                <RuntimeQuestionBlock
-                  key={`${event.questionId}-${questionIndex}`}
-                  item={item}
-                  answered={isAnswered}
-                  answeredValue={answeredValue}
-                  onSubmit={(value) =>
-                    handleAnswerRuntimeQuestion(message.id, question, {
-                      ...answers,
-                      [answerKey]: value,
-                    })
-                  }
-                />
-              );
-            })}
-          </div>
-        </section>
-      );
-    };
     const renderRuntimeFileChanges = (
       fileChanges: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']>
     ) => (
@@ -4448,8 +3137,40 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     return buildRuntimeExecutionTimelineCards({
       runtimeEvents,
       timelineEvents: message.role === 'assistant' ? message.timeline : undefined,
-      renderApprovalEvent,
-      renderQuestionEvent,
+      renderApprovalEvent: (event) => (
+        <Suspense fallback={null}>
+          <LazyAIChatRuntimeTimelineInteractionEvent
+            messageId={message.id}
+            event={event}
+            summarizeProjectFilePath={summarizeProjectFilePath}
+            onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
+            onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
+            onAnswerQuestion={(messageId, question, answers) =>
+              void handleAnswerRuntimeQuestion(messageId, question, answers)
+            }
+            approvalStatusLabelMap={approvalStatusLabelMap}
+            approvalRiskLabelMap={approvalRiskLabelMap}
+            approvalActionLabelMap={approvalActionLabelMap}
+          />
+        </Suspense>
+      ),
+      renderQuestionEvent: (event) => (
+        <Suspense fallback={null}>
+          <LazyAIChatRuntimeTimelineInteractionEvent
+            messageId={message.id}
+            event={event}
+            summarizeProjectFilePath={summarizeProjectFilePath}
+            onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
+            onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
+            onAnswerQuestion={(messageId, question, answers) =>
+              void handleAnswerRuntimeQuestion(messageId, question, answers)
+            }
+            approvalStatusLabelMap={approvalStatusLabelMap}
+            approvalRiskLabelMap={approvalRiskLabelMap}
+            approvalActionLabelMap={approvalActionLabelMap}
+          />
+        </Suspense>
+      ),
       renderRuntimeFileChanges,
       helpers: {
         summarizeRuntimeToolCall,
@@ -4478,585 +3199,26 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     loadCheckpointDiff,
     renderCheckpointDiffPanel,
   ]);
-  const syncModelCatalog = useCallback((nextProvider: AIProviderType, nextBaseURL: string, models: string[]) => {
-    const key = buildProviderKey(nextProvider, nextBaseURL);
-    setModelCatalog((current) => {
-      const merged = mergeModelCandidates(current[key] || [], models);
-      const previous = current[key] || [];
-      if (merged.length === previous.length && merged.every((item, index) => item === previous[index])) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [key]: merged,
-      };
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!selectedRuntimeConfig) {
-      return;
-    }
-
-    const matched = findPresetByConfig(selectedRuntimeConfig.provider, selectedRuntimeConfig.baseURL) || CUSTOM_PROVIDER_PRESET;
-    syncModelCatalog(selectedRuntimeConfig.provider, selectedRuntimeConfig.baseURL, [...matched.models, selectedRuntimeConfig.model]);
-  }, [selectedRuntimeConfig, syncModelCatalog]);
-
-  useEffect(() => {
-    if (selectedSettingsConfigId && !aiConfigs.some((item) => item.id === selectedSettingsConfigId)) {
-      setSelectedSettingsConfigId(aiConfigs[0]?.id || null);
-      return;
-    }
-
-    if (!selectedSettingsConfigId && aiConfigs[0]?.id) {
-      setSelectedSettingsConfigId(aiConfigs[0].id);
-    }
-  }, [aiConfigs, selectedSettingsConfigId]);
-
-  useEffect(() => {
-    setSettingsDraft(buildSettingsDraft(selectedSettingsConfig));
-  }, [selectedSettingsConfig]);
-
-  const settingsModelOptions = useMemo(
-    () =>
-      mergeModelCandidates(
-        selectedSettingsPreset.models,
-        modelCatalog[buildProviderKey(settingsDraft.provider, settingsDraft.baseURL)] || [],
-        [settingsDraft.model]
-      ),
-    [modelCatalog, selectedSettingsPreset.models, settingsDraft.baseURL, settingsDraft.model, settingsDraft.provider]
-  );
-
-  const selectedProviderListMode = useMemo(
-    () => listModelsSupportMode(settingsDraft.provider),
-    [settingsDraft.provider]
-  );
-
-  const selectedProviderEndpoint = useMemo(
-    () => buildProviderEndpointPreview(settingsDraft.provider, settingsDraft.baseURL),
-    [settingsDraft.baseURL, settingsDraft.provider]
-  );
-
-  const isSettingsDraftComplete = hasUsableAIConfigEntry(settingsDraft);
-  const isSettingsDraftSelected = settingsDraft.id === selectedConfigId;
-  const customHeadersJsonValid = !settingsDraft.customHeaders.trim()
-    || (() => { try { JSON.parse(settingsDraft.customHeaders); return true; } catch { return false; } })();
-
-  const handleTestConnection = useCallback(async () => {
-    setTestState('testing');
-    setTestMessage('');
-
-    const result = await aiService.testConnection(settingsDraft);
-    setTestState(result.ok ? 'success' : 'error');
-    setTestMessage(result.message);
-  }, [settingsDraft]);
-
-  const handleLoadModels = useCallback(async () => {
-    setIsLoadingModels(true);
-    setTestState('idle');
-    setTestMessage('');
-
-    try {
-      if (selectedProviderListMode === 'preset-only') {
-        const fallbackModels = mergeModelCandidates(selectedSettingsPreset.models, [settingsDraft.model]);
-        syncModelCatalog(settingsDraft.provider, settingsDraft.baseURL, fallbackModels);
-        setTestState('success');
-        setTestMessage('当前 provider 不支持远程拉取模型列表，已回退到内置模型候选。');
-        return;
-      }
-
-      const list = await aiService.listModels(settingsDraft);
-      syncModelCatalog(settingsDraft.provider, settingsDraft.baseURL, list);
-      setSettingsDraft((current) => ({
-        ...current,
-        model: current.model.trim() && list.includes(current.model) ? current.model : list[0] || current.model,
-      }));
-      setTestState('success');
-      setTestMessage(`已加载 ${list.length} 个模型。`);
-    } catch (error) {
-      setTestState('error');
-      setTestMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsLoadingModels(false);
-    }
-  }, [selectedProviderListMode, selectedSettingsPreset.models, settingsDraft, syncModelCatalog]);
-
-  const handleApplySettings = useCallback(() => {
-    if (!settingsDraft.id) {
-      return;
-    }
-
-    updateConfig(settingsDraft.id, {
-      name: settingsDraft.name.trim() || '未命名 AI',
-      provider: settingsDraft.provider,
-      apiKey: settingsDraft.apiKey,
-      baseURL: settingsDraft.baseURL,
-      model: settingsDraft.model,
-      contextWindowTokens: settingsDraft.contextWindowTokens,
-      customHeaders: settingsDraft.customHeaders,
-    });
-    syncModelCatalog(settingsDraft.provider, settingsDraft.baseURL, settingsModelOptions);
-    setTestState('success');
-    setTestMessage(`已保存 ${settingsDraft.name.trim() || '当前 AI 配置'}。`);
-  }, [settingsDraft, settingsModelOptions, syncModelCatalog, updateConfig]);
-
-  const handleToggleEnabled = useCallback(() => {
-    if (!settingsDraft.id) {
-      return;
-    }
-
-    if (!settingsDraft.enabled && !isSettingsDraftComplete) {
-      setTestState('error');
-      setTestMessage('请先补全 API Key 和模型，再启用该 AI。');
-      return;
-    }
-
-    if (!settingsDraft.enabled) {
-      updateConfig(settingsDraft.id, {
-        name: settingsDraft.name.trim() || '未命名 AI',
-        provider: settingsDraft.provider,
-        apiKey: settingsDraft.apiKey,
-        baseURL: settingsDraft.baseURL,
-        model: settingsDraft.model,
-        contextWindowTokens: settingsDraft.contextWindowTokens,
-        customHeaders: settingsDraft.customHeaders,
-      });
-    }
-
-    const changed = setConfigEnabled(settingsDraft.id, !settingsDraft.enabled);
-    if (!changed) {
-      setTestState('error');
-      setTestMessage('当前配置还不完整，不能启用。');
-      return;
-    }
-
-    setTestState('success');
-    setTestMessage(!settingsDraft.enabled ? '已启用当前 AI。' : '已关闭当前 AI。');
-  }, [isSettingsDraftComplete, setConfigEnabled, settingsDraft, updateConfig]);
-
-  const handleCreateConfig = useCallback(() => {
-    const nextId = addConfig({
-      name: `AI 配置 ${aiConfigs.length + 1}`,
-      provider: settingsDraft.provider,
-      baseURL: settingsDraft.baseURL || getSuggestedBaseURL(settingsDraft.provider, selectedSettingsPreset),
-      model: settingsDraft.model,
-      contextWindowTokens: settingsDraft.contextWindowTokens,
-    });
-    setSelectedSettingsConfigId(nextId);
-    setTestState('idle');
-    setTestMessage('');
-  }, [addConfig, aiConfigs.length, selectedSettingsPreset, settingsDraft.baseURL, settingsDraft.model, settingsDraft.provider]);
-
-  const handleDeleteConfig = useCallback(() => {
-    if (!settingsDraft.id || aiConfigs.length <= 1) {
-      setTestState('error');
-      setTestMessage(aiConfigs.length <= 1 ? '至少保留一个 AI 配置。' : '');
-      return;
-    }
-
-    deleteConfig(settingsDraft.id);
-    setTestState('success');
-    setTestMessage('已删除当前 AI 配置。');
-  }, [aiConfigs.length, deleteConfig, settingsDraft.id]);
-
-  const handleSelectConfig = useCallback(() => {
-    if (!settingsDraft.id) {
-      return;
-    }
-
-    selectConfig(settingsDraft.id);
-    setTestState('success');
-    setTestMessage(`已切换到 "${settingsDraft.name || '当前 AI 配置'}"。`);
-  }, [selectConfig, settingsDraft.id, settingsDraft.name]);
-
-  const handleExportConfigs = useCallback(async () => {
-    try {
-      const exportData = {
-        version: 2,
-        configs: aiConfigs.map(({ id, ...rest }) => rest),
-      };
-      const json = JSON.stringify(exportData, null, 2);
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(json);
-      } else {
-        throw new Error('剪贴板不可用');
-      }
-      setTestState('success');
-      setTestMessage('已复制 JSON 到剪贴板。');
-    } catch {
-      setTestState('error');
-      setTestMessage('导出失败：无法访问剪贴板。');
-    }
-  }, [aiConfigs]);
-
-  const handleImportConfigs = useCallback(() => {
-    try {
-      const parsed = JSON.parse(jsonImportText);
-      const importEntries = Array.isArray(parsed)
-        ? parsed
-        : parsed.configs;
-      if (!Array.isArray(importEntries) || importEntries.length === 0) {
-        setTestState('error');
-        setTestMessage('JSON 格式无效：缺少 configs 数组。');
-        return;
-      }
-
-      let importedCount = 0;
-      for (const entry of importEntries) {
-        if (entry.provider && entry.apiKey) {
-          addConfig({
-            name: entry.name || `导入 ${entry.provider}`,
-            provider: entry.provider,
-            apiKey: entry.apiKey,
-            baseURL: entry.baseURL,
-            model: entry.model,
-            contextWindowTokens: entry.contextWindowTokens,
-            customHeaders: entry.customHeaders || '',
-            enabled: false,
-          });
-          importedCount++;
-        }
-      }
-
-      setShowJsonImport(false);
-      setJsonImportText('');
-      setTestState('success');
-      setTestMessage(`成功导入 ${importedCount} 个 AI 配置。`);
-    } catch (err) {
-      console.warn('AI config import failed:', err);
-      setTestState('error');
-      setTestMessage('JSON 格式无效，请检查后重试。');
-    }
-  }, [addConfig, jsonImportText]);
-
   const closeSettings = useCallback(() => {
     setIsSettingsOpen(false);
     setActiveSettingsTab('ai');
-    setShowApiKey(false);
-    setShowJsonImport(false);
-    setJsonImportText('');
-  }, []);
-
-  const handleCreateSession = useCallback(() => {
-    if (!currentProject) {
-      return;
-    }
-
-    const session = createWelcomeSession(currentProject.id, runtimeProviderId);
-    upsertSession(currentProject.id, session);
-    setActiveSession(currentProject.id, session.id);
-    setInput('');
-    setShowHistoryMenu(false);
-  }, [currentProject, runtimeProviderId, setActiveSession, upsertSession]);
-
-        const submitPrompt = useCallback(
-    async (promptValue: string) => {
-      if (selectedRuntimeConfig && !providerExecutionMode) {
-        aiService.setConfig(toRuntimeAIConfig(selectedRuntimeConfig));
-      }
-      const effectiveChatAgentId =
-        selectedChatAgentId !== 'built-in' && !agentAvailability[selectedChatAgentId].ready
-          ? 'built-in'
-          : selectedChatAgentId;
-      const fallbackToBuiltInMessage =
-        selectedChatAgentId !== effectiveChatAgentId
-          ? agentAvailability[selectedChatAgentId].fallbackMessage
-          : null;
-      if (selectedChatAgentId !== effectiveChatAgentId) {
-        setSelectedChatAgentId('built-in');
-      }
-
-      await submitRuntimeChatTurn({
-      request: {
-        projectId: currentProject?.id || '',
-        projectName: currentProject?.name || '',
-        targetSessionId: activeSessionId || activeSession?.id || '',
-        runtimeThreadId: activeSession?.runtimeThreadId || null,
-        providerId: runtimeProviderId,
-        rawUserInput: promptValue,
-        cleanedUserInput: promptValue.trim(),
-        selectedRuntimeConfigId: selectedRuntimeConfig?.id || null,
-        selectedRuntimeConfigName: selectedRuntimeConfig?.name || null,
-        contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
-        permissionMode,
-        selectedChatAgentId: effectiveChatAgentId,
-        fallbackToBuiltInMessage,
-        activeSkills: activeSkillsByThread[activeSessionId || activeSession?.id || ''] || [],
-      },
-      ports: {
-        resolveProjectRootById,
-        executeRuntimePrompt: async (input) =>
-          executeRuntimePrompt({
-            providerId: input.providerId,
-            sessionId: input.sessionId,
-            config:
-              selectedRuntimeConfig && input.modelOverride
-                ? {
-                    ...selectedRuntimeConfig,
-                    model: input.modelOverride,
-                  }
-                : selectedRuntimeConfig,
-            systemPrompt: input.systemPrompt,
-            prompt: input.prompt,
-            signal: input.signal,
-            onEvent: input.onEvent as Parameters<typeof executeRuntimePrompt>[0]['onEvent'],
-          }),
-        persistRuntimeThread,
-      },
-      interactionPort: {
-        waitForQuestionAnswer: waitForRuntimeQuestionAnswer,
-        waitForApproval: waitForRuntimeApproval,
-      },
-      legacy: {
-        abortControllerRef,
-        activeSession,
-        activeSkillsByThread,
-        agentAvailability,
-        applyAssistantReasoningProgress,
-        applyRuntimeTurnBlocked,
-        applyRuntimeTurnClassifying,
-        applyRuntimeTurnCompleted,
-        applyRuntimeTurnExecuting,
-        applyRuntimeTurnFailed,
-        buildAIConfigurationError,
-        buildAgentContext,
-        buildAssistantContentState,
-        buildAssistantStreamingTimeline,
-        buildAssistantTimelineUpdate,
-        buildBuiltInToolApprovalActionType,
-        buildBuiltInToolApprovalDisplay,
-        buildBuiltInToolApprovalSummary,
-        buildMcpLifecycleStartDescriptor,
-        buildMemoryReadLifecycleDescriptor,
-        buildProjectMemoryEntry,
-        buildRuntimeAgentToolResult,
-        buildRuntimeChangedPathActivityEntry,
-        buildRuntimeEventId,
-        buildRuntimeLocalAgentDecisionState,
-        buildRuntimeLocalAgentPlan,
-        buildRuntimeReplayTurnStartPayload,
-        buildRuntimeTurnReviewPlan,
-        buildRuntimeWriteRecoveryProposal,
-        buildSessionPreview,
-        buildSkillActivationLifecycleDescriptor,
-        buildSkillHookLifecycleDescriptor,
-        buildSyntheticRuntimeToolCallId,
-        captureCheckpointFilesFromPaths,
-        classifyRuntimeActionRisk,
-        clearAssistantContentState,
-        clearStreamingDraft,
-        commitStreamingDraft,
-        contextSnapshot,
-        createActivityEntryId,
-        createEmptyAgentTurnSession,
-        createExecutionAgentRunRecord,
-        createExecutionRunRecord,
-        createExecutionTaskId,
-        createExecutionTaskRecord,
-        createLocalAgentExecutionAgentRunId,
-        createLocalAgentExecutionRunId,
-          createRootExecutionRunId,
-          createRunId,
-          createRuntimeEventId,
-          createStoredChatMessage,
-          createWelcomeSession,
-        decideAgentTurnMode,
-        denyRuntimeLocalAgentApproval,
-        deriveTaskStatusFromRuns,
-        enqueueAgentApproval,
-        estimateTokenCount,
-        explicitReferenceLabels,
-        extractCheckpointFilesFromToolCalls,
-        findLatestPendingProjectFileProposalAction,
-        findRuntimeMcpToolDefinition,
-        getAssistantRuntimeTimelineEvents,
-        getAssistantTimelineReasoning,
-        handleCancelProjectFileProposal,
-        handleExecuteProjectFileProposal,
-        handleRuntimeLocalAgentDecision,
-        invoke,
-        invokeRuntimeMcpTool,
-        isLoading,
-        isRuntimeConfigured,
-        isShortPendingActionAffirmation,
-        isShortPendingActionRejection,
-        loadProjectInstructionReferences,
-        memory,
-        normalizeErrorMessage,
-        notifyProjectFilesChanged,
-        parseRuntimeMcpCommand,
-        parseRuntimeQuestionInput,
-        patchExecutionRunStatus,
-        persistRuntimeTimelineEvent,
-        persistTurnCheckpointForRun,
-        preferredForkAgentId,
-        prepareRuntimeLocalAgentFlow,
-        pushStreamingDraft,
-        reduceAgentTurnSession,
-        replaceAssistantRuntimeTimelineEvents,
-        replayRecoveryController,
-        resolveAgentApproval,
-        resolveRuntimeAgentToolInput,
-        resolveRuntimeLocalAgentDecisionFeedback,
-        resolveSkillIntent,
-        resolveStoredApproval,
-        resolvedReferenceContextFiles,
-        runAgentTeamTurn,
-        runRuntimeLocalAgentExecution,
-        runningSubmissionRef,
-        runtimeMcpServers,
-        runtimeSkillRegistryRef,
-        setIsLoading,
-        setStallFP,
-        shouldAutoApproveRuntimeAction,
-        shouldDenyRuntimeAction,
-        stopRequestedRef,
-        streamingDraftBufferRef,
-        summarizeLiveToolInput,
-        summarizeSessionTitle,
-        syncAssistantTimelineWithToolCalls,
-        syncTeamExecutionGraph,
-        syncTeamRunRuntimeEvents,
-        toConversationHistoryMessages,
-        updateAssistantMessageTimeline,
-        updateRuntimeLocalAgentPlanApprovalStatus,
-        upsertAgentBackgroundTask,
-        upsertAssistantRuntimeQuestionEvent,
-      },
-      });
-    },
-    [
-      abortControllerRef,
-      activeSession,
-      activeSessionId,
-      activeSkillsByThread,
-      agentAvailability,
-      aiService,
-      applyAssistantReasoningProgress,
-      applyRuntimeTurnBlocked,
-      applyRuntimeTurnClassifying,
-      applyRuntimeTurnCompleted,
-      applyRuntimeTurnExecuting,
-      applyRuntimeTurnFailed,
-      buildAIConfigurationError,
-      buildAgentContext,
-      buildAssistantContentState,
-      buildAssistantStreamingTimeline,
-      buildAssistantTimelineUpdate,
-      buildBuiltInToolApprovalActionType,
-      buildBuiltInToolApprovalDisplay,
-      buildBuiltInToolApprovalSummary,
-      buildMcpLifecycleStartDescriptor,
-      buildMemoryReadLifecycleDescriptor,
-      buildProjectMemoryEntry,
-      buildRuntimeAgentToolResult,
-      buildRuntimeChangedPathActivityEntry,
-      buildRuntimeEventId,
-      buildRuntimeLocalAgentDecisionState,
-      buildRuntimeLocalAgentPlan,
-      buildRuntimeReplayTurnStartPayload,
-      buildRuntimeTurnReviewPlan,
-      buildRuntimeWriteRecoveryProposal,
-      buildSessionPreview,
-      buildSkillActivationLifecycleDescriptor,
-      buildSkillHookLifecycleDescriptor,
-      buildSyntheticRuntimeToolCallId,
-      captureCheckpointFilesFromPaths,
-      classifyRuntimeActionRisk,
-      clearAssistantContentState,
-      clearStreamingDraft,
-      commitStreamingDraft,
-      contextSnapshot,
-      createActivityEntryId,
-      createEmptyAgentTurnSession,
-      createExecutionAgentRunRecord,
-      createExecutionRunRecord,
-      createExecutionTaskId,
-      createExecutionTaskRecord,
-      createLocalAgentExecutionAgentRunId,
-      createLocalAgentExecutionRunId,
-      createRootExecutionRunId,
-      createRunId,
-      createRuntimeEventId,
-      createStoredChatMessage,
-      createWelcomeSession,
-      currentProject,
-      decideAgentTurnMode,
-      denyRuntimeLocalAgentApproval,
-      deriveTaskStatusFromRuns,
-      enqueueAgentApproval,
-      estimateTokenCount,
-      executeRuntimePrompt,
-      explicitReferenceLabels,
-      extractCheckpointFilesFromToolCalls,
-      findLatestPendingProjectFileProposalAction,
-      findRuntimeMcpToolDefinition,
-      getAssistantRuntimeTimelineEvents,
-      getAssistantTimelineReasoning,
-      handleCancelProjectFileProposal,
-      handleExecuteProjectFileProposal,
-      handleRuntimeLocalAgentDecision,
-      invoke,
-      invokeRuntimeMcpTool,
-      isLoading,
-      isRuntimeConfigured,
-      isShortPendingActionAffirmation,
-      isShortPendingActionRejection,
-      loadProjectInstructionReferences,
-      memory,
-      normalizeErrorMessage,
-      notifyProjectFilesChanged,
-      parseRuntimeMcpCommand,
-      parseRuntimeQuestionInput,
-      patchExecutionRunStatus,
-      persistRuntimeThread,
-      persistRuntimeTimelineEvent,
-      persistTurnCheckpointForRun,
-      preferredForkAgentId,
-      prepareRuntimeLocalAgentFlow,
-      providerExecutionMode,
-      pushStreamingDraft,
-      reduceAgentTurnSession,
-      replaceAssistantRuntimeTimelineEvents,
-      replayRecoveryController,
-      waitForRuntimeApproval,
-      resolveAgentApproval,
-      resolveProjectRootById,
-      resolveRuntimeAgentToolInput,
-      resolveRuntimeLocalAgentDecisionFeedback,
-      resolveSkillIntent,
-      resolveStoredApproval,
-      resolvedReferenceContextFiles,
-      runAgentTeamTurn,
-      runRuntimeLocalAgentExecution,
-      runningSubmissionRef,
-      runtimeMcpServers,
-      runtimeProviderId,
-      runtimeSkillRegistryRef,
-      selectedChatAgentId,
-      selectedRuntimeConfig,
-      setIsLoading,
-      setSelectedChatAgentId,
-      setStallFP,
-      shouldAutoApproveRuntimeAction,
-      shouldDenyRuntimeAction,
-      stopRequestedRef,
-      streamingDraftBufferRef,
-      summarizeLiveToolInput,
-      summarizeSessionTitle,
-      syncAssistantTimelineWithToolCalls,
-      syncTeamExecutionGraph,
-      syncTeamRunRuntimeEvents,
-      toConversationHistoryMessages,
-      toRuntimeAIConfig,
-      updateAssistantMessageTimeline,
-      updateRuntimeLocalAgentPlanApprovalStatus,
-      upsertAgentBackgroundTask,
-      upsertAssistantRuntimeQuestionEvent,
-      waitForRuntimeQuestionAnswer,
-    ]
-  );
+    resetSettingsTransientUi();
+  }, [resetSettingsTransientUi]);
+  const { handleCreateSession, submitPrompt } = useAIChatSidecarSessionActions({
+    currentProjectId: currentProject?.id || null,
+    runtimeProviderId,
+    activeSessionId,
+    activeSession,
+    selectedRuntimeConfig,
+    selectedChatAgentId,
+    isSelectedChatAgentReady: agentAvailability[selectedChatAgentId].ready,
+    setSelectedChatAgentId,
+    setInput,
+    setShowHistoryMenu,
+    createWelcomeSession,
+    upsertSession,
+    setActiveSession,
+  });
 
   const handleSubmit = useCallback(
     async (event?: React.FormEvent) => {
@@ -5081,16 +3243,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   const handleStopGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
     stopRequestedRef.current = true;
-    for (const [questionId, pendingQuestion] of Object.entries(pendingQuestionActionsRef.current)) {
-      pendingQuestion.reject('Generation stopped.');
-      delete pendingQuestionActionsRef.current[questionId];
-    }
-    for (const [approvalId, pendingApproval] of Object.entries(pendingApprovalActionsRef.current)) {
-      void pendingApproval.onDeny?.();
-      resolveStoredApproval(approvalId, 'denied');
-      void resolveAgentApproval({ approvalId, status: 'denied' });
-      delete pendingApprovalActionsRef.current[approvalId];
-    }
+    stopPendingRuntimeInteractions();
     const submission = runningSubmissionRef.current;
     if (submission) {
       commitStreamingDraft(submission.assistantMessageId);
@@ -5110,7 +3263,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
       runningSubmissionRef.current = null;
     }
     setIsLoading(false);
-  }, [clearStreamingDraft, commitStreamingDraft, patchLiveState, resolveAgentApproval, resolveStoredApproval, setIsLoading]);
+  }, [clearStreamingDraft, commitStreamingDraft, patchLiveState, setIsLoading, stopPendingRuntimeInteractions]);
 
   useEffect(() => {
     const handleExternalCommand = (event: Event) => {
@@ -5889,316 +4042,60 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
 
           <div className="chat-settings-panel">
             {activeSettingsTab === 'ai' ? (
-              <div className="chat-settings-ai-layout">
-                <aside className="chat-settings-provider-list">
-                  <div className="chat-settings-provider-search">
-                    <input
-                      value={providerSearch}
-                      onChange={(event) => setProviderSearch(event.target.value)}
-                      placeholder="搜索 AI 配置"
-                    />
+              <Suspense
+                fallback={(
+                  <div className="chat-settings-panel-surface">
+                    <div className="chat-settings-placeholder-card muted">
+                      <strong>加载 AI 设置中...</strong>
+                    </div>
                   </div>
-
-                  <button className="chat-settings-apply-btn" type="button" onClick={handleCreateConfig}>
-                    新增 AI 配置
-                  </button>
-
-                  <div className="chat-settings-provider-items">
-                    {filteredConfigs.map((config) => {
-                      const isActive = selectedSettingsConfig?.id === config.id;
-                      const configPreset = findPresetByConfig(config.provider, config.baseURL) || CUSTOM_PROVIDER_PRESET;
-                      return (
-                        <button
-                          key={config.id}
-                          className={`chat-settings-provider-item ${isActive ? 'active' : ''}`}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSettingsConfigId(config.id);
-                            setTestState('idle');
-                            setTestMessage('');
-                          }}
-                        >
-                          <span className={`chat-settings-provider-badge ${configPreset.accent}`}>{config.name.slice(0, 2).toUpperCase()}</span>
-                          <span className="chat-settings-provider-copy">
-                            <strong>{config.name}</strong>
-                            <span>
-                              {providerTypeLabel(config.provider)}
-                              {config.enabled && hasUsableAIConfigEntry(config) ? ' · 已启用' : ' · 已关闭'}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </aside>
-
-                <div className="chat-settings-detail">
-            <div className="chat-settings-detail-header">
-              <div>
-                <strong>{settingsDraft.name || '未命名 AI'}</strong>
-                <span>保存为本地配置项，只有启用后才会出现在聊天选择里。</span>
-              </div>
-            </div>
-
-            <div className="chat-settings-summary-card">
-              <div>
-                <span className="chat-settings-summary-label">当前配置</span>
-                <strong>{settingsDraft.name || '未命名 AI'}</strong>
-                <p>{selectedSettingsPreset.note}</p>
-              </div>
-              <div className="chat-settings-summary-meta">
-                <span>{providerTypeLabel(settingsDraft.provider)}</span>
-                <span>{settingsDraft.enabled && isSettingsDraftComplete ? '已启用' : '未启用'}</span>
-                <span>{isSettingsDraftSelected ? '当前聊天中' : '未选中'}</span>
-              </div>
-            </div>
-
-            <div className="chat-settings-section">
-              <div className="chat-settings-section-header">
-                <strong>API 类型</strong>
-                <span>{selectedProviderTypeOption.description}</span>
-              </div>
-
-              <div className="chat-settings-type-grid">
-                {AI_PROVIDER_TYPE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    className={`chat-settings-type-card ${settingsDraft.provider === option.value ? 'active' : ''}`}
-                    type="button"
-                    onClick={() =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        provider: option.value,
-                        baseURL:
-                          current.baseURL.trim() ||
-                          (selectedSettingsPreset.id !== CUSTOM_PROVIDER_PRESET.id && option.value === selectedSettingsPreset.type
-                            ? selectedSettingsPreset.baseURL
-                            : current.baseURL),
-                      }))
-                    }
-                  >
-                    <strong>{option.label}</strong>
-                    <span>{option.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="chat-settings-grid">
-              <label className="chat-settings-field chat-settings-field-full">
-                <span>配置名称</span>
-                <input
-                  value={settingsDraft.name}
-                  onChange={(event) =>
-                    setSettingsDraft((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="例如：OpenRouter 主力 / Claude 备用"
+                )}
+              >
+                <LazyAIChatAISettingsTab
+                  providerSearch={providerSearch}
+                  setProviderSearch={setProviderSearch}
+                  handleCreateConfig={handleCreateConfig}
+                  filteredConfigs={filteredConfigs}
+                  selectedSettingsConfig={selectedSettingsConfig}
+                  getConfigPreset={(config) => findPresetByConfig(config.provider, config.baseURL) || CUSTOM_PROVIDER_PRESET}
+                  providerTypeLabel={providerTypeLabel}
+                  setSelectedSettingsConfigId={setSelectedSettingsConfigId}
+                  setTestState={setTestState}
+                  setTestMessage={setTestMessage}
+                  settingsDraft={settingsDraft}
+                  selectedSettingsPreset={selectedSettingsPreset}
+                  isSettingsDraftComplete={isSettingsDraftComplete}
+                  isSettingsDraftSelected={isSettingsDraftSelected}
+                  selectedProviderTypeDescription={selectedProviderTypeOption.description}
+                  providerTypeOptions={AI_PROVIDER_TYPE_OPTIONS}
+                  setSettingsDraft={setSettingsDraft}
+                  customProviderPresetId={CUSTOM_PROVIDER_PRESET.id}
+                  getSuggestedBaseURL={getSuggestedBaseURL}
+                  selectedProviderEndpoint={selectedProviderEndpoint}
+                  handleLoadModels={handleLoadModels}
+                  isLoadingModels={isLoadingModels}
+                  selectedProviderListMode={selectedProviderListMode}
+                  customHeadersJsonValid={customHeadersJsonValid}
+                  settingsModelOptions={settingsModelOptions}
+                  handleApplySettings={handleApplySettings}
+                  handleToggleEnabled={handleToggleEnabled}
+                  handleTestConnection={handleTestConnection}
+                  selectedConfigId={selectedConfigId}
+                  handleSelectConfig={handleSelectConfig}
+                  handleExportConfigs={handleExportConfigs}
+                  setShowJsonImport={setShowJsonImport}
+                  showJsonImport={showJsonImport}
+                  jsonImportText={jsonImportText}
+                  setJsonImportText={setJsonImportText}
+                  handleImportConfigs={handleImportConfigs}
+                  aiConfigs={aiConfigs}
+                  handleDeleteConfig={handleDeleteConfig}
+                  showApiKey={showApiKey}
+                  setShowApiKey={setShowApiKey}
+                  testMessage={testMessage}
+                  testState={testState}
                 />
-                <small>聊天框顶部会显示这个名称。</small>
-              </label>
-
-              <label className="chat-settings-field">
-                <span>API Key</span>
-                <div className="chat-settings-inline">
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={settingsDraft.apiKey}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        apiKey: event.target.value,
-                      }))
-                    }
-                    placeholder={selectedSettingsPreset.keyHint}
-                  />
-                  <button className="chat-settings-inline-btn" type="button" onClick={() => setShowApiKey((current) => !current)}>
-                    {showApiKey ? '隐藏' : '显示'}
-                  </button>
-                </div>
-                <small>{settingsDraft.apiKey.trim() ? '已填写 API Key，可直接测试连接。' : '还没有填写 API Key。'}</small>
-              </label>
-
-              <label className="chat-settings-field">
-                <span>Base URL</span>
-                <div className="chat-settings-inline">
-                  <input
-                    value={settingsDraft.baseURL}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        baseURL: event.target.value,
-                      }))
-                    }
-                    placeholder={getSuggestedBaseURL(settingsDraft.provider, selectedSettingsPreset)}
-                  />
-                  <button
-                    className="chat-settings-inline-btn"
-                    type="button"
-                    onClick={() =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        baseURL: getSuggestedBaseURL(current.provider, selectedSettingsPreset),
-                      }))
-                    }
-                  >
-                    重置
-                  </button>
-                </div>
-                <small>{selectedProviderEndpoint}</small>
-              </label>
-
-              <label className="chat-settings-field">
-                <span>Model</span>
-                <div className="chat-settings-inline">
-                  <input
-                    value={settingsDraft.model}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        model: event.target.value,
-                      }))
-                    }
-                    placeholder={selectedSettingsPreset.models[0] || '输入模型 ID'}
-                  />
-                  <button className="chat-settings-inline-btn" type="button" onClick={() => void handleLoadModels()}>
-                    {isLoadingModels ? '加载中…' : selectedProviderListMode === 'preset-only' ? '内置候选' : '拉取模型'}
-                  </button>
-                </div>
-                <small>
-                  {selectedProviderListMode === 'preset-only'
-                    ? '当前 provider 使用内置模型候选。'
-                    : '当前 provider 支持远程拉取模型列表。'}
-                </small>
-              </label>
-
-              <label className="chat-settings-field">
-                <span>上下文长度</span>
-                <div className="chat-settings-input-unit">
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={Math.round(settingsDraft.contextWindowTokens / 1000)}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => {
-                        const nextValue = Number(event.target.value) * 1000;
-                        return {
-                          ...current,
-                          contextWindowTokens: Math.max(1000, Number.isFinite(nextValue) ? nextValue : 258000),
-                        };
-                      })
-                    }
-                  />
-                  <span className="chat-settings-unit">k</span>
-                </div>
-                <small>默认 258k，用于提示当前上下文占用，并作为后续引用预算。</small>
-              </label>
-
-              <label className="chat-settings-field chat-settings-field-full">
-                <span>
-                  Custom Headers
-                  {settingsDraft.customHeaders.trim() ? (
-                    <small className={`chat-settings-json-status ${customHeadersJsonValid ? 'valid' : 'invalid'}`}>
-                      {customHeadersJsonValid ? 'JSON 有效' : 'JSON 无效'}
-                    </small>
-                  ) : null}
-                </span>
-                <textarea
-                  value={settingsDraft.customHeaders}
-                  onChange={(event) =>
-                    setSettingsDraft((current) => ({
-                      ...current,
-                      customHeaders: event.target.value,
-                    }))
-                  }
-                  placeholder='{"HTTP-Referer":"https://your-app.com","X-Title":"GoodNight"}'
-                  rows={4}
-                />
-                <small>需要额外请求头时，在这里直接填写 JSON。</small>
-              </label>
-            </div>
-
-            {settingsModelOptions.length > 0 ? (
-              <div className="chat-settings-model-grid">
-                {settingsModelOptions.map((candidate) => (
-                  <button
-                    key={candidate}
-                    className={`chat-settings-model-chip ${settingsDraft.model === candidate ? 'active' : ''}`}
-                    type="button"
-                    onClick={() =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        model: candidate,
-                      }))
-                    }
-                  >
-                    {candidate}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="chat-settings-actions">
-              <button className="chat-settings-apply-btn secondary" type="button" onClick={handleApplySettings}>
-                保存
-              </button>
-              <button className="chat-settings-apply-btn" type="button" onClick={handleToggleEnabled}>
-                {settingsDraft.enabled ? '关闭' : '启用'}
-              </button>
-              <button className="chat-settings-apply-btn" type="button" onClick={() => void handleTestConnection()}>
-                {testState === 'testing' ? '测试中…' : '测试连接'}
-              </button>
-              {settingsDraft.id && (
-                <button
-                  className={`chat-settings-apply-btn ${settingsDraft.id === selectedConfigId ? 'secondary' : ''}`}
-                  type="button"
-                  onClick={handleSelectConfig}
-                >
-                  {settingsDraft.id === selectedConfigId ? '当前聊天中' : '选择使用'}
-                </button>
-              )}
-              <button className="chat-settings-apply-btn" type="button" onClick={handleExportConfigs}>
-                导出 JSON
-              </button>
-              <button className="chat-settings-apply-btn" type="button" onClick={() => { setShowJsonImport(true); setTestState('idle'); setTestMessage(''); }}>
-                导入 JSON
-              </button>
-              {aiConfigs.length > 1 ? (
-                <button className="chat-settings-apply-btn danger" type="button" onClick={handleDeleteConfig}>
-                  删除
-                </button>
-              ) : null}
-              <a className="chat-settings-doc-link" href={selectedSettingsPreset.docsUrl} target="_blank" rel="noreferrer">
-                查看文档
-              </a>
-            </div>
-
-            {showJsonImport ? (
-              <div className="chat-settings-import-json">
-                <span>导入 AI 配置 (JSON)</span>
-                <textarea
-                  value={jsonImportText}
-                  onChange={(event) => setJsonImportText(event.target.value)}
-                  placeholder='[{"provider":"openai-compatible","apiKey":"sk-...","baseURL":"https://api.openai.com/v1","model":"gpt-4o-mini"}]'
-                  rows={6}
-                />
-                <div className="chat-settings-import-actions">
-                  <button className="chat-settings-apply-btn" type="button" onClick={handleImportConfigs}>
-                    导入
-                  </button>
-                  <button className="chat-settings-apply-btn secondary" type="button" onClick={() => { setShowJsonImport(false); setJsonImportText(''); }}>
-                    取消
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {testMessage ? <div className={`chat-settings-test-note ${testState}`}>{testMessage}</div> : null}
-                </div>
-              </div>
+              </Suspense>
             ) : null}
 
             {activeSettingsTab === 'skills' ? (

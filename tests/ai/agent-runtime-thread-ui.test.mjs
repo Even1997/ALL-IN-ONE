@@ -10,28 +10,39 @@ const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AICha
 const chatPagePath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx');
 const threadListPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentThreadList.tsx');
 const timelinePanelPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentTimelinePanel.tsx');
+const sessionHookPath = path.resolve(
+  __dirname,
+  '../../src/components/ai/gn-agent-shell/useGNAgentWorkbenchSession.ts',
+);
 
-test('gn agent chat page references thread list, timeline panel, and memory panel through the runtime conversation gateway', async () => {
-  const [source, aiChatSource] = await Promise.all([
+test('gn agent compatibility page wraps AgentChatStage with the shared workbench session gateway', async () => {
+  const [source, aiChatSource, sessionHook] = await Promise.all([
     readFile(chatPagePath, 'utf8'),
     readFile(aiChatPath, 'utf8'),
+    readFile(sessionHookPath, 'utf8'),
   ]);
 
-  assert.match(source, /GNAgentThreadList/);
-  assert.match(source, /GNAgentTimelinePanel/);
-  assert.match(source, /GNAgentMemoryPanel/);
-  assert.match(source, /useRuntimeConversationGateway/);
+  assert.match(source, /AgentChatStage/);
+  assert.match(source, /useGNAgentWorkbenchSession/);
+  assert.match(source, /session=\{session\}/);
+  assert.match(sessionHook, /useRuntimeConversationGateway/);
+  assert.match(sessionHook, /threads:\s*conversation\.threads/);
+  assert.match(sessionHook, /recoveryByThread:\s*conversation\.recoveryByThread/);
   assert.match(aiChatSource, /useRuntimeConversationGateway/);
 });
 
-test('runtime thread and timeline panels expose resume or recovery UI without opening their own shared runtime stores', async () => {
+test('thread list stays presentation-focused while timeline panel owns recovery and runtime store wiring', async () => {
   const [threadListSource, timelinePanelSource] = await Promise.all([
     readFile(threadListPath, 'utf8'),
     readFile(timelinePanelPath, 'utf8'),
   ]);
 
-  assert.match(threadListSource, /requestReplayResumeFromRecovery|resume/i);
+  assert.match(threadListSource, /搜索对话历史/);
+  assert.match(threadListSource, /onSelectThread/);
+  assert.doesNotMatch(threadListSource, /requestReplayResumeFromRecovery/);
   assert.match(timelinePanelSource, /requestReplayResumeFromRecovery|recovery/i);
+  assert.match(timelinePanelSource, /useAIChatStore/);
+  assert.match(timelinePanelSource, /useAgentRuntimeStore/);
   assert.doesNotMatch(threadListSource, /useAIChatStore/);
   assert.doesNotMatch(threadListSource, /useAgentRuntimeStore/);
 });

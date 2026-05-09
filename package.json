@@ -3,9 +3,18 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": [
+    "apps/runtime",
+    "packages/runtime-client",
+    "packages/runtime-protocol"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "runtime:dev": "npm run dev --workspace @goodnight/runtime-sidecar",
+    "runtime:build": "npm run build --workspace @goodnight/runtime-sidecar",
+    "runtime-client:build": "npm run build --workspace @goodnight/runtime-client",
+    "runtime-protocol:build": "npm run build --workspace @goodnight/runtime-protocol",
     "preview": "vite preview",
     "tauri": "tauri",
     "test:builtin-ai-smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/test-builtin-ai-smoke.ps1",
@@ -55,9 +64,11 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@types/node": "^24.10.1",
     "@tauri-apps/cli": "^2.11.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"

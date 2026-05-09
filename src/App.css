@@ -11382,6 +11382,17 @@ body.ai-chat-sidebar-collapsed .app-main {
   backdrop-filter: none;
 }
 
+.app-surface-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  padding: 24px;
+  color: var(--macos-text-secondary);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
 .desktop-ai-shell {
   flex: 0 1 auto;
 }

@@ -76,7 +76,8 @@ test('Agent workbench has low-height responsive rules for the floating plan and 
   assert.match(css, /\.agent-workbench-left-rail\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{/);
   assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{[\s\S]*?\.agent-workbench-floating-overlay\s*{[\s\S]*?top:\s*12px;/);
-  assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{[\s\S]*?\.agent-chat-stage-header\s*{[\s\S]*?padding:\s*14px 16px 10px;/);
+  assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{[\s\S]*?\.agent-workbench-shell\s*{[\s\S]*?gap:\s*8px;[\s\S]*?padding:\s*8px;/);
+  assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{[\s\S]*?\.agent-floating-plan-card header\s*{[\s\S]*?padding:\s*12px 14px;/);
 });
 
 test('embedded agent composer can compress and wrap at small sizes instead of overflowing the bottom edge', async () => {
@@ -94,8 +95,8 @@ test('desktop workbench shell constrains the embedded agent page instead of lett
   assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?width:\s*100%;/);
   assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /body\.desktop-workbench-mode,\s*body\.desktop-workbench-mode\s+#root\s*{[\s\S]*?overflow:\s*hidden;/);
-  assert.doesNotMatch(css, /\.app-shell-desktop\s*{[\s\S]*?min-width:\s*1280px;/);
-  assert.doesNotMatch(css, /@media\s*\(max-width:\s*1280px\)\s*{[\s\S]*?\.app-shell-desktop\s*{[\s\S]*?min-height:\s*800px;/);
+  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?min-width:\s*0;/);
+  assert.match(css, /\.app-shell-desktop\s*{[\s\S]*?min-height:\s*0;/);
   assert.match(css, /\.desktop-shell-frame\s*{[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /\.desktop-workbench-column\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /\.desktop-workbench-column\s*{[\s\S]*?overflow:\s*hidden;/);
@@ -110,11 +111,12 @@ test('desktop workbench shell constrains the embedded agent page instead of lett
   assert.match(css, /\.desktop-primary-rail\.mac-sidebar-panel\s*{[\s\S]*?padding:\s*3px 1px 5px;/);
   assert.match(css, /\.desktop-primary-nav,\s*\.desktop-primary-foot\s*{[\s\S]*?gap:\s*8px;/);
   assert.match(css, /\.desktop-brand-chip\.mac-button\s*{[\s\S]*?width:\s*26px;/);
-  assert.match(css, /\.desktop-rail-icon-btn\.mac-button\s*{[\s\S]*?width:\s*30px;/);
-  assert.match(css, /\.desktop-rail-icon-btn\.mac-button svg\s*{[\s\S]*?width:\s*22px;/);
+  assert.match(css, /\.desktop-rail-icon-btn\.mac-button\s*{[\s\S]*?width:\s*32px;/);
+  assert.match(css, /\.desktop-rail-icon-btn\.mac-button svg\s*{[\s\S]*?width:\s*20px;/);
   assert.match(css, /\.desktop-rail-icon-btn\.mac-button\.active\s*{[\s\S]*?background:\s*linear-gradient/);
   assert.match(css, /\.desktop-window-control\s*{[\s\S]*?width:\s*36px;/);
   assert.match(css, /\.desktop-workbench-topbar\.mac-toolbar\.mac-panel\s*{[\s\S]*?padding:\s*2px 4px;/);
+  assert.match(css, /@media\s*\(max-width:\s*1099px\)\s*{[\s\S]*?\.app-shell-desktop\s*{[\s\S]*?min-height:\s*100dvh;/);
 });
 
 test('desktop window switches to a frameless custom titlebar with in-app menus and controls', async () => {

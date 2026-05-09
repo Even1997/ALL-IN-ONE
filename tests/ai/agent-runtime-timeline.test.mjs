@@ -267,24 +267,24 @@ test('agent turn runner builds a queued runtime turn shell', async () => {
   const toolUseAssembler = createRuntimeStreamingMessageAssembler();
   assert.equal(
     toolUseAssembler.append({ kind: 'text', delta: 'Before\n<tool_use><tool name="ls">\n<tool_params>\n<parameter name="path">.</parameter>\n</tool_params>\n</tool>\n</tool_use>\nAfter' }).content,
-    '<think>Before\n\nAfter',
+    'Before\n<tool_use><tool name="ls">\n<tool_params>\n<parameter name="path">.</parameter>\n</tool_params>\n</tool>\n</tool_use>\nAfter',
   );
 
   const toolResultAssembler = createRuntimeStreamingMessageAssembler();
   assert.equal(
     toolResultAssembler.append({ kind: 'text', delta: 'Done\n<tool_result name="ls" status="success">\nfile1.ts\nfile2.ts\n</tool_result>\nEnd' }).content,
-    '<think>Done\n\nEnd',
+    'Done\n<tool_result name="ls" status="success">\nfile1.ts\nfile2.ts\n</tool_result>\nEnd',
   );
 
   const legacyBashAssembler = createRuntimeStreamingMessageAssembler();
   assert.equal(
     legacyBashAssembler.append({ kind: 'text', delta: 'Inspect first\n<bash>\n<cmd>Get-ChildItem sketch</cmd>\n</bash>\nThen answer' }).content,
-    '<think>Inspect first\n\nThen answer',
+    'Inspect first\n<bash>\n<cmd>Get-ChildItem sketch</cmd>\n</bash>\nThen answer',
   );
 
   const responseOnlyAssembler = createRuntimeStreamingMessageAssembler();
   assert.equal(responseOnlyAssembler.buildFinal('Fallback response').content, 'Fallback response');
 
   const emptyAssembler = createRuntimeStreamingMessageAssembler();
-  assert.equal(emptyAssembler.buildFinal('').content, '已收到请求，但这次没有返回内容。');
+  assert.equal(emptyAssembler.buildFinal('').content, 'No response content was returned.');
 });

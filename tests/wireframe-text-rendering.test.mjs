@@ -7,7 +7,7 @@ import ts from 'typescript';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const appPath = path.resolve(__dirname, '../src/App.tsx');
+const designWorkbenchViewPath = path.resolve(__dirname, '../src/components/design/DesignWorkbenchView.tsx');
 const canvasPath = path.resolve(__dirname, '../src/components/canvas/Canvas.tsx');
 const wireframePath = path.resolve(__dirname, '../src/utils/wireframe.ts');
 
@@ -44,12 +44,12 @@ test('wireframe utilities normalize explicit module types and keep legacy conten
 
 test('canvas and sketch preview use text-specific rendering for text wireframe modules', async () => {
   const canvasSource = await readFile(canvasPath, 'utf8');
-  const appSource = await readFile(appPath, 'utf8');
+  const designWorkbenchViewSource = await readFile(designWorkbenchViewPath, 'utf8');
 
   assert.match(canvasSource, /getWireframeModuleVisualType/);
   assert.match(canvasSource, /const isTextModule = getModuleContentType\(element\) === 'text';/);
   assert.match(canvasSource, /height=\{isSelected \? 3 : 2\}/);
   assert.match(canvasSource, /fill="rgba\(255,255,255,0\.001\)"/);
-  assert.match(appSource, /getWireframeModuleVisualType/);
-  assert.match(appSource, /const isTextModule = getWireframeModuleVisualType\(element\.props\.moduleType, element\.props\.content\) === 'text';/);
+  assert.match(designWorkbenchViewSource, /getWireframeModuleVisualType/);
+  assert.match(designWorkbenchViewSource, /const isTextModule = getWireframeModuleVisualType\(element\.props\.moduleType, element\.props\.content\) === 'text';/);
 });

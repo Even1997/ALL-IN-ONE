@@ -4,6 +4,10 @@ import test from 'node:test';
 
 test('ai chat builds direct chat context from visible vault state only', async () => {
   const source = await readFile(new URL('../../src/components/workspace/AIChat.tsx', import.meta.url), 'utf8');
+  const directFlowSource = await readFile(
+    new URL('../../src/modules/ai/runtime/orchestration/runtimeDirectChatFlow.ts', import.meta.url),
+    'utf8',
+  );
 
   assert.match(source, /const serverNotes = useKnowledgeStore\(\(state\) => state\.notes\)/);
   assert.match(source, /const projectRoot = currentProject\?\.vaultPath \|\| ''/);
@@ -18,9 +22,10 @@ test('ai chat builds direct chat context from visible vault state only', async (
   assert.match(source, /buildReferencePromptContext/);
   assert.match(source, /referenceContext: previewReferenceContext/);
   assert.match(source, /buildDirectChatPrompt\(\{/);
-  assert.match(source, /referenceFiles: resolvedReferenceContextFiles/);
   assert.match(source, /contextLabels: \[/);
-  assert.doesNotMatch(source, /const knowledgeSourceDocs = useMemo/);
-  assert.doesNotMatch(source, /buildKnowledgeEntries/);
-  assert.doesNotMatch(source, /projectKnowledgeNotesToRequirementDocs/);
+  assert.match(directFlowSource, /const visibleReferenceFiles = input\.referenceFiles\.filter/);
+  assert.match(directFlowSource, /!isInternalAssistantReferencePath\(file\.path\)/);
+  assert.match(directFlowSource, /assembleAgentContext/);
+  assert.match(directFlowSource, /buildThreadPrompt/);
+  assert.match(directFlowSource, /buildDirectChatPrompt\(\{/);
 });

@@ -7,13 +7,14 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const productWorkbenchPath = path.resolve(__dirname, '../src/components/product/ProductWorkbench.tsx');
+const productPageWorkspacePanePath = path.resolve(__dirname, '../src/components/product/ProductPageWorkspacePane.tsx');
 const pageWorkspacePath = path.resolve(__dirname, '../src/components/product/PageWorkspace.tsx');
 const noteWorkspacePath = path.resolve(__dirname, '../src/features/knowledge/workspace/KnowledgeNoteWorkspace.tsx');
 const appCssPath = path.resolve(__dirname, '../src/App.css');
 const chatPath = path.resolve(__dirname, '../src/components/workspace/AIChat.tsx');
 
 test('module list text fields keep local drafts and commit on blur instead of every keystroke', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const source = await readFile(productPageWorkspacePanePath, 'utf8');
 
   assert.match(source, /const \[textDrafts, setTextDrafts\] = useState/);
   assert.match(source, /const handleTextDraftChange = useCallback/);
@@ -29,7 +30,7 @@ test('module list text fields keep local drafts and commit on blur instead of ev
 });
 
 test('module list drag handle can reorder layer position with pointer drag', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const source = await readFile(productPageWorkspacePanePath, 'utf8');
 
   assert.match(source, /const isModuleCardDragControl =/);
   assert.match(source, /const getModuleCardIdFromPoint =/);
@@ -44,7 +45,7 @@ test('module list drag handle can reorder layer position with pointer drag', asy
 // same element snapshot because loadFromCode clears selectedElementId and
 // collapses the active module card.
 test('wireframe sync bridge does not rehydrate the same page snapshot after autosave', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const source = await readFile(productPageWorkspacePanePath, 'utf8');
 
   assert.match(source, /const isSameHydratedSnapshot =/);
   assert.match(source, /hydratedPageIdRef\.current === nextPageId/);
@@ -135,15 +136,18 @@ test('page workspace falls back to in-memory page actions when Tauri runtime is 
 
 test('page workspace preserves current canvas and sketch persistence hooks', async () => {
   const workspaceSource = await readFile(pageWorkspacePath, 'utf8');
-  const productSource = await readFile(productWorkbenchPath, 'utf8');
+  const [productSource, pagePaneSource] = await Promise.all([
+    readFile(productWorkbenchPath, 'utf8'),
+    readFile(productPageWorkspacePanePath, 'utf8'),
+  ]);
 
   assert.match(workspaceSource, /pm-page-workspace-shell/);
   assert.doesNotMatch(workspaceSource, /Milkdown/);
-  assert.match(productSource, /Canvas/);
+  assert.match(pagePaneSource, /Canvas/);
   assert.match(productSource, /writeSketchPageFile/);
   assert.match(productSource, /deleteSketchPageFile/);
   assert.match(productSource, /loadSketchPageArtifactsFromProjectDir/);
-  assert.match(productSource, /<PageWorkspace/);
+  assert.match(productSource, /<LazyProductPageWorkspacePane/);
 });
 
 test('knowledge base searches database notes with search-filtered results only', async () => {
@@ -182,9 +186,9 @@ test('product knowledge reading view keeps chrome compact in the dedicated note 
   const productSource = await readFile(productWorkbenchPath, 'utf8');
   const noteSource = await readFile(noteWorkspacePath, 'utf8');
 
-  assert.match(productSource, /import \{ KnowledgeNoteWorkspace \} from '\.\.\/\.\.\/features\/knowledge\/workspace\/KnowledgeNoteWorkspace'/);
-  assert.match(productSource, /<KnowledgeNoteWorkspace/);
-  assert.match(productSource, /保存到知识库/);
+  assert.match(productSource, /LazyProductKnowledgeWorkspacePane/);
+  assert.match(productSource, /<LazyProductKnowledgeWorkspacePane/);
+  assert.match(productSource, /已保存到知识库/);
   assert.match(productSource, /Markdown 镜像/);
   assert.match(noteSource, /KnowledgeMarkdownViewer/);
   assert.match(noteSource, /GoodNightMarkdownEditor/);
@@ -203,7 +207,7 @@ test('product knowledge reading view keeps chrome compact in the dedicated note 
 test('product workbench passes database note search into the note workspace', async () => {
   const source = await readFile(productWorkbenchPath, 'utf8');
 
-  assert.match(source, /<KnowledgeNoteWorkspace/);
+  assert.match(source, /<LazyProductKnowledgeWorkspacePane/);
   assert.match(source, /searchValue=\{knowledgeSearch\}/);
   assert.match(source, /onSearchChange=\{setKnowledgeSearch\}/);
   assert.doesNotMatch(source, /className="product-input pm-knowledge-search-input"/);
@@ -221,14 +225,17 @@ test('knowledge note workspace search keeps the header compact in css', async ()
 });
 
 test('product workbench keeps page and knowledge labels in readable chinese', async () => {
-  const source = await readFile(productWorkbenchPath, 'utf8');
+  const [source, pagePaneSource] = await Promise.all([
+    readFile(productWorkbenchPath, 'utf8'),
+    readFile(productPageWorkspacePanePath, 'utf8'),
+  ]);
 
   assert.match(source, /未命名笔记/);
-  assert.match(source, /保存到知识库/);
+  assert.match(source, /已保存到知识库/);
   assert.match(source, /Markdown 镜像/);
-  assert.match(source, /添加模块/);
-  assert.match(source, /模块清单/);
-  assert.match(source, /页面画布/);
+  assert.match(pagePaneSource, /添加模块/);
+  assert.match(pagePaneSource, /模块清单/);
+  assert.match(pagePaneSource, /页面画布/);
   assert.doesNotMatch(source, /新建草图|新建设计|新建项目文件|关联文件|实时预览|加粗|链接|≈\?/);
 });
 
@@ -274,6 +281,4 @@ test('ai chat reference menu wraps actions and keeps selects within the popover 
   assert.match(source, /\.chat-reference-menu-select\s*{[\s\S]*?min-width:\s*0/);
   assert.match(source, /\.chat-reference-menu-select select\s*{[\s\S]*?width:\s*100%/);
 });
-
-
 

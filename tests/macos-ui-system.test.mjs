@@ -78,22 +78,22 @@ test('macOS UI system is wired into the desktop shell and project manager', asyn
   assert.match(appCss, /:root\[data-theme='light'\]\s*\{[\s\S]*?--macos-window-bg:/);
 });
 
-test('desktop primary rail and menubar stay borderless inside the macOS workbench skin', async () => {
+test('desktop primary rail stays borderless while the menubar keeps compact macOS chrome', async () => {
   const appCss = await readFile(appCssPath, 'utf8');
   const primaryRailBlock = appCss.match(/\.desktop-primary-rail\.mac-sidebar-panel\s*{([^}]*)}/);
-  const menubarBlock = appCss.match(/\.desktop-workbench-topbar\.mac-toolbar\.mac-panel\s*{([^}]*padding:\s*10px 14px;[^}]*)}/);
+  const menubarBlock = appCss.match(/\.desktop-workbench-topbar\.mac-toolbar\.mac-panel\s*{\s*min-height:\s*32px;([^}]*)}/);
 
   assert.ok(primaryRailBlock, 'expected macOS primary rail block');
   assert.ok(menubarBlock, 'expected macOS menubar block');
   assert.match(primaryRailBlock[1], /justify-content:\s*space-between;/);
-  assert.match(primaryRailBlock[1], /padding:\s*8px 6px 10px;/);
+  assert.match(primaryRailBlock[1], /padding:\s*3px 1px 5px;/);
   assert.match(primaryRailBlock[1], /background:\s*transparent;/);
   assert.match(primaryRailBlock[1], /border:\s*0;/);
   assert.match(primaryRailBlock[1], /border-radius:\s*0;/);
   assert.match(primaryRailBlock[1], /box-shadow:\s*none;/);
-  assert.match(menubarBlock[1], /padding:\s*10px 14px;/);
-  assert.match(menubarBlock[1], /background:\s*transparent;/);
-  assert.match(menubarBlock[1], /border:\s*0;/);
-  assert.match(menubarBlock[1], /border-radius:\s*0;/);
-  assert.match(menubarBlock[1], /box-shadow:\s*none;/);
+  assert.match(menubarBlock[1], /padding:\s*2px 4px;/);
+  assert.match(menubarBlock[1], /border-radius:\s*16px;/);
+  assert.match(menubarBlock[1], /background:\s*color-mix\(/);
+  assert.match(menubarBlock[1], /border:\s*1px solid var\(--macos-chrome-border\);/);
+  assert.match(menubarBlock[1], /box-shadow:\s*var\(--macos-shadow-panel\)/);
 });

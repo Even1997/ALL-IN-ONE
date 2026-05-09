@@ -8,26 +8,35 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const chatPagePath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx');
 const planPanelPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentPlanPanel.tsx');
-const summaryCardsPath = path.resolve(
+const agentShellPagePath = path.resolve(
   __dirname,
-  '../../src/components/ai/gn-agent-shell/GNAgentTurnSummaryCards.tsx',
+  '../../src/features/agent-shell/pages/AgentShellPage.tsx',
+);
+const floatingPlanCardPath = path.resolve(
+  __dirname,
+  '../../src/features/agent-shell/components/AgentFloatingPlanCard.tsx',
+);
+const sessionHookPath = path.resolve(
+  __dirname,
+  '../../src/components/ai/gn-agent-shell/useGNAgentWorkbenchSession.ts',
 );
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 
-test('GN agent shell wires turn summary cards and a plan panel into the main layout', async () => {
-  const [chatPageSource, aiChatSource] = await Promise.all([
+test('GN agent compatibility shell delegates plan actions through the shared workbench session', async () => {
+  const [chatPageSource, sessionHookSource, aiChatSource] = await Promise.all([
     readFile(chatPagePath, 'utf8'),
+    readFile(sessionHookPath, 'utf8'),
     readFile(aiChatPath, 'utf8'),
   ]);
 
-  assert.match(chatPageSource, /GNAgentPlanPanel/);
-  assert.match(chatPageSource, /GNAgentTurnSummaryCards/);
-  assert.match(chatPageSource, /latestTurnSession/);
-  assert.match(chatPageSource, /AI_CHAT_COMMAND_EVENT/);
-  assert.match(chatPageSource, /prefillChatPrompt\(prompt,\s*true\)/);
-  assert.match(chatPageSource, /Additional guidance:/);
-  assert.match(chatPageSource, /Pause after the current step and wait for more instructions before continuing\./);
-  assert.match(aiChatSource, /sessionsByThread|upsertTurnSession|patchTurnSession/);
+  assert.match(chatPageSource, /useGNAgentWorkbenchSession/);
+  assert.match(chatPageSource, /AgentChatStage/);
+  assert.match(chatPageSource, /session=\{session\}/);
+  assert.match(sessionHookSource, /AI_CHAT_COMMAND_EVENT/);
+  assert.match(sessionHookSource, /prefillChatPrompt\(nextPrompt,\s*true\)/);
+  assert.match(sessionHookSource, /Additional guidance:/);
+  assert.match(sessionHookSource, /Pause after the current step and wait for more instructions before continuing\./);
+  assert.match(aiChatSource, /useAIChatStore/);
 });
 
 test('GN agent plan panel renders structured plan state for the latest turn session', async () => {
@@ -38,18 +47,17 @@ test('GN agent plan panel renders structured plan state for the latest turn sess
   assert.match(source, /No structured plan/);
 });
 
-test('GN agent turn summary cards surface execution and resume cards', async () => {
-  const source = await readFile(summaryCardsPath, 'utf8');
+test('agent shell page surfaces floating plan review instead of legacy turn summary cards', async () => {
+  const [pageSource, floatingCardSource] = await Promise.all([
+    readFile(agentShellPagePath, 'utf8'),
+    readFile(floatingPlanCardPath, 'utf8'),
+  ]);
 
-  assert.match(source, /executionSteps\.slice\(-3\)/);
-  assert.match(source, /resumeSnapshot/);
-  assert.match(source, /onResumeTurn/);
-  assert.match(source, /onRetryTurn/);
-  assert.match(source, /onFeedTurn/);
-  assert.match(source, /onPauseTurn/);
-  assert.match(source, /Retry turn/);
-  assert.match(source, /Pause turn/);
-  assert.match(source, /Send guidance/);
-  assert.match(source, /Add guidance for the current turn/);
-  assert.match(source, /chat-structured-card/);
+  assert.match(pageSource, /AgentFloatingPlanCard/);
+  assert.match(pageSource, /session=\{session\.latestTurnSession\}/);
+  assert.match(pageSource, /onOpenInspector/);
+  assert.match(floatingCardSource, /session\?\.plan/);
+  assert.match(floatingCardSource, /session\.plan\.steps\.slice\(0,\s*3\)/);
+  assert.match(floatingCardSource, /查看完整详情/);
+  assert.match(floatingCardSource, /进度 \/ 计划/);
 });
