@@ -3207,7 +3207,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const { handleCreateSession, submitPrompt } = useAIChatSidecarSessionActions({
     currentProjectId: currentProject?.id || null,
     runtimeProviderId,
-    activeSessionId,
     activeSession,
     selectedRuntimeConfig,
     selectedChatAgentId,

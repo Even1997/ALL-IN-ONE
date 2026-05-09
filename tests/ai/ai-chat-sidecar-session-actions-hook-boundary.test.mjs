@@ -24,3 +24,18 @@ test('AIChat delegates sidecar session creation and turn submission into a dedic
   assert.match(hookSource, /createRuntimeSidecarSession/);
   assert.match(hookSource, /submitRuntimeSidecarTurn/);
 });
+
+test('sidecar turn submission only reuses sessions that are already bound to a runtime thread', async () => {
+  const hookSource = await readFile(hookPath, 'utf8');
+
+  assert.match(hookSource, /sessionId:\s*activeSession\?\.runtimeThreadId\s*\|\|\s*null/);
+  assert.doesNotMatch(hookSource, /sessionId:\s*activeSession\?\.runtimeThreadId\s*\|\|\s*activeSessionId/);
+});
+
+test('sidecar turn submission surfaces startup and submission failures in the chat', async () => {
+  const hookSource = await readFile(hookPath, 'utf8');
+
+  assert.match(hookSource, /const submitted = await submitRuntimeSidecarTurn/);
+  assert.match(hookSource, /appendMessage\(/);
+  assert.match(hookSource, /createStoredChatMessage\('system',[\s\S]*'error'\)/);
+});

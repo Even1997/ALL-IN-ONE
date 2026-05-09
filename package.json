@@ -9,8 +9,8 @@
     "packages/runtime-protocol"
   ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "npm run runtime:build && vite",
+    "build": "npm run runtime:build && tsc && vite build",
     "runtime:dev": "npm run dev --workspace @goodnight/runtime-sidecar",
     "runtime:build": "npm run build --workspace @goodnight/runtime-sidecar",
     "runtime-client:build": "npm run build --workspace @goodnight/runtime-client",

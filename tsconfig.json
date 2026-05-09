@@ -9,6 +9,11 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@goodnight/runtime-client": ["packages/runtime-client/src/index.ts"],
+      "@goodnight/runtime-protocol": ["packages/runtime-protocol/src/index.ts"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

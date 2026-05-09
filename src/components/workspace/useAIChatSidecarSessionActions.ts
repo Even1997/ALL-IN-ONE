@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { ChatAgentId } from '../../modules/ai/chat/chatAgents';
 import type { AIConfigEntry } from '../../modules/ai/store/aiConfigState';
-import { useAIChatStore } from '../../modules/ai/store/aiChatStore';
+import { createStoredChatMessage, useAIChatStore } from '../../modules/ai/store/aiChatStore';
 import type { AgentProviderId } from '../../modules/ai/runtime/agentRuntimeTypes';
 import {
   createRuntimeSidecarSession,
@@ -11,7 +11,6 @@ import {
 type UseAIChatSidecarSessionActionsInput = {
   currentProjectId: string | null;
   runtimeProviderId: AgentProviderId;
-  activeSessionId: string | null;
   activeSession: {
     id: string;
     runtimeThreadId: string | null;
@@ -31,7 +30,6 @@ type UseAIChatSidecarSessionActionsInput = {
 export const useAIChatSidecarSessionActions = ({
   currentProjectId,
   runtimeProviderId,
-  activeSessionId,
   activeSession,
   selectedRuntimeConfig,
   selectedChatAgentId,
@@ -76,6 +74,15 @@ export const useAIChatSidecarSessionActions = ({
 
   const submitPrompt = useCallback(
     async (promptValue: string) => {
+      const appendSubmissionError = (message: string) => {
+        if (!currentProjectId || !activeSession?.id) {
+          return;
+        }
+
+        useAIChatStore
+          .getState()
+          .appendMessage(currentProjectId, activeSession.id, createStoredChatMessage('system', message, 'error'));
+      };
       const effectiveChatAgentId =
         selectedChatAgentId !== 'built-in' && !isSelectedChatAgentReady
           ? 'built-in'
@@ -84,18 +91,27 @@ export const useAIChatSidecarSessionActions = ({
         setSelectedChatAgentId('built-in');
       }
 
-      await submitRuntimeSidecarTurn({
-        projectId: currentProjectId || '',
-        providerId: runtimeProviderId,
-        sessionId: activeSession?.runtimeThreadId || activeSessionId || null,
-        title: activeSession?.title || '新对话',
-        prompt: promptValue,
-        runtimeConfig: selectedRuntimeConfig,
-      });
+      try {
+        const submitted = await submitRuntimeSidecarTurn({
+          projectId: currentProjectId || '',
+          providerId: runtimeProviderId,
+          sessionId: activeSession?.runtimeThreadId || null,
+          title: activeSession?.title || '新对话',
+          prompt: promptValue,
+          runtimeConfig: selectedRuntimeConfig,
+        });
+
+        if (!submitted) {
+          appendSubmissionError('Node runtime sidecar 未启动，本次消息没有发送。请确认正在桌面端运行，并重新发送。');
+        }
+      } catch (error) {
+        appendSubmissionError(
+          `Node runtime sidecar 提交失败：${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     },
     [
       activeSession,
-      activeSessionId,
       currentProjectId,
       isSelectedChatAgentReady,
       runtimeProviderId,

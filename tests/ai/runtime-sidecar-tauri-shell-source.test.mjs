@@ -13,6 +13,7 @@ test('tauri shell exposes runtime sidecar lifecycle commands', async () => {
     path.join(repoRoot, 'src-tauri/src/runtime_sidecar.rs'),
     'utf8',
   );
+  const packageSource = await readFile(path.join(repoRoot, 'package.json'), 'utf8');
 
   assert.match(libSource, /RuntimeSidecarManager::default/);
   assert.match(libSource, /start_runtime_sidecar/);
@@ -21,4 +22,6 @@ test('tauri shell exposes runtime sidecar lifecycle commands', async () => {
   assert.match(runtimeSidecarSource, /Runtime sidecar build artifact not found/);
   assert.match(runtimeSidecarSource, /GOODNIGHT_RUNTIME_PORT/);
   assert.match(runtimeSidecarSource, /wait_for_runtime_ready/);
+  assert.match(packageSource, /"dev": "npm run runtime:build && vite"/);
+  assert.match(packageSource, /"build": "npm run runtime:build && tsc && vite build"/);
 });

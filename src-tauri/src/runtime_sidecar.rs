@@ -140,7 +140,14 @@ pub fn start_runtime_sidecar(
         descriptor: descriptor.clone(),
     });
 
-    wait_for_runtime_ready(&descriptor)?;
+    if let Err(error) = wait_for_runtime_ready(&descriptor) {
+        if let Some(mut process) = guard.take() {
+            let _ = process.child.kill();
+            let _ = process.child.wait();
+        }
+        return Err(error);
+    }
+
     Ok(descriptor)
 }
 

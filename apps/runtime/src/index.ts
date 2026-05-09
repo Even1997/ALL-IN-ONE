@@ -139,8 +139,13 @@ const parseCustomHeaders = (customHeaders?: string) => {
   }
 
   try {
+    const protectedHeaderNames = new Set(['authorization', 'content-type', 'x-api-key']);
     const parsed = JSON.parse(customHeaders) as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value)]));
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([key]) => !protectedHeaderNames.has(key.trim().toLowerCase()))
+        .map(([key, value]) => [key, String(value)]),
+    );
   } catch {
     return {};
   }
@@ -315,67 +320,79 @@ const main = async () => {
       response.end(await result.text());
     };
 
-    if (url.pathname === '/health' && request.method === 'GET') {
-      await send(
-        json(200, {
-          ok: true,
-          runtime: 'node-sidecar',
-        }),
-      );
-      return;
-    }
-
-    if (!isAuthorized(request, config.authToken)) {
-      await send(json(401, { error: 'Unauthorized' }));
-      return;
-    }
-
-    if (url.pathname === '/sessions' && request.method === 'GET') {
-      await send(
-        json(200, {
-          sessions: getProjectSessions(state, url.searchParams.get('projectId')),
-        }),
-      );
-      return;
-    }
-
-    if (url.pathname === '/sessions' && request.method === 'POST') {
-      const input = await readBody<RuntimeSessionCreateInput>(request);
-      const snapshot = buildSnapshot(input);
-      state.sessions.unshift(snapshot);
-      await saveState(config, state);
-      broadcast(buildSnapshotEvent(snapshot));
-      await send(json(201, snapshot));
-      return;
-    }
-
-    if (url.pathname.startsWith('/sessions/') && request.method === 'GET') {
-      const sessionId = url.pathname.split('/').pop() || '';
-      const snapshot = matchSession(state, sessionId);
-      await send(snapshot ? json(200, snapshot) : json(404, { error: 'Session not found' }));
-      return;
-    }
-
-    if (url.pathname === '/turns' && request.method === 'POST') {
-      const body = await readBody<RuntimeTurnSubmitInput>(request);
-      const snapshot = matchSession(state, body.sessionId);
-      if (!snapshot) {
-        await send(json(404, { error: 'Session not found' }));
+    try {
+      if (url.pathname === '/health' && request.method === 'GET') {
+        await send(
+          json(200, {
+            ok: true,
+            runtime: 'node-sidecar',
+          }),
+        );
         return;
       }
 
-      const userMessage = buildUserMessage(body.prompt);
-      snapshot.messages = [...snapshot.messages, userMessage];
-      snapshot.status = 'running';
-      snapshot.session.updatedAt = Date.now();
-      await saveState(config, state);
-      broadcast(buildSnapshotEvent(snapshot));
-      await send(json(202, { accepted: true }));
-      void completeSubmittedTurn(config, state, body, snapshot, broadcast);
-      return;
-    }
+      if (!isAuthorized(request, config.authToken)) {
+        await send(json(401, { error: 'Unauthorized' }));
+        return;
+      }
 
-    await send(json(404, { error: 'Not found' }));
+      if (url.pathname === '/sessions' && request.method === 'GET') {
+        await send(
+          json(200, {
+            sessions: getProjectSessions(state, url.searchParams.get('projectId')),
+          }),
+        );
+        return;
+      }
+
+      if (url.pathname === '/sessions' && request.method === 'POST') {
+        const input = await readBody<RuntimeSessionCreateInput>(request);
+        const snapshot = buildSnapshot(input);
+        state.sessions.unshift(snapshot);
+        await saveState(config, state);
+        broadcast(buildSnapshotEvent(snapshot));
+        await send(json(201, snapshot));
+        return;
+      }
+
+      if (url.pathname.startsWith('/sessions/') && request.method === 'GET') {
+        const sessionId = url.pathname.split('/').pop() || '';
+        const snapshot = matchSession(state, sessionId);
+        await send(snapshot ? json(200, snapshot) : json(404, { error: 'Session not found' }));
+        return;
+      }
+
+      if (url.pathname === '/turns' && request.method === 'POST') {
+        const body = await readBody<RuntimeTurnSubmitInput>(request);
+        const snapshot = matchSession(state, body.sessionId);
+        if (!snapshot) {
+          await send(json(404, { error: 'Session not found' }));
+          return;
+        }
+
+        const userMessage = buildUserMessage(body.prompt);
+        snapshot.messages = [...snapshot.messages, userMessage];
+        snapshot.status = 'running';
+        snapshot.session.updatedAt = Date.now();
+        await saveState(config, state);
+        broadcast(buildSnapshotEvent(snapshot));
+        await send(json(202, { accepted: true }));
+        void completeSubmittedTurn(config, state, body, snapshot, broadcast);
+        return;
+      }
+
+      await send(json(404, { error: 'Not found' }));
+    } catch (error) {
+      if (response.writableEnded) {
+        return;
+      }
+
+      await send(
+        json(error instanceof SyntaxError ? 400 : 500, {
+          error: error instanceof SyntaxError ? 'Invalid JSON body' : 'Runtime request failed',
+        }),
+      );
+    }
   });
 
   const wsServer = new WebSocketServer({ noServer: true });
