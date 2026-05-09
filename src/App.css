@@ -10503,6 +10503,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 .app-shell-desktop.desktop-active {
   border-radius: var(--desktop-window-radius);
   background: var(--mode-surface, #0f1115);
+  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.25));
 }
 
 .desktop-shell-codex {

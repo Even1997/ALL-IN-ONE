@@ -2586,6 +2586,7 @@ pub fn run() {
                     })
                     .ok();
                 window.set_background_color(Some(tauri::utils::config::Color(0, 0, 0, 0))).ok();
+                window.set_shadow(false).ok();
             }
 
             Ok(())
