@@ -2575,6 +2575,19 @@ pub fn run() {
                 .map_err(|error| format!("Failed to create app data directory: {}", error))?;
             ensure_builtin_skills_installed(&app_data_dir)?;
 
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_webview_window("main") {
+                window
+                    .set_effects(tauri::utils::config::WindowEffectsConfig {
+                        effects: vec![tauri::utils::WindowEffect::WindowBackground],
+                        state: None,
+                        radius: Some(14.0),
+                        color: None,
+                    })
+                    .ok();
+                window.set_background_color(Some(tauri::utils::config::Color(0, 0, 0, 0))).ok();
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -431,3 +431,27 @@ test('assistant timeline update tolerates malformed current timeline values', as
     [['text', 'Ready.']],
   );
 });
+
+test('assistant reasoning progress ignores placeholder timestamps instead of turning them into epoch-sized durations', async () => {
+  const { applyAssistantReasoningProgress } = await loadAssistantTimeline();
+
+  const updatedTimeline = applyAssistantReasoningProgress(
+    [
+      {
+        id: 'reasoning-1',
+        kind: 'reasoning',
+        content: 'Check the first file.',
+        collapsed: true,
+        status: 'streaming',
+        createdAt: 1,
+      },
+    ],
+    {
+      active: true,
+      referenceTime: Date.now(),
+    },
+  );
+
+  assert.equal(updatedTimeline[0]?.kind, 'reasoning');
+  assert.equal(updatedTimeline[0]?.elapsedSeconds, undefined);
+});

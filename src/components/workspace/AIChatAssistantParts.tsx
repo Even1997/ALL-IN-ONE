@@ -11,18 +11,58 @@ export type AIChatMessagePartRenderOptions = {
   onToggleThinking?: () => void;
 };
 
+const MIN_VALID_EPOCH_SECONDS = 946684800;
+const MIN_VALID_EPOCH_MILLISECONDS = MIN_VALID_EPOCH_SECONDS * 1000;
+const MAX_REASONABLE_ELAPSED_SECONDS = 60 * 60 * 24 * 365;
+
+const normalizeEpochMilliseconds = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  if (value >= MIN_VALID_EPOCH_MILLISECONDS) {
+    return value;
+  }
+
+  if (value >= MIN_VALID_EPOCH_SECONDS) {
+    return value * 1000;
+  }
+
+  return null;
+};
+
+const normalizeThinkingElapsedSeconds = (elapsedSeconds: number | undefined) => {
+  if (typeof elapsedSeconds !== 'number' || !Number.isFinite(elapsedSeconds)) {
+    return undefined;
+  }
+
+  if (elapsedSeconds > MAX_REASONABLE_ELAPSED_SECONDS) {
+    return undefined;
+  }
+
+  return Math.max(0.1, elapsedSeconds);
+};
+
 const formatThinkingDuration = (elapsedSeconds: number) => `${Math.max(0.1, elapsedSeconds).toFixed(1)}s`;
-const getLiveThinkingElapsedSeconds = (startedAt: number, referenceTime: number) =>
-  Math.max(0.1, Math.round(Math.max(0, referenceTime - startedAt) / 100) / 10);
+const getLiveThinkingElapsedSeconds = (startedAt: number, referenceTime: number) => {
+  const normalizedStartedAt = normalizeEpochMilliseconds(startedAt);
+  const normalizedReferenceTime = normalizeEpochMilliseconds(referenceTime);
+  if (normalizedStartedAt === null || normalizedReferenceTime === null) {
+    return undefined;
+  }
+
+  return Math.max(0.1, Math.round(Math.max(0, normalizedReferenceTime - normalizedStartedAt) / 100) / 10);
+};
 const resolveDisplayThinkingElapsedSeconds = (
   elapsedSeconds: number | undefined,
   lastDisplayedElapsedSeconds: number | null
 ) => {
-  if (typeof elapsedSeconds !== 'number') {
+  const normalizedElapsedSeconds = normalizeThinkingElapsedSeconds(elapsedSeconds);
+  if (typeof normalizedElapsedSeconds !== 'number') {
     return lastDisplayedElapsedSeconds ?? undefined;
   }
 
-  return Math.max(elapsedSeconds, lastDisplayedElapsedSeconds ?? elapsedSeconds);
+  return Math.max(normalizedElapsedSeconds, lastDisplayedElapsedSeconds ?? normalizedElapsedSeconds);
 };
 
 export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
@@ -42,7 +82,7 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
   const lastDisplayedElapsedSecondsRef = useRef<number | null>(null);
   useEffect(() => {
     lastDisplayedElapsedSecondsRef.current =
-      typeof part.elapsedSeconds === 'number' ? Math.max(0.1, part.elapsedSeconds) : null;
+      normalizeThinkingElapsedSeconds(part.elapsedSeconds) ?? null;
   }, [part.createdAt]);
   useEffect(() => {
     if (!isThinkingActive || typeof part.createdAt !== 'number') {

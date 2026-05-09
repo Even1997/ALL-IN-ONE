@@ -6,6 +6,7 @@
 
 html {
   height: 100%;
+  background: transparent;
 }
 
 :root {
@@ -13,7 +14,7 @@ html {
   font-size: 14px;
   line-height: 1.55;
   color: #1d1d1f;
-  background-color: #f5f5f7;
+  background-color: transparent;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   --ai-chat-sidebar-width-expanded: 420px;
@@ -27,17 +28,32 @@ body {
   height: 100%;
   min-height: 100vh;
   font-size: 14px;
+  background: transparent;
 }
 
 #root {
   height: 100%;
   min-height: 100vh;
+  background: transparent;
+}
+
+html.desktop-workbench-mode {
+  overflow: hidden;
+  clip-path: inset(0 round 14px);
 }
 
 body.desktop-workbench-mode,
 body.desktop-workbench-mode #root {
   min-height: 0;
   overflow: hidden;
+}
+
+body.desktop-workbench-mode {
+  background: transparent;
+}
+
+body.desktop-workbench-mode::before {
+  opacity: 0;
 }
 
 /* Project Setup */
@@ -10471,6 +10487,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 :root {
   --desktop-topbar-height: 40px;
   --desktop-workbench-gutter: 12px;
+  --desktop-window-radius: 14px;
   --desktop-workbench-radius: 18px;
 }
 
@@ -10480,6 +10497,11 @@ body.ai-chat-sidebar-collapsed .app-main {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: transparent;
+}
+
+.app-shell-desktop.desktop-active {
+  border-radius: var(--desktop-window-radius);
   background: var(--mode-surface, #0f1115);
 }
 

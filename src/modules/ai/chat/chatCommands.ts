@@ -7,5 +7,17 @@ export type AIChatCommandDetail = {
 };
 
 export type AIChatSettingsDetail = {
-  tab?: 'ai' | 'skills' | 'mcp';
+  tab?:
+    | 'ai'
+    | 'permissions'
+    | 'general'
+    | 'adapters'
+    | 'terminal'
+    | 'skills'
+    | 'mcp'
+    | 'agents'
+    | 'plugins'
+    | 'computerUse'
+    | 'diagnostics'
+    | 'about';
 };

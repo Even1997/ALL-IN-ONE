@@ -96,8 +96,8 @@ export const GNAgentThreadList: React.FC<{
                         ×
                       </button>
                     ) : null}
-                    <strong>{session.title}</strong>
-                    <span>{preview.trim() || '空会话'}</span>
+                    <strong className="gn-agent-thread-title">{session.title}</strong>
+                    <span className="gn-agent-thread-preview">{preview.trim() || '空会话'}</span>
                     <code>{formatThreadTime(session.createdAt)}</code>
                   </article>
                 );

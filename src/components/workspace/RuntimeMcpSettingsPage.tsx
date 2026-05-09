@@ -425,44 +425,44 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
 
   return (
     <div className="chat-settings-mcp-page">
-      <section className="chat-settings-surface chat-settings-mcp-hero">
-        <div className="chat-settings-mcp-hero-copy">
+      <section className="chat-settings-surface chat-settings-mcp-toolbar-bar">
+        <div className="chat-settings-mcp-toolbar-copy">
           <div className="chat-settings-eyebrow">Runtime MCP</div>
-          <strong>MCP 管理</strong>
-          <p>参考 haha 的管理方式，把 MCP 的查看、创建、编辑、启停和关键连接参数统一收进设置页。</p>
+          <strong>MCP Library</strong>
+          <p>把 MCP server 的查看、创建、编辑、启停和关键连接参数统一收进一个运行时资源面板。</p>
         </div>
-        <div className="chat-settings-mcp-summary">
-          <StatCard label="总数" value={String(servers.length)} />
-          <StatCard label="已启用" value={String(enabledServerCount)} />
-          <StatCard label="远程" value={String(remoteServerCount)} />
-          <StatCard label="自定义" value={String(customServerCount)} />
+        <div className="chat-settings-mcp-toolbar-actions">
+          <button
+            className="chat-settings-apply-btn secondary"
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={isWorking}
+          >
+            刷新列表
+          </button>
+          <button
+            className="chat-settings-apply-btn"
+            type="button"
+            onClick={handleCreateServer}
+            disabled={isWorking}
+          >
+            新建服务器
+          </button>
         </div>
       </section>
 
       <div className="chat-settings-mcp-layout">
         <aside className="chat-settings-mcp-list">
-          <div className="chat-settings-mcp-list-head">
+          <div className="chat-settings-mcp-panel-header chat-settings-mcp-list-head">
             <div>
-              <strong>Servers</strong>
+              <strong>服务器列表</strong>
               <span>内置能力保留只读，自定义 server 在这里统一维护。</span>
             </div>
-            <div className="chat-settings-mcp-list-actions">
-              <button
-                className="chat-settings-apply-btn secondary"
-                type="button"
-                onClick={() => void handleRefresh()}
-                disabled={isWorking}
-              >
-                刷新列表
-              </button>
-              <button
-                className="chat-settings-apply-btn"
-                type="button"
-                onClick={handleCreateServer}
-                disabled={isWorking}
-              >
-                新建服务器
-              </button>
+            <div className="chat-settings-mcp-list-meta">
+              <span>{servers.length} 总数</span>
+              <span>{enabledServerCount} 已启用</span>
+              <span>{remoteServerCount} 远程</span>
+              <span>{customServerCount} 自定义</span>
             </div>
           </div>
 
@@ -494,7 +494,7 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
         </aside>
 
         <section className="chat-settings-surface chat-settings-mcp-editor">
-          <div className="chat-settings-detail-header">
+          <div className="chat-settings-mcp-panel-header chat-settings-detail-header">
             <div>
               <strong>{isCreating ? '新建 MCP server' : draft.name || '选择一个 MCP server'}</strong>
               <span>
@@ -549,105 +549,140 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
             </div>
           </div>
 
-          <div className="chat-settings-mcp-chip-row">
-            <span className="chat-settings-mcp-chip">{transportLabel(draft.transport)}</span>
-            <span className="chat-settings-mcp-chip">{toolCount} 个工具</span>
-            <span className="chat-settings-mcp-chip">{draft.enabled ? '已启用' : '已停用'}</span>
-          </div>
+          <section className="chat-settings-mcp-detail-section">
+            <div className="chat-settings-section-header">
+              <strong>基本信息</strong>
+              <span>先确认 transport、启用状态和当前工具数量。</span>
+            </div>
+            <div className="chat-settings-mcp-chip-row">
+              <span className="chat-settings-mcp-chip">{transportLabel(draft.transport)}</span>
+              <span className="chat-settings-mcp-chip">{toolCount} 个工具</span>
+              <span className="chat-settings-mcp-chip">{draft.enabled ? '已启用' : '已停用'}</span>
+              <span className="chat-settings-mcp-chip">{selectedServer?.status || 'disconnected'}</span>
+            </div>
+            <div className="chat-settings-mcp-kv">
+              <div>
+                <span>Server ID</span>
+                <code>{draft.id || '未填写'}</code>
+              </div>
+              <div>
+                <span>名称</span>
+                <strong>{draft.name || '未命名 MCP server'}</strong>
+              </div>
+              <div>
+                <span>Transport</span>
+                <strong>{transportLabel(draft.transport)}</strong>
+              </div>
+              <div>
+                <span>启用状态</span>
+                <strong>{draft.enabled ? '启用' : '停用'}</strong>
+              </div>
+            </div>
+          </section>
 
-          <div className="chat-settings-grid">
-            <label className="chat-settings-field">
-              <span>Server ID</span>
-              <input
-                value={draft.id}
-                onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
-                placeholder="例如：design-inspect"
-                disabled={Boolean(isBuiltinServer)}
-              />
-            </label>
+          <section className="chat-settings-mcp-detail-section">
+            <div className="chat-settings-section-header">
+              <strong>连接配置</strong>
+              <span>编辑 server 标识、描述、transport 和工具清单。</span>
+            </div>
+            <div className="chat-settings-grid">
+              <label className="chat-settings-field">
+                <span>Server ID</span>
+                <input
+                  value={draft.id}
+                  onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
+                  placeholder="例如：design-inspect"
+                  disabled={Boolean(isBuiltinServer)}
+                />
+              </label>
 
-            <label className="chat-settings-field">
-              <span>名称</span>
-              <input
-                value={draft.name}
-                onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-                placeholder="例如：Design Inspect"
-                disabled={Boolean(isBuiltinServer)}
-              />
-            </label>
+              <label className="chat-settings-field">
+                <span>名称</span>
+                <input
+                  value={draft.name}
+                  onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="例如：Design Inspect"
+                  disabled={Boolean(isBuiltinServer)}
+                />
+              </label>
 
-            <label className="chat-settings-field">
-              <span>Transport</span>
-              <select
-                className="chat-settings-select"
-                value={draft.transport}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    transport: event.target.value as RuntimeMcpTransport,
-                  }))
-                }
-                disabled={Boolean(isBuiltinServer)}
-              >
-                {isBuiltinServer ? <option value="builtin">Built-in</option> : null}
-                <option value="stdio">STDIO</option>
-                <option value="http">HTTP</option>
-                <option value="sse">SSE</option>
-              </select>
-            </label>
+              <label className="chat-settings-field">
+                <span>Transport</span>
+                <select
+                  className="chat-settings-select"
+                  value={draft.transport}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      transport: event.target.value as RuntimeMcpTransport,
+                    }))
+                  }
+                  disabled={Boolean(isBuiltinServer)}
+                >
+                  {isBuiltinServer ? <option value="builtin">Built-in</option> : null}
+                  <option value="stdio">STDIO</option>
+                  <option value="http">HTTP</option>
+                  <option value="sse">SSE</option>
+                </select>
+              </label>
 
-            <label className="chat-settings-field">
-              <span>状态</span>
-              <input value={selectedServer?.status || 'disconnected'} disabled />
-            </label>
+              <label className="chat-settings-field">
+                <span>状态</span>
+                <input value={selectedServer?.status || 'disconnected'} disabled />
+              </label>
 
-            <label className="chat-settings-field">
-              <span>启用状态</span>
-              <select
-                className="chat-settings-select"
-                value={draft.enabled ? 'enabled' : 'disabled'}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    enabled: event.target.value === 'enabled',
-                  }))
-                }
-                disabled={Boolean(isBuiltinServer)}
-              >
-                <option value="enabled">启用</option>
-                <option value="disabled">停用</option>
-              </select>
-            </label>
+              <label className="chat-settings-field">
+                <span>启用状态</span>
+                <select
+                  className="chat-settings-select"
+                  value={draft.enabled ? 'enabled' : 'disabled'}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      enabled: event.target.value === 'enabled',
+                    }))
+                  }
+                  disabled={Boolean(isBuiltinServer)}
+                >
+                  <option value="enabled">启用</option>
+                  <option value="disabled">停用</option>
+                </select>
+              </label>
 
-            <label className="chat-settings-field chat-settings-field-full">
-              <span>描述</span>
-              <textarea
-                value={draft.description}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, description: event.target.value }))
-                }
-                rows={3}
-                placeholder="说明这个 MCP server 暴露什么能力。"
-                disabled={Boolean(isBuiltinServer)}
-              />
-            </label>
+              <label className="chat-settings-field chat-settings-field-full">
+                <span>描述</span>
+                <textarea
+                  value={draft.description}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, description: event.target.value }))
+                  }
+                  rows={3}
+                  placeholder="说明这个 MCP server 暴露什么能力。"
+                  disabled={Boolean(isBuiltinServer)}
+                />
+              </label>
 
-            <label className="chat-settings-field chat-settings-field-full">
-              <span>Tools</span>
-              <textarea
-                value={draft.toolNamesText}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, toolNamesText: event.target.value }))
-                }
-                rows={4}
-                placeholder={'一行一个 tool，例如：\ninspect\nsearch\nlist'}
-                disabled={Boolean(isBuiltinServer)}
-              />
-            </label>
-          </div>
+              <label className="chat-settings-field chat-settings-field-full">
+                <span>Tools</span>
+                <textarea
+                  value={draft.toolNamesText}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, toolNamesText: event.target.value }))
+                  }
+                  rows={4}
+                  placeholder={'一行一个 tool，例如：\ninspect\nsearch\nlist'}
+                  disabled={Boolean(isBuiltinServer)}
+                />
+              </label>
+            </div>
+          </section>
 
           {draft.transport === 'stdio' ? (
-            <div className="chat-settings-mcp-stack">
+            <section className="chat-settings-mcp-detail-section chat-settings-mcp-stack">
+              <div className="chat-settings-section-header">
+                <strong>STDIO 参数</strong>
+                <span>维护 command、启动参数和环境变量。</span>
+              </div>
               <label className="chat-settings-field">
                 <span>Command</span>
                 <input
@@ -721,11 +756,15 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
                   </div>
                 ))}
               </ArraySection>
-            </div>
+            </section>
           ) : null}
 
           {isRemoteTransport ? (
-            <div className="chat-settings-mcp-stack">
+            <section className="chat-settings-mcp-detail-section chat-settings-mcp-stack">
+              <div className="chat-settings-section-header">
+                <strong>远程连接参数</strong>
+                <span>维护 URL、OAuth 和请求头来源。</span>
+              </div>
               <div className="chat-settings-grid">
                 <label className="chat-settings-field chat-settings-field-full">
                   <span>{draft.transport === 'http' ? 'URL' : 'SSE URL'}</span>
@@ -813,14 +852,14 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
                   </div>
                 ))}
               </ArraySection>
-            </div>
+            </section>
           ) : null}
 
           {statusMessage ? <div className="chat-settings-test-note success">{statusMessage}</div> : null}
           {errorMessage ? <div className="chat-settings-test-note error">{errorMessage}</div> : null}
 
           {selectedServer ? (
-            <section className="chat-settings-mcp-tool-history">
+            <section className="chat-settings-mcp-tool-history chat-settings-mcp-detail-section">
               <div className="chat-settings-section-header">
                 <strong>最近工具调用</strong>
                 <span>{threadId ? '展示当前会话里这个 server 的最近结果。' : '当前没有活跃会话。'}</span>
@@ -873,11 +912,4 @@ const ArraySection: React.FC<{
       {addLabel}
     </button>
   </section>
-);
-
-const StatCard: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="chat-settings-mcp-stat">
-    <span>{label}</span>
-    <strong>{value}</strong>
-  </div>
 );

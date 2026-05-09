@@ -149,6 +149,27 @@ test('desktop workbench has compact 1280px rules that preserve topbar controls',
   assert.match(css, /@media\s*\(max-width:\s*1280px\)\s*{[\s\S]*?\.desktop-topbar-btn\.icon\s*{[\s\S]*?min-width:\s*32px;/);
 });
 
+test('desktop borderless window uses a transparent native shell and rounds the app root', async () => {
+  const css = await readFile(appCssPath, 'utf8');
+  const config = JSON.parse(await readFile(tauriConfigPath, 'utf8'));
+  const [mainWindow] = config.app.windows;
+
+  assert.equal(config.app.macOSPrivateApi, true);
+  assert.equal(mainWindow.decorations, false);
+  assert.equal(mainWindow.transparent, true);
+  assert.equal(mainWindow.shadow, true);
+  assert.deepEqual(mainWindow.windowEffects?.effects, ['windowBackground']);
+  assert.equal(mainWindow.windowEffects?.radius, 14);
+  assert.match(css, /--desktop-window-radius:\s*14px;/);
+  assert.match(css, /html\s*{[\s\S]*?background:\s*transparent;/);
+  assert.match(css, /body\s*{[\s\S]*?background:\s*transparent;/);
+  assert.match(css, /#root\s*{[\s\S]*?background:\s*transparent;/);
+  assert.match(css, /body\.desktop-workbench-mode\s*{[\s\S]*?background:\s*transparent;/);
+  assert.match(css, /body\.desktop-workbench-mode::before\s*{[\s\S]*?opacity:\s*0;/);
+  assert.match(css, /\.app-shell-desktop\.desktop-active\s*{[\s\S]*?border-radius:\s*var\(--desktop-window-radius\);/);
+  assert.match(css, /\.app-shell-desktop\.desktop-active\s*{[\s\S]*?overflow:\s*hidden;/);
+});
+
 test('desktop ai pane keeps GN Agent lane tabs inside the 1280px layout', async () => {
   const css = await readFile(chatCssPath, 'utf8');
 

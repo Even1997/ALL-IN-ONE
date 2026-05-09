@@ -97,6 +97,8 @@ test('agent workbench conversation history uses session entries with direct acti
   assert.match(source, /session\.title\.toLowerCase\(\)\.includes\(normalizedQuery\)/);
   assert.match(source, /preview\.toLowerCase\(\)\.includes\(normalizedQuery\)/);
   assert.match(source, /没有匹配的对话/);
+  assert.match(source, /className="gn-agent-thread-title"/);
+  assert.match(source, /className="gn-agent-thread-preview"/);
   assert.match(source, /gn-agent-runtime-card-delete/);
   assert.match(source, /删除/);
   assert.doesNotMatch(source, /查看/);
@@ -122,4 +124,17 @@ test('agent workbench rail styles shrink the navigation footprint', async () => 
   assert.match(css, /\.agent-workbench-review-diff/);
   assert.match(css, /\.agent-workbench-review-diff \.diff-added/);
   assert.match(css, /\.agent-workbench-review-diff \.diff-removed/);
+});
+
+test('agent workbench thread cards keep history entries at a fixed height with single-line previews', async () => {
+  const css = await readFile(cssPath, 'utf8');
+
+  assert.match(
+    css,
+    /\.agent-sidebar-panel-body-threads \.gn-agent-runtime-card\s*\{[\s\S]*height:\s*88px;[\s\S]*overflow:\s*hidden;/
+  );
+  assert.match(
+    css,
+    /\.agent-sidebar-panel-body-threads \.gn-agent-thread-preview\s*\{[\s\S]*overflow:\s*hidden;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/
+  );
 });

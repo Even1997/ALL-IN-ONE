@@ -132,8 +132,46 @@ const sortAssistantTimelineEntries = (
     return left.arrayIndex - right.arrayIndex;
   });
 
+const MIN_VALID_EPOCH_SECONDS = 946684800;
+const MIN_VALID_EPOCH_MILLISECONDS = MIN_VALID_EPOCH_SECONDS * 1000;
+const MAX_REASONABLE_ELAPSED_SECONDS = 60 * 60 * 24 * 365;
+
+const normalizeEpochMilliseconds = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  if (value >= MIN_VALID_EPOCH_MILLISECONDS) {
+    return value;
+  }
+
+  if (value >= MIN_VALID_EPOCH_SECONDS) {
+    return value * 1000;
+  }
+
+  return null;
+};
+
+const normalizeElapsedSeconds = (value: number | undefined) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  if (value > MAX_REASONABLE_ELAPSED_SECONDS) {
+    return undefined;
+  }
+
+  return Math.max(0.1, value);
+};
+
 const resolveElapsedSeconds = (startedAt: number, referenceTime: number) => {
-  const elapsedMs = Math.max(0, referenceTime - startedAt);
+  const normalizedStartedAt = normalizeEpochMilliseconds(startedAt);
+  const normalizedReferenceTime = normalizeEpochMilliseconds(referenceTime);
+  if (normalizedStartedAt === null || normalizedReferenceTime === null) {
+    return undefined;
+  }
+
+  const elapsedMs = Math.max(0, normalizedReferenceTime - normalizedStartedAt);
   return Math.max(0.1, Math.round(elapsedMs / 100) / 10);
 };
 
@@ -153,7 +191,7 @@ export const buildAssistantTimelineFromParts = (
           content: part.content,
           collapsed: part.collapsed,
           status: part.status ?? 'completed',
-          elapsedSeconds: part.elapsedSeconds,
+          elapsedSeconds: normalizeElapsedSeconds(part.elapsedSeconds),
           createdAt,
         },
       ];
@@ -263,9 +301,8 @@ export const buildAssistantTimelineUpdate = (
               : nextCreatedAt++,
         status: event.status ?? reusedReasoningEvent?.status ?? 'completed',
         elapsedSeconds:
-          typeof event.elapsedSeconds === 'number'
-            ? event.elapsedSeconds
-            : reusedReasoningEvent?.elapsedSeconds,
+          normalizeElapsedSeconds(event.elapsedSeconds) ??
+          normalizeElapsedSeconds(reusedReasoningEvent?.elapsedSeconds),
       };
       return {
         event: nextEvent,
@@ -440,12 +477,15 @@ export const applyAssistantReasoningProgress = (
   }
 
   const resolveReasoningElapsedSeconds = (event: AssistantTimelineReasoningEvent) => {
+    const storedElapsedSeconds = normalizeElapsedSeconds(event.elapsedSeconds);
     if (typeof input.referenceTime === 'number') {
       const elapsedSeconds = resolveElapsedSeconds(event.createdAt, input.referenceTime);
-      return Math.max(elapsedSeconds, event.elapsedSeconds ?? elapsedSeconds);
+      if (typeof elapsedSeconds === 'number') {
+        return Math.max(elapsedSeconds, storedElapsedSeconds ?? elapsedSeconds);
+      }
     }
 
-    return event.elapsedSeconds;
+    return storedElapsedSeconds;
   };
 
   return normalizedTimeline.map((event, index): AssistantTimelineEvent => {
@@ -467,7 +507,7 @@ export const applyAssistantReasoningProgress = (
       ...event,
       status,
       elapsedSeconds:
-        typeof nextElapsedSeconds === 'number' ? Math.max(0.1, nextElapsedSeconds) : event.elapsedSeconds,
+        typeof nextElapsedSeconds === 'number' ? Math.max(0.1, nextElapsedSeconds) : undefined,
     };
   });
 };

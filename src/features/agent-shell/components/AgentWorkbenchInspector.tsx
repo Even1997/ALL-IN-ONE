@@ -3,7 +3,7 @@ import { GNAgentMemoryPanel } from '../../../components/ai/gn-agent-shell/GNAgen
 import { WorkbenchIcon } from '../../../components/ui/WorkbenchIcon';
 import type { RuntimeToolStep } from '../../../modules/ai/runtime/agent-kernel/agentKernelTypes';
 
-export type AgentInspectorTab = 'review' | 'memory';
+export type AgentInspectorTab = 'review' | 'tool' | 'timeline' | 'approval' | 'memory';
 
 type AgentWorkbenchInspectorProps = {
   tab: AgentInspectorTab;
@@ -24,7 +24,7 @@ type ReviewDiffLine = {
   kind: 'added' | 'removed' | 'unchanged';
 };
 
-const INSPECTOR_TABS: AgentInspectorTab[] = ['review', 'memory'];
+const INSPECTOR_TABS: AgentInspectorTab[] = ['review', 'tool', 'timeline', 'approval', 'memory'];
 const INSPECTOR_TAB_META: Record<
   AgentInspectorTab,
   {
@@ -37,6 +37,21 @@ const INSPECTOR_TAB_META: Record<
     label: '审查',
     description: '查看本轮文档改动与内容',
     icon: 'page',
+  },
+  tool: {
+    label: '工具',
+    description: '查看本轮工具调用与执行结果',
+    icon: 'terminal',
+  },
+  timeline: {
+    label: '时间线',
+    description: '查看运行过程里的关键节点',
+    icon: 'gitBranch',
+  },
+  approval: {
+    label: '审批',
+    description: '查看需要人工确认的操作',
+    icon: 'bug',
   },
   memory: {
     label: '记忆',
@@ -113,6 +128,13 @@ const buildReviewDiff = (beforeContent: string | null, afterContent: string | nu
 
   return lines.length > 0 ? lines : [{ content: '没有可展示的内容。', kind: 'unchanged' }];
 };
+
+const renderInspectorPlaceholder = (title: string, description: string) => (
+  <section className="agent-workbench-inspector-placeholder">
+    <strong>{title}</strong>
+    <p>{description}</p>
+  </section>
+);
 
 export const AgentWorkbenchInspector: React.FC<AgentWorkbenchInspectorProps> = ({
   tab,
@@ -208,6 +230,68 @@ export const AgentWorkbenchInspector: React.FC<AgentWorkbenchInspectorProps> = (
                 ))}
               </div>
             )}
+          </section>
+        ) : null}
+
+        {tab === 'tool' ? (
+          <section className="gn-agent-runtime-panel">
+            <div className="gn-agent-runtime-panel-head">
+              <strong>工具调用</strong>
+              <span>{toolCalls.length} 项</span>
+            </div>
+            {toolCalls.length === 0 ? (
+              renderInspectorPlaceholder('还没有工具调用', 'Agent 使用文件、命令或 MCP 工具时，这里会显示输入、状态和结果摘要。')
+            ) : (
+              <div className="agent-workbench-review-list">
+                {toolCalls.map((toolCall) => (
+                  <article key={toolCall.id} className="agent-workbench-review-card">
+                    <div className="agent-workbench-review-card-head">
+                      <strong>{toolCall.name}</strong>
+                      <code>{toolCall.status}</code>
+                    </div>
+                    <pre className="agent-workbench-review-diff">
+                      {toolCall.resultPreview || JSON.stringify(toolCall.input, null, 2)}
+                    </pre>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {tab === 'timeline' ? (
+          <section className="gn-agent-runtime-panel">
+            <div className="gn-agent-runtime-panel-head">
+              <strong>运行时间线</strong>
+              <span>{toolCalls.length} 个节点</span>
+            </div>
+            {toolCalls.length === 0 ? (
+              renderInspectorPlaceholder('还没有时间线事件', '开始一次 Agent 执行后，计划、工具调用、文件变更和结束状态会汇总到这里。')
+            ) : (
+              <div className="agent-workbench-review-list">
+                {toolCalls.map((toolCall, index) => (
+                  <article key={`${toolCall.id}-timeline`} className="agent-workbench-review-card">
+                    <div className="agent-workbench-review-card-head">
+                      <strong>{index + 1}. {toolCall.name}</strong>
+                      <code>{toolCall.status}</code>
+                    </div>
+                    <p className="agent-workbench-inspector-note">
+                      {toolCall.resultPreview || '等待工具结果。'}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {tab === 'approval' ? (
+          <section className="gn-agent-runtime-panel">
+            <div className="gn-agent-runtime-panel-head">
+              <strong>审批队列</strong>
+              <span>按权限模式过滤</span>
+            </div>
+            {renderInspectorPlaceholder('当前没有待审批操作', '当 Agent 准备写文件、运行命令或调用需要确认的 MCP 工具时，这里会集中显示。')}
           </section>
         ) : null}
 

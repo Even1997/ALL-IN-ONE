@@ -16,6 +16,8 @@ function LoadingScreen() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        overflow: "hidden",
+        borderRadius: "14px",
         background:
           "radial-gradient(circle at 14% 12%, rgba(59, 130, 246, 0.12), transparent 28%), radial-gradient(circle at 84% 12%, rgba(20, 184, 166, 0.1), transparent 24%), linear-gradient(180deg, #edf2f8 0%, #f6f8fb 100%)",
         fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
@@ -52,6 +54,8 @@ function RuntimeErrorScreen({ error }: { error: RuntimeErrorDetails }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        overflow: "hidden",
+        borderRadius: "14px",
         background:
           "radial-gradient(circle at 12% 10%, rgba(59, 130, 246, 0.12), transparent 28%), radial-gradient(circle at 84% 12%, rgba(249, 115, 22, 0.12), transparent 24%), linear-gradient(180deg, #f6f1eb 0%, #fbf7f2 100%)",
         fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",

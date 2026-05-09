@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes';
+import { isTauriRuntimeAvailable } from '../../../utils/projectPersistence.ts';
 import {
   getSystemSkillDefinitionById,
   getSystemSkillDefinitions,
@@ -39,20 +40,69 @@ export type GitHubSkillImportParams = {
   gitRef?: string;
 };
 
-export const discoverLocalSkills = (params?: { projectRoot?: string | null }) =>
-  invoke<SkillDiscoveryEntry[]>('discover_local_skills', params ? { params } : undefined);
+const buildSystemSkillDiscoveryEntries = (): SkillDiscoveryEntry[] =>
+  getSystemSkillDefinitions().map((skill) => ({
+    id: skill.id,
+    name: skill.name,
+    category: 'system',
+    source: 'GoodNight system',
+    path: `goodnight://system-skills/${skill.id}`,
+    manifestPath: `goodnight://system-skills/${skill.id}/skill.json`,
+    imported: true,
+    builtin: true,
+    deletable: false,
+    syncedToCodex: true,
+    syncedToClaude: true,
+  }));
 
-export const importLocalSkill = (sourcePath: string) =>
-  invoke<SkillDiscoveryEntry>('import_local_skill', { params: { sourcePath } });
+const readSystemSkillFile = (filePath: string) => {
+  const match = filePath.match(/^goodnight:\/\/system-skills\/([^/]+)\/SKILL\.md$/i);
+  const skill = match ? getSystemSkillDefinitionById(match[1]) : null;
+  return skill?.prompt || null;
+};
 
-export const importGitHubSkill = (params: GitHubSkillImportParams) =>
-  invoke<SkillDiscoveryEntry>('import_github_skill', { params });
+export const discoverLocalSkills = (params?: { projectRoot?: string | null }) => {
+  if (!isTauriRuntimeAvailable()) {
+    return Promise.resolve(buildSystemSkillDiscoveryEntries());
+  }
 
-export const readSkillFile = (filePath: string) =>
-  invoke<string>('read_text_file', { filePath });
+  return invoke<SkillDiscoveryEntry[]>('discover_local_skills', params ? { params } : undefined);
+};
 
-export const deleteLibrarySkill = (skillId: string) =>
-  invoke<SkillDeleteResult>('delete_library_skill', { params: { skillId } });
+export const importLocalSkill = (sourcePath: string) => {
+  if (!isTauriRuntimeAvailable()) {
+    return Promise.reject(new Error('GoodNight desktop runtime is required to import local skills.'));
+  }
+
+  return invoke<SkillDiscoveryEntry>('import_local_skill', { params: { sourcePath } });
+};
+
+export const importGitHubSkill = (params: GitHubSkillImportParams) => {
+  if (!isTauriRuntimeAvailable()) {
+    return Promise.reject(new Error('GoodNight desktop runtime is required to import GitHub skills.'));
+  }
+
+  return invoke<SkillDiscoveryEntry>('import_github_skill', { params });
+};
+
+export const readSkillFile = (filePath: string) => {
+  if (!isTauriRuntimeAvailable()) {
+    const systemSkillPrompt = readSystemSkillFile(filePath);
+    return systemSkillPrompt
+      ? Promise.resolve(systemSkillPrompt)
+      : Promise.reject(new Error('GoodNight desktop runtime is required to read skill files.'));
+  }
+
+  return invoke<string>('read_text_file', { filePath });
+};
+
+export const deleteLibrarySkill = (skillId: string) => {
+  if (!isTauriRuntimeAvailable()) {
+    return Promise.reject(new Error('GoodNight desktop runtime is required to delete skills.'));
+  }
+
+  return invoke<SkillDeleteResult>('delete_library_skill', { params: { skillId } });
+};
 
 export const getSystemRuntimeSkillDefinitions = (): RuntimeSkillDefinition[] => getSystemSkillDefinitions();
 

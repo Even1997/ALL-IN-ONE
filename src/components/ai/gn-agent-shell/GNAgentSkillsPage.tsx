@@ -115,18 +115,6 @@ const buildPromptPreview = (content: string) => {
   return trimmed.length > 2200 ? `${trimmed.slice(0, 2200)}\n\n...` : trimmed;
 };
 
-const SummaryCard: React.FC<{
-  label: string;
-  value: string;
-  hint: string;
-}> = ({ label, value, hint }) => (
-  <article className="gn-agent-skills-summary-card">
-    <span>{label}</span>
-    <strong>{value}</strong>
-    <small>{hint}</small>
-  </article>
-);
-
 const SkillListItem: React.FC<{
   skill: SkillDiscoveryEntry;
   active: boolean;
@@ -155,6 +143,10 @@ const SkillListItem: React.FC<{
             <span className={`gn-agent-skills-source-badge${skill.builtin ? ' builtin' : ''}`}>
               {formatSourceBadge(skill)}
             </span>
+          </div>
+          <div className="gn-agent-skills-list-item-meta">
+            <span>/{skill.id}</span>
+            <span>{skill.source}</span>
           </div>
           <span>{buildSkillSummary(skill)}</span>
           <code>{skill.path}</code>
@@ -395,11 +387,15 @@ export const GNAgentSkillsPage: React.FC = () => {
   return (
     <section className="gn-agent-shell-page gn-agent-skills-page">
       <header className="gn-agent-shell-page-header gn-agent-shell-page-header-stack gn-agent-skills-page-header">
-        <div className="gn-agent-skills-topbar">
-          <div className="gn-agent-skills-mode-pill">
-            <span className="inactive">浏览</span>
-            <span className="active">技能</span>
+        <div className="gn-agent-skills-toolbar-bar">
+          <div className="gn-agent-skills-toolbar-copy">
+            <span className="gn-agent-context-badge">GN Agent</span>
+            <div>
+              <strong>Skills Library</strong>
+              <span>管理保存在 `.goodnight` 里的 GoodNight 技能资源。</span>
+            </div>
           </div>
+
           <div className="gn-agent-skills-toolbar">
             <button
               type="button"
@@ -407,7 +403,7 @@ export const GNAgentSkillsPage: React.FC = () => {
               onClick={() => void loadSkills()}
               disabled={isWorking || isLoading}
             >
-              管理
+              刷新列表
             </button>
             <button
               type="button"
@@ -428,23 +424,7 @@ export const GNAgentSkillsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="gn-agent-skills-hero">
-          <span className="gn-agent-context-badge">GN Agent</span>
-          <h3>让 GoodNight 按你的方式工作</h3>
-          <p>
-            技能只属于 GoodNight，本体统一保存在用户级 `.goodnight`
-            全局库里。在这里浏览、导入和管理，然后在聊天里通过 /skill 调用它们。
-          </p>
-        </div>
-
-        <div className="gn-agent-skills-summary-grid">
-          <SummaryCard label="全部技能" value={String(skills.length)} hint="当前全局库与可导入来源总数" />
-          <SummaryCard label="已安装" value={String(installedCount)} hint="已经能直接在聊天里调用" />
-          <SummaryCard label="待导入" value={String(importableCount)} hint="还可以继续补进 GoodNight" />
-          <SummaryCard label="当前可见" value={String(visibleCount)} hint="受搜索和筛选影响" />
-        </div>
-
-        <div className="gn-agent-skills-search-row">
+        <div className="gn-agent-skills-toolbar-filters">
           <label className="gn-agent-skills-search">
             <span className="gn-agent-skills-search-icon" aria-hidden="true">
               ⌕
@@ -490,6 +470,18 @@ export const GNAgentSkillsPage: React.FC = () => {
       {!isLoading ? (
         <div className="gn-agent-skills-shell">
           <section className="gn-agent-skills-list-panel">
+            <div className="gn-agent-skills-panel-header">
+              <div>
+                <strong>技能列表</strong>
+                <span>按资源列表浏览、筛选并选中技能。</span>
+              </div>
+              <div className="gn-agent-skills-list-meta">
+                <span>{skills.length} 全部</span>
+                <span>{visibleCount} 可见</span>
+                <span>{installedCount} 已安装</span>
+                <span>{importableCount} 待导入</span>
+              </div>
+            </div>
             {visibleSkills.length === 0 ? (
               <article className="gn-agent-skills-list-empty">
                 <strong>还没有技能</strong>
@@ -532,9 +524,15 @@ export const GNAgentSkillsPage: React.FC = () => {
           <aside className="gn-agent-skills-detail-panel">
             {selectedSkill ? (
               <>
+                <div className="gn-agent-skills-panel-header">
+                  <div>
+                    <strong>技能详情</strong>
+                    <span>当前选中资源的说明、操作和内容预览。</span>
+                  </div>
+                </div>
+
                 <div className="gn-agent-skills-detail-header">
                   <span className="gn-agent-skills-detail-eyebrow">当前选中</span>
-                  <h4>技能详情</h4>
                   <div className="gn-agent-skills-detail-title-row">
                     <strong>{selectedSkill.name}</strong>
                     <span className={`gn-agent-skills-source-badge${selectedSkill.builtin ? ' builtin' : ''}`}>
@@ -547,29 +545,6 @@ export const GNAgentSkillsPage: React.FC = () => {
                     <span>来源：{selectedSkill.source}</span>
                     <span>{isSkillInstalled(selectedSkill) ? '状态：已安装' : '状态：可导入'}</span>
                   </div>
-                </div>
-
-                <div className="gn-agent-skills-detail-grid">
-                  <SummaryCard
-                    label="调用方式"
-                    value={`/${selectedSkill.id}`}
-                    hint="会被直接写入聊天输入框"
-                  />
-                  <SummaryCard
-                    label="安装状态"
-                    value={isSkillInstalled(selectedSkill) ? '已安装' : '可导入'}
-                    hint="系统技能默认已启用"
-                  />
-                  <SummaryCard
-                    label="库内位置"
-                    value={selectedSkill.path}
-                    hint="技能目录或来源路径"
-                  />
-                  <SummaryCard
-                    label="提示词入口"
-                    value={getSkillPromptPath(selectedSkill)}
-                    hint="查看全文时读取的文件"
-                  />
                 </div>
 
                 <div className="gn-agent-skills-detail-actions">
@@ -612,10 +587,35 @@ export const GNAgentSkillsPage: React.FC = () => {
                   ) : null}
                 </div>
 
-                <section className="gn-agent-skills-detail-preview-card">
+                <section className="gn-agent-skills-detail-section">
+                  <div className="gn-agent-skills-detail-section-header">
+                    <strong>基本信息</strong>
+                    <span>用于确认调用方式、来源和文件位置。</span>
+                  </div>
+                  <div className="gn-agent-skills-detail-kv">
+                    <div>
+                      <span>调用方式</span>
+                      <code>/{selectedSkill.id}</code>
+                    </div>
+                    <div>
+                      <span>安装状态</span>
+                      <strong>{isSkillInstalled(selectedSkill) ? '已安装' : '可导入'}</strong>
+                    </div>
+                    <div>
+                      <span>库内位置</span>
+                      <code>{selectedSkill.path}</code>
+                    </div>
+                    <div>
+                      <span>提示词入口</span>
+                      <code>{getSkillPromptPath(selectedSkill)}</code>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="gn-agent-skills-detail-section gn-agent-skills-detail-preview-card">
                   <div className="gn-agent-skills-detail-preview-header">
                     <div>
-                      <span className="gn-agent-skills-detail-eyebrow">技能详情</span>
+                      <span className="gn-agent-skills-detail-eyebrow">技能内容</span>
                       <h5>SKILL.md 预览</h5>
                     </div>
                     <code>{getSkillPromptPath(selectedSkill)}</code>

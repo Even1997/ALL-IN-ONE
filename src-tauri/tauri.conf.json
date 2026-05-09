@@ -20,9 +20,16 @@
         "center": true,
         "resizable": true,
         "fullscreen": false,
-        "decorations": false
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "windowEffects": {
+          "effects": ["windowBackground"],
+          "radius": 14
+        }
       }
     ],
+    "macOSPrivateApi": true,
     "security": {
       "csp": null
     }

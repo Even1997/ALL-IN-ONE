@@ -1224,9 +1224,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     document.body.classList.toggle('desktop-workbench-mode', isDesktopWorkbenchMode);
+    document.documentElement.classList.toggle('desktop-workbench-mode', isDesktopWorkbenchMode);
 
     return () => {
       document.body.classList.remove('desktop-workbench-mode');
+      document.documentElement.classList.remove('desktop-workbench-mode');
     };
   }, [isDesktopWorkbenchMode]);
 

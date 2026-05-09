@@ -274,7 +274,19 @@ type AIChatProps = {
   headerActionSlot?: ReactNode;
 };
 
-type SettingsTabId = 'ai' | 'skills' | 'mcp';
+type SettingsTabId =
+  | 'ai'
+  | 'permissions'
+  | 'general'
+  | 'adapters'
+  | 'terminal'
+  | 'skills'
+  | 'mcp'
+  | 'agents'
+  | 'plugins'
+  | 'computerUse'
+  | 'diagnostics'
+  | 'about';
 
 type ChatAgentAvailability = {
   ready: boolean;
@@ -314,6 +326,34 @@ const SETTINGS_TABS: Array<{
     description: '管理当前聊天使用的模型配置与 Provider。',
   },
   {
+    id: 'permissions',
+    label: '权限',
+    eyebrow: 'Permissions',
+    title: '权限设置',
+    description: '管理审批、sandbox 和自动执行边界。',
+  },
+  {
+    id: 'general',
+    label: '通用',
+    eyebrow: 'General',
+    title: '通用设置',
+    description: '管理 Agent 工作台的默认行为与显示偏好。',
+  },
+  {
+    id: 'adapters',
+    label: '适配器',
+    eyebrow: 'Adapters',
+    title: '适配器设置',
+    description: '管理本地模型、外部 CLI 与运行时桥接能力。',
+  },
+  {
+    id: 'terminal',
+    label: '终端',
+    eyebrow: 'Terminal',
+    title: '终端设置',
+    description: '管理 shell、工作目录和命令执行偏好。',
+  },
+  {
     id: 'skills',
     label: '技能',
     eyebrow: 'Skills Library',
@@ -327,7 +367,46 @@ const SETTINGS_TABS: Array<{
     title: 'MCP 设置',
     description: '统一管理 MCP server 的查看、编辑、启停与运行记录。',
   },
+  {
+    id: 'agents',
+    label: 'Agents',
+    eyebrow: 'Agents',
+    title: 'Agents 设置',
+    description: '管理本地 Agent、团队执行与默认分工。',
+  },
+  {
+    id: 'plugins',
+    label: '插件',
+    eyebrow: 'Plugins',
+    title: '插件设置',
+    description: '管理扩展入口与未来插件能力。',
+  },
+  {
+    id: 'computerUse',
+    label: 'Computer Use',
+    eyebrow: 'Computer Use',
+    title: 'Computer Use 设置',
+    description: '管理桌面自动化与可视操作能力。',
+  },
+  {
+    id: 'diagnostics',
+    label: '诊断',
+    eyebrow: 'Diagnostics',
+    title: '诊断信息',
+    description: '查看运行时状态、连接情况与故障排查信息。',
+  },
+  {
+    id: 'about',
+    label: '关于',
+    eyebrow: 'About',
+    title: '关于 GoodNight Agent',
+    description: '查看版本、能力边界与本地运行说明。',
+  },
 ];
+
+const SETTINGS_TAB_IDS = new Set<SettingsTabId>(SETTINGS_TABS.map((tab) => tab.id));
+const resolveSettingsTabId = (tab: AIChatSettingsDetail['tab']): SettingsTabId =>
+  tab && SETTINGS_TAB_IDS.has(tab) ? tab : SETTINGS_TABS[0].id;
 
 const formatTimestamp = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
@@ -3476,6 +3555,23 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
     () => SETTINGS_TABS.find((tab) => tab.id === activeSettingsTab) || SETTINGS_TABS[0],
     [activeSettingsTab]
   );
+  const renderSettingsPlaceholder = useCallback(
+    (tab: typeof SETTINGS_TABS[number]) => (
+      <div className="chat-settings-placeholder-page">
+        <section className="chat-settings-placeholder-card">
+          <div className="chat-settings-eyebrow">{tab.eyebrow}</div>
+          <strong>{tab.title}</strong>
+          <p>{tab.description}</p>
+          <span>这个页面已经进入 Agent Settings 信息架构，底层能力会按 GoodNight runtime 逐步接入。</span>
+        </section>
+        <section className="chat-settings-placeholder-card muted">
+          <strong>当前状态</strong>
+          <p>保留完整入口，避免设置页出现空白、死链或分散管理。</p>
+        </section>
+      </div>
+    ),
+    [],
+  );
 
   const selectedProviderTypeOption = useMemo(
     () => AI_PROVIDER_TYPE_OPTIONS.find((item) => item.value === settingsDraft.provider) || AI_PROVIDER_TYPE_OPTIONS[0],
@@ -5046,7 +5142,7 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   useEffect(() => {
     const handleOpenSettings = (event: Event) => {
       const detail = (event as CustomEvent<AIChatSettingsDetail>).detail || {};
-      setActiveSettingsTab(detail.tab || SETTINGS_TABS[0].id);
+      setActiveSettingsTab(resolveSettingsTabId(detail.tab));
       setIsSettingsOpen(true);
     };
 
@@ -6114,6 +6210,12 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
             {activeSettingsTab === 'mcp' ? (
               <div className="chat-settings-panel-surface">
                 <RuntimeMcpSettingsPage threadId={activeSession?.runtimeThreadId || null} />
+              </div>
+            ) : null}
+
+            {!['ai', 'skills', 'mcp'].includes(activeSettingsTab) ? (
+              <div className="chat-settings-panel-surface">
+                {renderSettingsPlaceholder(selectedSettingsTabMeta)}
               </div>
             ) : null}
           </div>

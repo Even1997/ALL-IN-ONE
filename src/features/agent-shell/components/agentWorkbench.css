@@ -296,7 +296,17 @@
 }
 
 .agent-sidebar-panel-body-threads .gn-agent-runtime-card {
+  height: 88px;
   gap: 6px;
+  align-content: start;
+  overflow: hidden;
+}
+
+.agent-sidebar-panel-body-threads .gn-agent-thread-title,
+.agent-sidebar-panel-body-threads .gn-agent-thread-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-workbench-left-panel .gn-agent-runtime-panel,
@@ -358,6 +368,7 @@
 }
 
 .agent-chat-stage-body {
+  position: relative;
   min-height: 0;
   flex: 1 1 auto;
   display: flex;
@@ -368,6 +379,64 @@
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
+}
+
+.agent-chat-stage-empty {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(460px, calc(100% - 80px));
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--agent-text);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.agent-chat-stage-empty-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--agent-chip-bg);
+  color: var(--agent-text);
+}
+
+.agent-chat-stage-empty-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.agent-chat-stage-empty strong {
+  font-size: 18px;
+}
+
+.agent-chat-stage-empty p {
+  margin: 0;
+  color: var(--agent-text-soft);
+  line-height: 1.6;
+}
+
+.agent-chat-stage-empty-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.agent-chat-stage-empty-steps span {
+  padding: 6px 10px;
+  border: 1px solid var(--agent-panel-border);
+  border-radius: 999px;
+  background: var(--agent-panel-bg-strong);
+  color: var(--agent-text-soft);
+  font-size: 12px;
 }
 
 .agent-chat-stage .chat-shell.chat-shell-embedded {
@@ -634,6 +703,23 @@
 
 .agent-workbench-review-diff .diff-context {
   color: #94a3b8;
+}
+
+.agent-workbench-inspector-placeholder {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--agent-panel-border);
+  border-radius: 16px;
+  background: var(--agent-panel-bg-strong);
+  color: var(--agent-text);
+}
+
+.agent-workbench-inspector-placeholder p,
+.agent-workbench-inspector-note {
+  margin: 0;
+  color: var(--agent-text-soft);
+  line-height: 1.55;
 }
 
 :root[data-theme='dark'] .agent-workbench-review-diff {

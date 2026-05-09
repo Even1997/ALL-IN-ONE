@@ -59,6 +59,8 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
   }, [boundConfig, providerId]);
 
   const runtimeConfigIdOverride = usableBoundConfig?.id || preferredConfig?.id || null;
+  const messages = session.activeSession?.messages || [];
+  const showEmptyState = !messages.some((message) => message.role === 'user' || message.role === 'system');
 
   return (
     <section className={`agent-chat-stage agent-chat-stage-${mode}`}>
@@ -86,6 +88,20 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
             ) : null
           }
         />
+        {showEmptyState ? (
+          <div className="agent-chat-stage-empty" aria-hidden="true">
+            <span className="agent-chat-stage-empty-icon">
+              <WorkbenchIcon name="spark" />
+            </span>
+            <strong>打开一个新对话</strong>
+            <p>配置模型后，把任务、文件和上下文交给 Agent；需要时可以暂停、审查，再继续执行。</p>
+            <div className="agent-chat-stage-empty-steps">
+              <span>配置模型</span>
+              <span>描述任务</span>
+              <span>继续执行</span>
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );
