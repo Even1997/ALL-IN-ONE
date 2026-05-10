@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const loadGateway = async () =>
   import(`../../src/modules/ai/runtime/conversation/runtimeConversationGateway.ts?test=${Date.now()}`);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const gatewayHookPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/conversation/useRuntimeConversationGateway.ts',
+);
 
 test('runtime conversation gateway reconciles runtime threads with chat sessions', async () => {
   const { reconcileRuntimeThreadsWithSessions } = await loadGateway();
@@ -126,6 +134,15 @@ test('runtime conversation gateway resolves active conversation and thread route
   assert.equal(projection.liveThreadId, 'session-2');
   assert.equal(projection.pendingApprovalCount, 1);
   assert.equal(projection.messages.length, 1);
+});
+
+test('runtime conversation gateway keeps active thread ids stable across focused hooks', async () => {
+  const source = await readFile(gatewayHookPath, 'utf8');
+
+  assert.match(source, /const useActiveConversationBase =/);
+  assert.match(source, /approvalThreadId:/);
+  assert.match(source, /liveThreadId:/);
+  assert.match(source, /taskThreadId:/);
 });
 
 test('runtime conversation gateway clears stale runtime thread bindings missing from persistence', async () => {

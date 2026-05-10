@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import type { ActivityEntry } from '../../skills/activityLog.ts';
 import type {
   AgentBackgroundTaskRecord,
   AgentMemoryEntry,
@@ -24,7 +25,11 @@ import {
 import type { RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
 import type { RuntimeSkillDefinition } from '../skills/runtimeSkillTypes.ts';
 import type { AgentTeamRunRecord } from '../teams/teamTypes.ts';
+import type { ChatSession, StoredChatMessage } from '../../store/aiChatStore.ts';
 
+const EMPTY_MESSAGES: StoredChatMessage[] = [];
+const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
+const EMPTY_SESSIONS: ChatSession[] = [];
 const EMPTY_THREADS: AgentThreadRecord[] = [];
 const EMPTY_MEMORY_ENTRIES: AgentMemoryEntry[] = [];
 const EMPTY_BACKGROUND_TASKS: AgentBackgroundTaskRecord[] = [];
@@ -36,26 +41,16 @@ const EMPTY_TEAM_RUNS: AgentTeamRunRecord[] = [];
 const EMPTY_MCP_TOOL_CALLS: RuntimeMcpToolCall[] = [];
 const EMPTY_APPROVALS: ApprovalRecord[] = [];
 
-export const useRuntimeConversationGateway = (input?: {
+const useActiveConversationBase = (input?: {
   projectId?: string | null;
-}): RuntimeConversationProjection & {
-  projectId: string | null;
-  threads: AgentThreadRecord[];
-  recoveryByThread: ReturnType<typeof useAgentRuntimeStore.getState>['recoveryByThread'];
-} => {
+}) => {
   const currentProject = useProjectStore((state) => state.currentProject);
   const projectId = input?.projectId ?? currentProject?.id ?? null;
   const projectChatState = useAIChatStore(
     useShallow((state) => (projectId ? state.projects[projectId] || null : null)),
   );
-  const threads = useAgentRuntimeStore((state) =>
-    projectId ? state.threadsByProject[projectId] || EMPTY_THREADS : EMPTY_THREADS,
-  );
-  const memoryEntries = useAgentRuntimeStore((state) =>
-    projectId ? state.memoryByProject[projectId] || EMPTY_MEMORY_ENTRIES : EMPTY_MEMORY_ENTRIES,
-  );
-  const sessions = projectChatState?.sessions || [];
-  const activityEntries = projectChatState?.activityEntries || [];
+  const sessions = projectChatState?.sessions || EMPTY_SESSIONS;
+  const activityEntries = projectChatState?.activityEntries || EMPTY_ACTIVITY_ENTRIES;
   const selection = useMemo(
     () =>
       resolveActiveConversationSelection({
@@ -68,29 +63,150 @@ export const useRuntimeConversationGateway = (input?: {
     () => buildRuntimeConversationThreadIds(selection.activeSessionId, selection.activeSession),
     [selection.activeSession, selection.activeSessionId],
   );
+
+  return { projectId, projectChatState, sessions, activityEntries, selection, threadIds };
+};
+
+export const useActiveConversationSelection = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return {
+    projectId: base.projectId,
+    projectChatState: base.projectChatState,
+    sessions: base.sessions,
+    activeSessionId: base.selection.activeSessionId,
+    activeSession: base.selection.activeSession,
+    ...base.threadIds,
+  };
+};
+
+export const useActiveConversationMessages = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return {
+    messages: base.selection.activeSession?.messages || EMPTY_MESSAGES,
+    activityEntries: base.activityEntries,
+  };
+};
+
+export const useActiveConversationLiveState = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
   const latestTurnSession = useAgentRuntimeStore((state) =>
-    selection.activeSessionId
-      ? getLatestTurnSession(state.sessionsByThread[selection.activeSessionId]) || null
-      : null,
-  );
-  const replayResumeRequest = useAgentRuntimeStore((state) =>
-    selection.activeSessionId
-      ? state.resumeRequestsByThread[selection.activeSessionId] || null
+    base.selection.activeSessionId
+      ? getLatestTurnSession(state.sessionsByThread[base.selection.activeSessionId]) || null
       : null,
   );
   const liveState = useAgentRuntimeStore((state) =>
-    threadIds.liveThreadId ? state.liveStateByThread[threadIds.liveThreadId] || null : null,
+    base.threadIds.liveThreadId ? state.liveStateByThread[base.threadIds.liveThreadId] || null : null,
   );
+  const replayResumeRequest = useAgentRuntimeStore((state) =>
+    base.selection.activeSessionId
+      ? state.resumeRequestsByThread[base.selection.activeSessionId] || null
+      : null,
+  );
+
+  return {
+    liveThreadId: base.threadIds.liveThreadId,
+    latestTurnSession,
+    liveState,
+    replayResumeRequest,
+  };
+};
+
+export const useActiveConversationApprovals = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+  const approvalThreadId = base.threadIds.approvalThreadId;
+  const selectApprovals = (state: ReturnType<typeof useApprovalStore.getState>) =>
+    approvalThreadId ? state.approvalsByThread[approvalThreadId] || EMPTY_APPROVALS : EMPTY_APPROVALS;
+  const approvals = useApprovalStore(selectApprovals);
+  const pendingApprovals = useMemo(
+    () => approvals.filter((approval) => approval.status === 'pending'),
+    [approvals],
+  );
+
+  return {
+    approvalThreadId: approvalThreadId,
+    pendingApprovals,
+    pendingApprovalCount: pendingApprovals.length,
+  };
+};
+
+export const useActiveConversationTasks = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
   const backgroundTasks = useAgentRuntimeStore((state) =>
-    threadIds.liveThreadId
-      ? state.backgroundTasksByThread[threadIds.liveThreadId] || EMPTY_BACKGROUND_TASKS
+    base.threadIds.liveThreadId
+      ? state.backgroundTasksByThread[base.threadIds.liveThreadId] || EMPTY_BACKGROUND_TASKS
       : EMPTY_BACKGROUND_TASKS,
   );
+  const teamRuns = useAgentRuntimeStore((state) =>
+    base.selection.activeSessionId
+      ? state.teamRunsByThread[base.selection.activeSessionId] || EMPTY_TEAM_RUNS
+      : EMPTY_TEAM_RUNS,
+  );
+
+  return {
+    taskThreadId: base.threadIds.taskThreadId,
+    backgroundTasks,
+    teamRuns,
+    latestTeamRun: teamRuns[0] || null,
+  };
+};
+
+export const useActiveConversationSkillsAndRecovery = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
   const activeSkills = useAgentRuntimeStore((state) =>
-    selection.activeSessionId
-      ? state.activeSkillsByThread[selection.activeSessionId] || EMPTY_ACTIVE_SKILLS
+    base.selection.activeSessionId
+      ? state.activeSkillsByThread[base.selection.activeSessionId] || EMPTY_ACTIVE_SKILLS
       : EMPTY_ACTIVE_SKILLS,
   );
+  const recoveryState = useAgentRuntimeStore((state) =>
+    base.selection.activeSessionId ? state.recoveryByThread[base.selection.activeSessionId] || null : null,
+  );
+  const replayEvents = useAgentRuntimeStore((state) =>
+    base.selection.activeSession?.runtimeThreadId
+      ? state.replayEventsByThread[base.selection.activeSession.runtimeThreadId] || EMPTY_REPLAY_EVENTS
+      : EMPTY_REPLAY_EVENTS,
+  );
+
+  return {
+    activeSkills,
+    recoveryState,
+    replayEvents,
+  };
+};
+
+export const useRuntimeConversationGateway = (input?: {
+  projectId?: string | null;
+}): RuntimeConversationProjection & {
+  projectId: string | null;
+  threads: AgentThreadRecord[];
+  recoveryByThread: ReturnType<typeof useAgentRuntimeStore.getState>['recoveryByThread'];
+} => {
+  const base = useActiveConversationBase(input);
+  const threads = useAgentRuntimeStore((state) =>
+    base.projectId ? state.threadsByProject[base.projectId] || EMPTY_THREADS : EMPTY_THREADS,
+  );
+  const memoryEntries = useAgentRuntimeStore((state) =>
+    base.projectId ? state.memoryByProject[base.projectId] || EMPTY_MEMORY_ENTRIES : EMPTY_MEMORY_ENTRIES,
+  );
+  const selection = useActiveConversationSelection(input);
+  const messageSlice = useActiveConversationMessages(input);
+  const liveSlice = useActiveConversationLiveState(input);
+  const approvalSlice = useActiveConversationApprovals(input);
+  const taskSlice = useActiveConversationTasks(input);
+  const skillSlice = useActiveConversationSkillsAndRecovery(input);
   const contextSnapshot = useAgentRuntimeStore((state) =>
     selection.activeSessionId ? state.contextByThread[selection.activeSessionId] || null : null,
   );
@@ -108,75 +224,61 @@ export const useRuntimeConversationGateway = (input?: {
     selection.activeSessionId ? state.recoveryByThread[selection.activeSessionId] || null : null,
   );
   const recoveryByThread = useAgentRuntimeStore((state) => state.recoveryByThread);
-  const replayEvents = useAgentRuntimeStore((state) =>
-    selection.activeSession?.runtimeThreadId
-      ? state.replayEventsByThread[selection.activeSession.runtimeThreadId] || EMPTY_REPLAY_EVENTS
-      : EMPTY_REPLAY_EVENTS,
-  );
-  const teamRuns = useAgentRuntimeStore((state) =>
-    selection.activeSessionId
-      ? state.teamRunsByThread[selection.activeSessionId] || EMPTY_TEAM_RUNS
-      : EMPTY_TEAM_RUNS,
-  );
   const mcpToolCalls = useRuntimeMcpStore((state) =>
     selection.activeSessionId
       ? state.toolCallsByThread[selection.activeSessionId] || EMPTY_MCP_TOOL_CALLS
       : EMPTY_MCP_TOOL_CALLS,
   );
-  const approvals = useApprovalStore((state) =>
-    threadIds.approvalThreadId
-      ? state.approvalsByThread[threadIds.approvalThreadId] || EMPTY_APPROVALS
-      : EMPTY_APPROVALS,
-  );
 
   return useMemo(
     () => ({
       ...buildRuntimeConversationProjection({
-        projectChatState,
-        sessions,
+        projectChatState: base.projectChatState,
+        sessions: selection.sessions,
         activeSessionId: selection.activeSessionId,
-        activityEntries,
+        activityEntries: messageSlice.activityEntries,
         runtimeState: {
-          latestTurnSession,
-          replayResumeRequest,
-          liveState,
-          backgroundTasks,
-          activeSkills,
+          latestTurnSession: liveSlice.latestTurnSession,
+          replayResumeRequest: liveSlice.replayResumeRequest,
+          liveState: liveSlice.liveState,
+          backgroundTasks: taskSlice.backgroundTasks,
+          activeSkills: skillSlice.activeSkills,
           contextSnapshot,
           toolCalls,
           mcpToolCalls,
           memoryCandidates,
           memoryEntries,
-          recoveryState,
-          replayEvents,
-          teamRuns,
+          recoveryState: skillSlice.recoveryState || recoveryState,
+          replayEvents: skillSlice.replayEvents,
+          teamRuns: taskSlice.teamRuns,
         },
-        pendingApprovals: approvals,
+        pendingApprovals: approvalSlice.pendingApprovals,
       }),
-      projectId,
+      projectId: base.projectId,
       threads,
       recoveryByThread,
     }),
     [
-      activeSkills,
-      activityEntries,
-      backgroundTasks,
+      approvalSlice.pendingApprovals,
+      base.projectChatState,
+      base.projectId,
       contextSnapshot,
-      latestTurnSession,
-      liveState,
+      liveSlice.liveState,
+      liveSlice.latestTurnSession,
+      liveSlice.replayResumeRequest,
       mcpToolCalls,
       memoryCandidates,
       memoryEntries,
-      approvals,
-      projectChatState,
-      projectId,
+      messageSlice.activityEntries,
       recoveryByThread,
       recoveryState,
-      replayEvents,
-      replayResumeRequest,
       selection.activeSessionId,
-      sessions,
-      teamRuns,
+      selection.sessions,
+      skillSlice.activeSkills,
+      skillSlice.recoveryState,
+      skillSlice.replayEvents,
+      taskSlice.backgroundTasks,
+      taskSlice.teamRuns,
       threads,
       toolCalls,
     ],
