@@ -146,6 +146,14 @@ test('agent runtime client exposes thread, memory, and prompt execution APIs', a
   assert.match(source, /executePrompt/);
 });
 
+test('agent runtime client bypasses legacy timeline persistence for sidecar session ids', async () => {
+  const source = await readFile(runtimeClientPath, 'utf8');
+
+  assert.match(source, /threadId\.startsWith\('session_'\)/);
+  assert.match(source, /Agent thread not found/);
+  assert.match(source, /return buildLocalTimelineEvent\(input\)/);
+});
+
 test('chat sessions can carry runtime provider and external thread metadata', async () => {
   const { createChatSession } = await loadAIChatStore();
   const session = createChatSession('project-runtime', 'Runtime session', 'claude');

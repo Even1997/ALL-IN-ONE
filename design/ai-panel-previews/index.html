@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI 面板样式预览</title>
+    <title>AI Panel Preview Pack</title>
     <style>
       :root {
         --bg: #f4efe7;
@@ -72,7 +72,7 @@
 
       .hero p {
         margin: 0;
-        max-width: 760px;
+        max-width: 820px;
         color: var(--muted);
         font-size: 16px;
         line-height: 1.75;
@@ -90,7 +90,7 @@
       }
 
       .preview-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .card {
@@ -158,6 +158,12 @@
           linear-gradient(90deg, #faf5ef 0 28%, #ffffff 28% 100%);
       }
 
+      .shot-frame.kernel {
+        background:
+          linear-gradient(90deg, #fff8ef 0 48%, #eef8f6 48% 100%),
+          linear-gradient(180deg, rgba(180, 83, 9, 0.12), transparent);
+      }
+
       .preview-card a {
         width: fit-content;
         padding: 10px 14px;
@@ -184,18 +190,16 @@
     <main class="page">
       <section class="hero">
         <span class="eyebrow">AI Panel Preview Pack</span>
-        <h1>基于当前显示逻辑的 3 套 AI 面板样式稿</h1>
+        <h1>基于当前显示逻辑整理出的 AI 面板预览与架构对照稿</h1>
         <p>
-          我先按代码里的真实结构做了整理，再只改“展示层”。现在的核心骨架是固定的：
-          左栏承载线程和时间线，中间承载状态卡、回合摘要和主对话，右栏承载 Team / Plan /
-          Context / Tools / Memory Inbox / Memory。
+          这里把现有的几套界面方向和一份新的 runtime 架构对照页放在一起。前三个更偏展示层风格探索，新增的第四个页面更偏系统层，用来回答“现在到底是什么设计、和单内核目标差在哪、改完会变成什么样”。
         </p>
       </section>
 
       <section class="logic-grid">
         <article class="card">
           <h2>左栏</h2>
-          <p>当前偏“导航与追溯”：线程列表用来切线程，时间线用来看事件、恢复入口和多代理阶段。</p>
+          <p>偏导航与追踪：线程列表、时间线、恢复入口，适合承载多轮执行历史与切换语境。</p>
           <div class="tag-row">
             <span class="tag">Threads</span>
             <span class="tag">Timeline</span>
@@ -204,7 +208,7 @@
         </article>
         <article class="card">
           <h2>中栏</h2>
-          <p>当前偏“执行主舞台”：顶部是 Agent Status，中间是 Turn Summary，主体才是 AIChat。</p>
+          <p>偏执行主舞台：状态、回合摘要、主对话，是最接近日常 AI 使用的重心区域。</p>
           <div class="tag-row">
             <span class="tag">Status</span>
             <span class="tag">Turn Summary</span>
@@ -213,7 +217,7 @@
         </article>
         <article class="card">
           <h2>右栏</h2>
-          <p>当前偏“辅助决策与审计”：计划、上下文、工具调用、记忆建议和长期记忆都在这里。</p>
+          <p>偏辅助决策与审计：计划、上下文、工具调用、记忆建议和长期记忆更适合放在这一侧。</p>
           <div class="tag-row">
             <span class="tag">Plan</span>
             <span class="tag">Context</span>
@@ -252,9 +256,20 @@
           </div>
           <div>
             <h3>方案 C: Timeline Review</h3>
-            <p>把“过程可解释性”放大，适合强调回放、审核、恢复和多代理协作的场景。</p>
+            <p>把“过程可解释性”放大，适合强调回放、审计、恢复和多代理协作的场景。</p>
           </div>
           <a href="./variant-timeline-review.html">打开 HTML</a>
+        </article>
+
+        <article class="card preview-card">
+          <div class="preview-shot">
+            <div class="shot-frame kernel"></div>
+          </div>
+          <div>
+            <h3>方案 D: Runtime Kernel Review</h3>
+            <p>专门用来对照当前 runtime 架构、你想要的单内核方案、两者出入点、优缺点和改后状态。</p>
+          </div>
+          <a href="./runtime-kernel-architecture-review.html">打开 HTML</a>
         </article>
       </section>
     </main>

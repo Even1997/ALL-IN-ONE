@@ -99,6 +99,18 @@ type UpsertAgentBackgroundTaskInput = {
 };
 
 const createLocalId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const buildLocalTimelineEvent = (input: AppendAgentTimelineEventInput): AgentTimelineEvent => ({
+  id: createLocalId('event'),
+  threadId: input.threadId,
+  providerId: input.providerId,
+  summary: input.summary,
+  createdAt: Date.now(),
+});
+
+const shouldBypassLegacyTimelinePersistence = (
+  threadId: string,
+  error: unknown,
+) => threadId.startsWith('session_') && String(error).includes('Agent thread not found');
 
 const mapRuntimeSidecarCheckpoint = (checkpoint: {
   id: string;
@@ -151,35 +163,37 @@ export const appendAgentTimelineEvent = async (
   input: AppendAgentTimelineEventInput
 ): Promise<AgentTimelineEvent> => {
   if (!isTauriRuntimeAvailable()) {
-    return {
-      id: createLocalId('event'),
-      threadId: input.threadId,
-      providerId: input.providerId,
-      summary: input.summary,
-      createdAt: Date.now(),
-    };
+    return buildLocalTimelineEvent(input);
   }
 
-  const event = await invoke<{
-    id: string;
-    threadId: string;
-    createdAt: number;
-  }>('append_agent_timeline_event', {
-    input: {
-      threadId: input.threadId,
-      turnId: input.turnId || input.threadId,
-      kind: 'message',
-      payload: input.summary,
-    },
-  });
+  try {
+    const event = await invoke<{
+      id: string;
+      threadId: string;
+      createdAt: number;
+    }>('append_agent_timeline_event', {
+      input: {
+        threadId: input.threadId,
+        turnId: input.turnId || input.threadId,
+        kind: 'message',
+        payload: input.summary,
+      },
+    });
 
-  return {
-    id: event.id,
-    threadId: event.threadId,
-    providerId: input.providerId,
-    summary: input.summary,
-    createdAt: event.createdAt,
-  };
+    return {
+      id: event.id,
+      threadId: event.threadId,
+      providerId: input.providerId,
+      summary: input.summary,
+      createdAt: event.createdAt,
+    };
+  } catch (error) {
+    if (shouldBypassLegacyTimelinePersistence(input.threadId, error)) {
+      return buildLocalTimelineEvent(input);
+    }
+
+    throw error;
+  }
 };
 
 export const saveProjectMemoryEntry = async (

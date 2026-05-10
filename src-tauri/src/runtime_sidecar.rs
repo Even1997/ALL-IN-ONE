@@ -21,6 +21,11 @@ struct RuntimeSidecarProcess {
     descriptor: RuntimeSidecarDescriptor,
 }
 
+struct RuntimeSidecarEntryPoint {
+    path: PathBuf,
+    node_args: Vec<OsString>,
+}
+
 #[derive(Default)]
 pub struct RuntimeSidecarManager {
     process: Mutex<Option<RuntimeSidecarProcess>>,
@@ -45,19 +50,43 @@ fn build_runtime_token(port: u16) -> String {
     format!("goodnight_runtime_{}_{}", port, epoch)
 }
 
-fn resolve_runtime_script_path() -> Result<PathBuf, String> {
+fn resolve_runtime_entry_point() -> Result<RuntimeSidecarEntryPoint, String> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repo_root = manifest_dir
         .parent()
         .ok_or_else(|| "Failed to resolve repository root for runtime sidecar".to_string())?;
-    Ok(repo_root
+    let source_path = repo_root
+        .join("apps")
+        .join("runtime")
+        .join("src")
+        .join("index.ts");
+    if source_path.exists() {
+        return Ok(RuntimeSidecarEntryPoint {
+            path: source_path,
+            node_args: vec![OsString::from("--experimental-strip-types")],
+        });
+    }
+
+    let build_path = repo_root
         .join("apps")
         .join("runtime")
         .join("dist")
         .join("apps")
         .join("runtime")
         .join("src")
-        .join("index.js"))
+        .join("index.js");
+    if build_path.exists() {
+        return Ok(RuntimeSidecarEntryPoint {
+            path: build_path,
+            node_args: Vec::new(),
+        });
+    }
+
+    Err(format!(
+        "Runtime sidecar entrypoint not found. Checked {} and {}.",
+        source_path.display(),
+        build_path.display()
+    ))
 }
 
 fn find_node_in_path(path_env: Option<OsString>) -> Option<PathBuf> {
@@ -142,13 +171,7 @@ pub fn start_runtime_sidecar(
     let port = allocate_runtime_port()?;
     let auth_token = build_runtime_token(port);
     let descriptor = build_running_descriptor(port, auth_token.clone());
-    let script_path = resolve_runtime_script_path()?;
-    if !script_path.exists() {
-        return Err(format!(
-            "Runtime sidecar build artifact not found at {}. Run `npm run runtime:build` first.",
-            script_path.display()
-        ));
-    }
+    let entry_point = resolve_runtime_entry_point()?;
 
     let app_data_dir = app
         .path()
@@ -159,8 +182,10 @@ pub fn start_runtime_sidecar(
         .map_err(|error| format!("Failed to create runtime data directory: {}", error))?;
 
     let node_binary = resolve_node_binary();
-    let child = Command::new(&node_binary)
-        .arg(script_path)
+    let mut command = Command::new(&node_binary);
+    command.args(&entry_point.node_args);
+    let child = command
+        .arg(&entry_point.path)
         .env("GOODNIGHT_RUNTIME_HOST", "127.0.0.1")
         .env("GOODNIGHT_RUNTIME_PORT", port.to_string())
         .env("GOODNIGHT_RUNTIME_TOKEN", auth_token)

@@ -19,7 +19,9 @@ test('tauri shell exposes runtime sidecar lifecycle commands', async () => {
   assert.match(libSource, /start_runtime_sidecar/);
   assert.match(libSource, /get_runtime_sidecar_status/);
   assert.match(libSource, /stop_runtime_sidecar/);
-  assert.match(runtimeSidecarSource, /Runtime sidecar build artifact not found/);
+  assert.match(runtimeSidecarSource, /Runtime sidecar entrypoint not found/);
+  assert.match(runtimeSidecarSource, /--experimental-strip-types/);
+  assert.match(runtimeSidecarSource, /index\.ts/);
   assert.match(runtimeSidecarSource, /resolve_node_binary/);
   assert.match(runtimeSidecarSource, /\/opt\/homebrew\/bin\/node/);
   assert.match(runtimeSidecarSource, /\/usr\/local\/bin\/node/);
