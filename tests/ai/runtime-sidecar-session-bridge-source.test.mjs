@@ -24,6 +24,11 @@ test('runtime sidecar session bridge maps snapshots into the desktop chat store'
 test('runtime sidecar session bridge consumes streaming assistant messages and runtime interaction projections', async () => {
   const source = await readFile(bridgePath, 'utf8');
 
+  assert.match(source, /const patchLiveStateIfChanged =/);
+  assert.match(source, /const patchApprovalSummaryIfChanged =/);
+  assert.match(source, /applyRuntimeSidecarTurnDeltaEvent/);
+  assert.match(source, /patchLiveStateIfChanged\(sessionId,/);
+
   assert.match(source, /event\.type === 'message\.delta'/);
   assert.match(source, /event\.type === 'turn\.finished'/);
   assert.match(source, /event\.type === 'turn\.delta'/);

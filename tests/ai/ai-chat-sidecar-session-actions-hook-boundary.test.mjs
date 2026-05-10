@@ -38,13 +38,18 @@ test('sidecar turn submission forwards conversation history and selected referen
     readFile(hookPath, 'utf8'),
   ]);
 
-  assert.match(chatSource, /conversationHistory:\s*toConversationHistoryMessages\(activeSession\?\.messages \|\| \[\]\)/);
+  assert.doesNotMatch(
+    chatSource,
+    /conversationHistory:\s*toConversationHistoryMessages\(activeSession\?\.messages \|\| \[\]\)/,
+  );
+  assert.match(chatSource, /getConversationHistory:\s*getConversationHistory/);
   assert.match(chatSource, /referenceFiles:\s*resolvedReferenceContextFiles/);
   assert.match(chatSource, /contextLabels:\s*runtimeContextLabels/);
-  assert.match(hookSource, /conversationHistory,\s*/);
+  assert.match(hookSource, /getConversationHistory:\s*\(\)\s*=>\s*RuntimeConversationHistoryMessage\[\]/);
+  assert.match(hookSource, /conversationHistory:\s*getConversationHistory\(\)/);
   assert.match(hookSource, /referenceFiles,\s*/);
   assert.match(hookSource, /contextLabels,\s*/);
-  assert.match(hookSource, /conversationHistory,\s*$/m);
+  assert.match(hookSource, /getConversationHistory,\s*$/m);
   assert.match(hookSource, /referenceFiles,\s*$/m);
   assert.match(hookSource, /contextLabels,\s*$/m);
 });

@@ -14,6 +14,13 @@ const gatewayHookPath = path.resolve(
 test('runtime conversation gateway avoids unstable zustand selector fallbacks', async () => {
   const source = await readFile(gatewayHookPath, 'utf8');
 
+  assert.match(source, /export const useActiveConversationSelection =/);
+  assert.match(source, /export const useActiveConversationMessages =/);
+  assert.match(source, /export const useActiveConversationLiveState =/);
+  assert.match(source, /export const useActiveConversationApprovals =/);
+  assert.match(source, /export const useActiveConversationTasks =/);
+  assert.match(source, /export const useActiveConversationSkillsAndRecovery =/);
+
   assert.match(source, /const EMPTY_MEMORY_ENTRIES:/);
   assert.match(source, /const EMPTY_BACKGROUND_TASKS:/);
   assert.match(source, /const EMPTY_ACTIVE_SKILLS:/);
