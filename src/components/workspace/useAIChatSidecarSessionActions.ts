@@ -3,19 +3,27 @@ import type { ChatAgentId } from '../../modules/ai/chat/chatAgents';
 import type { AIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { createStoredChatMessage, useAIChatStore } from '../../modules/ai/store/aiChatStore';
 import type { AgentProviderId } from '../../modules/ai/runtime/agentRuntimeTypes';
+import type { RuntimeConversationHistoryMessage, RuntimeReferenceFileRecord } from '@goodnight/runtime-protocol';
 import {
   createRuntimeSidecarSession,
   submitRuntimeSidecarTurn,
 } from '../../modules/runtime-sidecar/runtimeSidecarSessionBridge.ts';
+import { getDesktopRuntimeSidecarStatus } from '../../modules/runtime-sidecar/desktopRuntimeSidecar.ts';
 
 type UseAIChatSidecarSessionActionsInput = {
   currentProjectId: string | null;
+  currentProjectName: string | null;
+  projectRoot: string | null;
   runtimeProviderId: AgentProviderId;
   activeSession: {
     id: string;
     runtimeThreadId: string | null;
     title: string;
   } | null;
+  permissionMode: 'ask' | 'plan' | 'auto' | 'bypass';
+  conversationHistory: RuntimeConversationHistoryMessage[];
+  referenceFiles: RuntimeReferenceFileRecord[];
+  contextLabels: string[];
   selectedRuntimeConfig: AIConfigEntry | null;
   selectedChatAgentId: ChatAgentId;
   isSelectedChatAgentReady: boolean;
@@ -29,8 +37,14 @@ type UseAIChatSidecarSessionActionsInput = {
 
 export const useAIChatSidecarSessionActions = ({
   currentProjectId,
+  currentProjectName,
+  projectRoot,
   runtimeProviderId,
   activeSession,
+  permissionMode,
+  conversationHistory,
+  referenceFiles,
+  contextLabels,
   selectedRuntimeConfig,
   selectedChatAgentId,
   isSelectedChatAgentReady,
@@ -74,14 +88,35 @@ export const useAIChatSidecarSessionActions = ({
 
   const submitPrompt = useCallback(
     async (promptValue: string) => {
-      const appendSubmissionError = (message: string) => {
-        if (!currentProjectId || !activeSession?.id) {
-          return;
+      const ensureLocalSubmissionSession = (promptValue: string) => {
+        if (!currentProjectId) {
+          return null;
         }
 
+        if (activeSession?.id) {
+          useAIChatStore
+            .getState()
+            .appendMessage(currentProjectId, activeSession.id, createStoredChatMessage('user', promptValue));
+          return activeSession.id;
+        }
+
+        const session = createWelcomeSession(currentProjectId, runtimeProviderId);
+        const sessionWithPrompt = {
+          ...session,
+          messages: [...session.messages, createStoredChatMessage('user', promptValue)],
+        };
+        upsertSession(currentProjectId, sessionWithPrompt);
+        setActiveSession(currentProjectId, sessionWithPrompt.id);
+        return sessionWithPrompt.id;
+      };
+
+      const appendSubmissionError = (sessionId: string | null, message: string) => {
+        if (!currentProjectId || !sessionId) {
+          return;
+        }
         useAIChatStore
           .getState()
-          .appendMessage(currentProjectId, activeSession.id, createStoredChatMessage('system', message, 'error'));
+          .appendMessage(currentProjectId, sessionId, createStoredChatMessage('system', message, 'error'));
       };
       const effectiveChatAgentId =
         selectedChatAgentId !== 'built-in' && !isSelectedChatAgentReady
@@ -98,22 +133,43 @@ export const useAIChatSidecarSessionActions = ({
           sessionId: activeSession?.runtimeThreadId || null,
           title: activeSession?.title || '新对话',
           prompt: promptValue,
+          projectName: currentProjectName || currentProjectId || '当前项目',
+          projectRoot: projectRoot || undefined,
+          permissionMode,
+          conversationHistory,
+          referenceFiles,
+          contextLabels,
           runtimeConfig: selectedRuntimeConfig,
         });
 
         if (!submitted) {
-          appendSubmissionError('Node runtime sidecar 未启动，本次消息没有发送。请确认正在桌面端运行，并重新发送。');
+          const fallbackSessionId = ensureLocalSubmissionSession(promptValue);
+          const sidecarStatus = getDesktopRuntimeSidecarStatus();
+          appendSubmissionError(
+            fallbackSessionId,
+            sidecarStatus.error
+              ? `Node runtime sidecar 未启动：${sidecarStatus.error}`
+              : 'Node runtime sidecar 未启动，本次消息没有发送。请确认正在桌面端运行，并重新发送。',
+          );
         }
       } catch (error) {
+        const fallbackSessionId = ensureLocalSubmissionSession(promptValue);
         appendSubmissionError(
+          fallbackSessionId,
           `Node runtime sidecar 提交失败：${error instanceof Error ? error.message : String(error)}`,
         );
       }
     },
     [
       activeSession,
+      currentProjectName,
       currentProjectId,
+      conversationHistory,
+      contextLabels,
       isSelectedChatAgentReady,
+      permissionMode,
+      projectRoot,
+      referenceFiles,
       runtimeProviderId,
       selectedChatAgentId,
       selectedRuntimeConfig,

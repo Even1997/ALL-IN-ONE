@@ -31,12 +31,7 @@ import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../.
 import {
   appendAgentTimelineEvent as persistRuntimeTimelineEvent,
   getAgentRuntimeSettings,
-  getAgentTurnCheckpointDiff,
   enqueueAgentApproval,
-  listAgentBackgroundTasks,
-  listAgentTurnCheckpoints,
-  listAgentApprovals,
-  rewindAgentTurn,
   resolveAgentApproval,
   setAgentPermissionMode,
 } from '../../modules/ai/runtime/agentRuntimeClient';
@@ -55,14 +50,6 @@ import type {
   AgentTurnCheckpointDiff,
   AgentTurnCheckpointRecord,
 } from '../../modules/ai/runtime/agentRuntimeTypes';
-import {
-  listRuntimeMcpServers,
-  listRuntimeMcpToolCalls,
-} from '../../modules/ai/runtime/mcp/runtimeMcpClient';
-import {
-  appendRuntimeReplayEvent,
-  listRuntimeReplayEvents,
-} from '../../modules/ai/runtime/replay/runtimeReplayClient';
 import {
   buildReplayRecoveryState,
   createReplayRecoveryController,
@@ -103,12 +90,16 @@ import { emitKnowledgeFilesystemChanged } from '../../features/knowledge/workspa
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import {
+  appendRuntimeSidecarReplayHistoryEntry,
+  getRuntimeSidecarCheckpointDiff,
+  initializeRuntimeSidecarBackgroundTasks,
+  initializeRuntimeSidecarMcpServers,
+  initializeRuntimeSidecarMcpToolCalls,
   initializeRuntimeSidecarProjectSessions,
+  initializeRuntimeSidecarReplayHistory,
+  listRuntimeSidecarCheckpoints,
+  rewindRuntimeSidecarCheckpoint,
 } from '../../modules/runtime-sidecar/runtimeSidecarSessionBridge.ts';
-import {
-  getProjectDir,
-  resolveProjectRuntimeRootPath,
-} from '../../utils/projectPersistence';
 import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
@@ -1516,17 +1507,15 @@ export const AIChat: React.FC<AIChatProps> = ({
     }))
   );
   const {
-    appendTimelineEvent: appendRuntimeTimelineEvent,
+    appendTimelineEvent: appendRuntimeTimelineEvent,
     setReplayEvents: setRuntimeReplayEvents,
-    appendReplayEvent: appendRuntimeReplayEventToStore,
+    appendReplayEvent: cacheReplayEventEntry,
     setRecoveryState: setRuntimeRecoveryState,
     clearReplayResumeRequest,
     activeSkillsByThread,
-    setActiveSkills,
-    setThreadBackgroundTasks,
-    upsertTeamRun,
+    setActiveSkills,
     pruneThreadHistorySince,
-    patchLiveState,
+    patchLiveState,
   } = useAgentRuntimeStore(
     useShallow((state) => ({
       appendTimelineEvent: state.appendTimelineEvent,
@@ -1535,19 +1524,15 @@ export const AIChat: React.FC<AIChatProps> = ({
       setRecoveryState: state.setRecoveryState,
       clearReplayResumeRequest: state.clearReplayResumeRequest,
       activeSkillsByThread: state.activeSkillsByThread,
-      setActiveSkills: state.setActiveSkills,
-      setThreadBackgroundTasks: state.setThreadBackgroundTasks,
-      upsertTeamRun: state.upsertTeamRun,
+      setActiveSkills: state.setActiveSkills,
       pruneThreadHistorySince: state.pruneThreadHistorySince,
-      patchLiveState: state.patchLiveState,
+      patchLiveState: state.patchLiveState,
     }))
   );
-  const { runtimeMcpServers, setRuntimeMcpServers, setRuntimeMcpToolCalls } =
+  const { runtimeMcpServers } =
     useRuntimeMcpStore(
     useShallow((state) => ({
       runtimeMcpServers: state.servers,
-      setRuntimeMcpServers: state.setServers,
-      setRuntimeMcpToolCalls: state.setToolCalls,
     }))
     );
   const conversation = useRuntimeConversationGateway({
@@ -1556,7 +1541,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const {
     approvalsByThread,
     permissionMode,
-    setThreadApprovals,
     enqueueApproval,
     resolveApproval: resolveStoredApproval,
     setPermissionMode,
@@ -1565,7 +1549,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     useShallow((state) => ({
       approvalsByThread: state.approvalsByThread,
       permissionMode: state.permissionMode,
-      setThreadApprovals: state.setThreadApprovals,
       enqueueApproval: state.enqueueApproval,
       resolveApproval: state.resolveApproval,
       setPermissionMode: state.setPermissionMode,
@@ -1618,21 +1601,8 @@ export const AIChat: React.FC<AIChatProps> = ({
   ]);
 
   useEffect(() => {
-    let alive = true;
-
-    void (async () => {
-      const servers = await listRuntimeMcpServers();
-      if (!alive) {
-        return;
-      }
-
-      setRuntimeMcpServers(servers);
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [setRuntimeMcpServers]);
+    void initializeRuntimeSidecarMcpServers();
+  }, []);
 
   const sessions = conversation.sessions.length > 0 ? conversation.sessions : EMPTY_SESSIONS;
   const activeSessionId = conversation.activeSessionId;
@@ -1683,8 +1653,8 @@ export const AIChat: React.FC<AIChatProps> = ({
   const replayRecoveryController = useMemo(
     () =>
       createReplayRecoveryController({
-        appendReplayEvent: appendRuntimeReplayEvent,
-        appendReplayEventToStore: appendRuntimeReplayEventToStore,
+        appendReplayEvent: appendRuntimeSidecarReplayHistoryEntry,
+        appendReplayEventToStore: cacheReplayEventEntry,
         getReplayEvents: (threadId) => useAgentRuntimeStore.getState().replayEventsByThread[threadId] || [],
         setRecoveryState: (threadId, recoveryState) => {
           setRuntimeRecoveryState(threadId, recoveryState);
@@ -1700,7 +1670,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           );
         },
       }),
-    [appendRuntimeReplayEventToStore, currentProject, setRuntimeRecoveryState, syncSessionReplayState]
+    [cacheReplayEventEntry, currentProject, setRuntimeRecoveryState, syncSessionReplayState]
   );
 
   useEffect(() => {
@@ -1778,27 +1748,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   }, [activeReplayResumeRequest, activeSessionId, clearReplayResumeRequest, setActiveSkills]);
 
   useEffect(() => {
-    if (!activeApprovalThreadId) {
-      return;
-    }
-
-    let alive = true;
-
-    void (async () => {
-      const approvals = await listAgentApprovals(activeApprovalThreadId);
-      if (!alive) {
-        return;
-      }
-
-      setThreadApprovals(activeApprovalThreadId, approvals);
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [activeApprovalThreadId, setThreadApprovals]);
-
-  useEffect(() => {
     if (!activeSession?.id || !activeSession.runtimeThreadId) {
       return;
     }
@@ -1834,21 +1783,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       return;
     }
 
-    let alive = true;
-
-    void (async () => {
-      const toolCalls = await listRuntimeMcpToolCalls(runtimeThreadId);
-      if (!alive) {
-        return;
-      }
-
-      setRuntimeMcpToolCalls(runtimeThreadId, toolCalls);
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [activeSession?.runtimeThreadId, setRuntimeMcpToolCalls]);
+    void initializeRuntimeSidecarMcpToolCalls(runtimeThreadId);
+  }, [activeSession?.runtimeThreadId]);
   useEffect(() => {
     const runtimeThreadId = activeSession?.runtimeThreadId;
     if (!runtimeThreadId) {
@@ -1858,7 +1794,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     let alive = true;
 
     void (async () => {
-      const replayEvents = await listRuntimeReplayEvents(runtimeThreadId);
+      const replayEvents = await initializeRuntimeSidecarReplayHistory(runtimeThreadId);
       if (!alive) {
         return;
       }
@@ -1911,7 +1847,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     let alive = true;
 
     void (async () => {
-      const checkpoints = await listAgentTurnCheckpoints(activeCheckpointThreadId);
+      const checkpoints = await listRuntimeSidecarCheckpoints(activeCheckpointThreadId);
       if (!alive) {
         return;
       }
@@ -1922,7 +1858,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     return () => {
       alive = false;
     };
-  }, [activeCheckpointThreadId]);
+  }, [activeCheckpointThreadId, activeSession?.updatedAt]);
 
   useEffect(() => {
     if (!activeTaskThreadId || !activeSessionId) {
@@ -1932,28 +1868,16 @@ export const AIChat: React.FC<AIChatProps> = ({
     let alive = true;
 
     void (async () => {
-      const tasks = await listAgentBackgroundTasks(activeTaskThreadId);
+      const tasks = await initializeRuntimeSidecarBackgroundTasks(activeTaskThreadId);
       if (!alive) {
         return;
       }
-
-      setThreadBackgroundTasks(activeSessionId, tasks);
-      tasks
-        .filter((task) => task.runKind === 'team')
-        .forEach((task) => {
-          try {
-            const teamRun = JSON.parse(task.payloadJson) as AgentTeamRunRecord;
-            upsertTeamRun(activeSessionId, teamRun);
-          } catch {
-            return;
-          }
-        });
     })();
 
     return () => {
       alive = false;
     };
-  }, [activeSessionId, activeTaskThreadId, setThreadBackgroundTasks, upsertTeamRun]);
+  }, [activeSessionId, activeTaskThreadId]);
   const updateAssistantMessageTimeline = useCallback(
     (
       messageId: string,
@@ -2067,17 +1991,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     [setInput]
   );
 
-  const resolveProjectRootById = useCallback(
-    async (projectId: string) => {
-      const projectDir = await getProjectDir(projectId);
-      if (currentProject?.id === projectId) {
-        return resolveProjectRuntimeRootPath(currentProject, projectDir);
-      }
-
-      return projectDir;
-    },
-    [currentProject]
-  );
   const renderProjectFileProposal = useCallback(
     (message: { id: string; projectFileProposal?: ProjectFileProposal }) => {
       const proposal = message.projectFileProposal;
@@ -2571,6 +2484,25 @@ export const AIChat: React.FC<AIChatProps> = ({
         : null,
     [input, resolvedReferenceContextFiles]
   );
+  const runtimeContextLabels = useMemo(
+    () =>
+      [
+        selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
+        contextSnapshot.primaryLabel,
+        contextSnapshot.secondaryLabel,
+        contextSnapshot.currentFileLabel,
+        contextSnapshot.vaultLabel,
+        ...explicitReferenceLabels,
+      ].filter((item): item is string => Boolean(item)),
+    [
+      contextSnapshot.currentFileLabel,
+      contextSnapshot.primaryLabel,
+      contextSnapshot.secondaryLabel,
+      contextSnapshot.vaultLabel,
+      explicitReferenceLabels,
+      selectedRuntimeConfig,
+    ]
+  );
 
   const currentContextUsage = useMemo(() => {
     const previewPrompt = buildDirectChatPrompt({
@@ -2580,14 +2512,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       skillIntent: null,
       conversationHistory: toConversationHistoryMessages(activeSession?.messages || []),
       referenceContext: previewReferenceContext,
-      contextLabels: [
-        selectedRuntimeConfig ? `当前 AI / ${selectedRuntimeConfig.name}` : null,
-        contextSnapshot.primaryLabel,
-        contextSnapshot.secondaryLabel,
-        contextSnapshot.currentFileLabel,
-        contextSnapshot.vaultLabel,
-        ...explicitReferenceLabels,
-      ].filter((item): item is string => Boolean(item)),
+      contextLabels: runtimeContextLabels,
     });
 
     return buildContextUsageSummary(
@@ -2595,15 +2520,11 @@ export const AIChat: React.FC<AIChatProps> = ({
       selectedRuntimeConfig?.contextWindowTokens || 258000
     );
   }, [
-    contextSnapshot.currentFileLabel,
-    contextSnapshot.primaryLabel,
-    contextSnapshot.secondaryLabel,
-    contextSnapshot.vaultLabel,
     currentProject?.name,
-    explicitReferenceLabels,
     input,
     activeSession?.messages,
     previewReferenceContext,
+    runtimeContextLabels,
     selectedRuntimeConfig,
   ]);
   const selectedAgent = useMemo(
@@ -2751,11 +2672,14 @@ export const AIChat: React.FC<AIChatProps> = ({
       }));
 
       try {
-        const diff = await getAgentTurnCheckpointDiff({
+        const diff = await getRuntimeSidecarCheckpointDiff({
           threadId: activeCheckpointThreadId,
           runId,
           path: relativePath,
         });
+        if (!diff) {
+          throw new Error('Node runtime sidecar 未启动，无法加载 checkpoint diff。');
+        }
         setRunDiffsByKey((current) => ({
           ...current,
           [diffKey]: {
@@ -2847,12 +2771,13 @@ export const AIChat: React.FC<AIChatProps> = ({
       setRewindError('');
 
       try {
-        const projectRoot = await resolveProjectRootById(currentProject.id);
-        const result = await rewindAgentTurn({
+        const result = await rewindRuntimeSidecarCheckpoint({
           threadId: activeCheckpointThreadId,
           runId: checkpoint.runId,
-          projectRoot,
         });
+        if (!result) {
+          throw new Error('Node runtime sidecar 未启动，无法回滚 checkpoint。');
+        }
         const removedRunIds = new Set(result.removedRunIds);
         const activeMessages = activeSession?.messages || [];
         const nextMessages = activeMessages.filter((message) => !message.runId || !removedRunIds.has(message.runId));
@@ -2868,7 +2793,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           )
         );
         pruneThreadHistorySince(activeSessionId, checkpoint.createdAt);
-        const replayEvents = await listRuntimeReplayEvents(activeCheckpointThreadId);
+        const replayEvents = await initializeRuntimeSidecarReplayHistory(activeCheckpointThreadId);
         setRuntimeReplayEvents(activeCheckpointThreadId, replayEvents);
         const recoveryState = buildReplayRecoveryState(activeCheckpointThreadId, replayEvents);
         setRuntimeRecoveryState(activeSessionId, recoveryState);
@@ -3206,8 +3131,14 @@ export const AIChat: React.FC<AIChatProps> = ({
   }, [resetSettingsTransientUi]);
   const { handleCreateSession, submitPrompt } = useAIChatSidecarSessionActions({
     currentProjectId: currentProject?.id || null,
+    currentProjectName: currentProject?.name || null,
+    projectRoot: currentProject?.vaultPath || null,
     runtimeProviderId,
     activeSession,
+    permissionMode,
+    conversationHistory: toConversationHistoryMessages(activeSession?.messages || []),
+    referenceFiles: resolvedReferenceContextFiles,
+    contextLabels: runtimeContextLabels,
     selectedRuntimeConfig,
     selectedChatAgentId,
     isSelectedChatAgentReady: agentAvailability[selectedChatAgentId].ready,

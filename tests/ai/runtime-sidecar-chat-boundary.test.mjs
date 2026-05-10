@@ -5,20 +5,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '../..');
-const aiChatPath = path.join(repoRoot, 'src/components/workspace/AIChat.tsx');
-const sidecarHookPath = path.join(repoRoot, 'src/components/workspace/useAIChatSidecarSessionActions.ts');
+const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 
-test('AIChat initializes and submits runtime sessions through the sidecar bridge', async () => {
-  const [source, sidecarHook] = await Promise.all([
-    readFile(aiChatPath, 'utf8'),
-    readFile(sidecarHookPath, 'utf8'),
-  ]);
+test('AIChat sidecar path does not invoke local runtime orchestration helpers for mcp replay or team execution', async () => {
+  const source = await readFile(aiChatPath, 'utf8');
 
-  assert.match(source, /useAIChatSidecarSessionActions/);
-  assert.match(source, /initializeRuntimeSidecarProjectSessions/);
-  assert.match(sidecarHook, /createRuntimeSidecarSession/);
-  assert.match(sidecarHook, /submitRuntimeSidecarTurn/);
-  assert.doesNotMatch(source, /submitRuntimeChatTurn/);
-  assert.doesNotMatch(source, /listAgentThreads\(projectId\)/);
+  assert.doesNotMatch(source, /appendRuntimeReplayEvent/);
+  assert.doesNotMatch(source, /listAgentApprovals/);
+  assert.doesNotMatch(source, /listAgentBackgroundTasks/);
+  assert.doesNotMatch(source, /listAgentTurnCheckpoints/);
+  assert.doesNotMatch(source, /getAgentTurnCheckpointDiff/);
+  assert.doesNotMatch(source, /listRuntimeMcpServers/);
+  assert.doesNotMatch(source, /listRuntimeMcpToolCalls/);
+  assert.doesNotMatch(source, /listRuntimeSidecarReplayHistory/);
+  assert.doesNotMatch(source, /invokeRuntimeMcpTool\(/);
+  assert.doesNotMatch(source, /rewindAgentTurn\(/);
+  assert.doesNotMatch(source, /runAgentTeamTurn/);
 });

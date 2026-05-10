@@ -20,6 +20,9 @@ test('tauri shell exposes runtime sidecar lifecycle commands', async () => {
   assert.match(libSource, /get_runtime_sidecar_status/);
   assert.match(libSource, /stop_runtime_sidecar/);
   assert.match(runtimeSidecarSource, /Runtime sidecar build artifact not found/);
+  assert.match(runtimeSidecarSource, /resolve_node_binary/);
+  assert.match(runtimeSidecarSource, /\/opt\/homebrew\/bin\/node/);
+  assert.match(runtimeSidecarSource, /\/usr\/local\/bin\/node/);
   assert.match(runtimeSidecarSource, /GOODNIGHT_RUNTIME_PORT/);
   assert.match(runtimeSidecarSource, /wait_for_runtime_ready/);
   assert.match(packageSource, /"dev": "npm run runtime:build && vite"/);

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getSystemRuntimeSkillDefinitions } from '../../skills/skillLibrary';
 import { isTauriRuntimeAvailable } from '../../../../utils/projectPersistence';
+import { ensureDesktopRuntimeSidecar } from '../../../runtime-sidecar/desktopRuntimeSidecar.ts';
 import type {
   RuntimeMcpDeleteResult,
   RuntimeMcpServer,
@@ -33,22 +34,26 @@ const DEFAULT_RUNTIME_MCP_SERVER: RuntimeMcpServer = {
 
 export const listRuntimeMcpServers = () =>
   isTauriRuntimeAvailable()
-    ? invoke<RuntimeMcpServer[]>('list_runtime_mcp_servers')
+    ? ensureDesktopRuntimeSidecar()
+        .then((client) => (client ? client.listMcpServers() : invoke<RuntimeMcpServer[]>('list_runtime_mcp_servers')))
     : Promise.resolve([DEFAULT_RUNTIME_MCP_SERVER]);
 
 export const upsertRuntimeMcpServer = (input: RuntimeMcpServer) =>
   isTauriRuntimeAvailable()
-    ? invoke<RuntimeMcpServer>('upsert_runtime_mcp_server', { input })
+    ? ensureDesktopRuntimeSidecar()
+        .then((client) => (client ? client.upsertMcpServer(input) : invoke<RuntimeMcpServer>('upsert_runtime_mcp_server', { input })))
     : Promise.resolve(input);
 
 export const deleteRuntimeMcpServer = (id: string) =>
   isTauriRuntimeAvailable()
-    ? invoke<RuntimeMcpDeleteResult>('delete_runtime_mcp_server', { id })
+    ? ensureDesktopRuntimeSidecar()
+        .then((client) => (client ? client.deleteMcpServer(id) : invoke<RuntimeMcpDeleteResult>('delete_runtime_mcp_server', { id })))
     : Promise.resolve({ id, deleted: true });
 
 export const listRuntimeMcpToolCalls = (threadId: string) =>
   isTauriRuntimeAvailable()
-    ? invoke<RuntimeMcpToolCall[]>('list_runtime_mcp_tool_calls', { threadId })
+    ? ensureDesktopRuntimeSidecar()
+        .then((client) => (client ? client.listMcpToolCalls(threadId) : invoke<RuntimeMcpToolCall[]>('list_runtime_mcp_tool_calls', { threadId })))
     : Promise.resolve([]);
 
 export const invokeRuntimeMcpTool = (input: {
@@ -58,7 +63,8 @@ export const invokeRuntimeMcpTool = (input: {
   argumentsText?: string;
 }): Promise<RuntimeMcpToolCall> =>
   isTauriRuntimeAvailable()
-    ? invoke<RuntimeMcpToolCall>('invoke_runtime_mcp_tool', { input })
+    ? ensureDesktopRuntimeSidecar()
+        .then((client) => (client ? client.invokeMcpTool(input) : invoke<RuntimeMcpToolCall>('invoke_runtime_mcp_tool', { input })))
     : Promise.resolve({
         id: `mcp-call_${Date.now()}`,
         threadId: input.threadId,

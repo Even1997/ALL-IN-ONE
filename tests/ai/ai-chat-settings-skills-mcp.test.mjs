@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 const aiChatCssPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.css');
 const mcpPagePath = path.resolve(__dirname, '../../src/components/workspace/RuntimeMcpSettingsPage.tsx');
-const mcpClientPath = path.resolve(__dirname, '../../src/modules/ai/runtime/mcp/runtimeMcpClient.ts');
+const sidecarBridgePath = path.resolve(__dirname, '../../src/modules/runtime-sidecar/runtimeSidecarSessionBridge.ts');
 
 test('ai chat settings drawer exposes ai, skills, and mcp tabs', async () => {
   const source = await readFile(aiChatPath, 'utf8');
@@ -62,11 +62,12 @@ test('ai chat settings drawer keeps desktop and mobile content scrollable', asyn
 
 test('runtime mcp settings page owns CRUD-style management hooks', async () => {
   const pageSource = await readFile(mcpPagePath, 'utf8');
-  const clientSource = await readFile(mcpClientPath, 'utf8');
+  const bridgeSource = await readFile(sidecarBridgePath, 'utf8');
 
-  assert.match(pageSource, /listRuntimeMcpServers/);
-  assert.match(pageSource, /upsertRuntimeMcpServer/);
-  assert.match(pageSource, /deleteRuntimeMcpServer/);
+  assert.match(pageSource, /initializeRuntimeSidecarMcpServers/);
+  assert.match(pageSource, /upsertRuntimeSidecarMcpServer/);
+  assert.match(pageSource, /deleteRuntimeSidecarMcpServer/);
+  assert.match(pageSource, /invokeRuntimeSidecarMcpTool/);
   assert.match(pageSource, /chat-settings-mcp-toolbar-bar/);
   assert.match(pageSource, /chat-settings-mcp-panel-header/);
   assert.match(pageSource, /chat-settings-mcp-list-meta/);
@@ -85,5 +86,8 @@ test('runtime mcp settings page owns CRUD-style management hooks', async () => {
   assert.doesNotMatch(pageSource, /chat-settings-mcp-hero/);
   assert.doesNotMatch(pageSource, /chat-settings-mcp-summary/);
 
-  assert.match(clientSource, /deleteRuntimeMcpServer/);
+  assert.match(bridgeSource, /initializeRuntimeSidecarMcpServers/);
+  assert.match(bridgeSource, /initializeRuntimeSidecarMcpToolCalls/);
+  assert.match(bridgeSource, /upsertRuntimeSidecarMcpServer/);
+  assert.match(bridgeSource, /deleteRuntimeSidecarMcpServer/);
 });

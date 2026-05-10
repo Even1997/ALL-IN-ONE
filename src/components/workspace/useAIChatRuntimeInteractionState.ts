@@ -14,6 +14,10 @@ import {
   type AssistantTimelineEvent,
 } from '../../modules/ai/store/assistantTimeline.ts';
 import { type RuntimeQuestionPayload } from '../../modules/ai/store/aiChatStore';
+import {
+  answerRuntimeSidecarQuestion,
+  resolveRuntimeSidecarApproval,
+} from '../../modules/runtime-sidecar/runtimeSidecarSessionBridge.ts';
 
 type RuntimePendingQuestionAction = {
   messageId: string;
@@ -305,9 +309,18 @@ export const useAIChatRuntimeInteractionState = ({
       const pendingAction = await settleApprovalLifecycle(approvalId, 'approved');
       if (pendingAction) {
         await pendingAction.onApprove();
+        return;
+      }
+
+      if (activeSessionId) {
+        await resolveRuntimeSidecarApproval({
+          sessionId: activeSessionId,
+          approvalId,
+          status: 'approved',
+        });
       }
     },
-    [settleApprovalLifecycle],
+    [activeSessionId, settleApprovalLifecycle],
   );
 
   const handleDenyRuntimeApproval = useCallback(
@@ -315,9 +328,18 @@ export const useAIChatRuntimeInteractionState = ({
       const pendingAction = await settleApprovalLifecycle(approvalId, 'denied');
       if (pendingAction?.onDeny) {
         await pendingAction.onDeny();
+        return;
+      }
+
+      if (activeSessionId) {
+        await resolveRuntimeSidecarApproval({
+          sessionId: activeSessionId,
+          approvalId,
+          status: 'denied',
+        });
       }
     },
-    [settleApprovalLifecycle],
+    [activeSessionId, settleApprovalLifecycle],
   );
 
   const handleAnswerRuntimeQuestion = useCallback(
@@ -341,7 +363,14 @@ export const useAIChatRuntimeInteractionState = ({
       if (pendingAction) {
         delete pendingQuestionActionsRef.current[question.id];
         pendingAction.resolve(answers);
+        return;
       }
+
+      await answerRuntimeSidecarQuestion({
+        sessionId: activeSessionId,
+        questionId: question.id,
+        answers,
+      });
     },
     [activeSessionId, patchLiveState, updateAssistantMessageTimeline],
   );

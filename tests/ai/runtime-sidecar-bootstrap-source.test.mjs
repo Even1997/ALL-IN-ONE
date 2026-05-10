@@ -18,4 +18,6 @@ test('desktop app bootstraps the node runtime sidecar', async () => {
   assert.match(appSource, /void ensureDesktopRuntimeSidecar\(\)/);
   assert.match(sidecarSource, /start_runtime_sidecar/);
   assert.match(sidecarSource, /RuntimeSidecarClient/);
+  assert.match(sidecarSource, /Tauri runtime unavailable/);
+  assert.match(sidecarSource, /getDesktopRuntimeSidecarStatus/);
 });

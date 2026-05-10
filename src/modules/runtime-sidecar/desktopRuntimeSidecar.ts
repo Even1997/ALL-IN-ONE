@@ -37,6 +37,8 @@ let currentStatus: RuntimeSidecarStatus = {
 };
 let startPromise: Promise<RuntimeSidecarClient | null> | null = null;
 let runtimeSocket: WebSocket | null = null;
+const TAURI_RUNTIME_UNAVAILABLE_MESSAGE =
+  'Tauri runtime unavailable. Please run the desktop app with `npm run tauri dev` instead of opening the Vite web page.';
 
 const emit = (status: RuntimeSidecarStatus) => {
   currentStatus = status;
@@ -65,6 +67,12 @@ const attachRuntimeEvents = (client: RuntimeSidecarClient) => {
 
 export const ensureDesktopRuntimeSidecar = async (): Promise<RuntimeSidecarClient | null> => {
   if (!isTauriRuntimeAvailable()) {
+    emit({
+      phase: 'error',
+      descriptor: null,
+      error: TAURI_RUNTIME_UNAVAILABLE_MESSAGE,
+      client: null,
+    });
     return null;
   }
 

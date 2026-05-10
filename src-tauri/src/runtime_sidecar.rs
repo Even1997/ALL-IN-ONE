@@ -1,4 +1,6 @@
 use serde::Serialize;
+use std::env;
+use std::ffi::OsString;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -56,6 +58,40 @@ fn resolve_runtime_script_path() -> Result<PathBuf, String> {
         .join("runtime")
         .join("src")
         .join("index.js"))
+}
+
+fn find_node_in_path(path_env: Option<OsString>) -> Option<PathBuf> {
+    let path_env = path_env?;
+    let binary_name = if cfg!(windows) { "node.exe" } else { "node" };
+    env::split_paths(&path_env)
+        .map(|entry| entry.join(binary_name))
+        .find(|candidate| candidate.is_file())
+}
+
+fn resolve_node_binary() -> PathBuf {
+    if let Ok(node_path) = env::var("GOODNIGHT_RUNTIME_NODE_PATH") {
+        let trimmed = node_path.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
+    if let Some(node_path) = find_node_in_path(env::var_os("PATH")) {
+        return node_path;
+    }
+
+    for candidate in [
+        "/opt/homebrew/bin/node",
+        "/usr/local/bin/node",
+        "/usr/bin/node",
+    ] {
+        let path = PathBuf::from(candidate);
+        if path.is_file() {
+            return path;
+        }
+    }
+
+    PathBuf::from("node")
 }
 
 fn wait_for_runtime_ready(descriptor: &RuntimeSidecarDescriptor) -> Result<(), String> {
@@ -122,9 +158,8 @@ pub fn start_runtime_sidecar(
     std::fs::create_dir_all(&runtime_data_dir)
         .map_err(|error| format!("Failed to create runtime data directory: {}", error))?;
 
-    let node_binary =
-        std::env::var("GOODNIGHT_RUNTIME_NODE_PATH").unwrap_or_else(|_| "node".to_string());
-    let child = Command::new(node_binary)
+    let node_binary = resolve_node_binary();
+    let child = Command::new(&node_binary)
         .arg(script_path)
         .env("GOODNIGHT_RUNTIME_HOST", "127.0.0.1")
         .env("GOODNIGHT_RUNTIME_PORT", port.to_string())
@@ -133,7 +168,13 @@ pub fn start_runtime_sidecar(
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|error| format!("Failed to launch runtime sidecar: {}", error))?;
+        .map_err(|error| {
+            format!(
+                "Failed to launch runtime sidecar with Node at {}: {}",
+                node_binary.display(),
+                error
+            )
+        })?;
 
     *guard = Some(RuntimeSidecarProcess {
         child,
@@ -195,4 +236,28 @@ pub fn stop_runtime_sidecar(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::find_node_in_path;
+    use std::env;
+    use std::fs;
+
+    #[test]
+    fn find_node_in_path_uses_explicit_path_entries() {
+        let temp_dir = env::temp_dir().join(format!(
+            "goodnight-runtime-node-path-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let node_path = temp_dir.join(if cfg!(windows) { "node.exe" } else { "node" });
+        fs::write(&node_path, "").expect("write node placeholder");
+
+        let resolved = find_node_in_path(Some(temp_dir.clone().into_os_string()));
+
+        assert_eq!(resolved.as_deref(), Some(node_path.as_path()));
+        let _ = fs::remove_file(node_path);
+        let _ = fs::remove_dir(temp_dir);
+    }
 }

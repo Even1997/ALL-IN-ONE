@@ -4,6 +4,7 @@ import { ClaudeRuntime } from '../gn-agent/runtime/claude/ClaudeRuntime';
 import { CodexRuntime } from '../gn-agent/runtime/codex/CodexRuntime';
 import type { ApprovalRecord, PermissionMode, SandboxPolicy } from './approval/approvalTypes';
 import { permissionModeToSandboxPolicy } from './approval/permissionMode';
+import { ensureDesktopRuntimeSidecar } from '../../runtime-sidecar/desktopRuntimeSidecar.ts';
 import type { AIConfigEntry } from '../store/aiConfigState';
 import { toRuntimeAIConfig } from '../store/aiConfigState';
 import { isTauriRuntimeAvailable } from '../../../utils/projectPersistence';
@@ -98,6 +99,30 @@ type UpsertAgentBackgroundTaskInput = {
 };
 
 const createLocalId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const mapRuntimeSidecarCheckpoint = (checkpoint: {
+  id: string;
+  sessionId: string;
+  runId: string;
+  messageId: string | null;
+  summary: string;
+  filesChanged: AgentTurnCheckpointRecord['filesChanged'];
+  insertions: number;
+  deletions: number;
+  createdAt: number;
+  updatedAt: number;
+}): AgentTurnCheckpointRecord => ({
+  id: checkpoint.id,
+  threadId: checkpoint.sessionId,
+  runId: checkpoint.runId,
+  messageId: checkpoint.messageId,
+  summary: checkpoint.summary,
+  filesChanged: checkpoint.filesChanged,
+  insertions: checkpoint.insertions,
+  deletions: checkpoint.deletions,
+  createdAt: checkpoint.createdAt,
+  updatedAt: checkpoint.updatedAt,
+});
 
 export const createAgentThread = async (input: CreateAgentThreadInput): Promise<AgentThreadRecord> => {
   if (!isTauriRuntimeAvailable()) {
@@ -299,6 +324,11 @@ export const listAgentTurnCheckpoints = async (
     return [];
   }
 
+  const sidecar = await ensureDesktopRuntimeSidecar();
+  if (sidecar) {
+    return (await sidecar.listCheckpoints(threadId)).map(mapRuntimeSidecarCheckpoint);
+  }
+
   return invoke<AgentTurnCheckpointRecord[]>('list_agent_turn_checkpoints', { threadId });
 };
 
@@ -307,12 +337,58 @@ export const getAgentTurnCheckpointDiff = async (input: {
   runId: string;
   path: string;
 }): Promise<AgentTurnCheckpointDiff> => {
+  const sidecar = isTauriRuntimeAvailable() ? await ensureDesktopRuntimeSidecar() : null;
+  if (sidecar) {
+    const diff = await sidecar.getCheckpointDiff({
+      sessionId: input.threadId,
+      runId: input.runId,
+      path: input.path,
+    });
+    return {
+      checkpointId: diff.checkpointId,
+      threadId: diff.sessionId,
+      runId: diff.runId,
+      path: diff.path,
+      changeType: diff.changeType,
+      beforeContent: diff.beforeContent,
+      afterContent: diff.afterContent,
+      diff: diff.diff,
+      insertions: diff.insertions,
+      deletions: diff.deletions,
+      createdAt: diff.createdAt,
+    };
+  }
+
   return invoke<AgentTurnCheckpointDiff>('get_agent_turn_checkpoint_diff', input);
 };
 
 export const rewindAgentTurn = async (
   input: RewindAgentTurnInput
-): Promise<AgentTurnRewindResult> => invoke<AgentTurnRewindResult>('rewind_agent_turn', { input });
+): Promise<AgentTurnRewindResult> => {
+  const sidecar = isTauriRuntimeAvailable() ? await ensureDesktopRuntimeSidecar() : null;
+  if (sidecar) {
+    const checkpoints = await sidecar.listCheckpoints(input.threadId);
+    const checkpoint = checkpoints.find((entry) => entry.runId === input.runId) || null;
+    if (!checkpoint) {
+      throw new Error(`Checkpoint not found for run ${input.runId}`);
+    }
+
+    const result = await sidecar.rewindCheckpoint({
+      sessionId: input.threadId,
+      checkpointId: checkpoint.id,
+    });
+    return {
+      threadId: result.sessionId,
+      runId: result.runId,
+      restoredPaths: result.restoredPaths,
+      removedRunIds: result.removedRunIds,
+      checkpointCount: result.checkpointCount,
+      rewoundAt: result.rewoundAt,
+    };
+  }
+
+  return invoke<AgentTurnRewindResult>('rewind_agent_turn', { input });
+};
 
 export const upsertAgentBackgroundTask = async (
   input: UpsertAgentBackgroundTaskInput

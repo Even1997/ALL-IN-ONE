@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import {
-  deleteRuntimeMcpServer,
-  invokeRuntimeMcpTool,
-  listRuntimeMcpServers,
-  upsertRuntimeMcpServer,
-} from '../../modules/ai/runtime/mcp/runtimeMcpClient';
+  deleteRuntimeSidecarMcpServer,
+  initializeRuntimeSidecarMcpServers,
+  invokeRuntimeSidecarMcpTool,
+  upsertRuntimeSidecarMcpServer,
+} from '../../modules/runtime-sidecar/runtimeSidecarSessionBridge.ts';
 import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
 import type {
   RuntimeMcpServer,
@@ -181,11 +181,9 @@ const transportLabel = (transport: RuntimeMcpTransport) => {
 export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
   threadId = null,
 }) => {
-  const { servers, setServers, appendToolCall, toolCallsByThread } = useRuntimeMcpStore(
+  const { servers, toolCallsByThread } = useRuntimeMcpStore(
     useShallow((state) => ({
       servers: state.servers,
-      setServers: state.setServers,
-      appendToolCall: state.appendToolCall,
       toolCallsByThread: state.toolCallsByThread,
     })),
   );
@@ -196,8 +194,8 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
   const [isWorking, setIsWorking] = useState(false);
 
   const loadServers = async (preferredServerId?: string | null) => {
-    const nextServers = await listRuntimeMcpServers();
-    setServers(nextServers);
+    await initializeRuntimeSidecarMcpServers();
+    const nextServers = useRuntimeMcpStore.getState().servers;
     const nextSelectedServerId =
       preferredServerId === NEW_SERVER_ID
         ? NEW_SERVER_ID
@@ -301,9 +299,12 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
     setErrorMessage('');
     setStatusMessage('');
     try {
-      const savedServer = await upsertRuntimeMcpServer(
+      const savedServer = await upsertRuntimeSidecarMcpServer(
         buildServerFromDraft(draft, isCreating ? null : selectedServer),
       );
+      if (!savedServer) {
+        throw new Error('Node runtime sidecar 未启动，无法保存 MCP server。');
+      }
       await loadServers(savedServer.id);
       setStatusMessage(isCreating ? 'MCP server 已创建。' : 'MCP server 已更新。');
     } catch (error) {
@@ -322,10 +323,13 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
     setErrorMessage('');
     setStatusMessage('');
     try {
-      const updatedServer = await upsertRuntimeMcpServer({
+      const updatedServer = await upsertRuntimeSidecarMcpServer({
         ...selectedServer,
         enabled: !selectedServer.enabled,
       });
+      if (!updatedServer) {
+        throw new Error('Node runtime sidecar 未启动，无法更新 MCP server。');
+      }
       await loadServers(updatedServer.id);
       setStatusMessage(updatedServer.enabled ? 'MCP server 已启用。' : 'MCP server 已停用。');
     } catch (error) {
@@ -348,7 +352,10 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
     setErrorMessage('');
     setStatusMessage('');
     try {
-      await deleteRuntimeMcpServer(selectedServer.id);
+      const result = await deleteRuntimeSidecarMcpServer(selectedServer.id);
+      if (!result) {
+        throw new Error('Node runtime sidecar 未启动，无法删除 MCP server。');
+      }
       await loadServers(null);
       setStatusMessage('MCP server 已删除。');
     } catch (error) {
@@ -367,12 +374,14 @@ export const RuntimeMcpSettingsPage: React.FC<RuntimeMcpSettingsPageProps> = ({
     setErrorMessage('');
     setStatusMessage('');
     try {
-      const toolCall = await invokeRuntimeMcpTool({
+      const toolCall = await invokeRuntimeSidecarMcpTool({
         threadId,
         serverId: selectedServer.id,
         toolName: selectedServer.toolNames[0],
       });
-      appendToolCall(threadId, toolCall);
+      if (!toolCall) {
+        throw new Error('Node runtime sidecar 未启动，无法执行 MCP 工具。');
+      }
       setStatusMessage(`已运行 ${selectedServer.toolNames[0]}。`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error));
