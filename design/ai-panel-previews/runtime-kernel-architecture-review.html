@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Runtime Kernel Architecture Review</title>
+    <style>
+      :root {
+        --bg: #f5efe6;
+        --paper: rgba(255, 251, 246, 0.94);
+        --paper-strong: #fffdfa;
+        --ink: #1a1714;
+        --muted: #6f655d;
+        --line: rgba(70, 55, 38, 0.12);
+        --teal: #0f766e;
+        --teal-soft: rgba(15, 118, 110, 0.12);
+        --amber: #b45309;
+        --amber-soft: rgba(180, 83, 9, 0.12);
+        --rose: #b42318;
+        --rose-soft: rgba(180, 35, 24, 0.1);
+        --shadow: 0 28px 80px rgba(53, 37, 24, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.14), transparent 32%),
+          linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%);
+      }
+
+      .page {
+        width: min(1360px, calc(100% - 32px));
+        margin: 20px auto 40px;
+      }
+
+      .hero,
+      .panel,
+      .comparison-card,
+      .status-card,
+      .timeline-card,
+      .flow-card,
+      .difference-card {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--paper);
+        backdrop-filter: blur(18px);
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 34px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -40px -70px auto;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(15, 118, 110, 0.14), transparent 70%);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--teal-soft);
+        color: var(--teal);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        margin-top: 18px;
+        font-size: clamp(32px, 5vw, 58px);
+        line-height: 0.98;
+        max-width: 900px;
+      }
+
+      .hero-copy {
+        margin-top: 16px;
+        max-width: 860px;
+        color: var(--muted);
+        line-height: 1.85;
+        font-size: 16px;
+      }
+
+      .hero-tags,
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .hero-tags {
+        margin-top: 22px;
+      }
+
+      .tag {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(26, 23, 20, 0.05);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .section {
+        margin-top: 22px;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .section-title p {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .timeline-grid,
+      .difference-grid,
+      .status-grid,
+      .pros-grid,
+      .flow-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .timeline-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .timeline-card,
+      .difference-card,
+      .status-card,
+      .flow-card {
+        padding: 20px;
+      }
+
+      .mini-label {
+        display: inline-flex;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(26, 23, 20, 0.06);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .timeline-card h3,
+      .difference-card h3,
+      .status-card h3,
+      .flow-card h3 {
+        margin-top: 12px;
+        font-size: 18px;
+      }
+
+      .timeline-card p,
+      .difference-card p,
+      .status-card p,
+      .flow-card p,
+      .comparison-copy,
+      .pros-column li {
+        margin-top: 10px;
+        color: var(--muted);
+        line-height: 1.75;
+        font-size: 14px;
+      }
+
+      .comparison {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr);
+        gap: 16px;
+        align-items: stretch;
+      }
+
+      .comparison-card {
+        padding: 24px;
+      }
+
+      .comparison-card.current {
+        border-color: rgba(180, 35, 24, 0.18);
+      }
+
+      .comparison-card.target {
+        border-color: rgba(15, 118, 110, 0.18);
+      }
+
+      .comparison-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .state-pill {
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .state-pill.current {
+        background: var(--rose-soft);
+        color: var(--rose);
+      }
+
+      .state-pill.target {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .node {
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: var(--paper-strong);
+      }
+
+      .node strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .node span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .node.warn {
+        background: linear-gradient(180deg, rgba(180, 35, 24, 0.06), #fffdfa);
+      }
+
+      .node.good {
+        background: linear-gradient(180deg, rgba(15, 118, 110, 0.06), #fffdfa);
+      }
+
+      .bridge {
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .difference-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .status-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .status-card.current {
+        background: linear-gradient(180deg, rgba(180, 35, 24, 0.05), rgba(255, 251, 246, 0.94));
+      }
+
+      .status-card.after {
+        background: linear-gradient(180deg, rgba(15, 118, 110, 0.06), rgba(255, 251, 246, 0.94));
+      }
+
+      .pros-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .panel {
+        padding: 24px;
+      }
+
+      .pros-column {
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        background: var(--paper-strong);
+        padding: 22px;
+      }
+
+      .pros-column ul {
+        margin: 14px 0 0;
+        padding-left: 18px;
+      }
+
+      .pros-column li + li {
+        margin-top: 10px;
+      }
+
+      .flow-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .flow-step {
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: var(--paper-strong);
+        border: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .flow-step.emphasis {
+        background: var(--amber-soft);
+        color: #7c2d12;
+        border-color: rgba(180, 83, 9, 0.18);
+      }
+
+      .callout {
+        margin-top: 16px;
+        padding: 16px 18px;
+        border-radius: 20px;
+        background: linear-gradient(180deg, rgba(180, 83, 9, 0.08), rgba(255, 251, 246, 0.94));
+        color: #7c2d12;
+        line-height: 1.75;
+        font-size: 14px;
+      }
+
+      @media (max-width: 1120px) {
+        .timeline-grid,
+        .difference-grid,
+        .status-grid,
+        .pros-grid,
+        .flow-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .comparison {
+          grid-template-columns: 1fr;
+        }
+
+        .bridge {
+          min-height: 40px;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .page {
+          width: min(100%, calc(100% - 20px));
+          margin: 10px auto 24px;
+        }
+
+        .hero,
+        .panel,
+        .comparison-card,
+        .timeline-card,
+        .difference-card,
+        .status-card,
+        .flow-card {
+          border-radius: 22px;
+        }
+
+        .hero {
+          padding: 24px;
+        }
+
+        .timeline-grid,
+        .difference-grid,
+        .status-grid,
+        .pros-grid,
+        .flow-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <span class="eyebrow">Runtime Review</span>
+        <h1>你现在手上的不是“没内核”，而是“内核还在，但外面又长了一层自己的语义”</h1>
+        <p class="hero-copy">
+          这个页面把你最近几次 runtime 改造收束成一张图：现在的真实结构、你记忆里的单一运行时内核、两者的出入点、各自优缺点，以及如果按“彻底回到单内核”这条路去改，最终会变成什么状态。
+        </p>
+        <div class="hero-tags">
+          <span class="tag">主内核仍在：runAgentTurn → runRuntimeToolLoop</span>
+          <span class="tag">问题在于 sidecar 复制了 provider / tool / allowlist 语义</span>
+          <span class="tag">正常路径常见是“思考 → 执行 → 反馈”</span>
+          <span class="tag">但合理内核应该是状态机，不是写死单一路线</span>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>最近几次改动，你记忆里“改过很多次”是对的</h2>
+          <p>从纯前端 runtime，到 compact streaming，再到 desktop sidecar cutover，轨迹是连续的。</p>
+        </div>
+        <div class="timeline-grid">
+          <article class="timeline-card">
+            <span class="mini-label">2026-05-06</span>
+            <h3>Runtime Orchestration 收口</h3>
+            <p>内置 agent turn、审批、工具回路逐步被放进统一 runtime 边界，单内核味道最浓。</p>
+          </article>
+          <article class="timeline-card">
+            <span class="mini-label">2026-05-08</span>
+            <h3>Compact Step Stream</h3>
+            <p>开始把流式 thinking、tool call、timeline 呈现做细，执行模型更接近真正 agent loop。</p>
+          </article>
+          <article class="timeline-card">
+            <span class="mini-label">2026-05-10</span>
+            <h3>Desktop Runtime Sidecar Cutover</h3>
+            <p>sidecar 接入后，宿主能力增强了，但也顺手带进了一套自己的 provider / executor / allowlist 语义。</p>
+          </article>
+          <article class="timeline-card">
+            <span class="mini-label">当前状态</span>
+            <h3>像单内核，其实不是单一事实源</h3>
+            <p>用户看到的是一个系统，代码里却有共享内核和 sidecar 宿主两层逻辑共同决定行为。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>当前设计 vs 你想要的设计</h2>
+          <p>差异不在“有没有 loop”，而在“谁定义 loop 的真实语义”。</p>
+        </div>
+        <div class="comparison">
+          <article class="comparison-card current">
+            <div class="comparison-head">
+              <h3>现在的真实结构</h3>
+              <span class="state-pill current">共享内核 + sidecar 自带语义</span>
+            </div>
+            <div class="stack">
+              <div class="node">
+                <strong>主执行链仍然存在</strong>
+                <span>`runAgentTurn → runRuntimeToolLoop` 负责多轮模型调用、工具执行、结果回灌和最终回答。</span>
+              </div>
+              <div class="node warn">
+                <strong>sidecar 又定义了一套宿主行为</strong>
+                <span>provider stream、工具 allowlist、shell 执行、approval 接入都在 sidecar 里再做了一轮拼装。</span>
+              </div>
+              <div class="node warn">
+                <strong>协议并不统一</strong>
+                <span>Anthropic 走结构化 tool call，OpenAI-compatible 仍大量依赖文本 / XML 解析，稳定性自然不一致。</span>
+              </div>
+              <div class="node warn">
+                <strong>工具目录表面一致，执行语义其实漂了</strong>
+                <span>前端有 `powershell`，sidecar executor 却没完整支持；Windows shell 还踩了 `/bin/zsh`。</span>
+              </div>
+            </div>
+          </article>
+
+          <div class="bridge">to be simplified</div>
+
+          <article class="comparison-card target">
+            <div class="comparison-head">
+              <h3>你想要的单内核</h3>
+              <span class="state-pill target">单一内核 + sidecar 只是宿主层</span>
+            </div>
+            <div class="stack">
+              <div class="node good">
+                <strong>只有一个 runtime kernel 决定流程</strong>
+                <span>所有 provider、tool、approval、question、tool result 都进入同一状态机和同一事件协议。</span>
+              </div>
+              <div class="node good">
+                <strong>sidecar 只提供宿主能力</strong>
+                <span>会话、持久化、WebSocket、审批 UI、文件 / shell / 网络执行这些留在 sidecar，但不再定义第二套业务语义。</span>
+              </div>
+              <div class="node good">
+                <strong>provider 全部翻译成 canonical events</strong>
+                <span>模型可以直接回答，也可以多轮调工具，也可以 ask user，但都走统一事件层。</span>
+              </div>
+              <div class="node good">
+                <strong>工具集、风险分级、结果格式只保留一份</strong>
+                <span>从根上减少“看起来能用、实际上不同宿主行为不一样”的问题。</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>你和当前设计的出入点</h2>
+          <p>这四个地方，就是你觉得“怎么越来越不对”的核心来源。</p>
+        </div>
+        <div class="difference-grid">
+          <article class="difference-card">
+            <span class="mini-label">出入点 1</span>
+            <h3>你记得的是“单一事实来源”</h3>
+            <p>现在不是没有内核，而是共享内核外面又包了一层 sidecar 语义。用户感觉不到，但实现复杂度会立刻上升。</p>
+          </article>
+          <article class="difference-card">
+            <span class="mini-label">出入点 2</span>
+            <h3>你希望 AI 自己决定路径</h3>
+            <p>这点你是对的。合理设计不该把“思考 → 工具 → 反馈”写死成脚本，而该让模型在统一状态机里自然选择。</p>
+          </article>
+          <article class="difference-card">
+            <span class="mini-label">出入点 3</span>
+            <h3>你要的是“常态上是 loop，结构上不是硬编码”</h3>
+            <p>正常任务大概率确实会反复走工具往返，但实现层应该支持直接回答、只读 burst、ask user、审批后继续等分支。</p>
+          </article>
+          <article class="difference-card">
+            <span class="mini-label">出入点 4</span>
+            <h3>你希望能顺手清理无用代码</h3>
+            <p>如果决定回到单内核，这次就不该只修 bug，而要一起删掉 sidecar 中重复的 allowlist、重复协议和漂移的执行分支。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>当前方案的优缺点</h2>
+          <p>不是全坏，它解决了不少宿主层问题；但它把“运行时真相”拆成两份了。</p>
+        </div>
+        <div class="panel pros-grid">
+          <div class="pros-column">
+            <h3>优点</h3>
+            <ul>
+              <li>共享内核仍然保留了真正的 agent loop，不是退化成一次性 request-response。</li>
+              <li>sidecar 带来了独立宿主进程，后续做持久化、审批、回放、后台任务都更顺手。</li>
+              <li>现在已经具备 thinking、tool timeline、question、approval 这些比较完整的交互基建。</li>
+              <li>只读工具的流式提前执行做得不差，体验上比纯串行“等模型说完再跑工具”更自然。</li>
+            </ul>
+          </div>
+          <div class="pros-column">
+            <h3>缺点</h3>
+            <ul>
+              <li>provider 协议分裂，Anthropic 和 OpenAI-compatible 的 tool 行为稳定性不一致。</li>
+              <li>工具定义和执行宿主漂移，最典型的就是 Windows shell 和 `powershell` 支持不一致。</li>
+              <li>sidecar 同时承担宿主层和部分运行时语义，后面每改一次都容易再长分支。</li>
+              <li>调试成本高，因为“问题在内核还是在 sidecar 拼装层”不再一眼能看出来。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>改完以后会是什么状态</h2>
+          <p>不是把 loop 砍掉，而是把 loop 的拥有权收回来。</p>
+        </div>
+        <div class="status-grid">
+          <article class="status-card current">
+            <span class="mini-label">Before</span>
+            <h3>看起来是一个系统</h3>
+            <p>但 provider、tool protocol、allowlist、executor、approval glue 分散在共享层和 sidecar 层。</p>
+          </article>
+          <article class="status-card after">
+            <span class="mini-label">After</span>
+            <h3>真正单内核</h3>
+            <p>所有模型事件先变成 canonical events，再由同一个 kernel 决定是否继续思考、调工具、问用户或结束回答。</p>
+          </article>
+          <article class="status-card after">
+            <span class="mini-label">Cleanup</span>
+            <h3>删掉重复和漂移代码</h3>
+            <p>sidecar 只保留 transport / persistence / execution host，不再维护第二套 runtime 业务语义。</p>
+          </article>
+        </div>
+        <div class="callout">
+          改后的正常体验依旧会经常表现成“思考 → 执行 → 反馈 → 再执行 → 最终回答”，只是这将成为模型在统一状态机里的自然结果，而不是被多层代码勉强拼出来的既视感。
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>执行模型应该怎样理解才最合理</h2>
+          <p>“常见路径”和“唯一合法路径”要分开看。</p>
+        </div>
+        <div class="flow-grid">
+          <article class="flow-card">
+            <span class="mini-label">常见路径</span>
+            <h3>大多数正常任务</h3>
+            <p>用户看起来往往就是这条线，因为 AI 需要先判断，再调工具，再吃结果，最后输出。</p>
+            <div class="flow">
+              <div class="flow-step">接收用户请求</div>
+              <div class="flow-step emphasis">thinking / plan</div>
+              <div class="flow-step">tool call</div>
+              <div class="flow-step">tool result</div>
+              <div class="flow-step">继续推理</div>
+              <div class="flow-step">final answer</div>
+            </div>
+          </article>
+          <article class="flow-card">
+            <span class="mini-label">合理内核</span>
+            <h3>应该允许的完整状态空间</h3>
+            <p>真正健壮的 runtime 要允许模型直接回答、连续多个只读工具、审批后恢复、ask user 后继续等多种分支。</p>
+            <div class="flow">
+              <div class="flow-step">direct answer</div>
+              <div class="flow-step">read-only burst</div>
+              <div class="flow-step">approval gate</div>
+              <div class="flow-step">ask user</div>
+              <div class="flow-step">resume tool loop</div>
+              <div class="flow-step emphasis">done / failed / cancelled</div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
