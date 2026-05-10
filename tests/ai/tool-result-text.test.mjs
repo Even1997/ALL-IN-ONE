@@ -15,7 +15,7 @@ import {
   verifyWriteFileMutation,
   shouldCaptureFileChangeSnapshot,
 } from '../../src/components/workspace/tools.ts';
-import { getBuiltInRuntimeToolNames } from '../../src/utils/hostPlatform.ts';
+import { getBuiltInRuntimeToolNames } from '../../src/modules/ai/runtime/tools/runtimeToolPolicy.ts';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const toolsPath = path.resolve(testDir, '../../src/modules/ai/runtime/tools/toolExecutor.ts');
@@ -35,7 +35,7 @@ test('runtime tool catalog exposes the built-in multi-agent delegation tool', as
   const agentTool = TOOLS.find((tool) => tool.name === 'agent');
 
   assert.ok(agentTool, 'expected an agent tool definition');
-  assert.ok(getBuiltInRuntimeToolNames().includes('agent'));
+  assert.ok(getBuiltInRuntimeToolNames(false).includes('agent'));
   assert.match(source, /name:\s*'agent'/);
   assert.match(source, /multi-agent/i);
 });

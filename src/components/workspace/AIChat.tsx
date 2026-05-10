@@ -43,7 +43,7 @@ import {
   sandboxPolicyToPermissionMode,
 } from '../../modules/ai/runtime/approval/permissionMode';
 import { buildMemoryRollbackLifecycleDescriptor, buildSkillDiscoveryLifecycleDescriptor, buildSkillLoadLifecycleDescriptor } from '../../modules/ai/runtime/dispatch/runtimeCapabilityLifecycle.ts';
-import { ASK_USER_TOOL_NAME } from '../../modules/ai/runtime/orchestration/runtimeChatTurnTools.ts';
+import { ASK_USER_TOOL_NAME } from '../../modules/ai/runtime/tools/runtimeToolPolicy.ts';
 import type {
   AgentBackgroundTaskRecord,
   AgentProviderId,
@@ -1868,7 +1868,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     let alive = true;
 
     void (async () => {
-      const tasks = await initializeRuntimeSidecarBackgroundTasks(activeTaskThreadId);
+      await initializeRuntimeSidecarBackgroundTasks(activeTaskThreadId);
       if (!alive) {
         return;
       }

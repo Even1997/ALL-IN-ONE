@@ -30,14 +30,13 @@ import {
   upsertAssistantRuntimeToolUseEvent as upsertRuntimeToolUseInMessage,
 } from '../../store/assistantTimeline.ts';
 import type { ToolCall, ToolResult } from '../tools/toolExecutor.ts';
-
 import {
   ASK_USER_TOOL_NAME,
-  BUILT_IN_EXECUTION_TOOLS,
-  createRuntimeChatToolExecutor,
-  READ_ONLY_CHAT_TOOLS,
-  RISKY_BUILT_IN_TOOLS,
-} from './runtimeChatTurnTools.ts';
+  getTurnAllowedRuntimeTools,
+  RISKY_RUNTIME_TOOLS,
+} from '../tools/runtimeToolPolicy.ts';
+import { createRuntimeChatToolExecutor } from './runtimeChatTurnTools.ts';
+import { isWindowsHost } from '../../../../utils/hostPlatform.ts';
 export { createRuntimeChatToolExecutor };
 
 export const runRuntimeChatBuiltInAgentTurn = (input: ExecuteRuntimeBuiltInAgentTurnInput) =>
@@ -1243,7 +1242,10 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
                 activeSkills: localAgentSkillsForTurn,
                 skillIntent,
                 contextLabels,
-                allowedTools: sandboxPolicy === 'deny' ? READ_ONLY_CHAT_TOOLS : BUILT_IN_EXECUTION_TOOLS,
+                allowedTools: getTurnAllowedRuntimeTools({
+                  sandboxPolicy,
+                  isWindows: isWindowsHost(),
+                }),
                 agentId: localExecutionAgentId,
                 projectRoot,
                 runPrompt,
@@ -1545,8 +1547,10 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
     const projectRoot = await ports.resolveProjectRootById(request.projectId);
     markTurnExecuting('Run built-in agent turn', buildSessionPreview(cleanedContent));
     const toolExecutor = createRuntimeChatToolExecutor(projectRoot);
-    const builtInAllowedTools =
-      sandboxPolicy === 'deny' ? READ_ONLY_CHAT_TOOLS : BUILT_IN_EXECUTION_TOOLS;
+    const builtInAllowedTools = getTurnAllowedRuntimeTools({
+      sandboxPolicy,
+      isWindows: isWindowsHost(),
+    });
     const runBuiltInQuestionTool = async (call: ToolCall): Promise<ToolResult> => {
       const questions = parseRuntimeQuestionInput(call.input);
       if (questions.length === 0) {
@@ -1680,7 +1684,7 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
       });
     };
     const requestBuiltInToolApproval = async (call: ToolCall) => {
-      if (!RISKY_BUILT_IN_TOOLS.has(call.name)) {
+      if (!RISKY_RUNTIME_TOOLS.has(call.name)) {
         return;
       }
 

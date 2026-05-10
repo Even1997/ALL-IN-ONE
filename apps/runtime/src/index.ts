@@ -40,13 +40,13 @@ import {
 } from '../../../src/modules/ai/runtime/approval/riskPolicy.ts';
 import { createRuntimeStreamingMessageAssembler } from '../../../src/modules/ai/runtime/orchestration/agentTurnRunner.ts';
 import { executeRuntimeBuiltInAgentTurn } from '../../../src/modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn.ts';
-import {
-  ASK_USER_TOOL_NAME,
-  READ_ONLY_CHAT_TOOLS,
-  RISKY_BUILT_IN_TOOLS,
-} from '../../../src/modules/ai/runtime/orchestration/runtimeChatTurnTools.ts';
 import type { RuntimeToolStep } from '../../../src/modules/ai/runtime/agent-kernel/agentKernelTypes.ts';
 import type { ToolCall, ToolResult } from '../../../src/modules/ai/runtime/tools/toolExecutor.ts';
+import {
+  ASK_USER_TOOL_NAME,
+  getTurnAllowedRuntimeTools,
+  RISKY_RUNTIME_TOOLS,
+} from '../../../src/modules/ai/runtime/tools/runtimeToolPolicy.ts';
 import {
   resolveEditStrings,
   resolveViewFilePathParam,
@@ -97,7 +97,6 @@ const STATE_FILE_NAME = 'sidecar-runtime-state.json';
 const CORS_ALLOW_ORIGIN = '*';
 const CORS_ALLOW_METHODS = 'GET, POST, OPTIONS';
 const CORS_ALLOW_HEADERS = 'authorization, content-type';
-const SIDE_EFFECT_TOOLS = ['glob', 'grep', 'ls', 'view', 'write', 'edit', 'bash', 'fetch', ASK_USER_TOOL_NAME];
 
 const pendingQuestions = new Map<string, PendingQuestionAnswer>();
 const pendingApprovals = new Map<string, PendingApprovalResolution>();
@@ -632,7 +631,7 @@ const completeSubmittedTurn = async (
     });
     broadcast(
       buildReasoningEvent(snapshot.session.id, assistantMessageId, {
-        id: buildRuntimeEventId('reasoning', assistantMessageId),
+        id: `runtime-event_reasoning_${assistantMessageId}`,
         kind: 'reasoning',
         content: '',
         collapsed: true,
@@ -659,7 +658,13 @@ const completeSubmittedTurn = async (
         runtimeConfig,
         contextWindowTokens: runtimeConfig.contextWindowTokens,
         conversationHistory: (input.conversationHistory || []) as RuntimeConversationHistoryMessage[],
-        referenceFiles: (input.referenceFiles || []) as RuntimeReferenceFileRecord[],
+        referenceFiles: (input.referenceFiles || []).map((f) => ({
+          ...f,
+          id: `ref-${f.path}`,
+          group: 'project' as const,
+          source: 'user' as const,
+          relatedIds: [],
+        })),
         agentInstructions: input.contextLabels || [],
         onUpdate: async (teamRun) => {
           const backgroundTask = {
@@ -700,12 +705,21 @@ const completeSubmittedTurn = async (
         contextWindowTokens: runtimeConfig.contextWindowTokens,
         conversationHistory: (input.conversationHistory || []) as RuntimeConversationHistoryMessage[],
         agentInstructions: [],
-        referenceFiles: (input.referenceFiles || []) as RuntimeReferenceFileRecord[],
+        referenceFiles: (input.referenceFiles || []).map((f) => ({
+          ...f,
+          id: `ref-${f.path}`,
+          group: 'project' as const,
+          source: 'user' as const,
+          relatedIds: [],
+        })),
         memoryEntries: [],
         activeSkills: [],
         skillIntent: null,
         contextLabels: input.contextLabels || [],
-        allowedTools: sandboxPolicy === 'deny' ? READ_ONLY_CHAT_TOOLS : SIDE_EFFECT_TOOLS,
+        allowedTools: getTurnAllowedRuntimeTools({
+          sandboxPolicy,
+          isWindows: process.platform === 'win32',
+        }),
         onModelEvent: async (event) => {
           if (event.kind === 'text') {
             broadcast(buildTurnDeltaEvent(snapshot.session.id, assistantMessageId, event.delta));
@@ -739,7 +753,7 @@ const completeSubmittedTurn = async (
         },
         beforeToolCall: async (call) => {
           await stopReasoningBeforeTool();
-          if (call.name === ASK_USER_TOOL_NAME || !RISKY_BUILT_IN_TOOLS.has(call.name)) {
+          if (call.name === ASK_USER_TOOL_NAME || !RISKY_RUNTIME_TOOLS.has(call.name)) {
             return;
           }
 
@@ -993,7 +1007,7 @@ const completeSubmittedTurn = async (
     assistantTimeline = [
       ...assistantTimeline,
       {
-        id: buildRuntimeEventId('error', createId('runtime-error')),
+        id: `runtime-event_error_${createId('runtime-error')}`,
         kind: 'error',
         message,
         source: 'runtime',

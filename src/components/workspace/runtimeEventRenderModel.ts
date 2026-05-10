@@ -3,6 +3,7 @@ import {
   isAssistantRuntimeTimelineEvent,
   type AssistantTimelineEvent,
 } from '../../modules/ai/store/assistantTimeline.ts';
+import { ASK_USER_TOOL_NAME } from '../../modules/ai/runtime/tools/runtimeToolPolicy.ts';
 
 export type RuntimeToolGroupType =
   | 'edit'
@@ -50,7 +51,6 @@ export type RuntimeEventRenderModel = {
   toolUseByToolCallId: Map<string, Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>;
 };
 
-const ASK_USER_TOOL_NAME = 'AskUserQuestion';
 const HIDDEN_RUNTIME_TOOL_NAMES = new Set(['memory_read']);
 const WRITE_TOOL_NAMES = new Set(['write', 'edit', 'project_file_apply']);
 const COMMAND_TOOL_NAMES = new Set(['bash', 'powershell']);

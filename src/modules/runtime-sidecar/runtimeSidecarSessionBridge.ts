@@ -2,18 +2,18 @@ import type {
   RuntimeMcpServerRecord,
   RuntimeMcpToolCallRecord,
   RuntimeApprovalResolveInput,
-  type RuntimeApprovalEventRecord,
-  type RuntimeBackgroundTaskRecord,
-  type RuntimeCheckpointRecord,
+  RuntimeApprovalEventRecord,
+  RuntimeBackgroundTaskRecord,
+  RuntimeCheckpointRecord,
   RuntimeConversationHistoryMessage,
   RuntimeEventEnvelope,
   RuntimeMessageRecord,
-  type RuntimeQuestionEventRecord,
+  RuntimeQuestionEventRecord,
   RuntimeQuestionAnswerInput,
   RuntimeReferenceFileRecord,
   RuntimeSessionSnapshot,
-  type RuntimeTeamRunRecord,
-  type RuntimeToolCallRecord,
+  RuntimeTeamRunRecord,
+  RuntimeToolCallRecord,
 } from '@goodnight/runtime-protocol';
 import type { AIConfigEntry } from '../ai/store/aiConfigState.ts';
 import { useRuntimeMcpStore } from '../ai/runtime/mcp/runtimeMcpStore.ts';
@@ -408,7 +408,7 @@ const upsertRuntimeToolCallProjection = (threadId: string, toolCall: RuntimeTool
 const mapRuntimeMcpServerRecord = (server: RuntimeMcpServerRecord) => ({
   ...server,
   toolNames: [...server.toolNames],
-  args: [...server.args],
+  args: server.args ? [...server.args] : undefined,
   env: { ...server.env },
   headers: { ...server.headers },
   oauth: server.oauth ? { ...server.oauth } : null,

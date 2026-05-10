@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const runtimeEntry = path.resolve(process.cwd(), 'apps/runtime/src/index.ts');
+const sidecarIndexPath = path.resolve(process.cwd(), 'apps/runtime/src/index.ts');
 
 const waitForHealth = async (baseUrl) => {
   for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -526,6 +527,24 @@ test('runtime sidecar executes the built-in tool loop and persists assistant tim
     await rm(projectRoot, { recursive: true, force: true });
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test('runtime sidecar uses shared allowed-tools policy for built-in turns', async () => {
+  const sidecarSource = await readFile(sidecarIndexPath, 'utf8');
+
+  assert.match(sidecarSource, /allowedTools:\s*getTurnAllowedRuntimeTools/);
+  assert.doesNotMatch(
+    sidecarSource,
+    /allowedTools:\s*sandboxPolicy === 'deny' \? READ_ONLY_CHAT_TOOLS : SIDE_EFFECT_TOOLS/,
+  );
+});
+
+test('sidecar turn submission delegates tool-loop policy to shared runtime modules', async () => {
+  const sidecarSource = await readFile(sidecarIndexPath, 'utf8');
+
+  assert.doesNotMatch(sidecarSource, /READ_ONLY_CHAT_TOOLS,\s*RISKY_BUILT_IN_TOOLS,\s*SIDE_EFFECT_TOOLS/);
+  assert.match(sidecarSource, /getTurnAllowedRuntimeTools/);
+  assert.match(sidecarSource, /RISKY_RUNTIME_TOOLS/);
 });
 
 test('runtime sidecar allows desktop webview CORS health checks and turn preflights', async () => {

@@ -515,6 +515,17 @@ test('runtime event render model tolerates malformed assistant timeline values',
   assert.deepEqual(model.items, []);
   assert.deepEqual(model.orderedRuntimeEvents, []);
 });
+
+test('runtime event render model uses the shared ask-user tool constant', async () => {
+  const source = await readFile(
+    path.resolve(testDir, '../../src/components/workspace/runtimeEventRenderModel.ts'),
+    'utf8',
+  );
+
+  assert.match(source, /ASK_USER_TOOL_NAME/);
+  assert.doesNotMatch(source, /const ASK_USER_TOOL_NAME = 'AskUserQuestion'/);
+});
+
 test('assistant narrative, thinking, and runtime cards share a unified surface language', async () => {
   const cssSource = await readFile(cssPath, 'utf8');
 

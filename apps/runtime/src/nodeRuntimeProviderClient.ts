@@ -1,32 +1,10 @@
 import { withRetry } from '../../../src/modules/ai/runtime/retry/withRetry.ts';
 import { TOOLS } from '../../../src/modules/ai/runtime/tools/toolExecutor.ts';
+import type {
+  RuntimeProviderEvent,
+  RuntimeProviderToolCall,
+} from '../../../src/modules/ai/runtime/provider/runtimeProviderEvents.ts';
 import type { RuntimeModelConfig } from '@goodnight/runtime-protocol';
-
-type RuntimeProviderToolCall = {
-  id: string;
-  name: string;
-  input: Record<string, unknown>;
-};
-
-export type RuntimeProviderStreamEvent =
-  | {
-      kind: 'thinking' | 'text';
-      delta: string;
-    }
-  | {
-      kind: 'tool_call';
-      toolCall: RuntimeProviderToolCall;
-    }
-  | {
-      kind: 'usage';
-      inputTokens: number;
-      outputTokens: number;
-      totalTokens?: number;
-    }
-  | {
-      kind: 'done';
-      finalText: string;
-    };
 
 type RuntimeProviderReadResult = {
   answer: string;
@@ -37,7 +15,7 @@ type RuntimeProviderStreamInput = {
   runtimeConfig: RuntimeModelConfig;
   prompt: string;
   systemPrompt: string;
-  onEvent?: (event: RuntimeProviderStreamEvent) => Promise<void> | void;
+  onEvent?: (event: RuntimeProviderEvent) => Promise<void> | void;
   signal?: AbortSignal;
 };
 
@@ -91,13 +69,13 @@ const collectTextParts = (value: unknown): string => {
 };
 
 const buildTextEvents = (
-  kind: Extract<RuntimeProviderStreamEvent['kind'], 'thinking' | 'text'>,
+  kind: Extract<RuntimeProviderEvent['kind'], 'thinking' | 'text'>,
   delta: string | null,
-): RuntimeProviderStreamEvent[] => (delta ? [{ kind, delta }] : []);
+): RuntimeProviderEvent[] => (delta ? [{ kind, delta }] : []);
 
 const normalizeUsage = (
   usage: RuntimeUsageSource | null | undefined,
-): Extract<RuntimeProviderStreamEvent, { kind: 'usage' }> | null => {
+): Extract<RuntimeProviderEvent, { kind: 'usage' }> | null => {
   if (!usage || typeof usage !== 'object') {
     return null;
   }
@@ -127,6 +105,34 @@ const normalizeUsage = (
   };
 };
 
+const parseOpenAICompatibleToolCall = (delta: any): RuntimeProviderToolCall[] =>
+  Array.isArray(delta?.tool_calls)
+    ? delta.tool_calls.flatMap((entry: any) => {
+        const name = entry?.function?.name;
+        const args = entry?.function?.arguments;
+        if (typeof name !== 'string' || typeof args !== 'string') {
+          return [];
+        }
+
+        try {
+          const parsed = JSON.parse(args);
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return [];
+          }
+
+          return [
+            {
+              id: typeof entry?.id === 'string' && entry.id.trim() ? entry.id : `call_${Date.now()}`,
+              name,
+              input: parsed,
+            },
+          ];
+        } catch {
+          return [];
+        }
+      })
+    : [];
+
 const buildAnthropicTools = () =>
   TOOLS.map((tool) => ({
     name: tool.name,
@@ -150,7 +156,7 @@ const buildAnthropicTools = () =>
 const readEventStream = async (
   body: ReadableStream<Uint8Array>,
   onEvent: NonNullable<RuntimeProviderStreamInput['onEvent']>,
-  parseEvents: (data: string) => RuntimeProviderStreamEvent[],
+  parseEvents: (data: string) => RuntimeProviderEvent[],
 ): Promise<RuntimeProviderReadResult> => {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -158,7 +164,7 @@ const readEventStream = async (
   let answer = '';
   let thinking = '';
 
-  const emitEvents = async (events: RuntimeProviderStreamEvent[]) => {
+  const emitEvents = async (events: RuntimeProviderEvent[]) => {
     for (const event of events) {
       if (event.kind === 'thinking') {
         thinking += event.delta;
@@ -272,6 +278,17 @@ const streamOpenAICompatibleTurn = async (
       const usageEvent = normalizeUsage(payload?.usage);
       const choice = payload?.choices?.[0];
       const delta = choice?.delta;
+      const toolCalls = parseOpenAICompatibleToolCall(delta);
+
+      if (toolCalls.length > 0) {
+        return [
+          ...(usageEvent ? [usageEvent] : []),
+          ...toolCalls.map((toolCall) => ({
+            kind: 'tool_call' as const,
+            toolCall,
+          })),
+        ];
+      }
 
       return [
         ...(usageEvent ? [usageEvent] : []),
@@ -411,7 +428,7 @@ const streamAnthropicTurn = async (
               name: block.name,
               input: structuredInput,
             },
-          } satisfies RuntimeProviderStreamEvent,
+          } satisfies RuntimeProviderEvent,
         ];
       }
 

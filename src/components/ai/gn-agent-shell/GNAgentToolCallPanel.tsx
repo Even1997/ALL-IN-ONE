@@ -1,6 +1,7 @@
 import React from 'react';
 import type { RuntimeToolStep } from '../../../modules/ai/runtime/agent-kernel/agentKernelTypes';
 import type { RuntimeMcpToolCall } from '../../../modules/ai/runtime/mcp/runtimeMcpTypes';
+import { ASK_USER_TOOL_NAME } from '../../../modules/ai/runtime/tools/runtimeToolPolicy.ts';
 
 const toolStatusLabels: Record<RuntimeToolStep['status'], string> = {
   running: 'Running',
@@ -38,7 +39,7 @@ const summarizeToolCall = (toolCall: RuntimeToolStep) => {
   if (toolCall.name === 'ls' && typeof input.path === 'string') {
     return `List ${input.path}`;
   }
-  if (toolCall.name === 'AskUserQuestion') {
+  if (toolCall.name === ASK_USER_TOOL_NAME) {
     return 'Waiting for input';
   }
   return toolStatusLabels[toolCall.status];

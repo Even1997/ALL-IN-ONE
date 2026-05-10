@@ -61,6 +61,8 @@ test('agent tool call panel surfaces tool call status and result fields', async 
   assert.match(source, /completed/);
   assert.match(source, /failed/);
   assert.match(source, /blocked/);
+  assert.match(source, /ASK_USER_TOOL_NAME/);
+  assert.doesNotMatch(source, /toolCall\.name === 'AskUserQuestion'/);
 });
 
 test('runtime conversation gateway pulls tool calls for the active session', async () => {

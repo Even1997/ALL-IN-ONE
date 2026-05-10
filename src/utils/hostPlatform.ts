@@ -21,17 +21,3 @@ export const isWindowsHost = () => {
 
 export const isCommandToolName = (toolName: string) =>
   toolName === 'bash' || toolName === 'powershell';
-
-export const getBuiltInRuntimeToolNames = () =>
-  [
-    'glob',
-    'grep',
-    'ls',
-    'view',
-    'write',
-    'edit',
-    ...(isWindowsHost() ? ['powershell', 'bash'] : ['bash']),
-    'fetch',
-    'agent',
-    'AskUserQuestion',
-  ] as const;

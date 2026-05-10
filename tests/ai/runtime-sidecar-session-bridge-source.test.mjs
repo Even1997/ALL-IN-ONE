@@ -60,3 +60,10 @@ test('runtime sidecar session bridge consumes streaming assistant messages and r
   assert.match(source, /pendingQuestionSummary/);
   assert.match(source, /pendingApprovalSummary/);
 });
+
+test('runtime sidecar session bridge keeps protocol imports and MCP server projection type-safe', async () => {
+  const source = await readFile(bridgePath, 'utf8');
+
+  assert.doesNotMatch(source, /import type\s*\{[\s\S]*\btype\s+RuntimeApprovalEventRecord/);
+  assert.match(source, /args:\s*server\.args\s*\?\s*\[\.\.\.server\.args\]\s*:\s*undefined/);
+});

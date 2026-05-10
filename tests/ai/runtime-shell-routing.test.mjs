@@ -16,6 +16,12 @@ const riskPolicyPath = path.resolve(
   __dirname,
   '../../src/modules/ai/runtime/approval/riskPolicy.ts',
 );
+const runtimeToolPolicyPath = path.resolve(
+  __dirname,
+  '../../src/modules/ai/runtime/tools/runtimeToolPolicy.ts',
+);
+const sidecarIndexPath = path.resolve(__dirname, '../../apps/runtime/src/index.ts');
+const nodeExecutorPath = path.resolve(__dirname, '../../apps/runtime/src/nodeRuntimeToolExecutor.ts');
 
 const toolUse = (name, input) => `<tool_use>
 <tool name="${name}">
@@ -32,14 +38,16 @@ test('workspace tool executor exposes a PowerShell tool on Windows and routes it
 });
 
 test('built-in approvals and risk policy treat powershell like a command tool', async () => {
-  const [hostPlatformSource, runtimeToolCatalogSource, riskPolicySource] = await Promise.all([
+  const [hostPlatformSource, runtimeToolCatalogSource, riskPolicySource, runtimeToolPolicySource] = await Promise.all([
     readFile(hostPlatformPath, 'utf8'),
     readFile(runtimeToolCatalogPath, 'utf8'),
     readFile(riskPolicyPath, 'utf8'),
+    readFile(runtimeToolPolicyPath, 'utf8'),
   ]);
 
   assert.match(hostPlatformSource, /toolName === 'bash' \|\| toolName === 'powershell'/);
-  assert.match(runtimeToolCatalogSource, /'write', 'edit', 'bash', 'powershell', 'fetch', 'agent'/);
+  assert.doesNotMatch(runtimeToolCatalogSource, /RISKY_BUILT_IN_TOOLS/);
+  assert.match(runtimeToolPolicySource, /'write', 'edit', 'bash', 'powershell', 'fetch', 'agent'/);
   assert.match(riskPolicySource, /tool_powershell/);
 });
 
@@ -103,4 +111,16 @@ test('Windows runtime prompt allows the model to call the powershell tool', asyn
       });
     }
   }
+});
+
+test('node runtime sidecar treats powershell as a first-class command tool', async () => {
+  const [sidecarSource, executorSource] = await Promise.all([
+    readFile(sidecarIndexPath, 'utf8'),
+    readFile(nodeExecutorPath, 'utf8'),
+  ]);
+
+  assert.match(sidecarSource, /buildApprovalSummary/);
+  assert.match(sidecarSource, /getTurnAllowedRuntimeTools/);
+  assert.match(executorSource, /case 'powershell'/);
+  assert.doesNotMatch(executorSource, /execFile\('\/bin\/zsh'/);
 });

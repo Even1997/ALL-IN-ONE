@@ -4,11 +4,12 @@ import {
   substituteRuntimeSkillArguments,
 } from '../skills/runtimeSkillArguments.ts';
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes.ts';
+import { getBuiltInRuntimeToolNames } from '../runtime/tools/runtimeToolPolicy.ts';
 import type { SkillIntent } from '../workflow/skillRouting.ts';
 import { estimateTextTokens } from './contextBudget.ts';
-import { getBuiltInRuntimeToolNames, isWindowsHost } from '../../../utils/hostPlatform.ts';
+import { isWindowsHost } from '../../../utils/hostPlatform.ts';
 
-const AVAILABLE_RUNTIME_TOOLS = getBuiltInRuntimeToolNames().join(', ');
+const AVAILABLE_RUNTIME_TOOLS = getBuiltInRuntimeToolNames(isWindowsHost()).join(', ');
 const WINDOWS_COMMAND_TOOL_POLICY = [
   'On Windows hosts, prefer the powershell tool for command execution.',
   'Use read-only tools such as ls, view, glob, and grep for directory and file inspection before using shell commands.',

@@ -68,8 +68,21 @@ export class NodeRuntimeToolExecutor {
     }
   }
 
-  private async runShell(command: string, cwd: string, timeout = DEFAULT_TIMEOUT_MS) {
-    const { stdout, stderr } = await execFile('/bin/zsh', ['-lc', command], {
+  private async runShell(
+    command: string,
+    cwd: string,
+    options?: { timeout?: number; shell?: 'bash' | 'powershell' },
+  ) {
+    const timeout = options?.timeout ?? DEFAULT_TIMEOUT_MS;
+    const shell = options?.shell ?? (process.platform === 'win32' ? 'powershell' : 'bash');
+    const file =
+      shell === 'powershell'
+        ? 'powershell.exe'
+        : process.platform === 'win32'
+          ? 'powershell.exe'
+          : '/bin/zsh';
+    const args = file === 'powershell.exe' ? ['-NoProfile', '-Command', command] : ['-lc', command];
+    const { stdout, stderr } = await execFile(file, args, {
       cwd,
       timeout,
       maxBuffer: 10 * 1024 * 1024,
@@ -97,6 +110,11 @@ export class NodeRuntimeToolExecutor {
           return await this.edit(call.input);
         case 'bash':
           return await this.bash(call.input);
+        case 'powershell':
+          return await this.bash({
+            ...call.input,
+            shell: 'powershell',
+          });
         case 'fetch':
           return await this.fetchUrl(call.input);
         case 'agent':
@@ -270,7 +288,8 @@ export class NodeRuntimeToolExecutor {
 
     const cwd = this.ensureProjectPath(typeof input.cwd === 'string' ? input.cwd : '.', 'directory');
     const timeout = typeof input.timeout === 'number' ? input.timeout : DEFAULT_TIMEOUT_MS;
-    const { stdout, stderr } = await this.runShell(command, cwd, timeout);
+    const shell = input.shell === 'powershell' ? 'powershell' : 'bash';
+    const { stdout, stderr } = await this.runShell(command, cwd, { timeout, shell });
     return {
       type: 'text',
       content: formatCommandOutput(stdout, stderr) || '(no output)',
