@@ -29,6 +29,7 @@ import type {
   AgentThreadRecord,
 } from '../ai/runtime/agentRuntimeTypes.ts';
 import { useAgentRuntimeStore } from '../ai/runtime/agentRuntimeStore.ts';
+import type { AgentRuntimeLiveState } from '../ai/runtime/agentRuntimeStore.ts';
 import type { RuntimeToolStep } from '../ai/runtime/agent-kernel/agentKernelTypes.ts';
 import type { AgentTeamRunRecord } from '../ai/runtime/teams/teamTypes.ts';
 import {
@@ -370,10 +371,74 @@ const resolvePassiveStatusVerb = (state: {
   return '';
 };
 
+const createIdleRuntimeSidecarLiveState = (): AgentRuntimeLiveState => ({
+  connectionState: 'disconnected',
+  statusVerb: '',
+  elapsedSeconds: 0,
+  startedAt: null,
+  activeToolName: null,
+  streamingToolInput: '',
+  pendingApprovalSummary: null,
+  pendingQuestionSummary: null,
+  activeThinking: false,
+  streamingText: '',
+  pendingPermissionCount: 0,
+  tokenUsage: {
+    inputTokens: 0,
+    outputTokens: 0,
+  },
+});
+
+const areRuntimeSidecarLiveStatesEqual = (
+  left: AgentRuntimeLiveState,
+  right: AgentRuntimeLiveState,
+) =>
+  left.connectionState === right.connectionState
+  && left.statusVerb === right.statusVerb
+  && left.elapsedSeconds === right.elapsedSeconds
+  && left.startedAt === right.startedAt
+  && left.activeToolName === right.activeToolName
+  && left.streamingToolInput === right.streamingToolInput
+  && left.pendingApprovalSummary === right.pendingApprovalSummary
+  && left.pendingQuestionSummary === right.pendingQuestionSummary
+  && left.activeThinking === right.activeThinking
+  && left.streamingText === right.streamingText
+  && left.pendingPermissionCount === right.pendingPermissionCount
+  && left.tokenUsage.inputTokens === right.tokenUsage.inputTokens
+  && left.tokenUsage.outputTokens === right.tokenUsage.outputTokens;
+
+const patchLiveStateIfChanged = (
+  threadId: string,
+  updater: (state: AgentRuntimeLiveState) => AgentRuntimeLiveState,
+) => {
+  const runtimeStore = useAgentRuntimeStore.getState();
+  const current = runtimeStore.liveStateByThread[threadId] || createIdleRuntimeSidecarLiveState();
+  const next = updater(current);
+
+  if (next === current || areRuntimeSidecarLiveStatesEqual(current, next)) {
+    return;
+  }
+
+  runtimeStore.patchLiveState(threadId, next);
+};
+
+const patchApprovalSummaryIfChanged = (threadId: string, summary: string | null, count: number) => {
+  patchLiveStateIfChanged(threadId, (state) =>
+    state.pendingApprovalSummary === summary && state.pendingPermissionCount === count
+      ? state
+      : {
+          ...state,
+          pendingApprovalSummary: summary,
+          pendingPermissionCount: count,
+          statusVerb: count > 0 ? 'Waiting for approval' : resolvePassiveStatusVerb(state),
+        },
+  );
+};
+
 const syncRuntimeSidecarSessionProjections = (projectId: string, sessionId: string, messages: RuntimeMessageRecord[]) => {
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.setThreadToolCalls(sessionId, deriveToolCallsFromMessages(messages));
-  runtimeStore.patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     connectionState: 'connected',
     ...deriveLiveState(messages),
@@ -439,7 +504,7 @@ const applyRuntimeSidecarTurnStartedEvent = (sessionId: string, emittedAt: numbe
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.startRun(sessionId);
-  runtimeStore.patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     connectionState: 'connected',
     startedAt: state.startedAt ?? emittedAt,
@@ -466,7 +531,7 @@ const applyRuntimeSidecarReasoningEvent = (sessionId: string) => {
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
-  useAgentRuntimeStore.getState().patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     connectionState: 'connected',
     activeThinking: true,
@@ -486,7 +551,7 @@ const applyRuntimeSidecarTurnDeltaEvent = (sessionId: string, delta: string) => 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.appendStreamDelta(sessionId, delta);
-  runtimeStore.patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     connectionState: 'connected',
     streamingText: `${state.streamingText}${delta}`,
@@ -507,7 +572,7 @@ const applyRuntimeSidecarTurnUsageEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
-  useAgentRuntimeStore.getState().patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     connectionState: 'connected',
     tokenUsage: {
@@ -525,7 +590,7 @@ const applyRuntimeSidecarToolStartedEvent = (sessionId: string, toolCall: Runtim
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
   upsertRuntimeToolCallProjection(sessionId, toolCall);
-  useAgentRuntimeStore.getState().patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     connectionState: 'connected',
     activeThinking: false,
@@ -543,7 +608,7 @@ const applyRuntimeSidecarToolFinishedEvent = (sessionId: string, toolCall: Runti
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
   upsertRuntimeToolCallProjection(sessionId, toolCall);
-  useAgentRuntimeStore.getState().patchLiveState(sessionId, (state) => {
+  patchLiveStateIfChanged(sessionId, (state) => {
     const nextActiveToolName = state.activeToolName === toolCall.name ? null : state.activeToolName;
     return {
       ...state,
@@ -591,12 +656,7 @@ const applyRuntimeSidecarApprovalRequestedEvent = (
   const pendingApprovals = useApprovalStore
     .getState()
     .approvalsByThread[sessionId]?.filter((entry) => entry.status === 'pending') || [];
-  useAgentRuntimeStore.getState().patchLiveState(sessionId, (state) => ({
-    ...state,
-    pendingApprovalSummary: pendingApprovals[0]?.summary || approval.summary,
-    pendingPermissionCount: pendingApprovals.length,
-    statusVerb: 'Waiting for approval',
-  }));
+  patchApprovalSummaryIfChanged(sessionId, pendingApprovals[0]?.summary || approval.summary, pendingApprovals.length);
 };
 
 const applyRuntimeSidecarApprovalResolvedEvent = (
@@ -613,7 +673,7 @@ const applyRuntimeSidecarApprovalResolvedEvent = (
   const pendingApprovals = useApprovalStore
     .getState()
     .approvalsByThread[sessionId]?.filter((entry) => entry.status === 'pending') || [];
-  useAgentRuntimeStore.getState().patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     pendingPermissionCount: pendingApprovals.length,
     pendingApprovalSummary: pendingApprovals[0]?.summary || null,
@@ -637,7 +697,7 @@ const applyRuntimeSidecarQuestionRequestedEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
-  useAgentRuntimeStore.getState().patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     pendingQuestionSummary: question.payload.questions[0]?.question || null,
     statusVerb: 'Waiting for input',
@@ -654,7 +714,7 @@ const applyRuntimeSidecarQuestionAnsweredEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
-  useAgentRuntimeStore.getState().patchLiveState(sessionId, (state) => {
+  patchLiveStateIfChanged(sessionId, (state) => {
     const nextPendingQuestionSummary =
       state.pendingQuestionSummary === question.payload.questions[0]?.question
         ? null
@@ -726,7 +786,7 @@ const applyRuntimeSidecarTurnCompletedEvent = (sessionId: string) => {
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.finishRun(sessionId);
-  runtimeStore.patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     activeThinking: false,
     activeToolName: null,
@@ -750,7 +810,7 @@ const applyRuntimeSidecarTurnFailedEvent = (sessionId: string) => {
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.failRun(sessionId, 'Runtime turn failed.');
-  runtimeStore.patchLiveState(sessionId, (state) => ({
+  patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     activeThinking: false,
     activeToolName: null,

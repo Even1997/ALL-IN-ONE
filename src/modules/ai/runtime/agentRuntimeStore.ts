@@ -203,6 +203,28 @@ const createIdleLiveState = (): AgentRuntimeLiveState => ({
   },
 });
 
+const areTokenUsageEqual = (
+  left: AgentRuntimeTokenUsage,
+  right: AgentRuntimeTokenUsage,
+) => left.inputTokens === right.inputTokens && left.outputTokens === right.outputTokens;
+
+const areLiveStatesEqual = (
+  left: AgentRuntimeLiveState,
+  right: AgentRuntimeLiveState,
+) =>
+  left.connectionState === right.connectionState
+  && left.statusVerb === right.statusVerb
+  && left.elapsedSeconds === right.elapsedSeconds
+  && left.startedAt === right.startedAt
+  && left.activeToolName === right.activeToolName
+  && left.streamingToolInput === right.streamingToolInput
+  && left.pendingApprovalSummary === right.pendingApprovalSummary
+  && left.pendingQuestionSummary === right.pendingQuestionSummary
+  && left.activeThinking === right.activeThinking
+  && left.streamingText === right.streamingText
+  && left.pendingPermissionCount === right.pendingPermissionCount
+  && areTokenUsageEqual(left.tokenUsage, right.tokenUsage);
+
 export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
   threadsByProject: {},
   timelineByThread: {},
@@ -584,15 +606,21 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
     })),
 
   appendStreamDelta: (threadId, delta) =>
-    set((state) => ({
-      runStateByThread: {
-        ...state.runStateByThread,
-        [threadId]: {
-          ...(state.runStateByThread[threadId] || createIdleRunState()),
-          draft: `${state.runStateByThread[threadId]?.draft || ''}${delta}`,
+    set((state) => {
+      if (!delta) {
+        return state;
+      }
+
+      return {
+        runStateByThread: {
+          ...state.runStateByThread,
+          [threadId]: {
+            ...(state.runStateByThread[threadId] || createIdleRunState()),
+            draft: `${state.runStateByThread[threadId]?.draft || ''}${delta}`,
+          },
         },
-      },
-    })),
+      };
+    }),
 
   finishRun: (threadId) =>
     set((state) => ({
@@ -631,6 +659,10 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
                 ? { ...current.tokenUsage, ...updater.tokenUsage }
                 : current.tokenUsage,
             };
+
+      if (next === current || areLiveStatesEqual(current, next)) {
+        return state;
+      }
 
       return {
         liveStateByThread: {
