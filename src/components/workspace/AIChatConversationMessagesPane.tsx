@@ -3,9 +3,8 @@ import type { MutableRefObject, ReactNode } from 'react';
 import { GNAgentMessageList, type MessageBubbleCard } from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import { useApprovalStore } from '../../modules/ai/runtime/approval/approvalStore.ts';
 import type { ApprovalRecord } from '../../modules/ai/runtime/approval/approvalTypes.ts';
-import { getAssistantRuntimeTimelineEvents } from '../../modules/ai/store/assistantTimeline.ts';
+import { applyAssistantReasoningProgress, getAssistantRuntimeTimelineEvents } from '../../modules/ai/store/assistantTimeline.ts';
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
-import type { ActivityEntry } from '../../modules/ai/skills/activityLog.ts';
 import type { AIChatMessagePart } from './aiChatMessageParts';
 import type { AssistantDraftState } from './assistantRenderModel.ts';
 import { useActiveConversationApprovals, useActiveConversationLiveState, useActiveConversationMessages } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
@@ -92,17 +91,10 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
         messageId,
         {
           ...draftState,
-          timeline: draftState.timeline.map((event) =>
-            event.kind === 'thinking'
-              ? {
-                  ...event,
-                  elapsedMs:
-                    typeof event.startedAt === 'number'
-                      ? Math.max(event.elapsedMs || 0, reasoningReferenceTime - event.startedAt)
-                      : event.elapsedMs,
-                }
-              : event,
-          ),
+          timeline: applyAssistantReasoningProgress(draftState.timeline, {
+            active: true,
+            referenceTime: reasoningReferenceTime,
+          }),
         },
       ]),
     );

@@ -25,7 +25,6 @@ import {
   getDefaultRuntimeSkillDefinitions,
   loadRuntimeSkillCatalog,
 } from '../../modules/ai/skills/skillLibrary';
-import type { RuntimeSkillDefinition } from '../../modules/ai/runtime/skills/runtimeSkillTypes';
 import type { AIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../../modules/ai/gn-agent/localConfig';
 import {
@@ -45,7 +44,6 @@ import {
 import { buildMemoryRollbackLifecycleDescriptor, buildSkillDiscoveryLifecycleDescriptor, buildSkillLoadLifecycleDescriptor } from '../../modules/ai/runtime/dispatch/runtimeCapabilityLifecycle.ts';
 import { ASK_USER_TOOL_NAME } from '../../modules/ai/runtime/tools/runtimeToolPolicy.ts';
 import type {
-  AgentBackgroundTaskRecord,
   AgentProviderId,
   AgentTurnCheckpointDiff,
   AgentTurnCheckpointRecord,
@@ -60,9 +58,7 @@ import { useActiveConversationSelection } from '../../modules/ai/runtime/convers
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
 import { getLatestTurnSession } from '../../modules/ai/runtime/session/agentSessionSelectors.ts';
-import type { AgentTeamRunRecord } from '../../modules/ai/runtime/teams/teamTypes';
 import {
-  type ChatSession,
   createChatSession,
   type StoredChatRuntimeEvent,
   type StoredChatMessage,
@@ -197,12 +193,8 @@ type StreamingDraftState = {
   timeline: AssistantTimelineEvent[];
 };
 
-const EMPTY_MESSAGES: StoredChatMessage[] = [];
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
-const EMPTY_SESSIONS: ChatSession[] = [];
 const EMPTY_PENDING_APPROVALS: ApprovalRecord[] = [];
-const EMPTY_RUNTIME_SKILLS: RuntimeSkillDefinition[] = [];
-const EMPTY_BACKGROUND_TASKS: AgentBackgroundTaskRecord[] = [];
 const STREAMING_DRAFT_FLUSH_MS = 50;
 const SETTINGS_TABS: Array<{
   id: SettingsTabId;
@@ -320,11 +312,6 @@ const normalizeErrorMessage = (error: unknown) => {
 
   return raw;
 };
-
-const getElapsedSecondsSince = (startedAt: number | null | undefined, fallback = 0) =>
-  typeof startedAt === 'number'
-    ? Math.max(0.1, Math.round(Math.max(0, Date.now() - startedAt) / 100) / 10)
-    : fallback;
 
 const findSlashTrigger = (value: string, cursorPos: number) => {
   for (let index = cursorPos - 1; index >= 0; index -= 1) {
@@ -1540,7 +1527,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     approvalThreadId: activeApprovalThreadId,
     checkpointThreadId: activeCheckpointThreadId,
     taskThreadId: activeTaskThreadId,
-    liveThreadId: activeLiveThreadId,
   } = useActiveConversationSelection({
     projectId: currentProjectId,
   });
@@ -1560,7 +1546,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     }))
   );
   const runtimeProviderId = (providerExecutionMode || 'built-in') as AgentProviderId;
-  const currentProjectId = currentProject?.id || null;
 
   useEffect(() => {
     let alive = true;
