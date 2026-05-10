@@ -1,4 +1,6 @@
 import type {
+  CanonicalEvent,
+  RuntimeAssistantTimelineEvent,
   RuntimeMcpServerRecord,
   RuntimeMcpToolCallRecord,
   RuntimeApprovalResolveInput,
@@ -9,6 +11,7 @@ import type {
   RuntimeEventEnvelope,
   RuntimeMessageRecord,
   RuntimeQuestionEventRecord,
+  RuntimeReasoningEventRecord,
   RuntimeQuestionAnswerInput,
   RuntimeReferenceFileRecord,
   RuntimeSessionSnapshot,
@@ -46,6 +49,11 @@ import {
 import {
   appendRuntimeReplayEvent as appendRuntimeReplayStoreEntry,
 } from '../ai/runtime/replay/runtimeReplayClient.ts';
+import {
+  buildCanonicalEventsFromRuntimeSnapshot,
+  buildRuntimeSidecarToolCompletedEvent,
+  createRuntimeSidecarCanonicalEvent,
+} from './runtimeSidecarCanonical.ts';
 
 const initializedProjects = new Set<string>();
 let runtimeEventsSubscribed = false;
@@ -59,7 +67,7 @@ const toProviderId = (providerId?: string | null): AgentProviderId => {
 };
 
 type RuntimeAssistantMessageRecord = RuntimeMessageRecord & {
-  timeline?: AssistantTimelineEvent[];
+  timeline?: RuntimeAssistantTimelineEvent[];
 };
 
 const getAssistantTimeline = (message: RuntimeMessageRecord) =>
@@ -94,6 +102,7 @@ const mapSnapshotToChatSession = (
 ): ChatSession => {
   const providerId = toProviderId(snapshot.session.providerId);
   const baseSession = existingSession || createChatSession(snapshot.session.projectId, snapshot.session.title, providerId);
+  const canonicalEvents = buildCanonicalEventsFromRuntimeSnapshot(snapshot);
 
   return {
     ...baseSession,
@@ -103,6 +112,7 @@ const mapSnapshotToChatSession = (
     providerId,
     runtimeThreadId: snapshot.session.id,
     messages: snapshot.messages.map(mapRuntimeMessage),
+    canonicalEvents,
     eventLog: [],
     createdAt: snapshot.session.createdAt,
     updatedAt: snapshot.session.updatedAt,
@@ -459,6 +469,53 @@ const findProjectSessionByRuntimeId = (sessionId: string) => {
   return null;
 };
 
+const ensureRuntimeAssistantMessage = (input: {
+  sessionId: string;
+  messageId: string;
+  createdAt: number;
+}) => {
+  const located = findProjectSessionByRuntimeId(input.sessionId);
+  if (!located) {
+    return null;
+  }
+
+  const existingMessage = located.session.messages.find((message) => message.id === input.messageId);
+  if (existingMessage) {
+    return located;
+  }
+
+  const placeholderMessage = {
+    ...createStoredChatMessage('assistant', '', 'default', {
+      runId: input.messageId,
+      timeline: [],
+    }),
+    id: input.messageId,
+    createdAt: input.createdAt,
+  };
+
+  useAIChatStore.getState().appendMessage(located.projectId, located.session.id, placeholderMessage);
+  return findProjectSessionByRuntimeId(input.sessionId);
+};
+
+const appendRuntimeSidecarCanonicalEvent = (
+  sessionId: string,
+  messageId: string,
+  event: CanonicalEvent,
+  createdAt: number,
+) => {
+  const located =
+    ensureRuntimeAssistantMessage({
+      sessionId,
+      messageId,
+      createdAt,
+    }) || findProjectSessionByRuntimeId(sessionId);
+  if (!located) {
+    return;
+  }
+
+  useAIChatStore.getState().appendCanonicalEvent(located.projectId, located.session.id, event);
+};
+
 const upsertRuntimeToolCallProjection = (threadId: string, toolCall: RuntimeToolCallRecord) => {
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.setThreadToolCalls(
@@ -495,13 +552,46 @@ const setRuntimeSidecarMcpToolCalls = (
   useRuntimeMcpStore.getState().setToolCalls(threadId, toolCalls.map(mapRuntimeMcpToolCallRecord));
 };
 
-const applyRuntimeSidecarTurnStartedEvent = (sessionId: string, emittedAt: number) => {
+const applyRuntimeSidecarTurnStartedEvent = (sessionId: string, messageId: string, emittedAt: number) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  ensureRuntimeAssistantMessage({ sessionId, messageId, createdAt: emittedAt });
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'run.started',
+      payload: {
+        providerId: located.session.providerId,
+        threadId: sessionId,
+        mode: 'agent',
+      },
+      ts: emittedAt,
+    }),
+    emittedAt,
+  );
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'message.started',
+      payload: { role: 'assistant' },
+      ts: emittedAt,
+    }),
+    emittedAt,
+  );
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.startRun(sessionId);
   patchLiveStateIfChanged(sessionId, (state) => ({
@@ -524,13 +614,36 @@ const applyRuntimeSidecarTurnStartedEvent = (sessionId: string, emittedAt: numbe
   }));
 };
 
-const applyRuntimeSidecarReasoningEvent = (sessionId: string) => {
+const applyRuntimeSidecarReasoningEvent = (
+  sessionId: string,
+  messageId: string,
+  reasoning: RuntimeReasoningEventRecord,
+) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'progress.updated',
+      payload: {
+        label: 'Reasoning',
+        detail: reasoning.content,
+        scope: 'phase',
+        importance: 'low',
+      },
+      ts: reasoning.createdAt,
+    }),
+    reasoning.createdAt,
+  );
   patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     connectionState: 'connected',
@@ -542,13 +655,29 @@ const applyRuntimeSidecarReasoningEvent = (sessionId: string) => {
   }));
 };
 
-const applyRuntimeSidecarTurnDeltaEvent = (sessionId: string, delta: string) => {
+const applyRuntimeSidecarTurnDeltaEvent = (sessionId: string, messageId: string, delta: string, emittedAt: number) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'message.delta',
+      payload: {
+        textChunk: delta,
+      },
+      ts: emittedAt,
+    }),
+    emittedAt,
+  );
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.appendStreamDelta(sessionId, delta);
   patchLiveStateIfChanged(sessionId, (state) => ({
@@ -582,13 +711,40 @@ const applyRuntimeSidecarTurnUsageEvent = (
   }));
 };
 
-const applyRuntimeSidecarToolStartedEvent = (sessionId: string, toolCall: RuntimeToolCallRecord) => {
+const applyRuntimeSidecarToolStartedEvent = (
+  sessionId: string,
+  messageId: string,
+  toolCall: RuntimeToolCallRecord,
+  emittedAt: number,
+) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'tool.started',
+      payload: {
+        toolCallId: toolCall.id,
+        parentToolCallId: toolCall.parentToolCallId ?? null,
+        toolName: toolCall.name,
+        input: toolCall.input,
+        inputSummary: JSON.stringify(toolCall.input),
+      },
+      ts: emittedAt,
+      correlationId: toolCall.id,
+      source: { kind: 'tool', provider: located.session.providerId, name: toolCall.name },
+    }),
+    emittedAt,
+  );
   upsertRuntimeToolCallProjection(sessionId, toolCall);
   patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
@@ -600,13 +756,31 @@ const applyRuntimeSidecarToolStartedEvent = (sessionId: string, toolCall: Runtim
   }));
 };
 
-const applyRuntimeSidecarToolFinishedEvent = (sessionId: string, toolCall: RuntimeToolCallRecord) => {
+const applyRuntimeSidecarToolFinishedEvent = (
+  sessionId: string,
+  messageId: string,
+  toolCall: RuntimeToolCallRecord,
+  emittedAt: number,
+) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    buildRuntimeSidecarToolCompletedEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      toolCall,
+      ts: emittedAt,
+    }),
+    emittedAt,
+  );
   upsertRuntimeToolCallProjection(sessionId, toolCall);
   patchLiveStateIfChanged(sessionId, (state) => {
     const nextActiveToolName = state.activeToolName === toolCall.name ? null : state.activeToolName;
@@ -623,13 +797,18 @@ const applyRuntimeSidecarToolFinishedEvent = (sessionId: string, toolCall: Runti
   });
 };
 
-const applyRuntimeSidecarToolUpdatedEvent = (sessionId: string, toolCall: RuntimeToolCallRecord) => {
+const applyRuntimeSidecarToolUpdatedEvent = (
+  sessionId: string,
+  messageId: string,
+  toolCall: RuntimeToolCallRecord,
+  emittedAt: number,
+) => {
   if (toolCall.status === 'running') {
-    applyRuntimeSidecarToolStartedEvent(sessionId, toolCall);
+    applyRuntimeSidecarToolStartedEvent(sessionId, messageId, toolCall, emittedAt);
     return;
   }
 
-  applyRuntimeSidecarToolFinishedEvent(sessionId, toolCall);
+  applyRuntimeSidecarToolFinishedEvent(sessionId, messageId, toolCall, emittedAt);
 };
 
 const applyRuntimeSidecarApprovalRequestedEvent = (
@@ -643,6 +822,28 @@ const applyRuntimeSidecarApprovalRequestedEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'approval.requested',
+      payload: {
+        approvalId: approval.approvalId,
+        toolCallId: approval.toolCallId ?? null,
+        actionType: approval.actionType,
+        riskLevel: approval.riskLevel,
+        summary: approval.summary,
+        display: approval.display,
+      },
+      ts: approval.createdAt,
+      correlationId: approval.approvalId,
+    }),
+    approval.createdAt,
+  );
   useApprovalStore.getState().enqueueApproval({
     id: approval.approvalId,
     threadId: sessionId,
@@ -661,6 +862,7 @@ const applyRuntimeSidecarApprovalRequestedEvent = (
 
 const applyRuntimeSidecarApprovalResolvedEvent = (
   sessionId: string,
+  messageId: string,
   approval: RuntimeApprovalEventRecord,
 ) => {
   const located = findProjectSessionByRuntimeId(sessionId);
@@ -669,6 +871,24 @@ const applyRuntimeSidecarApprovalResolvedEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'approval.resolved',
+      payload: {
+        approvalId: approval.approvalId,
+        resolution: approval.status === 'approved' ? 'approved' : 'denied',
+      },
+      ts: approval.createdAt,
+      correlationId: approval.approvalId,
+    }),
+    approval.createdAt,
+  );
   useApprovalStore.getState().resolveApproval(approval.approvalId, approval.status);
   const pendingApprovals = useApprovalStore
     .getState()
@@ -689,6 +909,7 @@ const applyRuntimeSidecarApprovalResolvedEvent = (
 
 const applyRuntimeSidecarQuestionRequestedEvent = (
   sessionId: string,
+  messageId: string,
   question: RuntimeQuestionEventRecord,
 ) => {
   const located = findProjectSessionByRuntimeId(sessionId);
@@ -697,6 +918,30 @@ const applyRuntimeSidecarQuestionRequestedEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'question.requested',
+      payload: {
+        questionId: question.questionId,
+        toolCallId: question.payload.toolCallId ?? null,
+        questions: question.payload.questions.map((item, index) => ({
+          id: `${question.questionId}_${index}`,
+          header: item.header,
+          question: item.question,
+          options: item.options,
+        })),
+      },
+      ts: question.createdAt,
+      correlationId: question.questionId,
+    }),
+    question.createdAt,
+  );
   patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     pendingQuestionSummary: question.payload.questions[0]?.question || null,
@@ -706,6 +951,7 @@ const applyRuntimeSidecarQuestionRequestedEvent = (
 
 const applyRuntimeSidecarQuestionAnsweredEvent = (
   sessionId: string,
+  messageId: string,
   question: RuntimeQuestionEventRecord,
 ) => {
   const located = findProjectSessionByRuntimeId(sessionId);
@@ -714,6 +960,24 @@ const applyRuntimeSidecarQuestionAnsweredEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'question.answered',
+      payload: {
+        questionId: question.questionId,
+        answers: question.payload.answers || {},
+      },
+      ts: question.createdAt,
+      correlationId: question.questionId,
+    }),
+    question.createdAt,
+  );
   patchLiveStateIfChanged(sessionId, (state) => {
     const nextPendingQuestionSummary =
       state.pendingQuestionSummary === question.payload.questions[0]?.question
@@ -777,13 +1041,29 @@ const applyRuntimeSidecarTeamRunUpdatedEvent = (
   useAgentRuntimeStore.getState().upsertTeamRun(sessionId, mapRuntimeTeamRun(teamRun));
 };
 
-const applyRuntimeSidecarTurnCompletedEvent = (sessionId: string) => {
+const applyRuntimeSidecarTurnCompletedEvent = (sessionId: string, messageId: string, emittedAt: number) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'run.completed',
+      payload: {
+        outcome: 'success',
+      },
+      ts: emittedAt,
+    }),
+    emittedAt,
+  );
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.finishRun(sessionId);
   patchLiveStateIfChanged(sessionId, (state) => ({
@@ -801,13 +1081,53 @@ const applyRuntimeSidecarTurnCompletedEvent = (sessionId: string) => {
   }));
 };
 
-const applyRuntimeSidecarTurnFailedEvent = (sessionId: string) => {
+const applyRuntimeSidecarTurnFailedEvent = (
+  sessionId: string,
+  messageId: string,
+  error: string,
+  emittedAt: number,
+) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'error.raised',
+      payload: {
+        code: 'runtime.sidecar.turn_failed',
+        summary: error,
+        source: 'runtime',
+      },
+      ts: emittedAt,
+    }),
+    emittedAt,
+  );
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'run.completed',
+      payload: {
+        outcome: 'failed',
+        summary: error,
+      },
+      ts: emittedAt,
+    }),
+    emittedAt,
+  );
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.failRun(sessionId, 'Runtime turn failed.');
   patchLiveStateIfChanged(sessionId, (state) => ({
@@ -852,11 +1172,17 @@ export const applyRuntimeSidecarSnapshot = (snapshot: RuntimeSessionSnapshot) =>
   chatStore.ensureProjectState(snapshot.session.projectId);
   chatStore.upsertSession(snapshot.session.projectId, nextSession);
   chatStore.replaceSessionMessages(snapshot.session.projectId, nextSession.id, nextSession.messages);
+  chatStore.replaceCanonicalEvents(snapshot.session.projectId, nextSession.id, nextSession.canonicalEvents);
   runtimeStore.createThread(snapshot.session.projectId, mapSnapshotToRuntimeThread(snapshot));
   syncRuntimeSidecarSessionProjections(snapshot.session.projectId, snapshot.session.id, snapshot.messages);
 };
 
-const applyRuntimeSidecarMessageEvent = (sessionId: string, message: RuntimeMessageRecord) => {
+const applyRuntimeSidecarMessageEvent = (
+  sessionId: string,
+  message: RuntimeMessageRecord,
+  eventType: 'message.delta' | 'turn.finished',
+  emittedAt: number,
+) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
@@ -871,6 +1197,24 @@ const applyRuntimeSidecarMessageEvent = (sessionId: string, message: RuntimeMess
     chatStore.appendMessage(located.projectId, located.session.id, mappedMessage);
   }
 
+  if (eventType === 'turn.finished' && message.role === 'assistant') {
+    appendRuntimeSidecarCanonicalEvent(
+      sessionId,
+      message.id,
+      createRuntimeSidecarCanonicalEvent({
+        sessionId,
+        providerId: located.session.providerId,
+        runId: message.id,
+        messageId: message.id,
+        type: 'message.completed',
+        payload: {
+          finalText: message.content,
+        },
+        ts: emittedAt,
+      }),
+      emittedAt,
+    );
+  }
 };
 
 const ensureRuntimeEventSubscription = () => {
@@ -886,12 +1230,17 @@ const ensureRuntimeEventSubscription = () => {
     }
 
     if (event.type === 'message.delta' || event.type === 'turn.finished') {
-      applyRuntimeSidecarMessageEvent(event.payload.sessionId, event.payload.message);
+      applyRuntimeSidecarMessageEvent(event.payload.sessionId, event.payload.message, event.type, event.emittedAt);
       return;
     }
 
     if (event.type === 'turn.delta') {
-      applyRuntimeSidecarTurnDeltaEvent(event.payload.sessionId, event.payload.delta);
+      applyRuntimeSidecarTurnDeltaEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.delta,
+        event.emittedAt,
+      );
       return;
     }
 
@@ -901,27 +1250,46 @@ const ensureRuntimeEventSubscription = () => {
     }
 
     if (event.type === 'turn.started') {
-      applyRuntimeSidecarTurnStartedEvent(event.payload.sessionId, event.emittedAt);
+      applyRuntimeSidecarTurnStartedEvent(event.payload.sessionId, event.payload.messageId, event.emittedAt);
       return;
     }
 
     if (event.type === 'turn.reasoning') {
-      applyRuntimeSidecarReasoningEvent(event.payload.sessionId);
+      applyRuntimeSidecarReasoningEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.reasoning,
+      );
       return;
     }
 
     if (event.type === 'tool.started') {
-      applyRuntimeSidecarToolStartedEvent(event.payload.sessionId, event.payload.toolCall);
+      applyRuntimeSidecarToolStartedEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.toolCall,
+        event.emittedAt,
+      );
       return;
     }
 
     if (event.type === 'tool.finished') {
-      applyRuntimeSidecarToolFinishedEvent(event.payload.sessionId, event.payload.toolCall);
+      applyRuntimeSidecarToolFinishedEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.toolCall,
+        event.emittedAt,
+      );
       return;
     }
 
     if (event.type === 'tool.updated') {
-      applyRuntimeSidecarToolUpdatedEvent(event.payload.sessionId, event.payload.toolCall);
+      applyRuntimeSidecarToolUpdatedEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.toolCall,
+        event.emittedAt,
+      );
       return;
     }
 
@@ -935,27 +1303,48 @@ const ensureRuntimeEventSubscription = () => {
     }
 
     if (event.type === 'approval.resolved') {
-      applyRuntimeSidecarApprovalResolvedEvent(event.payload.sessionId, event.payload.approval);
+      applyRuntimeSidecarApprovalResolvedEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.approval,
+      );
       return;
     }
 
     if (event.type === 'question.requested') {
-      applyRuntimeSidecarQuestionRequestedEvent(event.payload.sessionId, event.payload.question);
+      applyRuntimeSidecarQuestionRequestedEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.question,
+      );
       return;
     }
 
     if (event.type === 'question.answered') {
-      applyRuntimeSidecarQuestionAnsweredEvent(event.payload.sessionId, event.payload.question);
+      applyRuntimeSidecarQuestionAnsweredEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.question,
+      );
       return;
     }
 
     if (event.type === 'turn.completed') {
-      applyRuntimeSidecarTurnCompletedEvent(event.payload.sessionId);
+      applyRuntimeSidecarTurnCompletedEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.emittedAt,
+      );
       return;
     }
 
     if (event.type === 'turn.failed') {
-      applyRuntimeSidecarTurnFailedEvent(event.payload.sessionId);
+      applyRuntimeSidecarTurnFailedEvent(
+        event.payload.sessionId,
+        event.payload.messageId,
+        event.payload.error,
+        event.emittedAt,
+      );
       return;
     }
 

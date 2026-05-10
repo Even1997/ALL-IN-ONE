@@ -1,5 +1,8 @@
 export const DEFAULT_RUNTIME_HOST = '127.0.0.1';
 
+export * from './canonicalEvents.ts';
+export * from './canonicalEventValidators.ts';
+
 export type RuntimeSessionSummary = {
   id: string;
   projectId: string;

@@ -136,6 +136,127 @@ test('runtime conversation gateway resolves active conversation and thread route
   assert.equal(projection.messages.length, 1);
 });
 
+test('runtime conversation projection exposes timeline projections derived from canonical events by run id', async () => {
+  const { buildRuntimeConversationProjection } = await import(
+    `../../src/modules/ai/runtime/conversation/runtimeConversationGateway.ts?test=${Date.now()}`
+  );
+
+  const projection = buildRuntimeConversationProjection({
+    projectChatState: null,
+    sessions: [
+      {
+        id: 'session_1',
+        projectId: 'project_1',
+        title: 'Timeline',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        composerPrefill: null,
+        messages: [],
+        canonicalEvents: [
+          {
+            eventId: 'evt_1',
+            runId: 'run_1',
+            turnId: 'turn_1',
+            sessionId: 'session_1',
+            type: 'progress.updated',
+            ts: 1,
+            seq: 1,
+            source: { kind: 'runtime', provider: 'built-in', name: 'runtime' },
+            payload: { label: '正在扫描目录' },
+          },
+        ],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+    activeSessionId: 'session_1',
+    activityEntries: [],
+    runtimeState: {
+      latestTurnSession: null,
+      replayResumeRequest: null,
+      liveState: null,
+      backgroundTasks: [],
+      activeSkills: [],
+      contextSnapshot: null,
+      toolCalls: [],
+      mcpToolCalls: [],
+      memoryCandidates: [],
+      memoryEntries: [],
+    },
+    pendingApprovals: [],
+  });
+
+  assert.equal(projection.timelineProjectionByRunId.run_1.cards.length, 1);
+});
+
+test('runtime conversation projection can recover a timeline projection by assistant message id', async () => {
+  const { buildRuntimeConversationProjection } = await import(
+    `../../src/modules/ai/runtime/conversation/runtimeConversationGateway.ts?test=${Date.now()}`
+  );
+
+  const projection = buildRuntimeConversationProjection({
+    projectChatState: null,
+    sessions: [
+      {
+        id: 'session_1',
+        projectId: 'project_1',
+        title: 'Timeline',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        composerPrefill: null,
+        messages: [
+          {
+            id: 'assistant_msg_1',
+            role: 'assistant',
+            timeline: [],
+            createdAt: 1,
+          },
+        ],
+        canonicalEvents: [
+          {
+            eventId: 'evt_1',
+            runId: 'run_1',
+            turnId: 'turn_1',
+            sessionId: 'session_1',
+            messageId: 'assistant_msg_1',
+            type: 'tool.started',
+            ts: 1,
+            seq: 1,
+            source: { kind: 'tool', provider: 'built-in', name: 'powershell' },
+            payload: { toolCallId: 'call_1', toolName: 'powershell', inputSummary: 'npm run build' },
+          },
+        ],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+    activeSessionId: 'session_1',
+    activityEntries: [],
+    runtimeState: {
+      latestTurnSession: null,
+      replayResumeRequest: null,
+      liveState: null,
+      backgroundTasks: [],
+      activeSkills: [],
+      contextSnapshot: null,
+      toolCalls: [],
+      mcpToolCalls: [],
+      memoryCandidates: [],
+      memoryEntries: [],
+    },
+    pendingApprovals: [],
+  });
+
+  assert.equal(projection.timelineProjectionByMessageId.assistant_msg_1.cards.length, 1);
+  assert.equal(projection.timelineProjectionByMessageId.assistant_msg_1.cards[0]?.title, 'Tool run');
+});
+
 test('runtime conversation gateway keeps active thread ids stable across focused hooks', async () => {
   const source = await readFile(gatewayHookPath, 'utf8');
 

@@ -1,7 +1,6 @@
 ﻿import React, { Suspense, lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
-import { isCommandToolName } from '../../utils/hostPlatform.ts';
 import type { AIProviderType } from '../../modules/ai/core/AIService';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import type { ChatStructuredCard } from '../../modules/ai/chat/chatCards';
@@ -42,7 +41,6 @@ import {
   sandboxPolicyToPermissionMode,
 } from '../../modules/ai/runtime/approval/permissionMode';
 import { buildMemoryRollbackLifecycleDescriptor, buildSkillDiscoveryLifecycleDescriptor, buildSkillLoadLifecycleDescriptor } from '../../modules/ai/runtime/dispatch/runtimeCapabilityLifecycle.ts';
-import { ASK_USER_TOOL_NAME } from '../../modules/ai/runtime/tools/runtimeToolPolicy.ts';
 import type {
   AgentProviderId,
   AgentTurnCheckpointDiff,
@@ -53,17 +51,16 @@ import {
   createReplayRecoveryController,
   getLatestReplaySkillSnapshot,
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
-import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
 import {
   useActiveConversationRunStateSignals,
   useActiveConversationSelection,
+  useRuntimeConversationGateway,
 } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
 import { getLatestTurnSession } from '../../modules/ai/runtime/session/agentSessionSelectors.ts';
 import {
   createChatSession,
-  type StoredChatRuntimeEvent,
   type StoredChatMessage,
   useAIChatStore,
 } from '../../modules/ai/store/aiChatStore';
@@ -109,8 +106,7 @@ import { AIChatReferenceSearchMenu } from './AIChatReferenceSearchMenu';
 import { AIChatSlashCommandMenu, type SlashCommandEntry } from './AIChatSlashCommandMenu';
 import { RuntimeMcpSettingsPage } from './RuntimeMcpSettingsPage';
 import { AIChatConversationMessagesPane } from './AIChatConversationMessagesPane';
-import { AIChatRuntimeStatusPanel } from './AIChatRuntimeStatusPanel';
-import { AIChatRuntimeTasksPanel } from './AIChatRuntimeTasksPanel';
+import { AIChatRuntimeTimelineInteractionEvent } from './AIChatRuntimeInteractionCards.tsx';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -119,8 +115,7 @@ import {
 } from './aiChatViewState';
 import { parseAIChatMessageParts, type AIChatMessagePart } from './aiChatMessageParts';
 import { AssistantTextBlock, AssistantThinkingBlock } from './AIChatAssistantParts';
-import { buildRuntimeExecutionTimelineCards } from './AIChatRuntimeToolExecutionCard';
-import type { RuntimeEventRenderModel } from './runtimeEventRenderModel';
+import { TimelineView } from './timeline/TimelineView.tsx';
 import { useAIChatSettingsState } from './useAIChatSettingsState';
 import { useAIChatRuntimeInteractionState } from './useAIChatRuntimeInteractionState';
 import { useAIChatSidecarSessionActions } from './useAIChatSidecarSessionActions';
@@ -133,10 +128,6 @@ const loadAIServiceModule = () => (aiServiceModulePromise ??= import('../../modu
 const LazyAIChatAISettingsTab = lazy(async () => {
   const module = await import('./AIChatAISettingsTab');
   return { default: module.AIChatAISettingsTab };
-});
-const LazyAIChatRuntimeTimelineInteractionEvent = lazy(async () => {
-  const module = await import('./AIChatRuntimeInteractionCards');
-  return { default: module.AIChatRuntimeTimelineInteractionEvent };
 });
 
 type AISettingsDraft = {
@@ -533,156 +524,6 @@ const projectFileProposalStatusLabel: Record<ProjectFileProposal['status'], stri
   failed: '执行失败',
 };
 
-const RUNTIME_TOOL_GROUP_LABELS: Record<string, string> = {
-  view: '读取',
-  ls: '列目录',
-  grep: '检索',
-  glob: '匹配',
-  memory_read: '加载记忆',
-  write: '写入',
-  edit: '编辑',
-  bash: '命令',
-  powershell: 'PowerShell',
-  fetch: '抓取',
-  agent: '多 Agent',
-  project_file_flow: '处理文件请求',
-  project_file_read: '读取项目文件',
-  project_file_plan: '整理改动方案',
-  project_file_apply: '应用文件改动',
-  run_local_agent: '调用本地 Agent',
-  run_agent_team: '协调多 Agent',
-};
-
-const getRuntimeToolDisplayName = (toolName: string) => RUNTIME_TOOL_GROUP_LABELS[toolName] || toolName;
-
-const summarizeRuntimePathList = (paths: string[]) => {
-  const normalizedPaths = paths
-    .map((value) => summarizeProjectFilePath(value))
-    .filter((value) => value.trim().length > 0);
-
-  if (normalizedPaths.length <= 2) {
-    return normalizedPaths.join('、');
-  }
-
-  return `${normalizedPaths.slice(0, 2).join('、')} 等 ${normalizedPaths.length} 项`;
-};
-
-const summarizeRuntimeOutput = (output: string | undefined | null, maxLength = 160) => {
-  const normalized = (output || '').replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return '';
-  }
-
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
-};
-
-const summarizeRuntimeToolLabelList = (toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>) => {
-  const toolCounts = new Map<string, number>();
-
-  for (const toolUse of toolUses) {
-    toolCounts.set(toolUse.toolName, (toolCounts.get(toolUse.toolName) || 0) + 1);
-  }
-
-  return Array.from(toolCounts.entries())
-    .map(([toolName, count]) => `${RUNTIME_TOOL_GROUP_LABELS[toolName] || toolName}${count > 1 ? ` ${count}` : ''}`)
-    .join(' · ');
-};
-
-const getRuntimeStatusLabel = (status: 'running' | 'completed' | 'failed' | 'blocked') => {
-  switch (status) {
-    case 'completed':
-      return '已完成';
-    case 'failed':
-      return '失败';
-    case 'blocked':
-      return '已阻止';
-    case 'running':
-    default:
-      return '执行中';
-  }
-};
-
-const summarizeRuntimeFileChanges = (
-  fileChanges: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']> | undefined
-) => {
-  if (!fileChanges || fileChanges.length === 0) {
-    return '';
-  }
-
-  const changedPaths = fileChanges.map((change) => change.path);
-  return `${fileChanges.length} 个文件 · ${summarizeRuntimePathList(changedPaths)}`;
-};
-
-const summarizeRuntimeToolCall = (toolName: string, input: Record<string, unknown>) => {
-  if (toolName === ASK_USER_TOOL_NAME) {
-    if (typeof input.question === 'string') {
-      return input.question;
-    }
-    if (Array.isArray(input.questions) && input.questions.length > 0) {
-      const firstQuestion = input.questions[0];
-      if (firstQuestion && typeof firstQuestion === 'object' && 'question' in firstQuestion) {
-        return typeof firstQuestion.question === 'string' ? firstQuestion.question : '';
-      }
-    }
-  }
-
-  if (isCommandToolName(toolName) && typeof input.command === 'string') {
-    return input.command;
-  }
-
-  const filePathInput = input.file_path ?? input.path ?? input.file;
-  if ((toolName === 'write' || toolName === 'edit' || toolName === 'view') && typeof filePathInput === 'string') {
-    return summarizeProjectFilePath(filePathInput);
-  }
-
-  if (toolName === 'project_file_flow' && typeof input.summary === 'string') {
-    return input.summary;
-  }
-
-  if (toolName === 'project_file_read' && typeof input.request === 'string') {
-    return input.request;
-  }
-
-  if (toolName === 'project_file_plan' && typeof input.request === 'string') {
-    return input.request;
-  }
-
-  if (toolName === 'project_file_apply') {
-    if (Array.isArray(input.paths) && input.paths.length > 0) {
-      return summarizeRuntimePathList(input.paths.map((value) => String(value)));
-    }
-    if (typeof input.summary === 'string') {
-      return input.summary;
-    }
-  }
-
-  if ((toolName === 'run_local_agent' || toolName === 'run_agent_team') && typeof input.agent === 'string') {
-    return String(input.agent);
-  }
-
-  if (toolName === 'team_phase' && typeof input.title === 'string') {
-    return input.title;
-  }
-
-  if (toolName === 'team_member_task' && typeof input.title === 'string') {
-    return input.title;
-  }
-
-  if ((toolName === 'glob' || toolName === 'grep') && typeof input.pattern === 'string') {
-    return input.pattern;
-  }
-
-  if (toolName === 'ls' && typeof input.path === 'string') {
-    return summarizeProjectFilePath(input.path);
-  }
-
-  if (toolName === 'fetch' && typeof input.url === 'string') {
-    return input.url;
-  }
-
-  return '';
-};
-
 const summarizeProjectFileOperationPreview = (operation: ProjectFileOperation, maxLength = 220) => {
   const raw =
     operation.type === 'delete_file'
@@ -712,223 +553,8 @@ const buildRunDiffKey = (runId: string, path: string) => `${runId}::${path}`;
 const isRunDiffActive = (expandedRunDiffKey: string | null, runId: string, path: string) =>
   expandedRunDiffKey === buildRunDiffKey(runId, path);
 
-const getFileChangeTypeLabel = (change: { beforeContent: string | null; afterContent: string | null }) => {
-  if (change.beforeContent === null && change.afterContent !== null) {
-    return '新建';
-  }
-  if (change.beforeContent !== null && change.afterContent === null) {
-    return '删除';
-  }
-  if (change.beforeContent === null && change.afterContent === null) {
-    return '写入';
-  }
-  return '修改';
-};
-
 const getCheckpointChangeTypeLabel = (changeType: 'created' | 'updated' | 'deleted') =>
   changeType === 'created' ? '新建' : changeType === 'deleted' ? '删除' : '修改';
-
-const buildRuntimeEventGroupSummary = (
-  toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>,
-  resultMap: Map<string, Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>>
-) => {
-  const counts = {
-    running: 0,
-    completed: 0,
-    failed: 0,
-    blocked: 0,
-  };
-
-  for (const toolUse of toolUses) {
-    const status = resultMap.get(toolUse.toolCallId)?.status || toolUse.status;
-    counts[status] += 1;
-  }
-
-  const toolSummary = summarizeRuntimeToolLabelList(toolUses);
-
-  if (counts.running > 0) {
-    return `${toolSummary} · 进行中 ${counts.running}`;
-  }
-  if (counts.failed > 0) {
-    return `${toolSummary} · 失败 ${counts.failed}`;
-  }
-  if (counts.blocked > 0) {
-    return `${toolSummary} · 已拦截 ${counts.blocked}`;
-  }
-  return `${toolSummary} · 已完成`;
-};
-
-const shouldOpenRuntimeToolStep = ({
-  status,
-  approvalCount,
-  questionCount,
-}: {
-  status: 'running' | 'completed' | 'failed' | 'blocked';
-  approvalCount: number;
-  questionCount: number;
-}) => {
-  if (status === 'failed' || status === 'blocked') {
-    return true;
-  }
-
-  if (questionCount > 0) {
-    return true;
-  }
-
-  if (approvalCount > 0 && status !== 'completed') {
-    return true;
-  }
-
-  return false;
-};
-
-const shouldOpenRuntimeToolGroup = (
-  toolUses: Array<Extract<StoredChatRuntimeEvent, { kind: 'tool_use' }>>,
-  renderModel: RuntimeEventRenderModel
-) =>
-  toolUses.some((toolUse) =>
-    shouldOpenRuntimeToolStep({
-      status: renderModel.resultMap.get(toolUse.toolCallId)?.status || toolUse.status,
-      approvalCount: (renderModel.approvalsByToolCallId.get(toolUse.toolCallId) || []).length,
-      questionCount: (renderModel.questionsByToolCallId.get(toolUse.toolCallId) || []).length,
-    })
-  );
-
-const buildRuntimeToolStepPreview = (input: {
-  status: 'running' | 'completed' | 'failed' | 'blocked';
-  summary: string;
-  output?: string;
-  fileChanges?: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']>;
-  approvalCount: number;
-  questionCount: number;
-  childCount: number;
-}) => {
-  if (input.questionCount > 0) {
-    return `${input.questionCount} 个问题等待你补充`;
-  }
-  if (input.approvalCount > 0 && input.status !== 'completed') {
-    return `${input.approvalCount} 个权限确认${input.status === 'blocked' ? '已拦截' : '待你确认'}`;
-  }
-  if (input.fileChanges?.length) {
-    return summarizeRuntimeFileChanges(input.fileChanges);
-  }
-  if (input.childCount > 0 && input.status === 'running') {
-    return `${input.childCount} 个子步骤正在处理`;
-  }
-  if (input.output) {
-    return summarizeRuntimeOutput(input.output);
-  }
-  if (input.summary) {
-    return input.summary;
-  }
-  return getRuntimeStatusLabel(input.status);
-};
-
-const getRuntimeCommandCountLabel = (count: number) => {
-  if (count <= 0) {
-    return '暂无执行记录';
-  }
-
-  return `已运行 ${count} ${count === 1 ? '条命令' : '条命令'}`;
-};
-
-const getRuntimeToolHeadline = (toolName: string, input: Record<string, unknown>) => {
-  if (toolName === ASK_USER_TOOL_NAME) {
-    return '等待输入';
-  }
-
-  if (toolName === 'view') {
-    return '读取文件';
-  }
-
-  if (toolName === 'memory_read') {
-    return '加载记忆';
-  }
-
-  if (toolName === 'grep' || toolName === 'glob') {
-    return '搜索代码';
-  }
-
-  if (toolName === 'ls') {
-    return '浏览目录';
-  }
-
-  if (toolName === 'write' || toolName === 'edit') {
-    return '修改文件';
-  }
-
-  if (isCommandToolName(toolName)) {
-    return '执行命令';
-  }
-
-  if (toolName === 'fetch') {
-    return '请求网页';
-  }
-
-  if (toolName === 'project_file_read') {
-    return '读取项目文件';
-  }
-
-  if (toolName === 'project_file_plan') {
-    return '规划修改';
-  }
-
-  if (toolName === 'project_file_apply' || toolName === 'project_file_flow') {
-    return '应用修改';
-  }
-
-  if (toolName === 'run_local_agent' || toolName === 'run_agent_team') {
-    return '分派执行';
-  }
-
-  if (toolName === 'team_phase') {
-    return '执行阶段';
-  }
-
-  if (toolName === 'team_member_task') {
-    return '成员任务';
-  }
-
-  const summary = summarizeRuntimeToolCall(toolName, input).trim();
-  if (summary) {
-    return summary;
-  }
-
-  return getRuntimeToolDisplayName(toolName);
-};
-
-const shouldShowRuntimeToolBrief = (toolName: string, summary: string, headline: string) => {
-  if (!summary || summary === headline) {
-    return false;
-  }
-
-  if (toolName === 'project_file_flow' || toolName === 'project_file_plan' || toolName === 'project_file_apply') {
-    return false;
-  }
-
-  return true;
-};
-
-const shouldShowRuntimeToolTechnicalDetails = (input: {
-  toolName: string;
-  status: 'running' | 'completed' | 'failed' | 'blocked';
-  toolInput: Record<string, unknown>;
-  output?: string;
-}) => {
-  if (input.status === 'failed' || input.status === 'blocked') {
-    return true;
-  }
-
-  if (input.status === 'running') {
-    return Object.keys(input.toolInput).length > 0;
-  }
-
-  if (input.toolName === 'project_file_flow' || input.toolName === 'project_file_plan') {
-    return false;
-  }
-
-  return Object.keys(input.toolInput).length > 0 || Boolean(input.output?.trim());
-};
 
 const buildProjectFileStageItems = (proposal: ProjectFileProposal) => {
   const isDeleteOnlyProposal =
@@ -1516,12 +1142,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       patchLiveState: state.patchLiveState,
     }))
   );
-  const { runtimeMcpServers } =
-    useRuntimeMcpStore(
-    useShallow((state) => ({
-      runtimeMcpServers: state.servers,
-    }))
-    );
   const currentProjectId = currentProject?.id || null;
   const {
     sessions,
@@ -1531,6 +1151,9 @@ export const AIChat: React.FC<AIChatProps> = ({
     checkpointThreadId: activeCheckpointThreadId,
     taskThreadId: activeTaskThreadId,
   } = useActiveConversationSelection({
+    projectId: currentProjectId,
+  });
+  const { timelineProjectionByMessageId, timelineProjectionByRunId } = useRuntimeConversationGateway({
     projectId: currentProjectId,
   });
   const {
@@ -1846,8 +1469,44 @@ export const AIChat: React.FC<AIChatProps> = ({
   });
 
   const renderRuntimeQuestionCard = useCallback(
-    (_message: StoredChatMessage) => null,
-    []
+    (message: StoredChatMessage) => {
+      if (message.role !== 'assistant') {
+        return null;
+      }
+
+      const questionEvent = [...getAssistantRuntimeTimelineEvents(message.timeline)]
+        .reverse()
+        .find((event) => event.kind === 'question');
+
+      if (!questionEvent || questionEvent.kind !== 'question') {
+        return null;
+      }
+
+      return (
+        <AIChatRuntimeTimelineInteractionEvent
+          messageId={message.id}
+          event={questionEvent}
+          summarizeProjectFilePath={summarizeProjectFilePath}
+          onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
+          onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
+          onAnswerQuestion={(messageId, question, answers) =>
+            void handleAnswerRuntimeQuestion(messageId, question, answers)
+          }
+          approvalStatusLabelMap={approvalStatusLabelMap}
+          approvalRiskLabelMap={approvalRiskLabelMap}
+          approvalActionLabelMap={approvalActionLabelMap}
+        />
+      );
+    },
+    [
+      approvalActionLabelMap,
+      approvalRiskLabelMap,
+      approvalStatusLabelMap,
+      handleAnswerRuntimeQuestion,
+      handleApproveRuntimeApproval,
+      handleDenyRuntimeApproval,
+      summarizeProjectFilePath,
+    ]
   );
   const renderStructuredCards = useCallback(
     (message: { structuredCards?: ChatStructuredCard[] }) => {
@@ -2851,155 +2510,68 @@ export const AIChat: React.FC<AIChatProps> = ({
       turnCheckpointsByRunId,
     ]
   );
-  const renderToolExecutionCard = useCallback((message: StoredChatMessage) => {
-    const runtimeEvents = message.role === 'assistant' ? getAssistantRuntimeTimelineEvents(message.timeline) : [];
-    const teamRun = message.teamRun || null;
-
-    if (runtimeEvents.length === 0 && !teamRun) {
+  const renderTimelineProjection = useCallback((message: StoredChatMessage) => {
+    if (message.role !== 'assistant') {
       return null;
     }
 
-    if (teamRun && runtimeEvents.length === 0) {
-      return [
-        {
-          node: (
-            <section className="chat-tool-trace-card">
-              <div className="chat-tool-trace-head">
-                <strong>多 Agent 执行轨迹</strong>
-                <span>{teamRun.phases.length} phases / {teamRun.members.length} agents</span>
-              </div>
-              <div className="chat-tool-trace-list">
-                {teamRun.phases.map((phase) => {
-                  const phaseMembers = teamRun.members.filter((member) => member.phaseId === phase.id);
-                  return (
-                    <details key={phase.id} className="chat-tool-trace-phase" open={phase.status === 'running'}>
-                      <summary className="chat-inline-disclosure chat-tool-trace-phase-summary">
-                        <div className="chat-inline-disclosure-copy">
-                          <strong>{phase.title}</strong>
-                          <span>{phase.status}</span>
-                        </div>
-                        <span className="chat-inline-disclosure-caret" aria-hidden="true" />
-                      </summary>
-                      <div className="chat-tool-trace-members">
-                        {phaseMembers.map((member) => (
-                          <details key={member.id} className="chat-tool-trace-member">
-                            <summary className="chat-inline-disclosure chat-tool-trace-member-summary">
-                              <div className="chat-inline-disclosure-copy">
-                                <strong>{member.title}</strong>
-                                <span>{member.agentId} / {member.status}</span>
-                              </div>
-                              <span className="chat-inline-disclosure-caret" aria-hidden="true" />
-                            </summary>
-                            <pre>{member.error || member.result || 'No output yet.'}</pre>
-                          </details>
-                        ))}
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            </section>
-          ),
-          createdAt: message.createdAt,
-        },
-      ];
+    const projection =
+      (message.runId ? timelineProjectionByRunId[message.runId] : null) ||
+      timelineProjectionByMessageId[message.id] ||
+      null;
+    return projection ? <TimelineView projection={projection} /> : null;
+  }, [timelineProjectionByMessageId, timelineProjectionByRunId]);
+  const renderToolExecutionCard = useCallback((message: StoredChatMessage) => {
+    const teamRun = message.teamRun || null;
+
+    if (!teamRun) {
+      return null;
     }
 
-    const renderRuntimeFileChanges = (
-      fileChanges: NonNullable<Extract<StoredChatRuntimeEvent, { kind: 'tool_result' }>['fileChanges']>
-    ) => (
-      <div className="chat-tool-trace-file-list">
-        {fileChanges.map((change) => {
-          const isActiveDiff = message.runId ? isRunDiffActive(expandedRunDiffKey, message.runId, change.path) : false;
-
-          return (
-            <div key={`${message.id}-${change.path}`} className="chat-tool-trace-file-row">
-              {message.runId ? (
-                <button
-                  type="button"
-                  className={`chat-tool-trace-file-item chat-tool-trace-file-item-button ${isActiveDiff ? 'active' : ''}`}
-                  onClick={() => void loadCheckpointDiff(message.runId!, change.path)}
-                >
-                  <strong title={change.path}>{summarizeProjectFilePath(change.path)}</strong>
-                  <span>{getFileChangeTypeLabel(change)} · 查看更改</span>
-                </button>
-              ) : (
-                <div className="chat-tool-trace-file-item">
-                  <strong title={change.path}>{summarizeProjectFilePath(change.path)}</strong>
-                  <span>{getFileChangeTypeLabel(change)}</span>
-                </div>
-              )}
-              {message.runId ? renderCheckpointDiffPanel(message.runId, change.path) : null}
+    return [
+      {
+        node: (
+          <section className="chat-tool-trace-card">
+            <div className="chat-tool-trace-head">
+              <strong>多 Agent 执行轨迹</strong>
+              <span>{teamRun.phases.length} phases / {teamRun.members.length} agents</span>
             </div>
-          );
-        })}
-      </div>
-    );
-
-    return buildRuntimeExecutionTimelineCards({
-      runtimeEvents,
-      timelineEvents: message.role === 'assistant' ? message.timeline : undefined,
-      renderApprovalEvent: (event) => (
-        <Suspense fallback={null}>
-          <LazyAIChatRuntimeTimelineInteractionEvent
-            messageId={message.id}
-            event={event}
-            summarizeProjectFilePath={summarizeProjectFilePath}
-            onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
-            onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
-            onAnswerQuestion={(messageId, question, answers) =>
-              void handleAnswerRuntimeQuestion(messageId, question, answers)
-            }
-            approvalStatusLabelMap={approvalStatusLabelMap}
-            approvalRiskLabelMap={approvalRiskLabelMap}
-            approvalActionLabelMap={approvalActionLabelMap}
-          />
-        </Suspense>
-      ),
-      renderQuestionEvent: (event) => (
-        <Suspense fallback={null}>
-          <LazyAIChatRuntimeTimelineInteractionEvent
-            messageId={message.id}
-            event={event}
-            summarizeProjectFilePath={summarizeProjectFilePath}
-            onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
-            onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
-            onAnswerQuestion={(messageId, question, answers) =>
-              void handleAnswerRuntimeQuestion(messageId, question, answers)
-            }
-            approvalStatusLabelMap={approvalStatusLabelMap}
-            approvalRiskLabelMap={approvalRiskLabelMap}
-            approvalActionLabelMap={approvalActionLabelMap}
-          />
-        </Suspense>
-      ),
-      renderRuntimeFileChanges,
-      helpers: {
-        summarizeRuntimeToolCall,
-        getRuntimeToolHeadline,
-        buildRuntimeToolStepPreview,
-        shouldOpenRuntimeToolStep,
-        shouldOpenRuntimeToolGroup,
-        shouldShowRuntimeToolBrief,
-        shouldShowRuntimeToolTechnicalDetails,
-        summarizeRuntimeFileChanges,
-        summarizeRuntimeOutput,
-        getRuntimeStatusLabel,
-        getRuntimeCommandCountLabel,
-        buildRuntimeEventGroupSummary,
-        summarizeProjectFilePath,
+            <div className="chat-tool-trace-list">
+              {teamRun.phases.map((phase) => {
+                const phaseMembers = teamRun.members.filter((member) => member.phaseId === phase.id);
+                return (
+                  <details key={phase.id} className="chat-tool-trace-phase" open={phase.status === 'running'}>
+                    <summary className="chat-inline-disclosure chat-tool-trace-phase-summary">
+                      <div className="chat-inline-disclosure-copy">
+                        <strong>{phase.title}</strong>
+                        <span>{phase.status}</span>
+                      </div>
+                      <span className="chat-inline-disclosure-caret" aria-hidden="true" />
+                    </summary>
+                    <div className="chat-tool-trace-members">
+                      {phaseMembers.map((member) => (
+                        <details key={member.id} className="chat-tool-trace-member">
+                          <summary className="chat-inline-disclosure chat-tool-trace-member-summary">
+                            <div className="chat-inline-disclosure-copy">
+                              <strong>{member.title}</strong>
+                              <span>{member.agentId} / {member.status}</span>
+                            </div>
+                            <span className="chat-inline-disclosure-caret" aria-hidden="true" />
+                          </summary>
+                          <pre>{member.error || member.result || 'No output yet.'}</pre>
+                        </details>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          </section>
+        ),
+        createdAt: message.createdAt,
       },
-    }).map((card) => ({
-      node: card.node,
-      createdAt: card.createdAt,
-      timelineOrder: card.timelineOrder,
-    }));
+    ];
   }, [
-    handleAnswerRuntimeQuestion,
-    handleApproveRuntimeApproval,
-    handleDenyRuntimeApproval,
-    loadCheckpointDiff,
-    renderCheckpointDiffPanel,
   ]);
   const closeSettings = useCallback(() => {
     setIsSettingsOpen(false);
@@ -3376,12 +2948,12 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderMessagePart={renderMessagePart}
       renderStructuredCards={renderStructuredCards}
       renderProjectFileProposal={renderProjectFileProposal}
+      renderTimelineProjection={renderTimelineProjection}
       renderToolExecutionCard={renderToolExecutionCard}
       renderRunSummaryCard={renderRunSummaryCard}
       renderRuntimeQuestion={renderRuntimeQuestionCard}
       messageListRef={messageListRef}
       messagesEndRef={messagesEndRef}
-      leadingContent={<AIChatRuntimeTasksPanel projectId={currentProjectId} />}
       pendingApprovalActionsRef={pendingApprovalActionsRef}
       summarizeProjectFilePath={summarizeProjectFilePath}
       onApprove={handleApproveRuntimeApproval}
@@ -3409,23 +2981,6 @@ export const AIChat: React.FC<AIChatProps> = ({
               <strong>{isCollapsed && !lockExpandedForEmbedded ? 'GN' : activeSession?.title || '新对话'}</strong>
               {showExpandedShell && !isEmbedded ? <span>{currentProject?.name || '未打开项目'}</span> : null}
             </div>
-
-            {showExpandedShell && !isEmbedded ? (
-              <AIChatRuntimeStatusPanel
-                projectId={currentProjectId}
-                selectedAgentLabel={selectedAgent.label}
-                runtimeModelLabel={selectedRuntimeConfig?.model || '未启用模型'}
-                runtimeMcpServerCount={runtimeMcpServers.length}
-                permissionModeLabel={PERMISSION_MODE_LABELS[permissionMode]}
-                currentContextUsage={currentContextUsage}
-                isLoading={isLoading}
-                latestActivityType={latestActivityEntry?.type || null}
-                stalled={stalled}
-                stallDuration={currentStallDuration}
-                hasRuntimeThread={Boolean(activeSession?.runtimeThreadId)}
-                patchLiveState={patchLiveState}
-              />
-            ) : null}
 
             <div className="chat-shell-header-actions">
               {showExpandedShell ? (

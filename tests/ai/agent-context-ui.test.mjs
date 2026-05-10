@@ -10,10 +10,6 @@ const contextPanelPath = path.resolve(
   __dirname,
   '../../src/components/ai/gn-agent-shell/GNAgentContextPanel.tsx',
 );
-const toolCallPanelPath = path.resolve(
-  __dirname,
-  '../../src/components/ai/gn-agent-shell/GNAgentToolCallPanel.tsx',
-);
 const chatPagePath = path.resolve(
   __dirname,
   '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx',
@@ -52,17 +48,6 @@ test('agent compatibility page delegates context and tool-call state through the
   assert.match(sessionHook, /contextSnapshot:\s*conversation\.contextSnapshot/);
   assert.match(sessionHook, /toolCalls:\s*conversation\.toolCalls/);
   assert.match(sessionHook, /mcpToolCalls:\s*conversation\.mcpToolCalls/);
-});
-
-test('agent tool call panel surfaces tool call status and result fields', async () => {
-  const source = await readFile(toolCallPanelPath, 'utf8');
-
-  assert.match(source, /toolCalls/);
-  assert.match(source, /completed/);
-  assert.match(source, /failed/);
-  assert.match(source, /blocked/);
-  assert.match(source, /ASK_USER_TOOL_NAME/);
-  assert.doesNotMatch(source, /toolCall\.name === 'AskUserQuestion'/);
 });
 
 test('runtime conversation gateway pulls tool calls for the active session', async () => {

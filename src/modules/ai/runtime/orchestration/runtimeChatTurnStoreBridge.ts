@@ -1,3 +1,4 @@
+import type { CanonicalEvent } from '@goodnight/runtime-protocol';
 import type { RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
 import type { AgentRuntimeLiveState } from '../agentRuntimeStore.ts';
 import type { AssistantTimelineEvent } from '../../store/assistantTimeline.ts';
@@ -5,6 +6,7 @@ import type { AssistantTimelineEvent } from '../../store/assistantTimeline.ts';
 export type RuntimeChatMessageBridge = {
   appendUserMessage: (content: string, runId: string) => string;
   appendAssistantMessage: (runId: string) => string;
+  appendCanonicalEvent: (assistantMessageId: string, event: CanonicalEvent) => void;
   updateAssistantTimeline: (
     assistantMessageId: string,
     updater: (timeline: AssistantTimelineEvent[]) => AssistantTimelineEvent[],

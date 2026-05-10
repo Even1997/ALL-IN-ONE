@@ -9,7 +9,6 @@ const __dirname = path.dirname(__filename);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
 const chatPagePath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx');
 const threadListPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentThreadList.tsx');
-const timelinePanelPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentTimelinePanel.tsx');
 const sessionHookPath = path.resolve(
   __dirname,
   '../../src/components/ai/gn-agent-shell/useGNAgentWorkbenchSession.ts',
@@ -31,18 +30,17 @@ test('gn agent compatibility page wraps AgentChatStage with the shared workbench
   assert.match(aiChatSource, /useRuntimeConversationGateway/);
 });
 
-test('thread list stays presentation-focused while timeline panel owns recovery and runtime store wiring', async () => {
-  const [threadListSource, timelinePanelSource] = await Promise.all([
+test('thread list stays presentation-focused while workbench session owns recovery wiring', async () => {
+  const [threadListSource, sessionHookSource] = await Promise.all([
     readFile(threadListPath, 'utf8'),
-    readFile(timelinePanelPath, 'utf8'),
+    readFile(sessionHookPath, 'utf8'),
   ]);
 
   assert.match(threadListSource, /搜索对话历史/);
   assert.match(threadListSource, /onSelectThread/);
   assert.doesNotMatch(threadListSource, /requestReplayResumeFromRecovery/);
-  assert.match(timelinePanelSource, /requestReplayResumeFromRecovery|recovery/i);
-  assert.match(timelinePanelSource, /useAIChatStore/);
-  assert.match(timelinePanelSource, /useAgentRuntimeStore/);
+  assert.match(sessionHookSource, /threads:\s*conversation\.threads/);
+  assert.match(sessionHookSource, /recoveryByThread:\s*conversation\.recoveryByThread/);
   assert.doesNotMatch(threadListSource, /useAIChatStore/);
   assert.doesNotMatch(threadListSource, /useAgentRuntimeStore/);
 });

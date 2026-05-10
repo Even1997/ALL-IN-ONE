@@ -17,16 +17,12 @@ type AgentChatStageProps = {
   mode: 'full' | 'stage-plus' | 'stage-only';
   session: GNAgentWorkbenchSession;
   projectName?: string | null;
-  inspectorOpen?: boolean;
-  onToggleInspector?: () => void;
 };
 
 export const AgentChatStage: React.FC<AgentChatStageProps> = ({
   providerId,
   mode,
   session,
-  inspectorOpen = false,
-  onToggleInspector,
 }) => {
   const aiConfigs = useGlobalAIStore((state) => state.aiConfigs);
   const boundConfigId = useGNAgentShellStore((state) =>
@@ -69,24 +65,6 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
           variant={providerId === 'classic' ? 'gn-agent-embedded' : 'provider-embedded'}
           runtimeConfigIdOverride={runtimeConfigIdOverride}
           providerExecutionMode={providerId === 'classic' ? null : providerId}
-          headerActionSlot={
-            onToggleInspector ? (
-              <button
-                type="button"
-                className="chat-shell-icon-btn agent-chat-stage-toggle"
-                onClick={onToggleInspector}
-                aria-label={inspectorOpen ? '收起右侧面板' : '展开右侧面板'}
-                title={inspectorOpen ? '收起右侧面板' : '展开右侧面板'}
-              >
-                <WorkbenchIcon name={inspectorOpen ? 'panelRightClose' : 'panelRightOpen'} />
-                {session.pendingApprovalCount > 0 ? (
-                  <span className="agent-chat-stage-toggle-badge" aria-hidden="true">
-                    {session.pendingApprovalCount}
-                  </span>
-                ) : null}
-              </button>
-            ) : null
-          }
         />
         {showEmptyState ? (
           <div className="agent-chat-stage-empty" aria-hidden="true">

@@ -12,6 +12,7 @@ import {
   type ExecuteRuntimeBuiltInAgentTurnInput,
 } from './executeRuntimeBuiltInAgentTurn.ts';
 import { executeRuntimeMcpTurn } from './executeRuntimeMcpTurn.ts';
+import { createBuiltinRuntimeAdapter } from '../adapters/builtinRuntimeAdapter.ts';
 import { useAIChatStore } from '../../store/aiChatStore.ts';
 import { useAgentRuntimeStore } from '../agentRuntimeStore.ts';
 import { useRuntimeMcpStore } from '../mcp/runtimeMcpStore.ts';
@@ -177,6 +178,7 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
   const effectiveChatAgentId = request.selectedChatAgentId;
   const fallbackToBuiltInMessage = request.fallbackToBuiltInMessage;
   const {
+    appendCanonicalEvent,
     appendActivityEntry,
     appendMessage,
     bindRuntimeThread,
@@ -287,6 +289,69 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
   setIsLoading(true);
   stopRequestedRef.current = false;
   abortControllerRef.current = new AbortController();
+  const canonicalAdapter = createBuiltinRuntimeAdapter({
+    sessionId: targetSessionId,
+    runId,
+    turnId: runId,
+    providerId: runtimeProviderId,
+  });
+  let canonicalEventCounter = 0;
+  const appendCanonicalEventToSession = (event: any) =>
+    appendCanonicalEvent(request.projectId, targetSessionId, event);
+  const emitCanonicalProviderEvent = (event: any) =>
+    canonicalAdapter.onProviderEvent(event, appendCanonicalEventToSession);
+  const seenToolStatuses = new Map<string, RuntimeToolStep['status']>();
+  const emitCanonicalToolLifecycle = (toolCalls: RuntimeToolStep[]) => {
+    for (const toolCall of toolCalls) {
+      const previousStatus = seenToolStatuses.get(toolCall.id);
+
+      if (!previousStatus) {
+        appendCanonicalEventToSession({
+          eventId: `evt_tool_${runId}_${++canonicalEventCounter}`,
+          runId,
+          turnId: runId,
+          sessionId: targetSessionId,
+          messageId: assistantMessage.id,
+          correlationId: toolCall.id,
+          type: 'tool.started',
+          ts: Date.now(),
+          seq: 0,
+          source: { kind: 'tool', provider: runtimeProviderId, name: toolCall.name },
+          payload: {
+            toolCallId: toolCall.id,
+            parentToolCallId: toolCall.parentToolCallId ?? null,
+            toolName: toolCall.name,
+            input: toolCall.input,
+            inputSummary: summarizeLiveToolInput(toolCall.input),
+          },
+        });
+      }
+
+      if (previousStatus !== toolCall.status && toolCall.status !== 'running') {
+        appendCanonicalEventToSession({
+          eventId: `evt_tool_${runId}_${++canonicalEventCounter}`,
+          runId,
+          turnId: runId,
+          sessionId: targetSessionId,
+          messageId: assistantMessage.id,
+          correlationId: toolCall.id,
+          type: 'tool.completed',
+          ts: Date.now(),
+          seq: 0,
+          source: { kind: 'tool', provider: runtimeProviderId, name: toolCall.name },
+          payload: {
+            toolCallId: toolCall.id,
+            ok: toolCall.status === 'completed',
+            summary: toolCall.resultPreview || toolCall.name,
+            outputText: toolCall.resultContent,
+            fileChanges: toolCall.fileChanges,
+          },
+        });
+      }
+
+      seenToolStatuses.set(toolCall.id, toolCall.status);
+    }
+  };
 
   let runtimeThreadId = targetSession?.runtimeThreadId || null;
   let runtimeStoreThreadId = targetSessionId;
@@ -1756,6 +1821,7 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
       onToolCallsChange: (toolCalls: any) => {
         setStallFP((n: any) => n + 1);
         setThreadToolCalls(targetSessionId, toolCalls);
+        emitCanonicalToolLifecycle(toolCalls);
         const runningToolCall = [...toolCalls].reverse().find((toolCall) => toolCall.status === 'running') || null;
 
         if (runningToolCall && toolStartTime === 0) {
@@ -1791,6 +1857,11 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
       },
       onModelEvent: (event: any) => {
         setStallFP((n: any) => n + 1);
+        emitCanonicalProviderEvent(
+          event.kind === 'thinking'
+            ? { kind: 'thinking', delta: event.delta }
+            : { kind: 'text', delta: event.delta }
+        );
         const draftState = streamingAssembler.append(event);
         const currentDraftTimeline =
           streamingDraftBufferRef.current[assistantMessage.id]?.timeline || assistantBaseTimeline;
@@ -1880,6 +1951,8 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
 
     const finalDraft = streamingAssembler.buildFinal(agentTurn.finalContent);
     const normalizedFinalContent = finalDraft.content;
+    emitCanonicalToolLifecycle(agentTurn.toolCalls);
+    emitCanonicalProviderEvent({ kind: 'done', finalText: normalizedFinalContent });
     const recoveryProposal = await buildRuntimeWriteRecoveryProposal(agentTurn.toolCalls);
     if (toolTimerInterval) clearInterval(toolTimerInterval);
     clearStreamingDraft(assistantMessage.id);
@@ -1976,6 +2049,22 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
       }));
     } else {
       const message = normalizeErrorMessage(error);
+      appendCanonicalEventToSession({
+        eventId: `evt_error_${runId}_${++canonicalEventCounter}`,
+        runId,
+        turnId: runId,
+        sessionId: targetSessionId,
+        messageId: assistantMessage.id,
+        type: 'error.raised',
+        ts: Date.now(),
+        seq: 0,
+        source: { kind: 'runtime', provider: runtimeProviderId, name: 'runtime' },
+        payload: {
+          code: 'runtime.turn_failed',
+          summary: message,
+          source: 'runtime',
+        },
+      });
       clearStreamingDraft(assistantMessage.id);
       patchLiveState(runtimeStoreThreadId, (state: any) => ({
         ...state,

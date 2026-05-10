@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
 import { GNAgentMessageList, type MessageBubbleCard } from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import { useApprovalStore } from '../../modules/ai/runtime/approval/approvalStore.ts';
@@ -7,13 +7,9 @@ import { applyAssistantReasoningProgress, getAssistantRuntimeTimelineEvents } fr
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
 import type { AIChatMessagePart } from './aiChatMessageParts';
 import type { AssistantDraftState } from './assistantRenderModel.ts';
+import { AIChatRuntimeApprovalList } from './AIChatRuntimeInteractionCards.tsx';
 import { useActiveConversationApprovals, useActiveConversationLiveState, useActiveConversationMessages } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import type { RuntimePendingApprovalAction } from '../../modules/ai/runtime/orchestration/runtimeApprovalCoordinator.ts';
-
-const LazyAIChatRuntimeApprovalList = lazy(async () => {
-  const module = await import('./AIChatRuntimeInteractionCards');
-  return { default: module.AIChatRuntimeApprovalList };
-});
 
 type AIChatConversationMessagesPaneProps = {
   projectId: string | null;
@@ -34,6 +30,7 @@ type AIChatConversationMessagesPaneProps = {
   ) => ReactNode;
   renderStructuredCards: (message: StoredChatMessage) => ReactNode;
   renderProjectFileProposal: (message: StoredChatMessage) => ReactNode;
+  renderTimelineProjection: (message: StoredChatMessage) => ReactNode;
   renderToolExecutionCard: (message: StoredChatMessage) => MessageBubbleCard[] | null;
   renderRunSummaryCard: (message: StoredChatMessage) => ReactNode;
   renderRuntimeQuestion: (message: StoredChatMessage) => ReactNode;
@@ -59,6 +56,7 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
   renderMessagePart,
   renderStructuredCards,
   renderProjectFileProposal,
+  renderTimelineProjection,
   renderToolExecutionCard,
   renderRunSummaryCard,
   renderRuntimeQuestion,
@@ -118,20 +116,18 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
       }
 
       return (
-        <Suspense fallback={null}>
-          <LazyAIChatRuntimeApprovalList
-            approvals={messageApprovals}
-            pendingApprovalDisplays={Object.fromEntries(
-              messageApprovals.map((approval) => [approval.id, pendingApprovalActionsRef.current[approval.id]?.display]),
-            )}
-            summarizeProjectFilePath={summarizeProjectFilePath}
-            onApprove={(approvalId) => void onApprove(approvalId)}
-            onDeny={(approvalId) => void onDeny(approvalId)}
-            approvalStatusLabelMap={approvalStatusLabelMap}
-            approvalRiskLabelMap={approvalRiskLabelMap}
-            approvalActionLabelMap={approvalActionLabelMap}
-          />
-        </Suspense>
+        <AIChatRuntimeApprovalList
+          approvals={messageApprovals}
+          pendingApprovalDisplays={Object.fromEntries(
+            messageApprovals.map((approval) => [approval.id, pendingApprovalActionsRef.current[approval.id]?.display]),
+          )}
+          summarizeProjectFilePath={summarizeProjectFilePath}
+          onApprove={(approvalId) => void onApprove(approvalId)}
+          onDeny={(approvalId) => void onDeny(approvalId)}
+          approvalStatusLabelMap={approvalStatusLabelMap}
+          approvalRiskLabelMap={approvalRiskLabelMap}
+          approvalActionLabelMap={approvalActionLabelMap}
+        />
       );
     },
     [
@@ -156,6 +152,7 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
       renderMessagePart={renderMessagePart}
       renderStructuredCards={renderStructuredCards}
       renderProjectFileProposal={renderProjectFileProposal}
+      renderTimelineProjection={renderTimelineProjection}
       renderToolExecutionCard={renderToolExecutionCard}
       renderRunSummaryCard={renderRunSummaryCard}
       renderRuntimeApproval={renderRuntimeApproval}

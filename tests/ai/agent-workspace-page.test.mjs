@@ -9,7 +9,6 @@ const __dirname = path.dirname(__filename);
 const pagePath = path.resolve(__dirname, '../../src/features/agent-shell/pages/AgentShellPage.tsx');
 const sidebarPath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentWorkbenchSidebar.tsx');
 const stagePath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentChatStage.tsx');
-const inspectorPath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentWorkbenchInspector.tsx');
 const legacyConfigPagePath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentConfigPage.tsx');
 
 test('agent workspace keeps search entry points but removes the skills management surface', async () => {
@@ -18,8 +17,8 @@ test('agent workspace keeps search entry points but removes the skills managemen
 
   assert.match(pageSource, /AgentWorkbenchSidebar/);
   assert.match(pageSource, /AgentChatStage/);
-  assert.match(pageSource, /AgentWorkbenchInspector/);
   assert.match(pageSource, /onOpenSearch/);
+  assert.doesNotMatch(pageSource, /AgentWorkbenchInspector/);
   assert.doesNotMatch(pageSource, /GNAgentSkillsPage/);
   assert.doesNotMatch(pageSource, /isSkillsDialogOpen/);
   assert.doesNotMatch(pageSource, /title="技能"/);
@@ -35,18 +34,13 @@ test('agent workspace no longer keeps the unused legacy config page around', asy
   await assert.rejects(() => access(legacyConfigPagePath));
 });
 
-test('agent workspace adds a richer empty state and complete inspector surface', async () => {
+test('agent workspace adds a richer empty state without reviving the right-side inspector surface', async () => {
   const stageSource = await readFile(stagePath, 'utf8');
-  const inspectorSource = await readFile(inspectorPath, 'utf8');
 
   assert.match(stageSource, /agent-chat-stage-empty/);
   assert.match(stageSource, /打开一个新对话/);
   assert.match(stageSource, /配置模型/);
   assert.match(stageSource, /继续执行/);
-
-  assert.match(inspectorSource, /type AgentInspectorTab = 'review' \| 'tool' \| 'timeline' \| 'approval' \| 'memory'/);
-  assert.match(inspectorSource, /label:\s*'工具'/);
-  assert.match(inspectorSource, /label:\s*'时间线'/);
-  assert.match(inspectorSource, /label:\s*'审批'/);
-  assert.match(inspectorSource, /agent-workbench-inspector-placeholder/);
+  assert.doesNotMatch(stageSource, /agent-chat-stage-toggle/);
+  assert.doesNotMatch(stageSource, /onToggleInspector/);
 });

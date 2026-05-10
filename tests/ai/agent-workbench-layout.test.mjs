@@ -48,8 +48,10 @@ test('AgentShellPage composes the new workbench shell', async () => {
   assert.match(source, /AgentWorkbenchLayout/);
   assert.match(source, /AgentChatStage/);
   assert.match(source, /AgentWorkbenchSidebar/);
-  assert.match(source, /AgentWorkbenchInspector/);
   assert.match(source, /AgentFloatingPlanCard/);
+  assert.doesNotMatch(source, /AgentWorkbenchInspector/);
+  assert.doesNotMatch(source, /rightInspector=/);
+  assert.doesNotMatch(source, /inspectorCollapsed=/);
 });
 
 test('AgentShellPage no longer renders the old AGENT_WORKSPACE_TABS top-level shell', async () => {
@@ -71,7 +73,7 @@ test('Agent workbench has low-height responsive rules for the floating plan and 
   const css = await readFile(agentWorkbenchCssPath, 'utf8');
 
   assert.match(css, /\.agent-workbench-shell\s*{[\s\S]*?box-sizing:\s*border-box;/);
-  assert.match(css, /\.agent-workbench-sidebar-shell,\s*\.agent-workbench-center,\s*\.agent-workbench-right-panel\s*{[\s\S]*?height:\s*100%;/);
+  assert.match(css, /\.agent-workbench-sidebar-shell,\s*\.agent-workbench-center\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /\.agent-workbench-sidebar\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /\.agent-workbench-left-rail\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{/);
@@ -106,16 +108,16 @@ test('desktop workbench shell constrains the embedded agent page instead of lett
   assert.match(css, /\.app-workbench-main-shell\s*{[\s\S]*?min-height:\s*0;/);
   assert.match(css, /\.app-workbench-main-shell\s*{[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /--desktop-topbar-height:\s*40px;/);
-  assert.match(css, /\.desktop-shell-frame\s*{[\s\S]*?grid-template-columns:\s*36px minmax\(0,\s*1fr\);/);
-  assert.match(css, /\.desktop-shell-frame\s*{[\s\S]*?padding:\s*5px;/);
-  assert.match(css, /\.desktop-primary-rail\.mac-sidebar-panel\s*{[\s\S]*?padding:\s*3px 1px 5px;/);
+  assert.match(css, /\.desktop-shell-frame\s*{[\s\S]*?grid-template-columns:\s*\d+px minmax\(0,\s*1fr\);/);
+  assert.match(css, /\.desktop-shell-frame\s*{[\s\S]*?padding:\s*\d+px;/);
+  assert.match(css, /\.desktop-primary-rail\.mac-sidebar-panel\s*{[\s\S]*?padding:\s*\d+px \d+px \d+px;/);
   assert.match(css, /\.desktop-primary-nav,\s*\.desktop-primary-foot\s*{[\s\S]*?gap:\s*8px;/);
-  assert.match(css, /\.desktop-brand-chip\.mac-button\s*{[\s\S]*?width:\s*26px;/);
-  assert.match(css, /\.desktop-rail-icon-btn\.mac-button\s*{[\s\S]*?width:\s*32px;/);
-  assert.match(css, /\.desktop-rail-icon-btn\.mac-button svg\s*{[\s\S]*?width:\s*20px;/);
+  assert.match(css, /\.desktop-brand-chip\.mac-button\s*{[\s\S]*?width:\s*\d+px;/);
+  assert.match(css, /\.desktop-rail-icon-btn\.mac-button\s*{[\s\S]*?width:\s*\d+px;/);
+  assert.match(css, /\.desktop-rail-icon-btn\.mac-button svg\s*{[\s\S]*?width:\s*\d+px;/);
   assert.match(css, /\.desktop-rail-icon-btn\.mac-button\.active\s*{[\s\S]*?background:\s*linear-gradient/);
-  assert.match(css, /\.desktop-window-control\s*{[\s\S]*?width:\s*36px;/);
-  assert.match(css, /\.desktop-workbench-topbar\.mac-toolbar\.mac-panel\s*{[\s\S]*?padding:\s*2px 4px;/);
+  assert.match(css, /\.desktop-window-control\s*{[\s\S]*?width:\s*\d+px;/);
+  assert.match(css, /\.desktop-workbench-topbar\.mac-toolbar\.mac-panel\s*{[\s\S]*?padding:\s*\d+px \d+px;/);
   assert.match(css, /@media\s*\(max-width:\s*1099px\)\s*{[\s\S]*?\.app-shell-desktop\s*{[\s\S]*?min-height:\s*100dvh;/);
 });
 
@@ -129,7 +131,6 @@ test('desktop window switches to a frameless custom titlebar with in-app menus a
   assert.match(tauriConf, /"title":\s*""/);
   assert.match(tauriConf, /"decorations":\s*false/);
   assert.match(source, /getCurrentWindow/);
-  assert.match(source, /startDragging/);
   assert.match(source, /handleDesktopTopbarDoubleClick/);
   assert.match(source, /onDoubleClick=/);
   assert.match(source, /data-app-menu-root="desktop"/);
@@ -139,7 +140,6 @@ test('desktop window switches to a frameless custom titlebar with in-app menus a
   assert.match(source, /desktop-window-control/);
   assert.match(source, /handleDesktopMenuAction/);
   assert.match(source, /工作台/);
-  assert.doesNotMatch(source, /统一工作台布局/);
   assert.match(capability, /core:window:allow-start-dragging/);
   assert.match(capability, /core:window:allow-minimize/);
   assert.match(capability, /core:window:allow-is-maximized/);

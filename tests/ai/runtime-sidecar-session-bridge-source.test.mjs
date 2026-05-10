@@ -26,6 +26,9 @@ test('runtime sidecar session bridge consumes streaming assistant messages and r
 
   assert.match(source, /const patchLiveStateIfChanged =/);
   assert.match(source, /const patchApprovalSummaryIfChanged =/);
+  assert.match(source, /replaceCanonicalEvents/);
+  assert.match(source, /appendCanonicalEvent/);
+  assert.match(source, /canonicalEvents/);
   assert.match(source, /applyRuntimeSidecarTurnDeltaEvent/);
   assert.match(source, /patchLiveStateIfChanged\(sessionId,/);
 

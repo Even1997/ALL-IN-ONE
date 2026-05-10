@@ -1,5 +1,6 @@
 import type { AITextStreamEvent } from '../../core/AIService.ts';
 import type { RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
+import { createBuiltinRuntimeAdapter } from '../adapters/builtinRuntimeAdapter.ts';
 import {
   applyAssistantReasoningProgress,
   buildAssistantStreamingTimeline,
@@ -13,6 +14,7 @@ import type { RuntimeChatMessageBridge, RuntimeChatStateBridge } from './runtime
 
 export const createRuntimeChatStreamingController = (input: {
   assistantMessageId: string;
+  runId: string;
   bridge: RuntimeChatMessageBridge & Pick<RuntimeChatStateBridge, 'patchLiveState'>;
   runtimeStoreThreadId: string;
   baseTimeline: AssistantTimelineEvent[];
@@ -21,12 +23,24 @@ export const createRuntimeChatStreamingController = (input: {
   estimateTokenCount?: (content: string) => number;
 }) => {
   const streamingAssembler = createRuntimeStreamingMessageAssembler();
+  const adapter = createBuiltinRuntimeAdapter({
+    sessionId: input.runtimeStoreThreadId,
+    runId: input.runId,
+    turnId: input.runId,
+  });
 
   return {
     onModelEvent(event: AITextStreamEvent): void {
       if (event.kind !== 'thinking' && event.kind !== 'text') {
         return;
       }
+
+      adapter.onProviderEvent(
+        event.kind === 'thinking'
+          ? { kind: 'thinking', delta: event.delta }
+          : { kind: 'text', delta: event.delta },
+        (canonicalEvent) => input.bridge.appendCanonicalEvent(input.assistantMessageId, canonicalEvent),
+      );
 
       const draftState = streamingAssembler.append(event);
       input.bridge.patchLiveState(input.runtimeStoreThreadId, (state) => ({
@@ -71,6 +85,10 @@ export const createRuntimeChatStreamingController = (input: {
     },
     finalize(finalContent: string, toolCalls: RuntimeToolStep[]): string {
       const finalDraft = streamingAssembler.buildFinal(finalContent);
+      adapter.onProviderEvent(
+        { kind: 'done', finalText: finalContent },
+        (canonicalEvent) => input.bridge.appendCanonicalEvent(input.assistantMessageId, canonicalEvent),
+      );
       input.clearStreamingDraft?.(input.assistantMessageId);
       input.bridge.updateAssistantTimeline(input.assistantMessageId, (timeline) =>
         applyAssistantReasoningProgress(

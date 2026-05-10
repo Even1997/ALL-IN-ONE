@@ -215,3 +215,29 @@ test('openai-compatible SSE still returns parseable tool protocol when no event 
     globalThis.fetch = previousFetch;
   }
 });
+
+test('built-in runtime adapter maps provider text, thinking, and tool activity into canonical events', async () => {
+  const { createBuiltinRuntimeAdapter } = await import(
+    `../../src/modules/ai/runtime/adapters/builtinRuntimeAdapter.ts?test=${Date.now()}`
+  );
+
+  const events = [];
+  const adapter = createBuiltinRuntimeAdapter({
+    sessionId: 'session_1',
+    runId: 'run_1',
+    turnId: 'turn_1',
+  });
+
+  adapter.onProviderEvent({ kind: 'thinking', delta: 'check files' }, (event) => events.push(event));
+  adapter.onProviderEvent({ kind: 'text', delta: 'Scanning files...' }, (event) => events.push(event));
+  adapter.onProviderEvent(
+    { kind: 'tool_call', toolCall: { id: 'call_1', name: 'view', input: { path: 'README.md' } } },
+    (event) => events.push(event),
+  );
+  adapter.onProviderEvent({ kind: 'done', finalText: 'Done.' }, (event) => events.push(event));
+
+  assert.equal(events.some((event) => event.type === 'progress.updated'), true);
+  assert.equal(events.some((event) => event.type === 'message.delta'), true);
+  assert.equal(events.some((event) => event.type === 'tool.started'), true);
+  assert.equal(events.some((event) => event.type === 'message.completed'), true);
+});

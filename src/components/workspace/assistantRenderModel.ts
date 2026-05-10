@@ -54,17 +54,6 @@ export const buildAssistantRenderModel = (
   const isStreaming = Boolean(draftState);
   timeline.forEach((event, timelineOrder) => {
     if (event.kind === 'reasoning') {
-      timelineNarrativeItems.push({
-        part: {
-          type: 'thinking',
-          content: event.content,
-          collapsed: event.collapsed,
-          status: event.status,
-          elapsedSeconds: event.elapsedSeconds,
-          createdAt: event.createdAt,
-        },
-        timelineOrder,
-      });
       return;
     }
 

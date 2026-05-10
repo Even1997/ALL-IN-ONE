@@ -6,7 +6,6 @@ import { buildKnowledgeSearchIndex, searchKnowledgeEntries } from '../../../modu
 import { useProjectStore } from '../../../store/projectStore';
 import { AgentChatStage } from '../components/AgentChatStage';
 import { AgentFloatingPlanCard } from '../components/AgentFloatingPlanCard';
-import { AgentWorkbenchInspector, type AgentInspectorTab } from '../components/AgentWorkbenchInspector';
 import { AgentWorkbenchLayout } from '../components/AgentWorkbenchLayout';
 import { AgentWorkbenchSidebar } from '../components/AgentWorkbenchSidebar';
 import './AgentShellPage.css';
@@ -14,8 +13,6 @@ import './AgentShellPage.css';
 export const AgentShellPage: React.FC = () => {
   const session = useGNAgentWorkbenchSession();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
-  const [inspectorTab, setInspectorTab] = useState<AgentInspectorTab>('review');
   const [floatingPlanCollapsed, setFloatingPlanCollapsed] = useState(false);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,8 +73,6 @@ export const AgentShellPage: React.FC = () => {
             mode="full"
             session={session}
             projectName={session.currentProjectName}
-            inspectorOpen={!inspectorCollapsed}
-            onToggleInspector={() => setInspectorCollapsed((value) => !value)}
           />
         }
         floatingOverlay={
@@ -85,20 +80,8 @@ export const AgentShellPage: React.FC = () => {
             session={session.latestTurnSession}
             collapsed={floatingPlanCollapsed}
             onToggleCollapsed={() => setFloatingPlanCollapsed((value) => !value)}
-            onOpenInspector={() => {
-              setInspectorCollapsed(false);
-              setInspectorTab('review');
-            }}
           />
         }
-        rightInspector={
-          <AgentWorkbenchInspector
-            tab={inspectorTab}
-            onTabChange={setInspectorTab}
-            toolCalls={session.toolCalls}
-          />
-        }
-        inspectorCollapsed={inspectorCollapsed}
       />
 
       <MacDialog

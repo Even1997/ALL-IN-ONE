@@ -10,8 +10,6 @@ const coordinatorPath = path.resolve(
   testDir,
   '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts',
 );
-const cardPath = path.resolve(testDir, '../../src/components/workspace/AIChatRuntimeToolExecutionCard.tsx');
-const blocksPath = path.resolve(testDir, '../../src/components/workspace/AIChatRuntimeToolBlocks.tsx');
 const cssPath = path.resolve(testDir, '../../src/components/workspace/AIChat.css');
 
 const loadRenderModel = async () =>
@@ -416,53 +414,20 @@ test('runtime event render model keeps tool groups split when final content only
   assert.deepEqual(model.items[1]?.toolUses.map((toolUse) => toolUse.toolCallId), ['call-2']);
 });
 
-test('runtime tool blocks use compact grouped timeline markup without fallback rendering', async () => {
-  const [chatSource, cardSource, blocksSource, cssSource] = await Promise.all([
+test('runtime tool blocks stay off the primary assistant path once canonical timeline rendering takes over', async () => {
+  const [chatSource, timelineSource, cssSource] = await Promise.all([
     readFile(chatPath, 'utf8'),
-    readFile(cardPath, 'utf8'),
-    readFile(blocksPath, 'utf8'),
+    readFile(path.resolve(testDir, '../../src/components/workspace/timeline/TimelineCard.tsx'), 'utf8'),
     readFile(cssPath, 'utf8'),
   ]);
 
-  assert.match(chatSource, /buildRuntimeExecutionTimelineCards\(/);
-  assert.match(chatSource, /chat-inline-disclosure/);
-  assert.match(chatSource, /chat-tool-trace-phase-summary/);
-  assert.match(chatSource, /chat-tool-trace-member-summary/);
-  assert.match(chatSource, /chat-tool-card-summary/);
-  assert.match(cardSource, /className="chat-tool-trace-stream compact"/);
-  assert.match(cardSource, /data-runtime-trace="compact"/);
-  assert.doesNotMatch(cardSource, /RuntimeFallbackToolGroup/);
-  assert.doesNotMatch(cardSource, /buildFallbackToolGroupLabel/);
-  assert.match(blocksSource, /WRAPPER_TOOL_NAMES/);
-  assert.match(blocksSource, /buildCollapsedGroupHeadline/);
-  assert.match(blocksSource, /chat-inline-disclosure chat-tool-trace-group-summary/);
-  assert.match(blocksSource, /chat-tool-trace-group-main/);
-  assert.match(blocksSource, /chat-tool-trace-group-copy/);
-  assert.match(blocksSource, /chat-tool-trace-group-meta/);
-  assert.match(blocksSource, /chat-tool-trace-group-detail/);
-  assert.match(blocksSource, /chat-tool-trace-detail-line/);
-  assert.match(blocksSource, /chat-tool-trace-line-copy/);
-  assert.doesNotMatch(blocksSource, /RuntimeFallbackToolTree/);
-  assert.doesNotMatch(blocksSource, /chat-tool-trace-detail-toggle/);
-  assert.doesNotMatch(blocksSource, /閺囨潙顦跨紒鍡氬Ν/);
-  assert.doesNotMatch(blocksSource, /indexLabel/);
-  assert.doesNotMatch(blocksSource, /prefix=/);
-  assert.doesNotMatch(blocksSource, /\$\{index \+ 1\}\./);
-  assert.doesNotMatch(cssSource, /chat-tool-trace-detail-toggle/);
-  assert.match(cssSource, /\.chat-tool-trace-group-summary/);
-  assert.match(cssSource, /\.chat-tool-trace-group-main/);
-  assert.match(cssSource, /\.chat-tool-trace-group-copy/);
-  assert.match(cssSource, /\.chat-tool-trace-group-meta/);
-  assert.match(cssSource, /\.chat-tool-trace-detail-line/);
-  assert.match(cssSource, /\.chat-inline-disclosure/);
-  assert.match(cssSource, /\.chat-inline-disclosure-caret/);
-  assert.match(cssSource, /text-overflow:\s*ellipsis/);
-  assert.match(cssSource, /\.chat-tool-trace-line-copy\s*\{[\s\S]*align-items:\s*center/);
-  assert.match(cssSource, /\.chat-tool-trace-caret\s*\{/);
-  assert.match(cssSource, /margin-left:\s*auto/);
-  assert.match(cssSource, /opacity:\s*0/);
-  assert.match(cssSource, /:hover\s*>\s*\.chat-tool-trace-group-summary\s+\.chat-tool-trace-caret/);
-  assert.match(cssSource, /\[open\]\s*>\s*\.chat-tool-trace-group-summary\s+\.chat-tool-trace-caret/);
+  assert.match(chatSource, /renderTimelineProjection/);
+  assert.match(chatSource, /TimelineView/);
+  assert.doesNotMatch(chatSource, /buildRuntimeExecutionTimelineCards\(/);
+  assert.doesNotMatch(chatSource, /legacyRuntimeToolHelpers/);
+  assert.match(timelineSource, /chat-timeline-card/);
+  assert.match(cssSource, /\.chat-timeline-card/);
+  assert.match(cssSource, /\.chat-timeline-detail-drawer/);
 });
 
 test('runtime event render model hides internal memory reads from visible tool cards', async () => {
@@ -508,6 +473,13 @@ test('runtime event render model hides internal memory reads from visible tool c
   );
 });
 
+test('runtime output flow uses canonical event projection as the primary process rendering source', async () => {
+  const source = await readFile(chatPath, 'utf8');
+
+  assert.match(source, /timelineProjectionByRunId/);
+  assert.doesNotMatch(source, /buildRuntimeExecutionTimelineCards/);
+});
+
 test('runtime event render model tolerates malformed assistant timeline values', async () => {
   const { buildRuntimeTimelineModelFromAssistantTimeline } = await loadRenderModel();
   const model = buildRuntimeTimelineModelFromAssistantTimeline(/** @type {any} */ ({ kind: 'oops' }));
@@ -539,7 +511,11 @@ test('assistant narrative, thinking, and runtime cards share a unified surface l
   );
   assert.match(
     cssSource,
-    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-group-summary\s*\{[\s\S]*padding:\s*10px 12px[\s\S]*border-radius:\s*14px[\s\S]*border:\s*1px solid/
+    /\.chat-timeline-card\s*\{[\s\S]*padding:\s*12px 14px[\s\S]*border-radius:\s*16px[\s\S]*border:\s*1px solid/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-timeline-detail-line\s*\{[\s\S]*padding:\s*10px 12px[\s\S]*border-radius:\s*14px[\s\S]*border:\s*1px solid/
   );
   assert.match(
     cssSource,
@@ -560,11 +536,15 @@ test('assistant narrative and runtime cards use a consistent typography scale', 
   );
   assert.match(
     cssSource,
-    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-group-copy strong\s*\{[\s\S]*font-size:\s*13px/
+    /\.chat-timeline-card-copy strong\s*\{[\s\S]*font-size:\s*13px/
   );
   assert.match(
     cssSource,
-    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-group-meta\s*\{[\s\S]*font-size:\s*12px[\s\S]*line-height:\s*1\.5/
+    /\.chat-timeline-card-phase,\s*\r?\n\.chat-timeline-card-progress,\s*\r?\n\.chat-timeline-card-status,\s*\r?\n\.chat-timeline-card-chip\s*\{[\s\S]*font-size:\s*12px[\s\S]*line-height:\s*1\.5/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-timeline-detail-copy span,\s*\r?\n\.chat-timeline-detail-copy pre\s*\{[\s\S]*font-size:\s*13px[\s\S]*line-height:\s*1\.6/
   );
   assert.match(
     cssSource,

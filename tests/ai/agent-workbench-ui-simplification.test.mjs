@@ -6,9 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sidebarPath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentWorkbenchSidebar.tsx');
-const inspectorPath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentWorkbenchInspector.tsx');
 const pagePath = path.resolve(__dirname, '../../src/features/agent-shell/pages/AgentShellPage.tsx');
 const stagePath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentChatStage.tsx');
+const floatingPlanPath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentFloatingPlanCard.tsx');
 const cssPath = path.resolve(__dirname, '../../src/features/agent-shell/components/agentWorkbench.css');
 
 test('agent workbench sidebar removes redundant first-level destinations and keeps conversation history as the body', async () => {
@@ -35,48 +35,25 @@ test('agent workbench page opens search in a dialog instead of reviving sidebar 
   assert.match(source, /isSearchDialogOpen/);
   assert.doesNotMatch(source, /sidebarMode/);
   assert.doesNotMatch(source, /isSkillsDialogOpen/);
+  assert.doesNotMatch(source, /AgentWorkbenchInspector/);
 });
 
-test('agent workbench inspector keeps review focused on changed documents while exposing runtime tabs', async () => {
-  const source = await readFile(inspectorPath, 'utf8');
-
-  assert.match(source, /type AgentInspectorTab = 'review' \| 'tool' \| 'timeline' \| 'approval' \| 'memory'/);
-  assert.doesNotMatch(source, /'files'/);
-  assert.match(source, /查看本轮文档改动与内容/);
-  assert.match(source, /变更内容/);
-  assert.match(source, /buildReviewDiff/);
-  assert.match(source, /agent-workbench-review-diff/);
-  assert.match(source, /diff-removed/);
-  assert.match(source, /diff-added/);
-  assert.match(source, /diff-context/);
-  assert.doesNotMatch(source, /变更前/);
-  assert.doesNotMatch(source, /变更后/);
-  assert.doesNotMatch(source, /agent-workbench-review-section is-removed/);
-  assert.doesNotMatch(source, /agent-workbench-review-section is-added/);
-  assert.match(source, /label:\s*'工具'/);
-  assert.match(source, /label:\s*'时间线'/);
-  assert.match(source, /label:\s*'审批'/);
-  assert.doesNotMatch(source, /label:\s*'文件'/);
-  assert.doesNotMatch(source, /'context'/);
-});
-
-test('agent workbench inspector keeps memory tab minimal and removes inbox placeholder', async () => {
-  const source = await readFile(inspectorPath, 'utf8');
-
-  assert.match(source, /GNAgentMemoryPanel/);
-  assert.doesNotMatch(source, /记忆收件箱/);
-  assert.doesNotMatch(source, /待保存记忆/);
-  assert.doesNotMatch(source, /pendingMemoryCount/);
-});
-
-test('agent workbench stage removes redundant connection-state pill and keeps only core status signals', async () => {
+test('agent workbench stage removes the right-side inspector toggle so runtime events stay in the chat stream', async () => {
   const source = await readFile(stagePath, 'utf8');
 
   assert.doesNotMatch(source, /connectionState/);
-  assert.match(source, /pendingApprovalCount/);
-  assert.match(source, /收起右侧面板/);
-  assert.match(source, /展开右侧面板/);
-  assert.doesNotMatch(source, /审查、文件和记忆面板/);
+  assert.doesNotMatch(source, /pendingApprovalCount/);
+  assert.doesNotMatch(source, /agent-chat-stage-toggle/);
+  assert.doesNotMatch(source, /onToggleInspector/);
+  assert.doesNotMatch(source, /inspectorOpen/);
+});
+
+test('floating plan card no longer routes users back to a detached inspector panel', async () => {
+  const source = await readFile(floatingPlanPath, 'utf8');
+
+  assert.doesNotMatch(source, /onOpenInspector/);
+  assert.doesNotMatch(source, /agent-floating-plan-action/);
+  assert.doesNotMatch(source, /查看完整详情/);
 });
 
 test('agent workbench conversation history uses session entries with direct actions and readable Chinese labels', async () => {
@@ -114,16 +91,17 @@ test('agent workbench conversation history uses session entries with direct acti
   assert.doesNotMatch(embeddedSource, /\\u65b0\\u5efa\\u5bf9\\u8bdd/);
 });
 
-test('agent workbench rail styles shrink the navigation footprint', async () => {
+test('agent workbench rail styles shrink the navigation footprint without keeping inspector-specific controls alive', async () => {
   const css = await readFile(cssPath, 'utf8');
 
   assert.match(css, /grid-template-columns:\s*72px 300px;/);
   assert.match(css, /width:\s*34px;\s*[\s\S]*height:\s*34px;/);
   assert.match(css, /width:\s*16px;\s*[\s\S]*height:\s*16px;/);
-  assert.match(css, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
   assert.match(css, /\.agent-workbench-review-diff/);
   assert.match(css, /\.agent-workbench-review-diff \.diff-added/);
   assert.match(css, /\.agent-workbench-review-diff \.diff-removed/);
+  assert.doesNotMatch(css, /\.agent-workbench-inspector/);
+  assert.doesNotMatch(css, /\.agent-chat-stage-toggle/);
 });
 
 test('agent workbench thread cards keep history entries at a fixed height with single-line previews', async () => {

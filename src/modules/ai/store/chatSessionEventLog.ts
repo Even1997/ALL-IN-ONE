@@ -129,6 +129,7 @@ export const buildChatSessionProjection = (
       initialized?.runtimeThreadId ?? fallbackSession?.runtimeThreadId ?? null,
     composerPrefill: initialized?.composerPrefill ?? fallbackSession?.composerPrefill ?? null,
     messages: [],
+    canonicalEvents: fallbackSession?.canonicalEvents || [],
     replayEvents: fallbackSession?.replayEvents || [],
     recoveryState: fallbackSession?.recoveryState || null,
     eventLog: ordered,

@@ -18,3 +18,85 @@ test('runtime sidecar session bridge preserves assistant timelines from snapshot
   assert.match(source, /messageTimeline/);
   assert.match(source, /timeline:\s*messageTimeline/);
 });
+
+test('runtime sidecar session bridge derives canonical timeline events from assistant snapshot messages', async () => {
+  const { buildCanonicalEventsFromRuntimeMessages } = await import(
+    `../../src/modules/runtime-sidecar/runtimeSidecarCanonical.ts?test=${Date.now()}`
+  );
+
+  const createdAt = 100;
+  const events = buildCanonicalEventsFromRuntimeMessages({
+    sessionId: 'session-1',
+    providerId: 'codex',
+    messages: [
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Final answer',
+        createdAt,
+        timeline: [
+          {
+            id: 'reasoning-1',
+            kind: 'reasoning',
+            content: 'Inspecting project files',
+            collapsed: false,
+            status: 'completed',
+            createdAt: createdAt + 1,
+          },
+          {
+            id: 'tool-use-1',
+            kind: 'tool_use',
+            toolCallId: 'tool-1',
+            toolName: 'powershell',
+            input: { command: 'npm run build' },
+            status: 'completed',
+            createdAt: createdAt + 2,
+          },
+          {
+            id: 'tool-result-1',
+            kind: 'tool_result',
+            toolCallId: 'tool-1',
+            toolName: 'powershell',
+            status: 'completed',
+            output: 'build ok',
+            createdAt: createdAt + 3,
+          },
+          {
+            id: 'approval-1',
+            kind: 'approval',
+            approvalId: 'approval-1',
+            actionType: 'shell_command',
+            summary: 'Need approval',
+            riskLevel: 'medium',
+            status: 'approved',
+            createdAt: createdAt + 4,
+          },
+          {
+            id: 'question-1',
+            kind: 'question',
+            questionId: 'question-1',
+            payload: {
+              id: 'question-1',
+              status: 'answered',
+              questions: [{ question: 'Continue?' }],
+              answers: { continue: 'yes' },
+              createdAt: createdAt + 5,
+            },
+            createdAt: createdAt + 5,
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(events.some((event) => event.type === 'run.started' && event.runId === 'assistant-1'), true);
+  assert.equal(events.some((event) => event.type === 'progress.updated' && event.payload.detail === 'Inspecting project files'), true);
+  assert.equal(events.some((event) => event.type === 'tool.started' && event.payload.toolCallId === 'tool-1'), true);
+  assert.equal(events.some((event) => event.type === 'tool.completed' && event.payload.toolCallId === 'tool-1'), true);
+  assert.equal(events.some((event) => event.type === 'approval.requested' && event.payload.approvalId === 'approval-1'), true);
+  assert.equal(events.some((event) => event.type === 'approval.resolved' && event.payload.approvalId === 'approval-1'), true);
+  assert.equal(events.some((event) => event.type === 'question.requested' && event.payload.questionId === 'question-1'), true);
+  assert.equal(events.some((event) => event.type === 'question.answered' && event.payload.questionId === 'question-1'), true);
+  assert.equal(events.some((event) => event.type === 'message.completed' && event.messageId === 'assistant-1'), true);
+  assert.equal(events.some((event) => event.type === 'run.completed' && event.runId === 'assistant-1'), true);
+});

@@ -13,8 +13,10 @@ test('AIChat uses fine-grained runtime hooks instead of a single conversation pr
   assert.match(source, /useActiveConversationSelection/);
   assert.match(source, /useActiveConversationRunStateSignals/);
   assert.match(source, /AIChatConversationMessagesPane/);
-  assert.match(source, /AIChatRuntimeStatusPanel/);
-  assert.match(source, /AIChatRuntimeTasksPanel/);
+  assert.match(source, /renderTimelineProjection/);
+  assert.match(source, /renderRuntimeQuestion/);
+  assert.doesNotMatch(source, /AIChatRuntimeStatusPanel/);
+  assert.doesNotMatch(source, /AIChatRuntimeTasksPanel/);
   assert.match(source, /activeSession\?\.messages,/);
   assert.match(source, /activePendingQuestionSummary/);
   assert.match(source, /activeStatusVerb/);

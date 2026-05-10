@@ -6,14 +6,12 @@ type AgentFloatingPlanCardProps = {
   session: AgentTurnSession | null;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  onOpenInspector: () => void;
 };
 
 export const AgentFloatingPlanCard: React.FC<AgentFloatingPlanCardProps> = ({
   session,
   collapsed,
   onToggleCollapsed,
-  onOpenInspector,
 }) => {
   if (!session?.plan) {
     return null;
@@ -29,7 +27,7 @@ export const AgentFloatingPlanCard: React.FC<AgentFloatingPlanCardProps> = ({
           <div>
             <strong>进度 / 计划</strong>
             <span>
-              {session.plan.steps.length} 步 · {session.plan.riskLevel}
+              {session.plan.steps.length} 步 / {session.plan.riskLevel}
             </span>
           </div>
         </div>
@@ -52,9 +50,6 @@ export const AgentFloatingPlanCard: React.FC<AgentFloatingPlanCardProps> = ({
               </li>
             ))}
           </ul>
-          <button type="button" className="agent-floating-plan-action" onClick={onOpenInspector}>
-            查看完整详情
-          </button>
         </div>
       ) : null}
     </section>

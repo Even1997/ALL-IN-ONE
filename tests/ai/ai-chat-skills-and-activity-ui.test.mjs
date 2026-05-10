@@ -15,8 +15,7 @@ test('AIChat keeps GN Agent embedded chat focused while moving management into s
   assert.match(source, /GN Agent/);
   assert.match(source, /GNAgentEmbeddedComposer/);
   assert.match(source, /GNAgentHistoryMenu/);
-  assert.match(source, /GNAgentMessageList/);
-  assert.match(source, /renderRuntimeApproval/);
+  assert.match(source, /AIChatConversationMessagesPane/);
   assert.match(source, /const SETTINGS_TABS/);
   assert.match(source, /id:\s*'skills'/);
   assert.match(source, /id:\s*'mcp'/);
@@ -36,7 +35,6 @@ test('AIChat keeps GN Agent embedded chat focused while moving management into s
 
   assert.match(css, /\.chat-settings-tab/);
   assert.match(css, /\.chat-settings-mcp-page/);
-  assert.match(css, /\.chat-shell-status-pill/);
   assert.match(css, /\.chat-shell-drawer-panel/);
   assert.match(css, /\.gn-agent-runtime-panel/);
 });

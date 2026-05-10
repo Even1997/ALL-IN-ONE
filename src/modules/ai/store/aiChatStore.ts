@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import type { CanonicalEvent } from '@goodnight/runtime-protocol';
 import type { ActivityEntry } from '../skills/activityLog';
 import type { ChatStructuredCard } from '../chat/chatCards';
 import type { ProjectFileProposal } from '../chat/projectFileOperations';
@@ -80,6 +81,7 @@ export type ChatSession = {
   runtimeThreadId: string | null;
   composerPrefill?: ComposerPrefillPayload | null;
   messages: StoredChatMessage[];
+  canonicalEvents: CanonicalEvent[];
   replayEvents: RuntimeReplayEvent[];
   recoveryState: AgentReplayRecoveryState | null;
   eventLog: ChatSessionEvent[];
@@ -110,6 +112,8 @@ type AIChatStoreState = {
   ) => void;
   setActiveSession: (projectId: string, sessionId: string) => void;
   appendMessage: (projectId: string, sessionId: string, message: StoredChatMessage) => void;
+  appendCanonicalEvent: (projectId: string, sessionId: string, event: CanonicalEvent) => void;
+  replaceCanonicalEvents: (projectId: string, sessionId: string, events: CanonicalEvent[]) => void;
   appendActivityEntry: (projectId: string, entry: ActivityEntry) => void;
   setActivityEntries: (projectId: string, entries: ActivityEntry[]) => void;
   updateMessage: (
@@ -150,11 +154,20 @@ const normalizeAssistantMessage = (message: StoredChatMessage): StoredChatMessag
   return Array.isArray(message.timeline) ? message : { ...message, timeline: [] };
 };
 
+const normalizeCanonicalEvents = (events: CanonicalEvent[] | undefined, sessionId: string) =>
+  Array.isArray(events)
+    ? events.map((event) => ({
+        ...event,
+        sessionId,
+      }))
+    : [];
+
 const normalizeChatSession = (session: ChatSession): ChatSession => {
   const normalizedMessages = (session.messages || []).map(normalizeAssistantMessage);
   const normalizedSession = {
     ...session,
     messages: normalizedMessages,
+    canonicalEvents: normalizeCanonicalEvents(session.canonicalEvents, session.id),
   };
   const eventLog = ensureChatSessionEventLog(normalizedSession);
   return (
@@ -226,6 +239,20 @@ const areRecoveryStatesEqual = (
 const getSessionReplayThreadId = (session: ChatSession) =>
   session.recoveryState?.replayThreadId || session.replayEvents[0]?.threadId || null;
 
+const getNextCanonicalSeq = (session: ChatSession, runId: string) =>
+  (session.canonicalEvents || [])
+    .filter((event) => event.runId === runId)
+    .reduce((max, event) => Math.max(max, event.seq), 0) + 1;
+
+const normalizeCanonicalEventForSession = (
+  session: ChatSession,
+  event: CanonicalEvent,
+): CanonicalEvent => ({
+  ...event,
+  sessionId: session.id,
+  seq: getNextCanonicalSeq(session, event.runId),
+});
+
 export const createStoredChatMessage = (
   role: StoredChatMessage['role'],
   content: string,
@@ -283,6 +310,7 @@ export const createChatSession = (
     runtimeThreadId: null,
     composerPrefill: null,
     messages: [],
+    canonicalEvents: [],
     replayEvents: [],
     recoveryState: null,
     eventLog: [
@@ -397,6 +425,62 @@ export const useAIChatStore = create<AIChatStoreState>()(
               [projectId]: {
                 ...project,
                 activityEntries,
+              },
+            },
+          };
+        }),
+
+      appendCanonicalEvent: (projectId, sessionId, event) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.map((session) =>
+            session.id !== sessionId
+              ? session
+              : (() => {
+                  const normalizedEvent = normalizeCanonicalEventForSession(session, event);
+                  return {
+                    ...session,
+                    canonicalEvents: [...(session.canonicalEvents || []), normalizedEvent],
+                    updatedAt: Math.max(session.updatedAt, normalizedEvent.ts),
+                  };
+                })()
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                ...project,
+                activeSessionId: project.activeSessionId || sessionId,
+                sessions: sortSessions(sessions),
+              },
+            },
+          };
+        }),
+
+      replaceCanonicalEvents: (projectId, sessionId, events) =>
+        set((state) => {
+          const project = state.projects[projectId] || createProjectState();
+          const sessions = project.sessions.map((session) =>
+            session.id !== sessionId
+              ? session
+              : {
+                  ...session,
+                  canonicalEvents: normalizeCanonicalEvents(events, session.id),
+                  updatedAt: Math.max(
+                    session.updatedAt,
+                    ...events.map((event) => event.ts),
+                  ),
+                }
+          );
+
+          return {
+            projects: {
+              ...state.projects,
+              [projectId]: {
+                ...project,
+                activeSessionId: project.activeSessionId || sessionId,
+                sessions: sortSessions(sessions),
               },
             },
           };
@@ -590,7 +674,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
     }),
     {
       name: 'goodnight-ai-chat-store',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         projects: buildPersistedProjects(state.projects),

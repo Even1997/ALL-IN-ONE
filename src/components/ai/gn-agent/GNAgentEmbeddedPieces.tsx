@@ -92,6 +92,7 @@ type GNAgentMessageListProps = {
   renderMessagePart: MessagePartRenderer;
   renderStructuredCards?: (message: StoredChatMessage) => React.ReactNode;
   renderProjectFileProposal?: (message: StoredChatMessage) => React.ReactNode;
+  renderTimelineProjection?: (message: StoredChatMessage) => React.ReactNode;
   renderToolExecutionCard?: (message: StoredChatMessage) => MessageBubbleCard[] | null;
   renderRunSummaryCard?: (message: StoredChatMessage) => React.ReactNode;
   renderRuntimeApproval?: (message: StoredChatMessage) => React.ReactNode;
@@ -116,6 +117,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   renderMessagePart,
   renderStructuredCards,
   renderProjectFileProposal,
+  renderTimelineProjection,
   renderToolExecutionCard,
   renderRunSummaryCard,
   renderRuntimeApproval,
@@ -128,6 +130,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
     const map: Record<string, MessageBubbleCard[]> = {};
     for (const message of messages) {
       const earliestRuntimeEventTime = getEarliestRuntimeEventTime(message);
+      const timelineProjectionNode = renderTimelineProjection?.(message) || null;
       const structuredCardsNode = renderStructuredCards?.(message) || null;
       const projectFileProposalNode = renderProjectFileProposal?.(message) || null;
       const toolExecutionCards = renderToolExecutionCard?.(message) || [];
@@ -135,6 +138,9 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       const runtimeApprovalNode = renderRuntimeApproval?.(message) || null;
       const runtimeQuestionNode = renderRuntimeQuestion?.(message) || null;
       const cards: Array<MessageBubbleCard | null> = [
+        timelineProjectionNode
+          ? { node: timelineProjectionNode, createdAt: message.createdAt, timelineOrder: -100 }
+          : null,
         structuredCardsNode ? { node: structuredCardsNode, createdAt: message.createdAt } : null,
         projectFileProposalNode ? { node: projectFileProposalNode, createdAt: message.createdAt } : null,
         runSummaryNode ? { node: runSummaryNode, createdAt: message.createdAt } : null,
@@ -152,6 +158,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
     return map;
   }, [
     messages,
+    renderTimelineProjection,
     renderStructuredCards,
     renderProjectFileProposal,
     renderToolExecutionCard,

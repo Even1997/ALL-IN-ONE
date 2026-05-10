@@ -1,3 +1,4 @@
+import type { CanonicalEvent } from '@goodnight/runtime-protocol';
 import type { ActivityEntry } from '../../skills/activityLog.ts';
 import type { ApprovalRecord } from '../approval/approvalTypes.ts';
 import type { RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
@@ -24,6 +25,8 @@ import {
   type ChatSession,
   type StoredChatMessage,
 } from '../../store/aiChatStore.ts';
+import { createTimelineComposer } from '../composer/timelineComposer.ts';
+import type { TimelineProjection } from '../composer/timelineComposerTypes.ts';
 
 export type RuntimeConversationThreadIds = {
   approvalThreadId: string | null;
@@ -42,6 +45,9 @@ export type RuntimeConversationProjection = RuntimeConversationSelection &
   RuntimeConversationThreadIds & {
     projectChatState: ChatProjectState | null;
     messages: StoredChatMessage[];
+    canonicalEvents: CanonicalEvent[];
+    timelineProjectionByRunId: Record<string, TimelineProjection>;
+    timelineProjectionByMessageId: Record<string, TimelineProjection>;
     activityEntries: ActivityEntry[];
     pendingApprovals: ApprovalRecord[];
     pendingApprovalCount: number;
@@ -155,6 +161,52 @@ const dedupeSessionsByRuntimeThreadId = (sessions: ChatSession[]) => {
     sessions: dedupedSessions,
     removedSessionIds,
   };
+};
+
+const sortCanonicalEvents = (events: CanonicalEvent[]) =>
+  [...events].sort((left, right) =>
+    left.runId === right.runId
+      ? left.seq === right.seq
+        ? left.ts - right.ts
+        : left.seq - right.seq
+      : left.ts - right.ts,
+  );
+
+const buildTimelineProjectionByRunId = (events: CanonicalEvent[]) => {
+  const composers = new Map<string, ReturnType<typeof createTimelineComposer>>();
+
+  for (const event of sortCanonicalEvents(events)) {
+    const existing = composers.get(event.runId) || createTimelineComposer({ runId: event.runId });
+    existing.append(event);
+    composers.set(event.runId, existing);
+  }
+
+  return Object.fromEntries(
+    Array.from(composers.entries()).map(([runId, composer]) => [runId, composer.getProjection()]),
+  ) as Record<string, TimelineProjection>;
+};
+
+const buildTimelineProjectionByMessageId = (
+  events: CanonicalEvent[],
+  timelineProjectionByRunId: Record<string, TimelineProjection>,
+) => {
+  const runIdByMessageId = new Map<string, string>();
+
+  for (const event of events) {
+    if (!event.messageId) {
+      continue;
+    }
+
+    if (!runIdByMessageId.has(event.messageId)) {
+      runIdByMessageId.set(event.messageId, event.runId);
+    }
+  }
+
+  return Object.fromEntries(
+    Array.from(runIdByMessageId.entries())
+      .map(([messageId, runId]) => [messageId, timelineProjectionByRunId[runId] || null] as const)
+      .filter((entry): entry is [string, TimelineProjection] => Boolean(entry[1])),
+  ) as Record<string, TimelineProjection>;
 };
 
 export const buildRuntimeConversationThreadIds = (
@@ -276,12 +328,17 @@ export const buildRuntimeConversationProjection = (input: {
     (approval) => approval.status === 'pending',
   );
   const teamRuns = input.runtimeState.teamRuns || [];
+  const canonicalEvents = selection.activeSession?.canonicalEvents || [];
+  const timelineProjectionByRunId = buildTimelineProjectionByRunId(canonicalEvents);
 
   return {
     ...selection,
     ...threadIds,
     projectChatState: input.projectChatState || null,
     messages: selection.activeSession?.messages || [],
+    canonicalEvents,
+    timelineProjectionByRunId,
+    timelineProjectionByMessageId: buildTimelineProjectionByMessageId(canonicalEvents, timelineProjectionByRunId),
     activityEntries: input.activityEntries || [],
     pendingApprovals,
     pendingApprovalCount: pendingApprovals.length,
