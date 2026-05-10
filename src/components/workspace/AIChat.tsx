@@ -54,7 +54,10 @@ import {
   getLatestReplaySkillSnapshot,
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
 import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
-import { useActiveConversationSelection } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
+import {
+  useActiveConversationRunStateSignals,
+  useActiveConversationSelection,
+} from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
 import { getLatestTurnSession } from '../../modules/ai/runtime/session/agentSessionSelectors.ts';
@@ -1531,6 +1534,12 @@ export const AIChat: React.FC<AIChatProps> = ({
     projectId: currentProjectId,
   });
   const {
+    pendingQuestionSummary: activePendingQuestionSummary,
+    statusVerb: activeStatusVerb,
+  } = useActiveConversationRunStateSignals({
+    projectId: currentProjectId,
+  });
+  const {
     permissionMode,
     enqueueApproval,
     resolveApproval: resolveStoredApproval,
@@ -2399,6 +2408,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     getConversationHistory,
     currentProject?.name,
     input,
+    activeSession?.messages,
     previewReferenceContext,
     runtimeContextLabels,
     selectedRuntimeConfig,
@@ -2446,6 +2456,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       ? 'Planning'
       : latestTurnSessionStatus === 'waiting_approval'
         ? 'Approval required'
+        : activePendingQuestionSummary
+          ? 'Input required'
         : latestTurnSessionStatus === 'executing'
           ? stalled ? `Executing (stalled ${(currentStallDuration / 1000).toFixed(0)}s)` : 'Executing'
           : latestTurnSessionStatus === 'resumable'
@@ -2456,14 +2468,18 @@ export const AIChat: React.FC<AIChatProps> = ({
                 ? 'Failed'
                 : pendingApprovalCount > 0
                   ? 'Approval required'
-                  : isLoading
-                    ? 'Running'
-                    : latestActivityEntry?.type === 'failed'
-                      ? 'Failed'
-                      : 'Ready';
+                  : activeStatusVerb
+                    ? activeStatusVerb
+                    : isLoading
+                      ? 'Running'
+                      : latestActivityEntry?.type === 'failed'
+                        ? 'Failed'
+                        : 'Ready';
   const runStateTone =
     latestTurnSessionStatus === 'waiting_approval' || latestTurnSessionStatus === 'resumable'
       ? 'warning'
+      : activePendingQuestionSummary
+        ? 'warning'
       : latestTurnSessionStatus === 'failed'
         ? 'error'
         : latestTurnSessionStatus === 'completed'

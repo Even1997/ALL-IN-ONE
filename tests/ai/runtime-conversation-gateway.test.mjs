@@ -140,9 +140,9 @@ test('runtime conversation gateway keeps active thread ids stable across focused
   const source = await readFile(gatewayHookPath, 'utf8');
 
   assert.match(source, /const useActiveConversationBase =/);
-  assert.match(source, /approvalThreadId:/);
-  assert.match(source, /liveThreadId:/);
-  assert.match(source, /taskThreadId:/);
+  assert.match(source, /const useActiveConversationSelectionSlice =/);
+  assert.match(source, /\.\.\.base\.threadIds/);
+  assert.match(source, /buildRuntimeConversationThreadIds/);
 });
 
 test('runtime conversation gateway clears stale runtime thread bindings missing from persistence', async () => {

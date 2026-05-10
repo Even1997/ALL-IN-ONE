@@ -17,6 +17,7 @@ test('runtime conversation gateway avoids unstable zustand selector fallbacks', 
   assert.match(source, /export const useActiveConversationSelection =/);
   assert.match(source, /export const useActiveConversationMessages =/);
   assert.match(source, /export const useActiveConversationLiveState =/);
+  assert.match(source, /export const useActiveConversationRunStateSignals =/);
   assert.match(source, /export const useActiveConversationApprovals =/);
   assert.match(source, /export const useActiveConversationTasks =/);
   assert.match(source, /export const useActiveConversationSkillsAndRecovery =/);
@@ -44,4 +45,10 @@ test('runtime conversation gateway avoids unstable zustand selector fallbacks', 
   assert.doesNotMatch(source, /state\.toolCallsByThread\[selection\.activeSessionId\]\s*\|\|\s*\[\]/);
   assert.doesNotMatch(source, /state\.approvalsByThread\[threadIds\.approvalThreadId\]\s*\|\|\s*\[\]/);
   assert.doesNotMatch(source, /useApprovalStore\(\(state\)\s*=>[\s\S]*?\.filter\(/);
+  assert.doesNotMatch(source, /export const useRuntimeConversationGateway =[\s\S]*useActiveConversationSelection\(input\)/);
+  assert.doesNotMatch(source, /export const useRuntimeConversationGateway =[\s\S]*useActiveConversationMessages\(input\)/);
+  assert.doesNotMatch(source, /export const useRuntimeConversationGateway =[\s\S]*useActiveConversationLiveState\(input\)/);
+  assert.doesNotMatch(source, /export const useRuntimeConversationGateway =[\s\S]*useActiveConversationApprovals\(input\)/);
+  assert.doesNotMatch(source, /export const useRuntimeConversationGateway =[\s\S]*useActiveConversationTasks\(input\)/);
+  assert.doesNotMatch(source, /export const useRuntimeConversationGateway =[\s\S]*useActiveConversationSkillsAndRecovery\(input\)/);
 });

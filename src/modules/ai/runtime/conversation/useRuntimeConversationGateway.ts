@@ -40,6 +40,10 @@ const EMPTY_REPLAY_EVENTS: AgentReplayEvent[] = [];
 const EMPTY_TEAM_RUNS: AgentTeamRunRecord[] = [];
 const EMPTY_MCP_TOOL_CALLS: RuntimeMcpToolCall[] = [];
 const EMPTY_APPROVALS: ApprovalRecord[] = [];
+const EMPTY_RUN_STATE_SIGNALS = {
+  pendingQuestionSummary: null as string | null,
+  statusVerb: '',
+};
 
 const useActiveConversationBase = (input?: {
   projectId?: string | null;
@@ -67,36 +71,23 @@ const useActiveConversationBase = (input?: {
   return { projectId, projectChatState, sessions, activityEntries, selection, threadIds };
 };
 
-export const useActiveConversationSelection = (input?: {
-  projectId?: string | null;
-}) => {
-  const base = useActiveConversationBase(input);
+type ActiveConversationBase = ReturnType<typeof useActiveConversationBase>;
 
-  return {
-    projectId: base.projectId,
-    projectChatState: base.projectChatState,
-    sessions: base.sessions,
-    activeSessionId: base.selection.activeSessionId,
-    activeSession: base.selection.activeSession,
-    ...base.threadIds,
-  };
-};
+const useActiveConversationSelectionSlice = (base: ActiveConversationBase) => ({
+  projectId: base.projectId,
+  projectChatState: base.projectChatState,
+  sessions: base.sessions,
+  activeSessionId: base.selection.activeSessionId,
+  activeSession: base.selection.activeSession,
+  ...base.threadIds,
+});
 
-export const useActiveConversationMessages = (input?: {
-  projectId?: string | null;
-}) => {
-  const base = useActiveConversationBase(input);
+const useActiveConversationMessagesSlice = (base: ActiveConversationBase) => ({
+  messages: base.selection.activeSession?.messages || EMPTY_MESSAGES,
+  activityEntries: base.activityEntries,
+});
 
-  return {
-    messages: base.selection.activeSession?.messages || EMPTY_MESSAGES,
-    activityEntries: base.activityEntries,
-  };
-};
-
-export const useActiveConversationLiveState = (input?: {
-  projectId?: string | null;
-}) => {
-  const base = useActiveConversationBase(input);
+const useActiveConversationLiveStateSlice = (base: ActiveConversationBase) => {
   const latestTurnSession = useAgentRuntimeStore((state) =>
     base.selection.activeSessionId
       ? getLatestTurnSession(state.sessionsByThread[base.selection.activeSessionId]) || null
@@ -119,10 +110,22 @@ export const useActiveConversationLiveState = (input?: {
   };
 };
 
-export const useActiveConversationApprovals = (input?: {
-  projectId?: string | null;
-}) => {
-  const base = useActiveConversationBase(input);
+const useActiveConversationRunStateSignalsSlice = (base: ActiveConversationBase) =>
+  useAgentRuntimeStore(
+    useShallow((state) => {
+      const liveState =
+        base.threadIds.liveThreadId ? state.liveStateByThread[base.threadIds.liveThreadId] || null : null;
+
+      return liveState
+        ? {
+            pendingQuestionSummary: liveState.pendingQuestionSummary,
+            statusVerb: liveState.statusVerb,
+          }
+        : EMPTY_RUN_STATE_SIGNALS;
+    }),
+  );
+
+const useActiveConversationApprovalsSlice = (base: ActiveConversationBase) => {
   const approvalThreadId = base.threadIds.approvalThreadId;
   const selectApprovals = (state: ReturnType<typeof useApprovalStore.getState>) =>
     approvalThreadId ? state.approvalsByThread[approvalThreadId] || EMPTY_APPROVALS : EMPTY_APPROVALS;
@@ -133,16 +136,13 @@ export const useActiveConversationApprovals = (input?: {
   );
 
   return {
-    approvalThreadId: approvalThreadId,
+    approvalThreadId,
     pendingApprovals,
     pendingApprovalCount: pendingApprovals.length,
   };
 };
 
-export const useActiveConversationTasks = (input?: {
-  projectId?: string | null;
-}) => {
-  const base = useActiveConversationBase(input);
+const useActiveConversationTasksSlice = (base: ActiveConversationBase) => {
   const backgroundTasks = useAgentRuntimeStore((state) =>
     base.threadIds.liveThreadId
       ? state.backgroundTasksByThread[base.threadIds.liveThreadId] || EMPTY_BACKGROUND_TASKS
@@ -162,10 +162,7 @@ export const useActiveConversationTasks = (input?: {
   };
 };
 
-export const useActiveConversationSkillsAndRecovery = (input?: {
-  projectId?: string | null;
-}) => {
-  const base = useActiveConversationBase(input);
+const useActiveConversationSkillsAndRecoverySlice = (base: ActiveConversationBase) => {
   const activeSkills = useAgentRuntimeStore((state) =>
     base.selection.activeSessionId
       ? state.activeSkillsByThread[base.selection.activeSessionId] || EMPTY_ACTIVE_SKILLS
@@ -187,6 +184,62 @@ export const useActiveConversationSkillsAndRecovery = (input?: {
   };
 };
 
+export const useActiveConversationSelection = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return useActiveConversationSelectionSlice(base);
+};
+
+export const useActiveConversationMessages = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return useActiveConversationMessagesSlice(base);
+};
+
+export const useActiveConversationLiveState = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return useActiveConversationLiveStateSlice(base);
+};
+
+export const useActiveConversationRunStateSignals = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return useActiveConversationRunStateSignalsSlice(base);
+};
+
+export const useActiveConversationApprovals = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return useActiveConversationApprovalsSlice(base);
+};
+
+export const useActiveConversationTasks = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return useActiveConversationTasksSlice(base);
+};
+
+export const useActiveConversationSkillsAndRecovery = (input?: {
+  projectId?: string | null;
+}) => {
+  const base = useActiveConversationBase(input);
+
+  return useActiveConversationSkillsAndRecoverySlice(base);
+};
+
 export const useRuntimeConversationGateway = (input?: {
   projectId?: string | null;
 }): RuntimeConversationProjection & {
@@ -201,12 +254,12 @@ export const useRuntimeConversationGateway = (input?: {
   const memoryEntries = useAgentRuntimeStore((state) =>
     base.projectId ? state.memoryByProject[base.projectId] || EMPTY_MEMORY_ENTRIES : EMPTY_MEMORY_ENTRIES,
   );
-  const selection = useActiveConversationSelection(input);
-  const messageSlice = useActiveConversationMessages(input);
-  const liveSlice = useActiveConversationLiveState(input);
-  const approvalSlice = useActiveConversationApprovals(input);
-  const taskSlice = useActiveConversationTasks(input);
-  const skillSlice = useActiveConversationSkillsAndRecovery(input);
+  const selection = useActiveConversationSelectionSlice(base);
+  const messageSlice = useActiveConversationMessagesSlice(base);
+  const liveSlice = useActiveConversationLiveStateSlice(base);
+  const approvalSlice = useActiveConversationApprovalsSlice(base);
+  const taskSlice = useActiveConversationTasksSlice(base);
+  const skillSlice = useActiveConversationSkillsAndRecoverySlice(base);
   const contextSnapshot = useAgentRuntimeStore((state) =>
     selection.activeSessionId ? state.contextByThread[selection.activeSessionId] || null : null,
   );
