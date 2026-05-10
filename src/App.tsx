@@ -24,7 +24,12 @@ import type {
   PageStructureNode,
   ProjectConfig,
 } from './types';
-import { clampLayoutSize, LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
+import {
+  clampDesktopAiPaneWidth,
+  getDesktopAiPaneWidthFromPointer,
+  isDesktopTopbarInteractiveTarget,
+} from './features/desktopShell/desktopShell';
+import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
 import { getCanvasPreset } from './utils/wireframe';
 import {
   getProjectDir,
@@ -322,6 +327,11 @@ const App: React.FC = () => {
   const desktopAiTransitionTimerRef = useRef<number | null>(null);
   const desktopAiEnterFrameRef = useRef<number | null>(null);
   const desktopAiEnterCommitFrameRef = useRef<number | null>(null);
+  const desktopAiPaneElementRef = useRef<HTMLDivElement | null>(null);
+  const desktopAiResizeHandleRef = useRef<HTMLDivElement | null>(null);
+  const desktopAiPaneWidthRef = useRef(desktopAiPaneWidth);
+  const desktopAiResizeFrameRef = useRef<number | null>(null);
+  const desktopAiResizeDraftWidthRef = useRef<number | null>(null);
 
   useEffect(() => {
     void ensureDesktopRuntimeSidecar();
@@ -393,6 +403,9 @@ const App: React.FC = () => {
       }
       if (desktopAiEnterCommitFrameRef.current !== null) {
         window.cancelAnimationFrame(desktopAiEnterCommitFrameRef.current);
+      }
+      if (desktopAiResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopAiResizeFrameRef.current);
       }
     },
     []
@@ -472,6 +485,7 @@ const App: React.FC = () => {
   }, [showWorkspaceSidebar, isDesktopAiCollapsed]);
 
   useEffect(() => {
+    desktopAiPaneWidthRef.current = desktopAiPaneWidth;
     writeLayoutSize(
       LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
       desktopAiPaneWidth,
@@ -479,22 +493,67 @@ const App: React.FC = () => {
     );
   }, [desktopAiPaneWidth]);
 
+  const syncDesktopAiPaneWidthStyles = useCallback((nextWidth: number) => {
+    const pane = desktopAiPaneElementRef.current;
+    if (pane) {
+      pane.style.flex = `0 0 ${nextWidth}px`;
+      pane.style.width = `${nextWidth}px`;
+    }
+
+    const handle = desktopAiResizeHandleRef.current;
+    if (handle) {
+      handle.setAttribute('aria-valuenow', String(nextWidth));
+    }
+  }, []);
+
+  useEffect(() => {
+    syncDesktopAiPaneWidthStyles(desktopAiPaneWidth);
+  }, [desktopAiPaneWidth, syncDesktopAiPaneWidthStyles]);
+
   const handleDesktopAiResizePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!showWorkspaceSidebar || !isDesktopAiPaneVisible) {
       return;
     }
 
     event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     const startX = event.clientX;
-    const startWidth = desktopAiPaneWidth;
+    const startWidth = desktopAiPaneWidthRef.current;
+    desktopAiResizeDraftWidthRef.current = startWidth;
+    syncDesktopAiPaneWidthStyles(startWidth);
     setIsDesktopAiPaneResizing(true);
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
-      const nextWidth = clampLayoutSize(startWidth + startX - moveEvent.clientX, DESKTOP_AI_PANE_WIDTH_BOUNDS);
-      setDesktopAiPaneWidth(nextWidth);
+      const nextWidth = getDesktopAiPaneWidthFromPointer({
+        startWidth,
+        startPointerX: startX,
+        currentPointerX: moveEvent.clientX,
+        bounds: DESKTOP_AI_PANE_WIDTH_BOUNDS,
+      });
+      desktopAiResizeDraftWidthRef.current = nextWidth;
+      if (desktopAiResizeFrameRef.current !== null) {
+        return;
+      }
+
+      desktopAiResizeFrameRef.current = window.requestAnimationFrame(() => {
+        desktopAiResizeFrameRef.current = null;
+        if (desktopAiResizeDraftWidthRef.current !== null) {
+          syncDesktopAiPaneWidthStyles(desktopAiResizeDraftWidthRef.current);
+        }
+      });
     };
 
     const handlePointerUp = () => {
+      if (desktopAiResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopAiResizeFrameRef.current);
+        desktopAiResizeFrameRef.current = null;
+      }
+
+      const nextWidth = desktopAiResizeDraftWidthRef.current ?? startWidth;
+      desktopAiResizeDraftWidthRef.current = null;
+      desktopAiPaneWidthRef.current = nextWidth;
+      syncDesktopAiPaneWidthStyles(nextWidth);
+      setDesktopAiPaneWidth(nextWidth);
       setIsDesktopAiPaneResizing(false);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
@@ -504,7 +563,7 @@ const App: React.FC = () => {
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
-  }, [showWorkspaceSidebar, desktopAiPaneWidth, isDesktopAiPaneVisible]);
+  }, [isDesktopAiPaneVisible, showWorkspaceSidebar, syncDesktopAiPaneWidthStyles]);
 
   const handleDesktopAiResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
@@ -512,19 +571,21 @@ const App: React.FC = () => {
     }
 
     event.preventDefault();
-    setDesktopAiPaneWidth((current) => {
-      if (event.key === 'Home') {
-        return DESKTOP_AI_PANE_WIDTH_BOUNDS.min;
-      }
+    let nextWidth = desktopAiPaneWidthRef.current;
 
-      if (event.key === 'End') {
-        return DESKTOP_AI_PANE_WIDTH_BOUNDS.max;
-      }
-
+    if (event.key === 'Home') {
+      nextWidth = DESKTOP_AI_PANE_WIDTH_BOUNDS.min;
+    } else if (event.key === 'End') {
+      nextWidth = DESKTOP_AI_PANE_WIDTH_BOUNDS.max;
+    } else {
       const delta = event.key === 'ArrowLeft' ? 16 : -16;
-      return clampLayoutSize(current + delta, DESKTOP_AI_PANE_WIDTH_BOUNDS);
-    });
-  }, []);
+      nextWidth = clampDesktopAiPaneWidth(desktopAiPaneWidthRef.current + delta, DESKTOP_AI_PANE_WIDTH_BOUNDS);
+    }
+
+    desktopAiPaneWidthRef.current = nextWidth;
+    syncDesktopAiPaneWidthStyles(nextWidth);
+    setDesktopAiPaneWidth(nextWidth);
+  }, [syncDesktopAiPaneWidthStyles]);
 
   const toggleThemeMode = useCallback((): void => {
     setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'));
@@ -1117,30 +1178,9 @@ const App: React.FC = () => {
     [handleNativeMenuEvent]
   );
 
-  const handleDesktopTopbarPointerDown = useCallback(async (event: React.PointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || !isTauriRuntimeAvailable()) {
-      return;
-    }
-
-    const target = event.target as HTMLElement | null;
-    if (
-      target?.closest(
-        'button, input, select, textarea, a, [role="menu"], [role="menuitem"], [data-app-menu-root="desktop"], .mac-field, .mac-select-shell, .desktop-window-controls'
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await getCurrentWindow().startDragging();
-    } catch (error) {
-      console.error('Failed to start desktop topbar dragging', error);
-    }
-  }, []);
-
   const handleDesktopTopbarDoubleClick = useCallback(
     async (event: React.MouseEvent<HTMLElement>) => {
-      if (event.button !== 0) {
+      if (event.button !== 0 || isDesktopTopbarInteractiveTarget(event.target)) {
         return;
       }
 
@@ -1607,49 +1647,56 @@ const App: React.FC = () => {
                   })}
                 </nav>
                 <div
-                  className="desktop-workbench-title compact desktop-window-drag-region"
+                  className="desktop-workbench-title-shell desktop-window-drag-region"
                   data-tauri-drag-region
-                  onPointerDown={(event) => void handleDesktopTopbarPointerDown(event)}
                   onDoubleClick={(event) => void handleDesktopTopbarDoubleClick(event)}
                 >
-                  <h1 data-tauri-drag-region>{currentProject.name}</h1>
-                  <p>{activeDesktopRole.label} 工作台</p>
+                  <span className="desktop-workbench-role-indicator" aria-hidden="true">
+                    {activeDesktopRole.label}
+                  </span>
+                  <div className="desktop-workbench-title compact">
+                    <h1>{currentProject.name}</h1>
+                    <p>{activeDesktopRole.label} 工作台</p>
+                  </div>
                 </div>
               </div>
 
               <div className="desktop-workbench-tools">
-                {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
-                <MacSelectField
-                  className="desktop-project-switcher"
-                  label="项目"
-                  value={currentProject.id}
-                  onChange={(event) => handleOpenProject(event.target.value)}
-                >
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))}
-                </MacSelectField>
-                <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
-                  项目
-                </MacButton>
-                {showWorkspaceSidebar ? (
-                  <MacIconButton
-                    className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
-                    onClick={() => setIsDesktopAiCollapsed((current) => !current)}
-                    aria-label={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
-                    title={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
+                <div className="desktop-workbench-toolbar-group is-context">
+                  {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
+                  <MacSelectField
+                    className="desktop-project-switcher"
+                    label="项目"
+                    value={currentProject.id}
+                    onChange={(event) => handleOpenProject(event.target.value)}
                   >
-                    <WorkbenchIcon name={isDesktopAiCollapsed ? 'panelRightOpen' : 'panelRightClose'} />
-                  </MacIconButton>
-                ) : null}
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                  </MacSelectField>
+                </div>
+                <div className="desktop-workbench-toolbar-group is-actions">
+                  <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
+                    项目
+                  </MacButton>
+                  {showWorkspaceSidebar ? (
+                    <MacIconButton
+                      className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
+                      onClick={() => setIsDesktopAiCollapsed((current) => !current)}
+                      aria-label={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
+                      title={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
+                    >
+                      <WorkbenchIcon name={isDesktopAiCollapsed ? 'panelRightOpen' : 'panelRightClose'} />
+                    </MacIconButton>
+                  ) : null}
+                </div>
               </div>
               <div
                 className="desktop-workbench-drag-spacer desktop-window-drag-region"
                 aria-hidden="true"
                 data-tauri-drag-region
-                onPointerDown={(event) => void handleDesktopTopbarPointerDown(event)}
                 onDoubleClick={(event) => void handleDesktopTopbarDoubleClick(event)}
               />
               <div className="desktop-window-controls" aria-label="窗口控制">
@@ -1693,6 +1740,7 @@ const App: React.FC = () => {
                 <>
                   {isDesktopAiPaneVisible ? (
                     <div
+                      ref={desktopAiResizeHandleRef}
                       className="desktop-ai-resize-handle"
                       role="separator"
                       aria-label="调整 AI 栏宽度"
@@ -1706,6 +1754,7 @@ const App: React.FC = () => {
                     />
                   ) : null}
                   <div
+                    ref={desktopAiPaneElementRef}
                     className={`app-workbench-pane app-workbench-ai-shell desktop-ai-shell ${isDesktopAiPaneVisible ? '' : 'is-hidden'}`}
                     style={{
                       flex: `0 0 ${desktopAiPaneWidth}px`,

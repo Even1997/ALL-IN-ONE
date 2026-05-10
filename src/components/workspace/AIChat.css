@@ -6083,6 +6083,229 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
   color: var(--gn-agent-muted, var(--mode-muted, #6b7280));
 }
 
+body.desktop-workbench-mode .chat-settings-modal-backdrop {
+  padding: 20px;
+  background: rgba(6, 10, 16, 0.48);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme='light'] body.desktop-workbench-mode .chat-settings-modal-backdrop {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.desktop-workbench-mode .chat-settings-drawer {
+  width: min(1040px, calc(100vw - 40px));
+  max-width: calc(100vw - 40px);
+  height: min(840px, calc(100dvh - 40px));
+  max-height: min(840px, calc(100dvh - 40px));
+  border-radius: 24px;
+  border: 1px solid var(--desktop-shell-border, rgba(255, 255, 255, 0.08));
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--workbench-role-accent, #3b82f6) 11%, transparent), transparent 28%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--desktop-shell-surface-strong, #1d242f) 96%, transparent) 0%,
+      color-mix(in srgb, var(--desktop-shell-surface, #171c24) 99%, transparent) 100%
+    );
+  box-shadow: var(--desktop-shell-shadow-strong, 0 28px 56px rgba(0, 0, 0, 0.34));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.desktop-workbench-mode .chat-settings-drawer-header {
+  padding: 20px 22px 18px;
+  border-bottom-color: var(--desktop-shell-border, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--desktop-shell-toolbar-bg, rgba(255, 255, 255, 0.03)) 82%, transparent);
+}
+
+body.desktop-workbench-mode .chat-settings-drawer-body {
+  background: transparent;
+}
+
+body.desktop-workbench-mode .chat-settings-sidebar,
+body.desktop-workbench-mode .chat-settings-provider-list {
+  border-right-color: var(--desktop-shell-border, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--desktop-shell-toolbar-bg-subtle, rgba(255, 255, 255, 0.02)) 88%, transparent);
+}
+
+body.desktop-workbench-mode .chat-settings-sidebar {
+  padding: 18px 14px;
+}
+
+body.desktop-workbench-mode .chat-settings-panel {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--desktop-shell-surface-strong, #1d242f) 92%, transparent) 0%,
+      color-mix(in srgb, var(--desktop-shell-surface, #171c24) 98%, transparent) 100%
+    );
+}
+
+body.desktop-workbench-mode .chat-settings-panel-surface,
+body.desktop-workbench-mode .chat-settings-surface {
+  background: transparent;
+}
+
+body.desktop-workbench-mode .chat-settings-tab,
+body.desktop-workbench-mode .chat-settings-provider-item,
+body.desktop-workbench-mode .chat-settings-model-chip,
+body.desktop-workbench-mode .chat-settings-mcp-server-item,
+body.desktop-workbench-mode .chat-settings-close,
+body.desktop-workbench-mode .chat-settings-apply-btn.secondary {
+  border: 1px solid var(--desktop-shell-toolbar-border, rgba(255, 255, 255, 0.06));
+  background: color-mix(in srgb, var(--desktop-shell-toolbar-bg, rgba(255, 255, 255, 0.03)) 88%, transparent);
+  color: var(--desktop-shell-text, #f5f7fb);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.desktop-workbench-mode .chat-settings-tab {
+  border-radius: 16px;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+body.desktop-workbench-mode .chat-settings-tab:hover,
+body.desktop-workbench-mode .chat-settings-provider-item:hover,
+body.desktop-workbench-mode .chat-settings-model-chip:hover,
+body.desktop-workbench-mode .chat-settings-mcp-server-item:hover,
+body.desktop-workbench-mode .chat-settings-close:hover,
+body.desktop-workbench-mode .chat-settings-apply-btn.secondary:hover {
+  transform: translateY(-1px);
+  border-color: var(--desktop-shell-border-strong, rgba(255, 255, 255, 0.14));
+  background: color-mix(in srgb, var(--workbench-role-accent, #3b82f6) 12%, var(--desktop-shell-surface-strong, #1d242f));
+}
+
+body.desktop-workbench-mode .chat-settings-tab.active,
+body.desktop-workbench-mode .chat-settings-provider-item.active,
+body.desktop-workbench-mode .chat-settings-model-chip.active,
+body.desktop-workbench-mode .chat-settings-mcp-server-item.active {
+  border-color: color-mix(in srgb, var(--workbench-role-accent, #3b82f6) 34%, var(--desktop-shell-border, rgba(255, 255, 255, 0.08)));
+  background: color-mix(in srgb, var(--workbench-role-accent, #3b82f6) 14%, var(--desktop-shell-surface-strong, #1d242f));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 24px color-mix(in srgb, var(--workbench-role-accent, #3b82f6) 14%, transparent);
+}
+
+body.desktop-workbench-mode .chat-settings-drawer-header strong,
+body.desktop-workbench-mode .chat-settings-detail-header strong,
+body.desktop-workbench-mode .chat-settings-summary-card strong,
+body.desktop-workbench-mode .chat-settings-section-header strong,
+body.desktop-workbench-mode .chat-settings-type-card strong,
+body.desktop-workbench-mode .chat-settings-provider-copy strong,
+body.desktop-workbench-mode .chat-settings-import-json > span,
+body.desktop-workbench-mode .chat-settings-mcp-toolbar-copy strong,
+body.desktop-workbench-mode .chat-settings-mcp-panel-header strong,
+body.desktop-workbench-mode .chat-settings-mcp-tool-call strong,
+body.desktop-workbench-mode .chat-settings-mcp-server-item strong,
+body.desktop-workbench-mode .chat-settings-mcp-kv strong,
+body.desktop-workbench-mode .chat-settings-mcp-kv code {
+  color: var(--desktop-shell-text, #f5f7fb);
+}
+
+body.desktop-workbench-mode .chat-settings-header-description,
+body.desktop-workbench-mode .chat-settings-tab span,
+body.desktop-workbench-mode .chat-settings-provider-copy span,
+body.desktop-workbench-mode .chat-settings-detail-header span,
+body.desktop-workbench-mode .chat-settings-summary-card p,
+body.desktop-workbench-mode .chat-settings-summary-meta span,
+body.desktop-workbench-mode .chat-settings-section-header span,
+body.desktop-workbench-mode .chat-settings-type-card span,
+body.desktop-workbench-mode .chat-settings-field span,
+body.desktop-workbench-mode .chat-settings-field small,
+body.desktop-workbench-mode .chat-settings-placeholder-card p,
+body.desktop-workbench-mode .chat-settings-placeholder-card span,
+body.desktop-workbench-mode .chat-settings-mcp-toolbar-copy p,
+body.desktop-workbench-mode .chat-settings-mcp-panel-header span,
+body.desktop-workbench-mode .chat-settings-mcp-server-item span,
+body.desktop-workbench-mode .chat-settings-mcp-tool-call span,
+body.desktop-workbench-mode .chat-settings-mcp-empty,
+body.desktop-workbench-mode .chat-settings-mcp-kv span,
+body.desktop-workbench-mode .chat-settings-unit {
+  color: var(--desktop-shell-text-muted, rgba(214, 221, 232, 0.62));
+}
+
+body.desktop-workbench-mode .chat-settings-placeholder-card,
+body.desktop-workbench-mode .chat-settings-detail-header,
+body.desktop-workbench-mode .chat-settings-summary-card,
+body.desktop-workbench-mode .chat-settings-type-card,
+body.desktop-workbench-mode .chat-settings-import-json,
+body.desktop-workbench-mode .chat-settings-test-note,
+body.desktop-workbench-mode .chat-settings-mcp-toolbar-bar,
+body.desktop-workbench-mode .chat-settings-mcp-list,
+body.desktop-workbench-mode .chat-settings-mcp-editor,
+body.desktop-workbench-mode .chat-settings-mcp-tool-call,
+body.desktop-workbench-mode .chat-settings-mcp-detail-section {
+  border-color: var(--desktop-shell-border, rgba(255, 255, 255, 0.08));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--desktop-shell-surface-strong, #1d242f) 95%, transparent) 0%,
+      color-mix(in srgb, var(--desktop-shell-surface, #171c24) 98%, transparent) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 12px 28px rgba(0, 0, 0, 0.12);
+}
+
+body.desktop-workbench-mode .chat-settings-summary-meta span,
+body.desktop-workbench-mode .chat-settings-mcp-chip,
+body.desktop-workbench-mode .chat-settings-mcp-list-meta span {
+  border-color: var(--desktop-shell-toolbar-border, rgba(255, 255, 255, 0.06));
+  background: color-mix(in srgb, var(--desktop-shell-toolbar-bg, rgba(255, 255, 255, 0.03)) 90%, transparent);
+  color: var(--desktop-shell-text-muted, rgba(214, 221, 232, 0.62));
+}
+
+body.desktop-workbench-mode .chat-settings-provider-search input,
+body.desktop-workbench-mode .chat-settings-field input,
+body.desktop-workbench-mode .chat-settings-field textarea,
+body.desktop-workbench-mode .chat-settings-select,
+body.desktop-workbench-mode .chat-settings-import-json textarea {
+  border-color: var(--desktop-shell-toolbar-border, rgba(255, 255, 255, 0.06));
+  background: color-mix(in srgb, var(--desktop-shell-surface, #171c24) 92%, transparent);
+  color: var(--desktop-shell-text, #f5f7fb);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.desktop-workbench-mode .chat-settings-provider-search input::placeholder,
+body.desktop-workbench-mode .chat-settings-field input::placeholder,
+body.desktop-workbench-mode .chat-settings-field textarea::placeholder,
+body.desktop-workbench-mode .chat-settings-import-json textarea::placeholder {
+  color: var(--desktop-shell-text-muted, rgba(214, 221, 232, 0.62));
+}
+
+body.desktop-workbench-mode .chat-settings-provider-search input:focus,
+body.desktop-workbench-mode .chat-settings-field input:focus,
+body.desktop-workbench-mode .chat-settings-field textarea:focus,
+body.desktop-workbench-mode .chat-settings-select:focus,
+body.desktop-workbench-mode .chat-settings-import-json textarea:focus {
+  border-color: color-mix(in srgb, var(--workbench-role-accent, #3b82f6) 38%, var(--desktop-shell-border, rgba(255, 255, 255, 0.08)));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 3px color-mix(in srgb, var(--workbench-role-accent, #3b82f6) 16%, transparent);
+}
+
+body.desktop-workbench-mode .chat-settings-panel-surface-skills .gn-agent-skills-page {
+  border-radius: inherit;
+}
+
+@media (max-width: 900px) {
+  body.desktop-workbench-mode .chat-settings-modal-backdrop {
+    padding: 10px;
+  }
+
+  body.desktop-workbench-mode .chat-settings-drawer {
+    width: 100%;
+    max-width: 100%;
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px);
+    border-radius: 20px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-answer-text,
   .chat-thinking-block,

@@ -21,12 +21,8 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "transparent": true,
-        "shadow": true,
-        "windowEffects": {
-          "effects": ["windowBackground"],
-          "radius": 14
-        }
+        "transparent": false,
+        "shadow": true
       }
     ],
     "macOSPrivateApi": true,

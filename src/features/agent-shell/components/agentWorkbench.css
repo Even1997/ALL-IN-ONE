@@ -1,8 +1,8 @@
 .agent-workbench-shell {
   --agent-shell-bg: linear-gradient(180deg, rgba(245, 247, 250, 0.98), rgba(236, 240, 245, 0.98));
-  --agent-panel-bg: rgba(255, 255, 255, 0.84);
-  --agent-panel-bg-strong: rgba(255, 255, 255, 0.95);
-  --agent-panel-bg-muted: rgba(248, 250, 252, 0.86);
+  --agent-panel-bg: rgba(255, 255, 255, 0.94);
+  --agent-panel-bg-strong: rgba(255, 255, 255, 0.98);
+  --agent-panel-bg-muted: rgba(244, 247, 251, 0.96);
   --agent-panel-border: rgba(15, 23, 42, 0.08);
   --agent-panel-border-strong: rgba(15, 23, 42, 0.14);
   --agent-text: #152235;
@@ -10,6 +10,7 @@
   --agent-chip-bg: rgba(15, 23, 42, 0.05);
   --agent-chip-fg: #324154;
   --agent-shadow: 0 18px 48px rgba(22, 34, 58, 0.08);
+  border-radius: inherit;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
@@ -25,9 +26,9 @@
 
 :root[data-theme='dark'] .agent-workbench-shell {
   --agent-shell-bg: linear-gradient(180deg, rgba(16, 18, 22, 0.99), rgba(11, 13, 17, 0.99));
-  --agent-panel-bg: rgba(22, 25, 31, 0.9);
-  --agent-panel-bg-strong: rgba(28, 32, 39, 0.96);
-  --agent-panel-bg-muted: rgba(18, 21, 27, 0.92);
+  --agent-panel-bg: rgba(22, 25, 31, 0.96);
+  --agent-panel-bg-strong: rgba(28, 32, 39, 0.985);
+  --agent-panel-bg-muted: rgba(18, 21, 27, 0.97);
   --agent-panel-border: rgba(255, 255, 255, 0.08);
   --agent-panel-border-strong: rgba(255, 255, 255, 0.14);
   --agent-text: #ecf0f5;
@@ -74,7 +75,8 @@
   border: 1px solid var(--agent-panel-border);
   border-radius: 26px 0 0 26px;
   background: var(--agent-panel-bg-muted);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow: var(--agent-shadow);
   display: flex;
   flex-direction: column;
@@ -179,7 +181,8 @@
   border-left: 0;
   border-radius: 0 26px 26px 0;
   background: var(--agent-panel-bg);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow: var(--agent-shadow);
   display: flex;
   flex-direction: column;
@@ -334,7 +337,8 @@
   border: 1px solid var(--agent-panel-border);
   border-radius: 28px;
   background: var(--agent-panel-bg);
-  backdrop-filter: blur(22px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow: var(--agent-shadow);
   display: flex;
   flex-direction: column;
@@ -462,8 +466,9 @@
 
 .agent-floating-plan-card {
   border-radius: 22px;
-  background: color-mix(in srgb, var(--agent-panel-bg-strong) 92%, transparent);
-  backdrop-filter: blur(18px);
+  background: var(--agent-panel-bg-strong);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   color: var(--agent-text);
   overflow: hidden;
 }
@@ -568,7 +573,8 @@
   border: 1px solid var(--agent-panel-border);
   border-radius: 26px;
   background: var(--agent-panel-bg);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow: var(--agent-shadow);
   display: flex;
   flex-direction: column;

@@ -1,0 +1,698 @@
+<style>
+  .hero {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .hero h2 {
+    margin: 0;
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 12px;
+  }
+
+  .brief,
+  .signal {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.42);
+    padding: 14px 16px;
+  }
+
+  .signal {
+    background:
+      radial-gradient(circle at top right, rgba(16, 185, 129, 0.16), transparent 38%),
+      rgba(15, 23, 42, 0.46);
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(226, 232, 240, 0.9);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .brief p,
+  .signal p {
+    margin: 10px 0 0;
+    color: rgba(226, 232, 240, 0.84);
+    line-height: 1.6;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .card {
+    overflow: hidden;
+    border-radius: 22px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: linear-gradient(180deg, rgba(12, 18, 28, 0.96), rgba(10, 14, 24, 0.98));
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.32);
+  }
+
+  .card-body {
+    display: grid;
+    gap: 10px;
+    padding: 14px 16px 16px;
+  }
+
+  .card-body h3 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+    font-size: 17px;
+  }
+
+  .card-body p {
+    margin: 0;
+    color: rgba(226, 232, 240, 0.78);
+    line-height: 1.55;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(226, 232, 240, 0.9);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+
+  .tag.recommended {
+    background: rgba(16, 185, 129, 0.18);
+    color: #d1fae5;
+  }
+
+  .mock-shell {
+    position: relative;
+    min-height: 262px;
+    padding: 12px;
+    background:
+      radial-gradient(circle at top left, rgba(56, 189, 248, 0.1), transparent 24%),
+      radial-gradient(circle at top right, rgba(34, 197, 94, 0.08), transparent 26%),
+      #0b1018;
+  }
+
+  .window {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 298px;
+    height: 238px;
+    border-radius: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    overflow: hidden;
+    background: rgba(15, 23, 42, 0.82);
+  }
+
+  .window.minimal {
+    grid-template-columns: 46px minmax(0, 1fr) 270px;
+    background: rgba(12, 18, 28, 0.88);
+  }
+
+  .window.dense {
+    grid-template-columns: 52px minmax(0, 1fr) 320px;
+    background: rgba(9, 14, 22, 0.92);
+  }
+
+  .rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 8px;
+    border-right: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .rail-stack {
+    display: grid;
+    gap: 8px;
+  }
+
+  .rail-dot,
+  .rail-logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .rail-logo {
+    background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(16,185,129,0.42));
+  }
+
+  .rail-dot.active {
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12), 0 0 0 1px rgba(16,185,129,0.3);
+    background: rgba(16, 185, 129, 0.18);
+  }
+
+  .core {
+    display: grid;
+    grid-template-rows: 42px minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 12px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  }
+
+  .titlebar.centered {
+    justify-content: center;
+    position: relative;
+  }
+
+  .titlebar.centered .window-buttons {
+    position: absolute;
+    right: 10px;
+  }
+
+  .titlebar.brand {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
+      rgba(10, 16, 25, 0.66);
+  }
+
+  .menu-cluster,
+  .tool-cluster,
+  .window-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .menu-pill,
+  .tool-pill {
+    height: 22px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .menu-pill {
+    width: 34px;
+  }
+
+  .menu-pill.long {
+    width: 76px;
+  }
+
+  .tool-pill {
+    width: 68px;
+  }
+
+  .tool-pill.short {
+    width: 34px;
+  }
+
+  .title-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .title-copy .line {
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.16);
+  }
+
+  .title-copy .line.title {
+    width: 112px;
+    background: rgba(255,255,255,0.7);
+  }
+
+  .title-copy .line.sub {
+    width: 72px;
+  }
+
+  .window-button {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .window-button.close {
+    background: rgba(239, 68, 68, 0.24);
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1px 100px;
+    min-height: 0;
+  }
+
+  .workspace.minimal-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .canvas {
+    display: grid;
+    grid-template-rows: 1fr 76px;
+    gap: 10px;
+    padding: 12px;
+    min-width: 0;
+  }
+
+  .hero-panel {
+    position: relative;
+    border-radius: 16px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)),
+      rgba(255,255,255,0.02);
+    overflow: hidden;
+  }
+
+  .hero-panel.glow::after {
+    content: "";
+    position: absolute;
+    inset: auto 16px 12px 16px;
+    height: 46px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(14,165,233,0.18), rgba(16,185,129,0.18), rgba(99,102,241,0.16));
+    filter: blur(14px);
+  }
+
+  .hero-grid-lines {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 100% 24px, 24px 100%;
+    opacity: 0.22;
+  }
+
+  .hero-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .hero-header .chip {
+    width: 52px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .hero-header .chip.accent {
+    background: rgba(16,185,129,0.2);
+  }
+
+  .floating-card {
+    position: absolute;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(9, 14, 24, 0.78);
+    box-shadow: 0 18px 34px rgba(0,0,0,0.22);
+  }
+
+  .floating-card.left {
+    left: 12px;
+    top: 54px;
+    width: 108px;
+    height: 74px;
+  }
+
+  .floating-card.right {
+    right: 14px;
+    top: 36px;
+    width: 124px;
+    height: 92px;
+  }
+
+  .floating-card.bottom {
+    left: 126px;
+    right: 92px;
+    bottom: 14px;
+    height: 44px;
+  }
+
+  .tray {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .mini-card {
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    background: rgba(255,255,255,0.03);
+  }
+
+  .sidebar-divider {
+    background: rgba(148, 163, 184, 0.1);
+  }
+
+  .assistant {
+    padding: 10px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)),
+      rgba(255,255,255,0.02);
+  }
+
+  .assistant-shell {
+    display: grid;
+    grid-template-rows: 34px 1fr 40px;
+    height: 100%;
+    gap: 10px;
+  }
+
+  .assistant-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .assistant-top .chip {
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .assistant-top .chip.name {
+    width: 82px;
+  }
+
+  .assistant-top .chip.status {
+    width: 36px;
+    background: rgba(16,185,129,0.18);
+  }
+
+  .thread {
+    display: grid;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .bubble {
+    border-radius: 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(148,163,184,0.08);
+  }
+
+  .bubble.large {
+    height: 64px;
+  }
+
+  .bubble.medium {
+    height: 44px;
+  }
+
+  .bubble.small {
+    height: 28px;
+    width: 72%;
+  }
+
+  .composer {
+    border-radius: 14px;
+    border: 1px solid rgba(148,163,184,0.1);
+    background: rgba(255,255,255,0.04);
+  }
+
+  .features {
+    display: grid;
+    gap: 6px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    color: rgba(226, 232, 240, 0.9);
+    font-size: 13px;
+  }
+
+  .features li::before {
+    content: "• ";
+    color: rgba(16, 185, 129, 0.9);
+  }
+</style>
+
+<div class="hero">
+  <div class="hero-grid">
+    <div class="brief">
+      <span class="eyebrow">Desktop Direction</span>
+      <h2>GoodNight 适合做成“原生桌面感 + 品牌气质”的工作台</h2>
+      <p>我建议保留你现在的四段式结构，不改骨架，只统一窗口层级、标题栏语言、面板质感和 AI 侧栏存在感。重点不是加更多装饰，而是把无边框窗口做成这个产品最有辨识度的部分。</p>
+    </div>
+    <div class="signal">
+      <span class="eyebrow">Recommended</span>
+      <p>推荐优先做第三个方向：比纯工具感更有记忆点，比 IDE 风更克制。它最适合你现在这类“知识 / 设计 / 开发 / Agent”混合工作台。</p>
+    </div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="mock-shell">
+      <div class="window minimal">
+        <div class="rail">
+          <div class="rail-logo"></div>
+          <div class="rail-stack">
+            <div class="rail-dot active"></div>
+            <div class="rail-dot"></div>
+            <div class="rail-dot"></div>
+            <div class="rail-dot"></div>
+          </div>
+          <div class="rail-dot"></div>
+        </div>
+        <div class="core">
+          <div class="titlebar centered">
+            <div class="title-copy">
+              <div class="line title"></div>
+              <div class="line sub"></div>
+            </div>
+            <div class="window-buttons">
+              <div class="window-button"></div>
+              <div class="window-button"></div>
+              <div class="window-button close"></div>
+            </div>
+          </div>
+          <div class="workspace minimal-main">
+            <div class="canvas">
+              <div class="hero-panel">
+                <div class="hero-grid-lines"></div>
+                <div class="hero-header">
+                  <div class="chip accent"></div>
+                  <div class="chip"></div>
+                  <div class="chip"></div>
+                </div>
+                <div class="floating-card left"></div>
+                <div class="floating-card right"></div>
+              </div>
+              <div class="tray">
+                <div class="mini-card"></div>
+                <div class="mini-card"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="assistant">
+          <div class="assistant-shell">
+            <div class="assistant-top">
+              <div class="chip name"></div>
+              <div class="chip status"></div>
+            </div>
+            <div class="thread">
+              <div class="bubble large"></div>
+              <div class="bubble medium"></div>
+              <div class="bubble small"></div>
+            </div>
+            <div class="composer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Quiet Native <span class="tag">最克制</span></h3>
+      <p>更接近 Linear / Raycast 那种安静、专业、原生感强的工具。标题栏尽量轻，主工作区最显眼。</p>
+      <ul class="features">
+        <li>视觉负担最小，稳定耐看</li>
+        <li>系统窗口手感最自然</li>
+        <li>品牌记忆点相对弱一点</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="mock-shell">
+      <div class="window dense">
+        <div class="rail">
+          <div class="rail-logo"></div>
+          <div class="rail-stack">
+            <div class="rail-dot active"></div>
+            <div class="rail-dot active"></div>
+            <div class="rail-dot"></div>
+            <div class="rail-dot"></div>
+            <div class="rail-dot"></div>
+          </div>
+          <div class="rail-dot"></div>
+        </div>
+        <div class="core">
+          <div class="titlebar">
+            <div class="menu-cluster">
+              <div class="menu-pill"></div>
+              <div class="menu-pill"></div>
+              <div class="menu-pill long"></div>
+            </div>
+            <div class="tool-cluster">
+              <div class="tool-pill"></div>
+              <div class="tool-pill short"></div>
+            </div>
+          </div>
+          <div class="workspace">
+            <div class="canvas">
+              <div class="hero-panel">
+                <div class="hero-grid-lines"></div>
+                <div class="hero-header">
+                  <div class="chip accent"></div>
+                  <div class="chip"></div>
+                  <div class="chip"></div>
+                </div>
+                <div class="floating-card left"></div>
+                <div class="floating-card right"></div>
+                <div class="floating-card bottom"></div>
+              </div>
+              <div class="tray">
+                <div class="mini-card"></div>
+                <div class="mini-card"></div>
+              </div>
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="assistant" style="background: rgba(255,255,255,0.03)"></div>
+          </div>
+        </div>
+        <div class="assistant">
+          <div class="assistant-shell">
+            <div class="assistant-top">
+              <div class="chip name"></div>
+              <div class="chip status"></div>
+            </div>
+            <div class="thread">
+              <div class="bubble medium"></div>
+              <div class="bubble medium"></div>
+              <div class="bubble large"></div>
+              <div class="bubble small"></div>
+            </div>
+            <div class="composer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Studio Dense <span class="tag">操作感强</span></h3>
+      <p>更像 IDE / 创作工作台，工具感更重，信息更满，适合强调多面板、多状态、多任务并行。</p>
+      <ul class="features">
+        <li>专业工作台气质明确</li>
+        <li>适合复杂流程和高密度状态</li>
+        <li>稍不控制就会显得硬和乱</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="mock-shell">
+      <div class="window">
+        <div class="rail">
+          <div class="rail-logo"></div>
+          <div class="rail-stack">
+            <div class="rail-dot active"></div>
+            <div class="rail-dot"></div>
+            <div class="rail-dot active"></div>
+            <div class="rail-dot"></div>
+          </div>
+          <div class="rail-dot"></div>
+        </div>
+        <div class="core">
+          <div class="titlebar brand">
+            <div class="menu-cluster">
+              <div class="menu-pill"></div>
+              <div class="menu-pill"></div>
+              <div class="title-copy">
+                <div class="line title"></div>
+                <div class="line sub"></div>
+              </div>
+            </div>
+            <div class="tool-cluster">
+              <div class="tool-pill"></div>
+              <div class="tool-pill short"></div>
+              <div class="window-buttons">
+                <div class="window-button"></div>
+                <div class="window-button"></div>
+                <div class="window-button close"></div>
+              </div>
+            </div>
+          </div>
+          <div class="workspace">
+            <div class="canvas">
+              <div class="hero-panel glow">
+                <div class="hero-grid-lines"></div>
+                <div class="hero-header">
+                  <div class="chip accent"></div>
+                  <div class="chip"></div>
+                  <div class="chip"></div>
+                </div>
+                <div class="floating-card left"></div>
+                <div class="floating-card right"></div>
+                <div class="floating-card bottom"></div>
+              </div>
+              <div class="tray">
+                <div class="mini-card"></div>
+                <div class="mini-card"></div>
+              </div>
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="assistant" style="background: rgba(255,255,255,0.02)"></div>
+          </div>
+        </div>
+        <div class="assistant">
+          <div class="assistant-shell">
+            <div class="assistant-top">
+              <div class="chip name"></div>
+              <div class="chip status"></div>
+            </div>
+            <div class="thread">
+              <div class="bubble large"></div>
+              <div class="bubble medium"></div>
+              <div class="bubble medium"></div>
+              <div class="bubble small"></div>
+            </div>
+            <div class="composer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Signature Workbench <span class="tag recommended">推荐</span></h3>
+      <p>保留专业工作台的秩序感，但给标题栏、窗口框体和 AI 侧栏更完整的产品识别。更像“这是 GoodNight 自己的桌面工具”。</p>
+      <ul class="features">
+        <li>原生感、品牌感、工作感更平衡</li>
+        <li>最适合无边框窗口做出识别度</li>
+        <li>后续也最容易同时做流畅度优化</li>
+      </ul>
+    </div>
+  </div>
+</div>
