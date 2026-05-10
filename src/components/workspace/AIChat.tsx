@@ -56,9 +56,10 @@ import {
   getLatestReplaySkillSnapshot,
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
 import { useRuntimeMcpStore } from '../../modules/ai/runtime/mcp/runtimeMcpStore';
-import { useRuntimeConversationGateway } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
+import { useActiveConversationSelection } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
+import { getLatestTurnSession } from '../../modules/ai/runtime/session/agentSessionSelectors.ts';
 import type { AgentTeamRunRecord } from '../../modules/ai/runtime/teams/teamTypes';
 import {
   type ChatSession,
@@ -103,12 +104,14 @@ import {
 import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
-  GNAgentMessageList,
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import { AIChatReferenceSearchMenu } from './AIChatReferenceSearchMenu';
 import { AIChatSlashCommandMenu, type SlashCommandEntry } from './AIChatSlashCommandMenu';
 import { RuntimeMcpSettingsPage } from './RuntimeMcpSettingsPage';
+import { AIChatConversationMessagesPane } from './AIChatConversationMessagesPane';
+import { AIChatRuntimeStatusPanel } from './AIChatRuntimeStatusPanel';
+import { AIChatRuntimeTasksPanel } from './AIChatRuntimeTasksPanel';
 import {
   buildWelcomeMessage,
   getChatShellLayoutClassName,
@@ -131,10 +134,6 @@ const loadAIServiceModule = () => (aiServiceModulePromise ??= import('../../modu
 const LazyAIChatAISettingsTab = lazy(async () => {
   const module = await import('./AIChatAISettingsTab');
   return { default: module.AIChatAISettingsTab };
-});
-const LazyAIChatRuntimeApprovalList = lazy(async () => {
-  const module = await import('./AIChatRuntimeInteractionCards');
-  return { default: module.AIChatRuntimeApprovalList };
 });
 const LazyAIChatRuntimeTimelineInteractionEvent = lazy(async () => {
   const module = await import('./AIChatRuntimeInteractionCards');
@@ -1512,7 +1511,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     appendReplayEvent: cacheReplayEventEntry,
     setRecoveryState: setRuntimeRecoveryState,
     clearReplayResumeRequest,
-    activeSkillsByThread,
     setActiveSkills,
     pruneThreadHistorySince,
     patchLiveState,
@@ -1523,7 +1521,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       appendReplayEvent: state.appendReplayEvent,
       setRecoveryState: state.setRecoveryState,
       clearReplayResumeRequest: state.clearReplayResumeRequest,
-      activeSkillsByThread: state.activeSkillsByThread,
       setActiveSkills: state.setActiveSkills,
       pruneThreadHistorySince: state.pruneThreadHistorySince,
       patchLiveState: state.patchLiveState,
@@ -1535,11 +1532,19 @@ export const AIChat: React.FC<AIChatProps> = ({
       runtimeMcpServers: state.servers,
     }))
     );
-  const conversation = useRuntimeConversationGateway({
-    projectId: currentProject?.id || null,
+  const currentProjectId = currentProject?.id || null;
+  const {
+    sessions,
+    activeSessionId,
+    activeSession,
+    approvalThreadId: activeApprovalThreadId,
+    checkpointThreadId: activeCheckpointThreadId,
+    taskThreadId: activeTaskThreadId,
+    liveThreadId: activeLiveThreadId,
+  } = useActiveConversationSelection({
+    projectId: currentProjectId,
   });
   const {
-    approvalsByThread,
     permissionMode,
     enqueueApproval,
     resolveApproval: resolveStoredApproval,
@@ -1547,7 +1552,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     setSandboxPolicy,
   } = useApprovalStore(
     useShallow((state) => ({
-      approvalsByThread: state.approvalsByThread,
       permissionMode: state.permissionMode,
       enqueueApproval: state.enqueueApproval,
       resolveApproval: state.resolveApproval,
@@ -1604,52 +1608,22 @@ export const AIChat: React.FC<AIChatProps> = ({
     void initializeRuntimeSidecarMcpServers();
   }, []);
 
-  const sessions = conversation.sessions.length > 0 ? conversation.sessions : EMPTY_SESSIONS;
-  const activeSessionId = conversation.activeSessionId;
-  const activeSession = conversation.activeSession;
-  const activeApprovalThreadId = conversation.approvalThreadId;
-  const activeCheckpointThreadId = conversation.checkpointThreadId;
-  const activeTaskThreadId = conversation.taskThreadId;
-  const activeLiveThreadId = conversation.liveThreadId;
-  const messages = conversation.messages.length > 0 ? conversation.messages : EMPTY_MESSAGES;
-  const activityEntries =
-    conversation.activityEntries.length > 0
-      ? conversation.activityEntries
-      : EMPTY_ACTIVITY_ENTRIES;
-  const pendingApprovals =
-    conversation.pendingApprovals.length > 0
-      ? conversation.pendingApprovals
-      : EMPTY_PENDING_APPROVALS;
-  useEffect(() => {
-    if (!activeApprovalThreadId) {
-      return;
-    }
-
-    patchLiveState(activeApprovalThreadId, (state) => ({
-      ...state,
-      pendingPermissionCount: pendingApprovals.length,
-      pendingApprovalSummary: pendingApprovals[0]?.summary || null,
-      statusVerb:
-        pendingApprovals.length > 0
-          ? 'Waiting for approval'
-          : state.pendingPermissionCount > 0
-            ? ''
-            : state.statusVerb,
-    }));
-  }, [activeApprovalThreadId, patchLiveState, pendingApprovals]);
-  const activeSkills =
-    conversation.activeSkills.length > 0
-      ? conversation.activeSkills
-      : activeSessionId
-        ? activeSkillsByThread[activeSessionId] || EMPTY_RUNTIME_SKILLS
-        : EMPTY_RUNTIME_SKILLS;
-  const latestTurnSession = conversation.latestTurnSession;
-  const activeReplayResumeRequest = conversation.replayResumeRequest;
-  const activeRuntimeLiveState = conversation.liveState;
-  const activeBackgroundTasks =
-    conversation.backgroundTasks.length > 0
-      ? conversation.backgroundTasks
-      : EMPTY_BACKGROUND_TASKS;
+  const latestTurnSession = useAgentRuntimeStore((state) =>
+    activeSessionId ? getLatestTurnSession(state.sessionsByThread[activeSessionId]) || null : null,
+  );
+  const activeReplayResumeRequest = useAgentRuntimeStore((state) =>
+    activeSessionId ? state.resumeRequestsByThread[activeSessionId] || null : null,
+  );
+  const activityEntries = useAIChatStore((state) =>
+    currentProjectId ? state.projects[currentProjectId]?.activityEntries || EMPTY_ACTIVITY_ENTRIES : EMPTY_ACTIVITY_ENTRIES,
+  );
+  const pendingApprovalCount = useApprovalStore((state) =>
+    activeApprovalThreadId
+      ? (state.approvalsByThread[activeApprovalThreadId] || EMPTY_PENDING_APPROVALS).filter(
+          (approval) => approval.status === 'pending',
+        ).length
+      : 0,
+  );
   const replayRecoveryController = useMemo(
     () =>
       createReplayRecoveryController({
@@ -1672,62 +1646,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       }),
     [cacheReplayEventEntry, currentProject, setRuntimeRecoveryState, syncSessionReplayState]
   );
-
-  useEffect(() => {
-    if (!activeLiveThreadId) {
-      return;
-    }
-
-    patchLiveState(activeLiveThreadId, (state) => ({
-      ...state,
-      connectionState: activeSession?.runtimeThreadId
-        ? state.connectionState === 'disconnected'
-          ? 'reconnecting'
-          : 'connected'
-        : 'disconnected',
-    }));
-  }, [activeLiveThreadId, activeSession?.runtimeThreadId, patchLiveState]);
-
-  useEffect(() => {
-    if (!activeLiveThreadId || !activeRuntimeLiveState?.startedAt) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      patchLiveState(activeLiveThreadId, (state) => ({
-        ...state,
-        elapsedSeconds: getElapsedSecondsSince(state.startedAt, state.elapsedSeconds),
-      }));
-    }, 1000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [activeLiveThreadId, activeRuntimeLiveState?.startedAt, patchLiveState]);
-
-  const effectiveStreamingDraftContents = useMemo(() => {
-    if (!activeRuntimeLiveState?.activeThinking) {
-      return streamingDraftContents;
-    }
-    const reasoningReferenceTime = Date.now();
-
-    return Object.fromEntries(
-      Object.entries(streamingDraftContents).map(([messageId, draft]) => [
-        messageId,
-        {
-          ...draft,
-          timeline: applyAssistantReasoningProgress(draft.timeline, {
-            active: true,
-            referenceTime: reasoningReferenceTime,
-          }),
-        },
-      ])
-    );
-  }, [
-    activeRuntimeLiveState?.activeThinking,
-    streamingDraftContents,
-  ]);
-
   useEffect(() => {
     if (!activeReplayResumeRequest) {
       return;
@@ -1933,44 +1851,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     updateAssistantMessageTimeline,
   });
 
-  const renderRuntimeApprovalCard = useCallback(
-    (message: StoredChatMessage) => {
-      if (
-        message.role === 'assistant' &&
-        getAssistantRuntimeTimelineEvents(message.timeline).some((event) => event.kind === 'approval')
-      ) {
-        return null;
-      }
-      if (!activeApprovalThreadId || message.role !== 'assistant' || message.projectFileProposal) {
-        return null;
-      }
-
-      const messageApprovals = (approvalsByThread[activeApprovalThreadId] || []).filter(
-        (approval) => approval.messageId === message.id
-      );
-      if (messageApprovals.length === 0) {
-        return null;
-      }
-
-      return (
-        <Suspense fallback={null}>
-          <LazyAIChatRuntimeApprovalList
-            approvals={messageApprovals}
-            pendingApprovalDisplays={Object.fromEntries(
-              messageApprovals.map((approval) => [approval.id, pendingApprovalActionsRef.current[approval.id]?.display])
-            )}
-            summarizeProjectFilePath={summarizeProjectFilePath}
-            onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
-            onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
-            approvalStatusLabelMap={approvalStatusLabelMap}
-            approvalRiskLabelMap={approvalRiskLabelMap}
-            approvalActionLabelMap={approvalActionLabelMap}
-          />
-        </Suspense>
-      );
-    },
-    [activeApprovalThreadId, approvalsByThread, handleApproveRuntimeApproval, handleDenyRuntimeApproval]
-  );
   const renderRuntimeQuestionCard = useCallback(
     (_message: StoredChatMessage) => null,
     []
@@ -2082,7 +1962,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     scrollToBottom();
     const frameId = requestAnimationFrame(scrollToBottom);
     return () => cancelAnimationFrame(frameId);
-  }, [messages, isLoading, streamingDraftContents]);
+  }, [activeSession?.messages, isLoading, streamingDraftContents]);
 
   useEffect(
     () => () => {
@@ -2504,13 +2384,24 @@ export const AIChat: React.FC<AIChatProps> = ({
     ]
   );
 
+  const getConversationHistory = useCallback(() => {
+    if (!currentProjectId || !activeSession?.id) {
+      return [];
+    }
+
+    const latestSession =
+      useAIChatStore.getState().projects[currentProjectId]?.sessions.find((session) => session.id === activeSession.id) || null;
+
+    return toConversationHistoryMessages(latestSession?.messages || []);
+  }, [activeSession?.id, currentProjectId]);
+
   const currentContextUsage = useMemo(() => {
     const previewPrompt = buildDirectChatPrompt({
       userInput: input.trim() || '继续当前对话',
       currentProjectName: currentProject?.name,
       contextWindowTokens: selectedRuntimeConfig?.contextWindowTokens || 258000,
       skillIntent: null,
-      conversationHistory: toConversationHistoryMessages(activeSession?.messages || []),
+      conversationHistory: getConversationHistory(),
       referenceContext: previewReferenceContext,
       contextLabels: runtimeContextLabels,
     });
@@ -2520,9 +2411,9 @@ export const AIChat: React.FC<AIChatProps> = ({
       selectedRuntimeConfig?.contextWindowTokens || 258000
     );
   }, [
+    getConversationHistory,
     currentProject?.name,
     input,
-    activeSession?.messages,
     previewReferenceContext,
     runtimeContextLabels,
     selectedRuntimeConfig,
@@ -2559,16 +2450,7 @@ export const AIChat: React.FC<AIChatProps> = ({
         : [],
     [expandedDiffTarget, turnCheckpoints]
   );
-  const pendingApprovalCount = pendingApprovals.length;
   const latestTurnSessionStatus = latestTurnSession?.status || null;
-  const runtimeConnectionLabel =
-    activeRuntimeLiveState?.connectionState === 'connecting'
-      ? 'Connecting'
-      : activeRuntimeLiveState?.connectionState === 'reconnecting'
-        ? 'Reconnecting'
-        : activeRuntimeLiveState?.connectionState === 'connected'
-          ? 'Connected'
-          : 'Disconnected';
   const { stalled, stallDuration: currentStallDuration } = useStallDetector(
     isLoading,
     stallFP,
@@ -2579,8 +2461,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       ? 'Planning'
       : latestTurnSessionStatus === 'waiting_approval'
         ? 'Approval required'
-        : activeRuntimeLiveState?.pendingQuestionSummary
-          ? 'Input required'
         : latestTurnSessionStatus === 'executing'
           ? stalled ? `Executing (stalled ${(currentStallDuration / 1000).toFixed(0)}s)` : 'Executing'
           : latestTurnSessionStatus === 'resumable'
@@ -2590,19 +2470,15 @@ export const AIChat: React.FC<AIChatProps> = ({
               : latestTurnSessionStatus === 'failed'
                 ? 'Failed'
                 : pendingApprovalCount > 0
-      ? 'Approval required'
-      : activeRuntimeLiveState?.statusVerb
-        ? activeRuntimeLiveState.statusVerb
-      : isLoading
-        ? 'Running'
-        : latestActivityEntry?.type === 'failed'
-          ? 'Failed'
-          : 'Ready';
+                  ? 'Approval required'
+                  : isLoading
+                    ? 'Running'
+                    : latestActivityEntry?.type === 'failed'
+                      ? 'Failed'
+                      : 'Ready';
   const runStateTone =
     latestTurnSessionStatus === 'waiting_approval' || latestTurnSessionStatus === 'resumable'
       ? 'warning'
-      : activeRuntimeLiveState?.pendingQuestionSummary
-        ? 'warning'
       : latestTurnSessionStatus === 'failed'
         ? 'error'
         : latestTurnSessionStatus === 'completed'
@@ -3130,13 +3006,13 @@ export const AIChat: React.FC<AIChatProps> = ({
     resetSettingsTransientUi();
   }, [resetSettingsTransientUi]);
   const { handleCreateSession, submitPrompt } = useAIChatSidecarSessionActions({
-    currentProjectId: currentProject?.id || null,
+    currentProjectId,
     currentProjectName: currentProject?.name || null,
     projectRoot: currentProject?.vaultPath || null,
     runtimeProviderId,
     activeSession,
     permissionMode,
-    conversationHistory: toConversationHistoryMessages(activeSession?.messages || []),
+    getConversationHistory: getConversationHistory,
     referenceFiles: resolvedReferenceContextFiles,
     contextLabels: runtimeContextLabels,
     selectedRuntimeConfig,
@@ -3490,47 +3366,10 @@ export const AIChat: React.FC<AIChatProps> = ({
       buildSessionPreview={buildSessionPreview}
     />
   ) : null;
-  const runtimeTaskBar =
-    activeBackgroundTasks.length > 0 ? (
-      <section className="chat-runtime-task-strip" aria-label="Runtime tasks">
-        {activeBackgroundTasks.slice(0, 3).map((task) => {
-          let progressLabel = task.status;
-
-          if (task.runKind === 'team') {
-            try {
-              const teamRun = JSON.parse(task.payloadJson) as AgentTeamRunRecord;
-              const completedCount = teamRun.members.filter((member) => member.status === 'completed').length;
-              progressLabel = `${completedCount}/${teamRun.members.length}`;
-            } catch {
-              progressLabel = task.status;
-            }
-          }
-
-          const tone =
-            task.status === 'failed'
-              ? 'error'
-              : task.status === 'completed'
-                ? 'success'
-                : task.status === 'running' || task.status === 'planning'
-                  ? 'running'
-                  : '';
-
-          return (
-            <article key={task.id} className={`chat-runtime-task-chip ${tone}`.trim()}>
-              <div>
-                <strong>{task.title}</strong>
-                <span>{task.summary || task.runKind}</span>
-              </div>
-              <code>{progressLabel}</code>
-            </article>
-          );
-        })}
-      </section>
-    ) : null;
   const agentChatContent = (
-    <GNAgentMessageList
-      messages={messages}
-      draftContents={effectiveStreamingDraftContents}
+    <AIChatConversationMessagesPane
+      projectId={currentProjectId}
+      draftContents={streamingDraftContents}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseAIChatMessageParts}
       renderMessagePart={renderMessagePart}
@@ -3538,11 +3377,17 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderProjectFileProposal={renderProjectFileProposal}
       renderToolExecutionCard={renderToolExecutionCard}
       renderRunSummaryCard={renderRunSummaryCard}
-      renderRuntimeApproval={renderRuntimeApprovalCard}
       renderRuntimeQuestion={renderRuntimeQuestionCard}
-      listRef={messageListRef}
+      messageListRef={messageListRef}
       messagesEndRef={messagesEndRef}
-      leadingContent={runtimeTaskBar}
+      leadingContent={<AIChatRuntimeTasksPanel projectId={currentProjectId} />}
+      pendingApprovalActionsRef={pendingApprovalActionsRef}
+      summarizeProjectFilePath={summarizeProjectFilePath}
+      onApprove={handleApproveRuntimeApproval}
+      onDeny={handleDenyRuntimeApproval}
+      approvalStatusLabelMap={approvalStatusLabelMap}
+      approvalRiskLabelMap={approvalRiskLabelMap}
+      approvalActionLabelMap={approvalActionLabelMap}
     />
   );
   useEffect(() => {
@@ -3565,37 +3410,20 @@ export const AIChat: React.FC<AIChatProps> = ({
             </div>
 
             {showExpandedShell && !isEmbedded ? (
-              <div className="chat-shell-status-strip">
-                <span className="chat-shell-status-pill">{selectedAgent.label}</span>
-                <span className="chat-shell-status-pill">{selectedRuntimeConfig?.model || '未启用模型'}</span>
-                <span className="chat-shell-status-pill">Session / {runtimeConnectionLabel}</span>
-                <span className="chat-shell-status-pill">Skills / {activeSkills.length}</span>
-                <span className="chat-shell-status-pill">MCP / {runtimeMcpServers.length}</span>
-                <span className="chat-shell-status-pill">权限模式 / {PERMISSION_MODE_LABELS[permissionMode]}</span>
-                <span className={`chat-shell-status-pill ${pendingApprovalCount > 0 ? 'warning' : ''}`}>
-                  Approvals / {pendingApprovalCount}
-                </span>
-                {activeRuntimeLiveState?.activeToolName ? (
-                  <span className="chat-shell-status-pill">Tool / {activeRuntimeLiveState.activeToolName}</span>
-                ) : null}
-                {activeRuntimeLiveState?.streamingToolInput ? (
-                  <span className="chat-shell-status-pill">Input / {activeRuntimeLiveState.streamingToolInput}</span>
-                ) : null}
-                {activeRuntimeLiveState?.pendingQuestionSummary ? (
-                  <span className="chat-shell-status-pill warning">Question / Waiting</span>
-                ) : null}
-                <span className="chat-shell-status-pill">
-                  Elapsed / {activeRuntimeLiveState?.elapsedSeconds || 0}s
-                </span>
-                <span className="chat-shell-status-pill">
-                  Tokens / ~{activeRuntimeLiveState?.tokenUsage.inputTokens || 0} in / ~
-                  {activeRuntimeLiveState?.tokenUsage.outputTokens || 0} out
-                </span>
-                <span className={`chat-shell-status-pill ${currentContextUsage.ratio >= 0.8 ? 'warning' : ''}`}>
-                  {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
-                </span>
-                <span className={`chat-shell-status-pill ${runStateTone}`}>{runStateLabel}</span>
-              </div>
+              <AIChatRuntimeStatusPanel
+                projectId={currentProjectId}
+                selectedAgentLabel={selectedAgent.label}
+                runtimeModelLabel={selectedRuntimeConfig?.model || '未启用模型'}
+                runtimeMcpServerCount={runtimeMcpServers.length}
+                permissionModeLabel={PERMISSION_MODE_LABELS[permissionMode]}
+                currentContextUsage={currentContextUsage}
+                isLoading={isLoading}
+                latestActivityType={latestActivityEntry?.type || null}
+                stalled={stalled}
+                stallDuration={currentStallDuration}
+                hasRuntimeThread={Boolean(activeSession?.runtimeThreadId)}
+                patchLiveState={patchLiveState}
+              />
             ) : null}
 
             <div className="chat-shell-header-actions">

@@ -21,7 +21,7 @@ type UseAIChatSidecarSessionActionsInput = {
     title: string;
   } | null;
   permissionMode: 'ask' | 'plan' | 'auto' | 'bypass';
-  conversationHistory: RuntimeConversationHistoryMessage[];
+  getConversationHistory: () => RuntimeConversationHistoryMessage[];
   referenceFiles: RuntimeReferenceFileRecord[];
   contextLabels: string[];
   selectedRuntimeConfig: AIConfigEntry | null;
@@ -42,7 +42,7 @@ export const useAIChatSidecarSessionActions = ({
   runtimeProviderId,
   activeSession,
   permissionMode,
-  conversationHistory,
+  getConversationHistory,
   referenceFiles,
   contextLabels,
   selectedRuntimeConfig,
@@ -136,7 +136,7 @@ export const useAIChatSidecarSessionActions = ({
           projectName: currentProjectName || currentProjectId || '当前项目',
           projectRoot: projectRoot || undefined,
           permissionMode,
-          conversationHistory,
+          conversationHistory: getConversationHistory(),
           referenceFiles,
           contextLabels,
           runtimeConfig: selectedRuntimeConfig,
@@ -164,7 +164,7 @@ export const useAIChatSidecarSessionActions = ({
       activeSession,
       currentProjectName,
       currentProjectId,
-      conversationHistory,
+      getConversationHistory,
       contextLabels,
       isSelectedChatAgentReady,
       permissionMode,
