@@ -11,6 +11,12 @@ type RuntimeProviderReadResult = {
   thinking: string;
 };
 
+type RuntimeProviderPartialToolCall = {
+  id?: string;
+  name?: string;
+  partialArguments: string;
+};
+
 type RuntimeProviderStreamInput = {
   runtimeConfig: RuntimeModelConfig;
   prompt: string;
@@ -105,31 +111,163 @@ const normalizeUsage = (
   };
 };
 
-const parseOpenAICompatibleToolCall = (delta: any): RuntimeProviderToolCall[] =>
-  Array.isArray(delta?.tool_calls)
-    ? delta.tool_calls.flatMap((entry: any) => {
-        const name = entry?.function?.name;
-        const args = entry?.function?.arguments;
-        if (typeof name !== 'string' || typeof args !== 'string') {
+const parseToolArguments = (value: unknown): Record<string, unknown> | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const buildRuntimeProviderToolCall = (input: {
+  id?: string;
+  name?: string;
+  arguments: unknown;
+  fallbackId: string;
+}): RuntimeProviderToolCall | null => {
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  const parsedArguments = parseToolArguments(input.arguments);
+  if (!name || !parsedArguments) {
+    return null;
+  }
+
+  return {
+    id: typeof input.id === 'string' && input.id.trim() ? input.id.trim() : input.fallbackId,
+    name,
+    input: parsedArguments,
+  };
+};
+
+const parseOpenAICompatibleToolCalls = (value: unknown): RuntimeProviderToolCall[] =>
+  Array.isArray(value)
+    ? value.flatMap((entry: any, index: number) => {
+        const parsed = buildRuntimeProviderToolCall({
+          id: entry?.id,
+          name: entry?.function?.name,
+          arguments: entry?.function?.arguments,
+          fallbackId: `call_${index}`,
+        });
+        return parsed ? [parsed] : [];
+      })
+    : [];
+
+const accumulateOpenAICompatibleToolCalls = (
+  delta: any,
+  toolBlocks: Map<number, RuntimeProviderPartialToolCall>,
+): RuntimeProviderToolCall[] => {
+  if (!Array.isArray(delta?.tool_calls)) {
+    return [];
+  }
+
+  const completed: RuntimeProviderToolCall[] = [];
+  delta.tool_calls.forEach((entry: any, index: number) => {
+    const blockIndex = typeof entry?.index === 'number' ? entry.index : index;
+    const block = toolBlocks.get(blockIndex) || { partialArguments: '' };
+
+    if (typeof entry?.id === 'string' && entry.id.trim()) {
+      block.id = entry.id.trim();
+    }
+    if (typeof entry?.function?.name === 'string' && entry.function.name.trim()) {
+      block.name = entry.function.name.trim();
+    }
+    if (typeof entry?.function?.arguments === 'string') {
+      block.partialArguments += entry.function.arguments;
+    }
+
+    toolBlocks.set(blockIndex, block);
+    const parsed = buildRuntimeProviderToolCall({
+      id: block.id,
+      name: block.name,
+      arguments: block.partialArguments,
+      fallbackId: `call_${blockIndex}`,
+    });
+    if (!parsed) {
+      return;
+    }
+
+    completed.push(parsed);
+    toolBlocks.delete(blockIndex);
+  });
+
+  return completed;
+};
+
+const extractOpenAICompatibleMessageText = (content: unknown) => {
+  if (typeof content === 'string' && content.trim()) {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    const text = content.map((item: { text?: string }) => item?.text || '').join('\n').trim();
+    if (text) {
+      return text;
+    }
+  }
+
+  return '';
+};
+
+const emitToolCallEvents = async (
+  toolCalls: RuntimeProviderToolCall[],
+  onEvent?: RuntimeProviderStreamInput['onEvent'],
+) => {
+  for (const toolCall of toolCalls) {
+    await onEvent?.({
+      kind: 'tool_call',
+      toolCall,
+    });
+  }
+};
+
+const serializeToolCalls = (toolCalls: RuntimeProviderToolCall[]) =>
+  JSON.stringify({
+    tool_calls: toolCalls.map((toolCall) => ({
+      id: toolCall.id,
+      function: {
+        name: toolCall.name,
+        arguments: JSON.stringify(toolCall.input),
+      },
+    })),
+  });
+
+const buildAssistantFallbackContent = (text: string, toolCalls: RuntimeProviderToolCall[]) => {
+  const trimmedText = text.trim();
+  if (toolCalls.length === 0) {
+    return trimmedText;
+  }
+
+  const serializedToolCalls = serializeToolCalls(toolCalls);
+  return trimmedText ? `${trimmedText}\n${serializedToolCalls}` : serializedToolCalls;
+};
+
+const parseAnthropicMessageToolCalls = (content: unknown): RuntimeProviderToolCall[] =>
+  Array.isArray(content)
+    ? content.flatMap((block: any, index: number) => {
+        if (block?.type !== 'tool_use') {
           return [];
         }
 
-        try {
-          const parsed = JSON.parse(args);
-          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-            return [];
-          }
-
-          return [
-            {
-              id: typeof entry?.id === 'string' && entry.id.trim() ? entry.id : `call_${Date.now()}`,
-              name,
-              input: parsed,
-            },
-          ];
-        } catch {
+        const structuredInput =
+          block.input && typeof block.input === 'object' && !Array.isArray(block.input)
+            ? (block.input as Record<string, unknown>)
+            : {};
+        if (typeof block.name !== 'string' || !block.name.trim()) {
           return [];
         }
+
+        return [
+          {
+            id: typeof block.id === 'string' && block.id.trim() ? block.id : `call_${index}`,
+            name: block.name.trim(),
+            input: structuredInput,
+          },
+        ];
       })
     : [];
 
@@ -155,7 +293,7 @@ const buildAnthropicTools = () =>
 
 const readEventStream = async (
   body: ReadableStream<Uint8Array>,
-  onEvent: NonNullable<RuntimeProviderStreamInput['onEvent']>,
+  onEvent: RuntimeProviderStreamInput['onEvent'],
   parseEvents: (data: string) => RuntimeProviderEvent[],
 ): Promise<RuntimeProviderReadResult> => {
   const reader = body.getReader();
@@ -172,7 +310,7 @@ const readEventStream = async (
         answer += event.delta;
       }
 
-      await onEvent(event);
+      await onEvent?.(event);
     }
   };
 
@@ -254,21 +392,20 @@ const streamOpenAICompatibleTurn = async (
       throw new Error(`OpenAI-compatible API error (${response.status}): ${await response.text()}`);
     }
 
-    if (!response.body || !input.onEvent || !isEventStreamResponse(response)) {
+    if (!response.body || !isEventStreamResponse(response)) {
       const payload = await response.json();
-      const content = payload?.choices?.[0]?.message?.content;
-      if (typeof content === 'string' && content.trim()) {
-        return content;
-      }
-      if (Array.isArray(content)) {
-        const text = content.map((item: { text?: string }) => item?.text || '').join('\n').trim();
-        if (text) {
-          return text;
-        }
+      const message = payload?.choices?.[0]?.message;
+      const content = extractOpenAICompatibleMessageText(message?.content);
+      const toolCalls = parseOpenAICompatibleToolCalls(message?.tool_calls);
+      await emitToolCallEvents(toolCalls, input.onEvent);
+      if (content || toolCalls.length > 0) {
+        return input.onEvent ? content : buildAssistantFallbackContent(content, toolCalls);
       }
       throw new Error('OpenAI-compatible API returned empty content');
     }
 
+    const streamedToolCalls: RuntimeProviderToolCall[] = [];
+    const toolBlocks = new Map<number, RuntimeProviderPartialToolCall>();
     const streamed = await readEventStream(response.body, input.onEvent, (data) => {
       if (data === '[DONE]') {
         return [];
@@ -278,9 +415,10 @@ const streamOpenAICompatibleTurn = async (
       const usageEvent = normalizeUsage(payload?.usage);
       const choice = payload?.choices?.[0];
       const delta = choice?.delta;
-      const toolCalls = parseOpenAICompatibleToolCall(delta);
+      const toolCalls = accumulateOpenAICompatibleToolCalls(delta, toolBlocks);
 
       if (toolCalls.length > 0) {
+        streamedToolCalls.push(...toolCalls);
         return [
           ...(usageEvent ? [usageEvent] : []),
           ...toolCalls.map((toolCall) => ({
@@ -308,7 +446,7 @@ const streamOpenAICompatibleTurn = async (
       ];
     });
 
-    return streamed.answer;
+    return input.onEvent ? streamed.answer : buildAssistantFallbackContent(streamed.answer, streamedToolCalls);
   };
 
   const finalText = await withRetry(doFetch, { signal: input.signal });
@@ -353,24 +491,30 @@ const streamAnthropicTurn = async (
       throw new Error(`Anthropic API error (${response.status}): ${await response.text()}`);
     }
 
-    if (!response.body || !input.onEvent || !isEventStreamResponse(response)) {
+    if (!response.body || !isEventStreamResponse(response)) {
       const payload = await response.json();
       if (!Array.isArray(payload?.content)) {
         throw new Error('Anthropic API returned empty content');
       }
 
-      const text = payload.content.map((block: { text?: string }) => block?.text || '').join('\n').trim();
-      if (!text) {
-        throw new Error('Anthropic API returned empty content');
+      const text = payload.content
+        .filter((block: { type?: string }) => block?.type === 'text')
+        .map((block: { text?: string }) => block?.text || '')
+        .join('\n')
+        .trim();
+      const toolCalls = parseAnthropicMessageToolCalls(payload.content);
+      await emitToolCallEvents(toolCalls, input.onEvent);
+      if (text || toolCalls.length > 0) {
+        return input.onEvent ? text : buildAssistantFallbackContent(text, toolCalls);
       }
-
-      return text;
+      throw new Error('Anthropic API returned empty content');
     }
 
     const toolBlocks = new Map<
       number,
       { id: string; name: string; input?: Record<string, unknown>; partialJson: string }
     >();
+    const streamedToolCalls: RuntimeProviderToolCall[] = [];
     const streamed = await readEventStream(response.body, input.onEvent, (data) => {
       const payload = JSON.parse(data);
       const type = payload?.type as string | undefined;
@@ -419,15 +563,17 @@ const streamAnthropicTurn = async (
           }
         }
 
+        const toolCall = {
+          id: block.id,
+          name: block.name,
+          input: structuredInput,
+        } satisfies RuntimeProviderToolCall;
+        streamedToolCalls.push(toolCall);
         return [
           ...(usageEvent ? [usageEvent] : []),
           {
             kind: 'tool_call',
-            toolCall: {
-              id: block.id,
-              name: block.name,
-              input: structuredInput,
-            },
+            toolCall,
           } satisfies RuntimeProviderEvent,
         ];
       }
@@ -443,7 +589,7 @@ const streamAnthropicTurn = async (
       ];
     });
 
-    return streamed.answer;
+    return input.onEvent ? streamed.answer : buildAssistantFallbackContent(streamed.answer, streamedToolCalls);
   };
 
   const finalText = await withRetry(doFetch, { signal: input.signal });

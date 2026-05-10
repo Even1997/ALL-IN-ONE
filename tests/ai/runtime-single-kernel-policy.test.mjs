@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import {
+  getBuiltInRuntimeToolNames,
+  getTurnAllowedRuntimeTools,
+} from '../../src/modules/ai/runtime/tools/runtimeToolPolicy.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,4 +25,19 @@ test('shared runtime tool policy file exists and exports powershell-aware comman
   assert.match(policySource, /powershell/);
   assert.match(policySource, /READ_ONLY_RUNTIME_TOOLS/);
   assert.match(policySource, /getTurnAllowedRuntimeTools/);
+});
+
+test('Windows shared runtime tool policy only exposes powershell for command execution', () => {
+  assert.deepEqual(
+    getBuiltInRuntimeToolNames(true).filter((toolName) => toolName === 'bash' || toolName === 'powershell'),
+    ['powershell'],
+  );
+
+  assert.deepEqual(
+    getTurnAllowedRuntimeTools({
+      sandboxPolicy: 'allow',
+      isWindows: true,
+    }).filter((toolName) => toolName === 'bash' || toolName === 'powershell'),
+    ['powershell'],
+  );
 });

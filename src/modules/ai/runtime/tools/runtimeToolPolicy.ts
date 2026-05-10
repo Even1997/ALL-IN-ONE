@@ -13,7 +13,7 @@ export const getBuiltInRuntimeToolNames = (isWindows: boolean) =>
     'view',
     'write',
     'edit',
-    ...(isWindows ? ['powershell', 'bash'] : ['bash']),
+    ...(isWindows ? ['powershell'] : ['bash']),
     'fetch',
     'agent',
     ASK_USER_TOOL_NAME,
