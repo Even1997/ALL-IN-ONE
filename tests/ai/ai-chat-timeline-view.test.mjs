@@ -98,9 +98,11 @@ test('timeline migration removes the legacy runtime tool renderer files from the
 
 test('chat surface keeps runtime question interaction cards wired for pending ask-user events', async () => {
   const chatSource = await readFile('src/components/workspace/AIChat.tsx', 'utf8');
+  const selectorSource = await readFile('src/components/workspace/runtimeInteractionSelectors.ts', 'utf8');
 
   assert.match(chatSource, /AIChatRuntimeTimelineInteractionEvent/);
-  assert.match(chatSource, /event\.kind === 'question'/);
+  assert.match(chatSource, /getLatestRuntimeQuestionEvent/);
+  assert.match(selectorSource, /event\.kind === 'question'/);
   assert.doesNotMatch(chatSource, /const renderRuntimeQuestionCard = useCallback\(\s*\(_message: StoredChatMessage\) => null/);
 });
 

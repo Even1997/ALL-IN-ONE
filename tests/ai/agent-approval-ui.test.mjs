@@ -8,9 +8,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const riskPolicyPath = path.resolve(__dirname, '../../src/modules/ai/runtime/approval/riskPolicy.ts');
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const conversationPanePath = path.resolve(
+  __dirname,
+  '../../src/components/workspace/AIChatConversationMessagesPane.tsx',
+);
 const runtimeInteractionCardsPath = path.resolve(
   __dirname,
   '../../src/components/workspace/AIChatRuntimeInteractionCards.tsx',
+);
+const runtimeInteractionSelectorsPath = path.resolve(
+  __dirname,
+  '../../src/components/workspace/runtimeInteractionSelectors.ts',
 );
 const runtimeSummaryPath = path.resolve(
   __dirname,
@@ -41,23 +49,26 @@ test('risk policy classifies destructive runtime actions', async () => {
 });
 
 test('AIChat wires approval gating and inline approval cards into the existing shell', async () => {
-  const source = await readFile(aiChatPath, 'utf8');
+  const chat = await readFile(aiChatPath, 'utf8');
+  const pane = await readFile(conversationPanePath, 'utf8');
+  const selectors = await readFile(runtimeInteractionSelectorsPath, 'utf8');
 
-  assert.match(source, /useApprovalStore/);
-  assert.match(source, /enqueueAgentApproval/);
-  assert.match(source, /sandboxPolicy/);
-  assert.match(source, /renderRuntimeApprovalCard/);
-  assert.match(source, /renderRuntimeApproval/);
-  assert.doesNotMatch(source, /GNAgentApprovalPanel/);
-  assert.match(source, /run_local_agent_prompt/);
+  assert.match(chat, /useApprovalStore/);
+  assert.match(chat, /enqueueAgentApproval/);
+  assert.match(chat, /sandboxPolicy/);
+  assert.match(pane, /renderRuntimeApproval/);
+  assert.match(pane, /AIChatRuntimeTimelineInteractionEvent/);
+  assert.match(selectors, /getLatestPendingRuntimeApprovalEvent/);
+  assert.doesNotMatch(chat, /GNAgentApprovalPanel/);
+  assert.match(chat, /run_local_agent_prompt/);
 });
 
 test('approval cards and runtime summary expose approval actions and approval-policy wording', async () => {
-  const chat = await readFile(aiChatPath, 'utf8');
+  const pane = await readFile(conversationPanePath, 'utf8');
   const cards = await readFile(runtimeInteractionCardsPath, 'utf8');
   const summary = await readFile(runtimeSummaryPath, 'utf8');
 
-  assert.match(chat, /LazyAIChatRuntimeApprovalList/);
+  assert.match(pane, /AIChatRuntimeApprovalList/);
   assert.match(cards, /批准执行/);
   assert.match(cards, /拒绝/);
   assert.match(summary, /approval:/i);

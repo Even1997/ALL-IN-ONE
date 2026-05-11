@@ -119,6 +119,7 @@ import { TimelineView } from './timeline/TimelineView.tsx';
 import { useAIChatSettingsState } from './useAIChatSettingsState';
 import { useAIChatRuntimeInteractionState } from './useAIChatRuntimeInteractionState';
 import { useAIChatSidecarSessionActions } from './useAIChatSidecarSessionActions';
+import { getLatestRuntimeQuestionEvent } from './runtimeInteractionSelectors.ts';
 import './AIChat.css';
 
 let aiServiceModulePromise: Promise<typeof import('../../modules/ai/core/AIService')> | null = null;
@@ -1470,15 +1471,9 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const renderRuntimeQuestionCard = useCallback(
     (message: StoredChatMessage) => {
-      if (message.role !== 'assistant') {
-        return null;
-      }
+      const questionEvent = getLatestRuntimeQuestionEvent(message);
 
-      const questionEvent = [...getAssistantRuntimeTimelineEvents(message.timeline)]
-        .reverse()
-        .find((event) => event.kind === 'question');
-
-      if (!questionEvent || questionEvent.kind !== 'question') {
+      if (!questionEvent) {
         return null;
       }
 

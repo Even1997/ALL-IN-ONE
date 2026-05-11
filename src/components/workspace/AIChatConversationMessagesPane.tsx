@@ -3,13 +3,17 @@ import type { MutableRefObject, ReactNode } from 'react';
 import { GNAgentMessageList, type MessageBubbleCard } from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import { useApprovalStore } from '../../modules/ai/runtime/approval/approvalStore.ts';
 import type { ApprovalRecord } from '../../modules/ai/runtime/approval/approvalTypes.ts';
-import { applyAssistantReasoningProgress, getAssistantRuntimeTimelineEvents } from '../../modules/ai/store/assistantTimeline.ts';
+import { applyAssistantReasoningProgress } from '../../modules/ai/store/assistantTimeline.ts';
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
 import type { AIChatMessagePart } from './aiChatMessageParts';
 import type { AssistantDraftState } from './assistantRenderModel.ts';
-import { AIChatRuntimeApprovalList } from './AIChatRuntimeInteractionCards.tsx';
+import {
+  AIChatRuntimeApprovalList,
+  AIChatRuntimeTimelineInteractionEvent,
+} from './AIChatRuntimeInteractionCards.tsx';
 import { useActiveConversationApprovals, useActiveConversationLiveState, useActiveConversationMessages } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import type { RuntimePendingApprovalAction } from '../../modules/ai/runtime/orchestration/runtimeApprovalCoordinator.ts';
+import { getLatestPendingRuntimeApprovalEvent } from './runtimeInteractionSelectors.ts';
 
 type AIChatConversationMessagesPaneProps = {
   projectId: string | null;
@@ -98,15 +102,32 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
     );
   }, [draftContents, liveState?.activeThinking]);
 
+  const handleIgnoredQuestionAnswer = useCallback(() => undefined, []);
+
   const renderRuntimeApproval = useCallback(
     (message: StoredChatMessage) => {
-      if (
-        message.role === 'assistant' &&
-        getAssistantRuntimeTimelineEvents(message.timeline).some((event) => event.kind === 'approval')
-      ) {
+      if (message.role !== 'assistant' || message.projectFileProposal) {
         return null;
       }
-      if (!approvalThreadId || message.role !== 'assistant' || message.projectFileProposal) {
+
+      const approvalEvent = getLatestPendingRuntimeApprovalEvent(message);
+      if (approvalEvent) {
+        return (
+          <AIChatRuntimeTimelineInteractionEvent
+            messageId={message.id}
+            event={approvalEvent}
+            summarizeProjectFilePath={summarizeProjectFilePath}
+            onApprove={(approvalId) => void onApprove(approvalId)}
+            onDeny={(approvalId) => void onDeny(approvalId)}
+            onAnswerQuestion={handleIgnoredQuestionAnswer}
+            approvalStatusLabelMap={approvalStatusLabelMap}
+            approvalRiskLabelMap={approvalRiskLabelMap}
+            approvalActionLabelMap={approvalActionLabelMap}
+          />
+        );
+      }
+
+      if (!approvalThreadId) {
         return null;
       }
 
@@ -136,6 +157,7 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
       approvalStatusLabelMap,
       approvalThreadId,
       approvals,
+      handleIgnoredQuestionAnswer,
       onApprove,
       onDeny,
       pendingApprovalActionsRef,
