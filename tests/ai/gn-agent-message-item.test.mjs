@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const loadMessageItem = async () =>
@@ -97,4 +98,12 @@ test('message item breaks same-timestamp ties with original timeline order', asy
     items.map((item) => item.key),
     ['tool-1', 'text-1']
   );
+});
+
+test('embedded message list timestamps run summary cards from the latest runtime event', async () => {
+  const source = await readFile('src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx', 'utf8');
+
+  assert.match(source, /const getLatestRuntimeEventTime =/);
+  assert.match(source, /createdAt:\s*latestRuntimeEventTime\s*\?\?\s*message\.createdAt/);
+  assert.doesNotMatch(source, /runSummaryNode\s*\?\s*\{\s*node:\s*runSummaryNode,\s*createdAt:\s*message\.createdAt\s*\}/);
 });

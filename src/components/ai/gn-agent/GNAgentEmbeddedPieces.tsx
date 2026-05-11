@@ -109,6 +109,13 @@ const getEarliestRuntimeEventTime = (message: StoredChatMessage) =>
     undefined
   );
 
+const getLatestRuntimeEventTime = (message: StoredChatMessage) =>
+  (message.role === 'assistant' ? getAssistantRuntimeTimelineEvents(message.timeline) : []).reduce<number | undefined>(
+    (latest, event) =>
+      typeof latest === 'number' && latest >= event.createdAt ? latest : event.createdAt,
+    undefined
+  );
+
 export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   messages,
   draftContents,
@@ -130,6 +137,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
     const map: Record<string, MessageBubbleCard[]> = {};
     for (const message of messages) {
       const earliestRuntimeEventTime = getEarliestRuntimeEventTime(message);
+      const latestRuntimeEventTime = getLatestRuntimeEventTime(message);
       const timelineCards = renderTimelineCards?.(message) || [];
       const structuredCardsNode = renderStructuredCards?.(message) || null;
       const projectFileProposalNode = renderProjectFileProposal?.(message) || null;
@@ -140,7 +148,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       const cards: Array<MessageBubbleCard | null> = [
         structuredCardsNode ? { node: structuredCardsNode, createdAt: message.createdAt } : null,
         projectFileProposalNode ? { node: projectFileProposalNode, createdAt: message.createdAt } : null,
-        runSummaryNode ? { node: runSummaryNode, createdAt: message.createdAt } : null,
+        runSummaryNode ? { node: runSummaryNode, createdAt: latestRuntimeEventTime ?? message.createdAt } : null,
       ];
       map[message.id] = [
         ...timelineCards,

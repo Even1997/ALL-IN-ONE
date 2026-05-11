@@ -66,6 +66,27 @@ test('Windows tool catalog exposes powershell but not bash to the model', async 
   }
 });
 
+test('directory listing tool schema does not require a path when it defaults to project root', async () => {
+  const { TOOLS } = await import(`../../src/modules/ai/runtime/tools/toolExecutor.ts?test=${Date.now()}`);
+  const lsTool = TOOLS.find((tool) => tool.name === 'ls');
+
+  assert.ok(lsTool);
+  assert.deepEqual(lsTool.required || [], []);
+});
+
+test('workspace tool paths treat slash-prefixed paths as project-root relative without allowing traversal', async () => {
+  const { ToolExecutor } = await import(`../../src/modules/ai/runtime/tools/toolExecutor.ts?test=${Date.now()}`);
+  const executor = new ToolExecutor('C:\\repo\\app');
+
+  assert.equal(executor.ensureProjectPath('/', 'directory'), 'C:/repo/app');
+  assert.equal(executor.ensureProjectPath('/src', 'directory'), 'C:/repo/app/src');
+  assert.equal(executor.ensureProjectPath('src/../package.json', 'file'), 'C:/repo/app/package.json');
+  assert.throws(
+    () => executor.ensureProjectPath('../outside.txt', 'file'),
+    /Cannot access file outside the current project/,
+  );
+});
+
 test('built-in approvals and risk policy treat powershell like a command tool', async () => {
   const [hostPlatformSource, runtimeToolCatalogSource, riskPolicySource, runtimeToolPolicySource] = await Promise.all([
     readFile(hostPlatformPath, 'utf8'),

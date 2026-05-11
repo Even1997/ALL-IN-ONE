@@ -203,7 +203,7 @@ PARAMETERS:
       path: { type: 'string', description: 'The path to the directory to list' },
       ignore: { type: 'array', description: 'List of glob patterns to ignore', items: { type: 'string', description: 'Glob pattern' } },
     },
-    required: ['path'],
+    required: [],
   },
   {
     name: 'view',
@@ -406,12 +406,84 @@ export class ToolExecutor {
     return value.replace(/\\/g, '/');
   }
 
-  private normalizeProjectRoot() {
-    return this.normalizePath(this.projectRoot).replace(/\/+$/, '');
+  private collapsePathSegments(value: string) {
+    const normalized = this.normalizePath(value);
+    const uncMatch = normalized.match(/^\/\/[^/]+\/[^/]+/);
+    const driveMatch = uncMatch ? null : normalized.match(/^[A-Za-z]:/);
+    const hasRootSlash = !uncMatch && !driveMatch && normalized.startsWith('/');
+    const prefix = uncMatch?.[0] ?? driveMatch?.[0] ?? (hasRootSlash ? '/' : '');
+    let rest = normalized.slice(prefix.length);
+
+    if ((uncMatch || driveMatch || hasRootSlash) && rest.startsWith('/')) {
+      rest = rest.replace(/^\/+/, '');
+    }
+
+    const segments: string[] = [];
+    for (const segment of rest.split('/')) {
+      if (!segment || segment === '.') {
+        continue;
+      }
+
+      if (segment === '..') {
+        if (segments.length > 0 && segments[segments.length - 1] !== '..') {
+          segments.pop();
+        } else if (!prefix) {
+          segments.push(segment);
+        }
+        continue;
+      }
+
+      segments.push(segment);
+    }
+
+    const body = segments.join('/');
+    if (uncMatch || driveMatch) {
+      return body ? `${prefix}/${body}` : prefix;
+    }
+
+    if (hasRootSlash) {
+      return body ? `/${body}` : '/';
+    }
+
+    return body || '.';
   }
 
-  private isAbsolutePath(value: string) {
-    return /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value);
+  private normalizeProjectRoot() {
+    const collapsedRoot = this.collapsePathSegments(this.projectRoot);
+    return collapsedRoot === '/' ? collapsedRoot : collapsedRoot.replace(/\/+$/, '');
+  }
+
+  private isDriveOrUncAbsolutePath(value: string) {
+    return /^(?:[A-Za-z]:[\\/]|\\\\)/.test(value);
+  }
+
+  private resolveProjectPath(pathValue: string | undefined, normalizedRoot: string) {
+    const rawPath = (pathValue ?? '').trim();
+    if (!rawPath || rawPath === '.' || rawPath === './' || rawPath === '/' || rawPath === '\\') {
+      return normalizedRoot;
+    }
+
+    const normalizedInput = this.normalizePath(rawPath);
+    const collapsedInput = this.collapsePathSegments(normalizedInput);
+    const comparableInput = collapsedInput.toLowerCase();
+    const comparableRoot = normalizedRoot.toLowerCase();
+
+    if (this.isDriveOrUncAbsolutePath(rawPath)) {
+      return collapsedInput;
+    }
+
+    if (normalizedInput.startsWith('/')) {
+      if (
+        comparableInput === comparableRoot ||
+        comparableInput.startsWith(`${comparableRoot}/`)
+      ) {
+        return collapsedInput;
+      }
+
+      return this.collapsePathSegments(`${normalizedRoot}/${normalizedInput.replace(/^\/+/, '')}`);
+    }
+
+    return this.collapsePathSegments(`${normalizedRoot}/${normalizedInput}`);
   }
 
   private ensureProjectPath(pathValue?: string, kind: 'file' | 'directory' = 'file') {
@@ -420,12 +492,7 @@ export class ToolExecutor {
       throw new Error('Current project root is unavailable.');
     }
 
-    const rawPath = (pathValue || this.projectRoot).trim();
-    const candidatePath = rawPath || this.projectRoot;
-    const normalizedCandidate = this.normalizePath(candidatePath);
-    const resolvedPath = this.isAbsolutePath(candidatePath)
-      ? normalizedCandidate
-      : `${normalizedRoot}/${normalizedCandidate.replace(/^\/+/, '')}`.replace(/\/+/g, '/');
+    const resolvedPath = this.resolveProjectPath(pathValue, normalizedRoot);
     const comparableResolved = resolvedPath.toLowerCase();
     const comparableRoot = normalizedRoot.toLowerCase();
 

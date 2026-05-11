@@ -106,7 +106,7 @@ test('chat surface keeps runtime question interaction cards wired for pending as
   assert.doesNotMatch(chatSource, /const renderRuntimeQuestionCard = useCallback\(\s*\(_message: StoredChatMessage\) => null/);
 });
 
-test('chat timeline bubble card helper filters duplicate response and interaction cards while keeping chronological card timestamps', async () => {
+test('chat timeline bubble card helper filters duplicate response and interaction cards while using completion time for final run summaries', async () => {
   const { buildChatTimelineBubbleCards } = await import(
     `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`
   );
@@ -275,7 +275,63 @@ test('chat timeline bubble card helper filters duplicate response and interactio
   });
 
   assert.deepEqual(descriptors.map((descriptor) => descriptor.card.phase), ['intake', 'tooling']);
-  assert.deepEqual(descriptors.map((descriptor) => descriptor.createdAt), [1, 3]);
+  assert.deepEqual(descriptors.map((descriptor) => descriptor.createdAt), [6, 3]);
+});
+
+test('completed run summary cards sort after same-timestamp work cards', async () => {
+  const { buildChatTimelineBubbleCards } = await import(
+    `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`
+  );
+
+  const descriptors = buildChatTimelineBubbleCards({
+    runId: 'run-1',
+    status: 'completed',
+    activeMessage: null,
+    finalMessage: null,
+    events: [],
+    cards: [
+      {
+        cardId: 'run-card',
+        phase: 'intake',
+        title: 'Run',
+        summary: 'Done',
+        status: 'completed',
+        startedAt: 1,
+        endedAt: 6,
+        detailRefs: [],
+        interactionRefs: [],
+        toolCount: 0,
+        errorCount: 0,
+        warningCount: 0,
+        retryCount: 0,
+      },
+      {
+        cardId: 'tool-card',
+        phase: 'tooling',
+        title: 'Tool run',
+        summary: 'ls completed',
+        status: 'completed',
+        startedAt: 6,
+        endedAt: 6,
+        detailRefs: [],
+        interactionRefs: [],
+        toolCount: 1,
+        errorCount: 0,
+        warningCount: 0,
+        retryCount: 0,
+      },
+    ],
+  });
+
+  const sorted = [...descriptors].sort((left, right) => {
+    if (left.createdAt !== right.createdAt) {
+      return left.createdAt - right.createdAt;
+    }
+
+    return left.timelineOrder - right.timelineOrder;
+  });
+
+  assert.deepEqual(sorted.map((descriptor) => descriptor.cardId), ['tool-card', 'run-card']);
 });
 
 test('timeline detail formatter exposes run and message lifecycle items', async () => {

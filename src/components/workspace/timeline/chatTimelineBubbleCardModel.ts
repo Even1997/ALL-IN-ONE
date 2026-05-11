@@ -48,8 +48,12 @@ export const buildChatTimelineBubbleCards = (
       return [
         {
           cardId: card.cardId,
-          createdAt: card.startedAt,
-          timelineOrder: index,
+          createdAt: card.phase === 'intake' && typeof card.endedAt === 'number'
+            ? card.endedAt
+            : card.startedAt,
+          timelineOrder: card.phase === 'intake' && typeof card.endedAt === 'number'
+            ? Number.MAX_SAFE_INTEGER
+            : index,
           card,
           detailItems: buildTimelineDetailItems(detailEvents),
         },

@@ -100,3 +100,83 @@ test('runtime sidecar session bridge derives canonical timeline events from assi
   assert.equal(events.some((event) => event.type === 'message.completed' && event.messageId === 'assistant-1'), true);
   assert.equal(events.some((event) => event.type === 'run.completed' && event.runId === 'assistant-1'), true);
 });
+
+test('runtime sidecar marks recovered assistant answers successful even after a failed tool inspection', async () => {
+  const { buildCanonicalEventsFromRuntimeMessages } = await import(
+    `../../src/modules/runtime-sidecar/runtimeSidecarCanonical.ts?test=${Date.now()}`
+  );
+
+  const events = buildCanonicalEventsFromRuntimeMessages({
+    sessionId: 'session-1',
+    providerId: 'built-in',
+    messages: [
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'I can still answer directly from the provided context.',
+        createdAt: 100,
+        timeline: [
+          {
+            id: 'tool-use-1',
+            kind: 'tool_use',
+            toolCallId: 'tool-1',
+            toolName: 'ls',
+            input: { path: '/' },
+            status: 'failed',
+            createdAt: 110,
+          },
+          {
+            id: 'tool-result-1',
+            kind: 'tool_result',
+            toolCallId: 'tool-1',
+            toolName: 'ls',
+            status: 'failed',
+            output: 'Cannot access directory outside the current project.',
+            createdAt: 120,
+          },
+        ],
+      },
+    ],
+    snapshotStatus: 'completed',
+  });
+
+  const runCompleted = events.find((event) => event.type === 'run.completed');
+
+  assert.equal(runCompleted?.payload.outcome, 'success');
+});
+
+test('runtime sidecar does not complete idle snapshots that still have pending user interaction', async () => {
+  const { buildCanonicalEventsFromRuntimeMessages } = await import(
+    `../../src/modules/runtime-sidecar/runtimeSidecarCanonical.ts?test=${Date.now()}`
+  );
+
+  const events = buildCanonicalEventsFromRuntimeMessages({
+    sessionId: 'session-1',
+    providerId: 'built-in',
+    messages: [
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: '',
+        createdAt: 100,
+        timeline: [
+          {
+            id: 'approval-1',
+            kind: 'approval',
+            approvalId: 'approval-1',
+            actionType: 'edit',
+            summary: 'Approve file edit?',
+            riskLevel: 'medium',
+            status: 'pending',
+            createdAt: 110,
+          },
+        ],
+      },
+    ],
+    snapshotStatus: 'idle',
+  });
+
+  assert.equal(events.some((event) => event.type === 'approval.requested'), true);
+  assert.equal(events.some((event) => event.type === 'message.completed'), false);
+  assert.equal(events.some((event) => event.type === 'run.completed'), false);
+});

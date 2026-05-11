@@ -231,18 +231,32 @@ const getMessageStartTs = (message: RuntimeMessageRecord) =>
     ...((message.timeline || []).map((event) => event.createdAt)),
   );
 
+const hasPendingUserInteraction = (timeline: RuntimeAssistantTimelineEvent[]) =>
+  timeline.some(
+    (event) =>
+      (event.kind === 'approval' && event.status === 'pending') ||
+      (event.kind === 'question' && event.payload.status === 'pending'),
+  );
+
 const getRunOutcome = (message: RuntimeMessageRecord, snapshotStatus?: RuntimeSessionSnapshot['status']) => {
   if (snapshotStatus === 'failed') {
     return 'failed' as const;
   }
 
   const timeline = message.timeline || [];
+  if (timeline.some((event) => event.kind === 'error')) {
+    return 'failed' as const;
+  }
+
+  if (message.content?.trim()) {
+    return 'success' as const;
+  }
+
   if (
     timeline.some(
       (event) =>
-        event.kind === 'error' ||
-        ((event.kind === 'tool_use' || event.kind === 'tool_result') &&
-          (event.status === 'failed' || event.status === 'blocked')),
+        (event.kind === 'tool_use' || event.kind === 'tool_result') &&
+        (event.status === 'failed' || event.status === 'blocked'),
     )
   ) {
     return 'failed' as const;
@@ -424,7 +438,7 @@ export const buildCanonicalEventsFromRuntimeMessages = (input: {
         }
       }
 
-      if (input.snapshotStatus !== 'running') {
+      if (input.snapshotStatus !== 'running' && !hasPendingUserInteraction(orderedTimeline)) {
         const completionTs = Math.max(
           message.createdAt,
           ...orderedTimeline.map((event) => event.createdAt),
