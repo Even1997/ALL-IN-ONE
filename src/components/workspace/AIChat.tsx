@@ -205,11 +205,12 @@ type StreamingDraftState = {
   timeline: AssistantTimelineEvent[];
   streamingText?: string;
   isStreaming?: boolean;
+  streamingReasoningTextByEventId?: Record<string, string>;
 };
 
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
 const EMPTY_PENDING_APPROVALS: ApprovalRecord[] = [];
-const PARAGRAPH_STREAMING_TIMEOUT_MS = 220;
+const PARAGRAPH_STREAMING_TIMEOUT_MS = 140;
 const SETTINGS_TABS: Array<{
   id: SettingsTabId;
   label: string;
@@ -957,6 +958,18 @@ const getStoredMessageConversationContent = (message: StoredChatMessage) =>
     ? getAssistantTimelineText(message.timeline)
     : message.content;
 
+const resolveAssistantCompletionText = (
+  projectionFinalText: string | undefined,
+  timeline: AssistantTimelineEvent[],
+) => {
+  const projected = projectionFinalText?.trim();
+  if (projected) {
+    return projectionFinalText || '';
+  }
+
+  return getAssistantTimelineText(timeline);
+};
+
 const toConversationHistoryMessages = (messages: StoredChatMessage[] = []) =>
   messages.map((message) => ({
     role: message.role,
@@ -1049,6 +1062,10 @@ export const AIChat: React.FC<AIChatProps> = ({
   const streamingDraftFlushFrameRef = useRef<number | null>(null);
   const paragraphStreamingStateByMessageIdRef = useRef<Record<string, ParagraphStreamingState>>({});
   const paragraphStreamingTimeoutsRef = useRef<Record<string, number>>({});
+  const paragraphStreamingLatestRawTextByMessageIdRef = useRef<Record<string, string>>({});
+  const reasoningParagraphStreamingStateByEventIdRef = useRef<Record<string, ParagraphStreamingState>>({});
+  const reasoningParagraphStreamingTimeoutsRef = useRef<Record<string, number>>({});
+  const reasoningParagraphStreamingLatestRawTextByEventIdRef = useRef<Record<string, string>>({});
   const abortControllerRef = useRef<AbortController | null>(null);
   const stopRequestedRef = useRef(false);
   const runningSubmissionRef = useRef<{ assistantMessageId: string; runtimeStoreThreadId: string } | null>(null);
@@ -1098,8 +1115,23 @@ export const AIChat: React.FC<AIChatProps> = ({
     paragraphStreamingTimeoutsRef.current = nextTimeouts;
   }, []);
 
+  const clearReasoningParagraphStreamingTimeout = useCallback((eventId: string) => {
+    const timeoutId = reasoningParagraphStreamingTimeoutsRef.current[eventId];
+    if (timeoutId === undefined) {
+      return;
+    }
+
+    window.clearTimeout(timeoutId);
+    const nextTimeouts = { ...reasoningParagraphStreamingTimeoutsRef.current };
+    delete nextTimeouts[eventId];
+    reasoningParagraphStreamingTimeoutsRef.current = nextTimeouts;
+  }, []);
+
   const resetParagraphStreamingState = useCallback((messageId: string) => {
     clearParagraphStreamingTimeout(messageId);
+    const nextRawTextByMessageId = { ...paragraphStreamingLatestRawTextByMessageIdRef.current };
+    delete nextRawTextByMessageId[messageId];
+    paragraphStreamingLatestRawTextByMessageIdRef.current = nextRawTextByMessageId;
     if (!(messageId in paragraphStreamingStateByMessageIdRef.current)) {
       return;
     }
@@ -1109,15 +1141,41 @@ export const AIChat: React.FC<AIChatProps> = ({
     paragraphStreamingStateByMessageIdRef.current = nextStates;
   }, [clearParagraphStreamingTimeout]);
 
+  const resetReasoningParagraphStreamingState = useCallback(
+    (eventId: string) => {
+      clearReasoningParagraphStreamingTimeout(eventId);
+      const nextRawTextByEventId = { ...reasoningParagraphStreamingLatestRawTextByEventIdRef.current };
+      delete nextRawTextByEventId[eventId];
+      reasoningParagraphStreamingLatestRawTextByEventIdRef.current = nextRawTextByEventId;
+      if (!(eventId in reasoningParagraphStreamingStateByEventIdRef.current)) {
+        return;
+      }
+
+      const nextStates = { ...reasoningParagraphStreamingStateByEventIdRef.current };
+      delete nextStates[eventId];
+      reasoningParagraphStreamingStateByEventIdRef.current = nextStates;
+    },
+    [clearReasoningParagraphStreamingTimeout]
+  );
+
   const scheduleParagraphStreamingTimeout = useCallback(
     (messageId: string, rawText: string, timeline: AssistantTimelineEvent[]) => {
-      clearParagraphStreamingTimeout(messageId);
+      paragraphStreamingLatestRawTextByMessageIdRef.current = {
+        ...paragraphStreamingLatestRawTextByMessageIdRef.current,
+        [messageId]: rawText,
+      };
+      if (paragraphStreamingTimeoutsRef.current[messageId] !== undefined) {
+        return;
+      }
+
       paragraphStreamingTimeoutsRef.current = {
         ...paragraphStreamingTimeoutsRef.current,
         [messageId]: window.setTimeout(() => {
+          clearParagraphStreamingTimeout(messageId);
           const currentState =
             paragraphStreamingStateByMessageIdRef.current[messageId] ?? createParagraphStreamingState();
-          const nextState = advanceParagraphStreamingState(currentState, rawText, Date.now(), {
+          const latestRawText = paragraphStreamingLatestRawTextByMessageIdRef.current[messageId] ?? rawText;
+          const nextState = advanceParagraphStreamingState(currentState, latestRawText, Date.now(), {
             forceTimeoutFlush: true,
           });
           paragraphStreamingStateByMessageIdRef.current = {
@@ -1141,6 +1199,50 @@ export const AIChat: React.FC<AIChatProps> = ({
     [clearParagraphStreamingTimeout, flushStreamingDraftContentsNow]
   );
 
+  const scheduleReasoningParagraphStreamingTimeout = useCallback(
+    (messageId: string, eventId: string, rawText: string, timeline: AssistantTimelineEvent[]) => {
+      reasoningParagraphStreamingLatestRawTextByEventIdRef.current = {
+        ...reasoningParagraphStreamingLatestRawTextByEventIdRef.current,
+        [eventId]: rawText,
+      };
+      if (reasoningParagraphStreamingTimeoutsRef.current[eventId] !== undefined) {
+        return;
+      }
+
+      reasoningParagraphStreamingTimeoutsRef.current = {
+        ...reasoningParagraphStreamingTimeoutsRef.current,
+        [eventId]: window.setTimeout(() => {
+          clearReasoningParagraphStreamingTimeout(eventId);
+          const currentState =
+            reasoningParagraphStreamingStateByEventIdRef.current[eventId] ?? createParagraphStreamingState();
+          const latestRawText = reasoningParagraphStreamingLatestRawTextByEventIdRef.current[eventId] ?? rawText;
+          const nextState = advanceParagraphStreamingState(currentState, latestRawText, Date.now(), {
+            forceTimeoutFlush: true,
+          });
+          reasoningParagraphStreamingStateByEventIdRef.current = {
+            ...reasoningParagraphStreamingStateByEventIdRef.current,
+            [eventId]: nextState,
+          };
+          const currentDraft = streamingDraftBufferRef.current[messageId];
+          streamingDraftBufferRef.current = {
+            ...streamingDraftBufferRef.current,
+            [messageId]: {
+              ...currentDraft,
+              timeline: currentDraft?.timeline ?? timeline,
+              streamingReasoningTextByEventId: {
+                ...currentDraft?.streamingReasoningTextByEventId,
+                [eventId]: nextState.visibleText,
+              },
+              isStreaming: true,
+            },
+          };
+          flushStreamingDraftContentsNow();
+        }, PARAGRAPH_STREAMING_TIMEOUT_MS),
+      };
+    },
+    [clearReasoningParagraphStreamingTimeout, flushStreamingDraftContentsNow]
+  );
+
   useEffect(
     () => () => {
       if (streamingDraftFlushFrameRef.current !== null) {
@@ -1152,6 +1254,10 @@ export const AIChat: React.FC<AIChatProps> = ({
         window.clearTimeout(timeoutId);
       });
       paragraphStreamingTimeoutsRef.current = {};
+      Object.values(reasoningParagraphStreamingTimeoutsRef.current).forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      reasoningParagraphStreamingTimeoutsRef.current = {};
     },
     []
   );
@@ -1314,6 +1420,44 @@ export const AIChat: React.FC<AIChatProps> = ({
       const nextDraft: StreamingDraftState = {
         timeline: draftsByMessageId[message.id]?.timeline || message.timeline,
       };
+      const streamingReasoningTextByEventId: Record<string, string> = {};
+
+      nextDraft.timeline.forEach((event) => {
+        if (event.kind !== 'reasoning') {
+          return;
+        }
+
+        if (event.status === 'streaming') {
+          const currentReasoningState =
+            reasoningParagraphStreamingStateByEventIdRef.current[event.id] ?? createParagraphStreamingState();
+          const nextReasoningState = advanceParagraphStreamingState(
+            currentReasoningState,
+            event.content,
+            Date.now(),
+          );
+          reasoningParagraphStreamingStateByEventIdRef.current = {
+            ...reasoningParagraphStreamingStateByEventIdRef.current,
+            [event.id]: nextReasoningState,
+          };
+          streamingReasoningTextByEventId[event.id] = nextReasoningState.visibleText;
+
+          if (nextReasoningState.pendingText.trim().length > 0) {
+            scheduleReasoningParagraphStreamingTimeout(message.id, event.id, event.content, nextDraft.timeline);
+          } else {
+            clearReasoningParagraphStreamingTimeout(event.id);
+          }
+          return;
+        }
+
+        const currentReasoningState = reasoningParagraphStreamingStateByEventIdRef.current[event.id];
+        if (!currentReasoningState) {
+          return;
+        }
+
+        const finalized = finalizeParagraphStreamingState(currentReasoningState, event.content);
+        streamingReasoningTextByEventId[event.id] = finalized.visibleText;
+        resetReasoningParagraphStreamingState(event.id);
+      });
 
       if (projection.activeMessage) {
         const currentParagraphState =
@@ -1339,14 +1483,21 @@ export const AIChat: React.FC<AIChatProps> = ({
         clearParagraphStreamingTimeout(message.id);
         const currentParagraphState = paragraphStreamingStateByMessageIdRef.current[message.id];
         if (currentParagraphState) {
+          const finalText = resolveAssistantCompletionText(projection.finalMessage?.text, message.timeline);
           const finalized = finalizeParagraphStreamingState(
             currentParagraphState,
-            getAssistantTimelineText(message.timeline),
+            finalText,
           );
           nextDraft.streamingText = finalized.visibleText;
+          if (getAssistantTimelineText(message.timeline) === nextDraft.streamingText) {
+            resetParagraphStreamingState(message.id);
+          }
         }
         nextDraft.isStreaming = false;
-        resetParagraphStreamingState(message.id);
+      }
+
+      if (Object.keys(streamingReasoningTextByEventId).length > 0) {
+        nextDraft.streamingReasoningTextByEventId = streamingReasoningTextByEventId;
       }
 
       draftsByMessageId[message.id] = {
@@ -1358,9 +1509,12 @@ export const AIChat: React.FC<AIChatProps> = ({
     return draftsByMessageId;
   }, [
     activeSession?.messages,
+    clearReasoningParagraphStreamingTimeout,
     clearParagraphStreamingTimeout,
+    resetReasoningParagraphStreamingState,
     resetParagraphStreamingState,
     scheduleParagraphStreamingTimeout,
+    scheduleReasoningParagraphStreamingTimeout,
     streamingDraftContents,
     timelineProjectionByMessageId,
     timelineProjectionByRunId,
@@ -2338,6 +2492,12 @@ export const AIChat: React.FC<AIChatProps> = ({
           ? 'error'
           : 'success';
   const clearStreamingDraft = useCallback((messageId: string) => {
+    const draft = streamingDraftBufferRef.current[messageId];
+    draft?.timeline.forEach((event) => {
+      if (event.kind === 'reasoning') {
+        resetReasoningParagraphStreamingState(event.id);
+      }
+    });
     const hadDraft = messageId in streamingDraftBufferRef.current;
     if (hadDraft) {
       const nextDrafts = { ...streamingDraftBufferRef.current };
@@ -2347,7 +2507,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     }
 
     resetParagraphStreamingState(messageId);
-  }, [flushStreamingDraftContentsNow, resetParagraphStreamingState]);
+  }, [flushStreamingDraftContentsNow, resetParagraphStreamingState, resetReasoningParagraphStreamingState]);
   const commitStreamingDraft = useCallback(
     (messageId: string) => {
       const draft = streamingDraftBufferRef.current[messageId];

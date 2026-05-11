@@ -929,6 +929,12 @@
   color: color-mix(in srgb, var(--gn-agent-text, #f4f4f1) 96%, var(--mode-accent, #60a5fa));
 }
 
+.chat-answer-markdown {
+  display: grid;
+  gap: inherit;
+  min-width: 0;
+}
+
 .chat-thinking-block::before,
 .chat-answer-text::before,
 .chat-timeline-card::before {
@@ -946,13 +952,6 @@
   top: 6px;
   bottom: 6px;
   background: color-mix(in srgb, var(--gn-agent-text, #f4f4f1) 14%, transparent);
-}
-
-.chat-answer-streaming-plain {
-  display: inline;
-  white-space: pre-wrap;
-  word-break: break-word;
-  text-rendering: optimizeLegibility;
 }
 
 .chat-answer-text > :first-child {

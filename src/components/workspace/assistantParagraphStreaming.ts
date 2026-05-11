@@ -3,6 +3,7 @@ export type ParagraphStreamingState = {
   visibleText: string;
   pendingText: string;
   lastFlushAt: number | null;
+  lastInputAt: number | null;
   isComplete: boolean;
 };
 
@@ -72,6 +73,7 @@ export const createParagraphStreamingState = (): ParagraphStreamingState => ({
   visibleText: '',
   pendingText: '',
   lastFlushAt: null,
+  lastInputAt: null,
   isComplete: false,
 });
 
@@ -91,6 +93,7 @@ export const advanceParagraphStreamingState = (
       visibleText: `${nextRawText.startsWith(state.visibleText) ? state.visibleText : ''}${flushedText}`,
       pendingText: pendingText.slice(flushIndex),
       lastFlushAt: now,
+      lastInputAt: now,
       isComplete: false,
     };
   }
@@ -101,6 +104,7 @@ export const advanceParagraphStreamingState = (
       visibleText: nextRawText,
       pendingText: '',
       lastFlushAt: now,
+      lastInputAt: now,
       isComplete: false,
     };
   }
@@ -110,6 +114,7 @@ export const advanceParagraphStreamingState = (
     visibleText: nextRawText.startsWith(state.visibleText) ? state.visibleText : '',
     pendingText,
     lastFlushAt: state.lastFlushAt,
+    lastInputAt: now,
     isComplete: false,
   };
 };
@@ -122,6 +127,7 @@ export const finalizeParagraphStreamingState = (
     return {
       ...state,
       rawText: finalText,
+      lastInputAt: state.lastInputAt,
       isComplete: true,
     };
   }
@@ -131,6 +137,7 @@ export const finalizeParagraphStreamingState = (
     visibleText: finalText,
     pendingText: '',
     lastFlushAt: state.lastFlushAt,
+    lastInputAt: state.lastInputAt,
     isComplete: true,
   };
 };

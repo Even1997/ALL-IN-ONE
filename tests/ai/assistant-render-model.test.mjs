@@ -103,3 +103,55 @@ test('assistant render model shows the buffered answer lane once when streaming 
     ['First sentence.\n\nSecond sentence.'],
   );
 });
+
+test('assistant render model keeps the answer lane key stable across streaming and completion', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const message = {
+    id: 'assistant_stable_key',
+    role: 'assistant',
+    timeline: [{ id: 'text_1', kind: 'text', content: 'Final answer.', createdAt: 20 }],
+    createdAt: 1,
+  };
+
+  const streamingModel = buildAssistantRenderModel(message, undefined, 0, {
+    streamingText: 'Final answer.',
+    isStreaming: true,
+  });
+  const completedModel = buildAssistantRenderModel(message, undefined, 0, {
+    streamingText: 'Final answer.',
+    isStreaming: false,
+  });
+
+  assert.equal(
+    streamingModel.items.find((item) => item.kind === 'answer_lane')?.key,
+    completedModel.items.find((item) => item.kind === 'answer_lane')?.key,
+  );
+});
+
+test('assistant render model can show buffered thinking text without mutating timeline content', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const timeline = [
+    {
+      id: 'reasoning_1',
+      kind: 'reasoning',
+      content: 'First thought. Hidden unfinished fragment',
+      collapsed: true,
+      status: 'streaming',
+      createdAt: 10,
+    },
+  ];
+
+  const model = buildAssistantRenderModel(
+    { id: 'assistant_reasoning_buffered', role: 'assistant', timeline, createdAt: 1 },
+    {
+      timeline,
+      isStreaming: true,
+      streamingReasoningTextByEventId: {
+        reasoning_1: 'First thought.',
+      },
+    },
+  );
+
+  assert.equal(model.items[0]?.part.content, 'First thought.');
+  assert.equal(timeline[0].content, 'First thought. Hidden unfinished fragment');
+});

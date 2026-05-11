@@ -13,5 +13,7 @@ test('AIChat uses paragraph streaming helpers instead of mirroring projection te
 
   assert.match(source, /assistantParagraphStreaming/);
   assert.match(source, /finalizeParagraphStreamingState/);
+  assert.match(source, /projection\.finalMessage\?\.text/);
   assert.doesNotMatch(source, /nextDraft\.streamingText = projection\.activeMessage\.text;/);
+  assert.doesNotMatch(source, /finalizeParagraphStreamingState\(\s*currentParagraphState,\s*getAssistantTimelineText\(message\.timeline\),\s*\)/);
 });

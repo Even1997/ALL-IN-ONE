@@ -283,8 +283,44 @@ test('chat timeline bubble card helper filters duplicate run, response, and inte
     ],
   });
 
-  assert.deepEqual(descriptors.map((descriptor) => descriptor.card.phase), ['tooling']);
-  assert.deepEqual(descriptors.map((descriptor) => descriptor.createdAt), [3]);
+  assert.deepEqual(descriptors.map((descriptor) => descriptor.card.phase), ['tooling', 'response']);
+  assert.deepEqual(descriptors.map((descriptor) => descriptor.createdAt), [3, 6]);
+});
+
+test('chat timeline keeps one compact completed response summary card', async () => {
+  const { buildChatTimelineBubbleCards } = await import(
+    `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`
+  );
+
+  const cards = buildChatTimelineBubbleCards({
+    runId: 'run-1',
+    status: 'completed',
+    events: [],
+    activeMessage: null,
+    finalMessage: { messageId: 'assistant-1', text: 'Final answer ready.', completedAt: 60 },
+    cards: [
+      {
+        cardId: 'card_response',
+        phase: 'response',
+        title: 'Response',
+        summary: 'Final answer ready.',
+        status: 'completed',
+        startedAt: 20,
+        endedAt: 60,
+        toolCount: 0,
+        retryCount: 0,
+        warningCount: 0,
+        errorCount: 0,
+        detailRefs: [],
+        interactionRefs: [],
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    cards.map((card) => [card.card.phase, card.createdAt, card.card.summary]),
+    [['response', 60, 'Final answer ready.']],
+  );
 });
 
 test('completed run summary cards sort after same-timestamp work cards', async () => {

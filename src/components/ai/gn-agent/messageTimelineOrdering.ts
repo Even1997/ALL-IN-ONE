@@ -5,7 +5,7 @@ export type MessageTimelineRenderItem = {
   node: ReactNode;
   createdAt?: number;
   timelineOrder?: number;
-  laneKind?: 'thinking_lane' | 'bubble';
+  laneKind?: 'thinking_lane' | 'bubble' | 'answer_lane';
 };
 
 export type MessageTimelineRenderGroup = {
@@ -13,22 +13,13 @@ export type MessageTimelineRenderGroup = {
   items: MessageTimelineRenderItem[];
 };
 
-export const sortMessageRenderItems = (
-  partRenderItems: MessageTimelineRenderItem[],
-  bubbleRenderItems: MessageTimelineRenderItem[]
-) => {
-  const timelineItems = [
-    ...partRenderItems.map((item, index) => ({
+export const sortMessageRenderItems = (renderItems: MessageTimelineRenderItem[]) =>
+  renderItems
+    .map((item, index) => ({
       ...item,
       timelineIndex: index,
-    })),
-    ...bubbleRenderItems.map((item, index) => ({
-      ...item,
-      timelineIndex: partRenderItems.length + index,
-    })),
-  ];
-
-  return timelineItems.sort((left, right) => {
+    }))
+    .sort((left, right) => {
     const leftTime = typeof left.createdAt === 'number' ? left.createdAt : Number.MAX_SAFE_INTEGER;
     const rightTime = typeof right.createdAt === 'number' ? right.createdAt : Number.MAX_SAFE_INTEGER;
     if (leftTime !== rightTime) {
@@ -45,7 +36,9 @@ export const sortMessageRenderItems = (
 
     return left.timelineIndex - right.timelineIndex;
   });
-};
+
+const getRenderGroupKind = (item: MessageTimelineRenderItem): MessageTimelineRenderGroup['kind'] =>
+  item.laneKind === 'thinking_lane' ? 'thinking_lane' : 'bubble';
 
 export const groupMessageRenderItemsByLane = (
   timelineItems: MessageTimelineRenderItem[]
@@ -53,7 +46,7 @@ export const groupMessageRenderItemsByLane = (
   const groups: MessageTimelineRenderGroup[] = [];
 
   timelineItems.forEach((item) => {
-    const kind = item.laneKind === 'thinking_lane' ? 'thinking_lane' : 'bubble';
+    const kind = getRenderGroupKind(item);
     const previousGroup = groups[groups.length - 1];
 
     if (previousGroup?.kind === kind) {

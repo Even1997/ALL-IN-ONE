@@ -209,15 +209,11 @@ export const AssistantTextBlock = memo(function AssistantTextBlock({
     <div
       className={`chat-answer-text ${shouldUseAssistantDocumentLayout(content) ? 'document' : 'bubble'} ${isStreaming ? 'streaming' : ''}`}
     >
-      {isStreaming ? (
-        <div className="chat-answer-streaming-plain" aria-live="polite" aria-atomic="false">
-          <span>{content}</span>
-        </div>
-      ) : (
+      <div className="chat-answer-markdown" aria-live={isStreaming ? 'polite' : undefined} aria-atomic="false">
         <ReactMarkdown components={MARKDOWN_COMPONENTS} remarkPlugins={[remarkGfm]}>
           {content}
         </ReactMarkdown>
-      )}
+      </div>
       {inlineImagePaths.length > 0 ? (
         <div className="chat-inline-image-gallery">
           {inlineImagePaths.map((imagePath) => {

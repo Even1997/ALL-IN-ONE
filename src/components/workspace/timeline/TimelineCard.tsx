@@ -19,6 +19,12 @@ const PHASE_LABELS: Record<TimelineCardModel['phase'], string> = {
   error: '异常',
 };
 
+const formatCompactTime = (value: number) =>
+  new Date(value).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
 export const TimelineCard: React.FC<{
   card: TimelineCardModel;
   onToggleDetails: () => void;
@@ -52,6 +58,14 @@ export const TimelineCard: React.FC<{
         </div>
         <div className="chat-timeline-card-actions">
           <span className={`chat-timeline-card-status ${card.status}`}>{STATUS_LABELS[card.status]}</span>
+          {card.status === 'completed' && typeof card.endedAt === 'number' ? (
+            <>
+              <span aria-hidden="true" className="chat-timeline-card-divider">
+                路
+              </span>
+              <span className="chat-timeline-card-meta">{formatCompactTime(card.endedAt)} 完成</span>
+            </>
+          ) : null}
           {card.detailRefs.length > 0 ? (
             <>
               <span aria-hidden="true" className="chat-timeline-card-divider">

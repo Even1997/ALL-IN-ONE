@@ -10,7 +10,7 @@ export type ChatTimelineBubbleCardDescriptor = {
   detailItems: TimelineDetailItem[];
 };
 
-const SUPPRESSED_CHAT_TIMELINE_PHASES = new Set(['intake', 'approval', 'question', 'response']);
+const SUPPRESSED_CHAT_TIMELINE_PHASES = new Set(['intake', 'approval', 'question']);
 
 const isReasoningOnlyProgressCard = (
   card: TimelineProjection['cards'][number],
@@ -37,6 +37,10 @@ export const buildChatTimelineBubbleCards = (
         return [];
       }
 
+      if (card.phase === 'response' && card.status !== 'completed') {
+        return [];
+      }
+
       const detailEvents = card.detailRefs
         .map((detailRef) => eventsById.get(detailRef))
         .filter((event): event is CanonicalEvent => Boolean(event));
@@ -48,10 +52,10 @@ export const buildChatTimelineBubbleCards = (
       return [
         {
           cardId: card.cardId,
-          createdAt: card.phase === 'intake' && typeof card.endedAt === 'number'
+          createdAt: card.phase === 'response' && typeof card.endedAt === 'number'
             ? card.endedAt
             : card.startedAt,
-          timelineOrder: card.phase === 'intake' && typeof card.endedAt === 'number'
+          timelineOrder: card.phase === 'response'
             ? Number.MAX_SAFE_INTEGER
             : index,
           card,

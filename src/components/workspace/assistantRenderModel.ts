@@ -9,6 +9,7 @@ export type AssistantDraftState = {
   timeline: AssistantTimelineEvent[];
   streamingText?: string;
   isStreaming?: boolean;
+  streamingReasoningTextByEventId?: Record<string, string>;
 };
 
 export type AssistantStreamingState = {
@@ -81,7 +82,7 @@ export const buildAssistantRenderModel = (
       thinkingItems.push({
         part: {
           type: 'thinking',
-          content: event.content,
+          content: draftState?.streamingReasoningTextByEventId?.[event.id] ?? event.content,
           collapsed: event.collapsed,
           status: event.status,
           elapsedSeconds: event.elapsedSeconds,
@@ -119,7 +120,7 @@ export const buildAssistantRenderModel = (
         ...baseItems,
         {
           kind: 'answer_lane',
-          key: hasStreamingText ? `${message.id}-streaming-text` : `${message.id}-answer-text`,
+          key: `${message.id}-answer-text`,
           part: {
             type: 'text',
             content,

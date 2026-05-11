@@ -32,7 +32,7 @@ type MessageRenderItem = {
   node: React.ReactNode;
   createdAt?: number;
   timelineOrder?: number;
-  laneKind?: 'thinking_lane' | 'bubble';
+  laneKind?: 'thinking_lane' | 'bubble' | 'answer_lane';
 };
 
 type GNAgentMessageItemProps = {
@@ -102,15 +102,20 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
       : null;
   const isStreaming = assistantRenderModel?.isStreaming ?? false;
   const assistantCopyText = assistantRenderModel?.copyText;
-  const partRenderItems: MessageRenderItem[] = [];
-  const answerRenderItems: MessageRenderItem[] = [];
+  const hasCompletedAnswer =
+    message.role === 'assistant' &&
+    !isStreaming &&
+    Boolean(assistantRenderModel?.content.trim());
+  const allRenderItems: MessageRenderItem[] = [];
 
   if (message.role === 'assistant' && assistantRenderModel) {
     assistantRenderModel.items.forEach((item) => {
       const thinkingKey = `${message.id}-thinking-${item.index}`;
       const thinkingExpanded =
-        item.part.type === 'thinking' ? expandedThinkingKeys[thinkingKey] ?? false : undefined;
-      const renderItem: MessageRenderItem = {
+        item.part.type === 'thinking'
+          ? expandedThinkingKeys[thinkingKey] ?? !hasCompletedAnswer
+          : undefined;
+      allRenderItems.push({
         key: item.key,
         node: renderMessagePart(message, message.id, item.part, item.index, {
           content: assistantRenderModel.content,
@@ -127,20 +132,13 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
         }),
         createdAt: item.part.createdAt,
         timelineOrder: item.timelineOrder,
-        laneKind: 'thinking_lane',
-      };
-
-      if (item.kind === 'answer_lane') {
-        answerRenderItems.push(renderItem);
-        return;
-      }
-
-      partRenderItems.push(renderItem);
+        laneKind: item.kind === 'thinking_lane' ? 'thinking_lane' : 'answer_lane',
+      });
     });
   } else {
     const parts = parseMessageParts(content);
     parts.forEach((part, index) => {
-      partRenderItems.push({
+      allRenderItems.push({
         key: `${message.id}-part-${index}`,
         node: renderMessagePart(message, message.id, part, index, {
           content,
@@ -153,9 +151,9 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     });
   }
 
-  const processRenderItems = sortMessageRenderItems(partRenderItems, bubbleRenderItems);
-  const timelineGroups = message.role === 'assistant' ? groupMessageRenderItemsByLane(processRenderItems) : [];
-  const hasVisibleContent = processRenderItems.length > 0 || answerRenderItems.length > 0;
+  const timelineRenderItems = sortMessageRenderItems([...allRenderItems, ...bubbleRenderItems]);
+  const timelineGroups = message.role === 'assistant' ? groupMessageRenderItemsByLane(timelineRenderItems) : [];
+  const hasVisibleContent = timelineRenderItems.length > 0;
 
   return (
     <article className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}>
@@ -178,13 +176,6 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
               </div>
             )
           )}
-          {answerRenderItems.map((item) => (
-            <div key={item.key} className="chat-message-bubble">
-              <div className="chat-message-content chat-message-content-timeline">
-                <React.Fragment key={item.key}>{item.node}</React.Fragment>
-              </div>
-            </div>
-          ))}
           <AssistantMessageActionBar copyText={isStreaming ? undefined : assistantCopyText} />
           <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
         </>
@@ -192,7 +183,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
       {message.role !== 'assistant' && hasVisibleContent ? (
         <div className="chat-message-bubble">
           <div className="chat-message-content chat-message-content-timeline">
-            {processRenderItems.map((item) => (
+            {timelineRenderItems.map((item) => (
               <React.Fragment key={item.key}>{item.node}</React.Fragment>
             ))}
           </div>

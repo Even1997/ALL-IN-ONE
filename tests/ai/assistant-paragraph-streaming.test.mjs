@@ -32,6 +32,22 @@ test('flushes pending content after timeout when no sentence boundary arrives', 
   assert.equal(state.pendingText, '');
 });
 
+test('timeout flush appends pending text instead of replacing already visible text', async () => {
+  const {
+    createParagraphStreamingState,
+    advanceParagraphStreamingState,
+  } = await loadModule();
+
+  let state = createParagraphStreamingState();
+  state = advanceParagraphStreamingState(state, 'First sentence. unfinished', 1000);
+  state = advanceParagraphStreamingState(state, 'First sentence. unfinished chunk', 1300, {
+    forceTimeoutFlush: true,
+  });
+
+  assert.equal(state.visibleText, 'First sentence. unfinished chunk');
+  assert.equal(state.pendingText, '');
+});
+
 test('treats blank-line boundaries as paragraph flushes', async () => {
   const {
     createParagraphStreamingState,
