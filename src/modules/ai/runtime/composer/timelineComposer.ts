@@ -55,9 +55,12 @@ const getToolStartedSummary = (payload: ToolStartedPayload) =>
   payload.displayName?.trim() ||
   payload.toolName;
 
-const getToolCardTitle = (payload: ToolStartedPayload | ToolCompletedPayload) =>
+const getToolStartedCardTitle = (payload: ToolStartedPayload) =>
   payload.displayName?.trim() ||
   getTimelineToolDisplayName(payload.toolName);
+
+const getToolCompletedCardTitle = (event: Extract<CanonicalEvent, { type: 'tool.completed' }>) =>
+  getTimelineToolDisplayName(event.source.name || 'tool');
 
 const getToolCompletedSummary = (payload: ToolCompletedPayload) =>
   payload.summary?.trim() ||
@@ -232,7 +235,7 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
 
         case 'tool.started': {
           const summary = getToolStartedSummary(event.payload);
-          const title = getToolCardTitle(event.payload);
+          const title = getToolStartedCardTitle(event.payload);
           const last = projection.cards[projection.cards.length - 1];
           const card =
             last &&
@@ -264,7 +267,7 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
 
         case 'tool.completed': {
           const summary = getToolCompletedSummary(event.payload);
-          const title = getToolCardTitle(event.payload);
+          const title = getToolCompletedCardTitle(event);
           const activeCard = getActiveToolCard();
           const card = ensureLastCard(
             event,

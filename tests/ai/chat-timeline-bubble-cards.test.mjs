@@ -115,5 +115,8 @@ test('compact timeline cards avoid glassy blur and hover lift animations', async
   assert.ok(summaryBlockMatch);
   assert.ok(hoverBlockMatch);
   assert.doesNotMatch(summaryBlockMatch[1], /backdrop-filter:/);
+  assert.match(summaryBlockMatch[1], /border:\s*0/);
+  assert.match(summaryBlockMatch[1], /border-radius:\s*0/);
+  assert.match(summaryBlockMatch[1], /background:\s*transparent/);
   assert.doesNotMatch(hoverBlockMatch[1], /transform:/);
 });

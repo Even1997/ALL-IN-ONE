@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import type { StoredChatMessage } from '../../../modules/ai/store/aiChatStore.ts';
-import { buildAssistantRenderModel, type AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
+import type { StreamingLatencyTrace } from '../../../modules/ai/runtime/streamingLatencyTrace.ts';
+import {
+  buildAssistantRenderModel,
+  type AssistantDraftState,
+  type AssistantStreamingState,
+} from '../../workspace/assistantRenderModel.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
 import { groupMessageRenderItemsByLane, sortMessageRenderItems } from './messageTimelineOrdering.ts';
 
@@ -14,6 +19,9 @@ type MessagePartRenderer = (
     isStreaming: boolean;
     thinkingExpanded?: boolean;
     onToggleThinking?: () => void;
+    streamingLatencyTrace?: StreamingLatencyTrace | null;
+    onFirstVisibleChar?: () => void;
+    onFinalVisibleDone?: () => void;
   }
 ) => React.ReactNode;
 
@@ -30,6 +38,7 @@ type MessageRenderItem = {
 type GNAgentMessageItemProps = {
   message: StoredChatMessage;
   draftState?: AssistantDraftState;
+  streamingState?: AssistantStreamingState;
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
@@ -72,6 +81,7 @@ const AssistantMessageActionBar: React.FC<{
 export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   message,
   draftState,
+  streamingState,
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
@@ -87,17 +97,20 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     laneKind: 'bubble',
   }));
   const assistantRenderModel =
-    message.role === 'assistant' ? buildAssistantRenderModel(message, draftState, bubbleRenderItems.length) : null;
+    message.role === 'assistant'
+      ? buildAssistantRenderModel(message, draftState, bubbleRenderItems.length, streamingState)
+      : null;
   const isStreaming = assistantRenderModel?.isStreaming ?? false;
   const assistantCopyText = assistantRenderModel?.copyText;
   const partRenderItems: MessageRenderItem[] = [];
+  const answerRenderItems: MessageRenderItem[] = [];
 
   if (message.role === 'assistant' && assistantRenderModel) {
     assistantRenderModel.items.forEach((item) => {
       const thinkingKey = `${message.id}-thinking-${item.index}`;
       const thinkingExpanded =
         item.part.type === 'thinking' ? expandedThinkingKeys[thinkingKey] ?? false : undefined;
-      partRenderItems.push({
+      const renderItem: MessageRenderItem = {
         key: item.key,
         node: renderMessagePart(message, message.id, item.part, item.index, {
           content: assistantRenderModel.content,
@@ -114,8 +127,15 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
         }),
         createdAt: item.part.createdAt,
         timelineOrder: item.timelineOrder,
-        laneKind: item.kind === 'thinking_lane' ? 'thinking_lane' : 'bubble',
-      });
+        laneKind: 'thinking_lane',
+      };
+
+      if (item.kind === 'answer_lane') {
+        answerRenderItems.push(renderItem);
+        return;
+      }
+
+      partRenderItems.push(renderItem);
     });
   } else {
     const parts = parseMessageParts(content);
@@ -133,9 +153,9 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     });
   }
 
-  const timelineItems = sortMessageRenderItems(partRenderItems, bubbleRenderItems);
-  const timelineGroups = message.role === 'assistant' ? groupMessageRenderItemsByLane(timelineItems) : [];
-  const hasVisibleContent = timelineItems.length > 0;
+  const processRenderItems = sortMessageRenderItems(partRenderItems, bubbleRenderItems);
+  const timelineGroups = message.role === 'assistant' ? groupMessageRenderItemsByLane(processRenderItems) : [];
+  const hasVisibleContent = processRenderItems.length > 0 || answerRenderItems.length > 0;
 
   return (
     <article className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}>
@@ -158,6 +178,13 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
               </div>
             )
           )}
+          {answerRenderItems.map((item) => (
+            <div key={item.key} className="chat-message-bubble">
+              <div className="chat-message-content chat-message-content-timeline">
+                <React.Fragment key={item.key}>{item.node}</React.Fragment>
+              </div>
+            </div>
+          ))}
           <AssistantMessageActionBar copyText={isStreaming ? undefined : assistantCopyText} />
           <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
         </>
@@ -165,7 +192,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
       {message.role !== 'assistant' && hasVisibleContent ? (
         <div className="chat-message-bubble">
           <div className="chat-message-content chat-message-content-timeline">
-            {timelineItems.map((item) => (
+            {processRenderItems.map((item) => (
               <React.Fragment key={item.key}>{item.node}</React.Fragment>
             ))}
           </div>

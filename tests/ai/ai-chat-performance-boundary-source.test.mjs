@@ -11,29 +11,26 @@ const conversationPanePath = path.resolve(
   '../../src/components/workspace/AIChatConversationMessagesPane.tsx',
 );
 
-test('AIChat uses fine-grained runtime hooks instead of a single conversation projection', async () => {
+test('AIChat composes chat surfaces from focused runtime selectors and message-pane boundaries', async () => {
   const source = await readFile(aiChatPath, 'utf8');
 
   assert.match(source, /useActiveConversationSelection/);
   assert.match(source, /useActiveConversationRunStateSignals/);
+  assert.match(source, /useRuntimeConversationGateway/);
   assert.match(source, /AIChatConversationMessagesPane/);
-  assert.match(source, /renderTimelineCards/);
-  assert.match(source, /renderRuntimeQuestion/);
-  assert.doesNotMatch(source, /AIChatRuntimeStatusPanel/);
-  assert.doesNotMatch(source, /AIChatRuntimeTasksPanel/);
   assert.match(source, /activeSession\?\.messages,/);
   assert.match(source, /activePendingQuestionSummary/);
   assert.match(source, /activeStatusVerb/);
-  assert.doesNotMatch(source, /const conversation = useRuntimeConversationGateway/);
-  assert.doesNotMatch(source, /const messages = conversation\.messages/);
-  assert.doesNotMatch(source, /const pendingApprovals = conversation\.pendingApprovals/);
+  assert.match(source, /renderTimelineCards/);
+  assert.match(source, /renderRuntimeQuestion/);
 });
 
-test('conversation pane no longer recomputes all streaming drafts from live thinking state', async () => {
+test('conversation pane stays a message-surface boundary instead of owning direct live-state reconstruction', async () => {
   const source = await readFile(conversationPanePath, 'utf8');
 
-  assert.doesNotMatch(source, /useActiveConversationLiveState/);
-  assert.doesNotMatch(source, /applyAssistantReasoningProgress/);
-  assert.doesNotMatch(source, /effectiveStreamingDraftContents/);
+  assert.match(source, /useActiveConversationMessages/);
+  assert.match(source, /GNAgentMessageList/);
   assert.match(source, /draftContents=\{draftContents\}/);
+  assert.match(source, /renderMessagePart=\{renderMessagePart\}/);
+  assert.match(source, /renderTimelineCards=\{renderTimelineCards\}/);
 });

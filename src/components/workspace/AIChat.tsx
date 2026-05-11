@@ -52,6 +52,7 @@ import {
   getLatestReplaySkillSnapshot,
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
 import {
+  useActiveConversationLiveState,
   useActiveConversationRunStateSignals,
   useActiveConversationSelection,
   useRuntimeConversationGateway,
@@ -59,6 +60,12 @@ import {
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
 import { getLatestTurnSession } from '../../modules/ai/runtime/session/agentSessionSelectors.ts';
+import {
+  recordFinalVisibleDone,
+  recordFirstVisibleChar,
+  recordFrontendFlush,
+  type StreamingLatencyTrace,
+} from '../../modules/ai/runtime/streamingLatencyTrace.ts';
 import {
   createChatSession,
   type StoredChatMessage,
@@ -116,6 +123,12 @@ import {
 } from './aiChatViewState';
 import { parseAIChatMessageParts, type AIChatMessagePart } from './aiChatMessageParts';
 import { AssistantTextBlock, AssistantThinkingBlock } from './AIChatAssistantParts';
+import {
+  advanceParagraphStreamingState,
+  createParagraphStreamingState,
+  finalizeParagraphStreamingState,
+  type ParagraphStreamingState,
+} from './assistantParagraphStreaming.ts';
 import {
   buildChatTimelineBubbleCards,
   ChatTimelineBubbleCard,
@@ -190,10 +203,13 @@ type RunDiffState = {
 
 type StreamingDraftState = {
   timeline: AssistantTimelineEvent[];
+  streamingText?: string;
+  isStreaming?: boolean;
 };
 
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
 const EMPTY_PENDING_APPROVALS: ApprovalRecord[] = [];
+const PARAGRAPH_STREAMING_TIMEOUT_MS = 220;
 const SETTINGS_TABS: Array<{
   id: SettingsTabId;
   label: string;
@@ -823,6 +839,9 @@ const renderMessagePart = (
     isStreaming: boolean;
     thinkingExpanded?: boolean;
     onToggleThinking?: () => void;
+    streamingLatencyTrace?: StreamingLatencyTrace | null;
+    onFirstVisibleChar?: () => void;
+    onFinalVisibleDone?: () => void;
   }
 ) => {
   if (part.type === 'thinking') {
@@ -883,6 +902,8 @@ const renderMessagePart = (
       key={`${messageId}-text-${index}`}
       content={part.content}
       isStreaming={options?.isStreaming ?? false}
+      onFirstVisibleChar={options?.onFirstVisibleChar}
+      onFinalVisibleDone={options?.onFinalVisibleDone}
     />
   );
 };
@@ -1023,7 +1044,11 @@ export const AIChat: React.FC<AIChatProps> = ({
   const messageListRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const liveThreadIdRef = useRef<string | null>(null);
   const streamingDraftBufferRef = useRef<Record<string, StreamingDraftState>>({});
+  const streamingDraftFlushFrameRef = useRef<number | null>(null);
+  const paragraphStreamingStateByMessageIdRef = useRef<Record<string, ParagraphStreamingState>>({});
+  const paragraphStreamingTimeoutsRef = useRef<Record<string, number>>({});
   const abortControllerRef = useRef<AbortController | null>(null);
   const stopRequestedRef = useRef(false);
   const runningSubmissionRef = useRef<{ assistantMessageId: string; runtimeStoreThreadId: string } | null>(null);
@@ -1031,6 +1056,105 @@ export const AIChat: React.FC<AIChatProps> = ({
     createRuntimeSkillRegistry(getDefaultRuntimeSkillDefinitions())
   );
   const skillCatalogLifecycleSignatureRef = useRef('');
+
+  const flushStreamingDraftContents = useCallback(() => {
+    streamingDraftFlushFrameRef.current = null;
+    setStreamingDraftContents({ ...streamingDraftBufferRef.current });
+    const nextLiveThreadId = liveThreadIdRef.current;
+    if (nextLiveThreadId) {
+      useAgentRuntimeStore.getState().patchLiveState(nextLiveThreadId, (state) => ({
+        ...state,
+        streamingLatencyTrace: recordFrontendFlush(state.streamingLatencyTrace, Date.now()),
+      }));
+    }
+  }, []);
+
+  const scheduleStreamingDraftContentsFlush = useCallback(() => {
+    if (streamingDraftFlushFrameRef.current !== null) {
+      return;
+    }
+
+    streamingDraftFlushFrameRef.current = requestAnimationFrame(flushStreamingDraftContents);
+  }, [flushStreamingDraftContents]);
+
+  const flushStreamingDraftContentsNow = useCallback(() => {
+    if (streamingDraftFlushFrameRef.current !== null) {
+      cancelAnimationFrame(streamingDraftFlushFrameRef.current);
+      streamingDraftFlushFrameRef.current = null;
+    }
+
+    flushStreamingDraftContents();
+  }, [flushStreamingDraftContents]);
+
+  const clearParagraphStreamingTimeout = useCallback((messageId: string) => {
+    const timeoutId = paragraphStreamingTimeoutsRef.current[messageId];
+    if (timeoutId === undefined) {
+      return;
+    }
+
+    window.clearTimeout(timeoutId);
+    const nextTimeouts = { ...paragraphStreamingTimeoutsRef.current };
+    delete nextTimeouts[messageId];
+    paragraphStreamingTimeoutsRef.current = nextTimeouts;
+  }, []);
+
+  const resetParagraphStreamingState = useCallback((messageId: string) => {
+    clearParagraphStreamingTimeout(messageId);
+    if (!(messageId in paragraphStreamingStateByMessageIdRef.current)) {
+      return;
+    }
+
+    const nextStates = { ...paragraphStreamingStateByMessageIdRef.current };
+    delete nextStates[messageId];
+    paragraphStreamingStateByMessageIdRef.current = nextStates;
+  }, [clearParagraphStreamingTimeout]);
+
+  const scheduleParagraphStreamingTimeout = useCallback(
+    (messageId: string, rawText: string, timeline: AssistantTimelineEvent[]) => {
+      clearParagraphStreamingTimeout(messageId);
+      paragraphStreamingTimeoutsRef.current = {
+        ...paragraphStreamingTimeoutsRef.current,
+        [messageId]: window.setTimeout(() => {
+          const currentState =
+            paragraphStreamingStateByMessageIdRef.current[messageId] ?? createParagraphStreamingState();
+          const nextState = advanceParagraphStreamingState(currentState, rawText, Date.now(), {
+            forceTimeoutFlush: true,
+          });
+          paragraphStreamingStateByMessageIdRef.current = {
+            ...paragraphStreamingStateByMessageIdRef.current,
+            [messageId]: nextState,
+          };
+          const currentDraft = streamingDraftBufferRef.current[messageId];
+          streamingDraftBufferRef.current = {
+            ...streamingDraftBufferRef.current,
+            [messageId]: {
+              ...currentDraft,
+              timeline: currentDraft?.timeline ?? timeline,
+              streamingText: nextState.visibleText,
+              isStreaming: true,
+            },
+          };
+          flushStreamingDraftContentsNow();
+        }, PARAGRAPH_STREAMING_TIMEOUT_MS),
+      };
+    },
+    [clearParagraphStreamingTimeout, flushStreamingDraftContentsNow]
+  );
+
+  useEffect(
+    () => () => {
+      if (streamingDraftFlushFrameRef.current !== null) {
+        cancelAnimationFrame(streamingDraftFlushFrameRef.current);
+        streamingDraftFlushFrameRef.current = null;
+      }
+
+      Object.values(paragraphStreamingTimeoutsRef.current).forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      paragraphStreamingTimeoutsRef.current = {};
+    },
+    []
+  );
 
   const setCollapsedState = (nextValue: boolean) => {
     if (!isControlledCollapse) {
@@ -1166,6 +1290,82 @@ export const AIChat: React.FC<AIChatProps> = ({
   } = useActiveConversationRunStateSignals({
     projectId: currentProjectId,
   });
+  const { liveThreadId, liveState } = useActiveConversationLiveState({
+    projectId: currentProjectId,
+  });
+  const activeStreamingLatencyTrace = liveState?.streamingLatencyTrace ?? null;
+  const effectiveDraftContents = useMemo(() => {
+    const draftsByMessageId: Record<string, StreamingDraftState> = { ...streamingDraftContents };
+    const activeMessages = activeSession?.messages || [];
+
+    activeMessages.forEach((message) => {
+      if (message.role !== 'assistant') {
+        return;
+      }
+
+      const projection =
+        (message.runId ? timelineProjectionByRunId[message.runId] : null) ||
+        timelineProjectionByMessageId[message.id] ||
+        null;
+      if (!projection) {
+        return;
+      }
+
+      const nextDraft: StreamingDraftState = {
+        timeline: draftsByMessageId[message.id]?.timeline || message.timeline,
+      };
+
+      if (projection.activeMessage) {
+        const currentParagraphState =
+          paragraphStreamingStateByMessageIdRef.current[message.id] ?? createParagraphStreamingState();
+        const nextParagraphState = advanceParagraphStreamingState(
+          currentParagraphState,
+          projection.activeMessage.text,
+          Date.now(),
+        );
+
+        paragraphStreamingStateByMessageIdRef.current = {
+          ...paragraphStreamingStateByMessageIdRef.current,
+          [message.id]: nextParagraphState,
+        };
+        nextDraft.isStreaming = true;
+        nextDraft.streamingText = nextParagraphState.visibleText;
+        if (nextParagraphState.pendingText.trim().length > 0) {
+          scheduleParagraphStreamingTimeout(message.id, projection.activeMessage.text, nextDraft.timeline);
+        } else {
+          clearParagraphStreamingTimeout(message.id);
+        }
+      } else {
+        clearParagraphStreamingTimeout(message.id);
+        const currentParagraphState = paragraphStreamingStateByMessageIdRef.current[message.id];
+        if (currentParagraphState) {
+          const finalized = finalizeParagraphStreamingState(
+            currentParagraphState,
+            getAssistantTimelineText(message.timeline),
+          );
+          nextDraft.streamingText = finalized.visibleText;
+        }
+        nextDraft.isStreaming = false;
+        resetParagraphStreamingState(message.id);
+      }
+
+      draftsByMessageId[message.id] = {
+        ...draftsByMessageId[message.id],
+        ...nextDraft,
+      };
+    });
+
+    return draftsByMessageId;
+  }, [
+    activeSession?.messages,
+    clearParagraphStreamingTimeout,
+    resetParagraphStreamingState,
+    scheduleParagraphStreamingTimeout,
+    streamingDraftContents,
+    timelineProjectionByMessageId,
+    timelineProjectionByRunId,
+  ]);
+  liveThreadIdRef.current = liveThreadId;
   const {
     permissionMode,
     enqueueApproval,
@@ -1443,10 +1643,10 @@ export const AIChat: React.FC<AIChatProps> = ({
             timeline: updater(currentDraft.timeline),
           },
         };
-        setStreamingDraftContents({ ...streamingDraftBufferRef.current });
+        scheduleStreamingDraftContentsFlush();
       }
     },
-    [activeSessionId, currentProject, updateMessage]
+    [activeSessionId, currentProject, scheduleStreamingDraftContentsFlush, updateMessage]
   );
   const {
     handleApproveRuntimeApproval,
@@ -1611,7 +1811,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     scrollToBottom();
     const frameId = requestAnimationFrame(scrollToBottom);
     return () => cancelAnimationFrame(frameId);
-  }, [activeSession?.messages, isLoading, streamingDraftContents]);
+  }, [activeSession?.messages, effectiveDraftContents, isLoading]);
 
   useEffect(() => {
     const viewportClassName = getChatViewportClassName(isCollapsed);
@@ -2138,15 +2338,16 @@ export const AIChat: React.FC<AIChatProps> = ({
           ? 'error'
           : 'success';
   const clearStreamingDraft = useCallback((messageId: string) => {
-    if (!(messageId in streamingDraftBufferRef.current)) {
-      return;
+    const hadDraft = messageId in streamingDraftBufferRef.current;
+    if (hadDraft) {
+      const nextDrafts = { ...streamingDraftBufferRef.current };
+      delete nextDrafts[messageId];
+      streamingDraftBufferRef.current = nextDrafts;
+      flushStreamingDraftContentsNow();
     }
 
-    const nextDrafts = { ...streamingDraftBufferRef.current };
-    delete nextDrafts[messageId];
-    streamingDraftBufferRef.current = nextDrafts;
-    setStreamingDraftContents(nextDrafts);
-  }, []);
+    resetParagraphStreamingState(messageId);
+  }, [flushStreamingDraftContentsNow, resetParagraphStreamingState]);
   const commitStreamingDraft = useCallback(
     (messageId: string) => {
       const draft = streamingDraftBufferRef.current[messageId];
@@ -2165,6 +2366,26 @@ export const AIChat: React.FC<AIChatProps> = ({
     },
     [activeSessionId, currentProject, updateMessage]
   );
+  const markStreamingFirstVisible = useCallback(() => {
+    if (!liveThreadId) {
+      return;
+    }
+
+    patchLiveState(liveThreadId, (state) => ({
+      ...state,
+      streamingLatencyTrace: recordFirstVisibleChar(state.streamingLatencyTrace, Date.now()),
+    }));
+  }, [liveThreadId, patchLiveState]);
+  const markStreamingFinalVisible = useCallback(() => {
+    if (!liveThreadId) {
+      return;
+    }
+
+    patchLiveState(liveThreadId, (state) => ({
+      ...state,
+      streamingLatencyTrace: recordFinalVisibleDone(state.streamingLatencyTrace, Date.now()),
+    }));
+  }, [liveThreadId, patchLiveState]);
   const loadCheckpointDiff = useCallback(
     async (runId: string, relativePath: string) => {
       if (!activeCheckpointThreadId) {
@@ -2521,23 +2742,39 @@ export const AIChat: React.FC<AIChatProps> = ({
       return null;
     }
 
+    const phaseCount = teamRun.phases.length;
+    const memberCount = teamRun.members.length;
+    const runningPhaseCount = teamRun.phases.filter((phase) => phase.status === 'running').length;
+    const failedPhaseCount = teamRun.phases.filter((phase) => phase.status === 'failed').length;
+    const completedPhaseCount = teamRun.phases.filter((phase) => phase.status === 'completed').length;
+    const statusLabel =
+      teamRun.status === 'failed'
+        ? `${failedPhaseCount || 1} failed`
+        : teamRun.status === 'running'
+          ? `${runningPhaseCount || 1} running`
+          : `${completedPhaseCount}/${phaseCount} done`;
+
     return [
       {
         node: (
-          <section className="chat-tool-trace-card">
-            <div className="chat-tool-trace-head">
-              <strong>多 Agent 执行轨迹</strong>
-              <span>{teamRun.phases.length} phases / {teamRun.members.length} agents</span>
-            </div>
-            <div className="chat-tool-trace-list">
+          <details className="chat-tool-trace-card chat-tool-trace-card-inline">
+            <summary className="chat-tool-trace-inline-summary">
+              <div className="chat-tool-trace-inline-copy">
+                <strong>多 Agent 执行轨迹</strong>
+                <span>{statusLabel}</span>
+              </div>
+              <span className="chat-tool-trace-inline-meta">{phaseCount} phases · {memberCount} agents</span>
+              <span className="chat-tool-trace-inline-caret" aria-hidden="true">▾</span>
+            </summary>
+            <div className="chat-tool-trace-inline-detail chat-tool-trace-list">
               {teamRun.phases.map((phase) => {
                 const phaseMembers = teamRun.members.filter((member) => member.phaseId === phase.id);
                 return (
-                  <details key={phase.id} className="chat-tool-trace-phase" open={phase.status === 'running'}>
+                  <details key={phase.id} className="chat-tool-trace-phase">
                     <summary className="chat-inline-disclosure chat-tool-trace-phase-summary">
                       <div className="chat-inline-disclosure-copy">
                         <strong>{phase.title}</strong>
-                        <span>{phase.status}</span>
+                        <span>{phase.status} · {phaseMembers.length} agents</span>
                       </div>
                       <span className="chat-inline-disclosure-caret" aria-hidden="true" />
                     </summary>
@@ -2559,7 +2796,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                 );
               })}
             </div>
-          </section>
+          </details>
         ),
         createdAt: message.createdAt,
       },
@@ -2935,10 +3172,20 @@ export const AIChat: React.FC<AIChatProps> = ({
   const agentChatContent = (
     <AIChatConversationMessagesPane
       projectId={currentProjectId}
-      draftContents={streamingDraftContents}
+      draftContents={effectiveDraftContents}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseAIChatMessageParts}
-      renderMessagePart={renderMessagePart}
+      renderMessagePart={(message, messageId, part, index, options) =>
+        renderMessagePart(message, messageId, part, index, {
+          content: options?.content ?? '',
+          isStreaming: options?.isStreaming ?? false,
+          thinkingExpanded: options?.thinkingExpanded,
+          onToggleThinking: options?.onToggleThinking,
+          streamingLatencyTrace: activeStreamingLatencyTrace,
+          onFirstVisibleChar: options?.isStreaming ? markStreamingFirstVisible : undefined,
+          onFinalVisibleDone: options?.isStreaming ? markStreamingFinalVisible : undefined,
+        })
+      }
       renderStructuredCards={renderStructuredCards}
       renderProjectFileProposal={renderProjectFileProposal}
       renderTimelineCards={renderTimelineCards}

@@ -106,12 +106,28 @@ export const createSessionInitializedEvent = (
 const sortSessionEvents = (eventLog: ChatSessionEvent[]) =>
   [...eventLog].sort((left, right) => left.createdAt - right.createdAt);
 
+const compactSessionEvents = (eventLog: ChatSessionEvent[]) => {
+  const latestMessageUpdateIndexes = new Map<string, number>();
+
+  eventLog.forEach((event, index) => {
+    if (event.kind === 'message_updated') {
+      latestMessageUpdateIndexes.set(event.messageId, index);
+    }
+  });
+
+  return eventLog.filter(
+    (event, index) =>
+      event.kind !== 'message_updated' ||
+      latestMessageUpdateIndexes.get(event.messageId) === index
+  );
+};
+
 export const buildChatSessionProjection = (
   sessionId: string,
   eventLog: ChatSessionEvent[],
   fallbackSession?: Partial<ChatSession>
 ): ChatSession | null => {
-  const ordered = sortSessionEvents(eventLog);
+  const ordered = sortSessionEvents(compactSessionEvents(eventLog));
   const initialized =
     ordered.find((event): event is ChatSessionInitializedEvent => event.kind === 'session_initialized') || null;
 

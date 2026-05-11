@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { GNAgentMessageList, type MessageBubbleCard } from '../ai/gn-agent/GNAgentEmbeddedPieces';
+import type { StreamingLatencyTrace } from '../../modules/ai/runtime/streamingLatencyTrace.ts';
 import type { ApprovalRecord } from '../../modules/ai/runtime/approval/approvalTypes.ts';
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
 import type { AIChatMessagePart } from './aiChatMessageParts';
@@ -24,6 +25,9 @@ type AIChatConversationMessagesPaneProps = {
       isStreaming: boolean;
       thinkingExpanded?: boolean;
       onToggleThinking?: () => void;
+      streamingLatencyTrace?: StreamingLatencyTrace | null;
+      onFirstVisibleChar?: () => void;
+      onFinalVisibleDone?: () => void;
     },
   ) => ReactNode;
   renderStructuredCards: (message: StoredChatMessage) => ReactNode;

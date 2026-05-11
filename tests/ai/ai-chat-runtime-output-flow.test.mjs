@@ -503,19 +503,63 @@ test('assistant narrative, thinking, and runtime cards share a unified surface l
 
   assert.match(
     cssSource,
-    /\.chat-answer-text\s*\{[\s\S]*padding:\s*14px 16px[\s\S]*border-radius:\s*16px[\s\S]*border:\s*1px solid/
+    /\.chat-answer-text\s*\{[\s\S]*gap:\s*5px[\s\S]*padding:\s*5px 0 5px 12px[\s\S]*border:\s*0[\s\S]*border-radius:\s*0[\s\S]*box-shadow:\s*none/
   );
   assert.match(
     cssSource,
-    /\.chat-thinking-block\s*\{[\s\S]*padding:\s*10px 12px 12px[\s\S]*border-radius:\s*16px[\s\S]*border:\s*1px solid/
+    /\.chat-thinking-block\s*\{[\s\S]*padding:\s*6px 0 6px 14px[\s\S]*border:\s*0[\s\S]*border-radius:\s*0[\s\S]*box-shadow:\s*none/
   );
   assert.match(
     cssSource,
-    /\.chat-timeline-card\s*\{[\s\S]*padding:\s*12px 14px[\s\S]*border-radius:\s*16px[\s\S]*border:\s*1px solid/
+    /\.chat-thinking-block::before,\s*\r?\n\.chat-answer-text::before,\s*\r?\n\.chat-timeline-card::before\s*\{[\s\S]*width:\s*2px/
   );
   assert.match(
     cssSource,
-    /\.chat-timeline-detail-line\s*\{[\s\S]*padding:\s*10px 12px[\s\S]*border-radius:\s*14px[\s\S]*border:\s*1px solid/
+    /\.chat-timeline-card\s*\{[\s\S]*padding:\s*5px 0 5px 14px[\s\S]*border:\s*0[\s\S]*border-radius:\s*0[\s\S]*box-shadow:\s*none/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-timeline-card::before\s*\{[\s\S]*width:\s*2px[\s\S]*border-radius:\s*999px/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-timeline-detail-line\s*\{[\s\S]*padding:\s*3px 0[\s\S]*border:\s*0[\s\S]*border-radius:\s*0[\s\S]*background:\s*transparent/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-answer-text::before\s*\{[\s\S]*background:\s*color-mix\(in srgb, var\(--gn-agent-text, #f4f4f1\) 14%, transparent\)/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-answer-text pre\s*\{[\s\S]*padding:\s*7px 9px[\s\S]*border-radius:\s*4px[\s\S]*background:\s*color-mix\(in srgb, var\(--gn-agent-code-surface, rgba\(255, 255, 255, 0\.04\)\) 42%, transparent\)/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-group-summary\s*\{[\s\S]*padding:\s*5px 0 5px 12px[\s\S]*border:\s*0[\s\S]*border-radius:\s*0[\s\S]*background:\s*transparent/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-detail-line\s*\{[\s\S]*gap:\s*6px[\s\S]*padding:\s*3px 0 3px 12px[\s\S]*border:\s*0[\s\S]*border-radius:\s*0[\s\S]*background:\s*transparent/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-group-detail\s*\{[\s\S]*margin:\s*2px 0 0 8px[\s\S]*padding-left:\s*10px[\s\S]*gap:\s*4px/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-detail-pre\s*\{[\s\S]*padding:\s*8px 10px[\s\S]*border-radius:\s*5px[\s\S]*background:\s*color-mix\(in srgb, var\(--gn-agent-code-surface, rgba\(15, 23, 42, 0\.05\)\) 46%, transparent\)/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded\s*\{[\s\S]*--gn-agent-linear-lane-width:\s*min\(880px, 100%\)/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-message\.assistant \.chat-message-bubble\s*\{[\s\S]*width:\s*var\(--gn-agent-linear-lane-width\)/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-message-card-lane,\s*\r?\n\.gn-agent-workspace \.chat-shell-embedded \.chat-tool-trace-stream\s*\{[\s\S]*width:\s*var\(--gn-agent-linear-lane-width\)/
   );
   assert.match(
     cssSource,
@@ -528,27 +572,51 @@ test('assistant narrative and runtime cards use a consistent typography scale', 
 
   assert.match(
     cssSource,
-    /\.chat-answer-text\s*\{[\s\S]*font-size:\s*14px[\s\S]*line-height:\s*1\.72/
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-message\.assistant \.chat-message-content\s*\{[\s\S]*gap:\s*4px[\s\S]*font-size:\s*13px[\s\S]*line-height:\s*1\.56/
   );
   assert.match(
     cssSource,
-    /\.chat-thinking-block\s*\{[\s\S]*font-size:\s*13px[\s\S]*line-height:\s*1\.6/
+    /\.chat-thinking-copy strong\s*\{[\s\S]*font-size:\s*11px[\s\S]*font-weight:\s*560/
   );
   assert.match(
     cssSource,
-    /\.chat-timeline-card-copy strong\s*\{[\s\S]*font-size:\s*13px/
+    /\.chat-timeline-card-copy strong\s*\{[\s\S]*font-size:\s*12px/
   );
   assert.match(
     cssSource,
-    /\.chat-timeline-card-phase,\s*\r?\n\.chat-timeline-card-progress,\s*\r?\n\.chat-timeline-card-status,\s*\r?\n\.chat-timeline-card-chip\s*\{[\s\S]*font-size:\s*12px[\s\S]*line-height:\s*1\.5/
+    /\.chat-timeline-card-phase,\s*\r?\n\.chat-timeline-card-progress\s*\{[\s\S]*padding:\s*0[\s\S]*background:\s*transparent[\s\S]*font-size:\s*10px[\s\S]*line-height:\s*1\.35/
   );
   assert.match(
     cssSource,
-    /\.chat-timeline-detail-copy span,\s*\r?\n\.chat-timeline-detail-copy pre\s*\{[\s\S]*font-size:\s*13px[\s\S]*line-height:\s*1\.6/
+    /\.chat-timeline-card-status\s*\{[\s\S]*font-size:\s*10px[\s\S]*line-height:\s*1\.4/
   );
   assert.match(
     cssSource,
-    /\.chat-runtime-question-prompt,\s*\r?\n\.chat-runtime-question-answer[\s\S]*font-size:\s*13px[\s\S]*line-height:\s*1\.6/
+    /\.chat-timeline-card-toggle\s*\{[\s\S]*font-size:\s*9px[\s\S]*opacity:\s*0\.44/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-thinking-preview\s*\{[\s\S]*font-size:\s*10px[\s\S]*line-height:\s*1\.3/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-timeline-detail-copy span,\s*\r?\n\.chat-timeline-detail-copy pre\s*\{[\s\S]*font-size:\s*12px[\s\S]*line-height:\s*1\.55/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-summary-copy strong\s*\{[\s\S]*font-size:\s*12px/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-tool-trace-stream\.compact \.chat-tool-trace-summary-copy > span,\s*\r?\n\.chat-tool-trace-stream\.compact \.chat-tool-trace-preview,\s*\r?\n\.chat-tool-trace-stream\.compact \.chat-tool-trace-brief span\s*\{[\s\S]*font-size:\s*11px[\s\S]*line-height:\s*1\.4/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-runtime-details-summary\s*\{[\s\S]*font-size:\s*9px[\s\S]*line-height:\s*1\.3/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-runtime-details-summary code\s*\{[\s\S]*font-size:\s*9px[\s\S]*opacity:\s*0\.62/
   );
 });
 

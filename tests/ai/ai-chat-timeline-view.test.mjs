@@ -10,6 +10,15 @@ test('timeline view keeps raw tool logs out of the main assistant message path',
   assert.doesNotMatch(source, /buildRuntimeExecutionTimelineCards/);
 });
 
+test('timeline cards render as compact log rows with inline summary and lightweight actions', async () => {
+  const source = await readFile('src/components/workspace/timeline/TimelineCard.tsx', 'utf8');
+
+  assert.match(source, /className="chat-timeline-card-main"/);
+  assert.match(source, /className="chat-timeline-card-summary-inline"/);
+  assert.match(source, /className="chat-timeline-card-actions"/);
+  assert.doesNotMatch(source, /className="chat-timeline-card-chip"/);
+});
+
 test('timeline detail formatter exposes tool IO and file changes as structured detail items', async () => {
   const { buildTimelineDetailItems } = await import(
     `../../src/components/workspace/timeline/timelineEventDetails.ts?test=${Date.now()}`
@@ -75,11 +84,11 @@ test('timeline detail formatter exposes tool IO and file changes as structured d
     },
   ]);
 
-  assert.equal(items.some((item) => item.label === 'PowerShell' && item.value === 'npm run build'), true);
+  assert.equal(items.some((item) => item.label === 'PowerShell' && item.value === 'Build project'), true);
   assert.equal(items.some((item) => item.label === 'stdout' && item.mono === true), true);
   assert.equal(items.some((item) => item.label === 'stderr' && item.tone === 'warning'), true);
-  assert.equal(items.some((item) => item.label === '退出码' && item.value === '0'), true);
-  assert.equal(items.some((item) => item.label === '修改' && item.value?.includes('AIChat.tsx')), true);
+  assert.equal(items.some((item) => item.label === 'Exit code' && item.value === '0'), true);
+  assert.equal(items.some((item) => item.label === 'Edited' && item.value?.includes('AIChat.tsx')), true);
 });
 
 test('timeline migration removes the legacy runtime tool renderer files from the primary chat surface', async () => {
@@ -404,7 +413,7 @@ test('timeline detail formatter exposes run and message lifecycle items', async 
     },
   ]);
 
-  assert.equal(items.some((item) => item.label === 'Run' && item.value === 'built-in / agent'), true);
+  assert.equal(items.some((item) => item.label === 'Run' && item.value === 'Built-in agent run'), true);
   assert.equal(items.some((item) => item.label === 'Response' && item.value === 'Generating assistant reply'), true);
   assert.equal(items.some((item) => item.label === 'Draft' && item.value?.includes('Working through the final answer.')), true);
   assert.equal(items.some((item) => item.label === 'Final answer' && item.value === 'Final answer ready.'), true);

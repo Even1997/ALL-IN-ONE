@@ -24,38 +24,46 @@ export const TimelineCard: React.FC<{
   onToggleDetails: () => void;
   detailsOpen: boolean;
 }> = ({ card, onToggleDetails, detailsOpen }) => {
-  const metaItems = [
-    card.toolCount > 0 ? `${card.toolCount} 个工具` : '',
-    card.retryCount > 0 ? `${card.retryCount} 次重试` : '',
-    card.warningCount > 0 ? `${card.warningCount} 条警告` : '',
-    card.errorCount > 0 ? `${card.errorCount} 条错误` : '',
-  ].filter(Boolean);
-
   return (
     <section className={`chat-timeline-card ${card.status}`}>
       <header className="chat-timeline-card-head">
-        <div className="chat-timeline-card-copy">
-          <div className="chat-timeline-card-kicker">
-            <span className="chat-timeline-card-phase">{PHASE_LABELS[card.phase]}</span>
-            {card.progressLabel ? <span className="chat-timeline-card-progress">{card.progressLabel}</span> : null}
+        <div className="chat-timeline-card-main">
+          <span className="chat-timeline-card-phase">{PHASE_LABELS[card.phase]}</span>
+          <div className="chat-timeline-card-copy">
+            <strong>{card.title}</strong>
+            {card.progressLabel ? (
+              <>
+                <span aria-hidden="true" className="chat-timeline-card-divider">
+                  /
+                </span>
+                <span className="chat-timeline-card-progress">{card.progressLabel}</span>
+              </>
+            ) : null}
+            <span className="chat-timeline-card-summary-inline">{card.summary}</span>
+            {card.toolCount > 0 ? (
+              <>
+                <span aria-hidden="true" className="chat-timeline-card-divider">
+                  ·
+                </span>
+                <span className="chat-timeline-card-meta">{card.toolCount} 个工具</span>
+              </>
+            ) : null}
           </div>
-          <strong>{card.title}</strong>
         </div>
-        <span className={`chat-timeline-card-status ${card.status}`}>{STATUS_LABELS[card.status]}</span>
+        <div className="chat-timeline-card-actions">
+          <span className={`chat-timeline-card-status ${card.status}`}>{STATUS_LABELS[card.status]}</span>
+          {card.detailRefs.length > 0 ? (
+            <>
+              <span aria-hidden="true" className="chat-timeline-card-divider">
+                ·
+              </span>
+              <button type="button" className="chat-timeline-card-toggle" onClick={onToggleDetails}>
+                {detailsOpen ? '收起' : '详情'}
+              </button>
+            </>
+          ) : null}
+        </div>
       </header>
-      <p className="chat-timeline-card-summary">{card.summary}</p>
-      {metaItems.length > 0 ? (
-        <div className="chat-timeline-card-meta">
-          {metaItems.map((item) => (
-            <span key={item} className="chat-timeline-card-chip">{item}</span>
-          ))}
-        </div>
-      ) : null}
-      {card.detailRefs.length > 0 ? (
-        <button type="button" className="chat-timeline-card-toggle" onClick={onToggleDetails}>
-          {detailsOpen ? '收起详情' : '查看详情'}
-        </button>
-      ) : null}
     </section>
   );
 };

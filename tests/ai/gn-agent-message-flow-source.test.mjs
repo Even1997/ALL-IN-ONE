@@ -54,7 +54,17 @@ test('GN Agent message item keeps streaming thinking collapsed but expandable', 
   assert.doesNotMatch(messageItemSource, /isStreaming\s*\?\s*true\s*:/);
   assert.match(messageItemSource, /expandedThinkingKeys\[thinkingKey\]\s*\?\?\s*false/);
   assert.doesNotMatch(messageItemSource, /item\.part\.type === 'thinking' && !isStreaming/);
-  assert.match(messageItemSource, /groupMessageRenderItemsByLane\(timelineItems\)/);
+  assert.match(messageItemSource, /groupMessageRenderItemsByLane\(processRenderItems\)/);
   assert.match(messageItemSource, /className=\"chat-message-thinking-lane\"/);
   assert.match(messageOrderingSource, /export const groupMessageRenderItemsByLane =/);
+});
+
+test('GN Agent message item renders the final answer lane after process groups instead of sorting it with tools', async () => {
+  const messageItemSource = await readFile(messageItemPath, 'utf8');
+
+  assert.match(messageItemSource, /const answerRenderItems:\s*MessageRenderItem\[\]\s*=\s*\[\];/);
+  assert.match(messageItemSource, /const processRenderItems = sortMessageRenderItems\(partRenderItems, bubbleRenderItems\);/);
+  assert.match(messageItemSource, /const timelineGroups = message\.role === 'assistant' \? groupMessageRenderItemsByLane\(processRenderItems\) : \[\];/);
+  assert.match(messageItemSource, /answerRenderItems\.map\(\(item\) =>/);
+  assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(answerRenderItems,\s*bubbleRenderItems/);
 });

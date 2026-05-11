@@ -17,6 +17,7 @@ import type {
   RuntimeSessionSnapshot,
   RuntimeTeamRunRecord,
   RuntimeToolCallRecord,
+  RuntimeTurnDeltaTrace,
 } from '@goodnight/runtime-protocol';
 import type { AIConfigEntry } from '../ai/store/aiConfigState.ts';
 import { useRuntimeMcpStore } from '../ai/runtime/mcp/runtimeMcpStore.ts';
@@ -36,6 +37,10 @@ import type { AgentRuntimeLiveState } from '../ai/runtime/agentRuntimeStore.ts';
 import type { RuntimeToolStep } from '../ai/runtime/agent-kernel/agentKernelTypes.ts';
 import type { AgentTeamRunRecord } from '../ai/runtime/teams/teamTypes.ts';
 import {
+  createStreamingLatencyTrace,
+  recordProviderChunk,
+} from '../ai/runtime/streamingLatencyTrace.ts';
+import {
   type AssistantTimelineEvent,
   createChatSession,
   createStoredChatMessage,
@@ -54,6 +59,10 @@ import {
   buildRuntimeSidecarToolCompletedEvent,
   createRuntimeSidecarCanonicalEvent,
 } from './runtimeSidecarCanonical.ts';
+import {
+  createRuntimeSidecarDeltaCoalescer,
+  createRuntimeSidecarMessageCoalescer,
+} from './runtimeSidecarStreamingCoalescer.ts';
 
 const initializedProjects = new Set<string>();
 let runtimeEventsSubscribed = false;
@@ -398,6 +407,7 @@ const createIdleRuntimeSidecarLiveState = (): AgentRuntimeLiveState => ({
     inputTokens: 0,
     outputTokens: 0,
   },
+  streamingLatencyTrace: null,
 });
 
 const areRuntimeSidecarLiveStatesEqual = (
@@ -416,7 +426,19 @@ const areRuntimeSidecarLiveStatesEqual = (
   && left.streamingText === right.streamingText
   && left.pendingPermissionCount === right.pendingPermissionCount
   && left.tokenUsage.inputTokens === right.tokenUsage.inputTokens
-  && left.tokenUsage.outputTokens === right.tokenUsage.outputTokens;
+  && left.tokenUsage.outputTokens === right.tokenUsage.outputTokens
+  && left.streamingLatencyTrace?.requestStartedAt === right.streamingLatencyTrace?.requestStartedAt
+  && left.streamingLatencyTrace?.providerFirstChunkAt === right.streamingLatencyTrace?.providerFirstChunkAt
+  && left.streamingLatencyTrace?.providerChunkAt === right.streamingLatencyTrace?.providerChunkAt
+  && left.streamingLatencyTrace?.providerChunkIntervalMs === right.streamingLatencyTrace?.providerChunkIntervalMs
+  && left.streamingLatencyTrace?.runtimeBroadcastAt === right.streamingLatencyTrace?.runtimeBroadcastAt
+  && left.streamingLatencyTrace?.sidecarReceivedAt === right.streamingLatencyTrace?.sidecarReceivedAt
+  && left.streamingLatencyTrace?.frontendStateFlushAt === right.streamingLatencyTrace?.frontendStateFlushAt
+  && left.streamingLatencyTrace?.firstVisibleCharAt === right.streamingLatencyTrace?.firstVisibleCharAt
+  && left.streamingLatencyTrace?.finalVisibleDoneAt === right.streamingLatencyTrace?.finalVisibleDoneAt
+  && left.streamingLatencyTrace?.chunkIndex === right.streamingLatencyTrace?.chunkIndex
+  && left.streamingLatencyTrace?.endToEndFirstVisibleMs === right.streamingLatencyTrace?.endToEndFirstVisibleMs
+  && left.streamingLatencyTrace?.endToEndCompletedMs === right.streamingLatencyTrace?.endToEndCompletedMs;
 
 const patchLiveStateIfChanged = (
   threadId: string,
@@ -607,6 +629,7 @@ const applyRuntimeSidecarTurnStartedEvent = (sessionId: string, messageId: strin
       inputTokens: 0,
       outputTokens: 0,
     },
+    streamingLatencyTrace: createStreamingLatencyTrace(emittedAt),
     statusVerb: resolvePassiveStatusVerb({
       ...state,
       activeThinking: true,
@@ -655,7 +678,13 @@ const applyRuntimeSidecarReasoningEvent = (
   }));
 };
 
-const applyRuntimeSidecarTurnDeltaEvent = (sessionId: string, messageId: string, delta: string, emittedAt: number) => {
+const applyRuntimeSidecarTurnDeltaNow = (
+  sessionId: string,
+  messageId: string,
+  delta: string,
+  emittedAt: number,
+  trace?: RuntimeTurnDeltaTrace,
+) => {
   const located = findProjectSessionByRuntimeId(sessionId);
   if (!located) {
     return;
@@ -684,7 +713,29 @@ const applyRuntimeSidecarTurnDeltaEvent = (sessionId: string, messageId: string,
     ...state,
     connectionState: 'connected',
     streamingText: `${state.streamingText}${delta}`,
+    streamingLatencyTrace: recordProviderChunk(state.streamingLatencyTrace, {
+      requestStartedAt: trace?.requestStartedAt,
+      providerFirstChunkAt: trace?.providerFirstChunkAt,
+      providerChunkAt: trace?.providerChunkAt ?? emittedAt,
+      runtimeBroadcastAt: emittedAt,
+      sidecarReceivedAt: Date.now(),
+      chunkIndex: trace?.chunkIndex,
+    }),
   }));
+};
+
+const runtimeSidecarDeltaCoalescer = createRuntimeSidecarDeltaCoalescer({
+  applyDelta: applyRuntimeSidecarTurnDeltaNow,
+});
+
+const applyRuntimeSidecarTurnDeltaEvent = (
+  sessionId: string,
+  messageId: string,
+  delta: string,
+  emittedAt: number,
+  trace?: RuntimeTurnDeltaTrace,
+) => {
+  runtimeSidecarDeltaCoalescer.push(sessionId, messageId, delta, emittedAt, trace);
 };
 
 const applyRuntimeSidecarTurnUsageEvent = (
@@ -1075,6 +1126,7 @@ const applyRuntimeSidecarTurnCompletedEvent = (sessionId: string, messageId: str
     streamingToolInput: '',
     streamingText: '',
     startedAt: null,
+    streamingLatencyTrace: state.streamingLatencyTrace,
     statusVerb: resolvePassiveStatusVerb({
       ...state,
       activeThinking: false,
@@ -1139,6 +1191,7 @@ const applyRuntimeSidecarTurnFailedEvent = (
     streamingToolInput: '',
     streamingText: '',
     startedAt: null,
+    streamingLatencyTrace: state.streamingLatencyTrace,
     statusVerb: resolvePassiveStatusVerb({
       ...state,
       activeThinking: false,
@@ -1179,7 +1232,7 @@ export const applyRuntimeSidecarSnapshot = (snapshot: RuntimeSessionSnapshot) =>
   syncRuntimeSidecarSessionProjections(snapshot.session.projectId, snapshot.session.id, snapshot.messages);
 };
 
-const applyRuntimeSidecarMessageEvent = (
+const applyRuntimeSidecarMessageNow = (
   sessionId: string,
   message: RuntimeMessageRecord,
   eventType: 'message.delta' | 'turn.finished',
@@ -1219,6 +1272,27 @@ const applyRuntimeSidecarMessageEvent = (
   }
 };
 
+const runtimeSidecarMessageCoalescer = createRuntimeSidecarMessageCoalescer({
+  applyMessage: (sessionId, message, emittedAt) =>
+    applyRuntimeSidecarMessageNow(sessionId, message, 'message.delta', emittedAt),
+});
+
+const applyRuntimeSidecarMessageEvent = (
+  sessionId: string,
+  message: RuntimeMessageRecord,
+  eventType: 'message.delta' | 'turn.finished',
+  emittedAt: number,
+) => {
+  if (eventType === 'message.delta') {
+    runtimeSidecarMessageCoalescer.push(sessionId, message, emittedAt);
+    return;
+  }
+
+  runtimeSidecarDeltaCoalescer.flush();
+  runtimeSidecarMessageCoalescer.flush();
+  applyRuntimeSidecarMessageNow(sessionId, message, eventType, emittedAt);
+};
+
 const ensureRuntimeEventSubscription = () => {
   if (runtimeEventsSubscribed) {
     return;
@@ -1227,6 +1301,8 @@ const ensureRuntimeEventSubscription = () => {
   runtimeEventsSubscribed = true;
   subscribeDesktopRuntimeEvents((event: RuntimeEventEnvelope) => {
     if (event.type === 'session.snapshot') {
+      runtimeSidecarDeltaCoalescer.flush();
+      runtimeSidecarMessageCoalescer.flush();
       applyRuntimeSidecarSnapshot(event.payload);
       return;
     }
@@ -1242,6 +1318,7 @@ const ensureRuntimeEventSubscription = () => {
         event.payload.messageId,
         event.payload.delta,
         event.emittedAt,
+        event.payload.trace,
       );
       return;
     }

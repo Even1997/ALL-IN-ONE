@@ -18,6 +18,8 @@ import { canResumeFromRecovery, type AgentReplayRecoveryState } from './replay/r
 import type { RuntimeReplayTurnStartPayload } from './replay/runtimeReplayPayload.ts';
 import type { AgentTurnSession } from './session/agentSessionTypes';
 import type { AgentTeamRunRecord } from './teams/teamTypes.ts';
+import type { StreamingLatencyTrace } from './streamingLatencyTrace.ts';
+import { areStreamingLatencyTracesEqual } from './streamingLatencyTrace.ts';
 
 export type AgentRuntimeBinding = {
   providerId: AgentProviderId;
@@ -55,6 +57,7 @@ export type AgentRuntimeLiveState = {
   streamingText: string;
   pendingPermissionCount: number;
   tokenUsage: AgentRuntimeTokenUsage;
+  streamingLatencyTrace: StreamingLatencyTrace | null;
 };
 
 export type AgentRuntimeResumeRequest = {
@@ -201,6 +204,7 @@ const createIdleLiveState = (): AgentRuntimeLiveState => ({
     inputTokens: 0,
     outputTokens: 0,
   },
+  streamingLatencyTrace: null,
 });
 
 const areTokenUsageEqual = (
@@ -223,7 +227,8 @@ const areLiveStatesEqual = (
   && left.activeThinking === right.activeThinking
   && left.streamingText === right.streamingText
   && left.pendingPermissionCount === right.pendingPermissionCount
-  && areTokenUsageEqual(left.tokenUsage, right.tokenUsage);
+  && areTokenUsageEqual(left.tokenUsage, right.tokenUsage)
+  && areStreamingLatencyTracesEqual(left.streamingLatencyTrace, right.streamingLatencyTrace);
 
 export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
   threadsByProject: {},

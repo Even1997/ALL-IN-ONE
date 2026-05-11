@@ -456,8 +456,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
     };
   };
 
-  return {
-    append: (event: { kind: string; delta: string }) => {
+  const appendChunk = (event: { kind: string; delta: string }) => {
       if (event.kind === 'thinking') {
         discardPendingText();
         state = 'thinking';
@@ -476,7 +475,13 @@ export const createRuntimeStreamingMessageAssembler = () => {
         answerContentRaw += event.delta;
         appendAssistantPartContent('answer', event.delta, false);
       }
+  };
 
+  return {
+    appendChunk,
+    buildDraft,
+    append: (event: { kind: string; delta: string }) => {
+      appendChunk(event);
       return buildDraft(false);
     },
     markToolBoundary: (): RuntimeStreamingAssistantDraft => {

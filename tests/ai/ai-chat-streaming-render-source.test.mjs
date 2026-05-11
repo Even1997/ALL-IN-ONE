@@ -10,18 +10,103 @@ const assistantPartsPath = path.resolve(
   '../../src/components/workspace/AIChatAssistantParts.tsx',
 );
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const loadRenderModel = async () =>
+  import(`../../src/components/workspace/assistantRenderModel.ts?test=${Date.now()}`);
 
-test('streaming assistant text uses lightweight render path before final markdown render', async () => {
-  const source = await readFile(assistantPartsPath, 'utf8');
-
-  assert.match(source, /export const AssistantTextBlock = memo\(function AssistantTextBlock\(\{/);
-  assert.match(source, /isStreaming\?: boolean/);
-  assert.match(source, /isStreaming \? \(/);
-  assert.match(source, /className="chat-answer-streaming-plain"/);
+const buildAssistantMessage = (timeline = []) => ({
+  id: 'assistant-1',
+  role: 'assistant',
+  timeline,
+  createdAt: 1,
 });
 
-test('AIChat passes streaming state into assistant text renderer', async () => {
+const buildDraftState = (timeline) => ({ timeline });
+
+test('streaming assistant text keeps a dedicated streaming mode and lifecycle hooks before final markdown render', async () => {
+  const source = await readFile(assistantPartsPath, 'utf8');
+
+  assert.doesNotMatch(source, /createStreamingTextRevealController/);
+  assert.doesNotMatch(source, /displayedContent/);
+  assert.doesNotMatch(source, /chat-answer-streaming-caret/);
+  assert.match(source, /isStreaming\?: boolean/);
+  assert.match(source, /onFirstVisibleChar\?: \(\) => void/);
+  assert.match(source, /onFinalVisibleDone\?: \(\) => void/);
+  assert.match(source, /isStreaming[\s\S]*ReactMarkdown/);
+  assert.match(source, /onFirstVisibleChar\?\.\(\)/);
+  assert.match(source, /onFinalVisibleDone\?\.\(\)/);
+});
+
+test('AIChat passes streaming state into assistant text rendering options', async () => {
   const source = await readFile(aiChatPath, 'utf8');
 
-  assert.match(source, /<AssistantTextBlock[\s\S]*isStreaming=\{options\?\.isStreaming \?\? false\}/);
+  assert.match(source, /AssistantTextBlock/);
+  assert.match(source, /isStreaming:\s*options\?\.isStreaming \?\? false/);
+});
+
+test('assistant render model prefers fast streaming text over rebuilt draft text while streaming', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const message = buildAssistantMessage([
+    { id: 'text-message', kind: 'text', content: 'persisted final text', createdAt: 3 },
+  ]);
+  const draftState = buildDraftState([
+    { id: 'text-draft', kind: 'text', content: 'slower rebuilt draft text', createdAt: 2 },
+  ]);
+
+  const model = buildAssistantRenderModel(
+    message,
+    draftState,
+    0,
+    { streamingText: 'fast projection text', isStreaming: true },
+  );
+
+  assert.equal(model.content, 'fast projection text');
+  assert.equal(model.copyText, 'fast projection text');
+  assert.deepEqual(
+    model.items.filter((item) => item.part.type === 'text').map((item) => item.part.content),
+    ['fast projection text'],
+  );
+});
+
+test('assistant render model falls back to rebuilt timeline text when no fast projection text exists', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const draftState = buildDraftState([
+    { id: 'text-draft', kind: 'text', content: 'rebuilt timeline text', createdAt: 2 },
+  ]);
+
+  const model = buildAssistantRenderModel(
+    buildAssistantMessage(),
+    draftState,
+    0,
+    { streamingText: undefined, isStreaming: true },
+  );
+
+  assert.equal(model.content, 'rebuilt timeline text');
+  assert.equal(model.copyText, 'rebuilt timeline text');
+});
+
+test('assistant render model reverts to persisted timeline text after streaming finishes', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const message = buildAssistantMessage([
+    { id: 'text-final', kind: 'text', content: 'final persisted answer', createdAt: 4 },
+  ]);
+  const draftState = buildDraftState([
+    { id: 'text-draft', kind: 'text', content: 'stale streaming draft', createdAt: 2 },
+  ]);
+
+  const model = buildAssistantRenderModel(
+    message,
+    draftState,
+    0,
+    { streamingText: 'fast projection text', isStreaming: false },
+  );
+
+  assert.equal(model.content, 'final persisted answer');
+  assert.equal(model.copyText, 'final persisted answer');
+});
+
+test('thinking duration label uses whole-second display instead of fractional jitter', async () => {
+  const source = await readFile(assistantPartsPath, 'utf8');
+
+  assert.doesNotMatch(source, /toFixed\(1\)\}s/);
+  assert.match(source, /Math\.floor\(Math\.max\(0, elapsedSeconds\)\)/);
 });

@@ -7,11 +7,18 @@ import type { AIChatMessagePart } from './aiChatMessageParts.ts';
 
 export type AssistantDraftState = {
   timeline: AssistantTimelineEvent[];
+  streamingText?: string;
+  isStreaming?: boolean;
+};
+
+export type AssistantStreamingState = {
+  streamingText?: string;
+  isStreaming?: boolean;
 };
 
 export type AssistantRenderItem =
   | { kind: 'thinking_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number }
-  | { kind: 'bubble_part'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number };
+  | { kind: 'answer_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number };
 
 export type AssistantRenderModel = {
   content: string;
@@ -42,19 +49,36 @@ const shouldSuppressAssistantTextPart = (
 export const buildAssistantRenderModel = (
   message: StoredChatMessage,
   draftState?: AssistantDraftState,
-  bubbleCardCount = 0
+  bubbleCardCount = 0,
+  streamingState?: AssistantStreamingState,
 ): AssistantRenderModel => {
-  const timelineNarrativeItems: Array<{ part: AIChatMessagePart; timelineOrder: number }> = [];
-  const timeline = Array.isArray(draftState?.timeline)
-    ? draftState.timeline
+  const thinkingItems: Array<{ part: AIChatMessagePart; timelineOrder: number }> = [];
+  const isStreaming = streamingState?.isStreaming ?? draftState?.isStreaming ?? Boolean(draftState);
+  const timeline = isStreaming
+    ? Array.isArray(draftState?.timeline)
+      ? draftState.timeline
+      : message.role === 'assistant' && Array.isArray(message.timeline)
+        ? message.timeline
+        : []
     : message.role === 'assistant' && Array.isArray(message.timeline)
       ? message.timeline
       : [];
-  const content = getAssistantTimelineText(timeline);
-  const isStreaming = Boolean(draftState);
+  const timelineText = getAssistantTimelineText(timeline);
+  const streamingText =
+    streamingState && Object.prototype.hasOwnProperty.call(streamingState, 'streamingText')
+      ? streamingState.streamingText
+      : draftState?.streamingText;
+  const hasStreamingText = isStreaming && streamingText !== undefined;
+  const content = hasStreamingText ? streamingText || '' : timelineText;
+  const answerCreatedAt =
+    [...timeline]
+      .reverse()
+      .find((event): event is Extract<AssistantTimelineEvent, { kind: 'text' }> => event.kind === 'text')
+      ?.createdAt ?? message.createdAt;
+
   timeline.forEach((event, timelineOrder) => {
     if (event.kind === 'reasoning') {
-      timelineNarrativeItems.push({
+      thinkingItems.push({
         part: {
           type: 'thinking',
           content: event.content,
@@ -65,35 +89,52 @@ export const buildAssistantRenderModel = (
         },
         timelineOrder,
       });
-      return;
-    }
-
-    if (event.kind === 'text') {
-      timelineNarrativeItems.push({
-        part: {
-          type: 'text',
-          content: event.content,
-          createdAt: event.createdAt,
-        },
-        timelineOrder,
-      });
     }
   });
 
-  const items = timelineNarrativeItems
+  const baseItems = thinkingItems
     .filter(({ part }) => !shouldSuppressAssistantTextPart(message, part, bubbleCardCount))
     .map(({ part, timelineOrder }, index) => ({
-      kind: part.type === 'thinking' ? 'thinking_lane' : 'bubble_part',
+      kind: 'thinking_lane',
       key: `${message.id}-part-${index}`,
       part,
       index,
       timelineOrder,
     })) as AssistantRenderItem[];
+  const normalizedContent = normalizeAssistantCopy(content);
+  const shouldRenderAnswer =
+    hasStreamingText ||
+    (normalizedContent.length > 0 &&
+      !shouldSuppressAssistantTextPart(
+        message,
+        {
+          type: 'text',
+          content,
+          createdAt: answerCreatedAt,
+        },
+        bubbleCardCount,
+      ));
+  const items: AssistantRenderItem[] = shouldRenderAnswer
+    ? [
+        ...baseItems,
+        {
+          kind: 'answer_lane',
+          key: hasStreamingText ? `${message.id}-streaming-text` : `${message.id}-answer-text`,
+          part: {
+            type: 'text',
+            content,
+            createdAt: answerCreatedAt,
+          },
+          index: baseItems.length,
+          timelineOrder: timeline.length,
+        },
+      ]
+    : baseItems;
 
   return {
     content,
     isStreaming,
     items,
-    copyText: getAssistantTimelineText(timeline),
+    copyText: content,
   };
 };

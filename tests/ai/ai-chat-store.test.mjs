@@ -302,6 +302,45 @@ test('ai chat store skips duplicate replay sync snapshots', async () => {
   );
 });
 
+test('ai chat store compacts repeated message updates for live drafts', async () => {
+  const { useAIChatStore, createChatSession, createStoredChatMessage } = await loadStore();
+  const store = useAIChatStore.getState();
+
+  const projectId = 'project-live-draft';
+  const session = createChatSession(projectId, 'Live draft compaction');
+  const assistantMessage = createStoredChatMessage('assistant', '');
+
+  store.upsertSession(projectId, session);
+  store.appendMessage(projectId, session.id, assistantMessage);
+
+  for (let index = 0; index < 50; index += 1) {
+    store.updateMessage(projectId, session.id, assistantMessage.id, (message) => ({
+      ...message,
+      ...(message.role === 'assistant'
+        ? {
+            timeline: [
+              {
+                id: 'draft-text',
+                kind: 'text',
+                content: `draft ${index}`,
+                status: 'streaming',
+                createdAt: index,
+              },
+            ],
+          }
+        : {}),
+    }));
+  }
+
+  const savedSession = useAIChatStore.getState().projects[projectId].sessions[0];
+  assert.equal(
+    savedSession.eventLog.filter((event) => event.kind === 'message_updated').length,
+    1
+  );
+  assert.equal(savedSession.messages[0].role, 'assistant');
+  assert.equal(savedSession.messages[0].timeline[0].content, 'draft 49');
+});
+
 test('ai chat store persists project activity entries separately from chat history', async () => {
   const { useAIChatStore } = await loadStore();
   const store = useAIChatStore.getState();

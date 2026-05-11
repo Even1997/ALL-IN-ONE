@@ -49,6 +49,15 @@ test('AIChat source keeps a compact icon-first header and composer shell', async
   assert.match(source, /GNAgentEmbeddedComposer/);
 });
 
+test('GN Agent team execution trace collapses to a single inline summary row by default', async () => {
+  const source = await readFile(aiChatPath, 'utf8');
+
+  assert.match(source, /className="chat-tool-trace-card chat-tool-trace-card-inline"/);
+  assert.match(source, /className="chat-tool-trace-inline-summary"/);
+  assert.match(source, /className="chat-tool-trace-inline-meta"/);
+  assert.doesNotMatch(source, /<details key=\{phase\.id\} className="chat-tool-trace-phase" open=\{phase\.status === 'running'\}>/);
+});
+
 test('getChatViewportClassName maps collapse state to occupancy classes', () => {
   assert.equal(getChatViewportClassName(false), 'ai-chat-sidebar-expanded');
   assert.equal(getChatViewportClassName(true), 'ai-chat-sidebar-collapsed');

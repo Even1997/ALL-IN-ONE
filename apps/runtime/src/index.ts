@@ -28,6 +28,7 @@ import {
   type RuntimeSessionSummary,
   type RuntimeTokenUsageRecord,
   type RuntimeToolCallRecord,
+  type RuntimeTurnDeltaTrace,
   type RuntimeTurnSubmitInput,
   buildRuntimeReadyEvent,
 } from '@goodnight/runtime-protocol';
@@ -40,6 +41,7 @@ import {
 } from '../../../src/modules/ai/runtime/approval/riskPolicy.ts';
 import { createRuntimeStreamingMessageAssembler } from '../../../src/modules/ai/runtime/orchestration/agentTurnRunner.ts';
 import { executeRuntimeBuiltInAgentTurn } from '../../../src/modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn.ts';
+import { createRuntimeStreamingDraftScheduler } from '../../../src/modules/ai/runtime/orchestration/runtimeStreamingDraftScheduler.ts';
 import type { RuntimeToolStep } from '../../../src/modules/ai/runtime/agent-kernel/agentKernelTypes.ts';
 import type { ToolCall, ToolResult } from '../../../src/modules/ai/runtime/tools/toolExecutor.ts';
 import {
@@ -252,6 +254,7 @@ const buildTurnDeltaEvent = (
   sessionId: string,
   messageId: string,
   delta: string,
+  trace: RuntimeTurnDeltaTrace,
 ): RuntimeEventEnvelope => ({
   type: 'turn.delta',
   emittedAt: Date.now(),
@@ -259,6 +262,7 @@ const buildTurnDeltaEvent = (
     sessionId,
     messageId,
     delta,
+    trace,
   },
 });
 
@@ -563,8 +567,16 @@ const completeSubmittedTurn = async (
   const toolExecutor = new NodeRuntimeToolExecutor(projectRoot);
   const streamingAssembler = createRuntimeStreamingMessageAssembler();
   const emittedToolStatuses = new Map<string, RuntimeToolStep['status']>();
+  const requestStartedAt = Date.now();
+  let providerFirstChunkAt: number | null = null;
+  let providerChunkIndex = 0;
 
-  const persistAssistantMessage = async (final = false) => {
+  const persistAssistantMessage = async (
+    final = false,
+    options?: {
+      persist?: boolean;
+    },
+  ) => {
     const nextAssistantMessage = buildAssistantMessage(getAssistantTimelineText(assistantTimeline), {
       id: assistantMessageId,
       createdAt: assistantCreatedAt,
@@ -573,7 +585,9 @@ const completeSubmittedTurn = async (
     const nextMessages = snapshot.messages.filter((message) => message.id !== assistantMessageId);
     snapshot.messages = [...nextMessages, nextAssistantMessage].sort((left, right) => left.createdAt - right.createdAt);
     snapshot.session.updatedAt = Date.now();
-    await saveState(config, state);
+    if (options?.persist !== false) {
+      await saveState(config, state);
+    }
     broadcast(buildTurnEvent(snapshot.session.id, nextAssistantMessage, final));
     return nextAssistantMessage;
   };
@@ -602,11 +616,15 @@ const completeSubmittedTurn = async (
         referenceTime: Date.now(),
       },
     ) as RuntimeAssistantTimelineEvent[];
-    await persistAssistantMessage(false);
+    await persistAssistantMessage(false, { persist: false });
     emitLatestReasoningEvent();
   };
+  const draftSyncScheduler = createRuntimeStreamingDraftScheduler({
+    applyDraft: (active) => syncDraftTimeline(streamingAssembler.buildDraft(false), active),
+  });
 
   const stopReasoningBeforeTool = async () => {
+    await draftSyncScheduler.flush();
     const boundaryDraft = streamingAssembler.markToolBoundary();
     assistantTimeline = applyAssistantReasoningProgress(
       buildAssistantStreamingTimeline(boundaryDraft.content, assistantTimeline, {
@@ -721,15 +739,28 @@ const completeSubmittedTurn = async (
           isWindows: process.platform === 'win32',
         }),
         onModelEvent: async (event) => {
+          const providerChunkAt = Date.now();
+          if (providerFirstChunkAt === null) {
+            providerFirstChunkAt = providerChunkAt;
+          }
+
           if (event.kind === 'text') {
-            broadcast(buildTurnDeltaEvent(snapshot.session.id, assistantMessageId, event.delta));
+            providerChunkIndex += 1;
+            broadcast(
+              buildTurnDeltaEvent(snapshot.session.id, assistantMessageId, event.delta, {
+                requestStartedAt,
+                providerFirstChunkAt: providerFirstChunkAt ?? providerChunkAt,
+                providerChunkAt,
+                chunkIndex: providerChunkIndex,
+              }),
+            );
           }
 
           if (event.kind !== 'thinking' && event.kind !== 'text') {
             return;
           }
-          const draft = streamingAssembler.append(event);
-          await syncDraftTimeline(draft, event.kind === 'thinking');
+          streamingAssembler.appendChunk(event);
+          draftSyncScheduler.push(event.kind === 'thinking');
         },
         onToolCallsChange: async (toolCalls) => {
           assistantTimeline = syncAssistantTimelineWithToolCalls(
@@ -967,6 +998,7 @@ const completeSubmittedTurn = async (
       completedToolCalls = result.toolCalls as RuntimeToolStep[];
     }
 
+    await draftSyncScheduler.flush();
     const finalDraft = streamingAssembler.buildFinal(finalContent);
     assistantTimeline = applyAssistantReasoningProgress(
       buildAssistantStreamingTimeline(finalDraft.content, assistantTimeline, {
@@ -1005,6 +1037,7 @@ const completeSubmittedTurn = async (
     broadcast(buildSnapshotEvent(snapshot));
     return finalAssistantMessage;
   } catch (error) {
+    draftSyncScheduler.cancel();
     const message = `Node runtime sidecar 执行失败：${error instanceof Error ? error.message : String(error)}`;
     assistantTimeline = [
       ...assistantTimeline,

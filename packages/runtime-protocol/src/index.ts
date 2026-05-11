@@ -225,6 +225,13 @@ export type RuntimeTokenUsageRecord = {
   totalTokens?: number;
 };
 
+export type RuntimeTurnDeltaTrace = {
+  requestStartedAt?: number;
+  providerFirstChunkAt?: number;
+  providerChunkAt: number;
+  chunkIndex: number;
+};
+
 export type RuntimeMcpTransport = 'builtin' | 'stdio' | 'http' | 'sse';
 
 export type RuntimeMcpToolDefinition = {
@@ -423,6 +430,7 @@ export type RuntimeEventEnvelope =
         sessionId: string;
         messageId: string;
         delta: string;
+        trace?: RuntimeTurnDeltaTrace;
       };
     }
   | {

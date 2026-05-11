@@ -43,7 +43,11 @@ const normalizeThinkingElapsedSeconds = (elapsedSeconds: number | undefined) => 
   return Math.max(0.1, elapsedSeconds);
 };
 
-const formatThinkingDuration = (elapsedSeconds: number) => `${Math.max(0.1, elapsedSeconds).toFixed(1)}s`;
+const formatThinkingDuration = (elapsedSeconds: number) => {
+  const wholeSeconds = Math.floor(Math.max(0, elapsedSeconds));
+  return `${wholeSeconds}秒`;
+};
+
 const getLiveThinkingElapsedSeconds = (startedAt: number, referenceTime: number) => {
   const normalizedStartedAt = normalizeEpochMilliseconds(startedAt);
   const normalizedReferenceTime = normalizeEpochMilliseconds(referenceTime);
@@ -53,9 +57,10 @@ const getLiveThinkingElapsedSeconds = (startedAt: number, referenceTime: number)
 
   return Math.max(0.1, Math.round(Math.max(0, normalizedReferenceTime - normalizedStartedAt) / 100) / 10);
 };
+
 const resolveDisplayThinkingElapsedSeconds = (
   elapsedSeconds: number | undefined,
-  lastDisplayedElapsedSeconds: number | null
+  lastDisplayedElapsedSeconds: number | null,
 ) => {
   const normalizedElapsedSeconds = normalizeThinkingElapsedSeconds(elapsedSeconds);
   if (typeof normalizedElapsedSeconds !== 'number') {
@@ -80,10 +85,11 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
   const isThinkingActive = part.status === 'streaming' || (isStreaming && part.status !== 'completed');
   const [referenceTime, setReferenceTime] = useState(() => Date.now());
   const lastDisplayedElapsedSecondsRef = useRef<number | null>(null);
+
   useEffect(() => {
-    lastDisplayedElapsedSecondsRef.current =
-      normalizeThinkingElapsedSeconds(part.elapsedSeconds) ?? null;
+    lastDisplayedElapsedSecondsRef.current = normalizeThinkingElapsedSeconds(part.elapsedSeconds) ?? null;
   }, [part.createdAt]);
+
   useEffect(() => {
     if (!isThinkingActive || typeof part.createdAt !== 'number') {
       return;
@@ -100,8 +106,9 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
       : part.elapsedSeconds;
   const displayedElapsedSeconds = resolveDisplayThinkingElapsedSeconds(
     rawDisplayedElapsedSeconds,
-    lastDisplayedElapsedSecondsRef.current
+    lastDisplayedElapsedSecondsRef.current,
   );
+
   useEffect(() => {
     if (typeof displayedElapsedSeconds !== 'number') {
       return;
@@ -109,9 +116,10 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
 
     lastDisplayedElapsedSecondsRef.current = Math.max(
       lastDisplayedElapsedSecondsRef.current ?? displayedElapsedSeconds,
-      displayedElapsedSeconds
+      displayedElapsedSeconds,
     );
   }, [displayedElapsedSeconds]);
+
   const durationLabel =
     typeof displayedElapsedSeconds === 'number' ? formatThinkingDuration(displayedElapsedSeconds) : '';
   const previewLine =
@@ -119,9 +127,9 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
       .split('\n')
       .map((line) => line.replace(/\s+/g, ' ').trim())
       .find(Boolean) || '';
-  const summaryLabel = isThinkingActive ? '\u601d\u8003\u4e2d' : '\u601d\u8003\u8fc7\u7a0b';
+  const summaryLabel = isThinkingActive ? '思考中' : '思考过程';
   const summaryPreview = !isExpanded
-    ? previewLine || (isThinkingActive ? '\u6b63\u5728\u5b9e\u65f6\u66f4\u65b0\u63a8\u7406\u5185\u5bb9' : '')
+    ? previewLine || (isThinkingActive ? '正在实时更新推理内容' : '')
     : '';
 
   return (
@@ -155,7 +163,7 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
           {part.content ? (
             <pre>{part.content}</pre>
           ) : (
-            <div className="chat-thinking-empty">{'\u7b49\u5f85\u6a21\u578b\u8f93\u51fa\u601d\u8003\u5185\u5bb9...'}</div>
+            <div className="chat-thinking-empty">{'等待模型输出思考内容...'}</div>
           )}
         </div>
       </div>
@@ -166,18 +174,45 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
 export const AssistantTextBlock = memo(function AssistantTextBlock({
   content,
   isStreaming = false,
+  onFirstVisibleChar,
+  onFinalVisibleDone,
 }: {
   content: string;
   isStreaming?: boolean;
+  onFirstVisibleChar?: () => void;
+  onFinalVisibleDone?: () => void;
 }) {
+  const observedStreamingRef = useRef(false);
+  const reportedFirstVisibleRef = useRef(false);
   const inlineImagePaths = extractInlineImagePaths(content);
+
+  useEffect(() => {
+    if (isStreaming) {
+      observedStreamingRef.current = true;
+      if (content && !reportedFirstVisibleRef.current) {
+        reportedFirstVisibleRef.current = true;
+        onFirstVisibleChar?.();
+      }
+      return;
+    }
+
+    if (observedStreamingRef.current) {
+      observedStreamingRef.current = false;
+      reportedFirstVisibleRef.current = false;
+      if (content) {
+        onFinalVisibleDone?.();
+      }
+    }
+  }, [content, isStreaming, onFinalVisibleDone, onFirstVisibleChar]);
 
   return (
     <div
       className={`chat-answer-text ${shouldUseAssistantDocumentLayout(content) ? 'document' : 'bubble'} ${isStreaming ? 'streaming' : ''}`}
     >
       {isStreaming ? (
-        <div className="chat-answer-streaming-plain">{content}</div>
+        <div className="chat-answer-streaming-plain" aria-live="polite" aria-atomic="false">
+          <span>{content}</span>
+        </div>
       ) : (
         <ReactMarkdown components={MARKDOWN_COMPONENTS} remarkPlugins={[remarkGfm]}>
           {content}

@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ChatSession, StoredChatMessage } from '../../../modules/ai/store/aiChatStore.ts';
 import type { ActivityEntry } from '../../../modules/ai/skills/activityLog';
+import type { StreamingLatencyTrace } from '../../../modules/ai/runtime/streamingLatencyTrace.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
 import type { AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
 import {
@@ -19,6 +20,9 @@ type MessagePartRenderer = (
     isStreaming: boolean;
     thinkingExpanded?: boolean;
     onToggleThinking?: () => void;
+    streamingLatencyTrace?: StreamingLatencyTrace | null;
+    onFirstVisibleChar?: () => void;
+    onFinalVisibleDone?: () => void;
   }
 ) => React.ReactNode;
 
@@ -183,6 +187,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       key={message.id}
       message={message}
       draftState={draftContents?.[message.id]}
+      streamingState={draftContents?.[message.id]}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseMessageParts}
       renderMessagePart={renderMessagePart}
