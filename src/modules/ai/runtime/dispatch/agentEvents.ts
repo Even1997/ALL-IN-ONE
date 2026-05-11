@@ -90,6 +90,7 @@ export type AgentStoredRuntimeEvent<ApprovalDisplay = unknown, QuestionPayload =
       status: 'pending' | 'approved' | 'denied';
       display?: ApprovalDisplay;
       createdAt: number;
+      resolvedAt?: number;
     }
   | {
       id: string;
@@ -437,6 +438,7 @@ export const upsertRuntimeApprovalEvent = <TRuntimeEvent extends AgentStoredRunt
     {
       ...input,
       createdAt: existingEvent?.createdAt || input.createdAt || Date.now(),
+      resolvedAt: input.resolvedAt ?? existingEvent?.resolvedAt,
     },
     (event) => event.kind === 'approval' && event.approvalId === input.approvalId
   );

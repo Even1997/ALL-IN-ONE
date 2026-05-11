@@ -31,6 +31,7 @@ export type RuntimeQuestionPayload = {
   questions: RuntimeQuestionItem[];
   answers?: Record<string, string>;
   createdAt: number;
+  answeredAt?: number;
 };
 
 export type StoredChatRuntimeFileChange = {
@@ -442,6 +443,7 @@ export const answerAssistantRuntimeQuestionEvent = (
               ...event.payload,
               status: 'answered',
               answers,
+              answeredAt: event.payload.answeredAt ?? Date.now(),
             },
           }
         : event

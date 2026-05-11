@@ -828,6 +828,7 @@ const completeSubmittedTurn = async (
             status: approved ? 'approved' : 'denied',
             display,
             createdAt,
+            resolvedAt: Date.now(),
           };
           assistantTimeline = upsertAssistantRuntimeApprovalEvent(
             assistantTimeline,
@@ -937,6 +938,7 @@ const completeSubmittedTurn = async (
               ...payload,
               status: 'answered',
               answers,
+              answeredAt: Date.now(),
             },
             createdAt,
           };

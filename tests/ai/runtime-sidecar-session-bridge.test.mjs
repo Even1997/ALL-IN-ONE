@@ -19,12 +19,20 @@ test('runtime sidecar session bridge preserves assistant timelines from snapshot
   assert.match(source, /timeline:\s*messageTimeline/);
 });
 
+test('runtime sidecar live bridge does not expose raw reasoning text in canonical progress events', async () => {
+  const source = await readFile(bridgePath, 'utf8');
+
+  assert.doesNotMatch(source, /detail:\s*reasoning\.content/);
+});
+
 test('runtime sidecar session bridge derives canonical timeline events from assistant snapshot messages', async () => {
   const { buildCanonicalEventsFromRuntimeMessages } = await import(
     `../../src/modules/runtime-sidecar/runtimeSidecarCanonical.ts?test=${Date.now()}`
   );
 
   const createdAt = 100;
+  const approvalResolvedAt = createdAt + 40;
+  const questionAnsweredAt = createdAt + 50;
   const events = buildCanonicalEventsFromRuntimeMessages({
     sessionId: 'session-1',
     providerId: 'codex',
@@ -70,6 +78,7 @@ test('runtime sidecar session bridge derives canonical timeline events from assi
             riskLevel: 'medium',
             status: 'approved',
             createdAt: createdAt + 4,
+            resolvedAt: approvalResolvedAt,
           },
           {
             id: 'question-1',
@@ -81,6 +90,7 @@ test('runtime sidecar session bridge derives canonical timeline events from assi
               questions: [{ question: 'Continue?' }],
               answers: { continue: 'yes' },
               createdAt: createdAt + 5,
+              answeredAt: questionAnsweredAt,
             },
             createdAt: createdAt + 5,
           },
@@ -90,13 +100,24 @@ test('runtime sidecar session bridge derives canonical timeline events from assi
   });
 
   assert.equal(events.some((event) => event.type === 'run.started' && event.runId === 'assistant-1'), true);
-  assert.equal(events.some((event) => event.type === 'progress.updated' && event.payload.detail === 'Inspecting project files'), true);
+  const progressEvent = events.find((event) => event.type === 'progress.updated');
+
+  assert.equal(Boolean(progressEvent), true);
+  assert.notEqual(progressEvent?.payload.detail, 'Inspecting project files');
   assert.equal(events.some((event) => event.type === 'tool.started' && event.payload.toolCallId === 'tool-1'), true);
   assert.equal(events.some((event) => event.type === 'tool.completed' && event.payload.toolCallId === 'tool-1'), true);
   assert.equal(events.some((event) => event.type === 'approval.requested' && event.payload.approvalId === 'approval-1'), true);
   assert.equal(events.some((event) => event.type === 'approval.resolved' && event.payload.approvalId === 'approval-1'), true);
   assert.equal(events.some((event) => event.type === 'question.requested' && event.payload.questionId === 'question-1'), true);
   assert.equal(events.some((event) => event.type === 'question.answered' && event.payload.questionId === 'question-1'), true);
+  assert.equal(
+    events.find((event) => event.type === 'approval.resolved' && event.payload.approvalId === 'approval-1')?.ts,
+    approvalResolvedAt,
+  );
+  assert.equal(
+    events.find((event) => event.type === 'question.answered' && event.payload.questionId === 'question-1')?.ts,
+    questionAnsweredAt,
+  );
   assert.equal(events.some((event) => event.type === 'message.completed' && event.messageId === 'assistant-1'), true);
   assert.equal(events.some((event) => event.type === 'run.completed' && event.runId === 'assistant-1'), true);
 });

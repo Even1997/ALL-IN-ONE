@@ -235,7 +235,10 @@ export const useAIChatRuntimeInteractionState = ({
         mapAssistantRuntimeTimelineEvents(
           timeline,
           (event) => event.kind === 'approval' && event.approvalId === approvalId,
-          (event) => (event.kind === 'approval' ? { ...event, status } : event),
+          (event) =>
+            event.kind === 'approval'
+              ? { ...event, status, resolvedAt: event.resolvedAt ?? Date.now() }
+              : event,
         ),
       );
     },

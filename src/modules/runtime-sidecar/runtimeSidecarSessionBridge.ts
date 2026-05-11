@@ -290,6 +290,7 @@ const deriveApprovalsFromMessages = (
               summary: event.summary,
               status: event.status,
               createdAt: event.createdAt,
+              resolvedAt: event.resolvedAt,
               messageId: message.id,
             } satisfies ApprovalRecord,
           ]
@@ -636,7 +637,6 @@ const applyRuntimeSidecarReasoningEvent = (
       type: 'progress.updated',
       payload: {
         label: 'Reasoning',
-        detail: reasoning.content,
         scope: 'phase',
         importance: 'low',
       },
@@ -871,6 +871,7 @@ const applyRuntimeSidecarApprovalResolvedEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  const resolvedAt = approval.resolvedAt ?? approval.createdAt;
   appendRuntimeSidecarCanonicalEvent(
     sessionId,
     messageId,
@@ -884,12 +885,12 @@ const applyRuntimeSidecarApprovalResolvedEvent = (
         approvalId: approval.approvalId,
         resolution: approval.status === 'approved' ? 'approved' : 'denied',
       },
-      ts: approval.createdAt,
+      ts: resolvedAt,
       correlationId: approval.approvalId,
     }),
-    approval.createdAt,
+    resolvedAt,
   );
-  useApprovalStore.getState().resolveApproval(approval.approvalId, approval.status);
+  useApprovalStore.getState().resolveApproval(approval.approvalId, approval.status, resolvedAt);
   const pendingApprovals = useApprovalStore
     .getState()
     .approvalsByThread[sessionId]?.filter((entry) => entry.status === 'pending') || [];
@@ -960,6 +961,7 @@ const applyRuntimeSidecarQuestionAnsweredEvent = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  const answeredAt = question.payload.answeredAt ?? question.createdAt;
   appendRuntimeSidecarCanonicalEvent(
     sessionId,
     messageId,
@@ -973,10 +975,10 @@ const applyRuntimeSidecarQuestionAnsweredEvent = (
         questionId: question.questionId,
         answers: question.payload.answers || {},
       },
-      ts: question.createdAt,
+      ts: answeredAt,
       correlationId: question.questionId,
     }),
-    question.createdAt,
+    answeredAt,
   );
   patchLiveStateIfChanged(sessionId, (state) => {
     const nextPendingQuestionSummary =

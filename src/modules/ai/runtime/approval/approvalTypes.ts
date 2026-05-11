@@ -13,5 +13,6 @@ export type ApprovalRecord = {
   summary: string;
   status: ApprovalStatus;
   createdAt: number;
+  resolvedAt?: number;
   messageId?: string | null;
 };

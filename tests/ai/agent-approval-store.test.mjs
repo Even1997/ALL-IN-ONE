@@ -7,6 +7,7 @@ const loadApprovalStore = async () =>
 test('approval store tracks pending decisions per thread and updates approval status', async () => {
   const { useApprovalStore } = await loadApprovalStore();
   const store = useApprovalStore.getState();
+  const resolvedAt = 5;
 
   store.enqueueApproval({
     id: 'approval-1',
@@ -17,10 +18,11 @@ test('approval store tracks pending decisions per thread and updates approval st
     status: 'pending',
     createdAt: 1,
   });
-  store.resolveApproval('approval-1', 'approved');
+  store.resolveApproval('approval-1', 'approved', resolvedAt);
 
   const approval = useApprovalStore.getState().approvalsByThread['thread-1'][0];
   assert.equal(approval.status, 'approved');
+  assert.equal(approval.resolvedAt, resolvedAt);
 });
 
 test('approval store keeps sandbox policy for runtime gating', async () => {

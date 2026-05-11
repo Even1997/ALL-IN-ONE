@@ -93,7 +93,6 @@ export const createBuiltinRuntimeAdapter = (input: BuiltinRuntimeAdapterInput) =
         emit(
           buildEvent('progress.updated', {
             label: '正在分析',
-            detail: event.delta,
             scope: 'phase',
             importance: 'low',
           }),

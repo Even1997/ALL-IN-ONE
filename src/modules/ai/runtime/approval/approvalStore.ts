@@ -10,7 +10,7 @@ type ApprovalStoreState = {
   permissionMode: PermissionMode;
   setThreadApprovals: (threadId: string, approvals: ApprovalRecord[]) => void;
   enqueueApproval: (approval: ApprovalRecord) => void;
-  resolveApproval: (approvalId: string, status: ApprovalStatus) => void;
+  resolveApproval: (approvalId: string, status: ApprovalStatus, resolvedAt?: number) => void;
   setSandboxPolicy: (policy: SandboxPolicy) => void;
   setPermissionMode: (mode: PermissionMode) => void;
 };
@@ -41,13 +41,15 @@ export const useApprovalStore = create<ApprovalStoreState>((set) => ({
       },
     })),
 
-  resolveApproval: (approvalId, status) =>
+  resolveApproval: (approvalId, status, resolvedAt) =>
     set((state) => ({
       approvalsByThread: Object.fromEntries(
         Object.entries(state.approvalsByThread).map(([threadId, approvals]) => [
           threadId,
           approvals.map((approval) =>
-            approval.id === approvalId ? { ...approval, status } : approval,
+            approval.id === approvalId
+              ? { ...approval, status, resolvedAt: resolvedAt ?? approval.resolvedAt ?? Date.now() }
+              : approval,
           ),
         ]),
       ),

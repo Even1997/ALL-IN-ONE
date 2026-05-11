@@ -97,6 +97,7 @@ test('assistant timeline helpers update approval and question state in place', a
   assert.equal(answered[1].kind, 'question');
   assert.equal(answered[1].payload.status, 'answered');
   assert.equal(answered[1].payload.answers['Which file?'], 'src/App.tsx');
+  assert.equal(typeof answered[1].payload.answeredAt, 'number');
 });
 
 test('assistant streaming timeline keeps runtime events from the base timeline', async () => {

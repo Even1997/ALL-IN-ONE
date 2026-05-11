@@ -236,7 +236,10 @@ test('built-in runtime adapter maps provider text, thinking, and tool activity i
   );
   adapter.onProviderEvent({ kind: 'done', finalText: 'Done.' }, (event) => events.push(event));
 
-  assert.equal(events.some((event) => event.type === 'progress.updated'), true);
+  const progressEvent = events.find((event) => event.type === 'progress.updated');
+
+  assert.equal(Boolean(progressEvent), true);
+  assert.notEqual(progressEvent?.payload.detail, 'check files');
   assert.equal(events.some((event) => event.type === 'message.delta'), true);
   assert.equal(events.some((event) => event.type === 'tool.started'), true);
   assert.equal(events.some((event) => event.type === 'message.completed'), true);

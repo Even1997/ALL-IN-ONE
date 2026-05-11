@@ -38,6 +38,7 @@ export type RuntimeQuestionPayload = {
   questions: RuntimeQuestionItem[];
   answers?: Record<string, string>;
   createdAt: number;
+  answeredAt?: number;
 };
 
 export type RuntimeStoredFileChange = {
@@ -113,6 +114,7 @@ export type RuntimeAssistantTimelineEvent =
       status: 'pending' | 'approved' | 'denied';
       display?: RuntimeApprovalDisplay;
       createdAt: number;
+      resolvedAt?: number;
     }
   | {
       id: string;
