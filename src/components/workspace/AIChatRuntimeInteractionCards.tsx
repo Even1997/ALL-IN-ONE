@@ -19,9 +19,9 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   let suffixStartOld = oldLines.length;
   let suffixStartNew = newLines.length;
   while (
-    suffixStartOld > prefixEnd
-    && suffixStartNew > prefixEnd
-    && oldLines[suffixStartOld - 1] === newLines[suffixStartNew - 1]
+    suffixStartOld > prefixEnd &&
+    suffixStartNew > prefixEnd &&
+    oldLines[suffixStartOld - 1] === newLines[suffixStartNew - 1]
   ) {
     suffixStartOld -= 1;
     suffixStartNew -= 1;
@@ -118,87 +118,50 @@ type ApprovalLabels = {
   approvalActionLabelMap: Record<string, string>;
 };
 
-export const AIChatRuntimeApprovalList: React.FC<{
-  approvals: ApprovalRecord[];
-  pendingApprovalDisplays: Record<string, StoredChatRuntimeApprovalDisplay | undefined>;
+const ApprovalDisplayPreview: React.FC<{
+  display?: StoredChatRuntimeApprovalDisplay | null;
   summarizeProjectFilePath: (path: string) => string;
-  onApprove: (approvalId: string) => void;
-  onDeny: (approvalId: string) => void;
-} & ApprovalLabels> = ({
-  approvals,
-  pendingApprovalDisplays,
-  summarizeProjectFilePath,
-  onApprove,
-  onDeny,
-  approvalStatusLabelMap,
-  approvalRiskLabelMap,
-  approvalActionLabelMap,
-}) => (
-  <div className="chat-runtime-approval-list">
-    {approvals.map((approval) => {
-      const actionLabel = approvalActionLabelMap[approval.actionType] || approval.actionType;
-      const pendingDisplay = pendingApprovalDisplays[approval.id];
-      const showEditDiff =
-        pendingDisplay?.toolName === 'edit'
-        && typeof pendingDisplay.oldString === 'string'
-        && typeof pendingDisplay.newString === 'string';
-      const showWritePreview = pendingDisplay?.toolName === 'write' && typeof pendingDisplay.content === 'string';
-      const pendingCommand = typeof pendingDisplay?.command === 'string' ? pendingDisplay.command : null;
-      const showCommand = isCommandToolName(pendingDisplay?.toolName || '') && pendingCommand !== null;
-      const showFilePath = Boolean(pendingDisplay?.filePath);
+}> = ({ display, summarizeProjectFilePath }) => {
+  const showEditDiff =
+    display?.toolName === 'edit' &&
+    typeof display.oldString === 'string' &&
+    typeof display.newString === 'string';
+  const showWritePreview = display?.toolName === 'write' && typeof display.content === 'string';
+  const command = typeof display?.command === 'string' ? display.command : null;
+  const showCommand = isCommandToolName(display?.toolName || '') && command !== null;
 
-      return (
-        <section key={approval.id} className={`chat-runtime-approval-card ${approval.riskLevel}`}>
-          <div className="chat-runtime-approval-head">
-            <strong>{approval.summary}</strong>
-            <span>{approvalStatusLabelMap[approval.status]}</span>
-          </div>
-          <div className="chat-runtime-approval-meta">
-            <span>{actionLabel}</span>
-            <span>{approvalRiskLabelMap[approval.riskLevel]}</span>
-          </div>
-          {showFilePath ? (
-            <div className="chat-runtime-approval-file">
-              <code>{summarizeProjectFilePath(pendingDisplay!.filePath!)}</code>
-            </div>
-          ) : null}
-          {showEditDiff ? (
-            <pre className="chat-runtime-approval-diff">
-              {buildInlineDiff(pendingDisplay!.oldString!, pendingDisplay!.newString!).map((line, index) => (
-                <span
-                  key={index}
-                  className={line.startsWith('-') ? 'diff-removed' : line.startsWith('+') ? 'diff-added' : 'diff-context'}
-                >
-                  {line}
-                  {'\n'}
-                </span>
-              ))}
-            </pre>
-          ) : showWritePreview ? (
-            <pre className="chat-runtime-approval-write-preview">
-              {pendingDisplay!.content!.slice(0, 800)}
-              {pendingDisplay!.content!.length > 800 ? '\n...' : ''}
-            </pre>
-          ) : showCommand ? (
-            <pre className="chat-runtime-approval-command">{pendingCommand}</pre>
-          ) : pendingDisplay?.inputJson ? (
-            <pre className="chat-runtime-approval-pre">{pendingDisplay.inputJson}</pre>
-          ) : null}
-          {approval.status === 'pending' ? (
-            <div className="chat-runtime-approval-actions">
-              <button type="button" onClick={() => onApprove(approval.id)}>
-                批准执行
-              </button>
-              <button type="button" onClick={() => onDeny(approval.id)}>
-                拒绝
-              </button>
-            </div>
-          ) : null}
-        </section>
-      );
-    })}
-  </div>
-);
+  return (
+    <>
+      {display?.filePath ? (
+        <div className="chat-runtime-approval-file">
+          <code>{summarizeProjectFilePath(display.filePath)}</code>
+        </div>
+      ) : null}
+      {showEditDiff ? (
+        <pre className="chat-runtime-approval-diff">
+          {buildInlineDiff(display.oldString!, display.newString!).map((line, index) => (
+            <span
+              key={index}
+              className={line.startsWith('-') ? 'diff-removed' : line.startsWith('+') ? 'diff-added' : 'diff-context'}
+            >
+              {line}
+              {'\n'}
+            </span>
+          ))}
+        </pre>
+      ) : showWritePreview ? (
+        <pre className="chat-runtime-approval-write-preview">
+          {display.content!.slice(0, 800)}
+          {display.content!.length > 800 ? '\n...' : ''}
+        </pre>
+      ) : showCommand ? (
+        <pre className="chat-runtime-approval-command">{command}</pre>
+      ) : display?.inputJson ? (
+        <pre className="chat-runtime-approval-pre">{display.inputJson}</pre>
+      ) : null}
+    </>
+  );
+};
 
 type RuntimeInteractionEvent = Extract<StoredChatRuntimeEvent, { kind: 'approval' | 'question' }>;
 
@@ -228,7 +191,7 @@ export const AIChatRuntimeTimelineInteractionEvent: React.FC<{
     return (
       <section key={event.id} className={`chat-runtime-approval-card ${event.riskLevel}`}>
         <div className="chat-runtime-approval-head">
-          <strong>继续前想和你确认一下</strong>
+          <strong>继续前我想和你确认一下</strong>
           <span>{approvalStatusLabelMap[event.status]}</span>
         </div>
         <div className="chat-runtime-approval-summary">{event.summary}</div>
@@ -236,21 +199,10 @@ export const AIChatRuntimeTimelineInteractionEvent: React.FC<{
           <span>{approvalActionLabelMap[event.actionType] || event.actionType}</span>
           <span>{approvalRiskLabelMap[event.riskLevel]}</span>
         </div>
-        {event.display?.filePath ? (
-          <div className="chat-runtime-approval-preview">
-            <code>{summarizeProjectFilePath(event.display.filePath)}</code>
-          </div>
-        ) : null}
-        {event.display?.command ? <pre className="chat-runtime-approval-pre">{event.display.command}</pre> : null}
-        {event.display?.content && event.display.toolName === 'write' ? (
-          <pre className="chat-runtime-approval-pre">{event.display.content}</pre>
-        ) : null}
-        {event.display?.newString && event.display.toolName === 'edit' ? (
-          <pre className="chat-runtime-approval-pre">{event.display.newString}</pre>
-        ) : null}
-        {!event.display?.command && !event.display?.content && !event.display?.newString && event.display?.inputJson ? (
-          <pre className="chat-runtime-approval-pre">{event.display.inputJson}</pre>
-        ) : null}
+        <ApprovalDisplayPreview
+          display={event.display}
+          summarizeProjectFilePath={summarizeProjectFilePath}
+        />
         {event.status === 'pending' ? (
           <div className="chat-runtime-approval-actions">
             <button type="button" onClick={() => onApprove(event.approvalId)}>

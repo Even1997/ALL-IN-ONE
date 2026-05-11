@@ -1,0 +1,1 @@
+{"nodes": [], "edges": [{"source": "src_modules_knowledge_referencefiles_ts", "target": "concept_reference_file", "relation": "implements", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/superpowers/plans/2026-04-25-ai-chat-context-index-and-reference-scope-implementation.md", "source_location": null, "weight": 1.0}], "hyperedges": []}

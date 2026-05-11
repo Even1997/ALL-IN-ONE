@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { StoredChatMessage } from '../../../modules/ai/store/aiChatStore.ts';
 import { buildAssistantRenderModel, type AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
-import { sortMessageRenderItems } from './messageTimelineOrdering.ts';
+import { groupMessageRenderItemsByLane, sortMessageRenderItems } from './messageTimelineOrdering.ts';
 
 type MessagePartRenderer = (
   message: StoredChatMessage,
@@ -24,6 +24,7 @@ type MessageRenderItem = {
   node: React.ReactNode;
   createdAt?: number;
   timelineOrder?: number;
+  laneKind?: 'thinking_lane' | 'bubble';
 };
 
 type GNAgentMessageItemProps = {
@@ -83,6 +84,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     node: bubbleCard.node,
     createdAt: bubbleCard.createdAt,
     timelineOrder: bubbleCard.timelineOrder,
+    laneKind: 'bubble',
   }));
   const assistantRenderModel =
     message.role === 'assistant' ? buildAssistantRenderModel(message, draftState, bubbleRenderItems.length) : null;
@@ -112,6 +114,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
         }),
         createdAt: item.part.createdAt,
         timelineOrder: item.timelineOrder,
+        laneKind: item.kind === 'thinking_lane' ? 'thinking_lane' : 'bubble',
       });
     });
   } else {
@@ -125,25 +128,47 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
         }),
         createdAt: part.createdAt,
         timelineOrder: index,
+        laneKind: 'bubble',
       });
     });
   }
 
   const timelineItems = sortMessageRenderItems(partRenderItems, bubbleRenderItems);
+  const timelineGroups = message.role === 'assistant' ? groupMessageRenderItemsByLane(timelineItems) : [];
   const hasVisibleContent = timelineItems.length > 0;
 
   return (
     <article className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}>
-      {hasVisibleContent ? (
+      {message.role === 'assistant' && hasVisibleContent ? (
+        <>
+          {timelineGroups.map((group, groupIndex) =>
+            group.kind === 'thinking_lane' ? (
+              <div key={`${message.id}-group-${groupIndex}`} className="chat-message-thinking-lane">
+                {group.items.map((item) => (
+                  <React.Fragment key={item.key}>{item.node}</React.Fragment>
+                ))}
+              </div>
+            ) : (
+              <div key={`${message.id}-group-${groupIndex}`} className="chat-message-bubble">
+                <div className="chat-message-content chat-message-content-timeline">
+                  {group.items.map((item) => (
+                    <React.Fragment key={item.key}>{item.node}</React.Fragment>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+          <AssistantMessageActionBar copyText={isStreaming ? undefined : assistantCopyText} />
+          <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
+        </>
+      ) : null}
+      {message.role !== 'assistant' && hasVisibleContent ? (
         <div className="chat-message-bubble">
           <div className="chat-message-content chat-message-content-timeline">
             {timelineItems.map((item) => (
               <React.Fragment key={item.key}>{item.node}</React.Fragment>
             ))}
           </div>
-          {message.role === 'assistant' ? (
-            <AssistantMessageActionBar copyText={isStreaming ? undefined : assistantCopyText} />
-          ) : null}
           <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
         </div>
       ) : null}

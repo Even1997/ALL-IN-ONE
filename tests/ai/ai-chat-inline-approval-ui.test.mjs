@@ -6,6 +6,7 @@ test('chat conversation pane keeps inline approval interaction cards wired even 
   const source = await readFile('src/components/workspace/AIChatConversationMessagesPane.tsx', 'utf8');
 
   assert.match(source, /AIChatRuntimeTimelineInteractionEvent/);
-  assert.match(source, /getLatestPendingRuntimeApprovalEvent/);
-  assert.doesNotMatch(source, /\.some\(\(event\) => event\.kind === 'approval'\)/);
+  assert.match(source, /getRuntimeApprovalRenderEntries/);
+  assert.doesNotMatch(source, /AIChatRuntimeApprovalList/);
+  assert.doesNotMatch(source, /Number\.MAX_SAFE_INTEGER/);
 });

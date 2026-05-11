@@ -250,7 +250,10 @@ const normalizeCanonicalEventForSession = (
 ): CanonicalEvent => ({
   ...event,
   sessionId: session.id,
-  seq: getNextCanonicalSeq(session, event.runId),
+  seq:
+    typeof event.seq === 'number' && Number.isFinite(event.seq) && event.seq > 0
+      ? event.seq
+      : getNextCanonicalSeq(session, event.runId),
 });
 
 export const createStoredChatMessage = (
@@ -440,7 +443,12 @@ export const useAIChatStore = create<AIChatStoreState>()(
                   const normalizedEvent = normalizeCanonicalEventForSession(session, event);
                   return {
                     ...session,
-                    canonicalEvents: [...(session.canonicalEvents || []), normalizedEvent],
+                    canonicalEvents: [
+                      ...(session.canonicalEvents || []).filter(
+                        (existingEvent) => existingEvent.eventId !== normalizedEvent.eventId
+                      ),
+                      normalizedEvent,
+                    ],
                     updatedAt: Math.max(session.updatedAt, normalizedEvent.ts),
                   };
                 })()

@@ -5,6 +5,12 @@ export type MessageTimelineRenderItem = {
   node: ReactNode;
   createdAt?: number;
   timelineOrder?: number;
+  laneKind?: 'thinking_lane' | 'bubble';
+};
+
+export type MessageTimelineRenderGroup = {
+  kind: 'thinking_lane' | 'bubble';
+  items: MessageTimelineRenderItem[];
 };
 
 export const sortMessageRenderItems = (
@@ -39,4 +45,27 @@ export const sortMessageRenderItems = (
 
     return left.timelineIndex - right.timelineIndex;
   });
+};
+
+export const groupMessageRenderItemsByLane = (
+  timelineItems: MessageTimelineRenderItem[]
+): MessageTimelineRenderGroup[] => {
+  const groups: MessageTimelineRenderGroup[] = [];
+
+  timelineItems.forEach((item) => {
+    const kind = item.laneKind === 'thinking_lane' ? 'thinking_lane' : 'bubble';
+    const previousGroup = groups[groups.length - 1];
+
+    if (previousGroup?.kind === kind) {
+      previousGroup.items.push(item);
+      return;
+    }
+
+    groups.push({
+      kind,
+      items: [item],
+    });
+  });
+
+  return groups;
 };

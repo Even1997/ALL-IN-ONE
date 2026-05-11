@@ -100,6 +100,7 @@ import {
 import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
+  type MessageBubbleCard,
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import { AIChatReferenceSearchMenu } from './AIChatReferenceSearchMenu';
@@ -115,11 +116,14 @@ import {
 } from './aiChatViewState';
 import { parseAIChatMessageParts, type AIChatMessagePart } from './aiChatMessageParts';
 import { AssistantTextBlock, AssistantThinkingBlock } from './AIChatAssistantParts';
-import { TimelineView } from './timeline/TimelineView.tsx';
+import {
+  buildChatTimelineBubbleCards,
+  ChatTimelineBubbleCard,
+} from './timeline/chatTimelineBubbleCards.tsx';
 import { useAIChatSettingsState } from './useAIChatSettingsState';
 import { useAIChatRuntimeInteractionState } from './useAIChatRuntimeInteractionState';
 import { useAIChatSidecarSessionActions } from './useAIChatSidecarSessionActions';
-import { getLatestRuntimeQuestionEvent } from './runtimeInteractionSelectors.ts';
+import { getRuntimeQuestionRenderEntries } from './runtimeInteractionRenderModel.ts';
 import './AIChat.css';
 
 let aiServiceModulePromise: Promise<typeof import('../../modules/ai/core/AIService')> | null = null;
@@ -1451,7 +1455,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     [activeSessionId, currentProject, updateMessage]
   );
   const {
-    pendingApprovalActionsRef,
     handleApproveRuntimeApproval,
     handleDenyRuntimeApproval,
     handleAnswerRuntimeQuestion,
@@ -1470,28 +1473,32 @@ export const AIChat: React.FC<AIChatProps> = ({
   });
 
   const renderRuntimeQuestionCard = useCallback(
-    (message: StoredChatMessage) => {
-      const questionEvent = getLatestRuntimeQuestionEvent(message);
+    (message: StoredChatMessage): MessageBubbleCard[] | null => {
+      const questionEntries = getRuntimeQuestionRenderEntries(message);
 
-      if (!questionEvent) {
+      if (questionEntries.length === 0) {
         return null;
       }
 
-      return (
-        <AIChatRuntimeTimelineInteractionEvent
-          messageId={message.id}
-          event={questionEvent}
-          summarizeProjectFilePath={summarizeProjectFilePath}
-          onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
-          onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
-          onAnswerQuestion={(messageId, question, answers) =>
-            void handleAnswerRuntimeQuestion(messageId, question, answers)
-          }
-          approvalStatusLabelMap={approvalStatusLabelMap}
-          approvalRiskLabelMap={approvalRiskLabelMap}
-          approvalActionLabelMap={approvalActionLabelMap}
-        />
-      );
+      return questionEntries.map(({ event, createdAt, timelineOrder }) => ({
+        node: (
+          <AIChatRuntimeTimelineInteractionEvent
+            messageId={message.id}
+            event={event}
+            summarizeProjectFilePath={summarizeProjectFilePath}
+            onApprove={(approvalId) => void handleApproveRuntimeApproval(approvalId)}
+            onDeny={(approvalId) => void handleDenyRuntimeApproval(approvalId)}
+            onAnswerQuestion={(messageId, question, answers) =>
+              void handleAnswerRuntimeQuestion(messageId, question, answers)
+            }
+            approvalStatusLabelMap={approvalStatusLabelMap}
+            approvalRiskLabelMap={approvalRiskLabelMap}
+            approvalActionLabelMap={approvalActionLabelMap}
+          />
+        ),
+        createdAt,
+        timelineOrder,
+      }));
     },
     [
       approvalActionLabelMap,
@@ -2505,7 +2512,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       turnCheckpointsByRunId,
     ]
   );
-  const renderTimelineProjection = useCallback((message: StoredChatMessage) => {
+  const renderTimelineCards = useCallback((message: StoredChatMessage): MessageBubbleCard[] | null => {
     if (message.role !== 'assistant') {
       return null;
     }
@@ -2514,7 +2521,17 @@ export const AIChat: React.FC<AIChatProps> = ({
       (message.runId ? timelineProjectionByRunId[message.runId] : null) ||
       timelineProjectionByMessageId[message.id] ||
       null;
-    return projection ? <TimelineView projection={projection} /> : null;
+
+    const descriptors = buildChatTimelineBubbleCards(projection);
+    if (descriptors.length === 0) {
+      return null;
+    }
+
+    return descriptors.map((descriptor) => ({
+      node: <ChatTimelineBubbleCard key={descriptor.cardId} descriptor={descriptor} />,
+      createdAt: descriptor.createdAt,
+      timelineOrder: descriptor.timelineOrder,
+    }));
   }, [timelineProjectionByMessageId, timelineProjectionByRunId]);
   const renderToolExecutionCard = useCallback((message: StoredChatMessage) => {
     const teamRun = message.teamRun || null;
@@ -2943,13 +2960,12 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderMessagePart={renderMessagePart}
       renderStructuredCards={renderStructuredCards}
       renderProjectFileProposal={renderProjectFileProposal}
-      renderTimelineProjection={renderTimelineProjection}
+      renderTimelineCards={renderTimelineCards}
       renderToolExecutionCard={renderToolExecutionCard}
       renderRunSummaryCard={renderRunSummaryCard}
       renderRuntimeQuestion={renderRuntimeQuestionCard}
       messageListRef={messageListRef}
       messagesEndRef={messagesEndRef}
-      pendingApprovalActionsRef={pendingApprovalActionsRef}
       summarizeProjectFilePath={summarizeProjectFilePath}
       onApprove={handleApproveRuntimeApproval}
       onDeny={handleDenyRuntimeApproval}

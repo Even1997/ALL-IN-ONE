@@ -95,14 +95,35 @@ function Start-DevServerIfNeeded {
   throw "Vite dev server did not become ready at $Url."
 }
 
+function New-IsolatedUserDataDir {
+  param([string]$SourceDir)
+
+  if (-not (Test-Path $SourceDir)) {
+    throw "User data directory was not found: $SourceDir"
+  }
+
+  $targetDir = Join-Path $env:TEMP "goodnight-built-in-smoke-profile-$PID"
+  Remove-Item -LiteralPath $targetDir -Recurse -Force -ErrorAction SilentlyContinue
+  $null = New-Item -ItemType Directory -Path $targetDir -Force
+
+  & robocopy $SourceDir $targetDir /E /R:0 /W:0 /NFL /NDL /NJH /NJS /NP | Out-Null
+  $copiedEntryCount = (Get-ChildItem -LiteralPath $targetDir -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object).Count
+  if ($LASTEXITCODE -gt 7 -and $copiedEntryCount -eq 0) {
+    throw "Failed to stage browser user data directory for smoke test."
+  }
+
+  return $targetDir
+}
+
 $nodeExe = Resolve-NodeExecutable
 $nodePath = Resolve-PlaywrightNodePath
 $server = Start-DevServerIfNeeded -Url $AppOrigin -ListenPort $Port
+$isolatedUserDataDir = New-IsolatedUserDataDir -SourceDir $UserDataDir
 
 $env:NODE_PATH = $nodePath
 $env:GN_NODE_PATH = $nodePath
 $env:GN_APP_ORIGIN = $AppOrigin
-$env:GN_USER_DATA_DIR = $UserDataDir
+$env:GN_USER_DATA_DIR = $isolatedUserDataDir
 
 try {
   $tempStdout = [System.IO.Path]::Combine($env:TEMP, "goodnight-built-in-smoke-$PID.stdout.log")
@@ -124,6 +145,7 @@ try {
 } finally {
   Remove-Item -LiteralPath $tempStdout -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $tempStderr -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $isolatedUserDataDir -Recurse -Force -ErrorAction SilentlyContinue
   if ($server.Started -and -not $LeaveDevServerRunning) {
     Stop-Process -Id $server.Process.Id -Force -ErrorAction SilentlyContinue
   }

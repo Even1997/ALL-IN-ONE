@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const conversationPanePath = path.resolve(
+  __dirname,
+  '../../src/components/workspace/AIChatConversationMessagesPane.tsx',
+);
 
 test('AIChat uses fine-grained runtime hooks instead of a single conversation projection', async () => {
   const source = await readFile(aiChatPath, 'utf8');
@@ -13,7 +17,7 @@ test('AIChat uses fine-grained runtime hooks instead of a single conversation pr
   assert.match(source, /useActiveConversationSelection/);
   assert.match(source, /useActiveConversationRunStateSignals/);
   assert.match(source, /AIChatConversationMessagesPane/);
-  assert.match(source, /renderTimelineProjection/);
+  assert.match(source, /renderTimelineCards/);
   assert.match(source, /renderRuntimeQuestion/);
   assert.doesNotMatch(source, /AIChatRuntimeStatusPanel/);
   assert.doesNotMatch(source, /AIChatRuntimeTasksPanel/);
@@ -23,4 +27,13 @@ test('AIChat uses fine-grained runtime hooks instead of a single conversation pr
   assert.doesNotMatch(source, /const conversation = useRuntimeConversationGateway/);
   assert.doesNotMatch(source, /const messages = conversation\.messages/);
   assert.doesNotMatch(source, /const pendingApprovals = conversation\.pendingApprovals/);
+});
+
+test('conversation pane no longer recomputes all streaming drafts from live thinking state', async () => {
+  const source = await readFile(conversationPanePath, 'utf8');
+
+  assert.doesNotMatch(source, /useActiveConversationLiveState/);
+  assert.doesNotMatch(source, /applyAssistantReasoningProgress/);
+  assert.doesNotMatch(source, /effectiveStreamingDraftContents/);
+  assert.match(source, /draftContents=\{draftContents\}/);
 });

@@ -11,8 +11,11 @@ import { isWindowsHost } from '../../../utils/hostPlatform.ts';
 
 const AVAILABLE_RUNTIME_TOOLS = getBuiltInRuntimeToolNames(isWindowsHost()).join(', ');
 const WINDOWS_COMMAND_TOOL_POLICY = [
-  'On Windows hosts, prefer the powershell tool for command execution.',
+  'Prefer dedicated runtime tools such as glob, grep, ls, view, write, edit, fetch, and agent whenever they match the task.',
   'Use read-only tools such as ls, view, glob, and grep for directory and file inspection before using shell commands.',
+  'For directory listing, file discovery, content search, and file reading, use ls, glob, grep, and view instead of shell commands.',
+  'When command execution is necessary on Windows, use the powershell tool rather than bash syntax.',
+  'If a tool call fails, read the error and switch to a more suitable tool or narrower input instead of repeating the same failing call.',
   'Use commands such as Get-Location and Get-ChildItem instead of bash-only syntax like pwd && ls -la.',
 ].join(' ');
 

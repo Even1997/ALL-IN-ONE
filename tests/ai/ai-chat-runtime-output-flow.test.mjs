@@ -417,15 +417,15 @@ test('runtime event render model keeps tool groups split when final content only
 test('runtime tool blocks stay off the primary assistant path once canonical timeline rendering takes over', async () => {
   const [chatSource, timelineSource, cssSource] = await Promise.all([
     readFile(chatPath, 'utf8'),
-    readFile(path.resolve(testDir, '../../src/components/workspace/timeline/TimelineCard.tsx'), 'utf8'),
+    readFile(path.resolve(testDir, '../../src/components/workspace/timeline/chatTimelineBubbleCards.tsx'), 'utf8'),
     readFile(cssPath, 'utf8'),
   ]);
 
-  assert.match(chatSource, /renderTimelineProjection/);
-  assert.match(chatSource, /TimelineView/);
+  assert.match(chatSource, /renderTimelineCards/);
+  assert.match(chatSource, /ChatTimelineBubbleCard/);
   assert.doesNotMatch(chatSource, /buildRuntimeExecutionTimelineCards\(/);
   assert.doesNotMatch(chatSource, /legacyRuntimeToolHelpers/);
-  assert.match(timelineSource, /chat-timeline-card/);
+  assert.match(timelineSource, /buildChatTimelineBubbleCards/);
   assert.match(cssSource, /\.chat-timeline-card/);
   assert.match(cssSource, /\.chat-timeline-detail-drawer/);
 });

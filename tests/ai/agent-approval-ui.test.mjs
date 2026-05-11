@@ -16,9 +16,9 @@ const runtimeInteractionCardsPath = path.resolve(
   __dirname,
   '../../src/components/workspace/AIChatRuntimeInteractionCards.tsx',
 );
-const runtimeInteractionSelectorsPath = path.resolve(
+const runtimeInteractionRenderModelPath = path.resolve(
   __dirname,
-  '../../src/components/workspace/runtimeInteractionSelectors.ts',
+  '../../src/components/workspace/runtimeInteractionRenderModel.ts',
 );
 const runtimeSummaryPath = path.resolve(
   __dirname,
@@ -51,26 +51,28 @@ test('risk policy classifies destructive runtime actions', async () => {
 test('AIChat wires approval gating and inline approval cards into the existing shell', async () => {
   const chat = await readFile(aiChatPath, 'utf8');
   const pane = await readFile(conversationPanePath, 'utf8');
-  const selectors = await readFile(runtimeInteractionSelectorsPath, 'utf8');
+  const renderModel = await readFile(runtimeInteractionRenderModelPath, 'utf8');
 
   assert.match(chat, /useApprovalStore/);
   assert.match(chat, /enqueueAgentApproval/);
   assert.match(chat, /sandboxPolicy/);
   assert.match(pane, /renderRuntimeApproval/);
   assert.match(pane, /AIChatRuntimeTimelineInteractionEvent/);
-  assert.match(selectors, /getLatestPendingRuntimeApprovalEvent/);
+  assert.match(renderModel, /getRuntimeInteractionRenderEntries/);
   assert.doesNotMatch(chat, /GNAgentApprovalPanel/);
   assert.match(chat, /run_local_agent_prompt/);
 });
 
-test('approval cards and runtime summary expose approval actions and approval-policy wording', async () => {
+test('approval cards and runtime summary expose approval actions and approval-policy wording without store-list fallback UI', async () => {
   const pane = await readFile(conversationPanePath, 'utf8');
   const cards = await readFile(runtimeInteractionCardsPath, 'utf8');
   const summary = await readFile(runtimeSummaryPath, 'utf8');
 
-  assert.match(pane, /AIChatRuntimeApprovalList/);
-  assert.match(cards, /批准执行/);
-  assert.match(cards, /拒绝/);
+  assert.doesNotMatch(pane, /AIChatRuntimeApprovalList/);
+  assert.doesNotMatch(cards, /export const AIChatRuntimeApprovalList/);
+  assert.match(cards, /chat-runtime-approval-actions/);
+  assert.match(cards, /onApprove\(event\.approvalId\)/);
+  assert.match(cards, /onDeny\(event\.approvalId\)/);
   assert.match(summary, /approval:/i);
   assert.match(summary, /approval policy/i);
 });

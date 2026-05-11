@@ -194,6 +194,7 @@ PARAMETERS:
 WHEN TO USE THIS TOOL:
 - Use when you need to explore directory structure
 - Helpful for understanding project organization
+- Prefer this over shell commands such as dir, ls, or Get-ChildItem when you are only listing files
 
 PARAMETERS:
 - path: directory path to list (defaults to project root)
@@ -211,6 +212,7 @@ PARAMETERS:
 WHEN TO USE THIS TOOL:
 - Use when you need to read the contents of a specific file
 - Helpful for examining source code or configuration files
+- Prefer this over shell commands such as cat, type, or Get-Content when you only need file contents
 
 PARAMETERS:
 - file_path: path to the file to read
@@ -280,6 +282,7 @@ PARAMETERS:
 WHEN TO USE THIS TOOL:
 - Use when you need to run terminal commands on Windows with PowerShell syntax
 - Commands share the same shell session
+- Do not use this for directory listing, file search, or file reading when ls, glob, grep, or view can handle the task
 
 PARAMETERS:
 - command: the PowerShell command to execute
@@ -296,10 +299,10 @@ TIPS:
           required: ['command'],
         } satisfies Tool,
       ]
-    : []),
-  {
-    name: 'bash',
-    description: `Execute shell commands in a persistent session.
+    : [
+        {
+          name: 'bash',
+          description: `Execute shell commands in a persistent session.
 
 WHEN TO USE THIS TOOL:
 - Use when you need to run terminal commands
@@ -313,12 +316,13 @@ TIPS:
 - Try to use absolute paths
 - Avoid 'cd' commands to maintain context
 - On Windows, use PowerShell-compatible syntax by default`,
-    parameters: {
-      command: { type: 'string', description: 'The shell command to execute' },
-      timeout: { type: 'number', description: 'Timeout in milliseconds' },
-    },
-    required: ['command'],
-  },
+          parameters: {
+            command: { type: 'string', description: 'The shell command to execute' },
+            timeout: { type: 'number', description: 'Timeout in milliseconds' },
+          },
+          required: ['command'],
+        } satisfies Tool,
+      ]),
   {
     name: 'fetch',
     description: `Fetch data from URLs.

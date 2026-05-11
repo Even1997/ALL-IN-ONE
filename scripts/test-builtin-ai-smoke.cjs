@@ -32,6 +32,12 @@ const maskApiKey = (value) => {
 const joinUrl = (baseUrl, path) =>
   baseUrl.endsWith(path) ? baseUrl : `${baseUrl.replace(/\/+$/, "")}${path}`;
 
+const EXPECTED_ASSISTANT_TEXT = "OK.";
+const extractAssistantText = (parsedResponse) =>
+  parsedResponse?.content?.filter?.((item) => item?.type === "text").map((item) => item.text).join("\n").trim() ||
+  parsedResponse?.choices?.[0]?.message?.content?.trim?.() ||
+  null;
+
 (async () => {
   const origin = process.env.GN_APP_ORIGIN;
   const userDataDir = process.env.GN_USER_DATA_DIR;
@@ -59,10 +65,10 @@ const joinUrl = (baseUrl, path) =>
       throw new Error(`Selected config ${state.selectedConfigId || "(null)"} was not found.`);
     }
 
-    const prompt = "Reply with exactly OK.";
+    const prompt = `Reply with exactly ${EXPECTED_ASSISTANT_TEXT}`;
     let url;
     let headers;
-    let body;
+    let buildBody;
 
     if (selected.provider === "anthropic") {
       url = joinUrl(selected.baseURL, "/messages");
@@ -71,51 +77,91 @@ const joinUrl = (baseUrl, path) =>
         "x-api-key": selected.apiKey,
         "anthropic-version": "2023-06-01",
       };
-      body = {
+      buildBody = (maxTokens) => ({
         model: selected.model,
-        max_tokens: 32,
+        max_tokens: maxTokens,
         temperature: 0,
         system: prompt,
         stream: false,
         messages: [{ role: "user", content: prompt }],
-      };
+      });
     } else {
       url = joinUrl(selected.baseURL, "/chat/completions");
       headers = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${selected.apiKey}`,
       };
-      body = {
+      buildBody = (maxTokens) => ({
         model: selected.model,
-        max_tokens: 32,
+        max_tokens: maxTokens,
         temperature: 0,
         stream: false,
         messages: [
           { role: "system", content: prompt },
           { role: "user", content: prompt },
         ],
+      });
+    }
+
+    let finalAttempt = null;
+    for (const maxTokens of selected.provider === "anthropic" ? [128, 512] : [64, 256]) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(buildBody(maxTokens)),
+      });
+
+      const responseText = await response.text();
+
+      let parsedResponse = null;
+      try {
+        parsedResponse = JSON.parse(responseText);
+      } catch {
+        parsedResponse = null;
+      }
+
+      const assistantText = extractAssistantText(parsedResponse);
+      const stopReason =
+        parsedResponse?.stop_reason || parsedResponse?.choices?.[0]?.finish_reason || null;
+
+      finalAttempt = {
+        maxTokens,
+        response,
+        responseText,
+        parsedResponse,
+        assistantText,
+        stopReason,
       };
+
+      if (!response.ok) {
+        break;
+      }
+
+      if (assistantText === EXPECTED_ASSISTANT_TEXT && stopReason !== "max_tokens") {
+        break;
+      }
     }
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    const responseText = await response.text();
-
-    let parsedResponse = null;
-    try {
-      parsedResponse = JSON.parse(responseText);
-    } catch {
-      parsedResponse = null;
+    const { maxTokens, response, responseText, parsedResponse, assistantText, stopReason } = finalAttempt || {};
+    if (!finalAttempt) {
+      throw new Error("Smoke test did not execute any inference attempts.");
     }
 
-    const assistantText =
-      parsedResponse?.content?.find?.((item) => item?.type === "text")?.text ||
-      parsedResponse?.choices?.[0]?.message?.content ||
-      null;
+    if (!response.ok) {
+      throw new Error(`Smoke inference request failed with HTTP ${response.status}: ${responseText}`);
+    }
+
+    if (stopReason === "max_tokens") {
+      throw new Error(
+        `Smoke inference response was truncated at max_tokens=${maxTokens} before producing the expected text.`,
+      );
+    }
+
+    if (assistantText !== EXPECTED_ASSISTANT_TEXT) {
+      throw new Error(
+        `Smoke inference response did not produce the expected assistant text. Expected "${EXPECTED_ASSISTANT_TEXT}" but received ${JSON.stringify(assistantText)}.`,
+      );
+    }
 
     console.log(
       JSON.stringify(
@@ -127,8 +173,10 @@ const joinUrl = (baseUrl, path) =>
           apiKeyPreview: maskApiKey(selected.apiKey),
           appOrigin: origin,
           userDataDir,
+          maxTokens,
           httpStatus: response.status,
           ok: response.ok,
+          stopReason,
           assistantText,
           rawResponse: responseText,
           note:

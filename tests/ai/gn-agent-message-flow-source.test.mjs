@@ -38,9 +38,9 @@ test('GN Agent message flow derives runtime cards from the live draft timeline w
   assert.match(messageListSource, /draftState=\{draftContents\?\.\[message\.id\]\}/);
   assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(message\);/);
   assert.match(messageListSource, /const toolExecutionCards = renderToolExecutionCard\?\.\(message\) \|\| \[\];/);
-  assert.match(messageListSource, /const runtimeApprovalNode = renderRuntimeApproval\?\.\(message\) \|\| null;/);
-  assert.match(messageListSource, /const runtimeQuestionNode = renderRuntimeQuestion\?\.\(message\) \|\| null;/);
-  assert.match(messageListSource, /messages,\s*renderStructuredCards,/);
+  assert.match(messageListSource, /const runtimeApprovalCards = renderRuntimeApproval\?\.\(message\) \|\| \[\];/);
+  assert.match(messageListSource, /const runtimeQuestionCards = renderRuntimeQuestion\?\.\(message\) \|\| \[\];/);
+  assert.match(messageListSource, /renderTimelineCards,\s*[\r\n\s]*renderStructuredCards,/);
 });
 
 test('GN Agent message flow has no orphaned production helper module', async () => {
@@ -49,8 +49,12 @@ test('GN Agent message flow has no orphaned production helper module', async () 
 
 test('GN Agent message item keeps streaming thinking collapsed but expandable', async () => {
   const messageItemSource = await readFile(messageItemPath, 'utf8');
+  const messageOrderingSource = await readFile(messageOrderingPath, 'utf8');
 
   assert.doesNotMatch(messageItemSource, /isStreaming\s*\?\s*true\s*:/);
   assert.match(messageItemSource, /expandedThinkingKeys\[thinkingKey\]\s*\?\?\s*false/);
   assert.doesNotMatch(messageItemSource, /item\.part\.type === 'thinking' && !isStreaming/);
+  assert.match(messageItemSource, /groupMessageRenderItemsByLane\(timelineItems\)/);
+  assert.match(messageItemSource, /className=\"chat-message-thinking-lane\"/);
+  assert.match(messageOrderingSource, /export const groupMessageRenderItemsByLane =/);
 });

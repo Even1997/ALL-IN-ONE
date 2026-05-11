@@ -46,7 +46,19 @@ test('agent kernel prompt prefers direct drafting when project files are unneces
   );
   assert.match(
     source,
-    /On Windows hosts, prefer the powershell tool for command execution\./
+    /Prefer dedicated runtime tools such as glob, grep, ls, view, write, edit, fetch, and agent whenever they match the task\./
+  );
+  assert.match(
+    source,
+    /For directory listing, file discovery, content search, and file reading, use ls, glob, grep, and view instead of shell commands\./
+  );
+  assert.match(
+    source,
+    /If a tool call fails, read the error and switch to a more suitable tool or narrower input instead of repeating the same failing call\./
+  );
+  assert.match(
+    source,
+    /When command execution is necessary on Windows, use the powershell tool rather than bash syntax\./
   );
   assert.match(
     source,
@@ -55,6 +67,14 @@ test('agent kernel prompt prefers direct drafting when project files are unneces
   assert.match(
     source,
     /Do not emit repeated process narration such as "让我先\.\.\.", "好的，我来\.\.\.", or "现在我来\.\.\." across multiple consecutive replies\./
+  );
+  assert.match(
+    directChatSource,
+    /For directory listing, file discovery, content search, and file reading, use ls, glob, grep, and view instead of shell commands\./
+  );
+  assert.match(
+    directChatSource,
+    /If a tool call fails, read the error and switch to a more suitable tool or narrower input instead of repeating the same failing call\./
   );
   assert.match(
     directChatSource,

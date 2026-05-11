@@ -4,16 +4,21 @@ type NavigatorWithUserAgentData = Navigator & {
   };
 };
 
-export const isWindowsHost = () => {
-  if (typeof navigator === 'undefined') {
-    return false;
-  }
+const getNodePlatformHint = () => {
+  const runtimeProcess = (globalThis as { process?: { platform?: string } }).process;
+  return typeof runtimeProcess?.platform === 'string' && runtimeProcess.platform.trim().length > 0
+    ? runtimeProcess.platform
+    : null;
+};
 
-  const browserNavigator = navigator as NavigatorWithUserAgentData;
+export const isWindowsHost = () => {
+  const browserNavigator =
+    typeof navigator !== 'undefined' ? (navigator as NavigatorWithUserAgentData) : null;
   const platformHints = [
-    browserNavigator.userAgentData?.platform,
-    browserNavigator.platform,
-    browserNavigator.userAgent,
+    browserNavigator?.userAgentData?.platform,
+    browserNavigator?.platform,
+    browserNavigator?.userAgent,
+    getNodePlatformHint(),
   ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
 
   return platformHints.some((value) => /win/i.test(value));

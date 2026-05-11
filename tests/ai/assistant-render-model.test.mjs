@@ -10,7 +10,7 @@ const modulePath = path.resolve(__dirname, '../../src/components/workspace/assis
 
 const loadRenderModel = async () => import(`../../src/components/workspace/assistantRenderModel.ts?test=${Date.now()}`);
 
-test('assistant render model keeps only assistant text in the primary narrative lane', async () => {
+test('assistant render model keeps assistant thinking and text in the primary narrative lane', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel({
     id: 'assistant_1',
@@ -24,7 +24,10 @@ test('assistant render model keeps only assistant text in the primary narrative 
 
   assert.deepEqual(
     model.items.map((item) => [item.kind, item.part.type, item.part.content]),
-    [['bubble_part', 'text', 'Final answer']]
+    [
+      ['thinking_lane', 'thinking', 'Check project first'],
+      ['bubble_part', 'text', 'Final answer'],
+    ]
   );
   assert.equal(model.copyText, 'Final answer');
 });
@@ -40,7 +43,7 @@ test('assistant render model keeps streaming thinking collapsed by default', asy
   const source = await readFile(modulePath, 'utf8');
 
   assert.doesNotMatch(source, /thinkingCollapsed:\s*isStreaming\s*\?\s*false\s*:\s*undefined/);
-  assert.match(source, /if \(event\.kind === 'reasoning'\) \{\s*return;\s*\}/);
+  assert.match(source, /type:\s*'thinking'/);
 });
 
 test('assistant render model tolerates assistant messages without timeline', async () => {

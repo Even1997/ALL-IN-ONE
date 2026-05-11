@@ -37,6 +37,35 @@ test('workspace tool executor exposes a PowerShell tool on Windows and routes it
   assert.match(toolSource, /shell:\s*'powershell'/);
 });
 
+test('Windows tool catalog exposes powershell but not bash to the model', async () => {
+  const originalNavigator = globalThis.navigator;
+
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {
+      platform: 'Win32',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    },
+  });
+
+  try {
+    const { TOOLS } = await import(`../../src/modules/ai/runtime/tools/toolExecutor.ts?test=${Date.now()}`);
+    const toolNames = TOOLS.map((tool) => tool.name);
+
+    assert.ok(toolNames.includes('powershell'));
+    assert.ok(!toolNames.includes('bash'));
+  } finally {
+    if (originalNavigator === undefined) {
+      delete globalThis.navigator;
+    } else {
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: originalNavigator,
+      });
+    }
+  }
+});
+
 test('built-in approvals and risk policy treat powershell like a command tool', async () => {
   const [hostPlatformSource, runtimeToolCatalogSource, riskPolicySource, runtimeToolPolicySource] = await Promise.all([
     readFile(hostPlatformPath, 'utf8'),
@@ -100,7 +129,11 @@ test('Windows runtime prompt allows the model to call the powershell tool', asyn
     assert.equal(executedCalls.length, 1);
     assert.equal(executedCalls[0].name, 'powershell');
     assert.match(prompts[0].systemPrompt, /Available runtime tools: .*powershell/);
-    assert.match(prompts[0].systemPrompt, /prefer the powershell tool for command execution/i);
+    assert.match(prompts[0].systemPrompt, /Prefer dedicated runtime tools such as glob, grep, ls, view, write, edit, fetch, and agent whenever they match the task/i);
+    assert.match(prompts[0].systemPrompt, /For directory listing, file discovery, content search, and file reading, use ls, glob, grep, and view instead of shell commands/i);
+    assert.match(prompts[0].systemPrompt, /If a tool call fails, read the error and switch to a more suitable tool or narrower input instead of repeating the same failing call/i);
+    assert.match(prompts[0].systemPrompt, /When command execution is necessary on Windows, use the powershell tool rather than bash syntax/i);
+    assert.doesNotMatch(prompts[0].systemPrompt, /bash tool remains available as a compatibility alias/i);
   } finally {
     if (originalNavigator === undefined) {
       delete globalThis.navigator;

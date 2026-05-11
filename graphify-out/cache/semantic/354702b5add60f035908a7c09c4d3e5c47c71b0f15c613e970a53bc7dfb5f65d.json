@@ -1,0 +1,1 @@
+{"nodes": [], "edges": [{"source": "plan_2026_04_26_allotment_global_layout_memory", "target": "concept_allotment_layout", "relation": "describes", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/superpowers/plans/2026-04-26-allotment-global-layout-memory-implementation.md", "source_location": null, "weight": 1.0}], "hyperedges": []}
