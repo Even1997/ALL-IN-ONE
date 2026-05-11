@@ -90,7 +90,7 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
     }
 
     setReferenceTime(Date.now());
-    const timer = window.setInterval(() => setReferenceTime(Date.now()), 100);
+    const timer = window.setInterval(() => setReferenceTime(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [isThinkingActive, part.createdAt]);
 
@@ -165,16 +165,24 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
 
 export const AssistantTextBlock = memo(function AssistantTextBlock({
   content,
+  isStreaming = false,
 }: {
   content: string;
+  isStreaming?: boolean;
 }) {
   const inlineImagePaths = extractInlineImagePaths(content);
 
   return (
-    <div className={`chat-answer-text ${shouldUseAssistantDocumentLayout(content) ? 'document' : 'bubble'}`}>
-      <ReactMarkdown components={MARKDOWN_COMPONENTS} remarkPlugins={[remarkGfm]}>
-        {content}
-      </ReactMarkdown>
+    <div
+      className={`chat-answer-text ${shouldUseAssistantDocumentLayout(content) ? 'document' : 'bubble'} ${isStreaming ? 'streaming' : ''}`}
+    >
+      {isStreaming ? (
+        <div className="chat-answer-streaming-plain">{content}</div>
+      ) : (
+        <ReactMarkdown components={MARKDOWN_COMPONENTS} remarkPlugins={[remarkGfm]}>
+          {content}
+        </ReactMarkdown>
+      )}
       {inlineImagePaths.length > 0 ? (
         <div className="chat-inline-image-gallery">
           {inlineImagePaths.map((imagePath) => {

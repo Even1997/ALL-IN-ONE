@@ -106,7 +106,7 @@ test('chat surface keeps runtime question interaction cards wired for pending as
   assert.doesNotMatch(chatSource, /const renderRuntimeQuestionCard = useCallback\(\s*\(_message: StoredChatMessage\) => null/);
 });
 
-test('chat timeline bubble card helper filters duplicate response and interaction cards while using completion time for final run summaries', async () => {
+test('chat timeline bubble card helper filters duplicate run, response, and interaction cards while using completion time for final run summaries', async () => {
   const { buildChatTimelineBubbleCards } = await import(
     `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`
   );
@@ -274,8 +274,8 @@ test('chat timeline bubble card helper filters duplicate response and interactio
     ],
   });
 
-  assert.deepEqual(descriptors.map((descriptor) => descriptor.card.phase), ['intake', 'tooling']);
-  assert.deepEqual(descriptors.map((descriptor) => descriptor.createdAt), [6, 3]);
+  assert.deepEqual(descriptors.map((descriptor) => descriptor.card.phase), ['tooling']);
+  assert.deepEqual(descriptors.map((descriptor) => descriptor.createdAt), [3]);
 });
 
 test('completed run summary cards sort after same-timestamp work cards', async () => {
@@ -331,7 +331,7 @@ test('completed run summary cards sort after same-timestamp work cards', async (
     return left.timelineOrder - right.timelineOrder;
   });
 
-  assert.deepEqual(sorted.map((descriptor) => descriptor.cardId), ['tool-card', 'run-card']);
+  assert.deepEqual(sorted.map((descriptor) => descriptor.cardId), ['tool-card']);
 });
 
 test('timeline detail formatter exposes run and message lifecycle items', async () => {

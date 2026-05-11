@@ -24,8 +24,8 @@
     "hash": "be0bd4aab493d1d1342552d54dec91db"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\apps\\runtime\\src\\nodeRuntimeToolExecutor.ts": {
-    "mtime": 1778405144.8324423,
-    "hash": "6ff7b4ce59c6a671d377b78c3a146ee2"
+    "mtime": 1778477626.6812642,
+    "hash": "13900115b3a95593228a81c7ee5f3b5c"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\dist-test\\components\\workspace\\tools.js": {
     "mtime": 1777004211.3866525,
@@ -118,10 +118,6 @@
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\vite-env.d.ts": {
     "mtime": 1776777146.0,
     "hash": "0352474ba2918efe13895edbc3780d94"
-  },
-  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\AIPanel.tsx": {
-    "mtime": 1777213040.0715504,
-    "hash": "4258bdec99150f1a4cffea2ea3cf707f"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\AIWorkspace.tsx": {
     "mtime": 1777553911.442937,
@@ -320,16 +316,16 @@
     "hash": "e70f27a5c1b0433710106d476e757f97"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChat.tsx": {
-    "mtime": 1778461535.1301258,
-    "hash": "7141cce521012eb48302917ec48126af"
+    "mtime": 1778475646.619864,
+    "hash": "8c7c521a45b386c7b1746861faf588f0"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatAISettingsTab.tsx": {
     "mtime": 1778399387.7204428,
     "hash": "0f3e0aefa01db3b3028d8eb191cf7290"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatAssistantParts.tsx": {
-    "mtime": 1778399387.7204428,
-    "hash": "70177691ed8fe5a6ea49b8760284cddf"
+    "mtime": 1778475639.8865547,
+    "hash": "2fc9a73bb4d87b03437bdd0cf3f0c422"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatConversationMessagesPane.tsx": {
     "mtime": 1778461535.1271074,
@@ -404,8 +400,8 @@
     "hash": "fef321e55099f717c58069b3f45af810"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\timeline\\chatTimelineBubbleCardModel.ts": {
-    "mtime": 1778465977.3244689,
-    "hash": "9d5ccf6cc9a83db5f663c28ab1a7c090"
+    "mtime": 1778477659.8755248,
+    "hash": "d3edada73ee55a24729750b14872abc3"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\timeline\\chatTimelineBubbleCards.tsx": {
     "mtime": 1778458229.7915897,
@@ -420,8 +416,8 @@
     "hash": "88fb7db87c73228aa6cf80dff82d921a"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\timeline\\timelineEventDetails.ts": {
-    "mtime": 1778426730.3415787,
-    "hash": "a16c8467090b837303f3f2361e03e868"
+    "mtime": 1778474531.2300067,
+    "hash": "02cf349474aafddd152465ba14dd06f6"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentChatStage.tsx": {
     "mtime": 1778428483.731273,
@@ -656,12 +652,16 @@
     "hash": "f80874df784d59bd2d15ab9f76f60671"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\runtime\\composer\\timelineComposer.ts": {
-    "mtime": 1778426644.354532,
-    "hash": "e7d21c372934bc2451c1a2560c81d76e"
+    "mtime": 1778477651.869127,
+    "hash": "a6d8a3cb03def239a54d3f9c6ce784e4"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\runtime\\composer\\timelineComposerTypes.ts": {
     "mtime": 1778426649.479134,
     "hash": "ba9945e75d92fc11ed45a1534592571a"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\runtime\\composer\\timelinePresentation.ts": {
+    "mtime": 1778474445.238738,
+    "hash": "d2308f57dd39134cb14a3b8109c750c9"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\runtime\\context\\agentContextTypes.ts": {
     "mtime": 1777867070.8274338,
@@ -1451,9 +1451,17 @@
     "mtime": 1777976697.3939807,
     "hash": "f2f9ef7151aa48bf481643344fd966cb"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-streaming-draft-flush-source.test.mjs": {
+    "mtime": 1778475276.7130432,
+    "hash": "82f69dda51872ec2019e5f0219250399"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-streaming-render-source.test.mjs": {
+    "mtime": 1778475611.1095512,
+    "hash": "ef89366be4ce041d7c858608980dcafa"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-timeline-view.test.mjs": {
-    "mtime": 1778465965.691893,
-    "hash": "2eac5e540d5d0188e38f6d3430620308"
+    "mtime": 1778477745.7876067,
+    "hash": "e95d4b62ef04408216938eceebb40df0"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-view-state.test.mjs": {
     "mtime": 1777939515.2429264,
@@ -1558,6 +1566,10 @@
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\chat-runtime-registry.test.mjs": {
     "mtime": 1777213040.1183715,
     "hash": "c47e476cabb39a28da10e43dbedadc22"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\chat-timeline-bubble-cards.test.mjs": {
+    "mtime": 1778474304.3937743,
+    "hash": "12256680f6b7f09318b726835aba1016"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\chat-workflow-routing.test.mjs": {
     "mtime": 1777982515.2217278,
@@ -1680,8 +1692,8 @@
     "hash": "61649d9a1dbf4e1d4a1e4c26dd145521"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\legacy-ai-mainline-cleanup.test.mjs": {
-    "mtime": 1777985848.1547627,
-    "hash": "dcf147ce70d6b5a3daf8d728f17846ea"
+    "mtime": 1778477586.655872,
+    "hash": "c21970843bb0a85cc57ea1d0b5724dd4"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\local-agent-runtime-source.test.mjs": {
     "mtime": 1777213040.1253872,
@@ -1780,8 +1792,8 @@
     "hash": "baa028270c2aefc5ae374d87de4f739f"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\runtime-conversation-gateway.test.mjs": {
-    "mtime": 1778427562.9041963,
-    "hash": "465e9d3c596279702d4ce25241411cf1"
+    "mtime": 1778477499.4063892,
+    "hash": "8875231badfd61a820cd0540a671289d"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\runtime-history-sanitization.test.mjs": {
     "mtime": 1778025420.8471086,
@@ -1828,8 +1840,8 @@
     "hash": "46c2333e1dde87565f03a896c3fa109c"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\runtime-shell-routing.test.mjs": {
-    "mtime": 1778469118.5988173,
-    "hash": "39999cc5f1f40d72ae31a59dd24d1bae"
+    "mtime": 1778477478.0612643,
+    "hash": "8c472e22665982af3568cbf155e16de2"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\runtime-sidecar-bootstrap-source.test.mjs": {
     "mtime": 1778399387.7579868,
@@ -1892,8 +1904,8 @@
     "hash": "0cb3ac6671b1a106ed299c0b49a26e28"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\runtime-timeline-composer.test.mjs": {
-    "mtime": 1778426771.1342618,
-    "hash": "9d08cc2f8c3d569dd47bc53ba18afec2"
+    "mtime": 1778477486.3029962,
+    "hash": "ad9e70cac64725b6b0dcfb0f76cb6116"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\runtime-tool-loop.test.mjs": {
     "mtime": 1778399387.7621617,

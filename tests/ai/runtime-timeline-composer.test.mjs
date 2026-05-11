@@ -112,6 +112,8 @@ test('composer keeps tool stdout and stderr attached to the active tool card', a
 
   const projection = composer.getProjection();
   assert.equal(projection.cards.length, 1);
+  assert.equal(projection.cards[0].title, 'PowerShell');
+  assert.equal(projection.cards[0].summary, 'Build finished');
   assert.equal(projection.cards[0].status, 'completed');
   assert.equal(projection.cards[0].detailRefs.length, 4);
   assert.equal(projection.cards[0].warningCount, 1);

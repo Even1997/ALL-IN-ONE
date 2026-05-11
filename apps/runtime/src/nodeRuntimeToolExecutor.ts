@@ -1,5 +1,5 @@
 import { execFile as execFileCallback } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { ToolCall, ToolResult } from '../../../src/modules/ai/runtime/tools/toolExecutor.ts';
@@ -18,6 +18,7 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 
 const normalizePath = (value: string) => value.replace(/\\/g, '/');
 const isAbsolutePath = (value: string) => /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value);
+const DIRECTORY_LISTING_MAX_DEPTH = 4;
 
 const formatCommandOutput = (stdout: string, stderr: string) =>
   [stdout.trim(), stderr.trim() ? `Error: ${stderr.trim()}` : ''].filter(Boolean).join('\n');
@@ -66,6 +67,38 @@ export class NodeRuntimeToolExecutor {
     } catch {
       return null;
     }
+  }
+
+  private async listDirectoryEntries(
+    directoryPath: string,
+    maxDepth = DIRECTORY_LISTING_MAX_DEPTH,
+  ): Promise<string[]> {
+    const collected: string[] = [];
+
+    const walk = async (currentPath: string, depth: number) => {
+      if (depth >= maxDepth) {
+        return;
+      }
+
+      const entries = await readdir(currentPath, { withFileTypes: true });
+      entries.sort((left, right) => left.name.localeCompare(right.name));
+
+      for (const entry of entries) {
+        const absoluteEntryPath = path.join(currentPath, entry.name);
+        const relativeEntryPath = normalizePath(path.relative(directoryPath, absoluteEntryPath));
+        if (!relativeEntryPath) {
+          continue;
+        }
+
+        collected.push(`./${relativeEntryPath}`);
+        if (entry.isDirectory()) {
+          await walk(absoluteEntryPath, depth + 1);
+        }
+      }
+    };
+
+    await walk(directoryPath, 0);
+    return collected;
   }
 
   private async runShell(
@@ -175,8 +208,8 @@ export class NodeRuntimeToolExecutor {
 
   private async ls(input: Record<string, unknown>): Promise<ToolResult> {
     const searchPath = this.ensureProjectPath(typeof input.path === 'string' ? input.path : '.', 'directory');
-    const { stdout } = await this.runShell('find . -mindepth 1 -maxdepth 4 | sort', searchPath);
-    return { type: 'text', content: stdout.trim() || '(empty directory)' };
+    const entries = await this.listDirectoryEntries(searchPath);
+    return { type: 'text', content: entries.join('\n') || '(empty directory)' };
   }
 
   private async view(input: Record<string, unknown>): Promise<ToolResult> {

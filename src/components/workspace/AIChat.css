@@ -927,6 +927,15 @@
     transform 180ms ease;
 }
 
+.chat-answer-text.streaming {
+  gap: 0;
+}
+
+.chat-answer-streaming-plain {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .chat-answer-text > :first-child {
   margin-top: 0;
 }
@@ -5749,24 +5758,18 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 .chat-tool-trace-stream.compact .chat-tool-trace-group-summary {
   width: 100%;
   min-height: 0;
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 8px 10px;
+  border-radius: 12px;
   border: 1px solid var(--gn-agent-panel-border-soft, rgba(148, 163, 184, 0.18));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, rgba(255, 255, 255, 0.08) 60%, transparent), transparent),
-    var(--gn-agent-panel-surface, rgba(255, 255, 255, 0.03));
-  box-shadow: var(--gn-agent-panel-shadow, 0 10px 28px rgba(0, 0, 0, 0.18));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--gn-agent-panel-surface, rgba(255, 255, 255, 0.03));
+  box-shadow: none;
   color: var(--gn-agent-muted, var(--mode-muted, #6b7280));
   cursor: pointer;
   list-style: none;
   transition:
-    border-color 180ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease,
-    color 180ms ease;
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
 }
 
 .chat-tool-trace-stream.compact .chat-tool-trace-group-summary::-webkit-details-marker {
@@ -5776,16 +5779,12 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 .chat-tool-trace-stream.compact .chat-tool-trace-group-summary:hover {
   color: var(--gn-agent-text, var(--mode-text, #111827));
   border-color: var(--gn-agent-panel-border-strong, rgba(148, 163, 184, 0.22));
-  box-shadow: var(--gn-agent-panel-shadow-hover, 0 14px 32px rgba(0, 0, 0, 0.22));
-  transform: translateY(-1px);
 }
 
 .chat-tool-trace-stream.compact .chat-tool-trace-group[open] > .chat-tool-trace-group-summary,
 .chat-tool-trace-stream.compact .chat-tool-trace-group.running > .chat-tool-trace-group-summary {
   border-color: var(--gn-agent-panel-border-strong, rgba(148, 163, 184, 0.22));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, rgba(255, 255, 255, 0.10) 66%, transparent), transparent),
-    var(--gn-agent-panel-surface-strong, rgba(255, 255, 255, 0.04));
+  background: var(--gn-agent-panel-surface-strong, rgba(255, 255, 255, 0.04));
 }
 
 .chat-tool-trace-stream.compact .chat-tool-trace-group.failed > .chat-tool-trace-group-summary,

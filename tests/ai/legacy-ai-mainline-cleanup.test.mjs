@@ -21,6 +21,8 @@ const runtimeWorkflowFlowPath = path.resolve(
   __dirname,
   '../../src/modules/ai/runtime/orchestration/runtimeWorkflowFlow.ts'
 );
+const legacyAiPanelPath = path.resolve(__dirname, '../../src/components/ai/AIPanel.tsx');
+const legacyAiPanelCssPath = path.resolve(__dirname, '../../src/components/ai/AIPanel.css');
 const mainlineDocPath = path.resolve(
   __dirname,
   '../../docs/goodnight-obsidian-skills-adaptation.md'
@@ -34,7 +36,7 @@ const knowledgeProposalStorePath = path.resolve(
   '../../src/features/knowledge/store/knowledgeProposalStore.ts'
 );
 
-test('legacy AI mainline cleanup removes obsolete proposal, workflow shell, and system-index mainline remnants', async () => {
+test('legacy AI mainline cleanup removes obsolete proposal, workflow shell, and duplicate panel remnants', async () => {
   const [
     aiChatStoreSource,
     embeddedPiecesSource,
@@ -56,7 +58,7 @@ test('legacy AI mainline cleanup removes obsolete proposal, workflow shell, and 
   assert.doesNotMatch(appSource, /handleRunWorkflowAction/);
   assert.doesNotMatch(appSource, /currentRole === 'wiki'/);
   assert.doesNotMatch(appSource, /useAIWorkflowStore/);
-  assert.doesNotMatch(appSource, /工作流切换/);
+  assert.doesNotMatch(appSource, /AIPanel/);
   assert.doesNotMatch(appNavigationSource, /\|\s*'wiki'/);
   assert.doesNotMatch(appNavigationSource, /roleShowsLegacyAiWorkspace/);
   assert.doesNotMatch(appNavigationSource, /label:\s*'Knowledge'/);
@@ -75,4 +77,6 @@ test('legacy AI mainline cleanup removes obsolete proposal, workflow shell, and 
   await assert.rejects(access(workflowStorePath));
   await assert.rejects(access(aiWorkflowServicePath));
   await assert.rejects(access(runtimeWorkflowFlowPath));
+  await assert.rejects(access(legacyAiPanelPath));
+  await assert.rejects(access(legacyAiPanelCssPath));
 });

@@ -2,8 +2,12 @@ import type {
   CanonicalEvent,
   CanonicalFileChange,
   ToolCompletedPayload,
-  ToolStartedPayload,
 } from '@goodnight/runtime-protocol';
+import {
+  getTimelineRunStartSummary,
+  getTimelineToolDisplayName,
+  summarizeTimelineToolStarted,
+} from '../../../modules/ai/runtime/composer/timelinePresentation.ts';
 
 export type TimelineDetailTone = 'default' | 'success' | 'warning' | 'error';
 
@@ -13,28 +17,6 @@ export type TimelineDetailItem = {
   value?: string;
   tone?: TimelineDetailTone;
   mono?: boolean;
-};
-
-const TOOL_DISPLAY_NAMES: Record<string, string> = {
-  view: '读取',
-  ls: '列目录',
-  grep: '检索',
-  glob: '匹配',
-  memory_read: '加载记忆',
-  write: '写入',
-  edit: '编辑',
-  bash: '命令',
-  powershell: 'PowerShell',
-  fetch: '抓取',
-  agent: '多 Agent',
-  project_file_flow: '处理文件请求',
-  project_file_read: '读取项目文件',
-  project_file_plan: '整理改动方案',
-  project_file_apply: '应用文件改动',
-  run_local_agent: '调用本地 Agent',
-  run_agent_team: '协调多 Agent',
-  team_phase: '执行阶段',
-  team_member_task: '成员任务',
 };
 
 const summarizePath = (value: string) => {
@@ -48,18 +30,6 @@ const summarizePath = (value: string) => {
   return `.../${parts.slice(-3).join('/')}`;
 };
 
-const summarizePathList = (paths: string[]) => {
-  const normalizedPaths = paths
-    .map((value) => summarizePath(value))
-    .filter((value) => value.trim().length > 0);
-
-  if (normalizedPaths.length <= 2) {
-    return normalizedPaths.join('、');
-  }
-
-  return `${normalizedPaths.slice(0, 2).join('、')} 等 ${normalizedPaths.length} 项`;
-};
-
 const summarizeValue = (value: string | null | undefined, maxLength = 320) => {
   const normalized = (value || '').trim();
   if (!normalized) {
@@ -69,48 +39,14 @@ const summarizeValue = (value: string | null | undefined, maxLength = 320) => {
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
 };
 
-const getToolDisplayName = (toolName: string) => TOOL_DISPLAY_NAMES[toolName] || toolName;
-
 const getFileOperationLabel = (change: CanonicalFileChange) => {
   if (change.beforeContent === null && change.afterContent !== null) {
-    return '新建';
+    return 'Created';
   }
   if (change.beforeContent !== null && change.afterContent === null) {
-    return '删除';
+    return 'Deleted';
   }
-  return change.operation === 'write' ? '写入' : '修改';
-};
-
-const summarizeToolStarted = (payload: ToolStartedPayload) => {
-  if (payload.inputSummary?.trim()) {
-    return payload.inputSummary.trim();
-  }
-
-  const input = payload.input || {};
-
-  if (typeof input.command === 'string' && input.command.trim()) {
-    return input.command.trim();
-  }
-
-  const filePathInput = input.file_path ?? input.path ?? input.file;
-  if (typeof filePathInput === 'string' && filePathInput.trim()) {
-    return summarizePath(filePathInput);
-  }
-
-  if (typeof input.url === 'string' && input.url.trim()) {
-    return input.url.trim();
-  }
-
-  if (typeof input.pattern === 'string' && input.pattern.trim()) {
-    return input.pattern.trim();
-  }
-
-  if (Array.isArray(input.paths) && input.paths.length > 0) {
-    return summarizePathList(input.paths.map((value) => String(value)));
-  }
-
-  const json = JSON.stringify(input);
-  return json === '{}' ? '' : summarizeValue(json);
+  return change.operation === 'write' ? 'Wrote' : 'Edited';
 };
 
 const formatTokenUsage = (value: { totalTokens?: number } | undefined) =>
@@ -126,15 +62,15 @@ const appendToolCompletedItems = (
 
   items.push({
     key: `${event.eventId}:status`,
-    label: payload.ok ? '已完成' : '执行失败',
-    value: summary || outputText || getToolDisplayName(event.source.name || 'tool'),
+    label: payload.ok ? 'Completed' : 'Failed',
+    value: summary || outputText || getTimelineToolDisplayName(event.source.name || 'tool'),
     tone: payload.ok ? 'success' : 'error',
   });
 
   if (typeof payload.exitCode === 'number') {
     items.push({
       key: `${event.eventId}:exitCode`,
-      label: '退出码',
+      label: 'Exit code',
       value: String(payload.exitCode),
       tone: payload.ok ? 'default' : 'warning',
     });
@@ -151,7 +87,7 @@ const appendToolCompletedItems = (
   if (outputText && outputText !== summary) {
     items.push({
       key: `${event.eventId}:output`,
-      label: '输出',
+      label: 'Output',
       value: outputText,
       tone: payload.ok ? 'default' : 'warning',
       mono: true,
@@ -168,7 +104,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
         items.push({
           key: event.eventId,
           label: 'Run',
-          value: [event.payload.providerId, event.payload.mode].filter(Boolean).join(' / ') || 'started',
+          value: getTimelineRunStartSummary(event.payload) || 'started',
         });
         break;
       case 'run.completed': {
@@ -180,7 +116,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
         items.push({
           key: event.eventId,
           label: 'Run completed',
-          value: summaryParts.join(' • '),
+          value: summaryParts.join(' - '),
           tone:
             event.payload.outcome === 'success'
               ? 'success'
@@ -221,8 +157,8 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
       case 'tool.started':
         items.push({
           key: event.eventId,
-          label: getToolDisplayName(event.payload.toolName),
-          value: summarizeToolStarted(event.payload),
+          label: getTimelineToolDisplayName(event.payload.toolName),
+          value: summarizeTimelineToolStarted(event.payload),
           mono: Boolean(event.payload.inputSummary?.includes('\n')),
         });
         break;
@@ -249,7 +185,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
       case 'approval.requested':
         items.push({
           key: event.eventId,
-          label: '等待确认',
+          label: 'Approval needed',
           value: summarizeValue(event.payload.summary),
           tone: 'warning',
         });
@@ -257,7 +193,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
       case 'approval.resolved':
         items.push({
           key: event.eventId,
-          label: event.payload.resolution === 'approved' ? '已批准' : '已拒绝',
+          label: event.payload.resolution === 'approved' ? 'Approved' : 'Denied',
           tone: event.payload.resolution === 'approved' ? 'success' : 'warning',
         });
         break;
@@ -265,7 +201,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
         for (const [index, question] of event.payload.questions.entries()) {
           items.push({
             key: `${event.eventId}:question:${index}`,
-            label: '等待输入',
+            label: 'Input needed',
             value: summarizeValue(question.question),
             tone: 'warning',
           });
@@ -274,7 +210,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
       case 'question.answered':
         items.push({
           key: event.eventId,
-          label: '已提供输入',
+          label: 'Input received',
           value: summarizeValue(
             Object.entries(event.payload.answers)
               .map(([key, value]) => `${key}: ${value}`)
@@ -287,7 +223,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
       case 'retry.scheduled':
         items.push({
           key: event.eventId,
-          label: `准备重试 #${event.payload.attempt}`,
+          label: `Retry #${event.payload.attempt}`,
           value: summarizeValue(event.payload.reason),
           tone: 'warning',
         });
@@ -295,7 +231,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
       case 'warning.raised':
         items.push({
           key: event.eventId,
-          label: '警告',
+          label: 'Warning',
           value: summarizeValue(event.payload.summary),
           tone: 'warning',
         });
@@ -303,7 +239,7 @@ export const buildTimelineDetailItems = (events: CanonicalEvent[]) => {
       case 'error.raised':
         items.push({
           key: event.eventId,
-          label: '错误',
+          label: 'Error',
           value: summarizeValue(
             [event.payload.summary, event.payload.detail].filter(Boolean).join('\n'),
             1200,

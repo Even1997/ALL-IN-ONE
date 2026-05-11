@@ -194,7 +194,6 @@ type StreamingDraftState = {
 
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
 const EMPTY_PENDING_APPROVALS: ApprovalRecord[] = [];
-const STREAMING_DRAFT_FLUSH_MS = 50;
 const SETTINGS_TABS: Array<{
   id: SettingsTabId;
   label: string;
@@ -883,6 +882,7 @@ const renderMessagePart = (
     <AssistantTextBlock
       key={`${messageId}-text-${index}`}
       content={part.content}
+      isStreaming={options?.isStreaming ?? false}
     />
   );
 };
@@ -1024,7 +1024,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const shouldAutoScrollRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamingDraftBufferRef = useRef<Record<string, StreamingDraftState>>({});
-  const streamingFlushTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const stopRequestedRef = useRef(false);
   const runningSubmissionRef = useRef<{ assistantMessageId: string; runtimeStoreThreadId: string } | null>(null);
@@ -1444,12 +1443,7 @@ export const AIChat: React.FC<AIChatProps> = ({
             timeline: updater(currentDraft.timeline),
           },
         };
-        if (streamingFlushTimerRef.current === null) {
-          streamingFlushTimerRef.current = window.setTimeout(() => {
-            streamingFlushTimerRef.current = null;
-            setStreamingDraftContents({ ...streamingDraftBufferRef.current });
-          }, STREAMING_DRAFT_FLUSH_MS);
-        }
+        setStreamingDraftContents({ ...streamingDraftBufferRef.current });
       }
     },
     [activeSessionId, currentProject, updateMessage]
@@ -1618,15 +1612,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     const frameId = requestAnimationFrame(scrollToBottom);
     return () => cancelAnimationFrame(frameId);
   }, [activeSession?.messages, isLoading, streamingDraftContents]);
-
-  useEffect(
-    () => () => {
-      if (streamingFlushTimerRef.current !== null) {
-        window.clearTimeout(streamingFlushTimerRef.current);
-      }
-    },
-    []
-  );
 
   useEffect(() => {
     const viewportClassName = getChatViewportClassName(isCollapsed);
@@ -2160,10 +2145,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     const nextDrafts = { ...streamingDraftBufferRef.current };
     delete nextDrafts[messageId];
     streamingDraftBufferRef.current = nextDrafts;
-    if (streamingFlushTimerRef.current !== null) {
-      window.clearTimeout(streamingFlushTimerRef.current);
-      streamingFlushTimerRef.current = null;
-    }
     setStreamingDraftContents(nextDrafts);
   }, []);
   const commitStreamingDraft = useCallback(

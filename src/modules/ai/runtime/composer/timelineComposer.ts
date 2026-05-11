@@ -13,6 +13,11 @@ import type {
   TimelinePhase,
   TimelineProjection,
 } from './timelineComposerTypes.ts';
+import {
+  getTimelineRunStartSummary,
+  getTimelineToolDisplayName,
+  summarizeTimelineToolStarted,
+} from './timelinePresentation.ts';
 
 const createCard = (
   event: CanonicalEvent,
@@ -46,9 +51,13 @@ const summarizeText = (value: string | null | undefined, maxLength = 160) => {
 };
 
 const getToolStartedSummary = (payload: ToolStartedPayload) =>
-  payload.inputSummary?.trim() ||
+  summarizeTimelineToolStarted(payload) ||
   payload.displayName?.trim() ||
   payload.toolName;
+
+const getToolCardTitle = (payload: ToolStartedPayload | ToolCompletedPayload) =>
+  payload.displayName?.trim() ||
+  getTimelineToolDisplayName(payload.toolName);
 
 const getToolCompletedSummary = (payload: ToolCompletedPayload) =>
   payload.summary?.trim() ||
@@ -59,7 +68,7 @@ const getProgressSummary = (payload: ProgressUpdatedPayload) =>
   payload.detail?.trim() ? `${payload.label}: ${payload.detail}` : payload.label;
 
 const getRunStartedSummary = (payload: RunStartedPayload) =>
-  [payload.providerId, payload.mode].filter(Boolean).join(' / ') || 'Run started';
+  getTimelineRunStartSummary(payload) || 'Run started';
 
 const getRunCompletedSummary = (payload: RunCompletedPayload) => {
   const segments = [
@@ -223,6 +232,7 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
 
         case 'tool.started': {
           const summary = getToolStartedSummary(event.payload);
+          const title = getToolCardTitle(event.payload);
           const last = projection.cards[projection.cards.length - 1];
           const card =
             last &&
@@ -233,9 +243,9 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
             last.warningCount === 0 &&
             last.retryCount === 0
               ? last
-              : ensureLastCard(event, 'tooling', 'Tool run', summary);
+              : ensureLastCard(event, 'tooling', title, summary);
           card.phase = 'tooling';
-          card.title = 'Tool run';
+          card.title = title;
           card.summary = summary;
           card.toolCount += 1;
           card.detailRefs.push(event.eventId);
@@ -244,7 +254,7 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
 
         case 'tool.stdout':
         case 'tool.stderr': {
-          const card = getActiveToolCard() || ensureLastCard(event, 'tooling', 'Tool run');
+          const card = getActiveToolCard() || ensureLastCard(event, 'tooling', 'Tool');
           if (event.type === 'tool.stderr') {
             card.warningCount += 1;
           }
@@ -254,12 +264,15 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
 
         case 'tool.completed': {
           const summary = getToolCompletedSummary(event.payload);
+          const title = getToolCardTitle(event.payload);
+          const activeCard = getActiveToolCard();
           const card = ensureLastCard(
             event,
             event.payload.ok ? 'tooling' : 'error',
-            event.payload.ok ? 'Tool run' : 'Tool failure',
+            activeCard?.title || title,
             summary,
           );
+          card.title = activeCard?.title || title;
           card.summary = summary;
           card.status = getCompletionStatus(event.payload);
           card.endedAt = event.ts;

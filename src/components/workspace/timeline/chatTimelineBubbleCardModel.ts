@@ -10,7 +10,7 @@ export type ChatTimelineBubbleCardDescriptor = {
   detailItems: TimelineDetailItem[];
 };
 
-const SUPPRESSED_CHAT_TIMELINE_PHASES = new Set(['approval', 'question', 'response']);
+const SUPPRESSED_CHAT_TIMELINE_PHASES = new Set(['intake', 'approval', 'question', 'response']);
 
 const isReasoningOnlyProgressCard = (
   card: TimelineProjection['cards'][number],

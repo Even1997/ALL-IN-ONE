@@ -254,7 +254,7 @@ test('runtime conversation projection can recover a timeline projection by assis
   });
 
   assert.equal(projection.timelineProjectionByMessageId.assistant_msg_1.cards.length, 1);
-  assert.equal(projection.timelineProjectionByMessageId.assistant_msg_1.cards[0]?.title, 'Tool run');
+  assert.equal(projection.timelineProjectionByMessageId.assistant_msg_1.cards[0]?.title, 'PowerShell');
 });
 
 test('runtime conversation gateway keeps active thread ids stable across focused hooks', async () => {

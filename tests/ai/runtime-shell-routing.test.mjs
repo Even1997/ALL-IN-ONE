@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -177,4 +179,33 @@ test('node runtime sidecar treats powershell as a first-class command tool', asy
   assert.match(sidecarSource, /getTurnAllowedRuntimeTools/);
   assert.match(executorSource, /case 'powershell'/);
   assert.doesNotMatch(executorSource, /execFile\('\/bin\/zsh'/);
+});
+
+test('node runtime sidecar lists directories without relying on unix find syntax', async () => {
+  const { NodeRuntimeToolExecutor } = await import(
+    `../../apps/runtime/src/nodeRuntimeToolExecutor.ts?test=${Date.now()}`
+  );
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'goodnight-node-runtime-ls-'));
+  await mkdir(path.join(tempRoot, 'src', 'nested'), { recursive: true });
+  await mkdir(path.join(tempRoot, 'docs'), { recursive: true });
+  await writeFile(path.join(tempRoot, 'src', 'nested', 'index.ts'), 'export {};');
+  await writeFile(path.join(tempRoot, 'docs', 'note.md'), '# note');
+
+  const executor = new NodeRuntimeToolExecutor(tempRoot);
+  const result = await executor.execute({
+    id: 'call_ls_1',
+    name: 'ls',
+    input: {
+      path: '.',
+    },
+  });
+
+  assert.equal(result.is_error, undefined);
+  assert.deepEqual(result.content.split('\n'), [
+    './docs',
+    './docs/note.md',
+    './src',
+    './src/nested',
+    './src/nested/index.ts',
+  ]);
 });
