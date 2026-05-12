@@ -236,11 +236,13 @@ test('built-in runtime adapter maps provider text, thinking, and tool activity i
   );
   adapter.onProviderEvent({ kind: 'done', finalText: 'Done.' }, (event) => events.push(event));
 
-  const progressEvent = events.find((event) => event.type === 'progress.updated');
+  const reasoningDeltaEvent = events.find((event) => event.type === 'reasoning.delta');
+  const messageDeltaEvent = events.find((event) => event.type === 'message.delta');
+  const messageCompletedEvent = events.find((event) => event.type === 'message.completed');
 
-  assert.equal(Boolean(progressEvent), true);
-  assert.notEqual(progressEvent?.payload.detail, 'check files');
-  assert.equal(events.some((event) => event.type === 'message.delta'), true);
+  assert.equal(reasoningDeltaEvent?.payload.textChunk, 'check files');
+  assert.equal(events.some((event) => event.type === 'progress.updated'), false);
+  assert.equal(messageDeltaEvent?.payload.phase, 'final_answer');
   assert.equal(events.some((event) => event.type === 'tool.started'), true);
-  assert.equal(events.some((event) => event.type === 'message.completed'), true);
+  assert.equal(messageCompletedEvent?.payload.phase, 'final_answer');
 });

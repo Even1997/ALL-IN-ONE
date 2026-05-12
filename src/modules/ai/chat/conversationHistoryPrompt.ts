@@ -6,10 +6,7 @@ type ConversationHistoryMessage = {
 };
 
 const stripInternalThinking = (content: string) =>
-  content
-    .replace(/<think>[\s\S]*?<\/think>/g, '')
-    .replace(/<think>[\s\S]*$/g, '')
-    .trim();
+  content.trim();
 
 const INTERNAL_HISTORY_BLOCK_PATTERNS = [
   /<goodnight-m-flow\b[^>]*>[\s\S]*?<\/goodnight-m-flow>/gi,

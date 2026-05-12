@@ -1,8 +1,9 @@
 import type {
   CanonicalEvent,
   CanonicalEventFor,
-  CanonicalEventType,
   CanonicalEventPayloadMap,
+  CanonicalEventType,
+  MessagePhase,
 } from '@goodnight/runtime-protocol';
 import type { RuntimeProviderEvent } from '../provider/runtimeProviderEvents.ts';
 
@@ -19,6 +20,7 @@ export const createBuiltinRuntimeAdapter = (input: BuiltinRuntimeAdapterInput) =
   let transientSeq = 0;
   let started = false;
   let activeMessageId: string | null = null;
+  let reasoningStarted = false;
 
   const providerId = input.providerId || 'built-in';
 
@@ -37,7 +39,7 @@ export const createBuiltinRuntimeAdapter = (input: BuiltinRuntimeAdapterInput) =
     seq: transientSeq,
     source: {
       kind:
-        type.startsWith('message.')
+        type.startsWith('message.') || type.startsWith('reasoning.')
           ? 'model'
           : type.startsWith('tool.')
             ? 'tool'
@@ -66,7 +68,7 @@ export const createBuiltinRuntimeAdapter = (input: BuiltinRuntimeAdapterInput) =
     );
   };
 
-  const ensureMessageStarted = (emit: CanonicalEventEmitter) => {
+  const ensureMessageStarted = (emit: CanonicalEventEmitter, phase: MessagePhase) => {
     if (activeMessageId) {
       return activeMessageId;
     }
@@ -75,7 +77,7 @@ export const createBuiltinRuntimeAdapter = (input: BuiltinRuntimeAdapterInput) =
     emit(
       buildEvent(
         'message.started',
-        { role: 'assistant' },
+        { role: 'assistant', phase },
         {
           messageId: activeMessageId,
           source: { kind: 'model', provider: providerId, name: 'assistant' },
@@ -85,26 +87,70 @@ export const createBuiltinRuntimeAdapter = (input: BuiltinRuntimeAdapterInput) =
     return activeMessageId;
   };
 
+  const ensureReasoningStarted = (emit: CanonicalEventEmitter) => {
+    if (reasoningStarted) {
+      return;
+    }
+
+    reasoningStarted = true;
+    emit(
+      buildEvent(
+        'reasoning.started',
+        {},
+        {
+          messageId: activeMessageId,
+          source: { kind: 'model', provider: providerId, name: 'assistant' },
+        },
+      ),
+    );
+  };
+
+  const completeReasoning = (emit: CanonicalEventEmitter) => {
+    if (!reasoningStarted) {
+      return;
+    }
+
+    emit(
+      buildEvent(
+        'reasoning.completed',
+        {},
+        {
+          messageId: activeMessageId,
+          source: { kind: 'model', provider: providerId, name: 'assistant' },
+        },
+      ),
+    );
+    reasoningStarted = false;
+  };
+
+  const emitMessageDelta = (
+    delta: string,
+    phase: MessagePhase,
+    emit: CanonicalEventEmitter,
+  ) => {
+    completeReasoning(emit);
+    ensureMessageStarted(emit, phase);
+    emit(
+      buildEvent(
+        'message.delta',
+        { textChunk: delta, phase },
+        {
+          messageId: activeMessageId,
+          source: { kind: 'model', provider: providerId, name: 'assistant' },
+        },
+      ),
+    );
+  };
+
   return {
     onProviderEvent(event: RuntimeProviderEvent, emit: CanonicalEventEmitter) {
       ensureRunStarted(emit);
 
       if (event.kind === 'thinking') {
-        emit(
-          buildEvent('progress.updated', {
-            label: '正在分析',
-            scope: 'phase',
-            importance: 'low',
-          }),
-        );
-        return;
-      }
-
-      if (event.kind === 'text') {
-        ensureMessageStarted(emit);
+        ensureReasoningStarted(emit);
         emit(
           buildEvent(
-            'message.delta',
+            'reasoning.delta',
             { textChunk: event.delta },
             {
               messageId: activeMessageId,
@@ -115,7 +161,23 @@ export const createBuiltinRuntimeAdapter = (input: BuiltinRuntimeAdapterInput) =
         return;
       }
 
+      if (event.kind === 'text') {
+        emitMessageDelta(event.delta, event.phase || 'final_answer', emit);
+        return;
+      }
+
+      if (event.kind === 'commentary_text') {
+        emitMessageDelta(event.delta, 'commentary', emit);
+        return;
+      }
+
+      if (event.kind === 'final_text') {
+        emitMessageDelta(event.delta, 'final_answer', emit);
+        return;
+      }
+
       if (event.kind === 'tool_call') {
+        completeReasoning(emit);
         emit(
           buildEvent(
             'tool.started',
@@ -145,11 +207,12 @@ export const createBuiltinRuntimeAdapter = (input: BuiltinRuntimeAdapterInput) =
       }
 
       if (event.kind === 'done') {
-        ensureMessageStarted(emit);
+        completeReasoning(emit);
+        ensureMessageStarted(emit, 'final_answer');
         emit(
           buildEvent(
             'message.completed',
-            { finalText: event.finalText },
+            { finalText: event.finalText, phase: 'final_answer' },
             {
               messageId: activeMessageId,
               source: { kind: 'model', provider: providerId, name: 'assistant' },

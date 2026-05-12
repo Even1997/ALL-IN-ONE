@@ -1,5 +1,4 @@
 import type { AgentProviderId, AgentTurnRecord } from '../agentRuntimeTypes';
-import { parseStructuredAssistantOutput } from '../output/parseStructuredAssistantOutput.ts';
 
 const createTurnId = () => `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const EMPTY_RUNTIME_RESPONSE_MESSAGE = 'No response content was returned.';
@@ -252,23 +251,9 @@ export const createRuntimeReplayExecutionController = (input: {
   });
 
 const buildRuntimeStreamingMessage = (input: {
-  thinkingContent: string;
   answerContent: string;
-  completeThinking: boolean;
 }) => {
-  const sections: string[] = [];
-
-  if (input.thinkingContent.trim()) {
-    sections.push(
-      input.completeThinking ? `<think>${input.thinkingContent}</think>` : `<think>${input.thinkingContent}`,
-    );
-  }
-
-  if (input.answerContent.trim()) {
-    sections.push(input.answerContent);
-  }
-
-  return sections.join('\n\n').trim() || 'Thinking...';
+  return input.answerContent.trim();
 };
 
 export type RuntimeStreamingAssistantDraft = {
@@ -430,46 +415,41 @@ export const createRuntimeStreamingMessageAssembler = () => {
   };
 
   const buildDraft = (completeThinking: boolean): RuntimeStreamingAssistantDraft => {
-    const parsedOutput = parseStructuredAssistantOutput(answerContentRaw, {
-      allowPartial: !completeThinking,
-    });
-    const visibleAnswerContent = parsedOutput.finalText;
+    void completeThinking;
+    const visibleAnswerContent = answerContentRaw;
     const visibleThinkingContent = thinkingContent;
     const visibleParts: RuntimeStreamingAssistantDraft['assistantParts'] = [];
 
     assistantParts.forEach((part) => {
-      if (part.type !== 'thinking') {
+      if (!part.content.trim()) {
         return;
       }
 
-      const content = part.content;
-      if (!content) {
+      if (part.type === 'thinking') {
+        visibleParts.push({
+          ...part,
+          collapsed: true,
+        });
         return;
       }
 
-      visibleParts.push({
-        ...part,
-        content,
-        collapsed: true,
-      });
+      visibleParts.push(part);
     });
 
-    if (visibleAnswerContent.trim()) {
-      const lastAnswerPart = [...assistantParts].reverse().find(
-        (part): part is { type: 'text'; content: string; createdAt?: number } => part.type === 'text'
-      );
+    if (
+      visibleAnswerContent.trim() &&
+      !visibleParts.some((part) => part.type === 'text')
+    ) {
       visibleParts.push({
         type: 'text',
         content: visibleAnswerContent,
-        createdAt: lastAnswerPart?.createdAt ?? Date.now(),
+        createdAt: Date.now(),
       });
     }
 
     return {
       content: buildRuntimeStreamingMessage({
-        thinkingContent: visibleThinkingContent,
         answerContent: visibleAnswerContent,
-        completeThinking,
       }),
       thinkingContent: visibleThinkingContent,
       answerContent: visibleAnswerContent,
@@ -518,10 +498,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
       }
 
       const draft = buildDraft(true);
-      const parsedFinalOutput = parseStructuredAssistantOutput(response, {
-        allowPartial: false,
-      });
-      const parsedFinalText = parsedFinalOutput.finalText;
+      const parsedFinalText = response.trim() || draft.answerContent.trim() || EMPTY_RUNTIME_RESPONSE_MESSAGE;
       let answerContent = draft.answerContent;
       let finalParts = draft.assistantParts;
 
@@ -540,16 +517,14 @@ export const createRuntimeStreamingMessageAssembler = () => {
       }
 
       const content =
-        !draft.thinkingContent.trim() && !answerContent.trim()
-          ? parsedFinalText || EMPTY_RUNTIME_RESPONSE_MESSAGE
+        !answerContent.trim()
+          ? parsedFinalText
           : buildRuntimeStreamingMessage({
-              thinkingContent: draft.thinkingContent,
               answerContent,
-              completeThinking: true,
             });
 
       return {
-        content: content !== 'Thinking...' ? content : parsedFinalText || EMPTY_RUNTIME_RESPONSE_MESSAGE,
+        content: content || parsedFinalText,
         thinkingContent: draft.thinkingContent,
         answerContent,
         assistantParts: finalParts,

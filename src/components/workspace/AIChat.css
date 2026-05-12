@@ -1146,6 +1146,11 @@
   line-height: 1;
 }
 
+.chat-thinking-pill.completed {
+  border-color: color-mix(in srgb, var(--mode-border, rgba(255, 255, 255, 0.12)) 92%, transparent);
+  background: color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)) 96%, transparent);
+}
+
 .chat-thinking-block {
   position: relative;
   display: grid;
@@ -1170,62 +1175,11 @@
   background: color-mix(in srgb, var(--mode-accent, #60a5fa) 40%, transparent);
 }
 
-.chat-thinking-block-content {
-  display: grid;
-  grid-template-rows: 0fr;
-  overflow: hidden;
-  transition:
-    grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.25s ease,
-    transform 0.25s ease;
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-.chat-thinking-block.expanded .chat-thinking-block-content {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.chat-thinking-block-content > div {
-  min-height: 0;
-}
-
-.chat-thinking-toggle {
-  display: inline-flex;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: color-mix(in srgb, currentColor 82%, transparent);
-  font: inherit;
-  text-align: left;
-}
-
-.chat-thinking-toggle:disabled {
-  cursor: default;
-}
-
 .chat-thinking-copy {
   min-width: 0;
   flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  column-gap: 7px;
-  row-gap: 1px;
-}
-
-.chat-thinking-copy strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
 }
 
 .chat-thinking-copy strong {
@@ -1235,33 +1189,18 @@
   line-height: 1.36;
 }
 
-.chat-thinking-preview {
-  min-width: 0;
-  color: color-mix(in srgb, var(--gn-agent-muted, rgba(255, 255, 255, 0.68)) 84%, transparent);
-  font-size: 10px;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-thinking-block pre,
-.chat-thinking-empty {
+.chat-thinking-body {
   margin: 0;
-  max-height: 240px;
+  max-height: 320px;
   overflow: auto;
   white-space: pre-wrap;
-  color: var(--mode-text, #f8fafc);
+  color: color-mix(in srgb, var(--mode-text, #f8fafc) 88%, transparent);
   font: inherit;
   line-height: 1.5;
-  padding: 8px 0 0;
+  padding: 4px 0 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-
-.chat-thinking-block.collapsed .chat-thinking-dots {
-  display: none;
 }
 
 .chat-message-list-fold {
@@ -1402,55 +1341,6 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
 
 .chat-tool-card-summary {
   align-items: center;
-}
-
-.chat-thinking-preview {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--gn-agent-muted, var(--mode-muted, rgba(255, 255, 255, 0.68)));
-  font-size: 11px;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-thinking-toggle-caret {
-  margin-left: auto;
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  color: currentColor;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-6px) scale(0.9);
-  transition:
-    opacity 160ms ease,
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.chat-thinking-toggle-caret::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg) translateY(-1px);
-  transform-origin: center;
-}
-
-.chat-thinking-toggle:hover .chat-thinking-toggle-caret,
-.chat-thinking-toggle:focus-visible .chat-thinking-toggle-caret,
-.chat-thinking-toggle[aria-expanded='true'] .chat-thinking-toggle-caret {
-  opacity: 0.78;
-  transform: translateX(0) scale(1);
-}
-
-.chat-thinking-toggle[aria-expanded='true'] .chat-thinking-toggle-caret::before {
-  transform: rotate(-135deg) translate(-1px, 1px);
 }
 
 .chat-tool-card-summary::-webkit-details-marker {
@@ -6641,7 +6531,6 @@ body.desktop-workbench-mode .chat-settings-panel-surface-skills .gn-agent-skills
 @media (prefers-reduced-motion: reduce) {
   .chat-answer-text,
   .chat-thinking-block,
-  .chat-thinking-block-content,
   .chat-timeline-card,
   .chat-timeline-card-toggle,
   .chat-timeline-detail-line,

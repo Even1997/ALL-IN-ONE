@@ -610,7 +610,7 @@ const applyRuntimeSidecarTurnStartedEvent = (sessionId: string, messageId: strin
       runId: messageId,
       messageId,
       type: 'message.started',
-      payload: { role: 'assistant' },
+      payload: { role: 'assistant', phase: 'final_answer' },
       ts: emittedAt,
     }),
     emittedAt,
@@ -657,16 +657,48 @@ const applyRuntimeSidecarReasoningEvent = (
       providerId: located.session.providerId,
       runId: messageId,
       messageId,
-      type: 'progress.updated',
-      payload: {
-        label: 'Reasoning',
-        scope: 'phase',
-        importance: 'low',
-      },
+      type: 'reasoning.started',
+      payload: {},
       ts: reasoning.createdAt,
     }),
     reasoning.createdAt,
   );
+  if (reasoning.content.trim()) {
+    appendRuntimeSidecarCanonicalEvent(
+      sessionId,
+      messageId,
+      createRuntimeSidecarCanonicalEvent({
+        sessionId,
+        providerId: located.session.providerId,
+        runId: messageId,
+        messageId,
+        type: 'reasoning.delta',
+        payload: {
+          textChunk: reasoning.content,
+        },
+        ts: reasoning.createdAt,
+      }),
+      reasoning.createdAt,
+    );
+  }
+  if (reasoning.status === 'completed') {
+    appendRuntimeSidecarCanonicalEvent(
+      sessionId,
+      messageId,
+      createRuntimeSidecarCanonicalEvent({
+        sessionId,
+        providerId: located.session.providerId,
+        runId: messageId,
+        messageId,
+        type: 'reasoning.completed',
+        payload: {
+          finalText: reasoning.content,
+        },
+        ts: reasoning.createdAt,
+      }),
+      reasoning.createdAt,
+    );
+  }
   patchLiveStateIfChanged(sessionId, (state) => ({
     ...state,
     connectionState: 'connected',
@@ -1248,6 +1280,7 @@ const applyRuntimeSidecarMessageNow = (
         type: 'message.completed',
         payload: {
           finalText: message.content,
+          phase: 'final_answer',
         },
         ts: emittedAt,
       }),

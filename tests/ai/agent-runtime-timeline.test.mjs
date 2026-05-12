@@ -222,12 +222,12 @@ test('agent turn runner builds a queued runtime turn shell', async () => {
   ]);
 
   const streamAssembler = createRuntimeStreamingMessageAssembler();
-  assert.equal(streamAssembler.append({ kind: 'thinking', delta: 'Plan first' }).content, '<think>Plan first');
+  assert.equal(streamAssembler.append({ kind: 'thinking', delta: 'Plan first' }).content, '');
   assert.equal(
     streamAssembler.append({ kind: 'text', delta: 'Then answer' }).content,
-    '<think>Plan first\n\nThen answer',
+    'Then answer',
   );
-  assert.equal(streamAssembler.buildFinal('').content, '<think>Plan first</think>\n\nThen answer');
+  assert.equal(streamAssembler.buildFinal('').content, 'Then answer');
 
   const toolUseAssembler = createRuntimeStreamingMessageAssembler();
   assert.equal(

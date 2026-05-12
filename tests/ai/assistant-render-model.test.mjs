@@ -10,7 +10,7 @@ const modulePath = path.resolve(__dirname, '../../src/components/workspace/assis
 
 const loadRenderModel = async () => import(`../../src/components/workspace/assistantRenderModel.ts?test=${Date.now()}`);
 
-test('assistant render model hides completed assistant thinking from the visible process lane', async () => {
+test('assistant render model keeps completed assistant thinking in the visible process lane', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel({
     id: 'assistant_1',
@@ -25,16 +25,22 @@ test('assistant render model hides completed assistant thinking from the visible
 
   assert.deepEqual(
     model.items.map((item) => [item.kind, item.part.type, item.part.content]),
-    [['answer_lane', 'text', 'Checked the first file.\n\nFinal answer']]
+    [
+      ['thinking_lane', 'thinking', 'Check project first'],
+      ['answer_lane', 'text', 'Checked the first file.\n\nFinal answer'],
+    ]
   );
   assert.equal(model.hasFinalAnswer, true);
-  assert.deepEqual(model.processItems, []);
+  assert.deepEqual(
+    model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
+    [['thinking_lane', 'thinking', 'Check project first']],
+  );
   assert.equal(model.finalAnswerItem?.kind, 'answer_lane');
   assert.equal(model.finalAnswerItem?.part.content, 'Checked the first file.\n\nFinal answer');
   assert.equal(model.copyText, 'Checked the first file.\n\nFinal answer');
 });
 
-test('assistant render model keeps only active streaming thinking in the visible process lane', async () => {
+test('assistant render model keeps completed and active thinking in timeline order', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel({
     id: 'assistant_2',
@@ -64,7 +70,10 @@ test('assistant render model keeps only active streaming thinking in the visible
 
   assert.deepEqual(
     model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
-    [['thinking_lane', 'thinking', 'Inspect the second file.']],
+    [
+      ['thinking_lane', 'thinking', 'Inspect the first file.'],
+      ['thinking_lane', 'thinking', 'Inspect the second file.'],
+    ],
   );
 });
 

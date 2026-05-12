@@ -62,8 +62,7 @@ test('assistant messages store reasoning and text only in timeline', async () =>
   assert.deepEqual(
     message.timeline.map((event) => [event.kind, event.content]),
     [
-      ['reasoning', 'Analyze first'],
-      ['text', 'Final answer'],
+      ['text', '<think>Analyze first</think>\n\nFinal answer'],
     ]
   );
 });
@@ -77,7 +76,15 @@ test('assistant messages persist mixed runtime timeline events without reintrodu
   store.appendMessage('project-runtime', session.id, {
     ...createStoredChatMessage('assistant', 'Runtime answer'),
     timeline: [
-      ...createStoredChatMessage('assistant', '<think>Inspect</think>\n\nRuntime answer').timeline,
+      {
+        id: 'reasoning-event-1',
+        kind: 'reasoning',
+        content: 'Inspect',
+        collapsed: true,
+        status: 'completed',
+        createdAt: Date.now(),
+      },
+      ...createStoredChatMessage('assistant', 'Runtime answer').timeline,
       {
         id: 'approval-event-1',
         kind: 'approval',
@@ -178,7 +185,7 @@ test('ai chat store persists replay events and recovery state through session ev
   assert.equal(savedSession.eventLog.some((event) => event.kind === 'replay_state_synced'), true);
 });
 
-test('ai chat store migrates persisted replay state into the session event log projection', async () => {
+test('ai chat store drops pre-cutover persisted replay state instead of semantic migration', async () => {
   const storage = new MemoryStorage();
   storage.setItem(
     'goodnight-ai-chat-store',
@@ -233,18 +240,9 @@ test('ai chat store migrates persisted replay state into the session event log p
     })
   );
 
-  const [{ useAIChatStore }, { buildChatSessionProjection }] = await Promise.all([
-    loadStore(storage),
-    loadEventLog(),
-  ]);
-  const savedSession =
-    useAIChatStore.getState().projects['project-replay-migrate'].sessions[0];
-  const rebuiltFromEventLog = buildChatSessionProjection(savedSession.id, savedSession.eventLog);
+  const { useAIChatStore } = await loadStore(storage);
 
-  assert.equal(savedSession.eventLog.some((event) => event.kind === 'replay_state_synced'), true);
-  assert.equal(rebuiltFromEventLog?.replayEvents.length, 1);
-  assert.equal(rebuiltFromEventLog?.recoveryState?.resumeState, 'ready');
-  assert.equal(rebuiltFromEventLog?.recoveryState?.replayThreadId, 'runtime-thread-1');
+  assert.deepEqual(useAIChatStore.getState().projects, {});
 });
 
 test('ai chat store skips duplicate replay sync snapshots', async () => {
@@ -415,7 +413,7 @@ test('ai chat store keeps assistant structured cards intact after persistence an
   assert.equal(savedMessage.structuredCards[1].actions[0].label, 'Review conflicts');
 });
 
-test('ai chat store normalizes persisted assistant messages that are missing timeline', async () => {
+test('ai chat store drops pre-cutover persisted assistant messages instead of restoring legacy timelines', async () => {
   const storage = new MemoryStorage();
   storage.setItem(
     'goodnight-ai-chat-store',
@@ -452,13 +450,8 @@ test('ai chat store normalizes persisted assistant messages that are missing tim
   );
 
   const { useAIChatStore } = await loadStore(storage);
-  const savedMessage = useAIChatStore.getState().projects['project-rehydrate'].sessions[0].messages[0];
 
-  assert.deepEqual(savedMessage.timeline, []);
-  const savedSession = useAIChatStore.getState().projects['project-rehydrate'].sessions[0];
-  assert.equal(Array.isArray(savedSession.eventLog), true);
-  assert.equal(savedSession.eventLog.some((event) => event.kind === 'session_initialized'), true);
-  assert.equal(savedSession.eventLog.some((event) => event.kind === 'message_appended'), true);
+  assert.deepEqual(useAIChatStore.getState().projects, {});
 });
 
 test('ai chat store does not persist duplicate session event logs to localStorage', async () => {

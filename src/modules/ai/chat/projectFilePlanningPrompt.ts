@@ -6,10 +6,7 @@ type ProjectFilePlanningConversationMessage = {
 };
 
 const stripInternalThinking = (content: string) =>
-  content
-    .replace(/<think>[\s\S]*?<\/think>/g, '')
-    .replace(/<think>[\s\S]*$/g, '')
-    .trim();
+  content.trim();
 
 const findLatestAssistantOutput = (messages: ProjectFilePlanningConversationMessage[] = []) => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {

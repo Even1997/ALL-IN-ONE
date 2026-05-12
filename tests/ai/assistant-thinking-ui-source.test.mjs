@@ -9,21 +9,20 @@ const __dirname = path.dirname(__filename);
 const cssPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.css');
 const componentPath = path.resolve(__dirname, '../../src/components/workspace/AIChatAssistantParts.tsx');
 
-test('thinking summary preview uses a single-line ellipsis in collapsed state', async () => {
+test('thinking body keeps multi-line reasoning readable without collapsed preview chrome', async () => {
   const [css, componentSource] = await Promise.all([
     readFile(cssPath, 'utf8'),
     readFile(componentPath, 'utf8'),
   ]);
-  const previewRuleMatch = css.match(/\.chat-thinking-preview\s*\{[\s\S]*?\n\}/);
+  const thinkingBodyRuleMatch = css.match(/\.chat-thinking-body\s*\{[\s\S]*?\n\}/);
 
-  assert.match(css, /\.chat-thinking-copy\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*auto minmax\(0,\s*1fr\);/);
-  assert.ok(previewRuleMatch, 'expected to find .chat-thinking-preview CSS rule');
-  const previewRule = previewRuleMatch?.[0] || '';
-  assert.match(previewRule, /min-width:\s*0;/);
-  assert.match(previewRule, /overflow:\s*hidden;/);
-  assert.match(previewRule, /text-overflow:\s*ellipsis;/);
-  assert.match(previewRule, /white-space:\s*nowrap;/);
-  assert.doesNotMatch(previewRule, /-webkit-line-clamp:\s*2;/);
-  assert.doesNotMatch(previewRule, /white-space:\s*normal;/);
+  assert.match(css, /\.chat-thinking-copy\s*\{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;/);
+  assert.ok(thinkingBodyRuleMatch, 'expected to find .chat-thinking-body CSS rule');
+  const thinkingBodyRule = thinkingBodyRuleMatch?.[0] || '';
+  assert.match(thinkingBodyRule, /overflow:\s*auto;/);
+  assert.match(thinkingBodyRule, /white-space:\s*pre-wrap;/);
+  assert.match(thinkingBodyRule, /line-height:\s*1\.5/);
+  assert.doesNotMatch(thinkingBodyRule, /text-overflow:\s*ellipsis;/);
   assert.doesNotMatch(componentSource, /previewLine\.length > 88 \? /);
+  assert.doesNotMatch(componentSource, /chat-thinking-preview/);
 });

@@ -61,10 +61,12 @@ const ARTIFACT_DRAFT_POLICY = [
   'Treat slash skills as explicit opt-in accelerators, not as prerequisites for delivering the first useful answer.',
 ].join(' ');
 
-const STRUCTURED_OUTPUT_POLICY = [
-  'For normal answers, put the durable reply in <final>...</final>.',
-  'If tools are used and a short process note helps, you may emit <feedback>...</feedback> before <final>.',
-  'Do not put raw tool protocol, tool transcripts, or duplicate正文 inside <final>.',
+const RUNTIME_OUTPUT_BOUNDARY_POLICY = [
+  'Keep internal reasoning in the reasoning channel when the provider supports it.',
+  'Use tool calls only through the runtime tool protocol; do not replay raw tool protocol in normal prose.',
+  'User-visible process notes are optional and should be short.',
+  'Write the final answer as natural prose without XML wrapper tags.',
+  'Do not duplicate the same final answer in both process notes and final prose.',
 ].join(' ');
 
 const buildFreeChatSystemPrompt = (projectName?: string) =>
@@ -87,7 +89,7 @@ const buildFreeChatSystemPrompt = (projectName?: string) =>
     INTERNAL_CONTEXT_DISCLOSURE_POLICY,
     RESPONSE_STYLE_POLICY,
     ARTIFACT_DRAFT_POLICY,
-    STRUCTURED_OUTPUT_POLICY,
+    RUNTIME_OUTPUT_BOUNDARY_POLICY,
   ].join('\n');
 
 const buildSkillSystemPrompt = (projectName: string | undefined, skillName: string, skillPrompt: string) =>
@@ -101,7 +103,7 @@ const buildSkillSystemPrompt = (projectName: string | undefined, skillName: stri
     INTERNAL_CONTEXT_DISCLOSURE_POLICY,
     RESPONSE_STYLE_POLICY,
     ARTIFACT_DRAFT_POLICY,
-    STRUCTURED_OUTPUT_POLICY,
+    RUNTIME_OUTPUT_BOUNDARY_POLICY,
     isWindowsHost() ? WINDOWS_COMMAND_TOOL_POLICY : null,
     `<skill_playbook>\n${skillPrompt}\n</skill_playbook>`,
     skillName === 'UI Design'
@@ -151,10 +153,7 @@ const buildIndexedKnowledgePolicy = () =>
   ].join('\n');
 
 const stripInternalThinking = (content: string) =>
-  content
-    .replace(/<think>[\s\S]*?<\/think>/g, '')
-    .replace(/<think>[\s\S]*$/g, '')
-    .trim();
+  content.trim();
 
 const INTERNAL_HISTORY_BLOCK_PATTERNS = [
   /<goodnight-m-flow\b[^>]*>[\s\S]*?<\/goodnight-m-flow>/gi,

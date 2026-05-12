@@ -100,10 +100,10 @@ test('runtime sidecar session bridge derives canonical timeline events from assi
   });
 
   assert.equal(events.some((event) => event.type === 'run.started' && event.runId === 'assistant-1'), true);
-  const progressEvent = events.find((event) => event.type === 'progress.updated');
+  const reasoningEvent = events.find((event) => event.type === 'reasoning.delta');
 
-  assert.equal(Boolean(progressEvent), true);
-  assert.notEqual(progressEvent?.payload.detail, 'Inspecting project files');
+  assert.equal(reasoningEvent?.payload.textChunk, 'Inspecting project files');
+  assert.equal(events.some((event) => event.type === 'progress.updated'), false);
   assert.equal(events.some((event) => event.type === 'tool.started' && event.payload.toolCallId === 'tool-1'), true);
   assert.equal(events.some((event) => event.type === 'tool.completed' && event.payload.toolCallId === 'tool-1'), true);
   assert.equal(events.some((event) => event.type === 'approval.requested' && event.payload.approvalId === 'approval-1'), true);

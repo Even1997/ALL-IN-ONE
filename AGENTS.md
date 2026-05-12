@@ -26,7 +26,7 @@ Rules:
 For AI chat output, keep `thinking`, `tool`, `feedback`, and `final` as separate concepts.
 
 Rules:
-- `thinking` is transient reasoning status only. Do not treat it as durable assistant body text.
+- `thinking` can be shown in the process timeline, but it is never the durable final answer body.
 - `tool` facts must come from runtime / canonical tool events, not from re-parsing assistant prose.
 - `feedback` is optional, short, and transient process text. It must never become the final persisted answer body.
 - `final` is the only durable assistant answer body for a completed turn.

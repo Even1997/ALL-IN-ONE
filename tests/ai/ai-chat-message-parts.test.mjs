@@ -7,62 +7,44 @@ import {
   parseAIChatMessageParts,
 } from '../../src/components/workspace/aiChatMessageParts.ts';
 
-test('parseAIChatMessageParts keeps completed think content as a collapsed thinking block', () => {
-  const parts = parseAIChatMessageParts('<think>Analyze the references first</think>Final answer: keep the entry clean.');
+test('parseAIChatMessageParts treats legacy markup as plain answer text', () => {
+  const content = '<think>Analyze the references first</think>Final answer: keep the entry clean.';
+  const parts = parseAIChatMessageParts(content);
 
-  assert.deepEqual(parts, [
-    { type: 'thinking', content: 'Analyze the references first', collapsed: true },
-    { type: 'text', content: 'Final answer: keep the entry clean.' },
-  ]);
+  assert.deepEqual(parts, [{ type: 'text', content }]);
 });
 
-test('parseAIChatMessageParts extracts complete tool calls as operation cards', () => {
-  const parts = parseAIChatMessageParts(`Preparing to inspect the directory
+test('parseAIChatMessageParts does not restore tool protocol as operation cards', () => {
+  const content = `Preparing
 <tool_use>
 <tool name="bash">
-<tool_params>{"command":"npm run build","timeout":60000}</tool_params>
+<tool_params>{"command":"npm run build"}</tool_params>
 </tool>
 </tool_use>
-Continuing summary`);
+Continuing`;
+  const parts = parseAIChatMessageParts(content);
 
+  assert.equal(parts.length, 1);
   assert.equal(parts[0].type, 'text');
-  assert.equal(parts[0].content, 'Preparing to inspect the directory');
-  assert.equal(parts[1].type, 'tool');
-  assert.equal(parts[1].name, 'bash');
-  assert.equal(parts[1].command, 'npm run build');
-  assert.equal(parts[1].input, '{"command":"npm run build","timeout":60000}');
-  assert.equal(parts[1].status, 'running');
-  assert.equal(parts[2].type, 'text');
-  assert.equal(parts[2].content, 'Continuing summary');
+  assert.match(parts[0].content, /<tool_use>/);
 });
 
-test('parseAIChatMessageParts extracts terminal results separately', () => {
-  const parts = parseAIChatMessageParts(`<tool_result name="terminal" success>
-> tauri-app@0.1.0 build
-vite build
-</tool_result>
-Build complete.`);
-
-  assert.equal(parts[0].type, 'tool');
-  assert.equal(parts[0].name, 'terminal');
-  assert.equal(parts[0].output, '> tauri-app@0.1.0 build\nvite build');
-  assert.equal(parts[0].status, 'success');
-  assert.deepEqual(parts[1], { type: 'text', content: 'Build complete.' });
-});
-
-test('buildAssistantMessageParts treats answerContent as already normalized text', () => {
+test('buildAssistantMessageParts uses explicit runtime thinking and answer fields', () => {
   const parts = buildAssistantMessageParts({
-    answerContent: ['Final answer before', '<tool_', 'use>', 'Final answer after'].join('\n\n'),
+    thinkingContent: 'Inspect first',
+    answerContent: 'Then answer.',
+    thinkingCollapsed: true,
   });
 
   assert.deepEqual(parts, [
-    { type: 'text', content: 'Final answer before\n\n<tool_\n\nuse>\n\nFinal answer after' },
+    { type: 'thinking', content: 'Inspect first', collapsed: true },
+    { type: 'text', content: 'Then answer.' },
   ]);
 });
 
 test('buildAssistantStructuredContentState preserves preferred assistant part ordering and timestamps', () => {
   const state = buildAssistantStructuredContentState({
-    content: '<think>Inspect first</think>\n\nThen answer.',
+    content: 'Ignored stale content',
     preferredAssistantParts: [
       { type: 'thinking', content: 'Inspect first', collapsed: false, createdAt: 10 },
       { type: 'text', content: 'Then answer.', createdAt: 20 },
@@ -74,28 +56,5 @@ test('buildAssistantStructuredContentState preserves preferred assistant part or
     { type: 'thinking', content: 'Inspect first', collapsed: true, createdAt: 10 },
     { type: 'text', content: 'Then answer.', createdAt: 20 },
   ]);
-});
-
-test('buildAssistantStructuredContentState trusts preferred narrative parts over legacy execution text', () => {
-  const state = buildAssistantStructuredContentState({
-    content: `Preparing to inspect
-<tool_use>
-<tool name="view">
-<tool_params>{"file_path":"src/App.tsx"}</tool_params>
-</tool>
-</tool_use>
-Summarizing the result`,
-    preferredAssistantParts: [
-      { type: 'text', content: 'Preparing to inspect', createdAt: 10 },
-      { type: 'text', content: 'Summarizing the result', createdAt: 20 },
-    ],
-    thinkingCollapsed: true,
-  });
-
-  assert.deepEqual(state.assistantParts, [
-    { type: 'text', content: 'Preparing to inspect', createdAt: 10 },
-    { type: 'text', content: 'Summarizing the result', createdAt: 20 },
-  ]);
-  assert.equal(state.thinkingContent, '');
-  assert.equal(state.answerContent, 'Preparing to inspect\n\nSummarizing the result');
+  assert.equal(state.content, 'Then answer.');
 });

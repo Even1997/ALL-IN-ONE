@@ -87,6 +87,9 @@ const getRunCompletedSummary = (payload: RunCompletedPayload) => {
 
 const getMessageStartedSummary = () => 'Generating assistant reply';
 
+const getReasoningSummary = (value: string) =>
+  summarizeText(value) || 'Reasoning';
+
 const getMessageDeltaSummary = (value: string) =>
   summarizeText(value) || 'Generating assistant reply';
 
@@ -233,6 +236,29 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
           return;
         }
 
+        case 'reasoning.started': {
+          const card = ensureLastCard(event, 'analysis', 'Reasoning', event.payload.summary || 'Reasoning');
+          card.summary = event.payload.summary || 'Reasoning';
+          card.detailRefs.push(event.eventId);
+          return;
+        }
+
+        case 'reasoning.delta': {
+          const summary = getReasoningSummary(event.payload.textChunk);
+          const card = ensureLastCard(event, 'analysis', 'Reasoning', summary);
+          card.summary = summary;
+          card.detailRefs.push(event.eventId);
+          return;
+        }
+
+        case 'reasoning.completed': {
+          const summary = getReasoningSummary(event.payload.summary || event.payload.finalText || '');
+          const card = ensureLastCard(event, 'analysis', 'Reasoning', summary);
+          finalizeCard(card, 'completed', event.ts, summary);
+          card.detailRefs.push(event.eventId);
+          return;
+        }
+
         case 'tool.started': {
           const summary = getToolStartedSummary(event.payload);
           const title = getToolStartedCardTitle(event.payload);
@@ -350,6 +376,12 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
         }
 
         case 'message.started': {
+          if (event.payload.phase === 'commentary') {
+            const card = ensureLastCard(event, 'analysis', 'Process update', getMessageStartedSummary());
+            card.detailRefs.push(event.eventId);
+            return;
+          }
+
           projection.activeMessage = {
             messageId: event.messageId || `msg_${event.eventId}`,
             text: '',
@@ -363,6 +395,17 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
         }
 
         case 'message.delta': {
+          if (event.payload.phase === 'commentary') {
+            const card = ensureLastCard(
+              event,
+              'analysis',
+              'Process update',
+              getMessageDeltaSummary(event.payload.textChunk),
+            );
+            card.detailRefs.push(event.eventId);
+            return;
+          }
+
           projection.activeMessage = projection.activeMessage || {
             messageId: event.messageId || `msg_${event.eventId}`,
             text: '',
@@ -381,6 +424,18 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
         }
 
         case 'message.completed': {
+          if (event.payload.phase === 'commentary') {
+            const card = ensureLastCard(
+              event,
+              'analysis',
+              'Process update',
+              getMessageCompletedSummary(event.payload.finalText),
+            );
+            finalizeCard(card, 'completed', event.ts, getMessageCompletedSummary(event.payload.finalText));
+            card.detailRefs.push(event.eventId);
+            return;
+          }
+
           projection.finalMessage = {
             messageId: event.messageId || `msg_${event.eventId}`,
             text: event.payload.finalText,

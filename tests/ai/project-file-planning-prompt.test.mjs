@@ -24,7 +24,7 @@ test('project file planning prompt carries recent conversation and latest assist
   assert.match(prompt, /如果已经有明确正文，缺少的只是文件名或路径/);
 });
 
-test('project file planning prompt strips internal thinking from assistant output', async () => {
+test('project file planning prompt keeps assistant output literal after XML cutover', async () => {
   const { buildProjectFilePlanningPrompt } = await loadModule();
 
   const prompt = buildProjectFilePlanningPrompt({
@@ -37,7 +37,6 @@ test('project file planning prompt strips internal thinking from assistant outpu
     ],
   });
 
+  assert.match(prompt, /<think>internal<\/think>/);
   assert.match(prompt, /# Spec/);
-  assert.doesNotMatch(prompt, /internal/);
-  assert.doesNotMatch(prompt, /<think>/);
 });

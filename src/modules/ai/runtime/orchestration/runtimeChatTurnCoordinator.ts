@@ -13,6 +13,7 @@ import {
 } from './executeRuntimeBuiltInAgentTurn.ts';
 import { executeRuntimeMcpTurn } from './executeRuntimeMcpTurn.ts';
 import { createBuiltinRuntimeAdapter } from '../adapters/builtinRuntimeAdapter.ts';
+import { projectCanonicalEventsToAssistantTimeline } from '../timeline/canonicalNarrativeProjection.ts';
 import { useAIChatStore } from '../../store/aiChatStore.ts';
 import { useAgentRuntimeStore } from '../agentRuntimeStore.ts';
 import { useRuntimeMcpStore } from '../mcp/runtimeMcpStore.ts';
@@ -296,10 +297,15 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
     providerId: runtimeProviderId,
   });
   let canonicalEventCounter = 0;
-  const appendCanonicalEventToSession = (event: any) =>
+  const canonicalEventsForTurn: any[] = [];
+  const appendCanonicalEventToSession = (event: any) => {
+    canonicalEventsForTurn.push(event);
     appendCanonicalEvent(request.projectId, targetSessionId, event);
+  };
   const emitCanonicalProviderEvent = (event: any) =>
     canonicalAdapter.onProviderEvent(event, appendCanonicalEventToSession);
+  const projectCurrentCanonicalTimeline = () =>
+    projectCanonicalEventsToAssistantTimeline(canonicalEventsForTurn as any);
   const seenToolStatuses = new Map<string, RuntimeToolStep['status']>();
   const emitCanonicalToolLifecycle = (toolCalls: RuntimeToolStep[]) => {
     for (const toolCall of toolCalls) {
@@ -1862,9 +1868,8 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
             ? { kind: 'thinking', delta: event.delta }
             : { kind: 'text', delta: event.delta }
         );
-        const draftState = streamingAssembler.append(event);
-        const currentDraftTimeline =
-          streamingDraftBufferRef.current[assistantMessage.id]?.timeline || assistantBaseTimeline;
+        streamingAssembler.append(event);
+        const currentDraftTimeline = projectCurrentCanonicalTimeline();
         const reasoningReferenceTime = Date.now();
         const reasoningProgress = {
           active: event.kind === 'thinking',
@@ -1872,10 +1877,7 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
         };
         const draft = {
           timeline: applyAssistantReasoningProgress(
-            buildAssistantStreamingTimeline(draftState.content, currentDraftTimeline, {
-              fallbackThinkingContent: draftState.thinkingContent,
-              preferredAssistantParts: draftState.assistantParts,
-            }),
+            currentDraftTimeline.length > 0 ? currentDraftTimeline : assistantBaseTimeline,
             reasoningProgress
           ),
         };
@@ -1952,8 +1954,12 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
     const finalDraft = streamingAssembler.buildFinal(agentTurn.finalContent);
     const normalizedFinalContent = finalDraft.content;
     emitCanonicalToolLifecycle(agentTurn.toolCalls);
-    emitCanonicalProviderEvent({ kind: 'done', finalText: normalizedFinalContent });
     const recoveryProposal = await buildRuntimeWriteRecoveryProposal(agentTurn.toolCalls);
+    const finalAnswerContent =
+      recoveryProposal && !normalizedFinalContent.trim()
+        ? recoveryProposal.assistantMessage
+        : normalizedFinalContent;
+    emitCanonicalProviderEvent({ kind: 'done', finalText: finalAnswerContent });
     if (toolTimerInterval) clearInterval(toolTimerInterval);
     clearStreamingDraft(assistantMessage.id);
     const reasoningReferenceTime = Date.now();
@@ -1971,16 +1977,16 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
       ...(message.role === 'assistant'
         ? {
             timeline: applyAssistantReasoningProgress(
-              buildAssistantTimelineUpdate(
-                recoveryProposal && !normalizedFinalContent.trim()
-                  ? recoveryProposal.assistantMessage
-                  : normalizedFinalContent,
-                syncAssistantTimelineWithToolCalls(message.timeline, agentTurn.toolCalls),
-                {
-                  fallbackThinkingContent: getAssistantTimelineReasoning(message.timeline),
-                  preferredAssistantParts: finalDraft.assistantParts as AIChatMessagePart[],
-                }
-              ),
+              projectCurrentCanonicalTimeline().length > 0
+                ? projectCurrentCanonicalTimeline()
+                : buildAssistantTimelineUpdate(
+                    finalAnswerContent,
+                    syncAssistantTimelineWithToolCalls(message.timeline, agentTurn.toolCalls),
+                    {
+                      fallbackThinkingContent: getAssistantTimelineReasoning(message.timeline),
+                      preferredAssistantParts: finalDraft.assistantParts as AIChatMessagePart[],
+                    }
+                  ),
               {
                 active: false,
                 referenceTime: reasoningReferenceTime,

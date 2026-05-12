@@ -18,6 +18,10 @@ const messageOrderingPath = path.resolve(__dirname, '../../src/components/ai/gn-
 test('GN Agent message flow splits projection timeline cards from supplemental process cards', async () => {
   const messageListSource = await readFile(messageListPath, 'utf8');
   const messageItemSource = await readFile(messageItemPath, 'utf8');
+  const outputModelSource = await readFile(
+    path.resolve(__dirname, '../../src/components/workspace/assistantMessageOutputModel.ts'),
+    'utf8',
+  );
 
   assert.match(messageListSource, /type MessageBubbleCard =/);
   assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(message\);/);
@@ -27,7 +31,7 @@ test('GN Agent message flow splits projection timeline cards from supplemental p
   assert.match(messageListSource, /supplementalCardsByMessage: supplementalMap,/);
   assert.match(messageListSource, /\.\.\.toolExecutionCards\.map\(\(card\) => \(\{/);
   assert.match(messageListSource, /createdAt: card\.createdAt \?\? earliestRuntimeEventTime \?\? message\.createdAt,/);
-  assert.match(messageItemSource, /createdAt: timelineCard\.createdAt,/);
+  assert.match(outputModelSource, /createdAt: card\.createdAt,/);
   assert.match(messageItemSource, /supplementalCards/);
   assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(\[\.\.\.thinkingRenderItems,\s*\.\.\.bubbleRenderItems\]\)/);
   assert.doesNotMatch(messageListSource, /areMessageListPropsEqual/);
@@ -74,7 +78,7 @@ test('GN Agent message flow moves unified timeline ordering into the shared work
   await assert.rejects(access(messageOrderingPath));
 });
 
-test('GN Agent message item treats thinking as a transient status item instead of an expandable block', async () => {
+test('GN Agent message item keeps thinking in the shared process lane without local expand state', async () => {
   const messageItemSource = await readFile(messageItemPath, 'utf8');
 
   assert.doesNotMatch(messageItemSource, /expandedThinkingKeys/);
@@ -87,8 +91,13 @@ test('GN Agent message item treats thinking as a transient status item instead o
 
 test('GN Agent message item consumes a unified timeline model instead of sorting mixed runtime cards locally', async () => {
   const messageItemSource = await readFile(messageItemPath, 'utf8');
+  const outputModelSource = await readFile(
+    path.resolve(__dirname, '../../src/components/workspace/assistantMessageOutputModel.ts'),
+    'utf8',
+  );
 
-  assert.match(messageItemSource, /buildChatMessageTimelineRenderModel/);
+  assert.match(messageItemSource, /buildAssistantMessageOutputModel/);
+  assert.match(outputModelSource, /buildChatMessageTimelineRenderModel/);
   assert.match(messageItemSource, /timelineRenderModel\.processGroups/);
   assert.doesNotMatch(messageItemSource, /streamingState\?: AssistantStreamingState;/);
   assert.doesNotMatch(messageItemSource, /streamingState,/);

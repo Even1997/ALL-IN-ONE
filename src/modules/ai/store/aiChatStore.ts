@@ -136,6 +136,8 @@ type AIChatStoreState = {
   removeSession: (projectId: string, sessionId: string) => void;
 };
 
+const AI_CHAT_STORE_VERSION = 5;
+
 const createSessionId = () => `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const createMessageId = (role: StoredChatMessage['role']) =>
   `${role}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -682,7 +684,7 @@ export const useAIChatStore = create<AIChatStoreState>()(
     }),
     {
       name: 'goodnight-ai-chat-store',
-      version: 4,
+      version: AI_CHAT_STORE_VERSION,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         projects: buildPersistedProjects(state.projects),
@@ -691,7 +693,10 @@ export const useAIChatStore = create<AIChatStoreState>()(
         ...currentState,
         ...normalizePersistedChatState(persistedState),
       }),
-      migrate: (persistedState) => {
+      migrate: (persistedState, version) => {
+        if (typeof version !== 'number' || version < AI_CHAT_STORE_VERSION) {
+          return { projects: {} };
+        }
         return normalizePersistedChatState(persistedState);
       },
     }

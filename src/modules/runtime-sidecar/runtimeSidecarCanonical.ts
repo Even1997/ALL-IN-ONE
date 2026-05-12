@@ -55,16 +55,12 @@ const getDefaultSource = (
   messageId: string,
   toolName?: string | null,
 ): EventSource => {
-  if (type.startsWith('message.')) {
+  if (type.startsWith('message.') || type.startsWith('reasoning.')) {
     return { kind: 'model', provider: providerId, name: 'assistant' };
   }
 
   if (type.startsWith('tool.')) {
     return { kind: 'tool', provider: providerId, name: toolName || 'tool' };
-  }
-
-  if (type === 'progress.updated') {
-    return { kind: 'runtime', provider: providerId, name: 'reasoning' };
   }
 
   if (type === 'error.raised') {
@@ -309,7 +305,7 @@ export const buildCanonicalEventsFromRuntimeMessages = (input: {
           runId,
           messageId: message.id,
           type: 'message.started',
-          payload: { role: 'assistant' },
+          payload: { role: 'assistant', phase: 'final_answer' },
           ts: startTs,
           seq: ++state.seq,
         }),
@@ -326,16 +322,44 @@ export const buildCanonicalEventsFromRuntimeMessages = (input: {
               providerId,
               runId,
               messageId: message.id,
-              type: 'progress.updated',
-              payload: {
-                label: 'Reasoning',
-                scope: 'phase',
-                importance: 'low',
-              },
+              type: 'reasoning.started',
+              payload: {},
               ts: timelineEvent.createdAt,
               seq: ++state.seq,
             }),
           );
+          if (timelineEvent.content.trim()) {
+            canonicalEvents.push(
+              createRuntimeSidecarCanonicalEvent({
+                sessionId: input.sessionId,
+                providerId,
+                runId,
+                messageId: message.id,
+                type: 'reasoning.delta',
+                payload: {
+                  textChunk: timelineEvent.content,
+                },
+                ts: timelineEvent.createdAt,
+                seq: ++state.seq,
+              }),
+            );
+          }
+          if (timelineEvent.status === 'completed') {
+            canonicalEvents.push(
+              createRuntimeSidecarCanonicalEvent({
+                sessionId: input.sessionId,
+                providerId,
+                runId,
+                messageId: message.id,
+                type: 'reasoning.completed',
+                payload: {
+                  finalText: timelineEvent.content,
+                },
+                ts: timelineEvent.createdAt,
+                seq: ++state.seq,
+              }),
+            );
+          }
           continue;
         }
 
@@ -451,6 +475,7 @@ export const buildCanonicalEventsFromRuntimeMessages = (input: {
             type: 'message.completed',
             payload: {
               finalText: message.content,
+              phase: 'final_answer',
             },
             ts: completionTs,
             seq: ++state.seq,

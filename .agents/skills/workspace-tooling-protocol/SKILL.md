@@ -19,7 +19,7 @@ description: Use when the model needs to decide between normal text, built-in to
 
 ## Output Rules
 - Tool execution truth comes from runtime events, not from prose replay.
-- After using tools, keep process text brief and put the real answer in `<final>`.
+- After using tools, keep process text brief and write the real answer once as normal final prose.
 - Do not paste raw protocol blocks into normal assistant text.
 
 ## Avoid

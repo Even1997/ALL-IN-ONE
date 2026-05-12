@@ -10,19 +10,28 @@ test('assistant timeline update preserves runtime events while replacing text an
     getAssistantRuntimeTimelineEvents,
   } = await loadAssistantTimeline();
 
-  const timeline = buildAssistantTimelineUpdate('<think>Check files</think>\n\nInitial answer', [
+  const timeline = buildAssistantTimelineUpdate(
+    'Initial answer',
+    [
+      {
+        id: 'approval-1',
+        kind: 'approval',
+        approvalId: 'approval-1',
+        toolCallId: 'call-1',
+        actionType: 'bash',
+        summary: 'Run command',
+        riskLevel: 'high',
+        status: 'pending',
+        createdAt: 20,
+      },
+    ],
     {
-      id: 'approval-1',
-      kind: 'approval',
-      approvalId: 'approval-1',
-      toolCallId: 'call-1',
-      actionType: 'bash',
-      summary: 'Run command',
-      riskLevel: 'high',
-      status: 'pending',
-      createdAt: 20,
+      preferredAssistantParts: [
+        { type: 'thinking', content: 'Check files', collapsed: true, createdAt: 10 },
+        { type: 'text', content: 'Initial answer', createdAt: 30 },
+      ],
     },
-  ]);
+  );
 
   assert.equal(timeline.some((event) => event.kind === 'reasoning'), true);
   assert.equal(timeline.some((event) => event.kind === 'text'), true);
@@ -119,7 +128,12 @@ test('assistant streaming timeline keeps runtime events from the base timeline',
     },
   ];
 
-  const draftTimeline = buildAssistantStreamingTimeline('<think>Thinking</think>\n\nDraft answer', baseTimeline);
+  const draftTimeline = buildAssistantStreamingTimeline('Draft answer', baseTimeline, {
+    preferredAssistantParts: [
+      { type: 'thinking', content: 'Thinking', collapsed: true, createdAt: 30 },
+      { type: 'text', content: 'Draft answer', createdAt: 50 },
+    ],
+  });
 
   assert.equal(draftTimeline.some((event) => event.kind === 'reasoning'), true);
   assert.equal(draftTimeline.some((event) => event.kind === 'text'), true);
@@ -168,8 +182,14 @@ test('assistant timeline update preserves narrative timestamps across streaming 
   ];
 
   const updatedTimeline = buildAssistantTimelineUpdate(
-    '<think>Check the first file again</think>\n\nThe first check is still done.',
+    'The first check is still done.',
     currentTimeline,
+    {
+      preferredAssistantParts: [
+        { type: 'thinking', content: 'Check the first file again', collapsed: true },
+        { type: 'text', content: 'The first check is still done.' },
+      ],
+    },
   );
 
   const reasoningEvent = updatedTimeline.find((event) => event.kind === 'reasoning');

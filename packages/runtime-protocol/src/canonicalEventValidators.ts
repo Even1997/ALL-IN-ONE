@@ -28,6 +28,15 @@ function assertNumber(value: unknown, label: string): asserts value is number {
   }
 }
 
+function assertOptionalMessagePhase(value: unknown, label: string): void {
+  if (value == null) {
+    return;
+  }
+  if (value !== 'commentary' && value !== 'final_answer' && value !== 'unknown') {
+    throw new Error(`${label} must be commentary, final_answer, or unknown`);
+  }
+}
+
 function assertBoolean(value: unknown, label: string): asserts value is boolean {
   if (typeof value !== 'boolean') {
     throw new Error(`${label} must be a boolean`);
@@ -47,12 +56,25 @@ function validatePayloadForType(
       break;
     case 'message.started':
       assertString(payload.role, 'message.started payload.role');
+      assertOptionalMessagePhase(payload.phase, 'message.started payload.phase');
       break;
     case 'message.delta':
       assertString(payload.textChunk, 'message.delta payload.textChunk');
+      assertOptionalMessagePhase(payload.phase, 'message.delta payload.phase');
       break;
     case 'message.completed':
       assertString(payload.finalText, 'message.completed payload.finalText');
+      assertOptionalMessagePhase(payload.phase, 'message.completed payload.phase');
+      break;
+    case 'reasoning.started':
+      assertOptionalString(payload.summary, 'reasoning.started payload.summary');
+      break;
+    case 'reasoning.delta':
+      assertString(payload.textChunk, 'reasoning.delta payload.textChunk');
+      break;
+    case 'reasoning.completed':
+      assertOptionalString(payload.finalText, 'reasoning.completed payload.finalText');
+      assertOptionalString(payload.summary, 'reasoning.completed payload.summary');
       break;
     case 'progress.updated':
       assertString(payload.label, 'progress.updated payload.label');

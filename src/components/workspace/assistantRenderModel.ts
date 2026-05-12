@@ -55,6 +55,7 @@ export const buildAssistantRenderModel = (
   bubbleCardCount = 0,
 ): AssistantRenderModel => {
   const thinkingItems: Array<{
+    eventId: string;
     part: Extract<AIChatMessagePart, { type: 'thinking' }>;
     timelineOrder: number;
   }> = [];
@@ -82,6 +83,7 @@ export const buildAssistantRenderModel = (
   timeline.forEach((event, timelineOrder) => {
     if (event.kind === 'reasoning') {
       thinkingItems.push({
+        eventId: event.id,
         part: {
           type: 'thinking',
           content: draftState?.streamingReasoningTextByEventId?.[event.id] ?? event.content,
@@ -96,10 +98,10 @@ export const buildAssistantRenderModel = (
   });
 
   const processItems = thinkingItems
-    .filter(({ part }) => part.status === 'streaming')
-    .map(({ part, timelineOrder }, index) => ({
+    .filter(({ part }) => part.content.trim().length > 0)
+    .map(({ eventId, part, timelineOrder }, index) => ({
       kind: 'thinking_lane',
-      key: `${message.id}-part-${index}`,
+      key: `${message.id}-${eventId}`,
       part,
       index,
       timelineOrder,

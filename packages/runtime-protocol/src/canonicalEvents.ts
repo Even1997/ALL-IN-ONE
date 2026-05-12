@@ -4,6 +4,9 @@ export const CANONICAL_EVENT_TYPES = [
   'message.started',
   'message.delta',
   'message.completed',
+  'reasoning.started',
+  'reasoning.delta',
+  'reasoning.completed',
   'progress.updated',
   'tool.started',
   'tool.stdout',
@@ -34,6 +37,8 @@ export type EventSource = {
   name?: string;
 };
 
+export type MessagePhase = 'commentary' | 'final_answer' | 'unknown';
+
 export type RunStartedPayload = {
   providerId: string;
   threadId?: string | null;
@@ -53,14 +58,30 @@ export type RunCompletedPayload = {
 
 export type MessageStartedPayload = {
   role: 'assistant';
+  phase?: MessagePhase;
 };
 
 export type MessageDeltaPayload = {
   textChunk: string;
+  phase?: MessagePhase;
 };
 
 export type MessageCompletedPayload = {
   finalText: string;
+  phase?: MessagePhase;
+};
+
+export type ReasoningStartedPayload = {
+  summary?: string;
+};
+
+export type ReasoningDeltaPayload = {
+  textChunk: string;
+};
+
+export type ReasoningCompletedPayload = {
+  finalText?: string;
+  summary?: string;
 };
 
 export type ProgressUpdatedPayload = {
@@ -161,6 +182,9 @@ export type CanonicalEventPayloadMap = {
   'message.started': MessageStartedPayload;
   'message.delta': MessageDeltaPayload;
   'message.completed': MessageCompletedPayload;
+  'reasoning.started': ReasoningStartedPayload;
+  'reasoning.delta': ReasoningDeltaPayload;
+  'reasoning.completed': ReasoningCompletedPayload;
   'progress.updated': ProgressUpdatedPayload;
   'tool.started': ToolStartedPayload;
   'tool.stdout': ToolStreamPayload;

@@ -124,12 +124,14 @@ test('assistant thinking active state is not extended by answer streaming', asyn
   assert.doesNotMatch(source, /isStreaming && part\.status !== 'completed'/);
 });
 
-test('assistant thinking render only shows a live placeholder and hides completed reasoning content', async () => {
+test('assistant thinking render keeps reasoning content visible while preserving live status', async () => {
   const source = await readFile(assistantPartsPath, 'utf8');
 
-  assert.match(source, /if \(part\.status !== 'streaming'\) \{\s*return null;\s*\}/);
-  assert.match(source, /className="chat-thinking-pill"/);
+  assert.match(source, /const hasVisibleContent = part\.content\.trim\(\)\.length > 0;/);
+  assert.doesNotMatch(source, /if \(part\.status !== 'streaming'\) \{\s*return null;\s*\}/);
+  assert.match(source, /chat-thinking-pill/);
+  assert.match(source, /className="chat-thinking-body"/);
   assert.doesNotMatch(source, /className="chat-thinking-toggle"/);
   assert.doesNotMatch(source, /chat-thinking-preview/);
-  assert.doesNotMatch(source, /<pre>/);
+  assert.match(source, /<pre className="chat-thinking-body">/);
 });

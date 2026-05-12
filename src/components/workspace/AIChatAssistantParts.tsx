@@ -74,7 +74,9 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
   part: Extract<AIChatMessagePart, { type: 'thinking' }>;
 }) {
   const isThinkingActive = part.status === 'streaming';
-  if (part.status !== 'streaming') {
+  const hasVisibleContent = part.content.trim().length > 0;
+
+  if (!isThinkingActive && !hasVisibleContent) {
     return null;
   }
 
@@ -96,7 +98,7 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
   }, [isThinkingActive, part.createdAt]);
 
   const rawDisplayedElapsedSeconds =
-    typeof part.createdAt === 'number'
+    isThinkingActive && typeof part.createdAt === 'number'
       ? getLiveThinkingElapsedSeconds(part.createdAt, referenceTime)
       : part.elapsedSeconds;
   const displayedElapsedSeconds = resolveDisplayThinkingElapsedSeconds(
@@ -117,21 +119,30 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
 
   const durationLabel =
     typeof displayedElapsedSeconds === 'number' ? formatThinkingDuration(displayedElapsedSeconds) : '';
-  const summaryLabel = durationLabel ? `思考中 ${durationLabel}` : '思考中';
+  const summaryLabel = isThinkingActive
+    ? durationLabel ? `思考中 ${durationLabel}` : '思考中'
+    : durationLabel ? `思考 ${durationLabel}` : '思考';
 
   return (
-    <div className="chat-thinking-block">
-      <div className="chat-thinking-pill" role="status" aria-live="polite">
+    <div className={`chat-thinking-block ${isThinkingActive ? 'is-active' : 'is-completed'}`}>
+      <div
+        className={`chat-thinking-pill ${isThinkingActive ? 'active' : 'completed'}`}
+        role={isThinkingActive ? 'status' : undefined}
+        aria-live={isThinkingActive ? 'polite' : undefined}
+      >
         <span className="chat-thinking-pulse" aria-hidden="true" />
         <span className="chat-thinking-copy">
           <strong>{summaryLabel}</strong>
         </span>
-        <span className="chat-thinking-dots" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </span>
+        {isThinkingActive ? (
+          <span className="chat-thinking-dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+        ) : null}
       </div>
+      {hasVisibleContent ? <pre className="chat-thinking-body">{part.content}</pre> : null}
     </div>
   );
 });
