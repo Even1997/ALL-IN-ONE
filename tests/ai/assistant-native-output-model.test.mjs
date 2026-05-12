@@ -12,15 +12,15 @@ const buildAssistantMessage = (id, timeline = []) => ({
   createdAt: 1,
 });
 
-test('native output model keeps assistant reasoning and text in the original narrative order', async () => {
+test('native output model keeps reasoning in process and moves completed prose into the final answer lane', async () => {
   const { buildAssistantNativeMessageOutputModel } = await loadNativeOutputModel();
   const rendered = [];
   const model = buildAssistantNativeMessageOutputModel({
     message: buildAssistantMessage('assistant-1', [
-      { id: 'reasoning-1', kind: 'reasoning', content: '先分析', collapsed: false, status: 'completed', createdAt: 10 },
-      { id: 'text-1', kind: 'text', content: '第一段正文', createdAt: 20 },
-      { id: 'reasoning-2', kind: 'reasoning', content: '补充思考', collapsed: false, status: 'completed', createdAt: 30 },
-      { id: 'text-2', kind: 'text', content: '第二段正文', createdAt: 40 },
+      { id: 'reasoning-1', kind: 'reasoning', content: 'Inspect file A', collapsed: false, status: 'completed', createdAt: 10 },
+      { id: 'text-1', kind: 'text', content: 'First paragraph', createdAt: 20 },
+      { id: 'reasoning-2', kind: 'reasoning', content: 'Inspect file B', collapsed: false, status: 'completed', createdAt: 30 },
+      { id: 'text-2', kind: 'text', content: 'Second paragraph', createdAt: 40 },
     ]),
     renderMessagePart: (_message, _messageId, part, _index, options) => {
       const payload = {
@@ -33,33 +33,35 @@ test('native output model keeps assistant reasoning and text in the original nar
     },
   });
 
+  assert.deepEqual(rendered, [
+    { type: 'thinking', content: 'Inspect file A', isStreaming: false },
+    { type: 'thinking', content: 'Inspect file B', isStreaming: false },
+    { type: 'text', content: 'First paragraph\n\nSecond paragraph', isStreaming: false },
+  ]);
   assert.deepEqual(
-    rendered,
-    [
-      { type: 'thinking', content: '先分析', isStreaming: false },
-      { type: 'text', content: '第一段正文', isStreaming: false },
-      { type: 'thinking', content: '补充思考', isStreaming: false },
-      { type: 'text', content: '第二段正文', isStreaming: false },
-    ],
+    model.processItems.map((item) => item.key),
+    ['assistant-1-reasoning-1', 'assistant-1-reasoning-2'],
   );
-  assert.equal(model.copyText, '第一段正文\n\n第二段正文');
+  assert.equal(model.finalAnswerItem?.key, 'assistant-1-answer-text');
+  assert.equal(model.copyText, 'First paragraph\n\nSecond paragraph');
   assert.equal(model.hasVisibleContent, true);
 });
 
-test('native output model keeps streaming state only on the active text event from the shared draft timeline', async () => {
+test('native output model keeps the active answer in the shared process chronology while streaming', async () => {
   const { buildAssistantNativeMessageOutputModel } = await loadNativeOutputModel();
   const rendered = [];
   const model = buildAssistantNativeMessageOutputModel({
     message: buildAssistantMessage('assistant-2', [
-      { id: 'text-persisted', kind: 'text', content: '旧内容', createdAt: 5 },
+      { id: 'text-persisted', kind: 'text', content: 'Stored answer', createdAt: 5 },
     ]),
     draftState: {
       timeline: [
-        { id: 'reasoning-draft', kind: 'reasoning', content: '流式思考', collapsed: false, status: 'streaming', createdAt: 10 },
-        { id: 'text-draft-1', kind: 'text', content: '正在输出第一段', createdAt: 20 },
-        { id: 'text-draft-2', kind: 'text', content: '正在输出第二段', createdAt: 30 },
+        { id: 'reasoning-draft', kind: 'reasoning', content: 'Working through it', collapsed: false, status: 'streaming', createdAt: 10 },
+        { id: 'text-draft-1', kind: 'text', content: 'Streaming paragraph one', createdAt: 20 },
+        { id: 'text-draft-2', kind: 'text', content: 'Streaming paragraph two', createdAt: 30 },
       ],
       isStreaming: true,
+      streamingStartedAt: 20,
     },
     renderMessagePart: (_message, _messageId, part, _index, options) => {
       const payload = {
@@ -72,16 +74,63 @@ test('native output model keeps streaming state only on the active text event fr
     },
   });
 
+  assert.deepEqual(rendered, [
+    { type: 'thinking', content: 'Working through it', isStreaming: true },
+    { type: 'text', content: 'Streaming paragraph one\n\nStreaming paragraph two', isStreaming: true },
+  ]);
   assert.deepEqual(
-    rendered,
-    [
-      { type: 'thinking', content: '流式思考', isStreaming: false },
-      { type: 'text', content: '正在输出第一段', isStreaming: false },
-      { type: 'text', content: '正在输出第二段', isStreaming: true },
-    ],
+    model.processItems.map((item) => item.key),
+    ['assistant-2-reasoning-draft', 'assistant-2-answer-text'],
   );
+  assert.equal(model.finalAnswerItem, null);
   assert.equal(model.isStreaming, true);
-  assert.equal(model.copyText, '正在输出第一段\n\n正在输出第二段');
+  assert.equal(model.copyText, 'Streaming paragraph one\n\nStreaming paragraph two');
+});
+
+test('native output model merges runtime timeline items into the same ordered process stream without affecting copy text', async () => {
+  const { buildAssistantNativeMessageOutputModel } = await loadNativeOutputModel();
+  const rendered = [];
+  const model = buildAssistantNativeMessageOutputModel({
+    message: buildAssistantMessage('assistant-3', [
+      { id: 'reasoning-1', kind: 'reasoning', content: 'Inspect progress', collapsed: false, status: 'completed', createdAt: 10 },
+      { id: 'text-1', kind: 'text', content: 'Final answer', createdAt: 40 },
+    ]),
+    timelineItems: [
+      {
+        key: 'tool-1',
+        node: { type: 'tool', label: 'tool-1' },
+        createdAt: 20,
+        timelineOrder: 1,
+      },
+      {
+        key: 'approval-1',
+        node: { type: 'approval', label: 'approval-1' },
+        createdAt: 30,
+        timelineOrder: 2,
+      },
+    ],
+    renderMessagePart: (_message, _messageId, part, _index, options) => {
+      const payload = {
+        type: part.type,
+        content: part.content,
+        isStreaming: options?.isStreaming ?? false,
+      };
+      rendered.push(payload);
+      return payload;
+    },
+  });
+
+  assert.deepEqual(rendered, [
+    { type: 'thinking', content: 'Inspect progress', isStreaming: false },
+    { type: 'text', content: 'Final answer', isStreaming: false },
+  ]);
+  assert.deepEqual(
+    model.processItems.map((item) => item.key),
+    ['assistant-3-reasoning-1', 'tool-1', 'approval-1'],
+  );
+  assert.equal(model.finalAnswerItem?.key, 'assistant-3-answer-text');
+  assert.equal(model.copyText, 'Final answer');
+  assert.equal(model.hasVisibleContent, true);
 });
 
 test('AI chat defaults assistant messages to native output observation mode', async () => {
@@ -98,4 +147,7 @@ test('AI chat defaults assistant messages to native output observation mode', as
   assert.match(listSource, /assistantDisplayMode\?: 'composed' \| 'native';/);
   assert.match(itemSource, /assistantDisplayMode = 'composed'/);
   assert.match(itemSource, /buildAssistantNativeMessageOutputModel/);
+  assert.match(listSource, /nativeTimelineItemsByMessage/);
+  assert.match(itemSource, /nativeTimelineItems/);
+  assert.match(itemSource, /const activeAssistantOutputModel =/);
 });

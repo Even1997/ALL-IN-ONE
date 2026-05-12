@@ -43,7 +43,7 @@ const normalizeThinkingElapsedSeconds = (elapsedSeconds: number | undefined) => 
 
 const formatThinkingDuration = (elapsedSeconds: number) => {
   const wholeSeconds = Math.floor(Math.max(0, elapsedSeconds));
-  return `${wholeSeconds}秒`;
+  return `${wholeSeconds}\u79d2`;
 };
 
 const getLiveThinkingElapsedSeconds = (startedAt: number, referenceTime: number) => {
@@ -75,6 +75,7 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
 }) {
   const isThinkingActive = part.status === 'streaming';
   const hasVisibleContent = part.content.trim().length > 0;
+  const [expanded, setExpanded] = useState(false);
 
   if (!isThinkingActive && !hasVisibleContent) {
     return null;
@@ -85,6 +86,10 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
 
   useEffect(() => {
     lastDisplayedElapsedSecondsRef.current = normalizeThinkingElapsedSeconds(part.elapsedSeconds) ?? null;
+  }, [part.createdAt]);
+
+  useEffect(() => {
+    setExpanded(false);
   }, [part.createdAt]);
 
   useEffect(() => {
@@ -120,23 +125,41 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
   const durationLabel =
     typeof displayedElapsedSeconds === 'number' ? formatThinkingDuration(displayedElapsedSeconds) : '';
   const summaryLabel = isThinkingActive
-    ? durationLabel ? `思考中 ${durationLabel}` : '思考中'
-    : durationLabel ? `思考 ${durationLabel}` : '思考';
+    ? durationLabel ? `\u601d\u8003\u4e2d ${durationLabel}` : '\u601d\u8003\u4e2d'
+    : durationLabel ? `\u601d\u8003 ${durationLabel}` : '\u601d\u8003';
+
+  if (!hasVisibleContent) {
+    return (
+      <div className={`chat-thinking-block ${isThinkingActive ? 'is-active' : 'is-completed'}`}>
+        <div
+          className="chat-thinking-summary-text"
+          role={isThinkingActive ? 'status' : undefined}
+          aria-live={isThinkingActive ? 'polite' : undefined}
+        >
+          <span className="chat-thinking-summary-copy">{summaryLabel}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`chat-thinking-block ${isThinkingActive ? 'is-active' : 'is-completed'}`}>
-      <div
-        className={`chat-thinking-pill ${isThinkingActive ? 'active' : 'completed'}`}
+    <details
+      className={`chat-thinking-block ${isThinkingActive ? 'is-active' : 'is-completed'}`}
+      open={expanded}
+      onToggle={(event) => {
+        setExpanded((event.currentTarget as HTMLDetailsElement).open);
+      }}
+    >
+      <summary
+        className="chat-inline-disclosure chat-thinking-summary"
         role={isThinkingActive ? 'status' : undefined}
         aria-live={isThinkingActive ? 'polite' : undefined}
       >
-        <span className="chat-thinking-marker" aria-hidden="true" />
-        <span className="chat-thinking-copy">
-          <strong>{summaryLabel}</strong>
-        </span>
-      </div>
-      {hasVisibleContent ? <pre className="chat-thinking-body">{part.content}</pre> : null}
-    </div>
+        <span className="chat-thinking-summary-copy">{summaryLabel}</span>
+        <span className="chat-inline-disclosure-caret chat-thinking-summary-caret" aria-hidden="true" />
+      </summary>
+      <pre className="chat-thinking-body">{part.content}</pre>
+    </details>
   );
 });
 

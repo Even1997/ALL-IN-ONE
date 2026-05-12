@@ -129,8 +129,12 @@ test('assistant thinking render keeps reasoning content visible while preserving
 
   assert.match(source, /const hasVisibleContent = part\.content\.trim\(\)\.length > 0;/);
   assert.doesNotMatch(source, /if \(part\.status !== 'streaming'\) \{\s*return null;\s*\}/);
-  assert.match(source, /chat-thinking-pill/);
+  assert.match(source, /const \[expanded, setExpanded\] = useState\(false\);/);
+  assert.match(source, /setExpanded\(false\);/);
+  assert.match(source, /className="chat-inline-disclosure chat-thinking-summary"/);
   assert.match(source, /className="chat-thinking-body"/);
+  assert.match(source, /className="chat-thinking-summary-copy"/);
+  assert.doesNotMatch(source, /chat-thinking-pill/);
   assert.doesNotMatch(source, /className="chat-thinking-toggle"/);
   assert.doesNotMatch(source, /chat-thinking-preview/);
   assert.match(source, /<pre className="chat-thinking-body">/);

@@ -143,8 +143,14 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   messagesEndRef,
   leadingContent,
 }: GNAgentMessageListProps) {
-  const { timelineCardsByMessage, supplementalCardsByMessage, processSummaryByMessageId } = React.useMemo(() => {
+  const {
+    timelineCardsByMessage,
+    nativeTimelineItemsByMessage,
+    supplementalCardsByMessage,
+    processSummaryByMessageId,
+  } = React.useMemo(() => {
     const timelineMap: Record<string, MessageBubbleCard[]> = {};
+    const nativeTimelineMap: Record<string, MessageBubbleCard[]> = {};
     const supplementalMap: Record<string, MessageBubbleCard[]> = {};
     const processSummaryByMessageId: Record<string, MessageProcessSummary | null> = {};
     for (const message of messages) {
@@ -165,6 +171,16 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
         runSummaryNode ? { node: runSummaryNode, createdAt: latestRuntimeEventTime ?? message.createdAt } : null,
       ];
       timelineMap[message.id] = timelineCards;
+      nativeTimelineMap[message.id] = [
+        ...timelineCards,
+        ...supplementalCards.filter((card): card is MessageBubbleCard => Boolean(card?.node)),
+        ...runtimeApprovalCards,
+        ...runtimeQuestionCards,
+        ...toolExecutionCards.map((card) => ({
+          ...card,
+          createdAt: card.createdAt ?? earliestRuntimeEventTime ?? message.createdAt,
+        })),
+      ];
       supplementalMap[message.id] = [
         ...supplementalCards.filter((card): card is MessageBubbleCard => Boolean(card?.node)),
         ...runtimeApprovalCards,
@@ -177,6 +193,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
     }
     return {
       timelineCardsByMessage: timelineMap,
+      nativeTimelineItemsByMessage: nativeTimelineMap,
       supplementalCardsByMessage: supplementalMap,
       processSummaryByMessageId,
     };
@@ -207,6 +224,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       parseMessageParts={parseMessageParts}
       renderMessagePart={renderMessagePart}
       timelineCards={timelineCardsByMessage[message.id] ?? []}
+      nativeTimelineItems={nativeTimelineItemsByMessage[message.id] ?? []}
       supplementalCards={supplementalCardsByMessage[message.id] ?? []}
       processSummary={processSummaryByMessageId[message.id] ?? null}
     />

@@ -1,12 +1,15 @@
 import type React from 'react';
-import { getAssistantTimelineText } from '../../modules/ai/store/assistantTimeline.ts';
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
 import type { StreamingLatencyTrace } from '../../modules/ai/runtime/streamingLatencyTrace.ts';
-import type { AssistantDraftState } from './assistantRenderModel.ts';
+import {
+  buildAssistantRenderModel,
+  type AssistantDraftState,
+} from './assistantRenderModel.ts';
 import type { AIChatMessagePart } from './aiChatMessageParts.ts';
 import {
-  sortChatMessageTimelineItems,
+  buildChatMessageTimelineRenderModel,
   type ChatMessageTimelineRenderItem,
+  type ChatMessageTimelineRenderModel,
 } from './timeline/chatMessageTimelineRenderModel.ts';
 
 type MessagePartRenderer = (
@@ -24,7 +27,9 @@ type MessagePartRenderer = (
 ) => React.ReactNode;
 
 export type AssistantNativeMessageOutputModel = {
-  items: ChatMessageTimelineRenderItem[];
+  timelineRenderModel: ChatMessageTimelineRenderModel;
+  processItems: ChatMessageTimelineRenderItem[];
+  finalAnswerItem: ChatMessageTimelineRenderItem | null;
   copyText: string;
   hasVisibleContent: boolean;
   isStreaming: boolean;
@@ -34,86 +39,72 @@ export const buildAssistantNativeMessageOutputModel = (input: {
   message: StoredChatMessage;
   draftState?: AssistantDraftState;
   renderMessagePart: MessagePartRenderer;
+  timelineItems?: Array<{
+    key?: string;
+    node: React.ReactNode;
+    createdAt?: number;
+    timelineOrder?: number;
+  }>;
 }): AssistantNativeMessageOutputModel => {
-  const { message, draftState, renderMessagePart } = input;
-  const isStreaming = draftState?.isStreaming ?? Boolean(draftState);
-  const timeline =
-    isStreaming
-      ? Array.isArray(draftState?.timeline)
-        ? draftState.timeline
-        : message.role === 'assistant' && Array.isArray(message.timeline)
-          ? message.timeline
-          : []
-      : message.role === 'assistant' && Array.isArray(message.timeline)
-        ? message.timeline
-        : [];
-  const answerContent = getAssistantTimelineText(timeline);
-  const lastStreamingTextEventId = isStreaming
-    ? [...timeline]
-        .reverse()
-        .find((event): event is Extract<(typeof timeline)[number], { kind: 'text' }> => event.kind === 'text')
-        ?.id ?? null
-    : null;
+  const { message, draftState, renderMessagePart, timelineItems = [] } = input;
+  const assistantRenderModel = buildAssistantRenderModel(message, draftState);
+  const isStreaming = assistantRenderModel.isStreaming;
 
-  const items = sortChatMessageTimelineItems(
-    timeline.flatMap((event, index): ChatMessageTimelineRenderItem[] => {
-      if (event.kind === 'reasoning') {
-        const part: Extract<AIChatMessagePart, { type: 'thinking' }> = {
-          type: 'thinking',
-          content: draftState?.streamingReasoningTextByEventId?.[event.id] ?? event.content,
-          collapsed: event.collapsed,
-          status: event.status,
-          elapsedSeconds: event.elapsedSeconds,
-          createdAt: event.createdAt,
-        };
+  const thinkingItems: ChatMessageTimelineRenderItem[] = assistantRenderModel.processItems.map((item) => ({
+    key: item.key,
+    node: renderMessagePart(message, message.id, item.part, item.index, {
+      content: assistantRenderModel.content,
+      isStreaming,
+    }),
+    createdAt: item.part.createdAt,
+    timelineOrder: item.timelineOrder,
+    laneKind: 'thinking_lane',
+  }));
 
-        if (!part.content.trim()) {
-          return [];
+  const answerRenderItem =
+    assistantRenderModel.finalAnswerItem
+      ? {
+          key: assistantRenderModel.finalAnswerItem.key,
+          node: renderMessagePart(
+            message,
+            message.id,
+            assistantRenderModel.finalAnswerItem.part as Extract<AIChatMessagePart, { type: 'text' }>,
+            assistantRenderModel.finalAnswerItem.index,
+            {
+              content: assistantRenderModel.content,
+              isStreaming,
+            },
+          ),
+          createdAt: assistantRenderModel.finalAnswerItem.part.createdAt,
+          timelineOrder: assistantRenderModel.finalAnswerItem.timelineOrder,
+          laneKind: 'answer_lane' as const,
         }
+      : null;
 
-        return [
-          {
-            key: `${message.id}-${event.id}`,
-            node: renderMessagePart(message, message.id, part, index, {
-              content: answerContent,
-              isStreaming: false,
-            }),
-            createdAt: event.createdAt,
-            timelineOrder: index,
-            laneKind: 'thinking_lane',
-          },
-        ];
-      }
-
-      if (event.kind === 'text' && event.content.trim()) {
-        const part: Extract<AIChatMessagePart, { type: 'text' }> = {
-          type: 'text',
-          content: event.content,
-          createdAt: event.createdAt,
-        };
-
-        return [
-          {
-            key: `${message.id}-${event.id}`,
-            node: renderMessagePart(message, message.id, part, index, {
-              content: answerContent,
-              isStreaming: lastStreamingTextEventId === event.id,
-            }),
-            createdAt: event.createdAt,
-            timelineOrder: index,
-            laneKind: 'answer_lane',
-          },
-        ];
-      }
-
-      return [];
+  const runtimeItems = timelineItems.map(
+    (item, index): ChatMessageTimelineRenderItem => ({
+      key: item.key ?? `${message.id}-native-runtime-${index}`,
+      node: item.node,
+      createdAt: item.createdAt,
+      timelineOrder: item.timelineOrder,
+      laneKind: 'bubble',
     }),
   );
 
+  const timelineRenderModel = buildChatMessageTimelineRenderModel({
+    thinkingItems,
+    timelineCardItems: runtimeItems,
+    activeResponseItem: isStreaming ? answerRenderItem : null,
+    finalAnswerItem: isStreaming ? null : answerRenderItem,
+  });
+
   return {
-    items,
-    copyText: answerContent,
-    hasVisibleContent: items.length > 0,
+    timelineRenderModel,
+    processItems: timelineRenderModel.processItems,
+    finalAnswerItem: timelineRenderModel.finalAnswerItem,
+    copyText: assistantRenderModel.copyText,
+    hasVisibleContent:
+      timelineRenderModel.processItems.length > 0 || Boolean(timelineRenderModel.finalAnswerItem),
     isStreaming,
   };
 };

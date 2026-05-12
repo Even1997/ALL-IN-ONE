@@ -145,10 +145,12 @@ test('embedded message list timestamps run summary cards from the latest runtime
 test('GN Agent message item separates process rendering from the final answer body', async () => {
   const messageItemSource = await readFile('src/components/ai/gn-agent/GNAgentMessageItem.tsx', 'utf8');
   const outputModelSource = await readFile('src/components/workspace/assistantMessageOutputModel.ts', 'utf8');
+  const nativeOutputModelSource = await readFile('src/components/workspace/assistantNativeMessageOutputModel.ts', 'utf8');
 
   assert.match(messageItemSource, /buildAssistantMessageOutputModel/);
-  assert.match(messageItemSource, /const processGroups = assistantMessageOutputModel\?\.timelineRenderModel\.processGroups \|\| \[\];/);
-  assert.match(messageItemSource, /const answerBodyRenderItem = assistantMessageOutputModel\?\.finalAnswerItem \?\? null;/);
+  assert.match(messageItemSource, /const activeAssistantOutputModel =/);
+  assert.match(messageItemSource, /const processGroups = activeAssistantOutputModel\?\.timelineRenderModel\.processGroups \|\| \[\];/);
+  assert.match(messageItemSource, /const answerBodyRenderItem = activeAssistantOutputModel\?\.finalAnswerItem \?\? null;/);
   assert.match(messageItemSource, /const hasProcessArtifacts =/);
   assert.match(messageItemSource, /const shouldShowCompletedProcessFold =/);
   assert.match(messageItemSource, /className="chat-message-process-fold"/);
@@ -163,4 +165,7 @@ test('GN Agent message item separates process rendering from the final answer bo
   assert.match(outputModelSource, /buildChatMessageTimelineRenderModel/);
   assert.match(outputModelSource, /activeResponseItem:\s*isStreaming \? answerRenderItem : null/);
   assert.match(outputModelSource, /finalAnswerItem:\s*isStreaming \? null : answerRenderItem/);
+  assert.match(nativeOutputModelSource, /buildChatMessageTimelineRenderModel/);
+  assert.match(nativeOutputModelSource, /activeResponseItem:\s*isStreaming \? answerRenderItem : null/);
+  assert.match(nativeOutputModelSource, /finalAnswerItem:\s*isStreaming \? null : answerRenderItem/);
 });

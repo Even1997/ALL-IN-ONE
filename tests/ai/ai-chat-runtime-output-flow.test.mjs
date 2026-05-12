@@ -576,7 +576,7 @@ test('assistant narrative and runtime cards use a consistent typography scale', 
   );
   assert.match(
     cssSource,
-    /\.chat-thinking-copy strong\s*\{[\s\S]*font-size:\s*11px[\s\S]*font-weight:\s*560/
+    /\.chat-thinking-summary-copy\s*\{[\s\S]*font-size:\s*11px[\s\S]*font-weight:\s*560/
   );
   assert.match(
     cssSource,
