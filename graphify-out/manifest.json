@@ -124,12 +124,12 @@
     "hash": "40f0218c9799acb06db93ed5100bbe6f"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent\\GNAgentEmbeddedPieces.tsx": {
-    "mtime": 1778563320.8645997,
-    "hash": "a008d11995d0afb9563f4bac722e3558"
+    "mtime": 1778591014.3337457,
+    "hash": "d747134e32bf44d816f49e5a550710b2"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent\\GNAgentMessageItem.tsx": {
-    "mtime": 1778572096.117049,
-    "hash": "7c67da719345f3122aa7ae06c8f001c8"
+    "mtime": 1778591000.730935,
+    "hash": "32bd8c66b6b1be776b59f1357f4fc0a4"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent-shell\\GNAgentChatPage.tsx": {
     "mtime": 1778137333.0504103,
@@ -312,20 +312,20 @@
     "hash": "e70f27a5c1b0433710106d476e757f97"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChat.tsx": {
-    "mtime": 1778572096.1144094,
-    "hash": "5419269a265f2671ec1c893cf52f414b"
+    "mtime": 1778591047.1745982,
+    "hash": "fe9a9a145f24c3de0efd46b688a0d7fe"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatAISettingsTab.tsx": {
     "mtime": 1778399387.7204428,
     "hash": "0f3e0aefa01db3b3028d8eb191cf7290"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatAssistantParts.tsx": {
-    "mtime": 1778573519.628656,
-    "hash": "c905a11a50a5b4225c55c045f8ca3334"
+    "mtime": 1778590420.656979,
+    "hash": "ecfe3498e7bc663f32823bd6e0d8335f"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatConversationMessagesPane.tsx": {
-    "mtime": 1778563328.3295493,
-    "hash": "4fa435004d74edfc8d72da59bc6f0e01"
+    "mtime": 1778591026.4379165,
+    "hash": "01e0de3c5c9ce66816f1daefac27562c"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\aiChatMessageParts.ts": {
     "mtime": 1778587724.3797438,
@@ -350,6 +350,10 @@
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\assistantMessageOutputModel.ts": {
     "mtime": 1778572096.1103284,
     "hash": "f211a24552e3aecdf6ba87e05ce58fbb"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\assistantNativeMessageOutputModel.ts": {
+    "mtime": 1778590946.3659313,
+    "hash": "fb75c14293125fbdb78658a36267ad3d"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\assistantRenderModel.ts": {
     "mtime": 1778573543.4009752,
@@ -408,8 +412,8 @@
     "hash": "e17497dd86a4922bebc2b0f3bb9a6dd0"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\timeline\\chatTimelineBubbleCardModel.ts": {
-    "mtime": 1778546761.5541315,
-    "hash": "43826e2d48088dfea24b7e9862e3bd5f"
+    "mtime": 1778590420.6534479,
+    "hash": "99ffd53b1f725aa182e1472007596f4d"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\timeline\\chatTimelineBubbleCards.tsx": {
     "mtime": 1778458229.7915897,
@@ -1508,8 +1512,8 @@
     "hash": "0e5ad88462e757a310cc6a808f8fdb97"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-timeline-view.test.mjs": {
-    "mtime": 1778557214.6048903,
-    "hash": "161105ec79b825f180847480ba662561"
+    "mtime": 1778590420.666641,
+    "hash": "dd4a6045253e6dbb2568e04388f12540"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-view-state.test.mjs": {
     "mtime": 1778497999.8709447,
@@ -1571,6 +1575,10 @@
     "mtime": 1778399387.7464807,
     "hash": "06523b89dacac30081bbbed8f6d8dcee"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-native-output-model.test.mjs": {
+    "mtime": 1778591126.5296474,
+    "hash": "c2557351f0517d0dcc26dcce3cf7df52"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-render-model.test.mjs": {
     "mtime": 1778573690.2683234,
     "hash": "44c1fcd90a2214d6da240985d9177a64"
@@ -1580,8 +1588,8 @@
     "hash": "9a4e929285158f098342a225ff7f68a8"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-thinking-ui-source.test.mjs": {
-    "mtime": 1778573690.2733843,
-    "hash": "7a152eeeb67a5ccc79e8b70044a572e6"
+    "mtime": 1778590420.6631236,
+    "hash": "1b316033248acb636fed164132a70a28"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-timeline-events.test.mjs": {
     "mtime": 1778588029.7489114,

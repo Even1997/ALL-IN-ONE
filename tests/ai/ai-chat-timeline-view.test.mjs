@@ -297,6 +297,105 @@ test('chat timeline bubble card helper filters duplicate run, response, and inte
   assert.equal(model.completedResponseSummary?.completedAt, 6);
 });
 
+test('chat timeline bubble card helper hides analysis cards that only mirror reasoning events', async () => {
+  const { buildChatTimelineBubbleCards } = await import(
+    `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`
+  );
+
+  const model = buildChatTimelineBubbleCards({
+    runId: 'run_reasoning_1',
+    status: 'completed',
+    activeMessage: null,
+    finalMessage: {
+      messageId: 'assistant_reasoning_1',
+      text: '整理好了。',
+      completedAt: 8,
+    },
+    cards: [
+      {
+        cardId: 'card_reasoning_only',
+        phase: 'analysis',
+        title: 'Reasoning',
+        summary: 'Inspect files',
+        status: 'completed',
+        startedAt: 2,
+        endedAt: 4,
+        toolCount: 0,
+        retryCount: 0,
+        warningCount: 0,
+        errorCount: 0,
+        detailRefs: ['evt_reasoning_started', 'evt_reasoning_delta', 'evt_reasoning_completed'],
+        interactionRefs: [],
+      },
+      {
+        cardId: 'card_response',
+        phase: 'response',
+        title: 'Response',
+        summary: '整理好了。',
+        status: 'completed',
+        startedAt: 4,
+        endedAt: 8,
+        toolCount: 0,
+        retryCount: 0,
+        warningCount: 0,
+        errorCount: 0,
+        detailRefs: ['evt_message_completed'],
+        interactionRefs: [],
+      },
+    ],
+    events: [
+      {
+        eventId: 'evt_reasoning_started',
+        runId: 'run_reasoning_1',
+        turnId: 'turn_reasoning_1',
+        sessionId: 'session_reasoning_1',
+        type: 'reasoning.started',
+        ts: 2,
+        seq: 1,
+        source: { kind: 'runtime', provider: 'built-in', name: 'assistant' },
+        payload: { summary: 'Inspect files' },
+      },
+      {
+        eventId: 'evt_reasoning_delta',
+        runId: 'run_reasoning_1',
+        turnId: 'turn_reasoning_1',
+        sessionId: 'session_reasoning_1',
+        type: 'reasoning.delta',
+        ts: 3,
+        seq: 2,
+        source: { kind: 'runtime', provider: 'built-in', name: 'assistant' },
+        payload: { textChunk: 'Inspect files carefully.' },
+      },
+      {
+        eventId: 'evt_reasoning_completed',
+        runId: 'run_reasoning_1',
+        turnId: 'turn_reasoning_1',
+        sessionId: 'session_reasoning_1',
+        type: 'reasoning.completed',
+        ts: 4,
+        seq: 3,
+        source: { kind: 'runtime', provider: 'built-in', name: 'assistant' },
+        payload: { finalText: 'Inspect files carefully.' },
+      },
+      {
+        eventId: 'evt_message_completed',
+        runId: 'run_reasoning_1',
+        turnId: 'turn_reasoning_1',
+        sessionId: 'session_reasoning_1',
+        messageId: 'assistant_reasoning_1',
+        type: 'message.completed',
+        ts: 8,
+        seq: 4,
+        source: { kind: 'model', provider: 'built-in', name: 'assistant' },
+        payload: { finalText: '整理好了。' },
+      },
+    ],
+  });
+
+  assert.deepEqual(model.descriptors, []);
+  assert.equal(model.completedResponseSummary?.summary, '整理好了。');
+});
+
 test('chat timeline keeps one compact completed response summary card', async () => {
   const { buildChatTimelineBubbleCards } = await import(
     `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`

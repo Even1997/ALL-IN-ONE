@@ -93,6 +93,7 @@ export const GNAgentHistoryMenu: React.FC<{
 type GNAgentMessageListProps = {
   messages: StoredChatMessage[];
   draftContents?: Record<string, AssistantDraftState>;
+  assistantDisplayMode?: 'composed' | 'native';
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
@@ -126,6 +127,7 @@ const getLatestRuntimeEventTime = (message: StoredChatMessage) =>
 export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   messages,
   draftContents,
+  assistantDisplayMode = 'composed',
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
@@ -200,6 +202,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       key={message.id}
       message={message}
       draftState={draftContents?.[message.id]}
+      assistantDisplayMode={assistantDisplayMode}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseMessageParts}
       renderMessagePart={renderMessagePart}

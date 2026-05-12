@@ -130,17 +130,10 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
         role={isThinkingActive ? 'status' : undefined}
         aria-live={isThinkingActive ? 'polite' : undefined}
       >
-        <span className="chat-thinking-pulse" aria-hidden="true" />
+        <span className="chat-thinking-marker" aria-hidden="true" />
         <span className="chat-thinking-copy">
           <strong>{summaryLabel}</strong>
         </span>
-        {isThinkingActive ? (
-          <span className="chat-thinking-dots" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </span>
-        ) : null}
       </div>
       {hasVisibleContent ? <pre className="chat-thinking-body">{part.content}</pre> : null}
     </div>

@@ -6,6 +6,7 @@ import {
   type AssistantDraftState,
 } from '../../workspace/assistantRenderModel.ts';
 import { buildAssistantMessageOutputModel } from '../../workspace/assistantMessageOutputModel.ts';
+import { buildAssistantNativeMessageOutputModel } from '../../workspace/assistantNativeMessageOutputModel.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
 import {
   type ChatMessageTimelineRenderGroup,
@@ -31,6 +32,7 @@ type MessagePartsParser = (content: string) => AIChatMessagePart[];
 type GNAgentMessageItemProps = {
   message: StoredChatMessage;
   draftState?: AssistantDraftState;
+  assistantDisplayMode?: 'composed' | 'native';
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
@@ -112,6 +114,7 @@ const AssistantMessageActionBar: React.FC<{
 export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   message,
   draftState,
+  assistantDisplayMode = 'composed',
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
@@ -146,6 +149,14 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
           supplementalCards,
         })
       : null;
+  const assistantNativeOutputModel =
+    message.role === 'assistant' && assistantDisplayMode === 'native'
+      ? buildAssistantNativeMessageOutputModel({
+          message,
+          draftState,
+          renderMessagePart,
+        })
+      : null;
 
   if (message.role !== 'assistant') {
     const parts = parseMessageParts(content);
@@ -168,7 +179,9 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   const answerBodyRenderItem = assistantMessageOutputModel?.finalAnswerItem ?? null;
   const hasVisibleContent =
     message.role === 'assistant'
-      ? (assistantMessageOutputModel?.hasVisibleContent ?? false)
+      ? assistantDisplayMode === 'native'
+        ? (assistantNativeOutputModel?.hasVisibleContent ?? false)
+        : (assistantMessageOutputModel?.hasVisibleContent ?? false)
       : nonAssistantRenderItems.length > 0;
   const completedElapsedLabel =
     hasCompletedAnswer
@@ -196,33 +209,51 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     <article className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}>
       {message.role === 'assistant' && hasVisibleContent ? (
         <>
-          {shouldShowCompletedProcessFold ? (
-            <details
-              className="chat-message-process-fold"
-              open={isProcessFoldExpanded}
-              onToggle={(event) => {
-                const nextOpen = (event.currentTarget as HTMLDetailsElement).open;
-                setProcessFoldExpanded(nextOpen);
-              }}
-            >
-              <summary className="chat-message-process-summary">
-                <span className="chat-message-process-elapsed">{completedElapsedLabel}</span>
-                <span className="chat-message-process-caret" aria-hidden="true" />
-              </summary>
-              <div className="chat-message-process-fold-body">{renderProcessGroups(processGroups, message.id, 'fold')}</div>
-            </details>
-          ) : hasProcessArtifacts ? (
-            <div className="chat-message-process-inline">{renderProcessGroups(processGroups, message.id, 'inline')}</div>
-          ) : null}
-          {answerBodyRenderItem ? (
+          {assistantDisplayMode === 'native' ? (
             <div className="chat-message-bubble chat-message-final-answer">
               <div className="chat-message-content chat-message-content-timeline">
-                {answerBodyRenderItem.node}
+                {assistantNativeOutputModel?.items.map((item) => (
+                  <React.Fragment key={item.key}>{item.node}</React.Fragment>
+                ))}
               </div>
             </div>
-          ) : null}
+          ) : (
+            <>
+              {shouldShowCompletedProcessFold ? (
+                <details
+                  className="chat-message-process-fold"
+                  open={isProcessFoldExpanded}
+                  onToggle={(event) => {
+                    const nextOpen = (event.currentTarget as HTMLDetailsElement).open;
+                    setProcessFoldExpanded(nextOpen);
+                  }}
+                >
+                  <summary className="chat-message-process-summary">
+                    <span className="chat-message-process-elapsed">{completedElapsedLabel}</span>
+                    <span className="chat-message-process-caret" aria-hidden="true" />
+                  </summary>
+                  <div className="chat-message-process-fold-body">{renderProcessGroups(processGroups, message.id, 'fold')}</div>
+                </details>
+              ) : hasProcessArtifacts ? (
+                <div className="chat-message-process-inline">{renderProcessGroups(processGroups, message.id, 'inline')}</div>
+              ) : null}
+              {answerBodyRenderItem ? (
+                <div className="chat-message-bubble chat-message-final-answer">
+                  <div className="chat-message-content chat-message-content-timeline">
+                    {answerBodyRenderItem.node}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
           <AssistantMessageActionBar
-            copyText={isStreaming ? undefined : assistantMessageOutputModel?.copyText}
+            copyText={
+              isStreaming
+                ? undefined
+                : assistantDisplayMode === 'native'
+                  ? assistantNativeOutputModel?.copyText
+                  : assistantMessageOutputModel?.copyText
+            }
           />
           <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
         </>

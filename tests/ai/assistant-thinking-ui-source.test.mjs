@@ -26,3 +26,17 @@ test('thinking body keeps multi-line reasoning readable without collapsed previe
   assert.doesNotMatch(componentSource, /previewLine\.length > 88 \? /);
   assert.doesNotMatch(componentSource, /chat-thinking-preview/);
 });
+
+test('thinking header uses a static marker instead of animated pulse dots', async () => {
+  const [css, componentSource] = await Promise.all([
+    readFile(cssPath, 'utf8'),
+    readFile(componentPath, 'utf8'),
+  ]);
+
+  assert.match(componentSource, /chat-thinking-marker/);
+  assert.doesNotMatch(componentSource, /chat-thinking-pulse/);
+  assert.doesNotMatch(componentSource, /chat-thinking-dots/);
+  assert.match(css, /\.chat-thinking-marker,\s*\.chat-tool-icon\s*\{/);
+  assert.doesNotMatch(css, /@keyframes chat-thinking-pulse/);
+  assert.doesNotMatch(css, /@keyframes chat-thinking-dot/);
+});

@@ -28,13 +28,20 @@ export type ChatTimelineBubbleCardsModel = {
 
 const SUPPRESSED_CHAT_TIMELINE_PHASES = new Set(['intake', 'approval', 'question']);
 
-const isReasoningOnlyProgressCard = (
+const REASONING_ONLY_EVENT_TYPES = new Set([
+  'progress.updated',
+  'reasoning.started',
+  'reasoning.delta',
+  'reasoning.completed',
+]);
+
+const isReasoningOnlyAnalysisCard = (
   card: TimelineProjection['cards'][number],
   detailEvents: CanonicalEvent[],
 ) =>
   card.phase === 'analysis' &&
   detailEvents.length > 0 &&
-  detailEvents.every((event) => event.type === 'progress.updated');
+  detailEvents.every((event) => REASONING_ONLY_EVENT_TYPES.has(event.type));
 
 const MIN_VALID_EPOCH_SECONDS = 946684800;
 const MIN_VALID_EPOCH_MILLISECONDS = MIN_VALID_EPOCH_SECONDS * 1000;
@@ -100,7 +107,7 @@ export const buildChatTimelineBubbleCards = (
         .map((detailRef) => eventsById.get(detailRef))
         .filter((event): event is CanonicalEvent => Boolean(event));
 
-      if (isReasoningOnlyProgressCard(card, detailEvents)) {
+      if (isReasoningOnlyAnalysisCard(card, detailEvents)) {
         return [];
       }
 

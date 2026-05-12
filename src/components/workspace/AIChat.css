@@ -1280,7 +1280,7 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
   padding: 2px 0;
 }
 
-.chat-thinking-pulse,
+.chat-thinking-marker,
 .chat-tool-icon {
   width: 8px;
   height: 8px;
@@ -1288,32 +1288,6 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
   border-radius: 999px;
   background: var(--mode-accent, #60a5fa);
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--mode-accent, #60a5fa) 36%, transparent);
-}
-
-.chat-thinking-pulse {
-  animation: chat-thinking-pulse 1.5s ease-out infinite;
-}
-
-.chat-thinking-dots {
-  display: inline-flex;
-  gap: 3px;
-  align-items: center;
-}
-
-.chat-thinking-dots span {
-  width: 3px;
-  height: 3px;
-  border-radius: 999px;
-  background: currentColor;
-  animation: chat-thinking-dot 1.2s ease-in-out infinite;
-}
-
-.chat-thinking-dots span:nth-child(2) {
-  animation-delay: 0.16s;
-}
-
-.chat-thinking-dots span:nth-child(3) {
-  animation-delay: 0.32s;
 }
 
 .chat-tool-card {
@@ -1386,38 +1360,6 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
   line-height: 1.2;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-}
-
-@keyframes chat-thinking-pulse {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mode-accent, #60a5fa) 36%, transparent);
-  }
-
-  70%,
-  100% {
-    box-shadow: 0 0 0 8px transparent;
-  }
-}
-
-@keyframes chat-thinking-dot {
-  0%,
-  80%,
-  100% {
-    opacity: 0.35;
-    transform: translateY(0);
-  }
-
-  40% {
-    opacity: 1;
-    transform: translateY(-2px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chat-thinking-pulse,
-  .chat-thinking-dots span {
-    animation: none;
-  }
 }
 
 .chat-composer {
