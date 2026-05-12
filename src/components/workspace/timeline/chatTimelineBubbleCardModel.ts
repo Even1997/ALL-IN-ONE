@@ -10,6 +10,22 @@ export type ChatTimelineBubbleCardDescriptor = {
   detailItems: TimelineDetailItem[];
 };
 
+export type ChatTimelineCompletedResponseSummary = {
+  cardId: string;
+  phase: 'response';
+  title: string;
+  summary: string;
+  status: TimelineProjection['cards'][number]['status'];
+  completedAt: number;
+  elapsedSeconds?: number;
+  detailItems: TimelineDetailItem[];
+};
+
+export type ChatTimelineBubbleCardsModel = {
+  descriptors: ChatTimelineBubbleCardDescriptor[];
+  completedResponseSummary: ChatTimelineCompletedResponseSummary | null;
+};
+
 const SUPPRESSED_CHAT_TIMELINE_PHASES = new Set(['intake', 'approval', 'question']);
 
 const isReasoningOnlyProgressCard = (
@@ -20,18 +36,57 @@ const isReasoningOnlyProgressCard = (
   detailEvents.length > 0 &&
   detailEvents.every((event) => event.type === 'progress.updated');
 
+const MIN_VALID_EPOCH_SECONDS = 946684800;
+const MIN_VALID_EPOCH_MILLISECONDS = MIN_VALID_EPOCH_SECONDS * 1000;
+
+const normalizeTimelineTimestampToMilliseconds = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  if (value >= MIN_VALID_EPOCH_MILLISECONDS) {
+    return value;
+  }
+
+  if (value >= MIN_VALID_EPOCH_SECONDS) {
+    return value * 1000;
+  }
+
+  return null;
+};
+
+const deriveElapsedSeconds = (startedAt: number | undefined, completedAt: number) => {
+  if (typeof startedAt !== 'number' || !Number.isFinite(startedAt)) {
+    return undefined;
+  }
+
+  const normalizedStartedAt = normalizeTimelineTimestampToMilliseconds(startedAt);
+  const normalizedCompletedAt = normalizeTimelineTimestampToMilliseconds(completedAt);
+  if (normalizedStartedAt !== null && normalizedCompletedAt !== null) {
+    const deltaSeconds = Math.max(0, (normalizedCompletedAt - normalizedStartedAt) / 1000);
+    return deltaSeconds > 0 ? Math.max(1, Math.round(deltaSeconds)) : 0;
+  }
+
+  const delta = Math.max(0, completedAt - startedAt);
+  return delta > 0 ? Math.max(1, Math.round(delta)) : 0;
+};
+
 export const buildChatTimelineBubbleCards = (
   projection: TimelineProjection | null,
-): ChatTimelineBubbleCardDescriptor[] => {
+): ChatTimelineBubbleCardsModel => {
   if (!projection || projection.cards.length === 0) {
-    return [];
+    return {
+      descriptors: [],
+      completedResponseSummary: null,
+    };
   }
 
   const eventsById = new Map(
     (projection.events || []).map((event) => [event.eventId, event] as const),
   );
+  let completedResponseSummary: ChatTimelineCompletedResponseSummary | null = null;
 
-  return projection.cards
+  const descriptors = projection.cards
     .flatMap((card, index) => {
       if (SUPPRESSED_CHAT_TIMELINE_PHASES.has(card.phase)) {
         return [];
@@ -49,18 +104,34 @@ export const buildChatTimelineBubbleCards = (
         return [];
       }
 
+      if (card.phase === 'response') {
+        const completedAt = projection.finalMessage?.completedAt ?? card.endedAt ?? card.startedAt;
+        completedResponseSummary = {
+          cardId: card.cardId,
+          phase: 'response',
+          title: card.title,
+          summary: projection.finalMessage?.text || card.summary,
+          status: card.status,
+          completedAt,
+          elapsedSeconds: deriveElapsedSeconds(card.startedAt, completedAt),
+          detailItems: buildTimelineDetailItems(detailEvents),
+        };
+        return [];
+      }
+
       return [
         {
           cardId: card.cardId,
-          createdAt: card.phase === 'response' && typeof card.endedAt === 'number'
-            ? card.endedAt
-            : card.startedAt,
-          timelineOrder: card.phase === 'response'
-            ? Number.MAX_SAFE_INTEGER
-            : index,
+          createdAt: card.startedAt,
+          timelineOrder: index,
           card,
           detailItems: buildTimelineDetailItems(detailEvents),
         },
       ];
     });
+
+  return {
+    descriptors,
+    completedResponseSummary,
+  };
 };

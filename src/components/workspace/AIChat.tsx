@@ -108,6 +108,7 @@ import {
   GNAgentEmbeddedComposer,
   GNAgentHistoryMenu,
   type MessageBubbleCard,
+  type MessageProcessSummary,
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import { AIChatReferenceSearchMenu } from './AIChatReferenceSearchMenu';
@@ -126,9 +127,13 @@ import { AssistantTextBlock, AssistantThinkingBlock } from './AIChatAssistantPar
 import {
   advanceParagraphStreamingState,
   createParagraphStreamingState,
-  finalizeParagraphStreamingState,
   type ParagraphStreamingState,
 } from './assistantParagraphStreaming.ts';
+import type { AssistantDraftState } from './assistantRenderModel.ts';
+import {
+  areAssistantDraftStatesEqual,
+  projectAssistantStreamingDraft,
+} from './assistantStreamingDraftProjection.ts';
 import {
   buildChatTimelineBubbleCards,
   ChatTimelineBubbleCard,
@@ -199,13 +204,6 @@ type RunDiffState = {
   loading: boolean;
   diff?: AgentTurnCheckpointDiff | null;
   error?: string;
-};
-
-type StreamingDraftState = {
-  timeline: AssistantTimelineEvent[];
-  streamingText?: string;
-  isStreaming?: boolean;
-  streamingReasoningTextByEventId?: Record<string, string>;
 };
 
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
@@ -958,18 +956,6 @@ const getStoredMessageConversationContent = (message: StoredChatMessage) =>
     ? getAssistantTimelineText(message.timeline)
     : message.content;
 
-const resolveAssistantCompletionText = (
-  projectionFinalText: string | undefined,
-  timeline: AssistantTimelineEvent[],
-) => {
-  const projected = projectionFinalText?.trim();
-  if (projected) {
-    return projectionFinalText || '';
-  }
-
-  return getAssistantTimelineText(timeline);
-};
-
 const toConversationHistoryMessages = (messages: StoredChatMessage[] = []) =>
   messages.map((message) => ({
     role: message.role,
@@ -1032,7 +1018,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [selectedChatAgentId, setSelectedChatAgentId] = useState<ChatAgentId>('built-in');
   const [localAgentSnapshot, setLocalAgentSnapshot] = useState<LocalAgentConfigSnapshot | null>(null);
-  const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, StreamingDraftState>>({});
+  const [streamingDraftContents, setStreamingDraftContents] = useState<Record<string, AssistantDraftState>>({});
 
   const [referenceSearchOpen, setReferenceSearchOpen] = useState(false);
   const [referenceSearchQuery, setReferenceSearchQuery] = useState('');
@@ -1058,7 +1044,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const shouldAutoScrollRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const liveThreadIdRef = useRef<string | null>(null);
-  const streamingDraftBufferRef = useRef<Record<string, StreamingDraftState>>({});
+  const streamingDraftBufferRef = useRef<Record<string, AssistantDraftState>>({});
   const streamingDraftFlushFrameRef = useRef<number | null>(null);
   const paragraphStreamingStateByMessageIdRef = useRef<Record<string, ParagraphStreamingState>>({});
   const paragraphStreamingTimeoutsRef = useRef<Record<string, number>>({});
@@ -1400,9 +1386,23 @@ export const AIChat: React.FC<AIChatProps> = ({
     projectId: currentProjectId,
   });
   const activeStreamingLatencyTrace = liveState?.streamingLatencyTrace ?? null;
-  const effectiveDraftContents = useMemo(() => {
-    const draftsByMessageId: Record<string, StreamingDraftState> = { ...streamingDraftContents };
+  useEffect(() => {
     const activeMessages = activeSession?.messages || [];
+    const activeAssistantIds = new Set(
+      activeMessages.filter((message) => message.role === 'assistant').map((message) => message.id),
+    );
+    const activeReasoningEventIds = new Set<string>();
+    const nextDraftsByMessageId: Record<string, AssistantDraftState> = {
+      ...streamingDraftBufferRef.current,
+    };
+    const nextParagraphStatesByMessageId = {
+      ...paragraphStreamingStateByMessageIdRef.current,
+    };
+    const nextReasoningStatesByEventId = {
+      ...reasoningParagraphStreamingStateByEventIdRef.current,
+    };
+    let draftsChanged = false;
+    const now = Date.now();
 
     activeMessages.forEach((message) => {
       if (message.role !== 'assistant') {
@@ -1417,96 +1417,108 @@ export const AIChat: React.FC<AIChatProps> = ({
         return;
       }
 
-      const nextDraft: StreamingDraftState = {
-        timeline: draftsByMessageId[message.id]?.timeline || message.timeline,
-      };
-      const streamingReasoningTextByEventId: Record<string, string> = {};
+      const previousDraft = nextDraftsByMessageId[message.id];
+      const reasoningStateByEventId = (previousDraft?.timeline || message.timeline).reduce<Record<string, ParagraphStreamingState>>(
+        (acc, event) => {
+          if (event.kind !== 'reasoning') {
+            return acc;
+          }
 
-      nextDraft.timeline.forEach((event) => {
+          activeReasoningEventIds.add(event.id);
+          const currentState = nextReasoningStatesByEventId[event.id];
+          if (currentState) {
+            acc[event.id] = currentState;
+          }
+          return acc;
+        },
+        {},
+      );
+      const projectedDraft = projectAssistantStreamingDraft({
+        message,
+        projection,
+        previousDraft,
+        answerState: nextParagraphStatesByMessageId[message.id],
+        reasoningStateByEventId,
+        now,
+      });
+
+      if (!areAssistantDraftStatesEqual(previousDraft, projectedDraft.draft ?? undefined)) {
+        draftsChanged = true;
+        if (projectedDraft.draft) {
+          nextDraftsByMessageId[message.id] = projectedDraft.draft;
+        } else {
+          delete nextDraftsByMessageId[message.id];
+        }
+      }
+
+      if (projection.activeMessage && projectedDraft.answerState) {
+        nextParagraphStatesByMessageId[message.id] = projectedDraft.answerState;
+        if (projectedDraft.pendingAnswerFlush) {
+          scheduleParagraphStreamingTimeout(message.id, projection.activeMessage.text, projectedDraft.draft?.timeline || message.timeline);
+        } else {
+          clearParagraphStreamingTimeout(message.id);
+        }
+      } else {
+        resetParagraphStreamingState(message.id);
+        delete nextParagraphStatesByMessageId[message.id];
+      }
+
+      (projectedDraft.draft?.timeline || message.timeline).forEach((event) => {
         if (event.kind !== 'reasoning') {
           return;
         }
 
         if (event.status === 'streaming') {
-          const currentReasoningState =
-            reasoningParagraphStreamingStateByEventIdRef.current[event.id] ?? createParagraphStreamingState();
-          const nextReasoningState = advanceParagraphStreamingState(
-            currentReasoningState,
-            event.content,
-            Date.now(),
-          );
-          reasoningParagraphStreamingStateByEventIdRef.current = {
-            ...reasoningParagraphStreamingStateByEventIdRef.current,
-            [event.id]: nextReasoningState,
-          };
-          streamingReasoningTextByEventId[event.id] = nextReasoningState.visibleText;
-
-          if (nextReasoningState.pendingText.trim().length > 0) {
-            scheduleReasoningParagraphStreamingTimeout(message.id, event.id, event.content, nextDraft.timeline);
+          const nextReasoningState = projectedDraft.reasoningStateByEventId[event.id];
+          if (nextReasoningState) {
+            nextReasoningStatesByEventId[event.id] = nextReasoningState;
+          }
+          if (projectedDraft.pendingReasoningFlushEventIds.includes(event.id)) {
+            scheduleReasoningParagraphStreamingTimeout(message.id, event.id, event.content, projectedDraft.draft?.timeline || message.timeline);
           } else {
             clearReasoningParagraphStreamingTimeout(event.id);
           }
           return;
         }
 
-        const currentReasoningState = reasoningParagraphStreamingStateByEventIdRef.current[event.id];
-        if (!currentReasoningState) {
-          return;
-        }
-
-        const finalized = finalizeParagraphStreamingState(currentReasoningState, event.content);
-        streamingReasoningTextByEventId[event.id] = finalized.visibleText;
         resetReasoningParagraphStreamingState(event.id);
+        delete nextReasoningStatesByEventId[event.id];
       });
-
-      if (projection.activeMessage) {
-        const currentParagraphState =
-          paragraphStreamingStateByMessageIdRef.current[message.id] ?? createParagraphStreamingState();
-        const nextParagraphState = advanceParagraphStreamingState(
-          currentParagraphState,
-          projection.activeMessage.text,
-          Date.now(),
-        );
-
-        paragraphStreamingStateByMessageIdRef.current = {
-          ...paragraphStreamingStateByMessageIdRef.current,
-          [message.id]: nextParagraphState,
-        };
-        nextDraft.isStreaming = true;
-        nextDraft.streamingText = nextParagraphState.visibleText;
-        if (nextParagraphState.pendingText.trim().length > 0) {
-          scheduleParagraphStreamingTimeout(message.id, projection.activeMessage.text, nextDraft.timeline);
-        } else {
-          clearParagraphStreamingTimeout(message.id);
-        }
-      } else {
-        clearParagraphStreamingTimeout(message.id);
-        const currentParagraphState = paragraphStreamingStateByMessageIdRef.current[message.id];
-        if (currentParagraphState) {
-          const finalText = resolveAssistantCompletionText(projection.finalMessage?.text, message.timeline);
-          const finalized = finalizeParagraphStreamingState(
-            currentParagraphState,
-            finalText,
-          );
-          nextDraft.streamingText = finalized.visibleText;
-          if (getAssistantTimelineText(message.timeline) === nextDraft.streamingText) {
-            resetParagraphStreamingState(message.id);
-          }
-        }
-        nextDraft.isStreaming = false;
-      }
-
-      if (Object.keys(streamingReasoningTextByEventId).length > 0) {
-        nextDraft.streamingReasoningTextByEventId = streamingReasoningTextByEventId;
-      }
-
-      draftsByMessageId[message.id] = {
-        ...draftsByMessageId[message.id],
-        ...nextDraft,
-      };
     });
 
-    return draftsByMessageId;
+    Object.keys(nextDraftsByMessageId).forEach((messageId) => {
+      if (activeAssistantIds.has(messageId)) {
+        return;
+      }
+
+      draftsChanged = true;
+      nextDraftsByMessageId[messageId]?.timeline.forEach((event) => {
+        if (event.kind === 'reasoning') {
+          resetReasoningParagraphStreamingState(event.id);
+          delete nextReasoningStatesByEventId[event.id];
+        }
+      });
+      delete nextDraftsByMessageId[messageId];
+      delete nextParagraphStatesByMessageId[messageId];
+      resetParagraphStreamingState(messageId);
+    });
+
+    Object.keys(nextReasoningStatesByEventId).forEach((eventId) => {
+      if (activeReasoningEventIds.has(eventId)) {
+        return;
+      }
+
+      resetReasoningParagraphStreamingState(eventId);
+      delete nextReasoningStatesByEventId[eventId];
+    });
+
+    paragraphStreamingStateByMessageIdRef.current = nextParagraphStatesByMessageId;
+    reasoningParagraphStreamingStateByEventIdRef.current = nextReasoningStatesByEventId;
+
+    if (draftsChanged) {
+      streamingDraftBufferRef.current = nextDraftsByMessageId;
+      setStreamingDraftContents({ ...nextDraftsByMessageId });
+    }
   }, [
     activeSession?.messages,
     clearReasoningParagraphStreamingTimeout,
@@ -1515,10 +1527,12 @@ export const AIChat: React.FC<AIChatProps> = ({
     resetParagraphStreamingState,
     scheduleParagraphStreamingTimeout,
     scheduleReasoningParagraphStreamingTimeout,
-    streamingDraftContents,
     timelineProjectionByMessageId,
     timelineProjectionByRunId,
   ]);
+  const effectiveDraftContents = useMemo(() => {
+    return streamingDraftContents;
+  }, [streamingDraftContents]);
   liveThreadIdRef.current = liveThreadId;
   const {
     permissionMode,
@@ -2884,16 +2898,35 @@ export const AIChat: React.FC<AIChatProps> = ({
       timelineProjectionByMessageId[message.id] ||
       null;
 
-    const descriptors = buildChatTimelineBubbleCards(projection);
-    if (descriptors.length === 0) {
+    const model = buildChatTimelineBubbleCards(projection);
+    if (model.descriptors.length === 0) {
       return null;
     }
 
-    return descriptors.map((descriptor) => ({
+    return model.descriptors.map((descriptor) => ({
       node: <ChatTimelineBubbleCard key={descriptor.cardId} descriptor={descriptor} />,
       createdAt: descriptor.createdAt,
       timelineOrder: descriptor.timelineOrder,
     }));
+  }, [timelineProjectionByMessageId, timelineProjectionByRunId]);
+  const renderTimelineProcessSummary = useCallback((message: StoredChatMessage): MessageProcessSummary | null => {
+    if (message.role !== 'assistant') {
+      return null;
+    }
+
+    const projection =
+      (message.runId ? timelineProjectionByRunId[message.runId] : null) ||
+      timelineProjectionByMessageId[message.id] ||
+      null;
+    const model = buildChatTimelineBubbleCards(projection);
+
+    if (!model.completedResponseSummary) {
+      return null;
+    }
+
+    return {
+      elapsedSeconds: model.completedResponseSummary.elapsedSeconds,
+    };
   }, [timelineProjectionByMessageId, timelineProjectionByRunId]);
   const renderToolExecutionCard = useCallback((message: StoredChatMessage) => {
     const teamRun = message.teamRun || null;
@@ -3349,6 +3382,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderStructuredCards={renderStructuredCards}
       renderProjectFileProposal={renderProjectFileProposal}
       renderTimelineCards={renderTimelineCards}
+      renderTimelineProcessSummary={renderTimelineProcessSummary}
       renderToolExecutionCard={renderToolExecutionCard}
       renderRunSummaryCard={renderRunSummaryCard}
       renderRuntimeQuestion={renderRuntimeQuestionCard}

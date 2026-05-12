@@ -30,6 +30,13 @@ test('assistant render model keeps assistant thinking in the process lane and pr
       ['answer_lane', 'text', 'Checked the first file.\n\nFinal answer'],
     ]
   );
+  assert.equal(model.hasFinalAnswer, true);
+  assert.deepEqual(
+    model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
+    [['thinking_lane', 'thinking', 'Check project first']],
+  );
+  assert.equal(model.finalAnswerItem?.kind, 'answer_lane');
+  assert.equal(model.finalAnswerItem?.part.content, 'Checked the first file.\n\nFinal answer');
   assert.equal(model.copyText, 'Checked the first file.\n\nFinal answer');
 });
 
@@ -80,6 +87,9 @@ test('assistant render model tolerates assistant messages without timeline', asy
   });
 
   assert.deepEqual(model.items, []);
+  assert.deepEqual(model.processItems, []);
+  assert.equal(model.finalAnswerItem, null);
+  assert.equal(model.hasFinalAnswer, false);
   assert.equal(model.copyText, '');
 });
 
@@ -126,6 +136,22 @@ test('assistant render model keeps the answer lane key stable across streaming a
     streamingModel.items.find((item) => item.kind === 'answer_lane')?.key,
     completedModel.items.find((item) => item.kind === 'answer_lane')?.key,
   );
+});
+
+test('assistant render model prefers the finalized visible draft text during completion handoff', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const model = buildAssistantRenderModel({
+    id: 'assistant_final_handoff',
+    role: 'assistant',
+    timeline: [{ id: 'text_1', kind: 'text', content: 'Stored final answer.', createdAt: 10 }],
+    createdAt: 1,
+  }, undefined, 0, {
+    streamingText: 'Visible final answer.',
+    isStreaming: false,
+  });
+
+  assert.equal(model.content, 'Visible final answer.');
+  assert.equal(model.finalAnswerItem?.part.content, 'Visible final answer.');
 });
 
 test('assistant render model can show buffered thinking text without mutating timeline content', async () => {

@@ -105,6 +105,18 @@ test('timeline migration removes the legacy runtime tool renderer files from the
   }
 });
 
+test('AIChat keeps paragraph streaming mutations out of effectiveDraftContents useMemo', async () => {
+  const chatSource = await readFile('src/components/workspace/AIChat.tsx', 'utf8');
+  const match = chatSource.match(/const effectiveDraftContents = useMemo\(\(\) => \{[\s\S]*?\n  \}, \[/);
+
+  assert.ok(match, 'expected effectiveDraftContents useMemo block to exist');
+  assert.doesNotMatch(match[0], /advanceParagraphStreamingState\(/);
+  assert.doesNotMatch(match[0], /finalizeParagraphStreamingState\(/);
+  assert.doesNotMatch(match[0], /scheduleParagraphStreamingTimeout\(/);
+  assert.doesNotMatch(match[0], /scheduleReasoningParagraphStreamingTimeout\(/);
+  assert.doesNotMatch(match[0], /Date\.now\(\)/);
+});
+
 test('chat surface keeps runtime question interaction cards wired for pending ask-user events', async () => {
   const chatSource = await readFile('src/components/workspace/AIChat.tsx', 'utf8');
   const renderModelSource = await readFile('src/components/workspace/runtimeInteractionRenderModel.ts', 'utf8');
@@ -120,7 +132,7 @@ test('chat timeline bubble card helper filters duplicate run, response, and inte
     `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`
   );
 
-  const descriptors = buildChatTimelineBubbleCards({
+  const model = buildChatTimelineBubbleCards({
     runId: 'run_1',
     status: 'completed',
     activeMessage: null,
@@ -283,8 +295,10 @@ test('chat timeline bubble card helper filters duplicate run, response, and inte
     ],
   });
 
-  assert.deepEqual(descriptors.map((descriptor) => descriptor.card.phase), ['tooling', 'response']);
-  assert.deepEqual(descriptors.map((descriptor) => descriptor.createdAt), [3, 6]);
+  assert.deepEqual(model.descriptors.map((descriptor) => descriptor.card.phase), ['tooling']);
+  assert.deepEqual(model.descriptors.map((descriptor) => descriptor.createdAt), [3]);
+  assert.equal(model.completedResponseSummary?.summary, 'Final answer');
+  assert.equal(model.completedResponseSummary?.completedAt, 6);
 });
 
 test('chat timeline keeps one compact completed response summary card', async () => {
@@ -292,7 +306,7 @@ test('chat timeline keeps one compact completed response summary card', async ()
     `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`
   );
 
-  const cards = buildChatTimelineBubbleCards({
+  const model = buildChatTimelineBubbleCards({
     runId: 'run-1',
     status: 'completed',
     events: [],
@@ -317,9 +331,15 @@ test('chat timeline keeps one compact completed response summary card', async ()
     ],
   });
 
+  assert.deepEqual(model.descriptors, []);
   assert.deepEqual(
-    cards.map((card) => [card.card.phase, card.createdAt, card.card.summary]),
-    [['response', 60, 'Final answer ready.']],
+    model.completedResponseSummary && [
+      model.completedResponseSummary.phase,
+      model.completedResponseSummary.completedAt,
+      model.completedResponseSummary.elapsedSeconds,
+      model.completedResponseSummary.summary,
+    ],
+    ['response', 60, 40, 'Final answer ready.'],
   );
 });
 
@@ -328,7 +348,7 @@ test('completed run summary cards sort after same-timestamp work cards', async (
     `../../src/components/workspace/timeline/chatTimelineBubbleCardModel.ts?test=${Date.now()}`
   );
 
-  const descriptors = buildChatTimelineBubbleCards({
+  const model = buildChatTimelineBubbleCards({
     runId: 'run-1',
     status: 'completed',
     activeMessage: null,
@@ -368,7 +388,7 @@ test('completed run summary cards sort after same-timestamp work cards', async (
     ],
   });
 
-  const sorted = [...descriptors].sort((left, right) => {
+  const sorted = [...model.descriptors].sort((left, right) => {
     if (left.createdAt !== right.createdAt) {
       return left.createdAt - right.createdAt;
     }

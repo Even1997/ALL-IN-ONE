@@ -2,105 +2,136 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const loadMessageItem = async () =>
-  import(`../../src/components/ai/gn-agent/messageTimelineOrdering.ts?test=${Date.now()}`);
+const loadTimelineRenderModel = async () =>
+  import(`../../src/components/workspace/timeline/chatMessageTimelineRenderModel.ts?test=${Date.now()}`);
 
-test('message item keeps runtime cards interleaved with assistant narrative by timeline order', async () => {
-  const { sortMessageRenderItems } = await loadMessageItem();
+test('message timeline render model keeps projection cards interleaved with assistant narrative by timeline order', async () => {
+  const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
-  const items = sortMessageRenderItems([
-    {
+  const model = buildChatMessageTimelineRenderModel({
+    thinkingItems: [
+      {
+        key: 'thinking-1',
+        node: null,
+        createdAt: 10,
+        timelineOrder: 0,
+        laneKind: 'thinking_lane',
+      },
+    ],
+    timelineCardItems: [
+      {
+        key: 'tool-1',
+        node: null,
+        createdAt: 20,
+        timelineOrder: 1,
+        laneKind: 'bubble',
+      },
+      {
+        key: 'tool-2',
+        node: null,
+        createdAt: 40,
+        timelineOrder: 3,
+        laneKind: 'bubble',
+      },
+    ],
+    activeResponseItem: {
       key: 'text-1',
       node: null,
-      createdAt: 10,
-    },
-    {
-      key: 'text-2',
-      node: null,
       createdAt: 30,
+      timelineOrder: 2,
+      laneKind: 'answer_lane',
     },
-    {
-      key: 'tool-1',
-      node: null,
-      createdAt: 20,
-    },
-    {
-      key: 'tool-2',
-      node: null,
-      createdAt: 40,
-    },
-  ]);
+    finalAnswerItem: null,
+  });
 
   assert.deepEqual(
-    items.map((item) => item.key),
-    ['text-1', 'tool-1', 'text-2', 'tool-2']
+    model.processItems.map((item) => item.key),
+    ['thinking-1', 'tool-1', 'text-1', 'tool-2']
   );
 });
 
-test('message item keeps chronological order once streaming pin is disabled', async () => {
-  const { sortMessageRenderItems } = await loadMessageItem();
+test('message timeline render model keeps chronological order once only projection-backed process items remain', async () => {
+  const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
-  const items = sortMessageRenderItems([
-    {
+  const model = buildChatMessageTimelineRenderModel({
+    thinkingItems: [],
+    timelineCardItems: [
+      {
+        key: 'tool-1',
+        node: null,
+        createdAt: 10,
+        timelineOrder: 0,
+        laneKind: 'bubble',
+      },
+      {
+        key: 'tool-2',
+        node: null,
+        createdAt: 20,
+        timelineOrder: 1,
+        laneKind: 'bubble',
+      },
+    ],
+    activeResponseItem: {
       key: 'text-1',
       node: null,
       createdAt: 30,
+      timelineOrder: 2,
+      laneKind: 'answer_lane',
     },
-    {
-      key: 'tool-1',
-      node: null,
-      createdAt: 10,
-    },
-    {
-      key: 'tool-2',
-      node: null,
-      createdAt: 20,
-    },
-  ]);
+    finalAnswerItem: null,
+  });
 
   assert.deepEqual(
-    items.map((item) => item.key),
+    model.processItems.map((item) => item.key),
     ['tool-1', 'tool-2', 'text-1']
   );
 });
 
-test('message item breaks same-timestamp ties with original timeline order', async () => {
-  const { sortMessageRenderItems } = await loadMessageItem();
+test('message timeline render model breaks same-timestamp ties with shared projection order', async () => {
+  const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
-  const items = sortMessageRenderItems([
-    {
+  const model = buildChatMessageTimelineRenderModel({
+    thinkingItems: [],
+    timelineCardItems: [
+      {
+        key: 'tool-1',
+        node: null,
+        createdAt: 20,
+        timelineOrder: 1,
+        laneKind: 'bubble',
+      },
+    ],
+    activeResponseItem: {
       key: 'text-1',
       node: null,
       createdAt: 20,
       timelineOrder: 2,
+      laneKind: 'answer_lane',
     },
-    {
-      key: 'tool-1',
-      node: null,
-      createdAt: 20,
-      timelineOrder: 1,
-    },
-  ]);
+    finalAnswerItem: null,
+  });
 
   assert.deepEqual(
-    items.map((item) => item.key),
+    model.processItems.map((item) => item.key),
     ['tool-1', 'text-1']
   );
 });
 
-test('message item sorts answer, thinking, and runtime cards in one chronological pass', async () => {
-  const { sortMessageRenderItems } = await loadMessageItem();
+test('message timeline render model keeps the final answer separate from process chronology', async () => {
+  const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
-  const items = sortMessageRenderItems([
-    { key: 'thinking-1', node: null, createdAt: 10, laneKind: 'thinking_lane' },
-    { key: 'answer-1', node: null, createdAt: 30, laneKind: 'answer_lane' },
-    { key: 'tool-1', node: null, createdAt: 20, laneKind: 'bubble' },
-  ]);
+  const model = buildChatMessageTimelineRenderModel({
+    thinkingItems: [{ key: 'thinking-1', node: null, createdAt: 10, laneKind: 'thinking_lane' }],
+    timelineCardItems: [{ key: 'tool-1', node: null, createdAt: 20, laneKind: 'bubble' }],
+    activeResponseItem: null,
+    finalAnswerItem: { key: 'answer-1', node: null, createdAt: 30, laneKind: 'answer_lane' },
+  });
 
   assert.deepEqual(
-    items.map((item) => item.key),
-    ['thinking-1', 'tool-1', 'answer-1'],
+    model.processItems.map((item) => item.key),
+    ['thinking-1', 'tool-1'],
   );
+  assert.equal(model.finalAnswerItem?.key, 'answer-1');
 });
 
 test('embedded message list timestamps run summary cards from the latest runtime event', async () => {
@@ -109,4 +140,23 @@ test('embedded message list timestamps run summary cards from the latest runtime
   assert.match(source, /const getLatestRuntimeEventTime =/);
   assert.match(source, /createdAt:\s*latestRuntimeEventTime\s*\?\?\s*message\.createdAt/);
   assert.doesNotMatch(source, /runSummaryNode\s*\?\s*\{\s*node:\s*runSummaryNode,\s*createdAt:\s*message\.createdAt\s*\}/);
+});
+
+test('GN Agent message item separates process rendering from the final answer body', async () => {
+  const messageItemSource = await readFile('src/components/ai/gn-agent/GNAgentMessageItem.tsx', 'utf8');
+
+  assert.match(messageItemSource, /buildChatMessageTimelineRenderModel/);
+  assert.match(messageItemSource, /const processGroups = timelineRenderModel\.processGroups;/);
+  assert.match(messageItemSource, /finalAnswerRenderItem/);
+  assert.match(messageItemSource, /const hasProcessArtifacts =/);
+  assert.match(messageItemSource, /const shouldShowCompletedProcessFold =/);
+  assert.match(messageItemSource, /className="chat-message-process-fold"/);
+  assert.match(messageItemSource, /className="chat-message-process-inline"/);
+  assert.match(messageItemSource, /className="chat-message-process-elapsed"/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-kicker/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-status/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-detail-toggle/);
+  assert.doesNotMatch(messageItemSource, /TimelineDetailDrawer/);
+  assert.match(messageItemSource, /chat-message-final-answer/);
+  assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(\[\.\.\.thinkingRenderItems,\s*\.\.\.bubbleRenderItems\]\)/);
 });

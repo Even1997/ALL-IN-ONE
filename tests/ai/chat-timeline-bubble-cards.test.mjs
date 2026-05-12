@@ -69,10 +69,11 @@ test('chat timeline bubble cards suppress the redundant run-start card', async (
     payload: { finalText: 'Done.' },
   });
 
-  const descriptors = buildChatTimelineBubbleCards(composer.getProjection());
-  assert.equal(descriptors.length, 1);
-  assert.equal(descriptors[0].card.phase, 'tooling');
-  assert.notEqual(descriptors[0].card.title, 'Run');
+  const model = buildChatTimelineBubbleCards(composer.getProjection());
+  assert.equal(model.descriptors.length, 1);
+  assert.equal(model.descriptors[0].card.phase, 'tooling');
+  assert.notEqual(model.descriptors[0].card.title, 'Run');
+  assert.equal(model.completedResponseSummary?.phase, 'response');
 });
 
 test('timeline detail items summarize build commands instead of exposing raw command text as the main label', async () => {

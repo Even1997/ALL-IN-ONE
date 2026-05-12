@@ -124,16 +124,12 @@
     "hash": "40f0218c9799acb06db93ed5100bbe6f"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent\\GNAgentEmbeddedPieces.tsx": {
-    "mtime": 1778505865.535586,
-    "hash": "0a00c513caf9910ac97c0efcc8bd3b36"
+    "mtime": 1778554575.0618453,
+    "hash": "7008a0259fe36d461708612856ab9b26"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent\\GNAgentMessageItem.tsx": {
-    "mtime": 1778516610.806285,
-    "hash": "0d1b4dc795f798d136f60a12ccc27513"
-  },
-  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent\\messageTimelineOrdering.ts": {
-    "mtime": 1778516610.805285,
-    "hash": "df1cf1290555d4e4a707c65e349b27cd"
+    "mtime": 1778554652.9203942,
+    "hash": "a2ba20c270d0a773a9c1650b048f9bb4"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent-shell\\GNAgentChatPage.tsx": {
     "mtime": 1778137333.0504103,
@@ -316,8 +312,8 @@
     "hash": "e70f27a5c1b0433710106d476e757f97"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChat.tsx": {
-    "mtime": 1778516689.9555387,
-    "hash": "60b21fb0f9a1dc3d896e721057327b98"
+    "mtime": 1778556283.1834197,
+    "hash": "ed461c87b4892ebab091d5b671511f66"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatAISettingsTab.tsx": {
     "mtime": 1778399387.7204428,
@@ -328,8 +324,8 @@
     "hash": "dd1ba7bb42f3f8ca98c49d8d11b20835"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatConversationMessagesPane.tsx": {
-    "mtime": 1778502162.9609945,
-    "hash": "26ce13eb658fa4f516fdaba490cd5583"
+    "mtime": 1778544287.609453,
+    "hash": "4c71b4f54bfe3ea9440906843c6a94db"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\aiChatMessageParts.ts": {
     "mtime": 1778121782.9236214,
@@ -356,8 +352,12 @@
     "hash": "92adfcdc501335294b9711cf27df9306"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\assistantRenderModel.ts": {
-    "mtime": 1778516610.80859,
-    "hash": "c9caeae393a1a28133cd066bd424bc41"
+    "mtime": 1778556124.1058414,
+    "hash": "9f672e2e690c610246cb47088f8f4690"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\assistantStreamingDraftProjection.ts": {
+    "mtime": 1778556124.1048095,
+    "hash": "192720ee4035fa7ecb5b00fec265e23d"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\FileExplorer.tsx": {
     "mtime": 1777737320.622496,
@@ -407,9 +407,13 @@
     "mtime": 1777348617.3250258,
     "hash": "fef321e55099f717c58069b3f45af810"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\timeline\\chatMessageTimelineRenderModel.ts": {
+    "mtime": 1778554597.2282004,
+    "hash": "29ef4c27f5a487de9ea2d07935312c9d"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\timeline\\chatTimelineBubbleCardModel.ts": {
-    "mtime": 1778516721.8979926,
-    "hash": "4b32e83035d0320ac8c6520807c2ddba"
+    "mtime": 1778546761.5541315,
+    "hash": "43826e2d48088dfea24b7e9862e3bd5f"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\timeline\\chatTimelineBubbleCards.tsx": {
     "mtime": 1778458229.7915897,
@@ -1496,8 +1500,8 @@
     "hash": "efa61e50b6ee249ece217540b697e4c0"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-timeline-view.test.mjs": {
-    "mtime": 1778516545.9994385,
-    "hash": "3a5fbee594a321728978b37c00e5d00e"
+    "mtime": 1778556051.9010355,
+    "hash": "0ae9090d294ff43066f190608021111d"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-view-state.test.mjs": {
     "mtime": 1778497999.8709447,
@@ -1564,8 +1568,12 @@
     "hash": "f990def8a7971c6489286442edad2f97"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-render-model.test.mjs": {
-    "mtime": 1778516545.99444,
-    "hash": "df9a8b501c43ccd8e61b9006107ed4f5"
+    "mtime": 1778556051.8995256,
+    "hash": "8cf77165683dd901655c7730d42529e5"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-streaming-draft-projection.test.mjs": {
+    "mtime": 1778556051.8984828,
+    "hash": "6e38df7ef76a7de19e87d7beff271a1f"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-thinking-ui-source.test.mjs": {
     "mtime": 1777908170.5108855,
@@ -1608,8 +1616,8 @@
     "hash": "c47e476cabb39a28da10e43dbedadc22"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\chat-timeline-bubble-cards.test.mjs": {
-    "mtime": 1778505063.661329,
-    "hash": "1f901236a474c953cebd9a8a26b9f792"
+    "mtime": 1778544457.3843129,
+    "hash": "e0648f91d20ca27f70d43aaf9a0da76d"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\chat-workflow-routing.test.mjs": {
     "mtime": 1777982515.2217278,
@@ -1684,12 +1692,12 @@
     "hash": "bbec7cdb5ecd3766afadb5e37fc5124f"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\gn-agent-message-flow-source.test.mjs": {
-    "mtime": 1778516545.993441,
-    "hash": "072dfb7c242b9d165fe06ec7f3a4b302"
+    "mtime": 1778554517.3660502,
+    "hash": "fde34b619deee9f5aba5dccd10ab4c83"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\gn-agent-message-item.test.mjs": {
-    "mtime": 1778516545.989727,
-    "hash": "349a7c67a2e4768a6091915ca84c113d"
+    "mtime": 1778554470.0232866,
+    "hash": "96f427386080e6523807e71363fe2798"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\gn-agent-mode-switch-placement.test.mjs": {
     "mtime": 1778399387.7539947,
@@ -1748,8 +1756,8 @@
     "hash": "03c3190c1b059612b55c82402786b947"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\message-timeline-ordering.test.mjs": {
-    "mtime": 1778516545.9925542,
-    "hash": "828257419ddc8e9885711e0b3bc05d57"
+    "mtime": 1778554486.2224505,
+    "hash": "d3d86f75d2a7496c7096c9c9776f853e"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\product-workbench-lazy-loading.test.mjs": {
     "mtime": 1778399387.7569869,
@@ -2359,9 +2367,17 @@
     "mtime": 1778513394.5852437,
     "hash": "d3d91da36465910677f001f94a192298"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-12-ai-chat-final-answer-process-fold.md": {
+    "mtime": 1778543768.953275,
+    "hash": "e9742c9b2d4a01ae6e0f528683132106"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-12-ai-chat-paragraph-streaming-stabilization.md": {
     "mtime": 1778516222.6614602,
     "hash": "3c1a8a0520296929435e1beb05bbda53"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-12-ai-chat-render-phase-streaming-fix.md": {
+    "mtime": 1778555607.4965858,
+    "hash": "17a322a7ee41473421a9cf150ab3c75b"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\specs\\2026-04-24-ai-chat-unified-entry-design.md": {
     "mtime": 1776990247.5471349,

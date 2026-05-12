@@ -21,10 +21,16 @@ export type AssistantRenderItem =
   | { kind: 'thinking_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number }
   | { kind: 'answer_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number };
 
+type AssistantThinkingRenderItem = Extract<AssistantRenderItem, { kind: 'thinking_lane' }>;
+type AssistantAnswerRenderItem = Extract<AssistantRenderItem, { kind: 'answer_lane' }>;
+
 export type AssistantRenderModel = {
   content: string;
   isStreaming: boolean;
   items: AssistantRenderItem[];
+  processItems: AssistantThinkingRenderItem[];
+  finalAnswerItem: AssistantAnswerRenderItem | null;
+  hasFinalAnswer: boolean;
   copyText: string;
 };
 
@@ -69,8 +75,10 @@ export const buildAssistantRenderModel = (
     streamingState && Object.prototype.hasOwnProperty.call(streamingState, 'streamingText')
       ? streamingState.streamingText
       : draftState?.streamingText;
-  const hasStreamingText = isStreaming && streamingText !== undefined;
-  const content = hasStreamingText ? streamingText || '' : timelineText;
+  const hasVisibleDraftText =
+    (streamingState && Object.prototype.hasOwnProperty.call(streamingState, 'streamingText')) ||
+    (draftState && Object.prototype.hasOwnProperty.call(draftState, 'streamingText'));
+  const content = hasVisibleDraftText ? streamingText || '' : timelineText;
   const answerCreatedAt =
     [...timeline]
       .reverse()
@@ -93,7 +101,7 @@ export const buildAssistantRenderModel = (
     }
   });
 
-  const baseItems = thinkingItems
+  const processItems = thinkingItems
     .filter(({ part }) => !shouldSuppressAssistantTextPart(message, part, bubbleCardCount))
     .map(({ part, timelineOrder }, index) => ({
       kind: 'thinking_lane',
@@ -101,10 +109,10 @@ export const buildAssistantRenderModel = (
       part,
       index,
       timelineOrder,
-    })) as AssistantRenderItem[];
+    })) as AssistantThinkingRenderItem[];
   const normalizedContent = normalizeAssistantCopy(content);
   const shouldRenderAnswer =
-    hasStreamingText ||
+    hasVisibleDraftText ||
     (normalizedContent.length > 0 &&
       !shouldSuppressAssistantTextPart(
         message,
@@ -115,27 +123,28 @@ export const buildAssistantRenderModel = (
         },
         bubbleCardCount,
       ));
-  const items: AssistantRenderItem[] = shouldRenderAnswer
-    ? [
-        ...baseItems,
-        {
-          kind: 'answer_lane',
-          key: `${message.id}-answer-text`,
-          part: {
-            type: 'text',
-            content,
-            createdAt: answerCreatedAt,
-          },
-          index: baseItems.length,
-          timelineOrder: timeline.length,
+  const finalAnswerItem: AssistantAnswerRenderItem | null = shouldRenderAnswer
+    ? {
+        kind: 'answer_lane',
+        key: `${message.id}-answer-text`,
+        part: {
+          type: 'text',
+          content,
+          createdAt: answerCreatedAt,
         },
-      ]
-    : baseItems;
+        index: processItems.length,
+        timelineOrder: timeline.length,
+      }
+    : null;
+  const items: AssistantRenderItem[] = finalAnswerItem ? [...processItems, finalAnswerItem] : processItems;
 
   return {
     content,
     isStreaming,
     items,
+    processItems,
+    finalAnswerItem,
+    hasFinalAnswer: Boolean(finalAnswerItem),
     copyText: content,
   };
 };

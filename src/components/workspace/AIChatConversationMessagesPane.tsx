@@ -1,6 +1,10 @@
 import React, { useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { GNAgentMessageList, type MessageBubbleCard } from '../ai/gn-agent/GNAgentEmbeddedPieces';
+import {
+  GNAgentMessageList,
+  type MessageBubbleCard,
+  type MessageProcessSummary,
+} from '../ai/gn-agent/GNAgentEmbeddedPieces';
 import type { StreamingLatencyTrace } from '../../modules/ai/runtime/streamingLatencyTrace.ts';
 import type { ApprovalRecord } from '../../modules/ai/runtime/approval/approvalTypes.ts';
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
@@ -33,6 +37,7 @@ type AIChatConversationMessagesPaneProps = {
   renderStructuredCards: (message: StoredChatMessage) => ReactNode;
   renderProjectFileProposal: (message: StoredChatMessage) => ReactNode;
   renderTimelineCards: (message: StoredChatMessage) => MessageBubbleCard[] | null;
+  renderTimelineProcessSummary: (message: StoredChatMessage) => MessageProcessSummary | null;
   renderToolExecutionCard: (message: StoredChatMessage) => MessageBubbleCard[] | null;
   renderRunSummaryCard: (message: StoredChatMessage) => ReactNode;
   renderRuntimeQuestion: (message: StoredChatMessage) => MessageBubbleCard[] | null;
@@ -56,6 +61,7 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
   renderStructuredCards,
   renderProjectFileProposal,
   renderTimelineCards,
+  renderTimelineProcessSummary,
   renderToolExecutionCard,
   renderRunSummaryCard,
   renderRuntimeQuestion,
@@ -123,6 +129,7 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
       renderStructuredCards={renderStructuredCards}
       renderProjectFileProposal={renderProjectFileProposal}
       renderTimelineCards={renderTimelineCards}
+      renderTimelineProcessSummary={renderTimelineProcessSummary}
       renderToolExecutionCard={renderToolExecutionCard}
       renderRunSummaryCard={renderRunSummaryCard}
       renderRuntimeApproval={renderRuntimeApproval}

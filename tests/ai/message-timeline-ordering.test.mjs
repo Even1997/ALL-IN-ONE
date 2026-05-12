@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const loadOrdering = async () =>
-  import(`../../src/components/ai/gn-agent/messageTimelineOrdering.ts?test=${Date.now()}`);
+const loadRenderModel = async () =>
+  import(`../../src/components/workspace/timeline/chatMessageTimelineRenderModel.ts?test=${Date.now()}`);
 
-test('message timeline ordering groups contiguous thinking and bubble lanes without breaking chronology', async () => {
-  const { groupMessageRenderItemsByLane } = await loadOrdering();
+test('message timeline render model groups contiguous thinking and bubble lanes without breaking chronology', async () => {
+  const { groupChatMessageTimelineItemsByLane } = await loadRenderModel();
 
-  const groups = groupMessageRenderItemsByLane([
+  const groups = groupChatMessageTimelineItemsByLane([
     { key: 'thinking-1', node: null, createdAt: 1, laneKind: 'thinking_lane' },
     { key: 'bubble-1', node: null, createdAt: 2, laneKind: 'bubble' },
     { key: 'thinking-2', node: null, createdAt: 3, laneKind: 'thinking_lane' },
@@ -25,10 +25,10 @@ test('message timeline ordering groups contiguous thinking and bubble lanes with
   );
 });
 
-test('message timeline grouping treats answer items as bubble items without changing order', async () => {
-  const { groupMessageRenderItemsByLane } = await loadOrdering();
+test('message timeline render model treats answer items as bubble items without changing order', async () => {
+  const { groupChatMessageTimelineItemsByLane } = await loadRenderModel();
 
-  const groups = groupMessageRenderItemsByLane([
+  const groups = groupChatMessageTimelineItemsByLane([
     { key: 'thinking-1', node: null, createdAt: 1, laneKind: 'thinking_lane' },
     { key: 'answer-1', node: null, createdAt: 2, laneKind: 'answer_lane' },
     { key: 'tool-1', node: null, createdAt: 3, laneKind: 'bubble' },

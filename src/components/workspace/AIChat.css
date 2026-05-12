@@ -805,6 +805,68 @@
   gap: 8px;
 }
 
+.chat-message-process-inline {
+  width: min(760px, 100%);
+  margin: 0 0 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.chat-message-process-fold {
+  width: min(760px, 100%);
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--mode-border, rgba(255, 255, 255, 0.08)) 92%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)) 94%, transparent);
+}
+
+.chat-message-process-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.chat-message-process-summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-message-process-elapsed {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--mode-text, #f8fafc) 82%, transparent);
+}
+
+.chat-message-process-caret {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid color-mix(in srgb, var(--mode-text, #f8fafc) 58%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--mode-text, #f8fafc) 58%, transparent);
+  transform: rotate(-45deg);
+  transition: transform 140ms ease;
+}
+
+.chat-message-process-fold[open] .chat-message-process-caret {
+  transform: rotate(45deg);
+}
+
+.chat-message-process-fold-body {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.chat-message-final-answer {
+  margin-top: 2px;
+}
+
 .chat-message-card-lane,
 .chat-tool-trace-stream {
   width: min(760px, 100%);
@@ -2054,6 +2116,15 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
   padding-inline: 0;
   padding-top: 2px;
   border-radius: 0;
+}
+
+.chat-shell-embedded .chat-message-process-fold {
+  width: 100%;
+  padding-inline: 0;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  background: transparent;
 }
 
 .chat-shell-embedded .chat-message.user .chat-message-bubble {
@@ -5475,6 +5546,33 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 
 .gn-agent-workspace .chat-shell-embedded .chat-message.assistant .chat-message-meta {
   display: none;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-process-inline {
+  width: var(--gn-agent-linear-lane-width);
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-process-fold {
+  width: var(--gn-agent-linear-lane-width);
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--gn-agent-border, rgba(255, 255, 255, 0.08)) 88%, transparent);
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-process-summary {
+  gap: 10px;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-process-elapsed {
+  color: var(--gn-agent-muted, rgba(241, 241, 238, 0.68));
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-process-fold-body {
+  gap: 6px;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-final-answer {
+  width: var(--gn-agent-linear-lane-width);
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-message-card-lane,

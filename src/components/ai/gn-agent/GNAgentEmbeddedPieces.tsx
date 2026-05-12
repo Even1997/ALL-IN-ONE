@@ -34,6 +34,10 @@ export type MessageBubbleCard = {
   timelineOrder?: number;
 };
 
+export type MessageProcessSummary = {
+  elapsedSeconds?: number;
+};
+
 export const GNAgentHistoryMenu: React.FC<{
   sessions: ChatSession[];
   activeSessionId: string | null;
@@ -97,6 +101,7 @@ type GNAgentMessageListProps = {
   renderStructuredCards?: (message: StoredChatMessage) => React.ReactNode;
   renderProjectFileProposal?: (message: StoredChatMessage) => React.ReactNode;
   renderTimelineCards?: (message: StoredChatMessage) => MessageBubbleCard[] | null;
+  renderTimelineProcessSummary?: (message: StoredChatMessage) => MessageProcessSummary | null;
   renderToolExecutionCard?: (message: StoredChatMessage) => MessageBubbleCard[] | null;
   renderRunSummaryCard?: (message: StoredChatMessage) => React.ReactNode;
   renderRuntimeApproval?: (message: StoredChatMessage) => MessageBubbleCard[] | null;
@@ -129,6 +134,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   renderStructuredCards,
   renderProjectFileProposal,
   renderTimelineCards,
+  renderTimelineProcessSummary,
   renderToolExecutionCard,
   renderRunSummaryCard,
   renderRuntimeApproval,
@@ -137,26 +143,30 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   messagesEndRef,
   leadingContent,
 }: GNAgentMessageListProps) {
-  const bubbleCardsByMessage = React.useMemo(() => {
-    const map: Record<string, MessageBubbleCard[]> = {};
+  const { timelineCardsByMessage, supplementalCardsByMessage, processSummaryByMessageId } = React.useMemo(() => {
+    const timelineMap: Record<string, MessageBubbleCard[]> = {};
+    const supplementalMap: Record<string, MessageBubbleCard[]> = {};
+    const processSummaryByMessageId: Record<string, MessageProcessSummary | null> = {};
     for (const message of messages) {
       const earliestRuntimeEventTime = getEarliestRuntimeEventTime(message);
       const latestRuntimeEventTime = getLatestRuntimeEventTime(message);
       const timelineCards = renderTimelineCards?.(message) || [];
+      const processSummary = renderTimelineProcessSummary?.(message) || null;
       const structuredCardsNode = renderStructuredCards?.(message) || null;
       const projectFileProposalNode = renderProjectFileProposal?.(message) || null;
       const toolExecutionCards = renderToolExecutionCard?.(message) || [];
       const runSummaryNode = renderRunSummaryCard?.(message) || null;
       const runtimeApprovalCards = renderRuntimeApproval?.(message) || [];
       const runtimeQuestionCards = renderRuntimeQuestion?.(message) || [];
-      const cards: Array<MessageBubbleCard | null> = [
+      processSummaryByMessageId[message.id] = processSummary;
+      const supplementalCards: Array<MessageBubbleCard | null> = [
         structuredCardsNode ? { node: structuredCardsNode, createdAt: message.createdAt } : null,
         projectFileProposalNode ? { node: projectFileProposalNode, createdAt: message.createdAt } : null,
         runSummaryNode ? { node: runSummaryNode, createdAt: latestRuntimeEventTime ?? message.createdAt } : null,
       ];
-      map[message.id] = [
-        ...timelineCards,
-        ...cards.filter((card): card is MessageBubbleCard => Boolean(card?.node)),
+      timelineMap[message.id] = timelineCards;
+      supplementalMap[message.id] = [
+        ...supplementalCards.filter((card): card is MessageBubbleCard => Boolean(card?.node)),
         ...runtimeApprovalCards,
         ...runtimeQuestionCards,
         ...toolExecutionCards.map((card) => ({
@@ -165,10 +175,15 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
         })),
       ];
     }
-    return map;
+    return {
+      timelineCardsByMessage: timelineMap,
+      supplementalCardsByMessage: supplementalMap,
+      processSummaryByMessageId,
+    };
   }, [
     messages,
     renderTimelineCards,
+    renderTimelineProcessSummary,
     renderStructuredCards,
     renderProjectFileProposal,
     renderToolExecutionCard,
@@ -191,7 +206,9 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseMessageParts}
       renderMessagePart={renderMessagePart}
-      bubbleCards={bubbleCardsByMessage[message.id] ?? []}
+      timelineCards={timelineCardsByMessage[message.id] ?? []}
+      supplementalCards={supplementalCardsByMessage[message.id] ?? []}
+      processSummary={processSummaryByMessageId[message.id] ?? null}
     />
   );
 
