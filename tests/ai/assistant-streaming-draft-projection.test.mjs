@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const loadProjectionModule = async () =>
@@ -140,4 +141,13 @@ test('assistant streaming draft projection keeps the completed answer stable aft
   assert.equal(first.draft?.streamingText, 'Visible final answer.');
   assert.equal(second.draft?.streamingText, 'Visible final answer.');
   assert.equal(second.answerState?.isComplete, true);
+});
+
+test('assistant streaming draft projection removes unused forced flush parameters from the helper surface', async () => {
+  const source = await readFile('src/components/workspace/assistantStreamingDraftProjection.ts', 'utf8');
+
+  assert.doesNotMatch(source, /forceAnswerFlush\?: boolean;/);
+  assert.doesNotMatch(source, /forceReasoningFlushEventIds\?: string\[];/);
+  assert.doesNotMatch(source, /forceAnswerFlush = false/);
+  assert.doesNotMatch(source, /forceReasoningFlushEventIds = \[\]/);
 });

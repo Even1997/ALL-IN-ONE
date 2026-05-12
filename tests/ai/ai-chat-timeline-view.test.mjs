@@ -105,16 +105,12 @@ test('timeline migration removes the legacy runtime tool renderer files from the
   }
 });
 
-test('AIChat keeps paragraph streaming mutations out of effectiveDraftContents useMemo', async () => {
+test('AIChat removes the effectiveDraftContents wrapper and reads streamingDraftContents directly', async () => {
   const chatSource = await readFile('src/components/workspace/AIChat.tsx', 'utf8');
-  const match = chatSource.match(/const effectiveDraftContents = useMemo\(\(\) => \{[\s\S]*?\n  \}, \[/);
 
-  assert.ok(match, 'expected effectiveDraftContents useMemo block to exist');
-  assert.doesNotMatch(match[0], /advanceParagraphStreamingState\(/);
-  assert.doesNotMatch(match[0], /finalizeParagraphStreamingState\(/);
-  assert.doesNotMatch(match[0], /scheduleParagraphStreamingTimeout\(/);
-  assert.doesNotMatch(match[0], /scheduleReasoningParagraphStreamingTimeout\(/);
-  assert.doesNotMatch(match[0], /Date\.now\(\)/);
+  assert.doesNotMatch(chatSource, /const effectiveDraftContents = useMemo\(/);
+  assert.match(chatSource, /\}, \[activeSession\?\.messages, streamingDraftContents, isLoading\]\);/);
+  assert.match(chatSource, /draftContents=\{streamingDraftContents\}/);
 });
 
 test('chat surface keeps runtime question interaction cards wired for pending ask-user events', async () => {

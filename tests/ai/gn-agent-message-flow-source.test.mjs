@@ -40,6 +40,7 @@ test('GN Agent message flow derives runtime cards from the live draft timeline w
 
   assert.match(messageListSource, /draftContents\?\.\[message\.id\]/);
   assert.match(messageListSource, /draftState=\{draftContents\?\.\[message\.id\]\}/);
+  assert.doesNotMatch(messageListSource, /streamingState=\{draftContents\?\.\[message\.id\]\}/);
   assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(message\);/);
   assert.match(messageListSource, /const toolExecutionCards = renderToolExecutionCard\?\.\(message\) \|\| \[\];/);
   assert.match(messageListSource, /const runtimeApprovalCards = renderRuntimeApproval\?\.\(message\) \|\| \[\];/);
@@ -88,6 +89,8 @@ test('GN Agent message item consumes a unified timeline model instead of sorting
 
   assert.match(messageItemSource, /buildChatMessageTimelineRenderModel/);
   assert.match(messageItemSource, /timelineRenderModel\.processGroups/);
+  assert.doesNotMatch(messageItemSource, /streamingState\?: AssistantStreamingState;/);
+  assert.doesNotMatch(messageItemSource, /streamingState,/);
   assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(\[\.\.\.thinkingRenderItems,\s*\.\.\.bubbleRenderItems\]\)/);
 });
 

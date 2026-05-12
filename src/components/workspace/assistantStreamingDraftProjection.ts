@@ -36,8 +36,6 @@ export type AssistantStreamingDraftProjectionInput = {
   answerState?: ParagraphStreamingState | null;
   reasoningStateByEventId?: Record<string, ParagraphStreamingState>;
   now: number;
-  forceAnswerFlush?: boolean;
-  forceReasoningFlushEventIds?: string[];
 };
 
 export type AssistantStreamingDraftProjectionResult = {
@@ -86,8 +84,6 @@ export const projectAssistantStreamingDraft = ({
   answerState,
   reasoningStateByEventId = {},
   now,
-  forceAnswerFlush = false,
-  forceReasoningFlushEventIds = [],
 }: AssistantStreamingDraftProjectionInput): AssistantStreamingDraftProjectionResult => {
   const timeline =
     previousDraft?.timeline && previousDraft.timeline.length > 0
@@ -102,7 +98,6 @@ export const projectAssistantStreamingDraft = ({
   const nextReasoningStates: Record<string, ParagraphStreamingState> = {};
   const visibleReasoningByEventId = cloneReasoningMap(previousDraft?.streamingReasoningTextByEventId);
   const pendingReasoningFlushEventIds: string[] = [];
-  const forceReasoningFlushSet = new Set(forceReasoningFlushEventIds);
 
   timeline.forEach((event) => {
     if (event.kind !== 'reasoning') {
@@ -111,9 +106,7 @@ export const projectAssistantStreamingDraft = ({
 
     if (event.status === 'streaming') {
       const currentState = reasoningStateByEventId[event.id] ?? createParagraphStreamingState();
-      const nextState = advanceParagraphStreamingState(currentState, event.content, now, {
-        forceTimeoutFlush: forceReasoningFlushSet.has(event.id),
-      });
+      const nextState = advanceParagraphStreamingState(currentState, event.content, now);
       nextReasoningStates[event.id] = nextState;
       visibleReasoningByEventId[event.id] = nextState.visibleText;
 
@@ -137,9 +130,7 @@ export const projectAssistantStreamingDraft = ({
   const activeAnswerText = projection?.activeMessage?.text;
   if (typeof activeAnswerText === 'string') {
     const currentAnswerState = answerState ?? createParagraphStreamingState();
-    const nextAnswerState = advanceParagraphStreamingState(currentAnswerState, activeAnswerText, now, {
-      forceTimeoutFlush: forceAnswerFlush,
-    });
+    const nextAnswerState = advanceParagraphStreamingState(currentAnswerState, activeAnswerText, now);
     draft.isStreaming = true;
     draft.streamingText = nextAnswerState.visibleText;
     if (Object.keys(visibleReasoningByEventId).length > 0) {

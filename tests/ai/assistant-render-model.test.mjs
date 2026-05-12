@@ -103,7 +103,7 @@ test('assistant render model shows the buffered answer lane once when streaming 
       { id: 'text_2', kind: 'text', content: 'Second sentence.', createdAt: 2 },
     ],
     createdAt: 1,
-  }, undefined, 0, {
+  }, {
     streamingText: 'First sentence.\n\nSecond sentence.',
     isStreaming: false,
   });
@@ -123,11 +123,11 @@ test('assistant render model keeps the answer lane key stable across streaming a
     createdAt: 1,
   };
 
-  const streamingModel = buildAssistantRenderModel(message, undefined, 0, {
+  const streamingModel = buildAssistantRenderModel(message, {
     streamingText: 'Final answer.',
     isStreaming: true,
   });
-  const completedModel = buildAssistantRenderModel(message, undefined, 0, {
+  const completedModel = buildAssistantRenderModel(message, {
     streamingText: 'Final answer.',
     isStreaming: false,
   });
@@ -145,7 +145,7 @@ test('assistant render model prefers the finalized visible draft text during com
     role: 'assistant',
     timeline: [{ id: 'text_1', kind: 'text', content: 'Stored final answer.', createdAt: 10 }],
     createdAt: 1,
-  }, undefined, 0, {
+  }, {
     streamingText: 'Visible final answer.',
     isStreaming: false,
   });

@@ -1530,9 +1530,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     timelineProjectionByMessageId,
     timelineProjectionByRunId,
   ]);
-  const effectiveDraftContents = useMemo(() => {
-    return streamingDraftContents;
-  }, [streamingDraftContents]);
   liveThreadIdRef.current = liveThreadId;
   const {
     permissionMode,
@@ -1979,7 +1976,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     scrollToBottom();
     const frameId = requestAnimationFrame(scrollToBottom);
     return () => cancelAnimationFrame(frameId);
-  }, [activeSession?.messages, effectiveDraftContents, isLoading]);
+  }, [activeSession?.messages, streamingDraftContents, isLoading]);
 
   useEffect(() => {
     const viewportClassName = getChatViewportClassName(isCollapsed);
@@ -3365,7 +3362,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const agentChatContent = (
     <AIChatConversationMessagesPane
       projectId={currentProjectId}
-      draftContents={effectiveDraftContents}
+      draftContents={streamingDraftContents}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseAIChatMessageParts}
       renderMessagePart={(message, messageId, part, index, options) =>

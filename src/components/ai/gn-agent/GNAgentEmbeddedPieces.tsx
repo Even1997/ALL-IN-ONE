@@ -202,7 +202,6 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       key={message.id}
       message={message}
       draftState={draftContents?.[message.id]}
-      streamingState={draftContents?.[message.id]}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseMessageParts}
       renderMessagePart={renderMessagePart}

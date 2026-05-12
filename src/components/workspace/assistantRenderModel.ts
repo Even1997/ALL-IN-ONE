@@ -12,11 +12,6 @@ export type AssistantDraftState = {
   streamingReasoningTextByEventId?: Record<string, string>;
 };
 
-export type AssistantStreamingState = {
-  streamingText?: string;
-  isStreaming?: boolean;
-};
-
 export type AssistantRenderItem =
   | { kind: 'thinking_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number }
   | { kind: 'answer_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number };
@@ -57,10 +52,9 @@ export const buildAssistantRenderModel = (
   message: StoredChatMessage,
   draftState?: AssistantDraftState,
   bubbleCardCount = 0,
-  streamingState?: AssistantStreamingState,
 ): AssistantRenderModel => {
   const thinkingItems: Array<{ part: AIChatMessagePart; timelineOrder: number }> = [];
-  const isStreaming = streamingState?.isStreaming ?? draftState?.isStreaming ?? Boolean(draftState);
+  const isStreaming = draftState?.isStreaming ?? Boolean(draftState);
   const timeline = isStreaming
     ? Array.isArray(draftState?.timeline)
       ? draftState.timeline
@@ -71,13 +65,10 @@ export const buildAssistantRenderModel = (
       ? message.timeline
       : [];
   const timelineText = getAssistantTimelineText(timeline);
-  const streamingText =
-    streamingState && Object.prototype.hasOwnProperty.call(streamingState, 'streamingText')
-      ? streamingState.streamingText
-      : draftState?.streamingText;
-  const hasVisibleDraftText =
-    (streamingState && Object.prototype.hasOwnProperty.call(streamingState, 'streamingText')) ||
-    (draftState && Object.prototype.hasOwnProperty.call(draftState, 'streamingText'));
+  const streamingText = draftState?.streamingText;
+  const hasVisibleDraftText = Boolean(
+    draftState && Object.prototype.hasOwnProperty.call(draftState, 'streamingText'),
+  );
   const content = hasVisibleDraftText ? streamingText || '' : timelineText;
   const answerCreatedAt =
     [...timeline]

@@ -4,7 +4,6 @@ import type { StreamingLatencyTrace } from '../../../modules/ai/runtime/streamin
 import {
   buildAssistantRenderModel,
   type AssistantDraftState,
-  type AssistantStreamingState,
 } from '../../workspace/assistantRenderModel.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
 import {
@@ -34,7 +33,6 @@ type MessagePartsParser = (content: string) => AIChatMessagePart[];
 type GNAgentMessageItemProps = {
   message: StoredChatMessage;
   draftState?: AssistantDraftState;
-  streamingState?: AssistantStreamingState;
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
@@ -127,7 +125,6 @@ const AssistantMessageActionBar: React.FC<{
 export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   message,
   draftState,
-  streamingState,
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
@@ -158,7 +155,6 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
           message,
           draftState,
           timelineCardRenderItems.length + supplementalRenderItems.length,
-          streamingState,
         )
       : null;
   const isStreaming = assistantRenderModel?.isStreaming ?? false;
