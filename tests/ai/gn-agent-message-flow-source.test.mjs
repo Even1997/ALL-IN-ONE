@@ -74,12 +74,13 @@ test('GN Agent message flow moves unified timeline ordering into the shared work
   await assert.rejects(access(messageOrderingPath));
 });
 
-test('GN Agent message item keeps streaming thinking collapsed but expandable', async () => {
+test('GN Agent message item treats thinking as a transient status item instead of an expandable block', async () => {
   const messageItemSource = await readFile(messageItemPath, 'utf8');
 
-  assert.doesNotMatch(messageItemSource, /isStreaming\s*\?\s*true\s*:/);
-  assert.match(messageItemSource, /expandedThinkingKeys\[thinkingKey\]\s*\?\?\s*!hasCompletedAnswer/);
-  assert.doesNotMatch(messageItemSource, /item\.part\.type === 'thinking' && !isStreaming/);
+  assert.doesNotMatch(messageItemSource, /expandedThinkingKeys/);
+  assert.doesNotMatch(messageItemSource, /setExpandedThinkingKeys/);
+  assert.doesNotMatch(messageItemSource, /thinkingExpanded/);
+  assert.doesNotMatch(messageItemSource, /onToggleThinking/);
   assert.match(messageItemSource, /timelineRenderModel\.processGroups/);
   assert.match(messageItemSource, /className=\"chat-message-thinking-lane\"/);
 });
@@ -98,7 +99,6 @@ test('GN Agent message item auto-collapses thinking after the answer completes',
   const messageItemSource = await readFile(messageItemPath, 'utf8');
 
   assert.match(messageItemSource, /const hasCompletedAnswer =/);
-  assert.match(messageItemSource, /expandedThinkingKeys\[thinkingKey\]\s*\?\?\s*!hasCompletedAnswer/);
   assert.match(messageItemSource, /const shouldShowCompletedProcessFold =/);
   assert.match(messageItemSource, /const isProcessFoldExpanded = shouldShowCompletedProcessFold &&/);
   assert.match(messageItemSource, /if \(shouldShowCompletedProcessFold\) \{/);

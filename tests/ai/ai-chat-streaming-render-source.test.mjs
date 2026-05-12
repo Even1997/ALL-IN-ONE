@@ -20,7 +20,7 @@ const buildAssistantMessage = (timeline = []) => ({
   createdAt: 1,
 });
 
-const buildDraftState = (timeline) => ({ timeline });
+const buildDraftState = (timeline, overrides = {}) => ({ timeline, ...overrides });
 
 test('streaming assistant text keeps a dedicated streaming mode and lifecycle hooks before final markdown render', async () => {
   const source = await readFile(assistantPartsPath, 'utf8');
@@ -54,9 +54,12 @@ test('assistant render model prefers fast streaming text over rebuilt draft text
 
   const model = buildAssistantRenderModel(
     message,
-    draftState,
+    {
+      ...draftState,
+      streamingText: 'fast projection text',
+      isStreaming: true,
+    },
     0,
-    { streamingText: 'fast projection text', isStreaming: true },
   );
 
   assert.equal(model.content, 'fast projection text');
@@ -75,9 +78,11 @@ test('assistant render model falls back to rebuilt timeline text when no fast pr
 
   const model = buildAssistantRenderModel(
     buildAssistantMessage(),
-    draftState,
+    {
+      ...draftState,
+      isStreaming: true,
+    },
     0,
-    { streamingText: undefined, isStreaming: true },
   );
 
   assert.equal(model.content, 'rebuilt timeline text');
@@ -95,9 +100,12 @@ test('assistant render model reverts to persisted timeline text after streaming 
 
   const model = buildAssistantRenderModel(
     message,
-    draftState,
+    {
+      ...draftState,
+      streamingText: 'fast projection text',
+      isStreaming: false,
+    },
     0,
-    { streamingText: 'fast projection text', isStreaming: false },
   );
 
   assert.equal(model.content, 'final persisted answer');
@@ -109,4 +117,21 @@ test('thinking duration label uses whole-second display instead of fractional ji
 
   assert.doesNotMatch(source, /toFixed\(1\)\}s/);
   assert.match(source, /Math\.floor\(Math\.max\(0, elapsedSeconds\)\)/);
+});
+
+test('assistant thinking active state is not extended by answer streaming', async () => {
+  const source = await readFile(assistantPartsPath, 'utf8');
+
+  assert.match(source, /const isThinkingActive = part\.status === 'streaming';/);
+  assert.doesNotMatch(source, /isStreaming && part\.status !== 'completed'/);
+});
+
+test('assistant thinking render only shows a live placeholder and hides completed reasoning content', async () => {
+  const source = await readFile(assistantPartsPath, 'utf8');
+
+  assert.match(source, /if \(part\.status !== 'streaming'\) \{\s*return null;\s*\}/);
+  assert.match(source, /className="chat-thinking-pill"/);
+  assert.doesNotMatch(source, /className="chat-thinking-toggle"/);
+  assert.doesNotMatch(source, /chat-thinking-preview/);
+  assert.doesNotMatch(source, /<pre>/);
 });

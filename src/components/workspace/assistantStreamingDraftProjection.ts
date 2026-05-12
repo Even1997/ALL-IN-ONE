@@ -1,28 +1,20 @@
 import type { TimelineProjection } from '../../modules/ai/runtime/composer/timelineComposerTypes.ts';
 import {
   getAssistantTimelineText,
-  type AssistantTimelineEvent,
 } from '../../modules/ai/store/assistantTimeline.ts';
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
 import type { AssistantDraftState } from './assistantRenderModel.ts';
-
-export const resolveAssistantCompletionText = (
-  projectionFinalText: string | undefined,
-  timeline: AssistantTimelineEvent[],
-) => {
-  const projected = projectionFinalText?.trim();
-  if (projected) {
-    return projectionFinalText || '';
-  }
-
-  return getAssistantTimelineText(timeline);
-};
 
 const cloneReasoningMap = (value: Record<string, string> | undefined) => ({ ...(value || {}) });
 
 export type AssistantStreamingDraftProjectionInput = {
   message: StoredChatMessage;
   projection: TimelineProjection | null;
+  liveStreaming?: {
+    messageId: string | null;
+    text: string;
+    updatedAt?: number | null;
+  } | null;
   previousDraft?: AssistantDraftState;
 };
 
@@ -69,6 +61,7 @@ export const areAssistantDraftStatesEqual = (
 export const projectAssistantStreamingDraft = ({
   message,
   projection,
+  liveStreaming,
   previousDraft,
 }: AssistantStreamingDraftProjectionInput): AssistantStreamingDraftProjectionResult => {
   const canonicalTimeline =
@@ -93,13 +86,25 @@ export const projectAssistantStreamingDraft = ({
   });
 
   const activeMessage = projection?.activeMessage ?? null;
-  const activeAnswerText = activeMessage?.text;
+  const directLiveStreaming =
+    liveStreaming && liveStreaming.messageId === message.id
+      ? liveStreaming
+      : null;
+  const timelineText = getAssistantTimelineText(timeline);
+  const activeAnswerText =
+    directLiveStreaming
+      ? directLiveStreaming.text
+      : activeMessage && activeMessage.text.trim().length > 0
+      ? activeMessage.text
+      : activeMessage
+        ? timelineText
+        : undefined;
   if (typeof activeAnswerText === 'string') {
     const draft: AssistantDraftState = {
       timeline,
       isStreaming: true,
       streamingStartedAt: activeMessage?.startedAt,
-      streamingUpdatedAt: activeMessage?.updatedAt,
+      streamingUpdatedAt: directLiveStreaming?.updatedAt ?? activeMessage?.updatedAt,
     };
     draft.streamingText = activeAnswerText;
     if (Object.keys(visibleReasoningByEventId).length > 0) {
@@ -115,13 +120,6 @@ export const projectAssistantStreamingDraft = ({
     timeline,
     isStreaming: false,
   };
-  const timelineText = getAssistantTimelineText(timeline);
-  const finalText = resolveAssistantCompletionText(projection?.finalMessage?.text, timeline);
-  const shouldKeepCompletedAnswerDraft = Boolean(projection?.finalMessage?.text) && finalText !== timelineText;
-
-  if (shouldKeepCompletedAnswerDraft) {
-    draft.streamingText = finalText;
-  }
 
   if (Object.keys(visibleReasoningByEventId).length > 0) {
     draft.streamingReasoningTextByEventId = visibleReasoningByEventId;

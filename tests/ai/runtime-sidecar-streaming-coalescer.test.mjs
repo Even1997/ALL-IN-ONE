@@ -119,3 +119,30 @@ test('runtime sidecar message coalescer applies the first draft immediately', as
   ]);
   assert.equal(scheduled.length, 1);
 });
+
+test('runtime sidecar default scheduler flushes pending deltas in the same task turn', async () => {
+  const { createRuntimeSidecarDeltaCoalescer } = await import(
+    `../../src/modules/runtime-sidecar/runtimeSidecarStreamingCoalescer.ts?test=${Date.now()}`
+  );
+
+  const applied = [];
+  const coalescer = createRuntimeSidecarDeltaCoalescer({
+    applyDelta: (sessionId, messageId, delta, emittedAt) => {
+      applied.push({ sessionId, messageId, delta, emittedAt });
+    },
+  });
+
+  coalescer.push('session-1', 'message-1', 'Hel', 10);
+  coalescer.push('session-1', 'message-1', 'lo', 12);
+
+  assert.deepEqual(applied, [
+    { sessionId: 'session-1', messageId: 'message-1', delta: 'Hel', emittedAt: 10 },
+  ]);
+
+  await Promise.resolve();
+
+  assert.deepEqual(applied, [
+    { sessionId: 'session-1', messageId: 'message-1', delta: 'Hel', emittedAt: 10 },
+    { sessionId: 'session-1', messageId: 'message-1', delta: 'lo', emittedAt: 12 },
+  ]);
+});

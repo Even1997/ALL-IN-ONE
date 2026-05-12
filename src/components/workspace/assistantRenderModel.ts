@@ -55,7 +55,10 @@ export const buildAssistantRenderModel = (
   draftState?: AssistantDraftState,
   bubbleCardCount = 0,
 ): AssistantRenderModel => {
-  const thinkingItems: Array<{ part: AIChatMessagePart; timelineOrder: number }> = [];
+  const thinkingItems: Array<{
+    part: Extract<AIChatMessagePart, { type: 'thinking' }>;
+    timelineOrder: number;
+  }> = [];
   const isStreaming = draftState?.isStreaming ?? Boolean(draftState);
   const timeline = isStreaming
     ? Array.isArray(draftState?.timeline)
@@ -69,7 +72,7 @@ export const buildAssistantRenderModel = (
   const timelineText = getAssistantTimelineText(timeline);
   const streamingText = draftState?.streamingText;
   const hasVisibleDraftText = Boolean(
-    draftState && Object.prototype.hasOwnProperty.call(draftState, 'streamingText'),
+    isStreaming && draftState && Object.prototype.hasOwnProperty.call(draftState, 'streamingText'),
   );
   const content = hasVisibleDraftText ? streamingText || '' : timelineText;
   const fallbackAnswerCreatedAt =
@@ -78,7 +81,7 @@ export const buildAssistantRenderModel = (
       .find((event): event is Extract<AssistantTimelineEvent, { kind: 'text' }> => event.kind === 'text')
       ?.createdAt ?? message.createdAt;
   const answerCreatedAt = isStreaming
-    ? draftState?.streamingUpdatedAt ?? draftState?.streamingStartedAt ?? fallbackAnswerCreatedAt
+    ? draftState?.streamingStartedAt ?? fallbackAnswerCreatedAt
     : fallbackAnswerCreatedAt;
 
   timeline.forEach((event, timelineOrder) => {
@@ -98,7 +101,7 @@ export const buildAssistantRenderModel = (
   });
 
   const processItems = thinkingItems
-    .filter(({ part }) => !shouldSuppressAssistantTextPart(message, part, bubbleCardCount))
+    .filter(({ part }) => part.status === 'streaming')
     .map(({ part, timelineOrder }, index) => ({
       kind: 'thinking_lane',
       key: `${message.id}-part-${index}`,

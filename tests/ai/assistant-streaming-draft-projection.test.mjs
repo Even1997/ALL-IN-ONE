@@ -52,7 +52,7 @@ test('assistant streaming draft projection is stable across identical recomputat
   );
 });
 
-test('assistant streaming draft projection keeps the completed answer stable after handoff', async () => {
+test('assistant streaming draft projection clears completed answer drafts after handoff', async () => {
   const { projectAssistantStreamingDraft } = await loadProjectionModule();
 
   const message = {
@@ -73,15 +73,6 @@ test('assistant streaming draft projection keeps the completed answer stable aft
       completedAt: 5,
     },
   };
-  const answerState = {
-    rawText: 'Visible final answer.',
-    visibleText: 'Visible final answer.',
-    pendingText: '',
-    lastFlushAt: 4,
-    lastInputAt: 4,
-    isComplete: false,
-  };
-
   const first = projectAssistantStreamingDraft({
     message,
     projection,
@@ -92,19 +83,39 @@ test('assistant streaming draft projection keeps the completed answer stable aft
     },
     now: 200,
   });
-  const second = projectAssistantStreamingDraft({
+
+  assert.equal(first.draft, null);
+});
+
+test('assistant streaming draft projection uses canonical timeline text while active projection text is empty', async () => {
+  const { projectAssistantStreamingDraft } = await loadProjectionModule();
+
+  const result = projectAssistantStreamingDraft({
     message: {
-      ...message,
-      timeline: [{ id: 'text_1', kind: 'text', content: 'Visible final answer.', createdAt: 6 }],
+      id: 'assistant_sidecar_active',
+      role: 'assistant',
+      createdAt: 1,
+      timeline: [{ id: 'text_1', kind: 'text', content: 'Fast sidecar draft.', createdAt: 2 }],
     },
-    projection,
-    previousDraft: first.draft,
-    now: 201,
+    projection: {
+      runId: 'run_sidecar_active',
+      status: 'running',
+      cards: [],
+      events: [],
+      finalMessage: null,
+      activeMessage: {
+        messageId: 'assistant_sidecar_active',
+        text: '',
+        startedAt: 10,
+        updatedAt: 10,
+        isStreaming: true,
+      },
+    },
+    previousDraft: undefined,
   });
 
-  assert.equal(first.draft?.isStreaming, false);
-  assert.equal(first.draft?.streamingText, 'Visible final answer.');
-  assert.equal(second.draft, null);
+  assert.equal(result.draft?.isStreaming, true);
+  assert.equal(result.draft?.streamingText, 'Fast sidecar draft.');
 });
 
 test('assistant streaming draft projection carries active message timing while streaming', async () => {
@@ -137,6 +148,77 @@ test('assistant streaming draft projection carries active message timing while s
 
   assert.equal(result.draft?.streamingStartedAt, 20);
   assert.equal(result.draft?.streamingUpdatedAt, 30);
+});
+
+test('assistant streaming draft projection prefers direct live streaming text for the active message', async () => {
+  const { projectAssistantStreamingDraft } = await loadProjectionModule();
+
+  const result = projectAssistantStreamingDraft({
+    message: {
+      id: 'assistant_live',
+      role: 'assistant',
+      createdAt: 1,
+      timeline: [{ id: 'text_1', kind: 'text', content: 'Persisted slower text.', createdAt: 2 }],
+    },
+    projection: {
+      runId: 'run_live',
+      status: 'running',
+      cards: [],
+      events: [],
+      finalMessage: null,
+      activeMessage: {
+        messageId: 'assistant_live',
+        text: '',
+        startedAt: 20,
+        updatedAt: 30,
+        isStreaming: true,
+      },
+    },
+    liveStreaming: {
+      messageId: 'assistant_live',
+      text: 'Direct live text.',
+      updatedAt: 40,
+    },
+    previousDraft: undefined,
+  });
+
+  assert.equal(result.draft?.isStreaming, true);
+  assert.equal(result.draft?.streamingText, 'Direct live text.');
+  assert.equal(result.draft?.streamingStartedAt, 20);
+  assert.equal(result.draft?.streamingUpdatedAt, 40);
+});
+
+test('assistant streaming draft projection does not leak direct live text into older assistant messages', async () => {
+  const { projectAssistantStreamingDraft } = await loadProjectionModule();
+
+  const result = projectAssistantStreamingDraft({
+    message: {
+      id: 'assistant_older',
+      role: 'assistant',
+      createdAt: 1,
+      timeline: [{ id: 'text_1', kind: 'text', content: 'Older persisted answer.', createdAt: 2 }],
+    },
+    projection: {
+      runId: 'run_older',
+      status: 'completed',
+      cards: [],
+      events: [],
+      finalMessage: {
+        messageId: 'assistant_older',
+        text: 'Older persisted answer.',
+        completedAt: 50,
+      },
+      activeMessage: null,
+    },
+    liveStreaming: {
+      messageId: 'assistant_newer',
+      text: 'Newer active text.',
+      updatedAt: 60,
+    },
+    previousDraft: undefined,
+  });
+
+  assert.equal(result.draft, null);
 });
 
 test('assistant streaming draft projection removes paragraph state from the helper surface', async () => {

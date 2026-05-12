@@ -69,6 +69,19 @@ test('runtime sidecar session bridge consumes streaming assistant messages and r
   assert.match(source, /pendingApprovalSummary/);
 });
 
+test('runtime sidecar turn deltas update live text without persisting canonical message deltas', async () => {
+  const source = await readFile(bridgePath, 'utf8');
+  const deltaHandler = source.slice(
+    source.indexOf('const applyRuntimeSidecarTurnDeltaNow ='),
+    source.indexOf('const runtimeSidecarDeltaCoalescer ='),
+  );
+
+  assert.match(deltaHandler, /runtimeStore\.appendStreamDelta\(sessionId,\s*delta\)/);
+  assert.match(deltaHandler, /streamingText:\s*`\$\{state\.streamingText\}\$\{delta\}`/);
+  assert.doesNotMatch(deltaHandler, /appendRuntimeSidecarCanonicalEvent/);
+  assert.doesNotMatch(deltaHandler, /type:\s*'message\.delta'/);
+});
+
 test('runtime sidecar session bridge keeps protocol imports and MCP server projection type-safe', async () => {
   const source = await readFile(bridgePath, 'utf8');
 

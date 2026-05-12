@@ -5,7 +5,7 @@ import test from 'node:test';
 const loadTimelineRenderModel = async () =>
   import(`../../src/components/workspace/timeline/chatMessageTimelineRenderModel.ts?test=${Date.now()}`);
 
-test('message timeline render model keeps projection cards interleaved with assistant narrative by timeline order', async () => {
+test('message timeline render model keeps active response out of process chronology', async () => {
   const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
   const model = buildChatMessageTimelineRenderModel({
@@ -46,11 +46,11 @@ test('message timeline render model keeps projection cards interleaved with assi
 
   assert.deepEqual(
     model.processItems.map((item) => item.key),
-    ['thinking-1', 'tool-1', 'text-1', 'tool-2']
+    ['thinking-1', 'tool-1', 'tool-2']
   );
 });
 
-test('message timeline render model keeps chronological order once only projection-backed process items remain', async () => {
+test('message timeline render model keeps only projection-backed process items in chronology', async () => {
   const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
   const model = buildChatMessageTimelineRenderModel({
@@ -83,11 +83,11 @@ test('message timeline render model keeps chronological order once only projecti
 
   assert.deepEqual(
     model.processItems.map((item) => item.key),
-    ['tool-1', 'tool-2', 'text-1']
+    ['tool-1', 'tool-2']
   );
 });
 
-test('message timeline render model breaks same-timestamp ties with shared projection order', async () => {
+test('message timeline render model does not use active answer as a same-timestamp process tiebreaker', async () => {
   const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
   const model = buildChatMessageTimelineRenderModel({
@@ -113,7 +113,7 @@ test('message timeline render model breaks same-timestamp ties with shared proje
 
   assert.deepEqual(
     model.processItems.map((item) => item.key),
-    ['tool-1', 'text-1']
+    ['tool-1']
   );
 });
 
@@ -148,6 +148,8 @@ test('GN Agent message item separates process rendering from the final answer bo
   assert.match(messageItemSource, /buildChatMessageTimelineRenderModel/);
   assert.match(messageItemSource, /const processGroups = timelineRenderModel\.processGroups;/);
   assert.match(messageItemSource, /finalAnswerRenderItem/);
+  assert.match(messageItemSource, /activeResponseRenderItem\s*\|\|\s*timelineRenderModel\.finalAnswerItem/);
+  assert.match(messageItemSource, /activeResponseItem:\s*null/);
   assert.match(messageItemSource, /const hasProcessArtifacts =/);
   assert.match(messageItemSource, /const shouldShowCompletedProcessFold =/);
   assert.match(messageItemSource, /className="chat-message-process-fold"/);

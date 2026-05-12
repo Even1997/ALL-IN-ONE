@@ -79,7 +79,6 @@ export const buildChatMessageTimelineRenderModel = (input: {
   const processItems = sortChatMessageTimelineItems([
     ...input.thinkingItems,
     ...input.timelineCardItems,
-    ...(input.activeResponseItem ? [input.activeResponseItem] : []),
   ]);
 
   return {

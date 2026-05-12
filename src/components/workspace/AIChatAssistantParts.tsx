@@ -7,8 +7,6 @@ import type { AIChatMessagePart } from './aiChatMessageParts';
 
 export type AIChatMessagePartRenderOptions = {
   isStreaming: boolean;
-  thinkingExpanded?: boolean;
-  onToggleThinking?: () => void;
 };
 
 const MIN_VALID_EPOCH_SECONDS = 946684800;
@@ -72,17 +70,14 @@ const resolveDisplayThinkingElapsedSeconds = (
 
 export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
   part,
-  isStreaming,
-  thinkingExpanded,
-  onToggleThinking,
 }: {
   part: Extract<AIChatMessagePart, { type: 'thinking' }>;
-  isStreaming: boolean;
-  thinkingExpanded?: boolean;
-  onToggleThinking?: () => void;
 }) {
-  const isExpanded = thinkingExpanded ?? !part.collapsed;
-  const isThinkingActive = part.status === 'streaming' || (isStreaming && part.status !== 'completed');
+  const isThinkingActive = part.status === 'streaming';
+  if (part.status !== 'streaming') {
+    return null;
+  }
+
   const [referenceTime, setReferenceTime] = useState(() => Date.now());
   const lastDisplayedElapsedSecondsRef = useRef<number | null>(null);
 
@@ -101,7 +96,7 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
   }, [isThinkingActive, part.createdAt]);
 
   const rawDisplayedElapsedSeconds =
-    isThinkingActive && typeof part.createdAt === 'number'
+    typeof part.createdAt === 'number'
       ? getLiveThinkingElapsedSeconds(part.createdAt, referenceTime)
       : part.elapsedSeconds;
   const displayedElapsedSeconds = resolveDisplayThinkingElapsedSeconds(
@@ -122,50 +117,20 @@ export const AssistantThinkingBlock = memo(function AssistantThinkingBlock({
 
   const durationLabel =
     typeof displayedElapsedSeconds === 'number' ? formatThinkingDuration(displayedElapsedSeconds) : '';
-  const previewLine =
-    part.content
-      .split('\n')
-      .map((line) => line.replace(/\s+/g, ' ').trim())
-      .find(Boolean) || '';
-  const summaryLabel = isThinkingActive ? '思考中' : '思考过程';
-  const summaryPreview = !isExpanded
-    ? previewLine || (isThinkingActive ? '正在实时更新推理内容' : '')
-    : '';
+  const summaryLabel = durationLabel ? `思考中 ${durationLabel}` : '思考中';
 
   return (
-    <div className={`chat-thinking-block ${isExpanded ? 'expanded' : 'collapsed'}`}>
-      <button
-        type="button"
-        className="chat-thinking-toggle"
-        onClick={onToggleThinking}
-        disabled={!onToggleThinking}
-        aria-expanded={isExpanded}
-      >
+    <div className="chat-thinking-block">
+      <div className="chat-thinking-pill" role="status" aria-live="polite">
         <span className="chat-thinking-pulse" aria-hidden="true" />
         <span className="chat-thinking-copy">
-          <strong>
-            {summaryLabel}
-            {durationLabel ? ` ${durationLabel}` : ''}
-          </strong>
-          {summaryPreview ? <span className="chat-thinking-preview">{summaryPreview}</span> : null}
+          <strong>{summaryLabel}</strong>
         </span>
-        {isThinkingActive ? (
-          <span className="chat-thinking-dots" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </span>
-        ) : null}
-        <span className="chat-thinking-toggle-caret" aria-hidden="true" />
-      </button>
-      <div className="chat-thinking-block-content">
-        <div>
-          {part.content ? (
-            <pre>{part.content}</pre>
-          ) : (
-            <div className="chat-thinking-empty">{'等待模型输出思考内容...'}</div>
-          )}
-        </div>
+        <span className="chat-thinking-dots" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
       </div>
     </div>
   );

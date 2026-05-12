@@ -38,13 +38,15 @@ test('direct streaming display keeps fast text scoped to the active streaming me
     olderMessage,
     undefined,
     0,
-    { streamingText: 'fast active text', isStreaming: false },
   );
   const activeModel = buildAssistantRenderModel(
     activeMessage,
-    { timeline: [{ id: 'text-draft', kind: 'text', content: 'slower active draft', createdAt: 4 }] },
+    {
+      timeline: [{ id: 'text-draft', kind: 'text', content: 'slower active draft', createdAt: 4 }],
+      streamingText: 'fast active text',
+      isStreaming: true,
+    },
     0,
-    { streamingText: 'fast active text', isStreaming: true },
   );
 
   assert.equal(olderModel.content, 'older persisted answer');
@@ -55,9 +57,12 @@ test('direct streaming display can clear visible text back to empty when the fas
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel(
     buildAssistantMessage('assistant-empty'),
-    { timeline: [{ id: 'text-draft', kind: 'text', content: 'stale rebuilt text', createdAt: 2 }] },
+    {
+      timeline: [{ id: 'text-draft', kind: 'text', content: 'stale rebuilt text', createdAt: 2 }],
+      streamingText: '',
+      isStreaming: true,
+    },
     0,
-    { streamingText: '', isStreaming: true },
   );
 
   assert.equal(model.content, '');
@@ -81,4 +86,13 @@ test('sidecar chat keeps the direct-display path on the normal message surfaces'
   assert.match(paneSource, /GNAgentMessageList/);
   assert.match(messageListSource, /GNAgentMessageItem/);
   assert.match(messageItemSource, /buildAssistantRenderModel\(/);
+});
+
+test('AIChat recomputes direct streaming drafts from live state updates and passes them into projection', async () => {
+  const chatSource = await readFile(aiChatPath, 'utf8');
+
+  assert.match(chatSource, /liveState\?\.streamingText/);
+  assert.match(chatSource, /liveState\?\.streamingLatencyTrace\?\.sidecarReceivedAt/);
+  assert.match(chatSource, /liveStreaming:\s*liveState\s*\?/);
+  assert.match(chatSource, /messageId:\s*projection\?\.activeMessage\?\.messageId\s*\|\|\s*null/);
 });

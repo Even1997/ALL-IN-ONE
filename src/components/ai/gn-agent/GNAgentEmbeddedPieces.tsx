@@ -18,8 +18,6 @@ type MessagePartRenderer = (
   options?: {
     content: string;
     isStreaming: boolean;
-    thinkingExpanded?: boolean;
-    onToggleThinking?: () => void;
     streamingLatencyTrace?: StreamingLatencyTrace | null;
     onFirstVisibleChar?: () => void;
     onFinalVisibleDone?: () => void;

@@ -680,7 +680,7 @@ const applyRuntimeSidecarReasoningEvent = (
 
 const applyRuntimeSidecarTurnDeltaNow = (
   sessionId: string,
-  messageId: string,
+  _messageId: string,
   delta: string,
   emittedAt: number,
   trace?: RuntimeTurnDeltaTrace,
@@ -691,22 +691,6 @@ const applyRuntimeSidecarTurnDeltaNow = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
-  appendRuntimeSidecarCanonicalEvent(
-    sessionId,
-    messageId,
-    createRuntimeSidecarCanonicalEvent({
-      sessionId,
-      providerId: located.session.providerId,
-      runId: messageId,
-      messageId,
-      type: 'message.delta',
-      payload: {
-        textChunk: delta,
-      },
-      ts: emittedAt,
-    }),
-    emittedAt,
-  );
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.appendStreamDelta(sessionId, delta);
   patchLiveStateIfChanged(sessionId, (state) => ({

@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Chat 消息边界汇总</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f1e8;
+        --panel: #fffdf9;
+        --panel-soft: #f8f3ea;
+        --line: #ddd4c5;
+        --text: #1f1a14;
+        --muted: #665f56;
+        --blue: #1f5fff;
+        --teal: #106e63;
+        --amber: #a85a00;
+        --red: #b43b2d;
+        --green: #197548;
+        --shadow: 0 20px 48px rgba(37, 27, 15, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(31, 95, 255, 0.08), transparent 28%),
+          radial-gradient(circle at top right, rgba(16, 110, 99, 0.08), transparent 22%),
+          linear-gradient(180deg, #faf7f0 0%, var(--bg) 100%);
+        line-height: 1.7;
+      }
+
+      main {
+        width: min(1100px, calc(100vw - 32px));
+        margin: 24px auto 48px;
+      }
+
+      header,
+      section {
+        background: rgba(255, 253, 249, 0.92);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        padding: 24px;
+        margin-bottom: 18px;
+        backdrop-filter: blur(10px);
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 18px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.2;
+      }
+
+      h1 {
+        font-size: clamp(32px, 4vw, 54px);
+        letter-spacing: -0.03em;
+      }
+
+      h2 {
+        font-size: 24px;
+        margin-bottom: 14px;
+      }
+
+      h3 {
+        font-size: 17px;
+        margin-bottom: 8px;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: #e9f0ff;
+        color: #1848c7;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .headline {
+        display: grid;
+        gap: 14px;
+      }
+
+      .lead {
+        font-size: 18px;
+        max-width: 760px;
+      }
+
+      .meta {
+        display: grid;
+        gap: 12px;
+      }
+
+      .meta-card {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px;
+      }
+
+      .meta-card strong {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 6px;
+        color: var(--text);
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .pill-blue {
+        background: #e9f0ff;
+        border-color: #cad7ff;
+        color: #1848c7;
+      }
+
+      .pill-red {
+        background: #ffeceb;
+        border-color: #f3c7c2;
+        color: #a33024;
+      }
+
+      .pill-green {
+        background: #e7f6ed;
+        border-color: #c2e2cf;
+        color: #0d673f;
+      }
+
+      .pill-amber {
+        background: #fff2e2;
+        border-color: #f0d0a6;
+        color: #935200;
+      }
+
+      .grid-2,
+      .grid-3,
+      .grid-4 {
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .grid-4 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+      }
+
+      .card strong,
+      .step strong,
+      .compare strong {
+        color: var(--text);
+      }
+
+      .card.problem {
+        border-top: 5px solid var(--red);
+      }
+
+      .card.good {
+        border-top: 5px solid var(--green);
+      }
+
+      .card.info {
+        border-top: 5px solid var(--blue);
+      }
+
+      .card.warn {
+        border-top: 5px solid var(--amber);
+      }
+
+      .number {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        letter-spacing: -0.03em;
+        color: var(--text);
+      }
+
+      ul {
+        margin: 10px 0 0 18px;
+        padding: 0;
+        color: var(--muted);
+      }
+
+      li {
+        margin-bottom: 6px;
+      }
+
+      .callout {
+        border: 1px solid #c5d5ff;
+        background: linear-gradient(180deg, #f3f7ff 0%, #edf3ff 100%);
+        border-radius: 18px;
+        padding: 18px;
+        color: #345;
+      }
+
+      .callout strong {
+        color: #173fbc;
+      }
+
+      .compare {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+      }
+
+      .compare-panel {
+        border-radius: 18px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .compare-panel.bad {
+        box-shadow: inset 0 0 0 1px rgba(180, 59, 45, 0.1);
+      }
+
+      .compare-panel.good {
+        box-shadow: inset 0 0 0 1px rgba(25, 117, 72, 0.1);
+      }
+
+      .steps {
+        display: grid;
+        gap: 12px;
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 48px 1fr;
+        gap: 12px;
+        align-items: start;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 16px;
+      }
+
+      .step-index {
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        font-weight: 800;
+        background: #edf3ff;
+        color: #1848c7;
+      }
+
+      .table-like {
+        display: grid;
+        gap: 10px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+      }
+
+      .row-label {
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .footer-note {
+        font-size: 13px;
+      }
+
+      code {
+        padding: 1px 6px;
+        border-radius: 6px;
+        background: #f1ede4;
+        color: #3c342b;
+        font-family: "Cascadia Code", "SFMono-Regular", monospace;
+        font-size: 12px;
+      }
+
+      @media (max-width: 980px) {
+        header,
+        .grid-4,
+        .grid-3,
+        .grid-2,
+        .compare {
+          grid-template-columns: 1fr;
+        }
+
+        .row {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        main {
+          width: min(100vw - 20px, 1000px);
+          margin: 10px auto 28px;
+        }
+
+        header,
+        section {
+          padding: 18px;
+          border-radius: 18px;
+        }
+
+        h2 {
+          font-size: 20px;
+        }
+
+        .lead {
+          font-size: 16px;
+        }
+
+        .step {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="headline">
+          <div class="eyebrow">AI Chat / 中文汇总版</div>
+          <h1>消息边界问题，一页看懂</h1>
+          <p class="lead">
+            现在最核心的问题，不是某个样式没调好，而是
+            <strong>“过程反馈”和“最终正文”没有被严格分开</strong>。
+            所以才会出现过程和结果不一致、上一条消息被下一条影响、反馈重复出现这些问题。
+          </p>
+          <div class="pill-row">
+            <span class="pill pill-red">当前最大问题：正文定义混了</span>
+            <span class="pill pill-blue">思考更像状态，不该入正文</span>
+            <span class="pill pill-amber">工具链路较清楚，但还有旧兼容残留</span>
+            <span class="pill pill-green">最优路线：只保留一个正文真相源</span>
+          </div>
+        </div>
+        <div class="meta">
+          <div class="meta-card">
+            <strong>一句话结论</strong>
+            <p>现在不是“显示有点怪”，而是“正文到底是什么”这件事还没有收口。</p>
+          </div>
+          <div class="meta-card">
+            <strong>最适合 agent 的方向</strong>
+            <p>过程只显示状态和工具，最终只保留一份最终正文，不再多源拼装。</p>
+          </div>
+          <div class="meta-card">
+            <strong>这页的目标</strong>
+            <p>只讲你真正关心的产品语义，不先讲英文类型名和接口细节。</p>
+          </div>
+        </div>
+      </header>
+
+      <section>
+        <h2>先说人话：现在到底乱在哪里</h2>
+        <div class="grid-4">
+          <article class="card problem">
+            <div class="number">1</div>
+            <h3>过程和最终共用一类正文</h3>
+            <p>
+              “我先看看”“我正在检查”“这是最后结论”现在本质上都被当成同一种正文，所以系统没法天然分清楚谁该留下、谁只该临时展示。
+            </p>
+          </article>
+          <article class="card problem">
+            <div class="number">2</div>
+            <h3>正文同时有两份来源</h3>
+            <p>
+              运行中的正文走一套，完成后的正文又走一套。只要两边不同步，就容易出现过程和结果不一致。
+            </p>
+          </article>
+          <article class="card problem">
+            <div class="number">3</div>
+            <h3>实时正文没有强绑定到消息</h3>
+            <p>
+              实时流式内容还在靠“猜它属于哪条消息”，不是运行时直接标记归属，所以会有“影响上文”的风险。
+            </p>
+          </article>
+          <article class="card problem">
+            <div class="number">4</div>
+            <h3>旧路径还在兜底</h3>
+            <p>
+              工具和过程展示虽然已经收了一部分，但旧的兼容路径还在，UI 还要靠“压重复”来救场。
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>三个边界，应该怎么理解</h2>
+        <div class="grid-3">
+          <article class="card info">
+            <h3>思考</h3>
+            <p><strong>现在更像一种状态。</strong></p>
+            <ul>
+              <li>运行中可以显示“思考中”。</li>
+              <li>完成后不该再当正文展示。</li>
+              <li>它不应该参与最终答案的组成。</li>
+            </ul>
+          </article>
+          <article class="card warn">
+            <h3>反馈</h3>
+            <p><strong>现在最乱，问题主要出在这里。</strong></p>
+            <ul>
+              <li>过程话术和最终答案都混在正文里。</li>
+              <li>系统缺少单独的“过程反馈”定义。</li>
+              <li>这直接导致重复、串位、不一致。</li>
+            </ul>
+          </article>
+          <article class="card good">
+            <h3>工具</h3>
+            <p><strong>方向基本对，但还没彻底收口。</strong></p>
+            <ul>
+              <li>工具应只认运行时事件。</li>
+              <li>旧文本解析只保留兼容用途。</li>
+              <li>不该再作为实时展示主来源。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>为什么你会看到这些具体问题</h2>
+        <div class="table-like">
+          <div class="row">
+            <div class="row-label">反馈出现两遍</div>
+            <p>因为过程话术和最终正文都被当成正文，而且正文还有多份来源，只能靠界面层临时压掉一部分重复。</p>
+          </div>
+          <div class="row">
+            <div class="row-label">下一问影响上一问</div>
+            <p>因为实时流式正文没有被运行时直接绑定到某一条消息，界面还在依赖投影结果去反推归属。</p>
+          </div>
+          <div class="row">
+            <div class="row-label">过程和结果不一致</div>
+            <p>因为“流式过程正文”和“最终完成正文”不是同一个真相源，刷新、回放、完成切换时就会出现偏差。</p>
+          </div>
+          <div class="row">
+            <div class="row-label">过程里吐出一半一直留着</div>
+            <p>因为过程文字已经进入正文语义，而不是纯临时展示，所以完成后系统很难自然地把它们清干净。</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>我建议的唯一主线</h2>
+        <div class="callout">
+          <strong>不要再东一块西一块补 UI 了。</strong>
+          最合适的路线是：
+          <strong>把“最终正文”重新定义成唯一真相源，再把过程展示全部退回到状态层和工具层。</strong>
+        </div>
+        <div class="compare">
+          <article class="compare-panel bad">
+            <h3>不推荐继续这样改</h3>
+            <ul>
+              <li>发现哪里重复，就在 UI 上再压一次。</li>
+              <li>发现哪里顺序不对，就再补一个排序规则。</li>
+              <li>发现哪里串位，就再补一层展示判断。</li>
+              <li>结果会是：补丁越来越多，问题反复回来。</li>
+            </ul>
+          </article>
+          <article class="compare-panel good">
+            <h3>推荐的最终路线</h3>
+            <ul>
+              <li>思考只保留“思考中”状态，不入最终正文。</li>
+              <li>过程反馈不进最终正文，只做临时展示。</li>
+              <li>工具只认运行时事件，不再让旧文本路径主导。</li>
+              <li>最终正文只保留一份，完成前后都从同一来源来。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>最优改法，按这四步走</h2>
+        <div class="steps">
+          <article class="step">
+            <div class="step-index">1</div>
+            <div>
+              <h3>先定义“哪些字不是最终正文”</h3>
+              <p>
+                先把过程话术从最终正文里拆出去。也就是把“我先看看”“我正在检查”这类内容降级为临时展示，不再天然落到最终答案里。
+              </p>
+            </div>
+          </article>
+          <article class="step">
+            <div class="step-index">2</div>
+            <div>
+              <h3>给实时流式正文加消息归属</h3>
+              <p>
+                让运行时直接说清楚：这段实时正文属于哪条消息。这样才能真正解决“下一条影响上一条”。
+              </p>
+            </div>
+          </article>
+          <article class="step">
+            <div class="step-index">3</div>
+            <div>
+              <h3>收掉正文双来源</h3>
+              <p>
+                过程展示和完成展示都从同一份正文语义来。时间、状态、耗时可以单独算，但正文只能有一份。
+              </p>
+            </div>
+          </article>
+          <article class="step">
+            <div class="step-index">4</div>
+            <div>
+              <h3>把旧工具文本路径降级成兼容层</h3>
+              <p>
+                老的文本解析不再参与实时主链路，只给历史回放、导入兼容使用，避免继续搅乱现在的时间线。
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>删什么、改什么、保留什么</h2>
+        <div class="grid-3">
+          <article class="card problem">
+            <h3>建议删除或降级</h3>
+            <ul>
+              <li>把过程话术长期保留进最终正文的做法。</li>
+              <li>让旧工具文本解析参与实时展示主链路。</li>
+              <li>靠 UI 临时 suppression 维持正确性的逻辑。</li>
+            </ul>
+          </article>
+          <article class="card warn">
+            <h3>必须重点修改</h3>
+            <ul>
+              <li>正文边界定义。</li>
+              <li>实时正文归属关系。</li>
+              <li>完成前后正文的单源化。</li>
+              <li>过程展示和最终结果的职责切分。</li>
+            </ul>
+          </article>
+          <article class="card good">
+            <h3>建议保留</h3>
+            <ul>
+              <li>思考只显示“思考中”的产品方向。</li>
+              <li>工具按事件驱动展示的总体思路。</li>
+              <li>完成时再显示时间和总结的产品方式。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>为什么这条路线最适合 agent</h2>
+        <div class="grid-2">
+          <article class="card info">
+            <h3>对用户更稳定</h3>
+            <p>用户只会看到两类东西：过程状态 / 工具动作，以及最终正文。体验清晰，不容易前后变来变去。</p>
+          </article>
+          <article class="card info">
+            <h3>对系统更稳</h3>
+            <p>把真相源收成一个之后，刷新、恢复、回放、下一轮开始，都不再需要靠界面层猜和补。</p>
+          </article>
+          <article class="card info">
+            <h3>对后续迭代更省</h3>
+            <p>以后再做段落流式、块状流式、收口折叠，都是在一个稳定语义上改，而不是到处救火。</p>
+          </article>
+          <article class="card info">
+            <h3>对测试更好写</h3>
+            <p>可以直接验证“同一条消息完成后不再变化”“过程与结果来自同一正文语义”，而不是测很多展示细枝末节。</p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>技术附录：这次审计主要看的位置</h2>
+        <p class="footer-note">
+          如果你只想看汇总，到这里就够了。下面这些只是为了后续落地修改时能快速定位。
+        </p>
+        <ul>
+          <li><code>src/modules/ai/runtime/orchestration/agentTurnRunner.ts</code></li>
+          <li><code>src/modules/ai/store/assistantTimeline.ts</code></li>
+          <li><code>src/components/workspace/assistantStreamingDraftProjection.ts</code></li>
+          <li><code>src/components/workspace/assistantRenderModel.ts</code></li>
+          <li><code>src/modules/ai/runtime/composer/timelineComposer.ts</code></li>
+          <li><code>src/components/workspace/aiChatMessageParts.ts</code></li>
+          <li><code>src/components/workspace/AIChat.tsx</code></li>
+          <li><code>src/components/ai/gn-agent/GNAgentMessageItem.tsx</code></li>
+          <li><code>src/modules/runtime-sidecar/runtimeSidecarSessionBridge.ts</code></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

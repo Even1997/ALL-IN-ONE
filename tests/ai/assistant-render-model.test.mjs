@@ -10,7 +10,7 @@ const modulePath = path.resolve(__dirname, '../../src/components/workspace/assis
 
 const loadRenderModel = async () => import(`../../src/components/workspace/assistantRenderModel.ts?test=${Date.now()}`);
 
-test('assistant render model keeps assistant thinking in the process lane and projects one final answer lane', async () => {
+test('assistant render model hides completed assistant thinking from the visible process lane', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel({
     id: 'assistant_1',
@@ -25,42 +25,46 @@ test('assistant render model keeps assistant thinking in the process lane and pr
 
   assert.deepEqual(
     model.items.map((item) => [item.kind, item.part.type, item.part.content]),
-    [
-      ['thinking_lane', 'thinking', 'Check project first'],
-      ['answer_lane', 'text', 'Checked the first file.\n\nFinal answer'],
-    ]
+    [['answer_lane', 'text', 'Checked the first file.\n\nFinal answer']]
   );
   assert.equal(model.hasFinalAnswer, true);
-  assert.deepEqual(
-    model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
-    [['thinking_lane', 'thinking', 'Check project first']],
-  );
+  assert.deepEqual(model.processItems, []);
   assert.equal(model.finalAnswerItem?.kind, 'answer_lane');
   assert.equal(model.finalAnswerItem?.part.content, 'Checked the first file.\n\nFinal answer');
   assert.equal(model.copyText, 'Checked the first file.\n\nFinal answer');
 });
 
-test('assistant render model collapses interleaved narrative text into one answer lane even when tool cards exist', async () => {
+test('assistant render model keeps only active streaming thinking in the visible process lane', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel({
     id: 'assistant_2',
     role: 'assistant',
     timeline: [
-      { id: 'reasoning_1', kind: 'reasoning', content: 'Inspect the first file.', collapsed: true, createdAt: 1 },
+      {
+        id: 'reasoning_1',
+        kind: 'reasoning',
+        content: 'Inspect the first file.',
+        collapsed: true,
+        status: 'completed',
+        createdAt: 1,
+      },
       { id: 'text_1', kind: 'text', content: 'The first check is done.', createdAt: 2 },
-      { id: 'reasoning_2', kind: 'reasoning', content: 'Inspect the second file.', collapsed: true, createdAt: 3 },
+      {
+        id: 'reasoning_2',
+        kind: 'reasoning',
+        content: 'Inspect the second file.',
+        collapsed: true,
+        status: 'streaming',
+        createdAt: 3,
+      },
       { id: 'text_2', kind: 'text', content: 'Now fix the second issue.', createdAt: 6 },
     ],
     createdAt: 1,
   }, undefined, 2);
 
   assert.deepEqual(
-    model.items.map((item) => [item.kind, item.part.type, item.part.content]),
-    [
-      ['thinking_lane', 'thinking', 'Inspect the first file.'],
-      ['thinking_lane', 'thinking', 'Inspect the second file.'],
-      ['answer_lane', 'text', 'The first check is done.\n\nNow fix the second issue.'],
-    ],
+    model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
+    [['thinking_lane', 'thinking', 'Inspect the second file.']],
   );
 });
 
@@ -138,7 +142,7 @@ test('assistant render model keeps the answer lane key stable across streaming a
   );
 });
 
-test('assistant render model prefers the finalized visible draft text during completion handoff', async () => {
+test('assistant render model ignores completed answer drafts after handoff', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel({
     id: 'assistant_final_handoff',
@@ -150,11 +154,11 @@ test('assistant render model prefers the finalized visible draft text during com
     isStreaming: false,
   });
 
-  assert.equal(model.content, 'Visible final answer.');
-  assert.equal(model.finalAnswerItem?.part.content, 'Visible final answer.');
+  assert.equal(model.content, 'Stored final answer.');
+  assert.equal(model.finalAnswerItem?.part.content, 'Stored final answer.');
 });
 
-test('assistant render model timestamps the streaming answer from the active projection draft', async () => {
+test('assistant render model keeps streaming answer timestamp stable from its start', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel({
     id: 'assistant_streaming_ts',
@@ -168,7 +172,7 @@ test('assistant render model timestamps the streaming answer from the active pro
     streamingUpdatedAt: 30,
   });
 
-  assert.equal(model.finalAnswerItem?.part.createdAt, 30);
+  assert.equal(model.finalAnswerItem?.part.createdAt, 20);
 });
 
 test('assistant render model exposes an unfinished streaming answer block without paragraph gating', async () => {

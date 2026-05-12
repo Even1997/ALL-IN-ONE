@@ -20,8 +20,6 @@ type MessagePartRenderer = (
   options?: {
     content: string;
     isStreaming: boolean;
-    thinkingExpanded?: boolean;
-    onToggleThinking?: () => void;
     streamingLatencyTrace?: StreamingLatencyTrace | null;
     onFirstVisibleChar?: () => void;
     onFinalVisibleDone?: () => void;
@@ -132,7 +130,6 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   supplementalCards,
   processSummary,
 }: GNAgentMessageItemProps) {
-  const [expandedThinkingKeys, setExpandedThinkingKeys] = useState<Record<string, boolean>>({});
   const [processFoldExpanded, setProcessFoldExpanded] = useState<boolean | null>(null);
   const content = message.role === 'assistant' ? '' : message.content;
   const timelineCardRenderItems: ChatMessageTimelineRenderItem[] = timelineCards.map((timelineCard, index) => ({
@@ -170,25 +167,11 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
 
   if (message.role === 'assistant' && assistantRenderModel) {
     assistantRenderModel.processItems.forEach((item) => {
-      const thinkingKey = `${message.id}-thinking-${item.index}`;
-      const thinkingExpanded =
-        item.part.type === 'thinking'
-          ? expandedThinkingKeys[thinkingKey] ?? !hasCompletedAnswer
-          : undefined;
       thinkingRenderItems.push({
         key: item.key,
         node: renderMessagePart(message, message.id, item.part, item.index, {
           content: assistantRenderModel.content,
           isStreaming,
-          thinkingExpanded,
-          onToggleThinking:
-            item.part.type === 'thinking'
-              ? () =>
-                  setExpandedThinkingKeys((current) => ({
-                    ...current,
-                    [thinkingKey]: !(current[thinkingKey] ?? false),
-                  }))
-              : undefined,
         }),
         createdAt: item.part.createdAt,
         timelineOrder: item.timelineOrder,
@@ -239,13 +222,13 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   const timelineRenderModel = buildChatMessageTimelineRenderModel({
     thinkingItems: thinkingRenderItems,
     timelineCardItems: timelineCardRenderItems,
-    activeResponseItem: hasProjectionTimelineArtifacts ? activeResponseRenderItem : null,
+    activeResponseItem: null,
     finalAnswerItem: finalAnswerRenderItem,
   });
   const processGroups = timelineRenderModel.processGroups;
   const hasProcessArtifacts = hasProjectionTimelineArtifacts || supplementalRenderItems.length > 0;
   const answerBodyRenderItem =
-    timelineRenderModel.finalAnswerItem || (!hasProjectionTimelineArtifacts ? activeResponseRenderItem : null);
+    activeResponseRenderItem || timelineRenderModel.finalAnswerItem;
   const hasVisibleContent =
     message.role === 'assistant'
       ? hasProcessArtifacts || timelineRenderModel.processItems.length > 0 || Boolean(answerBodyRenderItem)

@@ -17,13 +17,28 @@ export type RuntimeSidecarMessageApply = (
 export type RuntimeSidecarDeltaScheduler = (flush: () => void) => () => void;
 
 const defaultScheduleFlush: RuntimeSidecarDeltaScheduler = (flush) => {
-  if (typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function') {
-    const handle = requestAnimationFrame(() => flush());
-    return () => cancelAnimationFrame(handle);
+  let cancelled = false;
+
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(() => {
+      if (!cancelled) {
+        flush();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }
 
-  const handle = setTimeout(flush, 16);
-  return () => clearTimeout(handle);
+  const handle = setTimeout(() => {
+    if (!cancelled) {
+      flush();
+    }
+  }, 0);
+  return () => {
+    cancelled = true;
+    clearTimeout(handle);
+  };
 };
 
 export const createRuntimeSidecarDeltaCoalescer = (input: {

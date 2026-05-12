@@ -830,8 +830,6 @@ const renderMessagePart = (
   options?: {
     content: string;
     isStreaming: boolean;
-    thinkingExpanded?: boolean;
-    onToggleThinking?: () => void;
     streamingLatencyTrace?: StreamingLatencyTrace | null;
     onFirstVisibleChar?: () => void;
     onFinalVisibleDone?: () => void;
@@ -842,9 +840,6 @@ const renderMessagePart = (
       <AssistantThinkingBlock
         key={`${messageId}-thinking-${index}`}
         part={part}
-        isStreaming={options?.isStreaming ?? false}
-        thinkingExpanded={options?.thinkingExpanded}
-        onToggleThinking={options?.onToggleThinking}
       />
     );
   }
@@ -1039,7 +1034,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const liveThreadIdRef = useRef<string | null>(null);
   const streamingDraftBufferRef = useRef<Record<string, AssistantDraftState>>({});
-  const streamingDraftFlushFrameRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const stopRequestedRef = useRef(false);
   const runningSubmissionRef = useRef<{ assistantMessageId: string; runtimeStoreThreadId: string } | null>(null);
@@ -1049,7 +1043,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const skillCatalogLifecycleSignatureRef = useRef('');
 
   const flushStreamingDraftContents = useCallback(() => {
-    streamingDraftFlushFrameRef.current = null;
     setStreamingDraftContents({ ...streamingDraftBufferRef.current });
     const nextLiveThreadId = liveThreadIdRef.current;
     if (nextLiveThreadId) {
@@ -1061,31 +1054,12 @@ export const AIChat: React.FC<AIChatProps> = ({
   }, []);
 
   const scheduleStreamingDraftContentsFlush = useCallback(() => {
-    if (streamingDraftFlushFrameRef.current !== null) {
-      return;
-    }
-
-    streamingDraftFlushFrameRef.current = requestAnimationFrame(flushStreamingDraftContents);
-  }, [flushStreamingDraftContents]);
-
-  const flushStreamingDraftContentsNow = useCallback(() => {
-    if (streamingDraftFlushFrameRef.current !== null) {
-      cancelAnimationFrame(streamingDraftFlushFrameRef.current);
-      streamingDraftFlushFrameRef.current = null;
-    }
-
     flushStreamingDraftContents();
   }, [flushStreamingDraftContents]);
 
-  useEffect(
-    () => () => {
-      if (streamingDraftFlushFrameRef.current !== null) {
-        cancelAnimationFrame(streamingDraftFlushFrameRef.current);
-        streamingDraftFlushFrameRef.current = null;
-      }
-    },
-    []
-  );
+  const flushStreamingDraftContentsNow = useCallback(() => {
+    flushStreamingDraftContents();
+  }, [flushStreamingDraftContents]);
 
   const setCollapsedState = (nextValue: boolean) => {
     if (!isControlledCollapse) {
@@ -1244,14 +1218,18 @@ export const AIChat: React.FC<AIChatProps> = ({
         (message.runId ? timelineProjectionByRunId[message.runId] : null) ||
         timelineProjectionByMessageId[message.id] ||
         null;
-      if (!projection) {
-        return;
-      }
 
       const previousDraft = nextDraftsByMessageId[message.id];
       const projectedDraft = projectAssistantStreamingDraft({
         message,
         projection,
+        liveStreaming: liveState
+          ? {
+              messageId: projection?.activeMessage?.messageId || null,
+              text: liveState.streamingText,
+              updatedAt: liveState?.streamingLatencyTrace?.sidecarReceivedAt ?? null,
+            }
+          : null,
         previousDraft,
       });
 
@@ -1280,6 +1258,8 @@ export const AIChat: React.FC<AIChatProps> = ({
     }
   }, [
     activeSession?.messages,
+    liveState?.streamingText,
+    liveState?.streamingLatencyTrace?.sidecarReceivedAt,
     timelineProjectionByMessageId,
     timelineProjectionByRunId,
   ]);
@@ -3114,8 +3094,6 @@ export const AIChat: React.FC<AIChatProps> = ({
         renderMessagePart(message, messageId, part, index, {
           content: options?.content ?? '',
           isStreaming: options?.isStreaming ?? false,
-          thinkingExpanded: options?.thinkingExpanded,
-          onToggleThinking: options?.onToggleThinking,
           streamingLatencyTrace: activeStreamingLatencyTrace,
           onFirstVisibleChar: options?.isStreaming ? markStreamingFirstVisible : undefined,
           onFinalVisibleDone: options?.isStreaming ? markStreamingFinalVisible : undefined,
