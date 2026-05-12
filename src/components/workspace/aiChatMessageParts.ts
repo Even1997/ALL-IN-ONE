@@ -1,5 +1,9 @@
 import { sanitizeAgentVisibleText } from '../../modules/ai/runtime/dispatch/agentEvents.ts';
 
+// Legacy compatibility parser for historical/raw assistant content.
+// The current runtime path should prefer structured output + assistant timeline,
+// and only fall back to this file when replaying older messages or loose text.
+
 export type AIChatMessagePart =
   | { type: 'text'; content: string; createdAt?: number }
   | {

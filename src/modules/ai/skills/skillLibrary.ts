@@ -123,7 +123,14 @@ const getSkillRoot = (skill: SkillDiscoveryEntry) => {
   return promptPath.replace(/\/SKILL\.md$/i, '');
 };
 
+const hasProjectSkillSource = (skill: SkillDiscoveryEntry) =>
+  /project/i.test(skill.source || '');
+
 const isProjectSkillEntry = (skill: SkillDiscoveryEntry, projectRoot?: string | null) => {
+  if (hasProjectSkillSource(skill)) {
+    return true;
+  }
+
   if (!projectRoot) {
     return false;
   }

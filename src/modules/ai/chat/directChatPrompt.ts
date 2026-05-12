@@ -61,6 +61,12 @@ const ARTIFACT_DRAFT_POLICY = [
   'Treat slash skills as explicit opt-in accelerators, not as prerequisites for delivering the first useful answer.',
 ].join(' ');
 
+const STRUCTURED_OUTPUT_POLICY = [
+  'For normal answers, put the durable reply in <final>...</final>.',
+  'If tools are used and a short process note helps, you may emit <feedback>...</feedback> before <final>.',
+  'Do not put raw tool protocol, tool transcripts, or duplicate正文 inside <final>.',
+].join(' ');
+
 const buildFreeChatSystemPrompt = (projectName?: string) =>
   [
     'You are a natural conversational AI assistant for the current project.',
@@ -81,6 +87,7 @@ const buildFreeChatSystemPrompt = (projectName?: string) =>
     INTERNAL_CONTEXT_DISCLOSURE_POLICY,
     RESPONSE_STYLE_POLICY,
     ARTIFACT_DRAFT_POLICY,
+    STRUCTURED_OUTPUT_POLICY,
   ].join('\n');
 
 const buildSkillSystemPrompt = (projectName: string | undefined, skillName: string, skillPrompt: string) =>
@@ -94,6 +101,7 @@ const buildSkillSystemPrompt = (projectName: string | undefined, skillName: stri
     INTERNAL_CONTEXT_DISCLOSURE_POLICY,
     RESPONSE_STYLE_POLICY,
     ARTIFACT_DRAFT_POLICY,
+    STRUCTURED_OUTPUT_POLICY,
     isWindowsHost() ? WINDOWS_COMMAND_TOOL_POLICY : null,
     `<skill_playbook>\n${skillPrompt}\n</skill_playbook>`,
     skillName === 'UI Design'

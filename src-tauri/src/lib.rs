@@ -687,6 +687,10 @@ fn get_goodnight_imported_skill_root_from_data_dir(app_data_dir: &Path) -> PathB
     get_goodnight_skill_root_from_data_dir(app_data_dir).join(GOODNIGHT_IMPORTED_SKILLS_DIR_NAME)
 }
 
+fn get_project_skill_root(project_root: &Path) -> PathBuf {
+    project_root.join(".agents").join("skills")
+}
+
 fn get_goodnight_skill_source_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -1239,6 +1243,7 @@ fn download_github_contents(
 
 pub(crate) fn collect_skill_discovery_entries(
     app_data_dir: &Path,
+    project_root: Option<&Path>,
 ) -> Result<Vec<SkillDiscoveryEntry>, String> {
     ensure_builtin_skills_installed(app_data_dir)?;
 
@@ -1297,6 +1302,30 @@ pub(crate) fn collect_skill_discovery_entries(
             true,
         )?;
         entries.push(entry);
+    }
+
+    if let Some(project_root) = project_root {
+        let project_skill_root = get_project_skill_root(project_root);
+        if project_skill_root.is_dir() {
+            for skill_dir in list_skill_directories_recursive(&project_skill_root)? {
+                let descriptor = load_skill_descriptor(&skill_dir, false)?;
+                if !seen_skill_ids.insert(descriptor.id.clone()) {
+                    continue;
+                }
+
+                let entry = build_skill_entry(
+                    app_data_dir,
+                    &home_dir,
+                    &skill_dir,
+                    "Project skill",
+                    false,
+                    false,
+                    false,
+                    false,
+                )?;
+                entries.push(entry);
+            }
+        }
     }
 
     entries.sort_by(|left, right| {
@@ -1538,14 +1567,19 @@ fn get_local_agent_config_snapshot() -> Result<LocalAgentConfigSnapshot, String>
 #[tauri::command]
 fn discover_local_skills(
     app_handle: tauri::AppHandle,
-    _params: Option<DiscoverLocalSkillsParams>,
+    params: Option<DiscoverLocalSkillsParams>,
 ) -> Result<Vec<SkillDiscoveryEntry>, String> {
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
         .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
 
-    collect_skill_discovery_entries(&app_data_dir)
+    let project_root = params
+        .and_then(|value| value.project_root)
+        .map(|value| PathBuf::from(value.trim()))
+        .filter(|value| !value.as_os_str().is_empty());
+
+    collect_skill_discovery_entries(&app_data_dir, project_root.as_deref())
 }
 
 #[tauri::command]

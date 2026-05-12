@@ -5,7 +5,7 @@ import test from 'node:test';
 const loadTimelineRenderModel = async () =>
   import(`../../src/components/workspace/timeline/chatMessageTimelineRenderModel.ts?test=${Date.now()}`);
 
-test('message timeline render model keeps active response out of process chronology', async () => {
+test('message timeline render model places active response on the same process chronology', async () => {
   const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
   const model = buildChatMessageTimelineRenderModel({
@@ -46,11 +46,11 @@ test('message timeline render model keeps active response out of process chronol
 
   assert.deepEqual(
     model.processItems.map((item) => item.key),
-    ['thinking-1', 'tool-1', 'tool-2']
+    ['thinking-1', 'tool-1', 'text-1', 'tool-2']
   );
 });
 
-test('message timeline render model keeps only projection-backed process items in chronology', async () => {
+test('message timeline render model keeps active response in the shared ordered process source', async () => {
   const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
   const model = buildChatMessageTimelineRenderModel({
@@ -83,11 +83,11 @@ test('message timeline render model keeps only projection-backed process items i
 
   assert.deepEqual(
     model.processItems.map((item) => item.key),
-    ['tool-1', 'tool-2']
+    ['tool-1', 'tool-2', 'text-1']
   );
 });
 
-test('message timeline render model does not use active answer as a same-timestamp process tiebreaker', async () => {
+test('message timeline render model uses active answer ordering for same-timestamp chronology', async () => {
   const { buildChatMessageTimelineRenderModel } = await loadTimelineRenderModel();
 
   const model = buildChatMessageTimelineRenderModel({
@@ -113,7 +113,7 @@ test('message timeline render model does not use active answer as a same-timesta
 
   assert.deepEqual(
     model.processItems.map((item) => item.key),
-    ['tool-1']
+    ['tool-1', 'text-1']
   );
 });
 
@@ -144,12 +144,11 @@ test('embedded message list timestamps run summary cards from the latest runtime
 
 test('GN Agent message item separates process rendering from the final answer body', async () => {
   const messageItemSource = await readFile('src/components/ai/gn-agent/GNAgentMessageItem.tsx', 'utf8');
+  const outputModelSource = await readFile('src/components/workspace/assistantMessageOutputModel.ts', 'utf8');
 
-  assert.match(messageItemSource, /buildChatMessageTimelineRenderModel/);
-  assert.match(messageItemSource, /const processGroups = timelineRenderModel\.processGroups;/);
-  assert.match(messageItemSource, /finalAnswerRenderItem/);
-  assert.match(messageItemSource, /activeResponseRenderItem\s*\|\|\s*timelineRenderModel\.finalAnswerItem/);
-  assert.match(messageItemSource, /activeResponseItem:\s*null/);
+  assert.match(messageItemSource, /buildAssistantMessageOutputModel/);
+  assert.match(messageItemSource, /const processGroups = assistantMessageOutputModel\?\.timelineRenderModel\.processGroups \|\| \[\];/);
+  assert.match(messageItemSource, /const answerBodyRenderItem = assistantMessageOutputModel\?\.finalAnswerItem \?\? null;/);
   assert.match(messageItemSource, /const hasProcessArtifacts =/);
   assert.match(messageItemSource, /const shouldShowCompletedProcessFold =/);
   assert.match(messageItemSource, /className="chat-message-process-fold"/);
@@ -161,4 +160,7 @@ test('GN Agent message item separates process rendering from the final answer bo
   assert.doesNotMatch(messageItemSource, /TimelineDetailDrawer/);
   assert.match(messageItemSource, /chat-message-final-answer/);
   assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(\[\.\.\.thinkingRenderItems,\s*\.\.\.bubbleRenderItems\]\)/);
+  assert.match(outputModelSource, /buildChatMessageTimelineRenderModel/);
+  assert.match(outputModelSource, /activeResponseItem:\s*isStreaming \? answerRenderItem : null/);
+  assert.match(outputModelSource, /finalAnswerItem:\s*isStreaming \? null : answerRenderItem/);
 });

@@ -7,7 +7,6 @@ import type { AIChatMessagePart } from './aiChatMessageParts.ts';
 
 export type AssistantDraftState = {
   timeline: AssistantTimelineEvent[];
-  streamingText?: string;
   isStreaming?: boolean;
   streamingReasoningTextByEventId?: Record<string, string>;
   streamingStartedAt?: number;
@@ -70,11 +69,7 @@ export const buildAssistantRenderModel = (
       ? message.timeline
       : [];
   const timelineText = getAssistantTimelineText(timeline);
-  const streamingText = draftState?.streamingText;
-  const hasVisibleDraftText = Boolean(
-    isStreaming && draftState && Object.prototype.hasOwnProperty.call(draftState, 'streamingText'),
-  );
-  const content = hasVisibleDraftText ? streamingText || '' : timelineText;
+  const content = timelineText;
   const fallbackAnswerCreatedAt =
     [...timeline]
       .reverse()
@@ -111,17 +106,16 @@ export const buildAssistantRenderModel = (
     })) as AssistantThinkingRenderItem[];
   const normalizedContent = normalizeAssistantCopy(content);
   const shouldRenderAnswer =
-    hasVisibleDraftText ||
-    (normalizedContent.length > 0 &&
-      !shouldSuppressAssistantTextPart(
-        message,
-        {
-          type: 'text',
-          content,
-          createdAt: answerCreatedAt,
-        },
-        bubbleCardCount,
-      ));
+    normalizedContent.length > 0 &&
+    !shouldSuppressAssistantTextPart(
+      message,
+      {
+        type: 'text',
+        content,
+        createdAt: answerCreatedAt,
+      },
+      bubbleCardCount,
+    );
   const finalAnswerItem: AssistantAnswerRenderItem | null = shouldRenderAnswer
     ? {
         kind: 'answer_lane',

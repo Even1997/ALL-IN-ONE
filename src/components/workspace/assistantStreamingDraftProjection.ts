@@ -10,11 +10,6 @@ const cloneReasoningMap = (value: Record<string, string> | undefined) => ({ ...(
 export type AssistantStreamingDraftProjectionInput = {
   message: StoredChatMessage;
   projection: TimelineProjection | null;
-  liveStreaming?: {
-    messageId: string | null;
-    text: string;
-    updatedAt?: number | null;
-  } | null;
   previousDraft?: AssistantDraftState;
 };
 
@@ -39,7 +34,6 @@ export const areAssistantDraftStatesEqual = (
   }
 
   if (
-    left.streamingText !== right.streamingText ||
     left.isStreaming !== right.isStreaming ||
     left.streamingStartedAt !== right.streamingStartedAt ||
     left.streamingUpdatedAt !== right.streamingUpdatedAt
@@ -61,7 +55,6 @@ export const areAssistantDraftStatesEqual = (
 export const projectAssistantStreamingDraft = ({
   message,
   projection,
-  liveStreaming,
   previousDraft,
 }: AssistantStreamingDraftProjectionInput): AssistantStreamingDraftProjectionResult => {
   const canonicalTimeline =
@@ -86,15 +79,9 @@ export const projectAssistantStreamingDraft = ({
   });
 
   const activeMessage = projection?.activeMessage ?? null;
-  const directLiveStreaming =
-    liveStreaming && liveStreaming.messageId === message.id
-      ? liveStreaming
-      : null;
   const timelineText = getAssistantTimelineText(timeline);
   const activeAnswerText =
-    directLiveStreaming
-      ? directLiveStreaming.text
-      : activeMessage && activeMessage.text.trim().length > 0
+    activeMessage && activeMessage.text.trim().length > 0
       ? activeMessage.text
       : activeMessage
         ? timelineText
@@ -104,9 +91,8 @@ export const projectAssistantStreamingDraft = ({
       timeline,
       isStreaming: true,
       streamingStartedAt: activeMessage?.startedAt,
-      streamingUpdatedAt: directLiveStreaming?.updatedAt ?? activeMessage?.updatedAt,
+      streamingUpdatedAt: activeMessage?.updatedAt,
     };
-    draft.streamingText = activeAnswerText;
     if (Object.keys(visibleReasoningByEventId).length > 0) {
       draft.streamingReasoningTextByEventId = visibleReasoningByEventId;
     }
@@ -125,7 +111,7 @@ export const projectAssistantStreamingDraft = ({
     draft.streamingReasoningTextByEventId = visibleReasoningByEventId;
   }
 
-  if (!draft.streamingText && !draft.streamingReasoningTextByEventId) {
+  if (!draft.streamingReasoningTextByEventId) {
     return {
       draft: null,
     };

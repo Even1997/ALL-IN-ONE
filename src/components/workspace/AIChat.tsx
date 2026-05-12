@@ -1223,13 +1223,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       const projectedDraft = projectAssistantStreamingDraft({
         message,
         projection,
-        liveStreaming: liveState
-          ? {
-              messageId: projection?.activeMessage?.messageId || null,
-              text: liveState.streamingText,
-              updatedAt: liveState?.streamingLatencyTrace?.sidecarReceivedAt ?? null,
-            }
-          : null,
         previousDraft,
       });
 
@@ -1258,8 +1251,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     }
   }, [
     activeSession?.messages,
-    liveState?.streamingText,
-    liveState?.streamingLatencyTrace?.sidecarReceivedAt,
     timelineProjectionByMessageId,
     timelineProjectionByRunId,
   ]);

@@ -45,7 +45,7 @@ test('assistant streaming draft projection is stable across identical recomputat
   });
 
   assert.deepEqual(second, first);
-  assert.equal(first.draft?.streamingText, 'First paragraph.\n\nSecond paragraph unfinished tail');
+  assert.equal(first.draft?.timeline?.[1]?.content, 'First paragraph.\n\nSecond paragraph unfinished tail');
   assert.equal(
     first.draft?.streamingReasoningTextByEventId?.reasoning_1,
     'First thought. Hidden tail',
@@ -78,7 +78,6 @@ test('assistant streaming draft projection clears completed answer drafts after 
     projection,
     previousDraft: {
       timeline: message.timeline,
-      streamingText: 'Visible final answer.',
       isStreaming: true,
     },
     now: 200,
@@ -115,7 +114,7 @@ test('assistant streaming draft projection uses canonical timeline text while ac
   });
 
   assert.equal(result.draft?.isStreaming, true);
-  assert.equal(result.draft?.streamingText, 'Fast sidecar draft.');
+  assert.equal(result.draft?.timeline?.[0]?.content, 'Fast sidecar draft.');
 });
 
 test('assistant streaming draft projection carries active message timing while streaming', async () => {
@@ -150,7 +149,7 @@ test('assistant streaming draft projection carries active message timing while s
   assert.equal(result.draft?.streamingUpdatedAt, 30);
 });
 
-test('assistant streaming draft projection prefers direct live streaming text for the active message', async () => {
+test('assistant streaming draft projection follows projection text for the active message', async () => {
   const { projectAssistantStreamingDraft } = await loadProjectionModule();
 
   const result = projectAssistantStreamingDraft({
@@ -168,27 +167,22 @@ test('assistant streaming draft projection prefers direct live streaming text fo
       finalMessage: null,
       activeMessage: {
         messageId: 'assistant_live',
-        text: '',
+        text: 'Projection live text.',
         startedAt: 20,
         updatedAt: 30,
         isStreaming: true,
       },
     },
-    liveStreaming: {
-      messageId: 'assistant_live',
-      text: 'Direct live text.',
-      updatedAt: 40,
-    },
     previousDraft: undefined,
   });
 
   assert.equal(result.draft?.isStreaming, true);
-  assert.equal(result.draft?.streamingText, 'Direct live text.');
+  assert.equal(result.draft?.timeline?.[0]?.content, 'Persisted slower text.');
   assert.equal(result.draft?.streamingStartedAt, 20);
-  assert.equal(result.draft?.streamingUpdatedAt, 40);
+  assert.equal(result.draft?.streamingUpdatedAt, 30);
 });
 
-test('assistant streaming draft projection does not leak direct live text into older assistant messages', async () => {
+test('assistant streaming draft projection no longer accepts a direct live text bypass', async () => {
   const { projectAssistantStreamingDraft } = await loadProjectionModule();
 
   const result = projectAssistantStreamingDraft({
@@ -210,11 +204,6 @@ test('assistant streaming draft projection does not leak direct live text into o
       },
       activeMessage: null,
     },
-    liveStreaming: {
-      messageId: 'assistant_newer',
-      text: 'Newer active text.',
-      updatedAt: 60,
-    },
     previousDraft: undefined,
   });
 
@@ -228,4 +217,6 @@ test('assistant streaming draft projection removes paragraph state from the help
   assert.doesNotMatch(source, /reasoningStateByEventId\?:/);
   assert.doesNotMatch(source, /pendingAnswerFlush/);
   assert.doesNotMatch(source, /pendingReasoningFlushEventIds/);
+  assert.doesNotMatch(source, /liveStreaming\?:/);
+  assert.doesNotMatch(source, /draft\.streamingText/);
 });

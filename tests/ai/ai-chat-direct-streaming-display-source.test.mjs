@@ -25,7 +25,7 @@ const buildAssistantMessage = (id, timeline = []) => ({
   createdAt: 1,
 });
 
-test('direct streaming display keeps fast text scoped to the active streaming message only', async () => {
+test('direct streaming display keeps draft timeline text scoped to the active streaming message only', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const olderMessage = buildAssistantMessage('assistant-older', [
     { id: 'text-older', kind: 'text', content: 'older persisted answer', createdAt: 2 },
@@ -43,33 +43,31 @@ test('direct streaming display keeps fast text scoped to the active streaming me
     activeMessage,
     {
       timeline: [{ id: 'text-draft', kind: 'text', content: 'slower active draft', createdAt: 4 }],
-      streamingText: 'fast active text',
       isStreaming: true,
     },
     0,
   );
 
   assert.equal(olderModel.content, 'older persisted answer');
-  assert.equal(activeModel.content, 'fast active text');
+  assert.equal(activeModel.content, 'slower active draft');
 });
 
-test('direct streaming display can clear visible text back to empty when the fast projection is empty', async () => {
+test('direct streaming display follows the shared timeline source instead of clearing from fast projection text alone', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel(
     buildAssistantMessage('assistant-empty'),
     {
       timeline: [{ id: 'text-draft', kind: 'text', content: 'stale rebuilt text', createdAt: 2 }],
-      streamingText: '',
       isStreaming: true,
     },
     0,
   );
 
-  assert.equal(model.content, '');
-  assert.equal(model.copyText, '');
+  assert.equal(model.content, 'stale rebuilt text');
+  assert.equal(model.copyText, 'stale rebuilt text');
   assert.deepEqual(
     model.items.filter((item) => item.part.type === 'text').map((item) => item.part.content),
-    [''],
+    ['stale rebuilt text'],
   );
 });
 
@@ -88,11 +86,11 @@ test('sidecar chat keeps the direct-display path on the normal message surfaces'
   assert.match(messageItemSource, /buildAssistantRenderModel\(/);
 });
 
-test('AIChat recomputes direct streaming drafts from live state updates and passes them into projection', async () => {
+test('AIChat recomputes streaming drafts from shared projection state instead of a live text bypass', async () => {
   const chatSource = await readFile(aiChatPath, 'utf8');
 
-  assert.match(chatSource, /liveState\?\.streamingText/);
-  assert.match(chatSource, /liveState\?\.streamingLatencyTrace\?\.sidecarReceivedAt/);
-  assert.match(chatSource, /liveStreaming:\s*liveState\s*\?/);
-  assert.match(chatSource, /messageId:\s*projection\?\.activeMessage\?\.messageId\s*\|\|\s*null/);
+  assert.match(chatSource, /projectAssistantStreamingDraft\(/);
+  assert.match(chatSource, /const projection =/);
+  assert.doesNotMatch(chatSource, /liveState\?\.streamingText/);
+  assert.doesNotMatch(chatSource, /liveStreaming:/);
 });

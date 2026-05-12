@@ -108,7 +108,10 @@ test('assistant render model shows the buffered answer lane once when streaming 
     ],
     createdAt: 1,
   }, {
-    streamingText: 'First sentence.\n\nSecond sentence.',
+    timeline: [
+      { id: 'text_1', kind: 'text', content: 'First sentence.', createdAt: 1 },
+      { id: 'text_2', kind: 'text', content: 'Second sentence.', createdAt: 2 },
+    ],
     isStreaming: false,
   });
 
@@ -128,11 +131,11 @@ test('assistant render model keeps the answer lane key stable across streaming a
   };
 
   const streamingModel = buildAssistantRenderModel(message, {
-    streamingText: 'Final answer.',
+    timeline: [{ id: 'text_stream', kind: 'text', content: 'Final answer.', createdAt: 20 }],
     isStreaming: true,
   });
   const completedModel = buildAssistantRenderModel(message, {
-    streamingText: 'Final answer.',
+    timeline: [{ id: 'text_stream', kind: 'text', content: 'Final answer.', createdAt: 20 }],
     isStreaming: false,
   });
 
@@ -150,7 +153,7 @@ test('assistant render model ignores completed answer drafts after handoff', asy
     timeline: [{ id: 'text_1', kind: 'text', content: 'Stored final answer.', createdAt: 10 }],
     createdAt: 1,
   }, {
-    streamingText: 'Visible final answer.',
+    timeline: [{ id: 'text_1', kind: 'text', content: 'Visible final answer.', createdAt: 20 }],
     isStreaming: false,
   });
 
@@ -166,7 +169,7 @@ test('assistant render model keeps streaming answer timestamp stable from its st
     timeline: [{ id: 'text_1', kind: 'text', content: 'Stored answer.', createdAt: 2 }],
     createdAt: 1,
   }, {
-    streamingText: 'Visible answer.',
+    timeline: [{ id: 'text_1', kind: 'text', content: 'Visible answer.', createdAt: 20 }],
     isStreaming: true,
     streamingStartedAt: 20,
     streamingUpdatedAt: 30,
@@ -183,7 +186,7 @@ test('assistant render model exposes an unfinished streaming answer block withou
     timeline: [{ id: 'text_1', kind: 'text', content: 'Stored answer.', createdAt: 2 }],
     createdAt: 1,
   }, {
-    streamingText: 'Unfinished fragment without punctuation',
+    timeline: [{ id: 'text_stream', kind: 'text', content: 'Unfinished fragment without punctuation', createdAt: 20 }],
     isStreaming: true,
     streamingStartedAt: 20,
     streamingUpdatedAt: 30,

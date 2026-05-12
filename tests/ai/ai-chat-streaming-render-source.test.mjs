@@ -43,7 +43,7 @@ test('AIChat passes streaming state into assistant text rendering options', asyn
   assert.match(source, /isStreaming:\s*options\?\.isStreaming \?\? false/);
 });
 
-test('assistant render model prefers fast streaming text over rebuilt draft text while streaming', async () => {
+test('assistant render model prefers the shared draft timeline text while streaming', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const message = buildAssistantMessage([
     { id: 'text-message', kind: 'text', content: 'persisted final text', createdAt: 3 },
@@ -56,17 +56,16 @@ test('assistant render model prefers fast streaming text over rebuilt draft text
     message,
     {
       ...draftState,
-      streamingText: 'fast projection text',
       isStreaming: true,
     },
     0,
   );
 
-  assert.equal(model.content, 'fast projection text');
-  assert.equal(model.copyText, 'fast projection text');
+  assert.equal(model.content, 'slower rebuilt draft text');
+  assert.equal(model.copyText, 'slower rebuilt draft text');
   assert.deepEqual(
     model.items.filter((item) => item.part.type === 'text').map((item) => item.part.content),
-    ['fast projection text'],
+    ['slower rebuilt draft text'],
   );
 });
 
@@ -102,7 +101,6 @@ test('assistant render model reverts to persisted timeline text after streaming 
     message,
     {
       ...draftState,
-      streamingText: 'fast projection text',
       isStreaming: false,
     },
     0,

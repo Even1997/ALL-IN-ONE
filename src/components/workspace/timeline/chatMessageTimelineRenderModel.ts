@@ -14,6 +14,7 @@ export type ChatMessageTimelineRenderGroup = {
 };
 
 export type ChatMessageTimelineRenderModel = {
+  orderedItems: ChatMessageTimelineRenderItem[];
   processItems: ChatMessageTimelineRenderItem[];
   processGroups: ChatMessageTimelineRenderGroup[];
   finalAnswerItem: ChatMessageTimelineRenderItem | null;
@@ -76,12 +77,18 @@ export const buildChatMessageTimelineRenderModel = (input: {
   activeResponseItem?: ChatMessageTimelineRenderItem | null;
   finalAnswerItem?: ChatMessageTimelineRenderItem | null;
 }): ChatMessageTimelineRenderModel => {
-  const processItems = sortChatMessageTimelineItems([
+  const orderedItems = sortChatMessageTimelineItems([
     ...input.thinkingItems,
     ...input.timelineCardItems,
+    ...(input.activeResponseItem ? [input.activeResponseItem] : []),
+    ...(input.finalAnswerItem ? [input.finalAnswerItem] : []),
   ]);
+  const processItems = input.finalAnswerItem
+    ? orderedItems.filter((item) => item.key !== input.finalAnswerItem?.key)
+    : orderedItems;
 
   return {
+    orderedItems,
     processItems,
     processGroups: groupChatMessageTimelineItemsByLane(processItems),
     finalAnswerItem: input.finalAnswerItem ?? null,

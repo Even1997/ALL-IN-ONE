@@ -71,7 +71,7 @@ fn default_goodnight_skills_server() -> RuntimeMcpServerRecord {
 }
 
 fn build_skill_list_preview(app_data_dir: &Path) -> Result<(String, String), String> {
-    let entries = collect_skill_discovery_entries(app_data_dir)?;
+    let entries = collect_skill_discovery_entries(app_data_dir, None)?;
     let summary = format!("Listed {} GoodNight skills", entries.len());
     let preview = if entries.is_empty() {
         "No skills discovered.".to_string()

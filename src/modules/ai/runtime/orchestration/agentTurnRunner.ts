@@ -1,4 +1,5 @@
 import type { AgentProviderId, AgentTurnRecord } from '../agentRuntimeTypes';
+import { parseStructuredAssistantOutput } from '../output/parseStructuredAssistantOutput.ts';
 
 const createTurnId = () => `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const EMPTY_RUNTIME_RESPONSE_MESSAGE = 'No response content was returned.';
@@ -429,20 +430,40 @@ export const createRuntimeStreamingMessageAssembler = () => {
   };
 
   const buildDraft = (completeThinking: boolean): RuntimeStreamingAssistantDraft => {
-    const visibleAnswerContent = answerContentRaw;
+    const parsedOutput = parseStructuredAssistantOutput(answerContentRaw, {
+      allowPartial: !completeThinking,
+    });
+    const visibleAnswerContent = parsedOutput.finalText;
     const visibleThinkingContent = thinkingContent;
-    const visibleParts = assistantParts
-      .map((part) => {
-        const content = part.content;
-        return content
-          ? {
-              ...part,
-              content,
-              ...(part.type === 'thinking' ? { collapsed: true } : {}),
-            }
-          : null;
-      })
-      .filter((part): part is RuntimeStreamingAssistantDraft['assistantParts'][number] => Boolean(part));
+    const visibleParts: RuntimeStreamingAssistantDraft['assistantParts'] = [];
+
+    assistantParts.forEach((part) => {
+      if (part.type !== 'thinking') {
+        return;
+      }
+
+      const content = part.content;
+      if (!content) {
+        return;
+      }
+
+      visibleParts.push({
+        ...part,
+        content,
+        collapsed: true,
+      });
+    });
+
+    if (visibleAnswerContent.trim()) {
+      const lastAnswerPart = [...assistantParts].reverse().find(
+        (part): part is { type: 'text'; content: string; createdAt?: number } => part.type === 'text'
+      );
+      visibleParts.push({
+        type: 'text',
+        content: visibleAnswerContent,
+        createdAt: lastAnswerPart?.createdAt ?? Date.now(),
+      });
+    }
 
     return {
       content: buildRuntimeStreamingMessage({
@@ -497,18 +518,22 @@ export const createRuntimeStreamingMessageAssembler = () => {
       }
 
       const draft = buildDraft(true);
+      const parsedFinalOutput = parseStructuredAssistantOutput(response, {
+        allowPartial: false,
+      });
+      const parsedFinalText = parsedFinalOutput.finalText;
       let answerContent = draft.answerContent;
       let finalParts = draft.assistantParts;
 
-      if (response && response !== answerContent) {
-        answerContent = response;
+      if (parsedFinalText && parsedFinalText !== answerContent) {
+        answerContent = parsedFinalText;
         finalParts =
-          reconcileFinalAssistantParts(response, draft.assistantParts) ||
-          reconcileFinalAssistantPartsByParagraph(response, draft.assistantParts) || [
+          reconcileFinalAssistantParts(parsedFinalText, draft.assistantParts) ||
+          reconcileFinalAssistantPartsByParagraph(parsedFinalText, draft.assistantParts) || [
             ...draft.assistantParts.filter((part) => part.type === 'thinking'),
             {
               type: 'text',
-              content: response,
+              content: parsedFinalText,
               createdAt: Date.now(),
             },
           ];
@@ -516,7 +541,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
 
       const content =
         !draft.thinkingContent.trim() && !answerContent.trim()
-          ? response || EMPTY_RUNTIME_RESPONSE_MESSAGE
+          ? parsedFinalText || EMPTY_RUNTIME_RESPONSE_MESSAGE
           : buildRuntimeStreamingMessage({
               thinkingContent: draft.thinkingContent,
               answerContent,
@@ -524,7 +549,7 @@ export const createRuntimeStreamingMessageAssembler = () => {
             });
 
       return {
-        content: content !== 'Thinking...' ? content : response || EMPTY_RUNTIME_RESPONSE_MESSAGE,
+        content: content !== 'Thinking...' ? content : parsedFinalText || EMPTY_RUNTIME_RESPONSE_MESSAGE,
         thinkingContent: draft.thinkingContent,
         answerContent,
         assistantParts: finalParts,

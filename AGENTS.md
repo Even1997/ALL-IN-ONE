@@ -20,3 +20,15 @@ Rules:
 - Prefer fixing presentation issues in `projection`, `render model`, `message ordering`, or `UI composition` layers.
 - If a change must cross layers, document why the lower-layer change is architecture-driven rather than a display workaround.
 - When reviewing prior changes, explicitly check whether they violate this layer contract before keeping them.
+
+## AI chat output contract
+
+For AI chat output, keep `thinking`, `tool`, `feedback`, and `final` as separate concepts.
+
+Rules:
+- `thinking` is transient reasoning status only. Do not treat it as durable assistant body text.
+- `tool` facts must come from runtime / canonical tool events, not from re-parsing assistant prose.
+- `feedback` is optional, short, and transient process text. It must never become the final persisted answer body.
+- `final` is the only durable assistant answer body for a completed turn.
+- If no tool is used, reply with `<final>...</final>` only.
+- If tools are used, use runtime tool events as the source of truth and keep any `<feedback>` short. Do not restate tool protocol blocks inside `<final>`.
