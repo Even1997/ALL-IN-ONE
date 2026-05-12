@@ -154,6 +154,41 @@ test('assistant render model prefers the finalized visible draft text during com
   assert.equal(model.finalAnswerItem?.part.content, 'Visible final answer.');
 });
 
+test('assistant render model timestamps the streaming answer from the active projection draft', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const model = buildAssistantRenderModel({
+    id: 'assistant_streaming_ts',
+    role: 'assistant',
+    timeline: [{ id: 'text_1', kind: 'text', content: 'Stored answer.', createdAt: 2 }],
+    createdAt: 1,
+  }, {
+    streamingText: 'Visible answer.',
+    isStreaming: true,
+    streamingStartedAt: 20,
+    streamingUpdatedAt: 30,
+  });
+
+  assert.equal(model.finalAnswerItem?.part.createdAt, 30);
+});
+
+test('assistant render model exposes an unfinished streaming answer block without paragraph gating', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const model = buildAssistantRenderModel({
+    id: 'assistant_streaming_fragment',
+    role: 'assistant',
+    timeline: [{ id: 'text_1', kind: 'text', content: 'Stored answer.', createdAt: 2 }],
+    createdAt: 1,
+  }, {
+    streamingText: 'Unfinished fragment without punctuation',
+    isStreaming: true,
+    streamingStartedAt: 20,
+    streamingUpdatedAt: 30,
+  });
+
+  assert.equal(model.content, 'Unfinished fragment without punctuation');
+  assert.equal(model.finalAnswerItem?.part.content, 'Unfinished fragment without punctuation');
+});
+
 test('assistant render model can show buffered thinking text without mutating timeline content', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const timeline = [

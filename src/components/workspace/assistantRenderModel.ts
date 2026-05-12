@@ -10,6 +10,8 @@ export type AssistantDraftState = {
   streamingText?: string;
   isStreaming?: boolean;
   streamingReasoningTextByEventId?: Record<string, string>;
+  streamingStartedAt?: number;
+  streamingUpdatedAt?: number;
 };
 
 export type AssistantRenderItem =
@@ -70,11 +72,14 @@ export const buildAssistantRenderModel = (
     draftState && Object.prototype.hasOwnProperty.call(draftState, 'streamingText'),
   );
   const content = hasVisibleDraftText ? streamingText || '' : timelineText;
-  const answerCreatedAt =
+  const fallbackAnswerCreatedAt =
     [...timeline]
       .reverse()
       .find((event): event is Extract<AssistantTimelineEvent, { kind: 'text' }> => event.kind === 'text')
       ?.createdAt ?? message.createdAt;
+  const answerCreatedAt = isStreaming
+    ? draftState?.streamingUpdatedAt ?? draftState?.streamingStartedAt ?? fallbackAnswerCreatedAt
+    : fallbackAnswerCreatedAt;
 
   timeline.forEach((event, timelineOrder) => {
     if (event.kind === 'reasoning') {

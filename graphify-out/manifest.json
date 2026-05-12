@@ -312,8 +312,8 @@
     "hash": "e70f27a5c1b0433710106d476e757f97"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChat.tsx": {
-    "mtime": 1778557258.5219254,
-    "hash": "7aaa16618b8cf6501867f4940a4a9559"
+    "mtime": 1778560919.6384373,
+    "hash": "397106ae1fe77b1002c3972e9dda2cbc"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatAISettingsTab.tsx": {
     "mtime": 1778399387.7204428,
@@ -347,17 +347,13 @@
     "mtime": 1777939009.611922,
     "hash": "e8bde0f44c8279bb75a44e18cd08eff4"
   },
-  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\assistantParagraphStreaming.ts": {
-    "mtime": 1778516610.8095884,
-    "hash": "92adfcdc501335294b9711cf27df9306"
-  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\assistantRenderModel.ts": {
-    "mtime": 1778557258.5234618,
-    "hash": "ef51745873196f62688b1ac1a6337b91"
+    "mtime": 1778558459.6838965,
+    "hash": "d8f4074db626808572006c1de59dce3c"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\assistantStreamingDraftProjection.ts": {
-    "mtime": 1778557258.5286877,
-    "hash": "83352626cb791fa5bbb426f22e471e3c"
+    "mtime": 1778560792.0202782,
+    "hash": "a20e836bf6e4507414e1827034981916"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\FileExplorer.tsx": {
     "mtime": 1777737320.622496,
@@ -1436,8 +1432,8 @@
     "hash": "ec6e41b8f2e1e7930ae80113f867ffb6"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-paragraph-streaming-source.test.mjs": {
-    "mtime": 1778516545.9954412,
-    "hash": "c9d354d77a724a75d7dfc591016f3235"
+    "mtime": 1778560959.3946722,
+    "hash": "19aeb82e09916ca168298c628a06eca6"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-performance-boundary-source.test.mjs": {
     "mtime": 1778505670.6777618,
@@ -1496,8 +1492,8 @@
     "hash": "5fce5c0468f1d82f19546e37a3b37569"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-thinking-paragraph-streaming-source.test.mjs": {
-    "mtime": 1778516545.9964392,
-    "hash": "efa61e50b6ee249ece217540b697e4c0"
+    "mtime": 1778560967.839532,
+    "hash": "0e5ad88462e757a310cc6a808f8fdb97"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-timeline-view.test.mjs": {
     "mtime": 1778557214.6048903,
@@ -1563,17 +1559,13 @@
     "mtime": 1778399387.7464807,
     "hash": "06523b89dacac30081bbbed8f6d8dcee"
   },
-  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-paragraph-streaming.test.mjs": {
-    "mtime": 1778516545.9984381,
-    "hash": "f990def8a7971c6489286442edad2f97"
-  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-render-model.test.mjs": {
-    "mtime": 1778557299.1694822,
-    "hash": "e710a6cf7f505ed5d42211ed31eb8d81"
+    "mtime": 1778560711.0164,
+    "hash": "73a25593fbf47f5ac490b68782e9afb4"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-streaming-draft-projection.test.mjs": {
-    "mtime": 1778557214.6107466,
-    "hash": "7bf6b3a7451913116c3d401eaaed9692"
+    "mtime": 1778560702.9221754,
+    "hash": "d0240246e9ebd9101ca520ed32cbbdd6"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\assistant-thinking-ui-source.test.mjs": {
     "mtime": 1777908170.5108855,
@@ -2367,6 +2359,10 @@
     "mtime": 1778513394.5852437,
     "hash": "d3d91da36465910677f001f94a192298"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-12-ai-chat-block-streaming-cutover.md": {
+    "mtime": 1778560629.2593086,
+    "hash": "441f8a956d94dc720545162391f17a21"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-12-ai-chat-final-answer-process-fold.md": {
     "mtime": 1778543768.953275,
     "hash": "e9742c9b2d4a01ae6e0f528683132106"
@@ -2378,6 +2374,10 @@
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-12-ai-chat-render-phase-streaming-fix.md": {
     "mtime": 1778555607.4965858,
     "hash": "17a322a7ee41473421a9cf150ab3c75b"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-12-assistant-streaming-timeline-stability.md": {
+    "mtime": 1778558400.1229594,
+    "hash": "0b0a2352dfd01f9d97e054f6b96e0920"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\specs\\2026-04-24-ai-chat-unified-entry-design.md": {
     "mtime": 1776990247.5471349,
