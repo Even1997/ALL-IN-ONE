@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import type { StoredChatMessage } from '../../../modules/ai/store/aiChatStore.ts';
 import type { StreamingLatencyTrace } from '../../../modules/ai/runtime/streamingLatencyTrace.ts';
 import type { AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
@@ -42,18 +42,10 @@ type GNAgentMessageItemProps = {
   } | null;
 };
 
-const formatProcessElapsedLabel = (elapsedSeconds: number | undefined) => {
-  if (typeof elapsedSeconds !== 'number' || !Number.isFinite(elapsedSeconds)) {
-    return '';
-  }
-
-  return `\u5df2\u5904\u7406 ${Math.max(0, Math.floor(elapsedSeconds))} \u79d2`;
-};
-
 const renderProcessGroups = (
   processGroups: ChatMessageTimelineRenderGroup[],
   messageId: string,
-  variant: 'inline' | 'fold',
+  variant: 'inline',
 ) =>
   processGroups.map((group, groupIndex) =>
     group.kind === 'thinking_lane' ? (
@@ -109,9 +101,9 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   parseMessageParts,
   renderMessagePart,
   timelineItems,
-  processSummary,
+  processSummary: _processSummary,
 }: GNAgentMessageItemProps) {
-  const [processFoldExpanded, setProcessFoldExpanded] = useState<boolean | null>(null);
+  void _processSummary;
   const content = message.role === 'assistant' ? '' : message.content;
   const assistantOutputModel =
     message.role === 'assistant'
@@ -123,10 +115,6 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
         })
       : null;
   const isStreaming = assistantOutputModel?.isStreaming ?? false;
-  const hasCompletedAnswer =
-    message.role === 'assistant' &&
-    !isStreaming &&
-    Boolean(assistantOutputModel?.finalAnswerItem);
   const nonAssistantRenderItems: ChatMessageTimelineRenderItem[] = [];
 
   if (message.role !== 'assistant') {
@@ -152,48 +140,12 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     message.role === 'assistant'
       ? (assistantOutputModel?.hasVisibleContent ?? false)
       : nonAssistantRenderItems.length > 0;
-  const completedElapsedLabel =
-    hasCompletedAnswer
-      ? formatProcessElapsedLabel(processSummary?.elapsedSeconds)
-      : '';
-  const shouldShowCompletedProcessFold =
-    hasProcessArtifacts &&
-    hasCompletedAnswer &&
-    Boolean(completedElapsedLabel);
-
-  useEffect(() => {
-    if (shouldShowCompletedProcessFold) {
-      if (processFoldExpanded === null) {
-        setProcessFoldExpanded(false);
-      }
-      return;
-    }
-
-    setProcessFoldExpanded(null);
-  }, [processFoldExpanded, shouldShowCompletedProcessFold]);
-
-  const isProcessFoldExpanded = shouldShowCompletedProcessFold && (processFoldExpanded ?? false);
 
   return (
     <article className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}>
       {message.role === 'assistant' && hasVisibleContent ? (
         <>
-          {shouldShowCompletedProcessFold ? (
-            <details
-              className="chat-message-process-fold"
-              open={isProcessFoldExpanded}
-              onToggle={(event) => {
-                const nextOpen = (event.currentTarget as HTMLDetailsElement).open;
-                setProcessFoldExpanded(nextOpen);
-              }}
-            >
-              <summary className="chat-message-process-summary">
-                <span className="chat-message-process-elapsed">{completedElapsedLabel}</span>
-                <span className="chat-message-process-caret" aria-hidden="true" />
-              </summary>
-              <div className="chat-message-process-fold-body">{renderProcessGroups(processGroups, message.id, 'fold')}</div>
-            </details>
-          ) : hasProcessArtifacts ? (
+          {hasProcessArtifacts ? (
             <div className="chat-message-process-inline">{renderProcessGroups(processGroups, message.id, 'inline')}</div>
           ) : null}
           {answerBodyRenderItem ? (

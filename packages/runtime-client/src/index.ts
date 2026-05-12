@@ -13,6 +13,7 @@ import type {
   RuntimeReplayAppendInput,
   RuntimeReplayEvent,
   RuntimeQuestionAnswerInput,
+  RuntimeSessionDeleteResult,
   RuntimeTurnSubmitInput,
   RuntimeSessionCreateInput,
   RuntimeSessionSnapshot,
@@ -100,6 +101,10 @@ export class RuntimeSidecarClient {
 
   async openSession(sessionId: string) {
     return this.get<RuntimeSessionSnapshot>(`/sessions/${sessionId}`);
+  }
+
+  async deleteSession(sessionId: string) {
+    return this.post<RuntimeSessionDeleteResult>('/sessions/delete', { sessionId });
   }
 
   async submitTurn(input: RuntimeTurnSubmitInput) {

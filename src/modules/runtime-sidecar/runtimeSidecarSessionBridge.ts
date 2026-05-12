@@ -14,6 +14,7 @@ import type {
   RuntimeReasoningEventRecord,
   RuntimeQuestionAnswerInput,
   RuntimeReferenceFileRecord,
+  RuntimeSessionDeleteResult,
   RuntimeSessionSnapshot,
   RuntimeTeamRunRecord,
   RuntimeToolCallRecord,
@@ -40,6 +41,7 @@ import {
   createStreamingLatencyTrace,
   recordProviderChunk,
 } from '../ai/runtime/streamingLatencyTrace.ts';
+import { reconcileRuntimeThreadsWithSessions } from '../ai/runtime/conversation/runtimeConversationGateway.ts';
 import {
   type AssistantTimelineEvent,
   createChatSession,
@@ -62,6 +64,9 @@ import {
 import {
   createRuntimeSidecarDeltaCoalescer,
 } from './runtimeSidecarStreamingCoalescer.ts';
+import {
+  resolveRuntimeSidecarSnapshotMessageDelta,
+} from './runtimeSidecarMessageDelta.ts';
 
 const initializedProjects = new Set<string>();
 let runtimeEventsSubscribed = false;
@@ -735,7 +740,7 @@ const applyRuntimeSidecarReasoningEvent = (
 
 const applyRuntimeSidecarTurnDeltaNow = (
   sessionId: string,
-  messageId: string,
+  _messageId: string,
   delta: string,
   emittedAt: number,
   trace?: RuntimeTurnDeltaTrace,
@@ -746,23 +751,6 @@ const applyRuntimeSidecarTurnDeltaNow = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
-  appendRuntimeSidecarCanonicalEvent(
-    sessionId,
-    messageId,
-    createRuntimeSidecarCanonicalEvent({
-      sessionId,
-      providerId: located.session.providerId,
-      runId: messageId,
-      messageId,
-      type: 'message.delta',
-      payload: {
-        textChunk: delta,
-        phase: 'final_answer',
-      },
-      ts: emittedAt,
-    }),
-    emittedAt,
-  );
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.appendStreamDelta(sessionId, delta);
   patchLiveStateIfChanged(sessionId, (state) => ({
@@ -1296,11 +1284,39 @@ const applyRuntimeSidecarMessageNow = (
 ) => {
   if (eventType === 'message.delta') {
     if (message.role === 'assistant') {
-      ensureRuntimeAssistantMessage({
+      const located = ensureRuntimeAssistantMessage({
         sessionId,
         messageId: message.id,
         createdAt: emittedAt,
       });
+      if (located) {
+        const textChunk = resolveRuntimeSidecarSnapshotMessageDelta(
+          located.session.canonicalEvents || [],
+          message.id,
+          message.content,
+        );
+        if (!textChunk) {
+          return;
+        }
+
+        appendRuntimeSidecarCanonicalEvent(
+          sessionId,
+          message.id,
+          createRuntimeSidecarCanonicalEvent({
+            sessionId,
+            providerId: located.session.providerId,
+            runId: message.id,
+            messageId: message.id,
+            type: 'message.delta',
+            payload: {
+              textChunk,
+              phase: 'final_answer',
+            },
+            ts: emittedAt,
+          }),
+          emittedAt,
+        );
+      }
     } else {
       commitRuntimeSidecarMessage(sessionId, message);
     }
@@ -1538,13 +1554,71 @@ export const initializeRuntimeSidecarProjectSessions = async (projectId: string)
   });
 
   const chatStore = useAIChatStore.getState();
-  const projectState = chatStore.projects[projectId];
-  if (!projectState?.activeSessionId && projectState?.sessions[0]) {
-    chatStore.setActiveSession(projectId, projectState.sessions[0].id);
+  const currentProjectState = chatStore.projects[projectId] || null;
+  const runtimeThreads = summaries.map((session) => ({
+    id: session.id,
+    providerId: toProviderId(session.providerId),
+    title: session.title,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+  }));
+  const reconciled = reconcileRuntimeThreadsWithSessions({
+    projectId,
+    sessions: currentProjectState?.sessions || [],
+    runtimeThreads,
+  });
+
+  chatStore.replaceProjectSessions(
+    projectId,
+    reconciled.sessions,
+    currentProjectState?.activeSessionId &&
+      reconciled.sessions.some((session) => session.id === currentProjectState.activeSessionId)
+      ? currentProjectState.activeSessionId
+      : reconciled.sessions[0]?.id || null,
+  );
+
+  if (reconciled.removedSessionIds.length > 0) {
+    console.info('[ai-chat] removed stale or duplicate sessions during bootstrap', {
+      projectId,
+      removedSessionIds: reconciled.removedSessionIds,
+    });
   }
 
   initializedProjects.add(projectId);
   return true;
+};
+
+export const deleteRuntimeSidecarSession = async (input: {
+  projectId: string;
+  sessionId: string;
+  runtimeThreadId: string | null;
+}): Promise<RuntimeSessionDeleteResult> => {
+  if (!input.runtimeThreadId) {
+    useAIChatStore.getState().removeSession(input.projectId, input.sessionId);
+    return {
+      sessionId: input.sessionId,
+      deleted: true,
+    };
+  }
+
+  const client = await ensureDesktopRuntimeSidecar();
+  if (!client) {
+    return {
+      sessionId: input.runtimeThreadId,
+      deleted: false,
+    };
+  }
+
+  const result = await client.deleteSession(input.runtimeThreadId);
+  if (!result.deleted) {
+    return result;
+  }
+
+  useAIChatStore.getState().removeSession(input.projectId, input.sessionId);
+  useAgentRuntimeStore.getState().removeThreadState(input.projectId, input.runtimeThreadId);
+  useApprovalStore.getState().clearThreadApprovals(input.runtimeThreadId);
+  useRuntimeMcpStore.getState().clearThreadToolCalls(input.runtimeThreadId);
+  return result;
 };
 
 export const createRuntimeSidecarSession = async (input: {

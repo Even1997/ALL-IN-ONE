@@ -137,6 +137,7 @@ type AgentRuntimeState = {
   setThreadToolCalls: (threadId: string, toolCalls: RuntimeToolStep[]) => void;
   setRuntimeBinding: (threadId: string, binding: AgentRuntimeBinding) => void;
   setThreadBackgroundTasks: (threadId: string, tasks: AgentBackgroundTaskRecord[]) => void;
+  removeThreadState: (projectId: string, threadId: string) => void;
   upsertBackgroundTask: (threadId: string, task: AgentBackgroundTaskRecord) => void;
   upsertTeamRun: (threadId: string, teamRun: AgentTeamRunRecord) => void;
   pruneThreadHistorySince: (threadId: string, createdAt: number) => void;
@@ -515,6 +516,68 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
         ...state.backgroundTasksByThread,
         [threadId]: sortBackgroundTasks([...tasks]),
       },
+    })),
+
+  removeThreadState: (projectId, threadId) =>
+    set((state) => ({
+      threadsByProject: {
+        ...state.threadsByProject,
+        [projectId]: (state.threadsByProject[projectId] || []).filter((thread) => thread.id !== threadId),
+      },
+      timelineByThread: Object.fromEntries(
+        Object.entries(state.timelineByThread).filter(([key]) => key !== threadId),
+      ),
+      turnsByThread: Object.fromEntries(
+        Object.entries(state.turnsByThread).filter(([key]) => key !== threadId),
+      ),
+      sessionsByThread: Object.fromEntries(
+        Object.entries(state.sessionsByThread).filter(([key]) => key !== threadId),
+      ),
+      tasksByThread: Object.fromEntries(
+        Object.entries(state.tasksByThread).filter(([key]) => key !== threadId),
+      ),
+      runsByThread: Object.fromEntries(
+        Object.entries(state.runsByThread).filter(([key]) => key !== threadId),
+      ),
+      agentRunsByThread: Object.fromEntries(
+        Object.entries(state.agentRunsByThread).filter(([key]) => key !== threadId),
+      ),
+      memoryCandidatesByThread: Object.fromEntries(
+        Object.entries(state.memoryCandidatesByThread).filter(([key]) => key !== threadId),
+      ),
+      replayEventsByThread: Object.fromEntries(
+        Object.entries(state.replayEventsByThread).filter(([key]) => key !== threadId),
+      ),
+      recoveryByThread: Object.fromEntries(
+        Object.entries(state.recoveryByThread).filter(([key]) => key !== threadId),
+      ),
+      resumeRequestsByThread: Object.fromEntries(
+        Object.entries(state.resumeRequestsByThread).filter(([key]) => key !== threadId),
+      ),
+      activeSkillsByThread: Object.fromEntries(
+        Object.entries(state.activeSkillsByThread).filter(([key]) => key !== threadId),
+      ),
+      contextByThread: Object.fromEntries(
+        Object.entries(state.contextByThread).filter(([key]) => key !== threadId),
+      ),
+      toolCallsByThread: Object.fromEntries(
+        Object.entries(state.toolCallsByThread).filter(([key]) => key !== threadId),
+      ),
+      bindingByThread: Object.fromEntries(
+        Object.entries(state.bindingByThread).filter(([key]) => key !== threadId),
+      ),
+      runStateByThread: Object.fromEntries(
+        Object.entries(state.runStateByThread).filter(([key]) => key !== threadId),
+      ),
+      liveStateByThread: Object.fromEntries(
+        Object.entries(state.liveStateByThread).filter(([key]) => key !== threadId),
+      ),
+      backgroundTasksByThread: Object.fromEntries(
+        Object.entries(state.backgroundTasksByThread).filter(([key]) => key !== threadId),
+      ),
+      teamRunsByThread: Object.fromEntries(
+        Object.entries(state.teamRunsByThread).filter(([key]) => key !== threadId),
+      ),
     })),
 
   upsertBackgroundTask: (threadId, task) =>

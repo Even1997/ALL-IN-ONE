@@ -19,6 +19,10 @@ test('runtime sidecar session bridge maps snapshots into the desktop chat store'
   assert.match(source, /useAIChatStore/);
   assert.match(source, /replaceSessionMessages/);
   assert.match(source, /upsertSession/);
+  assert.match(source, /reconcileRuntimeThreadsWithSessions/);
+  assert.match(source, /removedSessionIds/);
+  assert.match(source, /replaceProjectSessions/);
+  assert.match(source, /deleteRuntimeSidecarSession/);
 });
 
 test('runtime sidecar session bridge consumes streaming assistant messages and runtime interaction projections', async () => {

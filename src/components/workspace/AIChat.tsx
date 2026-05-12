@@ -94,6 +94,7 @@ import { emitKnowledgeFilesystemChanged } from '../../features/knowledge/workspa
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
 import {
+  deleteRuntimeSidecarSession,
   appendRuntimeSidecarReplayHistoryEntry,
   getRuntimeSidecarCheckpointDiff,
   initializeRuntimeSidecarBackgroundTasks,
@@ -1138,7 +1139,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     clearComposerPrefill,
     syncSessionReplayState,
     replaceSessionMessages,
-    removeSession,
   } = useAIChatStore(
     useShallow((state) => ({
       ensureProjectState: state.ensureProjectState,
@@ -1150,7 +1150,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       clearComposerPrefill: state.clearComposerPrefill,
       syncSessionReplayState: state.syncSessionReplayState,
       replaceSessionMessages: state.replaceSessionMessages,
-      removeSession: state.removeSession,
     }))
   );
   const {
@@ -1185,6 +1184,17 @@ export const AIChat: React.FC<AIChatProps> = ({
   } = useActiveConversationSelection({
     projectId: currentProjectId,
   });
+  const hasPersistedSessions = sessions.length > 0;
+  const isConversationEmptyState = !activeSession && !hasPersistedSessions;
+  const activeSessionTitle = isConversationEmptyState
+    ? '暂无对话'
+    : activeSession?.title || '新对话';
+  const emptyConversationLeadingContent = isConversationEmptyState ? (
+    <div className="chat-empty-conversation-state">
+      <strong>暂无历史对话</strong>
+      <span>点击“新对话”开始，或直接发送消息创建新会话。</span>
+    </div>
+  ) : null;
   const { timelineProjectionByMessageId, timelineProjectionByRunId } = useRuntimeConversationGateway({
     projectId: currentProjectId,
   });
@@ -3069,7 +3079,16 @@ export const AIChat: React.FC<AIChatProps> = ({
           return;
         }
 
-        removeSession(currentProject.id, sessionId);
+        const session = sessions.find((entry) => entry.id === sessionId) || null;
+        if (!session) {
+          return;
+        }
+
+        void deleteRuntimeSidecarSession({
+          projectId: currentProject.id,
+          sessionId: session.id,
+          runtimeThreadId: session.runtimeThreadId,
+        });
       }}
       buildSessionPreview={buildSessionPreview}
     />
@@ -3098,6 +3117,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       renderRuntimeQuestion={renderRuntimeQuestionCard}
       messageListRef={messageListRef}
       messagesEndRef={messagesEndRef}
+      leadingContent={emptyConversationLeadingContent}
       summarizeProjectFilePath={summarizeProjectFilePath}
       onApprove={handleApproveRuntimeApproval}
       onDeny={handleDenyRuntimeApproval}
@@ -3121,7 +3141,7 @@ export const AIChat: React.FC<AIChatProps> = ({
           <div className="chat-shell-header-main">
             <div className="chat-shell-title">
               {!isEmbedded ? <span className="chat-shell-kicker">GN Agent</span> : null}
-              <strong>{isCollapsed && !lockExpandedForEmbedded ? 'GN' : activeSession?.title || '新对话'}</strong>
+              <strong>{isCollapsed && !lockExpandedForEmbedded ? 'GN' : activeSessionTitle}</strong>
               {showExpandedShell && !isEmbedded ? <span>{currentProject?.name || '未打开项目'}</span> : null}
             </div>
 

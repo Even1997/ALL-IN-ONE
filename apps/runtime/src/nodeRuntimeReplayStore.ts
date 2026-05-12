@@ -194,6 +194,14 @@ export class NodeRuntimeReplayStore {
       .sort((left, right) => left.createdAt - right.createdAt);
   }
 
+  async deleteSessionArtifacts(sessionId: string): Promise<void> {
+    const store = await this.loadStore();
+    store.replayEvents = store.replayEvents.filter((event) => event.sessionId !== sessionId);
+    store.checkpoints = store.checkpoints.filter((checkpoint) => checkpoint.sessionId !== sessionId);
+    store.fileChanges = store.fileChanges.filter((change) => change.sessionId !== sessionId);
+    await this.saveStore(store);
+  }
+
   async saveCheckpoint(input: RuntimeCheckpointSaveInput): Promise<RuntimeCheckpointRecord | null> {
     if (input.files.length === 0) {
       return null;

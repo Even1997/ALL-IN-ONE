@@ -600,3 +600,69 @@ test('runtime sidecar allows desktop webview CORS health checks and turn preflig
     await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test('runtime sidecar delete removes a session from persisted listings and snapshots', async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'goodnight-runtime-sidecar-'));
+  const port = 49831 + Math.floor(Math.random() * 1000);
+  const authToken = `test-token-${Date.now()}`;
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const sidecar = spawn(process.execPath, ['--experimental-strip-types', runtimeEntry], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      GOODNIGHT_RUNTIME_HOST: '127.0.0.1',
+      GOODNIGHT_RUNTIME_PORT: String(port),
+      GOODNIGHT_RUNTIME_TOKEN: authToken,
+      GOODNIGHT_RUNTIME_DATA_DIR: tempDir,
+    },
+    stdio: 'ignore',
+  });
+
+  try {
+    await waitForHealth(baseUrl);
+
+    const createResponse = await fetch(`${baseUrl}/sessions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        projectId: 'project-delete',
+        providerId: 'built-in',
+        title: 'Delete me',
+      }),
+    });
+    assert.equal(createResponse.status, 201);
+    const created = await createResponse.json();
+
+    const deleteResponse = await fetch(`${baseUrl}/sessions/delete`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${authToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId: created.session.id }),
+    });
+    assert.equal(deleteResponse.status, 200);
+    assert.deepEqual(await deleteResponse.json(), {
+      sessionId: created.session.id,
+      deleted: true,
+    });
+
+    const listResponse = await fetch(`${baseUrl}/sessions?projectId=project-delete`, {
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+    const listed = await listResponse.json();
+    assert.deepEqual(listed.sessions, []);
+
+    const openResponse = await fetch(`${baseUrl}/sessions/${created.session.id}`, {
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+    assert.equal(openResponse.status, 404);
+  } finally {
+    sidecar.kill('SIGTERM');
+    await delay(50);
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});

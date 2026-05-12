@@ -64,8 +64,7 @@ test('GN Agent message flow carries timeline process summaries separately from v
   assert.match(messageListSource, /processSummary=\{processSummaryByMessageId\[message\.id\] \?\? null\}/);
   assert.match(messageItemSource, /processSummary\?:/);
   assert.match(messageItemSource, /elapsedSeconds\?: number;/);
-  assert.doesNotMatch(messageItemSource, /formatTimestamp\(processSummary\.completedAt\)/);
-  assert.match(messageItemSource, /processSummary\?\.elapsedSeconds/);
+  assert.match(messageItemSource, /processSummary:\s*_processSummary/);
   assert.doesNotMatch(messageItemSource, /processSummary\?\.status/);
   assert.doesNotMatch(messageItemSource, /detailItems/);
 });
@@ -106,13 +105,14 @@ test('GN Agent message item consumes a unified timeline model instead of sorting
   assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(\[\.\.\.thinkingRenderItems,\s*\.\.\.bubbleRenderItems\]\)/);
 });
 
-test('GN Agent message item auto-collapses thinking after the answer completes', async () => {
+test('GN Agent message item keeps the process lane expanded after the answer completes', async () => {
   const messageItemSource = await readFile(messageItemPath, 'utf8');
 
-  assert.match(messageItemSource, /const hasCompletedAnswer =/);
-  assert.match(messageItemSource, /const shouldShowCompletedProcessFold =/);
-  assert.match(messageItemSource, /const isProcessFoldExpanded = shouldShowCompletedProcessFold &&/);
-  assert.match(messageItemSource, /if \(shouldShowCompletedProcessFold\) \{/);
-  assert.doesNotMatch(messageItemSource, /setProcessDetailsOpen/);
-  assert.doesNotMatch(messageItemSource, /Process<\/span>/);
+  assert.match(messageItemSource, /className="chat-message-process-inline"/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-fold/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-summary/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-elapsed/);
+  assert.doesNotMatch(messageItemSource, /useEffect/);
+  assert.doesNotMatch(messageItemSource, /processFoldExpanded/);
+  assert.doesNotMatch(messageItemSource, /setProcessFoldExpanded/);
 });

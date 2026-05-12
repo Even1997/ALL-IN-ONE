@@ -551,7 +551,7 @@ test('assistant narrative, thinking, and runtime cards share a unified surface l
   );
   assert.match(
     cssSource,
-    /\.gn-agent-workspace \.chat-shell-embedded\s*\{[\s\S]*--gn-agent-linear-lane-width:\s*min\(880px, 100%\)/
+    /\.gn-agent-workspace \.chat-shell-embedded\s*\{[\s\S]*--gn-agent-content-width:\s*min\(880px, 100%\)[\s\S]*--gn-agent-linear-lane-width:\s*var\(--gn-agent-content-width\)/
   );
   assert.match(
     cssSource,

@@ -396,6 +396,26 @@
   gap: 18px;
 }
 
+.chat-empty-conversation-state {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px dashed color-mix(in srgb, var(--mode-border, rgba(255, 255, 255, 0.12)) 85%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)) 92%, transparent);
+  color: var(--mode-text-secondary, rgba(255, 255, 255, 0.72));
+}
+
+.chat-empty-conversation-state strong {
+  color: var(--mode-text, rgba(255, 255, 255, 0.94));
+  font-size: 0.95rem;
+}
+
+.chat-empty-conversation-state span {
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
 .chat-structured-cards {
   display: grid;
   gap: 10px;
@@ -808,57 +828,6 @@
 .chat-message-process-inline {
   width: min(760px, 100%);
   margin: 0 0 8px;
-  display: grid;
-  gap: 8px;
-}
-
-.chat-message-process-fold {
-  width: min(760px, 100%);
-  margin: 0 0 8px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--mode-border, rgba(255, 255, 255, 0.08)) 92%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)) 94%, transparent);
-}
-
-.chat-message-process-summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-  cursor: pointer;
-}
-
-.chat-message-process-summary::-webkit-details-marker {
-  display: none;
-}
-
-.chat-message-process-elapsed {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: color-mix(in srgb, var(--mode-text, #f8fafc) 82%, transparent);
-}
-
-.chat-message-process-caret {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-right: 1.5px solid color-mix(in srgb, var(--mode-text, #f8fafc) 58%, transparent);
-  border-bottom: 1.5px solid color-mix(in srgb, var(--mode-text, #f8fafc) 58%, transparent);
-  transform: rotate(-45deg);
-  transition: transform 140ms ease;
-}
-
-.chat-message-process-fold[open] .chat-message-process-caret {
-  transform: rotate(45deg);
-}
-
-.chat-message-process-fold-body {
-  margin-top: 10px;
   display: grid;
   gap: 8px;
 }
@@ -3406,7 +3375,9 @@ body.desktop-workbench-mode .chat-shell.is-collapsed {
 }
 
 .gn-agent-workspace .chat-shell-embedded {
-  --gn-agent-linear-lane-width: min(880px, 100%);
+  --gn-agent-content-width: min(880px, 100%);
+  --gn-agent-content-gutter: clamp(10px, 3vw, 24px);
+  --gn-agent-linear-lane-width: var(--gn-agent-content-width);
   background: var(--gn-agent-bg, #171819);
   color: var(--gn-agent-text, #e9e9e6);
 }
@@ -3639,8 +3610,14 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-composer {
-  padding: 6px 12px 10px;
+  padding-block: 6px 10px;
+  padding-inline: var(--gn-agent-content-gutter);
   background: var(--gn-agent-bg, #171819);
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-composer-shell {
+  width: var(--gn-agent-content-width);
+  margin-inline: auto;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-composer-embedded-input {
@@ -5331,7 +5308,8 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 
 .gn-agent-workspace .chat-shell-embedded .chat-message-list {
   gap: 8px;
-  padding: 8px 10px 6px;
+  padding-block: 8px 6px;
+  padding-inline: var(--gn-agent-content-gutter);
   background: var(--gn-agent-bg, #171819);
 }
 
@@ -5381,25 +5359,6 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
   width: var(--gn-agent-linear-lane-width);
 }
 
-.gn-agent-workspace .chat-shell-embedded .chat-message-process-fold {
-  width: var(--gn-agent-linear-lane-width);
-  padding: 8px 0 0;
-  border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--gn-agent-border, rgba(255, 255, 255, 0.08)) 88%, transparent);
-}
-
-.gn-agent-workspace .chat-shell-embedded .chat-message-process-summary {
-  gap: 10px;
-}
-
-.gn-agent-workspace .chat-shell-embedded .chat-message-process-elapsed {
-  color: var(--gn-agent-muted, rgba(241, 241, 238, 0.68));
-}
-
-.gn-agent-workspace .chat-shell-embedded .chat-message-process-fold-body {
-  gap: 6px;
-}
-
 .gn-agent-workspace .chat-shell-embedded .chat-message-final-answer {
   width: var(--gn-agent-linear-lane-width);
 }
@@ -5408,6 +5367,55 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream {
   width: var(--gn-agent-linear-lane-width);
   gap: 6px;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message.assistant .chat-message-bubble,
+.gn-agent-workspace .chat-shell-embedded .chat-message-process-inline,
+.gn-agent-workspace .chat-shell-embedded .chat-message-final-answer,
+.gn-agent-workspace .chat-shell-embedded .chat-message-card-lane,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream {
+  margin-inline: auto;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-card,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-card,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-card-inline {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-summary {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-copy,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-summary-copy,
+.gn-agent-workspace .chat-shell-embedded .chat-inline-disclosure-copy {
+  min-width: 0;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-meta {
+  max-width: 100%;
+  margin-left: 0;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-detail,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-list,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-members,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-phase,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-member {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-command,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-output,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-step pre,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-member pre {
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-card,

@@ -151,10 +151,10 @@ test('GN Agent message item separates process rendering from the final answer bo
   assert.match(messageItemSource, /const processGroups = assistantOutputModel\?\.timelineRenderModel\.processGroups \|\| \[\];/);
   assert.match(messageItemSource, /const answerBodyRenderItem = assistantOutputModel\?\.finalAnswerItem \?\? null;/);
   assert.match(messageItemSource, /const hasProcessArtifacts =/);
-  assert.match(messageItemSource, /const shouldShowCompletedProcessFold =/);
-  assert.match(messageItemSource, /className="chat-message-process-fold"/);
   assert.match(messageItemSource, /className="chat-message-process-inline"/);
-  assert.match(messageItemSource, /className="chat-message-process-elapsed"/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-fold/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-summary/);
+  assert.doesNotMatch(messageItemSource, /chat-message-process-elapsed/);
   assert.doesNotMatch(messageItemSource, /chat-message-process-kicker/);
   assert.doesNotMatch(messageItemSource, /chat-message-process-status/);
   assert.doesNotMatch(messageItemSource, /chat-message-process-detail-toggle/);
@@ -165,4 +165,10 @@ test('GN Agent message item separates process rendering from the final answer bo
   assert.match(outputModelSource, /activeResponseItem:\s*isStreaming \? answerRenderItem : null/);
   assert.match(outputModelSource, /finalAnswerItem:\s*isStreaming \? null : answerRenderItem/);
   assert.match(outputModelSource, /timelineItems\?: Array/);
+});
+
+test('GN Agent message item imports useState for the assistant action bar copy state', async () => {
+  const messageItemSource = await readFile('src/components/ai/gn-agent/GNAgentMessageItem.tsx', 'utf8');
+
+  assert.match(messageItemSource, /import React,\s*\{\s*useState\s*\}\s*from 'react';/);
 });

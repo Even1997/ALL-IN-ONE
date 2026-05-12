@@ -131,6 +131,11 @@ type AIChatStoreState = {
     replayEvents: RuntimeReplayEvent[],
     recoveryState: AgentReplayRecoveryState | null
   ) => void;
+  replaceProjectSessions: (
+    projectId: string,
+    sessions: ChatSession[],
+    activeSessionId?: string | null,
+  ) => void;
   replaceSessionMessages: (projectId: string, sessionId: string, messages: StoredChatMessage[]) => void;
   renameSession: (projectId: string, sessionId: string, title: string) => void;
   removeSession: (projectId: string, sessionId: string) => void;
@@ -622,6 +627,18 @@ export const useAIChatStore = create<AIChatStoreState>()(
             },
           };
         }),
+
+      replaceProjectSessions: (projectId, sessions, activeSessionId) =>
+        set((state) => ({
+          projects: {
+            ...state.projects,
+            [projectId]: {
+              ...(state.projects[projectId] || createProjectState()),
+              activeSessionId: activeSessionId ?? sessions[0]?.id ?? null,
+              sessions: sortSessions(sessions.map(normalizeChatSession)),
+            },
+          },
+        })),
 
       replaceSessionMessages: (projectId, sessionId, messages) =>
         set((state) => {

@@ -413,6 +413,9 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
             updatedAt: event.ts,
             isStreaming: true,
           };
+          if (projection.activeMessage.text.length === 0) {
+            projection.activeMessage.startedAt = event.ts;
+          }
           projection.activeMessage.text += event.payload.textChunk;
           projection.activeMessage.updatedAt = event.ts;
           const card = ensureResponseCard(

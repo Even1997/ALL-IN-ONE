@@ -8,6 +8,7 @@ type RuntimeMcpStoreState = {
   upsertServer: (server: RuntimeMcpServer) => void;
   removeServer: (serverId: string) => void;
   setToolCalls: (threadId: string, toolCalls: RuntimeMcpToolCall[]) => void;
+  clearThreadToolCalls: (threadId: string) => void;
   appendToolCall: (threadId: string, toolCall: RuntimeMcpToolCall) => void;
 };
 
@@ -29,6 +30,12 @@ export const useRuntimeMcpStore = create<RuntimeMcpStoreState>((set) => ({
         ...state.toolCallsByThread,
         [threadId]: [...toolCalls],
       },
+    })),
+  clearThreadToolCalls: (threadId) =>
+    set((state) => ({
+      toolCallsByThread: Object.fromEntries(
+        Object.entries(state.toolCallsByThread).filter(([key]) => key !== threadId),
+      ),
     })),
   appendToolCall: (threadId, toolCall) =>
     set((state) => ({

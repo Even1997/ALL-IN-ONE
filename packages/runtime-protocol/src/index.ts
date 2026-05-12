@@ -356,6 +356,11 @@ export type RuntimeSessionCreateInput = {
   providerId?: string;
 };
 
+export type RuntimeSessionDeleteResult = {
+  sessionId: string;
+  deleted: boolean;
+};
+
 export type RuntimeModelConfig = {
   provider: 'openai-compatible' | 'anthropic';
   apiKey: string;

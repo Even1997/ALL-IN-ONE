@@ -192,3 +192,60 @@ test('composer projects run lifecycle and response lifecycle into visible timeli
   assert.equal(projection.cards[1].detailRefs.includes('3'), true);
   assert.equal(projection.finalMessage?.text, 'Final answer ready.');
 });
+
+test('composer timestamps an active response from the first visible text delta', async () => {
+  const { createTimelineComposer } = await loadComposer();
+
+  const composer = createTimelineComposer({ runId: 'run_visible_response' });
+  composer.append({
+    eventId: '1',
+    runId: 'run_visible_response',
+    turnId: 'turn_visible_response',
+    sessionId: 'session_visible_response',
+    messageId: 'msg_visible_response',
+    type: 'message.started',
+    ts: 1,
+    seq: 1,
+    source: { kind: 'model', provider: 'sidecar', name: 'assistant' },
+    payload: { role: 'assistant', phase: 'final_answer' },
+  });
+  composer.append({
+    eventId: '2',
+    runId: 'run_visible_response',
+    turnId: 'turn_visible_response',
+    sessionId: 'session_visible_response',
+    type: 'tool.started',
+    ts: 2,
+    seq: 2,
+    source: { kind: 'tool', provider: 'sidecar', name: 'powershell' },
+    payload: { toolCallId: 'call_visible', toolName: 'powershell', inputSummary: 'Get-ChildItem' },
+  });
+  composer.append({
+    eventId: '3',
+    runId: 'run_visible_response',
+    turnId: 'turn_visible_response',
+    sessionId: 'session_visible_response',
+    type: 'tool.completed',
+    ts: 3,
+    seq: 3,
+    source: { kind: 'tool', provider: 'sidecar', name: 'powershell' },
+    payload: { toolCallId: 'call_visible', ok: true, summary: 'Listed files' },
+  });
+  composer.append({
+    eventId: '4',
+    runId: 'run_visible_response',
+    turnId: 'turn_visible_response',
+    sessionId: 'session_visible_response',
+    messageId: 'msg_visible_response',
+    type: 'message.delta',
+    ts: 4,
+    seq: 4,
+    source: { kind: 'model', provider: 'sidecar', name: 'assistant' },
+    payload: { textChunk: 'Now the answer is visible.', phase: 'final_answer' },
+  });
+
+  const projection = composer.getProjection();
+  assert.equal(projection.activeMessage?.startedAt, 4);
+  assert.equal(projection.activeMessage?.updatedAt, 4);
+  assert.equal(projection.activeMessage?.text, 'Now the answer is visible.');
+});

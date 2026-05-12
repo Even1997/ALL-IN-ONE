@@ -90,6 +90,27 @@ test('embedded agent composer can compress and wrap at small sizes instead of ov
   assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-composer-embedded-input\s*{[\s\S]*?min-height:\s*78px;/);
 });
 
+test('embedded agent chat content shares a responsive width lane with the composer', async () => {
+  const css = await readFile(aiChatCssPath, 'utf8');
+
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s*{[\s\S]*?--gn-agent-content-width:\s*min\(880px,\s*100%\);/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s*{[\s\S]*?--gn-agent-content-gutter:\s*clamp\(10px,\s*3vw,\s*24px\);/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s*{[\s\S]*?--gn-agent-linear-lane-width:\s*var\(--gn-agent-content-width\);/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-list\s*{[\s\S]*?padding-inline:\s*var\(--gn-agent-content-gutter\);/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message\.assistant\s+\.chat-message-bubble,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\s*{[\s\S]*?margin-inline:\s*auto;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-composer\s*{[\s\S]*?padding-inline:\s*var\(--gn-agent-content-gutter\);/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-composer-shell\s*{[\s\S]*?width:\s*var\(--gn-agent-content-width\);[\s\S]*?margin-inline:\s*auto;/);
+});
+
+test('embedded agent tool execution cards shrink inside the shared content lane', async () => {
+  const css = await readFile(aiChatCssPath, 'utf8');
+
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-card,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-card-inline\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-inline-summary\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?flex-wrap:\s*wrap;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-inline-meta\s*\{[\s\S]*?max-width:\s*100%;[\s\S]*?margin-left:\s*0;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-command,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-member\s+pre\s*\{[\s\S]*?max-width:\s*100%;[\s\S]*?box-sizing:\s*border-box;/);
+});
+
 test('desktop workbench shell constrains the embedded agent page instead of letting it bleed past the frame', async () => {
   const css = await readFile(appCssPath, 'utf8');
 

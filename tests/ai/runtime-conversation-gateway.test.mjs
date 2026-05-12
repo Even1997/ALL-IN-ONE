@@ -541,3 +541,39 @@ test('runtime conversation gateway ignores legacy empty runtime threads from per
   assert.equal(result.sessions.length, 0);
   assert.equal(result.bindings.length, 0);
 });
+
+test('runtime conversation gateway replaces fallback sessions with bound runtime thread sessions', async () => {
+  const { reconcileRuntimeThreadsWithSessions } = await loadGateway();
+
+  const result = reconcileRuntimeThreadsWithSessions({
+    projectId: 'project-1',
+    sessions: [
+      {
+        id: 'local-fallback',
+        projectId: 'project-1',
+        title: '新对话',
+        providerId: 'built-in',
+        runtimeThreadId: null,
+        messages: [],
+        replayEvents: [],
+        recoveryState: null,
+        eventLog: [],
+        createdAt: 10,
+        updatedAt: 10,
+      },
+    ],
+    runtimeThreads: [
+      {
+        id: 'thread-real',
+        providerId: 'built-in',
+        title: '新对话',
+        createdAt: 20,
+        updatedAt: 20,
+      },
+    ],
+  });
+
+  assert.equal(result.sessions.some((session) => session.id === 'local-fallback'), false);
+  assert.equal(result.sessions.some((session) => session.runtimeThreadId === 'thread-real'), true);
+  assert.deepEqual(result.removedSessionIds, ['local-fallback']);
+});

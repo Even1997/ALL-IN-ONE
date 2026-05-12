@@ -9,6 +9,7 @@ type ApprovalStoreState = {
   sandboxPolicy: SandboxPolicy;
   permissionMode: PermissionMode;
   setThreadApprovals: (threadId: string, approvals: ApprovalRecord[]) => void;
+  clearThreadApprovals: (threadId: string) => void;
   enqueueApproval: (approval: ApprovalRecord) => void;
   resolveApproval: (approvalId: string, status: ApprovalStatus, resolvedAt?: number) => void;
   setSandboxPolicy: (policy: SandboxPolicy) => void;
@@ -26,6 +27,13 @@ export const useApprovalStore = create<ApprovalStoreState>((set) => ({
         ...state.approvalsByThread,
         [threadId]: sortApprovals(approvals),
       },
+    })),
+
+  clearThreadApprovals: (threadId) =>
+    set((state) => ({
+      approvalsByThread: Object.fromEntries(
+        Object.entries(state.approvalsByThread).filter(([key]) => key !== threadId),
+      ),
     })),
 
   enqueueApproval: (approval) =>

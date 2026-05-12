@@ -23,6 +23,7 @@ import {
   type RuntimeReferenceFileRecord,
   type RuntimeMcpServerRecord,
   type RuntimeMcpToolInvokeInput,
+  type RuntimeSessionDeleteResult,
   type RuntimeSessionCreateInput,
   type RuntimeSessionSnapshot,
   type RuntimeSessionSummary,
@@ -1149,6 +1150,27 @@ const main = async () => {
         await saveState(config, state);
         broadcast(buildSnapshotEvent(snapshot));
         await send(json(201, snapshot));
+        return;
+      }
+
+      if (url.pathname === '/sessions/delete' && request.method === 'POST') {
+        const body = await readBody<{ sessionId: string }>(request);
+        const existing = matchSession(state, body.sessionId);
+        if (!existing) {
+          await send(json(404, { error: 'Session not found' }));
+          return;
+        }
+
+        state.sessions = state.sessions.filter((entry) => entry.session.id !== body.sessionId);
+        delete state.backgroundTasksBySession[body.sessionId];
+        await replayStore.deleteSessionArtifacts(body.sessionId);
+        await saveState(config, state);
+        await send(
+          json(200, {
+            sessionId: body.sessionId,
+            deleted: true,
+          } satisfies RuntimeSessionDeleteResult),
+        );
         return;
       }
 

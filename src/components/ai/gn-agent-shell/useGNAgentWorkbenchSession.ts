@@ -15,6 +15,7 @@ import type { AgentTeamRunRecord } from '../../../modules/ai/runtime/teams/teamT
 import type { AgentMemoryEntry, AgentThreadRecord } from '../../../modules/ai/runtime/agentRuntimeTypes';
 import type { ChatSession } from '../../../modules/ai/store/aiChatStore';
 import { createChatSession, useAIChatStore } from '../../../modules/ai/store/aiChatStore';
+import { deleteRuntimeSidecarSession } from '../../../modules/runtime-sidecar/runtimeSidecarSessionBridge.ts';
 import { useProjectStore } from '../../../store/projectStore';
 
 export type GNAgentWorkbenchSession = {
@@ -55,7 +56,6 @@ export const useGNAgentWorkbenchSession = (): GNAgentWorkbenchSession => {
   const permissionMode = useApprovalStore((state) => state.permissionMode);
   const setActiveSession = useAIChatStore((state) => state.setActiveSession);
   const upsertSession = useAIChatStore((state) => state.upsertSession);
-  const removeSession = useAIChatStore((state) => state.removeSession);
 
   const prefillChatPrompt = useCallback((prompt: string, autoSubmit = false) => {
     window.dispatchEvent(
@@ -103,9 +103,14 @@ export const useGNAgentWorkbenchSession = (): GNAgentWorkbenchSession => {
         return;
       }
 
-      removeSession(currentProject.id, threadId);
+      const session = conversation.sessions.find((entry) => entry.id === threadId) || null;
+      void deleteRuntimeSidecarSession({
+        projectId: currentProject.id,
+        sessionId: threadId,
+        runtimeThreadId: session?.runtimeThreadId || null,
+      });
     },
-    [currentProject, removeSession],
+    [conversation.sessions, currentProject],
   );
 
   const createThread = useCallback(() => {
