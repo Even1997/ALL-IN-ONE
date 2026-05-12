@@ -1977,16 +1977,14 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
       ...(message.role === 'assistant'
         ? {
             timeline: applyAssistantReasoningProgress(
-              projectCurrentCanonicalTimeline().length > 0
-                ? projectCurrentCanonicalTimeline()
-                : buildAssistantTimelineUpdate(
-                    finalAnswerContent,
-                    syncAssistantTimelineWithToolCalls(message.timeline, agentTurn.toolCalls),
-                    {
-                      fallbackThinkingContent: getAssistantTimelineReasoning(message.timeline),
-                      preferredAssistantParts: finalDraft.assistantParts as AIChatMessagePart[],
-                    }
-                  ),
+              buildAssistantTimelineUpdate(
+                finalAnswerContent,
+                syncAssistantTimelineWithToolCalls(message.timeline, agentTurn.toolCalls),
+                {
+                  fallbackThinkingContent: getAssistantTimelineReasoning(message.timeline),
+                  preferredAssistantParts: finalDraft.assistantParts as AIChatMessagePart[],
+                }
+              ),
               {
                 active: false,
                 referenceTime: reasoningReferenceTime,

@@ -35,7 +35,7 @@
   作用：把 approval/question 渲染也接进消息列表，属于旧卡片链的一部分。
 
 - `src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx`
-  作用：把 `timelineCardsByMessage`、`supplementalCardsByMessage`、`processSummaryByMessageId` 按 message 组装后传给消息项。
+  作用：把历史上的 `timelineCardsByMessage`、`supplementalCardsByMessage`、`processSummaryByMessageId` 装配点收束为单一 message 输入。
   问题：这里本质上还在维护“外挂补充卡片”机制。
 
 - `src/components/ai/gn-agent/GNAgentMessageItem.tsx`
@@ -68,7 +68,7 @@
 
 ### 删除或退役
 
-- 退役 native 模式下的 `supplementalCards` 主入口
+- 退役旧路线里的 `supplementalCards` 主入口
 - 退役 native 模式下对 `renderTimelineCards / renderToolExecutionCard / renderRuntimeApproval / renderRuntimeQuestion` 的并列主导地位
 - 不再让 `chatTimelineBubbleCardModel.ts` 决定 assistant 消息主时间线排序
 
@@ -83,19 +83,19 @@
   不再自己决定“哪部分是主时间线，哪部分是外挂卡片”
 
 - `GNAgentEmbeddedPieces.tsx`
-  职责：只传 message 级所需原始输入，不再提前分叉为 `timelineCardsByMessage` 和 `supplementalCardsByMessage`
+  职责：只传 message 级所需原始输入，不再提前分叉为多套 message 级卡片集合
 
 ## 实施任务
 
 ### Task 1: 先锁定现状与目标，防止再次回退成双轨展示
 
 **Files:**
-- Modify: `tests/ai/assistant-native-output-model.test.mjs`
+- Modify: `tests/ai/assistant-message-output-model.test.mjs`
 - Modify: `tests/ai/gn-agent-message-item.test.mjs`
 - Modify: `tests/ai/ai-chat-timeline-view.test.mjs`
 
 - [ ] 补一组 source / model 测试，明确 native 模式最终目标是“同一条 ordered items”
-- [ ] 断言 native 模式下工具、审批、提问不会再依赖 `supplementalCards`
+- [ ] 断言旧路线里的工具、审批、提问入口不会再依赖 `supplementalCards`
 - [ ] 断言 assistant 最终正文不会再次被重复渲染
 - [ ] 运行相关测试，确认先红后绿
 
@@ -126,7 +126,7 @@
 
 - [ ] `AIChat.tsx` 不再向 native 模式并列下发 `renderTimelineCards / renderToolExecutionCard / renderRuntimeQuestion`
 - [ ] `AIChatConversationMessagesPane.tsx` 只负责取 active messages 和必要的 interaction 数据，不再承担消息主排序职责
-- [ ] `GNAgentEmbeddedPieces.tsx` 删除 native 模式下的 `timelineCardsByMessage / supplementalCardsByMessage` 主装配逻辑
+- [ ] `GNAgentEmbeddedPieces.tsx` 删除旧路线里的 `timelineCardsByMessage / supplementalCardsByMessage` 主装配逻辑
 - [ ] 保留 composed 模式兼容，避免一次性把所有旧链全删坏
 
 ### Task 4: 让消息项只认一份 ordered items
@@ -153,7 +153,7 @@
 ### Task 6: 验证回归
 
 **Files:**
-- Test: `tests/ai/assistant-native-output-model.test.mjs`
+- Test: `tests/ai/assistant-message-output-model.test.mjs`
 - Test: `tests/ai/gn-agent-message-item.test.mjs`
 - Test: `tests/ai/ai-chat-timeline-view.test.mjs`
 - Test: `tests/ai/ai-chat-direct-streaming-display-source.test.mjs`

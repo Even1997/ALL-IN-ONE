@@ -1,12 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import type { StoredChatMessage } from '../../../modules/ai/store/aiChatStore.ts';
 import type { StreamingLatencyTrace } from '../../../modules/ai/runtime/streamingLatencyTrace.ts';
-import {
-  buildAssistantRenderModel,
-  type AssistantDraftState,
-} from '../../workspace/assistantRenderModel.ts';
+import type { AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
 import { buildAssistantMessageOutputModel } from '../../workspace/assistantMessageOutputModel.ts';
-import { buildAssistantNativeMessageOutputModel } from '../../workspace/assistantNativeMessageOutputModel.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
 import {
   type ChatMessageTimelineRenderGroup,
@@ -32,21 +28,11 @@ type MessagePartsParser = (content: string) => AIChatMessagePart[];
 type GNAgentMessageItemProps = {
   message: StoredChatMessage;
   draftState?: AssistantDraftState;
-  assistantDisplayMode?: 'composed' | 'native';
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
-  timelineCards: Array<{
-    node: React.ReactNode;
-    createdAt?: number;
-    timelineOrder?: number;
-  }>;
-  nativeTimelineItems: Array<{
-    node: React.ReactNode;
-    createdAt?: number;
-    timelineOrder?: number;
-  }>;
-  supplementalCards: Array<{
+  timelineItems: Array<{
+    key?: string;
     node: React.ReactNode;
     createdAt?: number;
     timelineOrder?: number;
@@ -119,55 +105,29 @@ const AssistantMessageActionBar: React.FC<{
 export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   message,
   draftState,
-  assistantDisplayMode = 'composed',
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
-  timelineCards,
-  nativeTimelineItems,
-  supplementalCards,
+  timelineItems,
   processSummary,
 }: GNAgentMessageItemProps) {
   const [processFoldExpanded, setProcessFoldExpanded] = useState<boolean | null>(null);
   const content = message.role === 'assistant' ? '' : message.content;
-  const assistantRenderModel =
+  const assistantOutputModel =
     message.role === 'assistant'
-      ? buildAssistantRenderModel(
-          message,
-          draftState,
-          timelineCards.length + supplementalCards.length,
-        )
-      : null;
-  const isStreaming = assistantRenderModel?.isStreaming ?? false;
-  const hasCompletedAnswer =
-    message.role === 'assistant' &&
-    !isStreaming &&
-    Boolean(assistantRenderModel?.content.trim());
-  const nonAssistantRenderItems: ChatMessageTimelineRenderItem[] = [];
-  const assistantMessageOutputModel =
-    message.role === 'assistant' && assistantRenderModel
       ? buildAssistantMessageOutputModel({
           message,
           draftState,
-          assistantRenderModel,
           renderMessagePart,
-          timelineCards,
-          supplementalCards,
+          timelineItems,
         })
       : null;
-  const assistantNativeOutputModel =
-    message.role === 'assistant' && assistantDisplayMode === 'native'
-      ? buildAssistantNativeMessageOutputModel({
-          message,
-          draftState,
-          renderMessagePart,
-          timelineItems: nativeTimelineItems,
-        })
-      : null;
-  const activeAssistantOutputModel =
-    assistantDisplayMode === 'native'
-      ? assistantNativeOutputModel
-      : assistantMessageOutputModel;
+  const isStreaming = assistantOutputModel?.isStreaming ?? false;
+  const hasCompletedAnswer =
+    message.role === 'assistant' &&
+    !isStreaming &&
+    Boolean(assistantOutputModel?.finalAnswerItem);
+  const nonAssistantRenderItems: ChatMessageTimelineRenderItem[] = [];
 
   if (message.role !== 'assistant') {
     const parts = parseMessageParts(content);
@@ -185,12 +145,12 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     });
   }
 
-  const processGroups = activeAssistantOutputModel?.timelineRenderModel.processGroups || [];
-  const hasProcessArtifacts = (activeAssistantOutputModel?.processItems.length || 0) > 0;
-  const answerBodyRenderItem = activeAssistantOutputModel?.finalAnswerItem ?? null;
+  const processGroups = assistantOutputModel?.timelineRenderModel.processGroups || [];
+  const hasProcessArtifacts = (assistantOutputModel?.processItems.length || 0) > 0;
+  const answerBodyRenderItem = assistantOutputModel?.finalAnswerItem ?? null;
   const hasVisibleContent =
     message.role === 'assistant'
-      ? (activeAssistantOutputModel?.hasVisibleContent ?? false)
+      ? (assistantOutputModel?.hasVisibleContent ?? false)
       : nonAssistantRenderItems.length > 0;
   const completedElapsedLabel =
     hasCompletedAnswer
@@ -247,7 +207,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
             copyText={
               isStreaming
                 ? undefined
-                : activeAssistantOutputModel?.copyText
+                : assistantOutputModel?.copyText
             }
           />
           <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>

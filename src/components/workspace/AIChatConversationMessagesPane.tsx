@@ -17,7 +17,6 @@ import { getRuntimeApprovalRenderEntries } from './runtimeInteractionRenderModel
 type AIChatConversationMessagesPaneProps = {
   projectId: string | null;
   draftContents: Record<string, AssistantDraftState>;
-  assistantDisplayMode?: 'composed' | 'native';
   formatTimestamp: (value: number) => string;
   parseMessageParts: (content: string) => AIChatMessagePart[];
   renderMessagePart: (
@@ -54,7 +53,6 @@ type AIChatConversationMessagesPaneProps = {
 export const AIChatConversationMessagesPane = React.memo(function AIChatConversationMessagesPane({
   projectId,
   draftContents,
-  assistantDisplayMode = 'composed',
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
@@ -123,7 +121,6 @@ export const AIChatConversationMessagesPane = React.memo(function AIChatConversa
     <GNAgentMessageList
       messages={messages}
       draftContents={draftContents}
-      assistantDisplayMode={assistantDisplayMode}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseMessageParts}
       renderMessagePart={renderMessagePart}

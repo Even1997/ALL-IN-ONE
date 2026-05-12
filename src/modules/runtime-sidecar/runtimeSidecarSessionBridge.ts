@@ -61,7 +61,6 @@ import {
 } from './runtimeSidecarCanonical.ts';
 import {
   createRuntimeSidecarDeltaCoalescer,
-  createRuntimeSidecarMessageCoalescer,
 } from './runtimeSidecarStreamingCoalescer.ts';
 
 const initializedProjects = new Set<string>();
@@ -539,6 +538,30 @@ const appendRuntimeSidecarCanonicalEvent = (
   useAIChatStore.getState().appendCanonicalEvent(located.projectId, located.session.id, event);
 };
 
+const commitRuntimeSidecarMessage = (
+  sessionId: string,
+  message: RuntimeMessageRecord,
+) => {
+  const located = findProjectSessionByRuntimeId(sessionId);
+  if (!located) {
+    return null;
+  }
+
+  const mappedMessage = mapRuntimeMessage(message);
+  const chatStore = useAIChatStore.getState();
+  const existingMessage = located.session.messages.find((entry) => entry.id === mappedMessage.id);
+  if (existingMessage) {
+    chatStore.updateMessage(located.projectId, located.session.id, mappedMessage.id, () => mappedMessage);
+  } else {
+    chatStore.appendMessage(located.projectId, located.session.id, mappedMessage);
+  }
+
+  return {
+    ...located,
+    mappedMessage,
+  };
+};
+
 const upsertRuntimeToolCallProjection = (threadId: string, toolCall: RuntimeToolCallRecord) => {
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.setThreadToolCalls(
@@ -712,7 +735,7 @@ const applyRuntimeSidecarReasoningEvent = (
 
 const applyRuntimeSidecarTurnDeltaNow = (
   sessionId: string,
-  _messageId: string,
+  messageId: string,
   delta: string,
   emittedAt: number,
   trace?: RuntimeTurnDeltaTrace,
@@ -723,6 +746,23 @@ const applyRuntimeSidecarTurnDeltaNow = (
   }
 
   ensureRuntimeThreadProjection(located.projectId, located.session.id);
+  appendRuntimeSidecarCanonicalEvent(
+    sessionId,
+    messageId,
+    createRuntimeSidecarCanonicalEvent({
+      sessionId,
+      providerId: located.session.providerId,
+      runId: messageId,
+      messageId,
+      type: 'message.delta',
+      payload: {
+        textChunk: delta,
+        phase: 'final_answer',
+      },
+      ts: emittedAt,
+    }),
+    emittedAt,
+  );
   const runtimeStore = useAgentRuntimeStore.getState();
   runtimeStore.appendStreamDelta(sessionId, delta);
   patchLiveStateIfChanged(sessionId, (state) => ({
@@ -1254,27 +1294,27 @@ const applyRuntimeSidecarMessageNow = (
   eventType: 'message.delta' | 'turn.finished',
   emittedAt: number,
 ) => {
-  const located = findProjectSessionByRuntimeId(sessionId);
-  if (!located) {
+  if (eventType === 'message.delta') {
+    if (message.role === 'assistant') {
+      ensureRuntimeAssistantMessage({
+        sessionId,
+        messageId: message.id,
+        createdAt: emittedAt,
+      });
+    } else {
+      commitRuntimeSidecarMessage(sessionId, message);
+    }
     return;
   }
 
-  const mappedMessage = mapRuntimeMessage(message);
-  const chatStore = useAIChatStore.getState();
-  const existingMessage = located.session.messages.find((entry) => entry.id === mappedMessage.id);
-  if (existingMessage) {
-    chatStore.updateMessage(located.projectId, located.session.id, mappedMessage.id, () => mappedMessage);
-  } else {
-    chatStore.appendMessage(located.projectId, located.session.id, mappedMessage);
-  }
-
-  if (eventType === 'turn.finished' && message.role === 'assistant') {
+  const committed = commitRuntimeSidecarMessage(sessionId, message);
+  if (message.role === 'assistant' && committed) {
     appendRuntimeSidecarCanonicalEvent(
       sessionId,
       message.id,
       createRuntimeSidecarCanonicalEvent({
         sessionId,
-        providerId: located.session.providerId,
+        providerId: committed.session.providerId,
         runId: message.id,
         messageId: message.id,
         type: 'message.completed',
@@ -1289,24 +1329,13 @@ const applyRuntimeSidecarMessageNow = (
   }
 };
 
-const runtimeSidecarMessageCoalescer = createRuntimeSidecarMessageCoalescer({
-  applyMessage: (sessionId, message, emittedAt) =>
-    applyRuntimeSidecarMessageNow(sessionId, message, 'message.delta', emittedAt),
-});
-
 const applyRuntimeSidecarMessageEvent = (
   sessionId: string,
   message: RuntimeMessageRecord,
   eventType: 'message.delta' | 'turn.finished',
   emittedAt: number,
 ) => {
-  if (eventType === 'message.delta') {
-    runtimeSidecarMessageCoalescer.push(sessionId, message, emittedAt);
-    return;
-  }
-
   runtimeSidecarDeltaCoalescer.flush();
-  runtimeSidecarMessageCoalescer.flush();
   applyRuntimeSidecarMessageNow(sessionId, message, eventType, emittedAt);
 };
 
@@ -1319,7 +1348,6 @@ const ensureRuntimeEventSubscription = () => {
   subscribeDesktopRuntimeEvents((event: RuntimeEventEnvelope) => {
     if (event.type === 'session.snapshot') {
       runtimeSidecarDeltaCoalescer.flush();
-      runtimeSidecarMessageCoalescer.flush();
       applyRuntimeSidecarSnapshot(event.payload);
       return;
     }

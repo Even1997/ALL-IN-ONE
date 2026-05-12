@@ -15,7 +15,7 @@ const messageTimelineRenderModelPath = path.resolve(
 );
 const messageOrderingPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/messageTimelineOrdering.ts');
 
-test('GN Agent message flow splits projection timeline cards from supplemental process cards', async () => {
+test('GN Agent message flow merges projection cards with message-level timeline items into one process source', async () => {
   const messageListSource = await readFile(messageListPath, 'utf8');
   const messageItemSource = await readFile(messageItemPath, 'utf8');
   const outputModelSource = await readFile(
@@ -26,13 +26,13 @@ test('GN Agent message flow splits projection timeline cards from supplemental p
   assert.match(messageListSource, /type MessageBubbleCard =/);
   assert.match(messageListSource, /const earliestRuntimeEventTime = getEarliestRuntimeEventTime\(message\);/);
   assert.match(messageListSource, /const timelineCards = renderTimelineCards\?\.\(message\) \|\| \[\];/);
-  assert.match(messageListSource, /const supplementalCards: Array<MessageBubbleCard \| null> = \[/);
-  assert.match(messageListSource, /timelineCardsByMessage: timelineMap,/);
-  assert.match(messageListSource, /supplementalCardsByMessage: supplementalMap,/);
+  assert.match(messageListSource, /const messageLevelTimelineItems: Array<MessageBubbleCard \| null> = \[/);
+  assert.match(messageListSource, /timelineItemsByMessage: timelineMap,/);
   assert.match(messageListSource, /\.\.\.toolExecutionCards\.map\(\(card\) => \(\{/);
   assert.match(messageListSource, /createdAt: card\.createdAt \?\? earliestRuntimeEventTime \?\? message\.createdAt,/);
-  assert.match(outputModelSource, /createdAt: card\.createdAt,/);
-  assert.match(messageItemSource, /supplementalCards/);
+  assert.match(outputModelSource, /timelineItems\?: Array/);
+  assert.match(messageItemSource, /timelineItems:/);
+  assert.doesNotMatch(messageItemSource, /supplementalCards/);
   assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(\[\.\.\.thinkingRenderItems,\s*\.\.\.bubbleRenderItems\]\)/);
   assert.doesNotMatch(messageListSource, /areMessageListPropsEqual/);
   assert.doesNotMatch(messageItemSource, /areMessageItemPropsEqual/);
@@ -49,6 +49,7 @@ test('GN Agent message flow derives runtime cards from the live draft timeline w
   assert.match(messageListSource, /const toolExecutionCards = renderToolExecutionCard\?\.\(message\) \|\| \[\];/);
   assert.match(messageListSource, /const runtimeApprovalCards = renderRuntimeApproval\?\.\(message\) \|\| \[\];/);
   assert.match(messageListSource, /const runtimeQuestionCards = renderRuntimeQuestion\?\.\(message\) \|\| \[\];/);
+  assert.match(messageListSource, /timelineItemsByMessage/);
   assert.match(messageListSource, /renderTimelineCards,\s*[\r\n\s]*renderTimelineProcessSummary,\s*[\r\n\s]*renderStructuredCards,/);
 });
 
@@ -99,6 +100,7 @@ test('GN Agent message item consumes a unified timeline model instead of sorting
   assert.match(messageItemSource, /buildAssistantMessageOutputModel/);
   assert.match(outputModelSource, /buildChatMessageTimelineRenderModel/);
   assert.match(messageItemSource, /timelineRenderModel\.processGroups/);
+  assert.doesNotMatch(messageItemSource, /assistantDisplayMode/);
   assert.doesNotMatch(messageItemSource, /streamingState\?: AssistantStreamingState;/);
   assert.doesNotMatch(messageItemSource, /streamingState,/);
   assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(\[\.\.\.thinkingRenderItems,\s*\.\.\.bubbleRenderItems\]\)/);

@@ -66,22 +66,53 @@ test('assistant render model keeps completed and active thinking in timeline ord
       { id: 'text_2', kind: 'text', content: 'Now fix the second issue.', createdAt: 6 },
     ],
     createdAt: 1,
-  }, undefined, 2);
+  });
 
   assert.deepEqual(
     model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
     [
       ['thinking_lane', 'thinking', 'Inspect the first file.'],
+      ['feedback_lane', 'text', 'The first check is done.'],
       ['thinking_lane', 'thinking', 'Inspect the second file.'],
     ],
   );
+  assert.equal(model.finalAnswerItem?.part.content, 'Now fix the second issue.');
+  assert.equal(model.copyText, 'Now fix the second issue.');
+});
+
+test('assistant render model keeps interleaved assistant feedback in process chronology and only uses the trailing text block as the final answer', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const model = buildAssistantRenderModel({
+    id: 'assistant_interleaved_feedback',
+    role: 'assistant',
+    timeline: [
+      { id: 'reasoning_1', kind: 'reasoning', content: 'Inspect file A', collapsed: true, status: 'completed', createdAt: 10 },
+      { id: 'text_1', kind: 'text', content: 'Checked file A.', createdAt: 20 },
+      { id: 'tool_use_1', kind: 'tool_use', toolCallId: 'call-1', parentToolCallId: null, toolName: 'view', input: { file_path: 'src/App.tsx' }, status: 'completed', createdAt: 30 },
+      { id: 'reasoning_2', kind: 'reasoning', content: 'Inspect file B', collapsed: true, status: 'completed', createdAt: 40 },
+      { id: 'text_2', kind: 'text', content: 'Final answer.', createdAt: 50 },
+    ],
+    createdAt: 1,
+  });
+
+  assert.deepEqual(
+    model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
+    [
+      ['thinking_lane', 'thinking', 'Inspect file A'],
+      ['feedback_lane', 'text', 'Checked file A.'],
+      ['thinking_lane', 'thinking', 'Inspect file B'],
+    ],
+  );
+  assert.equal(model.finalAnswerItem?.part.content, 'Final answer.');
+  assert.equal(model.content, 'Final answer.');
+  assert.equal(model.copyText, 'Final answer.');
 });
 
 test('assistant render model no longer hides short assistant text just because runtime cards exist', async () => {
   const source = await readFile(modulePath, 'utf8');
 
-  assert.doesNotMatch(source, /return normalized\.length <= 120;/);
-  assert.match(source, /return normalized\.length === 0;/);
+  assert.doesNotMatch(source, /shouldSuppressAssistantTextPart/);
+  assert.match(source, /const shouldRenderAnswer = normalizedContent\.length > 0;/);
 });
 
 test('assistant render model keeps streaming thinking collapsed by default', async () => {
@@ -205,7 +236,7 @@ test('assistant render model exposes an unfinished streaming answer block withou
   assert.equal(model.finalAnswerItem?.part.content, 'Unfinished fragment without punctuation');
 });
 
-test('assistant render model can show buffered thinking text without mutating timeline content', async () => {
+test('assistant render model uses reasoning content directly from the shared timeline', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const timeline = [
     {
@@ -223,12 +254,9 @@ test('assistant render model can show buffered thinking text without mutating ti
     {
       timeline,
       isStreaming: true,
-      streamingReasoningTextByEventId: {
-        reasoning_1: 'First thought.',
-      },
     },
   );
 
-  assert.equal(model.items[0]?.part.content, 'First thought.');
+  assert.equal(model.items[0]?.part.content, 'First thought. Hidden unfinished fragment');
   assert.equal(timeline[0].content, 'First thought. Hidden unfinished fragment');
 });

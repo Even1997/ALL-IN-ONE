@@ -1,11 +1,116 @@
 import type { TimelineProjection } from '../../modules/ai/runtime/composer/timelineComposerTypes.ts';
 import {
-  getAssistantTimelineText,
+  type AssistantTimelineEvent,
 } from '../../modules/ai/store/assistantTimeline.ts';
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
 import type { AssistantDraftState } from './assistantRenderModel.ts';
 
-const cloneReasoningMap = (value: Record<string, string> | undefined) => ({ ...(value || {}) });
+const sortTimeline = (timeline: AssistantTimelineEvent[]) =>
+  [...timeline].sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
+
+const areTimelineEventsEqual = (
+  left: AssistantTimelineEvent[],
+  right: AssistantTimelineEvent[],
+) => {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((event, index) => JSON.stringify(event) === JSON.stringify(right[index]));
+};
+
+const buildProjectionNarrativeTimeline = (
+  message: StoredChatMessage,
+  projection: TimelineProjection,
+  fallbackTimeline: AssistantTimelineEvent[],
+) => {
+  const nonNarrativeEvents = fallbackTimeline.filter(
+    (event) => event.kind !== 'text' && event.kind !== 'reasoning',
+  );
+  const stableTextEvents = fallbackTimeline.filter(
+    (event): event is Extract<AssistantTimelineEvent, { kind: 'text' }> => event.kind === 'text',
+  );
+  const preservedTextEvents =
+    stableTextEvents.length > 1 ? stableTextEvents.slice(0, -1) : [];
+  const stableLatestTextEvent =
+    stableTextEvents.length > 0 ? stableTextEvents[stableTextEvents.length - 1]! : null;
+  const stableReasoningEvents = fallbackTimeline.filter(
+    (event): event is Extract<AssistantTimelineEvent, { kind: 'reasoning' }> => event.kind === 'reasoning',
+  );
+  const reasoningEvents: Extract<AssistantTimelineEvent, { kind: 'reasoning' }>[] = [];
+  let activeReasoning: Extract<AssistantTimelineEvent, { kind: 'reasoning' }> | null = null;
+  let reasoningIndex = 0;
+
+  const openReasoning = (createdAt: number) => {
+    if (activeReasoning) {
+      return activeReasoning;
+    }
+
+    const reused = stableReasoningEvents[reasoningIndex];
+    activeReasoning = {
+      id: reused?.id || `${message.id}-projection-reasoning-${reasoningIndex}`,
+      kind: 'reasoning',
+      content: reused?.content || '',
+      collapsed: reused?.collapsed ?? true,
+      status: 'streaming',
+      elapsedSeconds: reused?.elapsedSeconds,
+      createdAt: reused?.createdAt ?? createdAt,
+    };
+    reasoningIndex += 1;
+    return activeReasoning;
+  };
+
+  projection.events.forEach((event) => {
+    if (event.type === 'reasoning.started') {
+      openReasoning(event.ts);
+      return;
+    }
+
+    if (event.type === 'reasoning.delta') {
+      const reasoning = openReasoning(event.ts);
+      reasoning.content = event.payload.textChunk;
+      reasoning.status = 'streaming';
+      return;
+    }
+
+    if (event.type === 'reasoning.completed') {
+      const reasoning = openReasoning(event.ts);
+      reasoning.content = event.payload.finalText || event.payload.summary || reasoning.content;
+      reasoning.status = 'completed';
+      reasoningEvents.push(reasoning);
+      activeReasoning = null;
+    }
+  });
+
+  if (activeReasoning) {
+    reasoningEvents.push(activeReasoning);
+  }
+
+  const projectionText = projection.activeMessage?.text || projection.finalMessage?.text || '';
+  const stableText = stableLatestTextEvent?.content || '';
+  const shouldUseProjectionText =
+    projectionText.trim().length > 0
+      && (projection.activeMessage !== null || stableText.trim() !== projectionText.trim());
+  const textEvent = shouldUseProjectionText
+    ? ({
+        id: stableLatestTextEvent?.id || `${message.id}-projection-text`,
+        kind: 'text',
+        content: projectionText,
+        createdAt:
+          projection.activeMessage?.startedAt
+          || projection.finalMessage?.completedAt
+          || stableLatestTextEvent?.createdAt
+          || message.createdAt,
+      } satisfies Extract<AssistantTimelineEvent, { kind: 'text' }>)
+    : stableLatestTextEvent || null;
+
+  return sortTimeline([
+    ...nonNarrativeEvents,
+    ...reasoningEvents,
+    ...preservedTextEvents,
+    ...(textEvent ? [textEvent] : []),
+  ]);
+};
 
 export type AssistantStreamingDraftProjectionInput = {
   message: StoredChatMessage;
@@ -29,27 +134,15 @@ export const areAssistantDraftStatesEqual = (
     return false;
   }
 
-  if (left.timeline !== right.timeline) {
+  if (!areTimelineEventsEqual(left.timeline, right.timeline)) {
     return false;
   }
 
-  if (
-    left.isStreaming !== right.isStreaming ||
-    left.streamingStartedAt !== right.streamingStartedAt ||
-    left.streamingUpdatedAt !== right.streamingUpdatedAt
-  ) {
-    return false;
-  }
-
-  const leftReasoning = left.streamingReasoningTextByEventId || {};
-  const rightReasoning = right.streamingReasoningTextByEventId || {};
-  const leftKeys = Object.keys(leftReasoning);
-  const rightKeys = Object.keys(rightReasoning);
-  if (leftKeys.length !== rightKeys.length) {
-    return false;
-  }
-
-  return leftKeys.every((key) => leftReasoning[key] === rightReasoning[key]);
+  return (
+    left.isStreaming === right.isStreaming
+    && left.streamingStartedAt === right.streamingStartedAt
+    && left.streamingUpdatedAt === right.streamingUpdatedAt
+  );
 };
 
 export const projectAssistantStreamingDraft = ({
@@ -59,65 +152,46 @@ export const projectAssistantStreamingDraft = ({
 }: AssistantStreamingDraftProjectionInput): AssistantStreamingDraftProjectionResult => {
   const canonicalTimeline =
     message.role === 'assistant' && Array.isArray(message.timeline) ? message.timeline : [];
-  const timeline =
+  const fallbackTimeline =
     canonicalTimeline.length > 0
       ? canonicalTimeline
       : previousDraft?.timeline || [];
-  const visibleReasoningByEventId = cloneReasoningMap(previousDraft?.streamingReasoningTextByEventId);
+  const timeline = projection
+    ? buildProjectionNarrativeTimeline(message, projection, fallbackTimeline)
+    : fallbackTimeline;
+  const latestTimelineText = [...timeline]
+    .reverse()
+    .find((event): event is Extract<AssistantTimelineEvent, { kind: 'text' }> => event.kind === 'text')
+    ?.content
+    .trim() || '';
+  const hasStreamingReasoning = timeline.some(
+    (event) => event.kind === 'reasoning' && event.status === 'streaming',
+  );
+  const shouldKeepDraftVisible =
+    Boolean(projection?.activeMessage)
+    || hasStreamingReasoning
+    || Boolean(
+      projection?.finalMessage
+      && projection.finalMessage.text.trim()
+      && projection.finalMessage.text.trim() !== latestTimelineText,
+    );
 
-  timeline.forEach((event) => {
-    if (event.kind !== 'reasoning') {
-      return;
-    }
-
-    if (event.status === 'streaming') {
-      visibleReasoningByEventId[event.id] = event.content;
-      return;
-    }
-
-    delete visibleReasoningByEventId[event.id];
-  });
-
-  const activeMessage = projection?.activeMessage ?? null;
-  const timelineText = getAssistantTimelineText(timeline);
-  const activeAnswerText =
-    activeMessage && activeMessage.text.trim().length > 0
-      ? activeMessage.text
-      : activeMessage
-        ? timelineText
-        : undefined;
-  if (typeof activeAnswerText === 'string') {
-    const draft: AssistantDraftState = {
-      timeline,
-      isStreaming: true,
-      streamingStartedAt: activeMessage?.startedAt,
-      streamingUpdatedAt: activeMessage?.updatedAt,
-    };
-    if (Object.keys(visibleReasoningByEventId).length > 0) {
-      draft.streamingReasoningTextByEventId = visibleReasoningByEventId;
-    }
-
-    return {
-      draft,
-    };
-  }
-
-  const draft: AssistantDraftState = {
-    timeline,
-    isStreaming: false,
-  };
-
-  if (Object.keys(visibleReasoningByEventId).length > 0) {
-    draft.streamingReasoningTextByEventId = visibleReasoningByEventId;
-  }
-
-  if (!draft.streamingReasoningTextByEventId) {
+  if (!shouldKeepDraftVisible) {
     return {
       draft: null,
     };
   }
 
   return {
-    draft,
+    draft: {
+      timeline,
+      isStreaming: true,
+      streamingStartedAt:
+        projection?.activeMessage?.startedAt
+        || projection?.finalMessage?.completedAt,
+      streamingUpdatedAt:
+        projection?.activeMessage?.updatedAt
+        || projection?.finalMessage?.completedAt,
+    },
   };
 };

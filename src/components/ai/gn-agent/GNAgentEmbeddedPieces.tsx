@@ -93,7 +93,6 @@ export const GNAgentHistoryMenu: React.FC<{
 type GNAgentMessageListProps = {
   messages: StoredChatMessage[];
   draftContents?: Record<string, AssistantDraftState>;
-  assistantDisplayMode?: 'composed' | 'native';
   formatTimestamp: (value: number) => string;
   parseMessageParts: MessagePartsParser;
   renderMessagePart: MessagePartRenderer;
@@ -127,7 +126,6 @@ const getLatestRuntimeEventTime = (message: StoredChatMessage) =>
 export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   messages,
   draftContents,
-  assistantDisplayMode = 'composed',
   formatTimestamp,
   parseMessageParts,
   renderMessagePart,
@@ -144,14 +142,10 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
   leadingContent,
 }: GNAgentMessageListProps) {
   const {
-    timelineCardsByMessage,
-    nativeTimelineItemsByMessage,
-    supplementalCardsByMessage,
+    timelineItemsByMessage,
     processSummaryByMessageId,
   } = React.useMemo(() => {
     const timelineMap: Record<string, MessageBubbleCard[]> = {};
-    const nativeTimelineMap: Record<string, MessageBubbleCard[]> = {};
-    const supplementalMap: Record<string, MessageBubbleCard[]> = {};
     const processSummaryByMessageId: Record<string, MessageProcessSummary | null> = {};
     for (const message of messages) {
       const earliestRuntimeEventTime = getEarliestRuntimeEventTime(message);
@@ -165,24 +159,14 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       const runtimeApprovalCards = renderRuntimeApproval?.(message) || [];
       const runtimeQuestionCards = renderRuntimeQuestion?.(message) || [];
       processSummaryByMessageId[message.id] = processSummary;
-      const supplementalCards: Array<MessageBubbleCard | null> = [
+      const messageLevelTimelineItems: Array<MessageBubbleCard | null> = [
         structuredCardsNode ? { node: structuredCardsNode, createdAt: message.createdAt } : null,
         projectFileProposalNode ? { node: projectFileProposalNode, createdAt: message.createdAt } : null,
         runSummaryNode ? { node: runSummaryNode, createdAt: latestRuntimeEventTime ?? message.createdAt } : null,
       ];
-      timelineMap[message.id] = timelineCards;
-      nativeTimelineMap[message.id] = [
+      timelineMap[message.id] = [
         ...timelineCards,
-        ...supplementalCards.filter((card): card is MessageBubbleCard => Boolean(card?.node)),
-        ...runtimeApprovalCards,
-        ...runtimeQuestionCards,
-        ...toolExecutionCards.map((card) => ({
-          ...card,
-          createdAt: card.createdAt ?? earliestRuntimeEventTime ?? message.createdAt,
-        })),
-      ];
-      supplementalMap[message.id] = [
-        ...supplementalCards.filter((card): card is MessageBubbleCard => Boolean(card?.node)),
+        ...messageLevelTimelineItems.filter((card): card is MessageBubbleCard => Boolean(card?.node)),
         ...runtimeApprovalCards,
         ...runtimeQuestionCards,
         ...toolExecutionCards.map((card) => ({
@@ -192,9 +176,7 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       ];
     }
     return {
-      timelineCardsByMessage: timelineMap,
-      nativeTimelineItemsByMessage: nativeTimelineMap,
-      supplementalCardsByMessage: supplementalMap,
+      timelineItemsByMessage: timelineMap,
       processSummaryByMessageId,
     };
   }, [
@@ -219,13 +201,10 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
       key={message.id}
       message={message}
       draftState={draftContents?.[message.id]}
-      assistantDisplayMode={assistantDisplayMode}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseMessageParts}
       renderMessagePart={renderMessagePart}
-      timelineCards={timelineCardsByMessage[message.id] ?? []}
-      nativeTimelineItems={nativeTimelineItemsByMessage[message.id] ?? []}
-      supplementalCards={supplementalCardsByMessage[message.id] ?? []}
+      timelineItems={timelineItemsByMessage[message.id] ?? []}
       processSummary={processSummaryByMessageId[message.id] ?? null}
     />
   );

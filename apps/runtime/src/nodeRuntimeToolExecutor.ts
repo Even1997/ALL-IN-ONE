@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { ToolCall, ToolResult } from '../../../src/modules/ai/runtime/tools/toolExecutor.ts';
+import { decodeCommandOutput } from './commandOutputDecoding.ts';
 import {
   buildVerifiedFileChange,
   resolveEditStrings,
@@ -117,12 +118,13 @@ export class NodeRuntimeToolExecutor {
     const args = file === 'powershell.exe' ? ['-NoProfile', '-Command', command] : ['-lc', command];
     const { stdout, stderr } = await execFile(file, args, {
       cwd,
+      encoding: 'buffer',
       timeout,
       maxBuffer: 10 * 1024 * 1024,
     });
     return {
-      stdout: String(stdout || ''),
-      stderr: String(stderr || ''),
+      stdout: decodeCommandOutput(stdout),
+      stderr: decodeCommandOutput(stderr),
     };
   }
 

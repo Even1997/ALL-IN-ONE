@@ -299,8 +299,6 @@ const SETTINGS_TABS: Array<{
 const SETTINGS_TAB_IDS = new Set<SettingsTabId>(SETTINGS_TABS.map((tab) => tab.id));
 const resolveSettingsTabId = (tab: AIChatSettingsDetail['tab']): SettingsTabId =>
   tab && SETTINGS_TAB_IDS.has(tab) ? tab : SETTINGS_TABS[0].id;
-const ASSISTANT_OUTPUT_DISPLAY_MODE: 'composed' | 'native' = 'native';
-
 const formatTimestamp = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
@@ -3080,7 +3078,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     <AIChatConversationMessagesPane
       projectId={currentProjectId}
       draftContents={streamingDraftContents}
-      assistantDisplayMode={ASSISTANT_OUTPUT_DISPLAY_MODE}
       formatTimestamp={formatTimestamp}
       parseMessageParts={parseAIChatMessageParts}
       renderMessagePart={(message, messageId, part, index, options) =>

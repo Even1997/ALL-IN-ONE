@@ -1,4 +1,4 @@
-import type { RuntimeMessageRecord, RuntimeTurnDeltaTrace } from '@goodnight/runtime-protocol';
+import type { RuntimeTurnDeltaTrace } from '@goodnight/runtime-protocol';
 
 export type RuntimeSidecarDeltaApply = (
   sessionId: string,
@@ -6,12 +6,6 @@ export type RuntimeSidecarDeltaApply = (
   delta: string,
   emittedAt: number,
   trace?: RuntimeTurnDeltaTrace,
-) => void;
-
-export type RuntimeSidecarMessageApply = (
-  sessionId: string,
-  message: RuntimeMessageRecord,
-  emittedAt: number,
 ) => void;
 
 export type RuntimeSidecarDeltaScheduler = (flush: () => void) => () => void;
@@ -102,71 +96,6 @@ export const createRuntimeSidecarDeltaCoalescer = (input: {
         delta: `${existing.delta}${delta}`,
         emittedAt,
         trace: trace || existing.trace,
-      });
-      schedule();
-    },
-    flush,
-    cancel() {
-      cancelScheduledFlush?.();
-      cancelScheduledFlush = null;
-      pending.clear();
-    },
-  };
-};
-
-export const createRuntimeSidecarMessageCoalescer = (input: {
-  applyMessage: RuntimeSidecarMessageApply;
-  scheduleFlush?: RuntimeSidecarDeltaScheduler;
-}) => {
-  const scheduleFlush = input.scheduleFlush || defaultScheduleFlush;
-  const pending = new Map<string, {
-    sessionId: string;
-    message: RuntimeMessageRecord | null;
-    emittedAt: number;
-  }>();
-  let cancelScheduledFlush: (() => void) | null = null;
-
-  const schedule = () => {
-    if (cancelScheduledFlush) {
-      return;
-    }
-
-    cancelScheduledFlush = scheduleFlush(flush);
-  };
-
-  function flush() {
-    cancelScheduledFlush = null;
-    const batch = [...pending.values()];
-    pending.clear();
-    batch.forEach((entry) => {
-      if (!entry.message) {
-        return;
-      }
-
-      input.applyMessage(entry.sessionId, entry.message, entry.emittedAt);
-    });
-  }
-
-  return {
-    push(sessionId: string, message: RuntimeMessageRecord, emittedAt: number) {
-      const key = `${sessionId}\u0000${message.id}`;
-      const existing = pending.get(key);
-      if (!existing) {
-        input.applyMessage(sessionId, message, emittedAt);
-        pending.set(key, {
-          sessionId,
-          message: null,
-          emittedAt,
-        });
-        schedule();
-        return;
-      }
-
-      pending.set(key, {
-        ...existing,
-        sessionId,
-        message,
-        emittedAt,
       });
       schedule();
     },

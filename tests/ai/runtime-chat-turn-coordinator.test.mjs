@@ -27,3 +27,16 @@ test('runtime chat turn coordinator is the runtime execution dependency boundary
   assert.doesNotMatch(source, /\[dependency: string\]: any/);
   assert.doesNotMatch(source, /requestRuntimeApproval/);
 });
+
+test('runtime chat turn coordinator does not overwrite final assistant narrative blocks with the lossy canonical message projection', async () => {
+  const source = await readFile(
+    path.resolve(__dirname, '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts'),
+    'utf8',
+  );
+
+  assert.match(source, /buildAssistantTimelineUpdate\(\s*finalAnswerContent,/);
+  assert.doesNotMatch(
+    source,
+    /projectCurrentCanonicalTimeline\(\)\.length > 0[\s\S]*?\?\s*projectCurrentCanonicalTimeline\(\)/,
+  );
+});

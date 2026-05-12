@@ -8,6 +8,7 @@ import {
   type RuntimeMcpToolInvokeInput,
 } from '@goodnight/runtime-protocol';
 import { getSystemRuntimeSkillDefinitions } from '../../../src/modules/ai/skills/skillLibrary.ts';
+import { decodeCommandOutput } from './commandOutputDecoding.ts';
 
 const MCP_STORE_FILE = 'runtime-mcp.json';
 const GOODNIGHT_SKILLS_SERVER_ID = 'goodnight-skills';
@@ -166,8 +167,8 @@ const executeStdioTool = async (input: {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    let stdout = '';
-    let stderr = '';
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
     let settled = false;
     const timeout = setTimeout(() => {
       if (settled) {
@@ -178,13 +179,11 @@ const executeStdioTool = async (input: {
       reject(new Error(`Runtime MCP stdio tool timed out: ${input.server.id}/${input.toolName}`));
     }, 60_000);
 
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
-      stdout += chunk;
+      stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
     child.stderr.on('data', (chunk) => {
-      stderr += chunk;
+      stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
     child.on('error', (error) => {
       if (settled) {
@@ -200,6 +199,9 @@ const executeStdioTool = async (input: {
       }
       settled = true;
       clearTimeout(timeout);
+
+      const stdout = decodeCommandOutput(Buffer.concat(stdoutChunks));
+      const stderr = decodeCommandOutput(Buffer.concat(stderrChunks));
 
       if (code !== 0) {
         reject(

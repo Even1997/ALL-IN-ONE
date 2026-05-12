@@ -45,11 +45,7 @@ test('assistant streaming draft projection is stable across identical recomputat
   });
 
   assert.deepEqual(second, first);
-  assert.equal(first.draft?.timeline?.[1]?.content, 'First paragraph.\n\nSecond paragraph unfinished tail');
-  assert.equal(
-    first.draft?.streamingReasoningTextByEventId?.reasoning_1,
-    'First thought. Hidden tail',
-  );
+  assert.equal(first.draft?.timeline?.[0]?.content, 'First paragraph.\n\nSecond paragraph unfinished tail');
 });
 
 test('assistant streaming draft projection clears completed answer drafts after handoff', async () => {
@@ -84,6 +80,53 @@ test('assistant streaming draft projection clears completed answer drafts after 
   });
 
   assert.equal(first.draft, null);
+});
+
+test('assistant streaming draft projection clears completed drafts when earlier feedback text remains in the stored timeline', async () => {
+  const { projectAssistantStreamingDraft } = await loadProjectionModule();
+
+  const message = {
+    id: 'assistant_feedback_handoff',
+    role: 'assistant',
+    createdAt: 1,
+    timeline: [
+      { id: 'text_feedback', kind: 'text', content: 'Checked file A.', createdAt: 2 },
+      {
+        id: 'tool_use_1',
+        kind: 'tool_use',
+        toolCallId: 'call-1',
+        parentToolCallId: null,
+        toolName: 'view',
+        input: { file_path: 'src/App.tsx' },
+        status: 'completed',
+        createdAt: 3,
+      },
+      { id: 'text_final', kind: 'text', content: 'Final answer.', createdAt: 4 },
+    ],
+  };
+  const projection = {
+    runId: 'run_feedback_handoff',
+    status: 'completed',
+    cards: [],
+    events: [],
+    activeMessage: null,
+    finalMessage: {
+      messageId: 'assistant_feedback_handoff',
+      text: 'Final answer.',
+      completedAt: 5,
+    },
+  };
+
+  const result = projectAssistantStreamingDraft({
+    message,
+    projection,
+    previousDraft: {
+      timeline: message.timeline,
+      isStreaming: true,
+    },
+  });
+
+  assert.equal(result.draft, null);
 });
 
 test('assistant streaming draft projection uses canonical timeline text while active projection text is empty', async () => {
@@ -177,9 +220,63 @@ test('assistant streaming draft projection follows projection text for the activ
   });
 
   assert.equal(result.draft?.isStreaming, true);
-  assert.equal(result.draft?.timeline?.[0]?.content, 'Persisted slower text.');
+  assert.equal(result.draft?.timeline?.[0]?.content, 'Projection live text.');
   assert.equal(result.draft?.streamingStartedAt, 20);
   assert.equal(result.draft?.streamingUpdatedAt, 30);
+});
+
+test('assistant streaming draft projection preserves earlier feedback text while replacing only the active response block', async () => {
+  const { projectAssistantStreamingDraft } = await loadProjectionModule();
+
+  const result = projectAssistantStreamingDraft({
+    message: {
+      id: 'assistant_preserve_feedback',
+      role: 'assistant',
+      createdAt: 1,
+      timeline: [
+        { id: 'text_feedback', kind: 'text', content: 'Checked file A.', createdAt: 2 },
+        {
+          id: 'tool_use_1',
+          kind: 'tool_use',
+          toolCallId: 'call-1',
+          parentToolCallId: null,
+          toolName: 'view',
+          input: { file_path: 'src/App.tsx' },
+          status: 'completed',
+          createdAt: 3,
+        },
+        { id: 'text_final', kind: 'text', content: 'Old final answer.', createdAt: 4 },
+      ],
+    },
+    projection: {
+      runId: 'run_preserve_feedback',
+      status: 'running',
+      cards: [],
+      events: [],
+      finalMessage: null,
+      activeMessage: {
+        messageId: 'assistant_preserve_feedback',
+        text: 'New final answer.',
+        startedAt: 20,
+        updatedAt: 30,
+        isStreaming: true,
+      },
+    },
+    previousDraft: undefined,
+  });
+
+  assert.deepEqual(
+    result.draft?.timeline.map((event) =>
+      event.kind === 'text'
+        ? [event.kind, event.id, event.content]
+        : [event.kind, event.id],
+    ),
+    [
+      ['text', 'text_feedback', 'Checked file A.'],
+      ['tool_use', 'tool_use_1'],
+      ['text', 'text_final', 'New final answer.'],
+    ],
+  );
 });
 
 test('assistant streaming draft projection no longer accepts a direct live text bypass', async () => {

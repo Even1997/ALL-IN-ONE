@@ -1,10 +1,7 @@
 import type React from 'react';
 import type { StreamingLatencyTrace } from '../../modules/ai/runtime/streamingLatencyTrace.ts';
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
-import type {
-  AssistantDraftState,
-  AssistantRenderModel,
-} from './assistantRenderModel.ts';
+import { buildAssistantRenderModel, type AssistantDraftState } from './assistantRenderModel.ts';
 import type { AIChatMessagePart } from './aiChatMessageParts.ts';
 import {
   buildChatMessageTimelineRenderModel,
@@ -32,28 +29,25 @@ export type AssistantMessageOutputModel = {
   finalAnswerItem: ChatMessageTimelineRenderItem | null;
   copyText: string;
   hasVisibleContent: boolean;
+  isStreaming: boolean;
 };
 
 export const buildAssistantMessageOutputModel = (input: {
   message: StoredChatMessage;
   draftState?: AssistantDraftState;
-  assistantRenderModel: AssistantRenderModel;
   renderMessagePart: MessagePartRenderer;
-  timelineCards: Array<{
-    node: React.ReactNode;
-    createdAt?: number;
-    timelineOrder?: number;
-  }>;
-  supplementalCards: Array<{
+  timelineItems?: Array<{
+    key?: string;
     node: React.ReactNode;
     createdAt?: number;
     timelineOrder?: number;
   }>;
 }): AssistantMessageOutputModel => {
-  const { message, assistantRenderModel, renderMessagePart, timelineCards, supplementalCards } = input;
+  const { message, draftState, renderMessagePart, timelineItems = [] } = input;
+  const assistantRenderModel = buildAssistantRenderModel(message, draftState);
   const isStreaming = assistantRenderModel.isStreaming;
 
-  const thinkingItems: ChatMessageTimelineRenderItem[] = assistantRenderModel.processItems.map((item) => ({
+  const processItems: ChatMessageTimelineRenderItem[] = assistantRenderModel.processItems.map((item) => ({
     key: item.key,
     node: renderMessagePart(message, message.id, item.part, item.index, {
       content: assistantRenderModel.content,
@@ -61,15 +55,7 @@ export const buildAssistantMessageOutputModel = (input: {
     }),
     createdAt: item.part.createdAt,
     timelineOrder: item.timelineOrder,
-    laneKind: 'thinking_lane',
-  }));
-
-  const cardItems: ChatMessageTimelineRenderItem[] = [...timelineCards, ...supplementalCards].map((card, index) => ({
-    key: `${message.id}-output-card-${index}`,
-    node: card.node,
-    createdAt: card.createdAt,
-    timelineOrder: card.timelineOrder,
-    laneKind: 'bubble',
+    laneKind: item.kind === 'thinking_lane' ? 'thinking_lane' : 'bubble',
   }));
 
   const answerRenderItem =
@@ -92,8 +78,18 @@ export const buildAssistantMessageOutputModel = (input: {
         }
       : null;
 
+  const cardItems = timelineItems.map(
+    (item, index): ChatMessageTimelineRenderItem => ({
+      key: item.key ?? `${message.id}-timeline-${index}`,
+      node: item.node,
+      createdAt: item.createdAt,
+      timelineOrder: item.timelineOrder,
+      laneKind: 'bubble',
+    }),
+  );
+
   const timelineRenderModel = buildChatMessageTimelineRenderModel({
-    thinkingItems,
+    thinkingItems: processItems,
     timelineCardItems: cardItems,
     activeResponseItem: isStreaming ? answerRenderItem : null,
     finalAnswerItem: isStreaming ? null : answerRenderItem,
@@ -106,5 +102,6 @@ export const buildAssistantMessageOutputModel = (input: {
     copyText: assistantRenderModel.copyText,
     hasVisibleContent:
       timelineRenderModel.processItems.length > 0 || Boolean(timelineRenderModel.finalAnswerItem),
+    isStreaming,
   };
 };

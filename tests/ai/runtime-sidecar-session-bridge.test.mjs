@@ -25,6 +25,17 @@ test('runtime sidecar live bridge does not expose raw reasoning text in canonica
   assert.doesNotMatch(source, /detail:\s*reasoning\.content/);
 });
 
+test('runtime sidecar live bridge keeps message deltas out of persisted chat messages and feeds canonical response events instead', async () => {
+  const source = await readFile(bridgePath, 'utf8');
+
+  assert.match(source, /type:\s*'message\.delta'/);
+  assert.match(source, /ensureRuntimeAssistantMessage\(/);
+  assert.doesNotMatch(
+    source,
+    /eventType === 'message\.delta'[\s\S]*?chatStore\.updateMessage/,
+  );
+});
+
 test('runtime sidecar session bridge derives canonical timeline events from assistant snapshot messages', async () => {
   const { buildCanonicalEventsFromRuntimeMessages } = await import(
     `../../src/modules/runtime-sidecar/runtimeSidecarCanonical.ts?test=${Date.now()}`

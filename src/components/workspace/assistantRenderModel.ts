@@ -1,6 +1,6 @@
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
 import {
-  getAssistantTimelineText,
+  type AssistantTimelineTextEvent,
   type AssistantTimelineEvent,
 } from '../../modules/ai/store/assistantTimeline.ts';
 import type { AIChatMessagePart } from './aiChatMessageParts.ts';
@@ -8,23 +8,25 @@ import type { AIChatMessagePart } from './aiChatMessageParts.ts';
 export type AssistantDraftState = {
   timeline: AssistantTimelineEvent[];
   isStreaming?: boolean;
-  streamingReasoningTextByEventId?: Record<string, string>;
   streamingStartedAt?: number;
   streamingUpdatedAt?: number;
 };
 
 export type AssistantRenderItem =
   | { kind: 'thinking_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number }
+  | { kind: 'feedback_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number }
   | { kind: 'answer_lane'; key: string; part: AIChatMessagePart; index: number; timelineOrder: number };
 
 type AssistantThinkingRenderItem = Extract<AssistantRenderItem, { kind: 'thinking_lane' }>;
+type AssistantFeedbackRenderItem = Extract<AssistantRenderItem, { kind: 'feedback_lane' }>;
 type AssistantAnswerRenderItem = Extract<AssistantRenderItem, { kind: 'answer_lane' }>;
+type AssistantProcessRenderItem = AssistantThinkingRenderItem | AssistantFeedbackRenderItem;
 
 export type AssistantRenderModel = {
   content: string;
   isStreaming: boolean;
   items: AssistantRenderItem[];
-  processItems: AssistantThinkingRenderItem[];
+  processItems: AssistantProcessRenderItem[];
   finalAnswerItem: AssistantAnswerRenderItem | null;
   hasFinalAnswer: boolean;
   copyText: string;
@@ -32,33 +34,74 @@ export type AssistantRenderModel = {
 
 const normalizeAssistantCopy = (value: string) => value.replace(/\s+/g, ' ').trim();
 
-const shouldSuppressAssistantTextPart = (
-  _message: StoredChatMessage,
-  part: AIChatMessagePart,
-  bubbleCardCount: number
-) => {
-  if (part.type !== 'text') {
-    return false;
-  }
+type AssistantTextTimelineBlock = {
+  firstEventId: string;
+  content: string;
+  createdAt: number;
+  timelineOrder: number;
+};
 
-  if (bubbleCardCount === 0) {
-    return false;
-  }
+const buildAssistantTextTimelineBlocks = (timeline: AssistantTimelineEvent[]) => {
+  const blocks: AssistantTextTimelineBlock[] = [];
+  let currentBlock:
+    | {
+        firstEventId: string;
+        segments: string[];
+        createdAt: number;
+        timelineOrder: number;
+      }
+    | null = null;
 
-  const normalized = normalizeAssistantCopy(part.content);
-  return normalized.length === 0;
+  const flushCurrentBlock = () => {
+    if (!currentBlock) {
+      return;
+    }
+
+    const content = currentBlock.segments.join('\n\n').trim();
+    if (content) {
+      blocks.push({
+        firstEventId: currentBlock.firstEventId,
+        content,
+        createdAt: currentBlock.createdAt,
+        timelineOrder: currentBlock.timelineOrder,
+      });
+    }
+
+    currentBlock = null;
+  };
+
+  timeline.forEach((event, timelineOrder) => {
+    if (event.kind !== 'text') {
+      flushCurrentBlock();
+      return;
+    }
+
+    const content = event.content.trim();
+    if (!content) {
+      return;
+    }
+
+    if (!currentBlock) {
+      currentBlock = {
+        firstEventId: event.id,
+        segments: [content],
+        createdAt: event.createdAt,
+        timelineOrder,
+      };
+      return;
+    }
+
+    currentBlock.segments.push(content);
+  });
+
+  flushCurrentBlock();
+  return blocks;
 };
 
 export const buildAssistantRenderModel = (
   message: StoredChatMessage,
   draftState?: AssistantDraftState,
-  bubbleCardCount = 0,
 ): AssistantRenderModel => {
-  const thinkingItems: Array<{
-    eventId: string;
-    part: Extract<AIChatMessagePart, { type: 'thinking' }>;
-    timelineOrder: number;
-  }> = [];
   const isStreaming = draftState?.isStreaming ?? Boolean(draftState);
   const timeline = isStreaming
     ? Array.isArray(draftState?.timeline)
@@ -69,55 +112,79 @@ export const buildAssistantRenderModel = (
     : message.role === 'assistant' && Array.isArray(message.timeline)
       ? message.timeline
       : [];
-  const timelineText = getAssistantTimelineText(timeline);
-  const content = timelineText;
+  const processItems: AssistantProcessRenderItem[] = [];
+  const textBlocks = buildAssistantTextTimelineBlocks(timeline);
+  const lastTimelineEvent = timeline.length > 0 ? timeline[timeline.length - 1] : null;
+  const finalTextBlock =
+    lastTimelineEvent?.kind === 'text' && textBlocks.length > 0
+      ? textBlocks[textBlocks.length - 1]!
+      : null;
+  const feedbackTextBlocks = finalTextBlock ? textBlocks.slice(0, -1) : textBlocks;
+  const content = finalTextBlock?.content || '';
   const fallbackAnswerCreatedAt =
-    [...timeline]
+    finalTextBlock?.createdAt
+    ?? [...timeline]
       .reverse()
-      .find((event): event is Extract<AssistantTimelineEvent, { kind: 'text' }> => event.kind === 'text')
-      ?.createdAt ?? message.createdAt;
+      .find((event): event is AssistantTimelineTextEvent => event.kind === 'text')
+      ?.createdAt
+    ?? message.createdAt;
   const answerCreatedAt = isStreaming
     ? draftState?.streamingStartedAt ?? fallbackAnswerCreatedAt
     : fallbackAnswerCreatedAt;
 
-  timeline.forEach((event, timelineOrder) => {
+  timeline.forEach((event, timelineOrder, events) => {
     if (event.kind === 'reasoning') {
-      thinkingItems.push({
-        eventId: event.id,
-        part: {
-          type: 'thinking',
-          content: draftState?.streamingReasoningTextByEventId?.[event.id] ?? event.content,
-          collapsed: event.collapsed,
-          status: event.status,
-          elapsedSeconds: event.elapsedSeconds,
-          createdAt: event.createdAt,
-        },
+      const part = {
+        type: 'thinking' as const,
+        content: event.content,
+        collapsed: event.collapsed,
+        status: event.status,
+        elapsedSeconds: event.elapsedSeconds,
+        createdAt: event.createdAt,
+      };
+      if (part.content.trim().length === 0) {
+        return;
+      }
+
+      processItems.push({
+        kind: 'thinking_lane',
+        key: `${message.id}-${event.id}`,
+        part,
+        index: processItems.length,
         timelineOrder,
       });
+      return;
     }
+
+    if (event.kind !== 'text' || finalTextBlock?.firstEventId === event.id) {
+      return;
+    }
+
+    const previousEvent = timelineOrder > 0 ? events[timelineOrder - 1] : null;
+    if (previousEvent?.kind === 'text') {
+      return;
+    }
+
+    const feedbackBlock = feedbackTextBlocks.find((block) => block.firstEventId === event.id);
+    if (!feedbackBlock) {
+      return;
+    }
+
+    processItems.push({
+      kind: 'feedback_lane',
+      key: `${message.id}-${feedbackBlock.firstEventId}`,
+      part: {
+        type: 'text',
+        content: feedbackBlock.content,
+        createdAt: feedbackBlock.createdAt,
+      },
+      index: processItems.length,
+      timelineOrder: feedbackBlock.timelineOrder,
+    });
   });
 
-  const processItems = thinkingItems
-    .filter(({ part }) => part.content.trim().length > 0)
-    .map(({ eventId, part, timelineOrder }, index) => ({
-      kind: 'thinking_lane',
-      key: `${message.id}-${eventId}`,
-      part,
-      index,
-      timelineOrder,
-    })) as AssistantThinkingRenderItem[];
   const normalizedContent = normalizeAssistantCopy(content);
-  const shouldRenderAnswer =
-    normalizedContent.length > 0 &&
-    !shouldSuppressAssistantTextPart(
-      message,
-      {
-        type: 'text',
-        content,
-        createdAt: answerCreatedAt,
-      },
-      bubbleCardCount,
-    );
+  const shouldRenderAnswer = normalizedContent.length > 0;
   const finalAnswerItem: AssistantAnswerRenderItem | null = shouldRenderAnswer
     ? {
         kind: 'answer_lane',
@@ -128,7 +195,7 @@ export const buildAssistantRenderModel = (
           createdAt: answerCreatedAt,
         },
         index: processItems.length,
-        timelineOrder: timeline.length,
+        timelineOrder: finalTextBlock?.timelineOrder ?? timeline.length,
       }
     : null;
   const items: AssistantRenderItem[] = finalAnswerItem ? [...processItems, finalAnswerItem] : processItems;
