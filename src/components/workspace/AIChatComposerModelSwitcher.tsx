@@ -22,6 +22,18 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
 }) => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const activeConfigLabel = activeRuntimeConfig?.name || 'No AI Enabled';
+  const activeModelLabel = activeRuntimeConfig?.model || 'Select Model';
+  const activeProviderMonogram = activeRuntimeConfig ? getProviderMonogram(activeRuntimeConfig.provider) : '--';
+  const activeProviderTone = buildProviderToneStyle(activeRuntimeConfig?.provider);
+  const activeConfigMeta = activeRuntimeConfig
+    ? activeRuntimeConfig.baseURL
+      ? formatCompactBaseURL(activeRuntimeConfig.baseURL)
+      : activeRuntimeConfig.provider
+    : 'Pick a config';
+  const activeConfigHint = activeRuntimeConfig ? `${activeConfigLabel} / ${activeConfigMeta}` : activeConfigMeta;
+
+  const getModelMeta = (model: string) => getModelStatusMeta(getModelStatus(activeRuntimeConfig, model));
 
   useEffect(() => {
     if (!open) {
@@ -49,59 +61,107 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
   }, [open]);
 
   return (
-    <div ref={containerRef} className="chat-model-switcher">
+    <div ref={containerRef} className="chat-model-switcher" style={activeProviderTone}>
       <button
         type="button"
         className={`chat-model-switcher-trigger ${isRuntimeConfigLocked ? 'locked' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Switch model"
+        aria-label={`Switch model (${activeModelLabel})`}
+        title={`${activeConfigLabel} / ${activeModelLabel}`}
         onClick={() => setOpen((current) => !current)}
       >
-        <span>{activeRuntimeConfig?.name || 'No AI Enabled'}</span>
-        <strong>{activeRuntimeConfig?.model || 'Select Model'}</strong>
-        <span className="chat-model-switcher-caret">▾</span>
+        <span className="chat-model-switcher-trigger-brand" aria-hidden="true">
+          <TriggerSparkIcon />
+          <span className="chat-model-switcher-trigger-brand-monogram">{activeProviderMonogram}</span>
+        </span>
       </button>
 
       {open ? (
-        <div className="chat-model-switcher-menu" role="menu">
-          <div className="chat-model-switcher-configs">
-            {enabledRuntimeConfigs.map((config) => (
-              <button
-                key={config.id}
-                type="button"
-                className={`chat-model-switcher-config-item ${activeRuntimeConfig?.id === config.id ? 'active' : ''}`}
-                disabled={!allowConfigSelection}
-                onClick={() => {
-                  onSelectConfig(config.id);
-                  if (allowConfigSelection) {
-                    setOpen(false);
-                  }
-                }}
-              >
-                <strong>{config.name}</strong>
-                <span>{config.provider}</span>
-              </button>
-            ))}
+        <div className="chat-model-switcher-menu" role="menu" aria-label="Model switcher">
+          <div className="chat-model-switcher-provider-rail chat-model-switcher-configs">
+            <div className="chat-model-switcher-panel-heading">
+              <PanelStackIcon />
+              <span>AGENT</span>
+            </div>
+            {enabledRuntimeConfigs.map((config) => {
+              const configMeta = config.baseURL ? formatCompactBaseURL(config.baseURL) : config.provider;
+
+              return (
+                <button
+                  key={config.id}
+                  type="button"
+                  className={`chat-model-switcher-config-item ${activeRuntimeConfig?.id === config.id ? 'active' : ''}`}
+                  style={buildProviderToneStyle(config.provider)}
+                  title={`${config.name} / ${configMeta}`}
+                  disabled={!allowConfigSelection}
+                  onClick={() => {
+                    onSelectConfig(config.id);
+                    if (allowConfigSelection) {
+                      setOpen(false);
+                    }
+                  }}
+                >
+                  <span className="chat-model-switcher-provider-mark" aria-hidden="true" />
+                  <span className="chat-model-switcher-provider-avatar" aria-hidden="true">
+                    {getProviderMonogram(config.provider)}
+                  </span>
+                  <span className="chat-model-switcher-provider-copy">
+                    <strong>{config.name}</strong>
+                    <span className="chat-model-switcher-provider-meta sr-only">{configMeta}</span>
+                  </span>
+                </button>
+              );
+            })}
             {enabledRuntimeConfigs.length === 0 ? (
               <div className="chat-model-switcher-empty">No enabled configs</div>
             ) : null}
           </div>
 
-          <div className="chat-model-switcher-models">
-            {runtimeModelOptions.map((model) => (
-              <button
-                key={model}
-                type="button"
-                className={`chat-model-switcher-model-item ${activeRuntimeConfig?.model === model ? 'active' : ''}`}
-                onClick={() => {
-                  onSelectModel(model);
-                  setOpen(false);
-                }}
-              >
-                {model}
-              </button>
-            ))}
+          <div className="chat-model-switcher-model-panel chat-model-switcher-models">
+            <div className="chat-model-switcher-model-panel-header">
+              <div className="chat-model-switcher-panel-heading">
+                <ModelOrbitIcon />
+                <span>MODEL</span>
+              </div>
+              <div className="chat-model-switcher-model-summary">
+                <span className="chat-model-switcher-model-summary-badge" aria-hidden="true">
+                  {activeProviderMonogram}
+                </span>
+                <span className="chat-model-switcher-model-summary-copy">
+                  <strong>{activeModelLabel}</strong>
+                  <span>{activeConfigHint}</span>
+                </span>
+              </div>
+            </div>
+            {runtimeModelOptions.map((model) => {
+              const status = getModelStatus(activeRuntimeConfig, model);
+
+              return (
+                <button
+                  key={model}
+                  type="button"
+                  className={`chat-model-switcher-model-item ${activeRuntimeConfig?.model === model ? 'active' : ''}`}
+                  title={`${model} / ${getModelMeta(model)}`}
+                  onClick={() => {
+                    onSelectModel(model);
+                    setOpen(false);
+                  }}
+                >
+                  <strong className="chat-model-switcher-model-label">{model}</strong>
+                  <span className={`chat-model-switcher-model-meta ${status}`} aria-hidden="true">
+                    {status === 'current' ? (
+                      <StatusCheckIcon />
+                    ) : status === 'saved' ? (
+                      <StatusBookmarkIcon />
+                    ) : (
+                      <StatusDotIcon />
+                    )}
+                  </span>
+                  <span className="sr-only">{getModelMeta(model)}</span>
+                </button>
+              );
+            })}
             {runtimeModelOptions.length === 0 ? (
               <div className="chat-model-switcher-empty">No models available</div>
             ) : null}
@@ -111,3 +171,142 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
     </div>
   );
 };
+
+type ModelStatus = 'current' | 'saved' | 'available';
+
+const formatCompactBaseURL = (value: string) => {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.host.replace(/^www\./, '');
+    const path = parsed.pathname.replace(/\/$/, '');
+    return path ? `${host}${path}` : host;
+  } catch {
+    return value.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  }
+};
+
+const getModelStatus = (activeRuntimeConfig: AIConfigEntry | null, model: string): ModelStatus => {
+  if (activeRuntimeConfig?.model === model) {
+    return 'current';
+  }
+
+  if (activeRuntimeConfig?.savedModels?.includes(model)) {
+    return 'saved';
+  }
+
+  return 'available';
+};
+
+const getModelStatusMeta = (status: ModelStatus) => {
+  switch (status) {
+    case 'current':
+      return 'Current selection';
+    case 'saved':
+      return 'Saved in settings';
+    default:
+      return 'Available model';
+  }
+};
+
+const getProviderMonogram = (provider: string) => {
+  const normalized = provider.trim().toLowerCase();
+
+  switch (normalized) {
+    case 'openai':
+      return 'OA';
+    case 'anthropic':
+      return 'AN';
+    case 'deepseek':
+      return 'DS';
+    case 'google':
+    case 'gemini':
+      return 'G';
+    case 'openrouter':
+      return 'OR';
+    case 'xai':
+      return 'XA';
+    case 'ollama':
+      return 'OL';
+    case 'moonshot':
+      return 'MS';
+    default:
+      return normalized
+        .split(/[\s-_/]+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() || '')
+        .join('') || provider.slice(0, 2).toUpperCase();
+  }
+};
+
+const getProviderAccent = (provider?: string | null) => {
+  const normalized = provider?.trim().toLowerCase();
+
+  switch (normalized) {
+    case 'openai':
+      return '#10b981';
+    case 'anthropic':
+      return '#f59e0b';
+    case 'deepseek':
+      return '#38bdf8';
+    case 'google':
+    case 'gemini':
+      return '#60a5fa';
+    case 'openrouter':
+      return '#f97316';
+    case 'xai':
+      return '#94a3b8';
+    case 'ollama':
+      return '#22c55e';
+    case 'moonshot':
+      return '#fb7185';
+    default:
+      return '#60a5fa';
+  }
+};
+
+const buildProviderToneStyle = (provider?: string | null) =>
+  ({ '--chat-provider-accent': getProviderAccent(provider) } as React.CSSProperties);
+
+const TriggerSparkIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path
+      d="M8 2.25L9.32 5.02L12.1 6.34L9.32 7.66L8 10.43L6.68 7.66L3.9 6.34L6.68 5.02L8 2.25Z"
+      fill="currentColor"
+    />
+    <circle cx="11.85" cy="11.85" r="1.1" fill="currentColor" opacity="0.7" />
+  </svg>
+);
+
+const PanelStackIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <rect x="2.5" y="3.25" width="4.25" height="9.5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+    <rect x="9.25" y="4.5" width="4.25" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.2" opacity="0.82" />
+  </svg>
+);
+
+const ModelOrbitIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="1.35" fill="currentColor" />
+    <path d="M3.25 8C3.25 5.53 5.53 3.5 8 3.5C10.47 3.5 12.75 5.53 12.75 8C12.75 10.47 10.47 12.5 8 12.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M8.05 1.95C10.92 2.17 13.35 4.67 13.35 7.95C13.35 11.24 10.96 13.82 8.05 14.05" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+  </svg>
+);
+
+const StatusCheckIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path d="M4.2 8.2L6.7 10.7L11.8 5.55" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const StatusBookmarkIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path d="M5.1 3.2H10.9C11.29 3.2 11.6 3.51 11.6 3.9V12.35L8 10.25L4.4 12.35V3.9C4.4 3.51 4.71 3.2 5.1 3.2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+  </svg>
+);
+
+const StatusDotIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="2.05" fill="currentColor" />
+  </svg>
+);

@@ -10,6 +10,7 @@ const cssPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.c
 const workspaceCssPath = path.resolve(__dirname, '../../src/components/ai/AIWorkspace.css');
 const storePath = path.resolve(__dirname, '../../src/modules/ai/store/globalAIStore.ts');
 const chatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const embeddedPiecesPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx');
 const settingsTabPath = path.resolve(__dirname, '../../src/components/workspace/AIChatAISettingsTab.tsx');
 const settingsHookPath = path.resolve(__dirname, '../../src/components/workspace/useAIChatSettingsState.ts');
 
@@ -52,9 +53,8 @@ test('ai chat keeps context usage meta and adds quick model switching near the c
   const source = await readFile(chatPath, 'utf8');
 
   assert.doesNotMatch(source, /className="chat-ai-select"/);
-  assert.match(source, /className="chat-composer-meta"/);
+  assert.match(source, /className="chat-composer-runtime-strip"/);
   assert.match(source, /AIChatComposerModelSwitcher/);
-  assert.match(source, /selectedRuntimeConfig \? selectedRuntimeConfig\.name : '\\u672a\\u542f\\u7528 AI'/);
   assert.match(source, /handleToggleEnabled/);
 });
 
@@ -88,9 +88,31 @@ test('ai chat exposes direct new-session entry and context budget indicator near
   const source = await readFile(chatPath, 'utf8');
 
   assert.match(source, /onClick=\{handleCreateSession\}/);
-  assert.match(source, /chat-composer-meta/);
+  assert.match(source, /chat-composer-runtime-strip/);
   assert.match(source, /currentContextUsage\.usedLabel/);
   assert.match(source, /currentContextUsage\.limitLabel/);
+});
+
+test('composer runtime meta only keeps context usage and removes duplicated runtime labels', async () => {
+  const [chatSource, embeddedSource] = await Promise.all([
+    readFile(chatPath, 'utf8'),
+    readFile(embeddedPiecesPath, 'utf8'),
+  ]);
+
+  assert.match(chatSource, /chat-composer-runtime-strip/);
+  assert.match(chatSource, /currentContextUsage\.usedLabel/);
+  assert.match(chatSource, /currentContextUsage\.limitLabel/);
+  assert.doesNotMatch(
+    chatSource,
+    /selectedRuntimeConfig \? selectedRuntimeConfig\.name : '\\u672a\\u542f\\u7528 AI'/
+  );
+
+  assert.match(embeddedSource, /chat-composer-runtime-strip/);
+  assert.match(embeddedSource, /contextUsageLabel/);
+  assert.doesNotMatch(embeddedSource, /agentStatusLabel/);
+  assert.doesNotMatch(embeddedSource, /selectedRuntimeLabel/);
+  assert.doesNotMatch(embeddedSource, /runStateLabel/);
+  assert.doesNotMatch(embeddedSource, /chat-composer-embedded-toolbar-stack/);
 });
 
 test('ai settings modal CSS keeps dialog centered and close button above content', async () => {
@@ -106,5 +128,6 @@ test('ai settings modal CSS keeps dialog centered and close button above content
   assert.match(css, /\.chat-settings-close\s*\{[^}]*position:\s*relative;/s);
   assert.match(css, /\.chat-settings-close\s*\{[^}]*z-index:\s*2;/s);
   assert.match(css, /\.chat-settings-close\s*\{[^}]*flex-shrink:\s*0;/s);
-  assert.match(css, /\.chat-composer-meta\s*\{/);
+  assert.match(css, /\.chat-composer-runtime-strip\s*\{/);
+  assert.match(css, /\.chat-composer-footer-start\s*\{/);
 });

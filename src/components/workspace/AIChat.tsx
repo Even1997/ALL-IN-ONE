@@ -10,7 +10,6 @@ import {
   isInternalAssistantReferencePath,
 } from '../../modules/ai/chat/referencePromptContext';
 import {
-  CHAT_AGENTS,
   type ChatAgentId,
 } from '../../modules/ai/chat/chatAgents';
 import {
@@ -53,13 +52,11 @@ import {
 } from '../../modules/ai/runtime/replay/runtimeReplayRecovery';
 import {
   useActiveConversationLiveState,
-  useActiveConversationRunStateSignals,
   useActiveConversationSelection,
   useRuntimeConversationGateway,
 } from '../../modules/ai/runtime/conversation/useRuntimeConversationGateway.ts';
 import { createRuntimeSkillRegistry } from '../../modules/ai/runtime/skills/runtimeSkillRegistry';
 import { useAgentRuntimeStore } from '../../modules/ai/runtime/agentRuntimeStore';
-import { getLatestTurnSession } from '../../modules/ai/runtime/session/agentSessionSelectors.ts';
 import {
   recordFinalVisibleDone,
   recordFirstVisibleChar,
@@ -206,7 +203,6 @@ type RunDiffState = {
 };
 
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
-const EMPTY_PENDING_APPROVALS: ApprovalRecord[] = [];
 const SETTINGS_TABS: Array<{
   id: SettingsTabId;
   label: string;
@@ -431,9 +427,13 @@ const ChatSandboxPolicySelector: React.FC<{
           setOpen((current) => !current);
         }}
       >
-        <span className="chat-sandbox-selector-trigger-icon">⚙</span>
+        <span className="chat-sandbox-selector-trigger-icon" aria-hidden="true">
+          <SettingsIcon />
+        </span>
         <span className="chat-sandbox-selector-trigger-label">{PERMISSION_MODE_LABELS[value]}</span>
-        <span className="chat-sandbox-selector-trigger-caret">▾</span>
+        <span className="chat-sandbox-selector-trigger-caret" aria-hidden="true">
+          <ChevronDownIcon />
+        </span>
       </button>
 
       {open ? (
@@ -790,6 +790,12 @@ const SettingsIcon = () => (
   </svg>
 );
 
+const ChevronDownIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+    <path d="M5.75 7.75L10 12.25L14.25 7.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 const CollapseIcon = ({ collapsed }: { collapsed: boolean }) => (
   <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
     {collapsed ? (
@@ -955,41 +961,6 @@ const toConversationHistoryMessages = (messages: StoredChatMessage[] = []) =>
     content: getStoredMessageConversationContent(message),
   }));
 
-function useStallDetector(isRunning: boolean, activityFingerprint: unknown, thresholdMs = 10000) {
-  const [stalled, setStalled] = useState(false);
-  const [stallDuration, setStallDuration] = useState(0);
-  const lastActivityRef = useRef(performance.now());
-
-  useEffect(() => {
-    if (!isRunning) {
-      setStalled(false);
-      setStallDuration(0);
-      return;
-    }
-    lastActivityRef.current = performance.now();
-    setStalled(false);
-    setStallDuration(0);
-  }, [isRunning, activityFingerprint]);
-
-  useEffect(() => {
-    if (!isRunning) {
-      return;
-    }
-
-    const id = setInterval(() => {
-      const elapsed = performance.now() - lastActivityRef.current;
-      if (elapsed >= thresholdMs) {
-        setStalled(true);
-        setStallDuration(elapsed);
-      }
-    }, 1000);
-
-    return () => clearInterval(id);
-  }, [isRunning, thresholdMs]);
-
-  return { stalled, stallDuration };
-}
-
 export const AIChat: React.FC<AIChatProps> = ({
   variant = 'default',
   runtimeConfigIdOverride = null,
@@ -1004,7 +975,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const lockExpandedForEmbedded = isProviderEmbedded;
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [stallFP] = useState(0);
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTabId>('ai');
@@ -1182,7 +1152,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     sessions,
     activeSessionId,
     activeSession,
-    approvalThreadId: activeApprovalThreadId,
     checkpointThreadId: activeCheckpointThreadId,
     taskThreadId: activeTaskThreadId,
   } = useActiveConversationSelection({
@@ -1200,12 +1169,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     </div>
   ) : null;
   const { timelineProjectionByMessageId, timelineProjectionByRunId } = useRuntimeConversationGateway({
-    projectId: currentProjectId,
-  });
-  const {
-    pendingQuestionSummary: activePendingQuestionSummary,
-    statusVerb: activeStatusVerb,
-  } = useActiveConversationRunStateSignals({
     projectId: currentProjectId,
   });
   const { liveThreadId, liveState } = useActiveConversationLiveState({
@@ -1331,21 +1294,11 @@ export const AIChat: React.FC<AIChatProps> = ({
     void initializeRuntimeSidecarMcpServers();
   }, []);
 
-  const latestTurnSession = useAgentRuntimeStore((state) =>
-    activeSessionId ? getLatestTurnSession(state.sessionsByThread[activeSessionId]) || null : null,
-  );
   const activeReplayResumeRequest = useAgentRuntimeStore((state) =>
     activeSessionId ? state.resumeRequestsByThread[activeSessionId] || null : null,
   );
   const activityEntries = useAIChatStore((state) =>
     currentProjectId ? state.projects[currentProjectId]?.activityEntries || EMPTY_ACTIVITY_ENTRIES : EMPTY_ACTIVITY_ENTRIES,
-  );
-  const pendingApprovalCount = useApprovalStore((state) =>
-    activeApprovalThreadId
-      ? (state.approvalsByThread[activeApprovalThreadId] || EMPTY_PENDING_APPROVALS).filter(
-          (approval) => approval.status === 'pending',
-        ).length
-      : 0,
   );
   const replayRecoveryController = useMemo(
     () =>
@@ -2195,11 +2148,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     runtimeContextLabels,
     selectedRuntimeConfig,
   ]);
-  const selectedAgent = useMemo(
-    () => CHAT_AGENTS.find((agent) => agent.id === selectedChatAgentId) || CHAT_AGENTS[0],
-    [selectedChatAgentId]
-  );
-  const latestActivityEntry = activityEntries[0] || null;
   const activityEntriesByRunId = useMemo(() => groupActivityEntriesByRunId(activityEntries), [activityEntries]);
   const turnCheckpointsByRunId = useMemo(() => groupTurnCheckpointsByRunId(turnCheckpoints), [turnCheckpoints]);
   const latestCheckpointRunId = turnCheckpoints[0]?.runId || null;
@@ -2227,52 +2175,6 @@ export const AIChat: React.FC<AIChatProps> = ({
         : [],
     [expandedDiffTarget, turnCheckpoints]
   );
-  const latestTurnSessionStatus = latestTurnSession?.status || null;
-  const { stalled, stallDuration: currentStallDuration } = useStallDetector(
-    isLoading,
-    stallFP,
-    10000,
-  );
-  const runStateLabel =
-    latestTurnSessionStatus === 'planning'
-      ? 'Planning'
-      : latestTurnSessionStatus === 'waiting_approval'
-        ? 'Approval required'
-        : activePendingQuestionSummary
-          ? 'Input required'
-        : latestTurnSessionStatus === 'executing'
-          ? stalled ? `Executing (stalled ${(currentStallDuration / 1000).toFixed(0)}s)` : 'Executing'
-          : latestTurnSessionStatus === 'resumable'
-            ? 'Resume ready'
-            : latestTurnSessionStatus === 'completed'
-              ? 'Completed'
-              : latestTurnSessionStatus === 'failed'
-                ? 'Failed'
-                : pendingApprovalCount > 0
-                  ? 'Approval required'
-                  : activeStatusVerb
-                    ? activeStatusVerb
-                    : isLoading
-                      ? 'Running'
-                      : latestActivityEntry?.type === 'failed'
-                        ? 'Failed'
-                        : 'Ready';
-  const runStateTone =
-    latestTurnSessionStatus === 'waiting_approval' || latestTurnSessionStatus === 'resumable'
-      ? 'warning'
-      : activePendingQuestionSummary
-        ? 'warning'
-      : latestTurnSessionStatus === 'failed'
-        ? 'error'
-        : latestTurnSessionStatus === 'completed'
-          ? 'success'
-          : pendingApprovalCount > 0
-      ? 'warning'
-      : isLoading
-        ? stalled ? 'stalled' : 'running'
-        : latestActivityEntry?.type === 'failed'
-          ? 'error'
-          : 'success';
   const clearStreamingDraft = useCallback((messageId: string) => {
     const hadDraft = messageId in streamingDraftBufferRef.current;
     if (hadDraft) {
@@ -3301,12 +3203,8 @@ export const AIChat: React.FC<AIChatProps> = ({
                   textareaRef={textareaRef}
                   onKeyDown={handleKeyDown}
                   placeholder={getComposerPlaceholder(isRuntimeConfigured)}
-                  agentStatusLabel={isGNAgentEmbedded ? selectedAgent.label : undefined}
-                  selectedRuntimeLabel={selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}
                   contextUsageLabel={`${currentContextUsage.usedLabel} / ${currentContextUsage.limitLabel}`}
                   contextUsageWarning={currentContextUsage.ratio >= 0.8}
-                  runStateLabel={isGNAgentEmbedded ? runStateLabel : undefined}
-                  runStateTone={isGNAgentEmbedded ? runStateTone : undefined}
                   isLoading={isLoading}
                   disabled={!input.trim() && !isLoading}
                   onSubmit={isLoading ? handleStopGeneration : () => { void handleSubmit(); }}
@@ -3357,44 +3255,47 @@ export const AIChat: React.FC<AIChatProps> = ({
                           onSelect={handleSlashCommandSelect}
                         />
                       ) : null}
-                      <textarea
-                        ref={textareaRef}
-                        value={input}
-                        onChange={(event) =>
-                          handleInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length)
-                        }
-                        onKeyDown={handleKeyDown}
-                        placeholder={getComposerPlaceholder(isRuntimeConfigured)}
-                        className="chat-composer-input"
-                        rows={1}
-                      />
-                      <button
-                        type={isLoading ? 'button' : 'submit'}
-                        className="chat-send-btn"
-                        aria-label={isLoading ? '终止' : '发送'}
-                        title={isLoading ? '终止' : '发送'}
-                        disabled={!input.trim() && !isLoading}
-                        onClick={isLoading ? handleStopGeneration : undefined}
-                      >
-                        {isLoading ? <PauseIcon /> : <SendIcon />}
-                      </button>
+                      <div className="chat-composer-input-area">
+                        <textarea
+                          ref={textareaRef}
+                          value={input}
+                          onChange={(event) =>
+                            handleInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length)
+                          }
+                          onKeyDown={handleKeyDown}
+                          placeholder={getComposerPlaceholder(isRuntimeConfigured)}
+                          className="chat-composer-input"
+                          rows={1}
+                        />
+                        <button
+                          type={isLoading ? 'button' : 'submit'}
+                          className="chat-send-btn chat-send-btn-inline"
+                          aria-label={isLoading ? '终止' : '发送'}
+                          title={isLoading ? '终止' : '发送'}
+                          disabled={!input.trim() && !isLoading}
+                          onClick={isLoading ? handleStopGeneration : undefined}
+                        >
+                          {isLoading ? <PauseIcon /> : <SendIcon />}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="chat-composer-footer">
-                      <ChatSandboxPolicySelector
-                        value={permissionMode}
-                        onChange={async (mode) => {
-                          const nextMode = await setAgentPermissionMode(mode);
-                          setPermissionMode(nextMode);
-                          setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
-                        }}
-                      />
-                      <AIChatComposerModelSwitcher {...composerModelSwitcherProps} />
-                      <div className="chat-composer-meta">
-                        <span>{selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}</span>
-                        <span className={currentContextUsage.ratio >= 0.8 ? 'warning' : ''}>
-                          {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
-                        </span>
+                      <div className="chat-composer-footer-start">
+                        <ChatSandboxPolicySelector
+                          value={permissionMode}
+                          onChange={async (mode) => {
+                            const nextMode = await setAgentPermissionMode(mode);
+                            setPermissionMode(nextMode);
+                            setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
+                          }}
+                        />
+                        <AIChatComposerModelSwitcher {...composerModelSwitcherProps} />
+                        <div className="chat-composer-runtime-strip" aria-label="Context usage">
+                          <span className={currentContextUsage.ratio >= 0.8 ? 'warning' : ''}>
+                            {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

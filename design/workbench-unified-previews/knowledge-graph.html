@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Knowledge Graph Preview</title>
+    <link rel="stylesheet" href="./workbench-preview.css" />
+  </head>
+  <body>
+    <div class="preview-shell">
+      <div class="preview-window">
+        <header class="preview-topbar">
+          <div class="preview-topbar-left">
+            <div class="traffic-lights"><span></span><span></span><span></span></div>
+            <span class="window-title">GoodNight Knowledge Graph</span>
+            <span class="window-meta">knowledge tree / graph / summary</span>
+          </div>
+          <div class="preview-topbar-right">
+            <div class="chrome-pill"><span>64 nodes</span></div>
+            <div class="chrome-pill"><span class="chrome-dot"></span><span>index synced</span></div>
+          </div>
+        </header>
+
+        <section class="preview-workbench">
+          <aside class="rail panel panel-muted">
+            <div class="brand-mark">GN</div>
+            <nav class="rail-nav">
+              <a class="rail-item" href="#"><strong>◎</strong><span>Agent</span></a>
+              <a class="rail-item" href="#"><strong>▣</strong><span>Files</span></a>
+              <a class="rail-item active" href="#"><strong>◇</strong><span>Graph</span></a>
+              <a class="rail-item" href="#"><strong>⋯</strong><span>Plan</span></a>
+              <a class="rail-item" href="#"><strong>⌘</strong><span>Tools</span></a>
+            </nav>
+            <div class="rail-foot">
+              <a class="rail-item" href="#"><strong>⚙</strong><span>Setup</span></a>
+            </div>
+          </aside>
+
+          <aside class="sidebar panel">
+            <div class="sidebar-header">
+              <div class="sidebar-header-copy">
+                <span class="eyebrow">Knowledge</span>
+                <h1 class="sidebar-title">实体与文档</h1>
+                <span class="sidebar-subtitle">左侧不做花哨卡片，只做可扫描的知识树</span>
+              </div>
+              <button class="btn">Filter</button>
+            </div>
+            <div class="sidebar-body stack">
+              <div class="segmented">
+                <button class="segmented-item active">Knowledge</button>
+                <button class="segmented-item">Files</button>
+              </div>
+              <article class="list-card active">
+                <strong>Project Overview</strong>
+                <span>统一 UI 规范、HTML 原型、React token 回落。</span>
+              </article>
+              <article class="list-card">
+                <strong>Workbench Shell</strong>
+                <span>rail、sidebar、main stage、companion pane 的共享骨架。</span>
+              </article>
+              <article class="list-card">
+                <strong>Output Boundary</strong>
+                <span>thinking、tool、feedback、final 的职责分离。</span>
+              </article>
+              <article class="list-card">
+                <strong>Provider Layout</strong>
+                <span>当前 provider workspace 的玻璃面板与间距参考。</span>
+              </article>
+            </div>
+          </aside>
+
+          <main class="stage panel">
+            <div class="stage-toolbar">
+              <div class="section-title-group">
+                <span class="eyebrow">Graph Stage</span>
+                <h2 class="section-title">Workbench UI Graph</h2>
+                <span class="section-subtitle">壳子保持中性，颜色只留给图谱语义</span>
+              </div>
+              <div class="toolbar-row">
+                <button class="btn">Type</button>
+                <button class="btn">Community</button>
+                <button class="btn btn-primary">Insight</button>
+              </div>
+            </div>
+            <div class="stage-body">
+              <div class="graph-shell">
+                <div class="graph-grid"></div>
+                <div class="graph-line" style="left:160px; top:132px; width:220px; transform:rotate(18deg);"></div>
+                <div class="graph-line" style="left:282px; top:188px; width:180px; transform:rotate(-22deg);"></div>
+                <div class="graph-line" style="left:448px; top:280px; width:210px; transform:rotate(6deg);"></div>
+                <div class="graph-line" style="left:312px; top:362px; width:250px; transform:rotate(28deg);"></div>
+                <div class="graph-line" style="left:530px; top:186px; width:140px; transform:rotate(54deg);"></div>
+                <div class="graph-line" style="left:660px; top:312px; width:140px; transform:rotate(-18deg);"></div>
+
+                <div class="graph-node node-source" style="left:92px; top:84px; width:82px; height:82px;">Source</div>
+                <div class="graph-node node-entity" style="left:254px; top:132px; width:92px; height:92px;">Shell</div>
+                <div class="graph-node node-concept" style="left:470px; top:128px; width:110px; height:110px;">Boundary</div>
+                <div class="graph-node node-entity" style="left:662px; top:182px; width:86px; height:86px;">Agent</div>
+                <div class="graph-node node-overview" style="left:384px; top:250px; width:80px; height:80px;">UI</div>
+                <div class="graph-node node-entity" style="left:212px; top:344px; width:108px; height:108px;">Sidebar</div>
+                <div class="graph-node node-concept" style="left:520px; top:354px; width:104px; height:104px;">Context</div>
+                <div class="graph-node node-entity" style="left:752px; top:336px; width:94px; height:94px;">Graph</div>
+
+                <div class="graph-controls">
+                  <div class="graph-control">+</div>
+                  <div class="graph-control">-</div>
+                  <div class="graph-control">□</div>
+                </div>
+              </div>
+            </div>
+          </main>
+
+          <aside class="context-pane panel">
+            <div class="section-header">
+              <div class="section-title-group">
+                <span class="eyebrow">Summary</span>
+                <h2 class="section-title">图谱摘要</h2>
+                <span class="section-subtitle">右侧只是解释和动作，不再做第二套视觉中心</span>
+              </div>
+            </div>
+            <div class="context-body stack">
+              <article class="detail-card">
+                <span class="eyebrow">Top cluster</span>
+                <strong>Shell architecture</strong>
+                <span>多数 UI 节点最后都回到同一套 left / center / right 工作台结构。</span>
+              </article>
+              <article class="detail-card">
+                <span class="eyebrow">Key point</span>
+                <strong>Color stays semantic</strong>
+                <span>图谱里可以有蓝、橙、紫，但页面壳子本身不能跟着变花。</span>
+              </article>
+              <article class="detail-card">
+                <span class="eyebrow">Actions</span>
+                <div class="detail-list">
+                  <div class="detail-list-item"><strong>1</strong><span>统一 graph control 按钮样式</span></div>
+                  <div class="detail-list-item"><strong>2</strong><span>知识树与会话侧栏复用同一列表节奏</span></div>
+                </div>
+              </article>
+            </div>
+          </aside>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodNight UI Standards</title>
+    <link rel="stylesheet" href="./workbench-preview.css" />
+  </head>
+  <body>
+    <main class="standards-shell standards-shell-wide">
+      <section class="standards-hero standards-hero-tight">
+        <div class="standards-hero-copy">
+          <span class="eyebrow">Foundation Standard</span>
+          <h1>GoodNight Workbench UI Standard</h1>
+          <p>
+            Notes-first document space, Finder-like structure, and a native desktop tone.
+            This page is the reusable baseline for tokens, icons, components, and interaction rules.
+          </p>
+        </div>
+        <div class="standards-hero-actions">
+          <a class="btn btn-primary" href="./overview-home.html">Open Standard Boards</a>
+          <a class="btn" href="./index.html">Open Standards Hub</a>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Quick Read</span>
+          <h2>How To Use This Standard</h2>
+        </div>
+        <div class="standards-guide-grid">
+          <article class="standards-mini-card">
+            <strong>1. Read the anatomy first</strong>
+            <p>Understand the shell before touching cards, buttons, or accents.</p>
+          </article>
+          <article class="standards-mini-card">
+            <strong>2. Reuse the component cards</strong>
+            <p>Rail, sidebar, document, and companion are the primary reusable building blocks.</p>
+          </article>
+          <article class="standards-mini-card">
+            <strong>3. Match the right board recipe</strong>
+            <p>AI, graph, and overview pages each have a different center of gravity.</p>
+          </article>
+          <article class="standards-mini-card">
+            <strong>4. Feed the contract to AI</strong>
+            <p>Use the machine-readable section at the end when asking AI to generate pages.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Workbench Anatomy</span>
+          <h2>One Glance Layout Model</h2>
+        </div>
+        <article class="standards-card">
+          <div class="standards-anatomy-board">
+            <div class="standards-anatomy-topbar">Topbar: location, search, global actions</div>
+            <div class="standards-anatomy-body">
+              <div class="standards-anatomy-rail">Rail
+                <span>primary mode switch</span>
+              </div>
+              <div class="standards-anatomy-sidebar">Sidebar
+                <span>thread list, source list, project list</span>
+              </div>
+              <div class="standards-anatomy-stage">Main Stage
+                <span>document, canvas, or current working surface</span>
+              </div>
+              <div class="standards-anatomy-companion">Companion
+                <span>AI, inspector, quick actions, context</span>
+              </div>
+            </div>
+            <div class="standards-anatomy-status">Status Bar: lightweight runtime or context facts</div>
+          </div>
+          <div class="standards-guide-grid">
+            <article class="standards-mini-card">
+              <strong>Rail</strong>
+              <p>Always compact and icon-led. It changes the mode, not the content details.</p>
+            </article>
+            <article class="standards-mini-card">
+              <strong>Sidebar</strong>
+              <p>List-oriented. Behaves like Notes or Finder source lists, not like stacked cards.</p>
+            </article>
+            <article class="standards-mini-card">
+              <strong>Main Stage</strong>
+              <p>The visual center. Only one thing should clearly dominate here.</p>
+            </article>
+            <article class="standards-mini-card">
+              <strong>Companion</strong>
+              <p>Secondary help, never a second competing main stage.</p>
+            </article>
+          </div>
+        </article>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Core Rules</span>
+          <h2>Direction Cards</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-3">
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <span class="icon icon-soft-blue">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M4 2.5h8A1.5 1.5 0 0 1 13.5 4v8A1.5 1.5 0 0 1 12 13.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5Z" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M5 5.2h6M5 8h4.6M5 10.8h5.2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/>
+                </svg>
+              </span>
+              <strong>Document First</strong>
+            </div>
+            <p>The center of the product should feel like a calm note surface before it feels like a tool cluster.</p>
+            <ul class="standards-list">
+              <li>One primary reading column in the main stage</li>
+              <li>AI suggestions live inline or in the right companion pane</li>
+              <li>Fewer bubbles, fewer pills, fewer nested cards</li>
+            </ul>
+          </article>
+
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <span class="icon icon-soft-cyan">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M2.75 4.25A1.5 1.5 0 0 1 4.25 2.75H6.8l1 1.4h4a1.45 1.45 0 0 1 1.45 1.45v5.95A1.45 1.45 0 0 1 11.8 13H4.2A1.45 1.45 0 0 1 2.75 11.55V4.25Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/>
+                </svg>
+              </span>
+              <strong>Desktop Native</strong>
+            </div>
+            <p>Structure should come from rail, sidebars, toolbars, and status bars, not from dashboard decoration.</p>
+            <ul class="standards-list">
+              <li>Pane-based layout stays consistent across pages</li>
+              <li>Subtle surface contrast instead of loud section framing</li>
+              <li>Rounded corners are restrained, not bubbly</li>
+            </ul>
+          </article>
+
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <span class="icon icon-soft-orange">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="m8 2.35 1.1 2.58 2.55 1.07L9.1 7.07 8 9.65 6.9 7.07 4.35 6l2.55-1.07L8 2.35Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/>
+                  <path d="m11.7 10.25.52 1.12 1.13.53-1.13.52-.52 1.13-.53-1.13-1.12-.52 1.12-.53.53-1.12Z" fill="currentColor"/>
+                </svg>
+              </span>
+              <strong>AI Companion</strong>
+            </div>
+            <p>AI should feel integrated with work, closer to Notes smart assistance than a standalone chat product.</p>
+            <ul class="standards-list">
+              <li>Quick actions beat oversized response cards</li>
+              <li>Thinking reads like a margin note, not the hero section</li>
+              <li>Right pane summarizes, suggests, and helps navigate</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Token Kit</span>
+          <h2>Foundation Cards</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-4">
+          <article class="standards-card standards-token-card">
+            <span class="standards-token-label">Typography</span>
+            <strong>SF Pro Text / Display</strong>
+            <p>Default UI text at 13px, section titles at 16px, note headlines at 28-34px.</p>
+          </article>
+          <article class="standards-card standards-token-card">
+            <span class="standards-token-label">Spacing</span>
+            <strong>4px base, 10-16px groups</strong>
+            <p>Compact shell rhythm, but with larger breathing room inside the document center.</p>
+          </article>
+          <article class="standards-card standards-token-card">
+            <span class="standards-token-label">Radius</span>
+            <strong>8 / 10 / 12 / 16</strong>
+            <p>Panel corners stay soft and native, never pill-heavy or playful.</p>
+          </article>
+          <article class="standards-card standards-token-card">
+            <span class="standards-token-label">Accent</span>
+            <strong>Blue / Cyan / Indigo</strong>
+            <p>Accent color is for selection, focus, and AI emphasis only.</p>
+          </article>
+        </div>
+
+        <div class="standards-token-panels">
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Surface Ladder</strong>
+            </div>
+            <div class="standards-surface-ladder">
+              <div><span class="color-swatch" style="background:#f5f5f7"></span><strong>Window</strong><span>#f5f5f7</span></div>
+              <div><span class="color-swatch" style="background:#ffffff"></span><strong>Strong Surface</strong><span>#ffffff</span></div>
+              <div><span class="color-swatch" style="background:#f6f7fa"></span><strong>Muted Surface</strong><span>#f6f7fa</span></div>
+              <div><span class="color-swatch" style="background:#eef1f4"></span><strong>Backdrop</strong><span>#eef1f4</span></div>
+            </div>
+          </article>
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Type Scale</strong>
+            </div>
+            <div class="standards-type-scale">
+              <div><span class="standards-scale-11">11</span><span>Eyebrow / Labels</span></div>
+              <div><span class="standards-scale-13">13</span><span>Default UI text</span></div>
+              <div><span class="standards-scale-16">16</span><span>Section headings</span></div>
+              <div><span class="standards-scale-32">32</span><span>Document headline</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Theme System</span>
+          <h2>Light And Dark Standard</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-2">
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Light Theme Rules</strong>
+            </div>
+            <div class="standards-theme-token-list">
+              <div><span>Window</span><strong>#f5f5f7</strong></div>
+              <div><span>Panel</span><strong>rgba(255,255,255,0.9)</strong></div>
+              <div><span>Main Stage</span><strong>rgba(250,251,252,0.98)</strong></div>
+              <div><span>Primary Text</span><strong>#1f2328</strong></div>
+              <div><span>Muted Text</span><strong>rgba(31,35,40,0.68)</strong></div>
+            </div>
+            <ul class="standards-list">
+              <li>Keep large surfaces neutral and bright</li>
+              <li>Use accent color only for focus, selection, and AI hints</li>
+              <li>Reading comfort matters more than decoration</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-card-dark">
+            <div class="standards-card-head">
+              <strong>Dark Theme Rules</strong>
+            </div>
+            <div class="standards-theme-token-list">
+              <div><span>Window</span><strong>#111317</strong></div>
+              <div><span>Panel</span><strong>rgba(22,24,30,0.9)</strong></div>
+              <div><span>Main Stage</span><strong>rgba(18,20,25,0.96)</strong></div>
+              <div><span>Primary Text</span><strong>#f3f4f6</strong></div>
+              <div><span>Muted Text</span><strong>rgba(243,244,246,0.68)</strong></div>
+            </div>
+            <ul class="standards-list">
+              <li>Do not use pure black backgrounds</li>
+              <li>Keep the same hierarchy as light mode, only invert the surface ladder</li>
+              <li>Use softer borders and stronger separation between stage and chrome</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="standards-theme-boards">
+          <article class="standards-theme-preview">
+            <span class="eyebrow">Light Preview</span>
+            <div class="standards-theme-shell standards-theme-shell-light">
+              <div class="standards-theme-shell-top"></div>
+              <div class="standards-theme-shell-body">
+                <div class="standards-theme-rail"></div>
+                <div class="standards-theme-sidebar"></div>
+                <div class="standards-theme-stage"></div>
+                <div class="standards-theme-companion"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="standards-theme-preview standards-theme-preview-dark">
+            <span class="eyebrow">Dark Preview</span>
+            <div class="standards-theme-shell standards-theme-shell-dark">
+              <div class="standards-theme-shell-top"></div>
+              <div class="standards-theme-shell-body">
+                <div class="standards-theme-rail"></div>
+                <div class="standards-theme-sidebar"></div>
+                <div class="standards-theme-stage"></div>
+                <div class="standards-theme-companion"></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Embedded Icons</span>
+          <h2>Built-in Icon Library</h2>
+        </div>
+        <div class="standards-icon-grid">
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M4 2.5h8A1.5 1.5 0 0 1 13.5 4v8A1.5 1.5 0 0 1 12 13.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5Z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5 5.2h6M5 8h4.6M5 10.8h5.2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/></svg></span><strong>Note</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M2.75 4.25A1.5 1.5 0 0 1 4.25 2.75H6.8l1 1.4h4a1.45 1.45 0 0 1 1.45 1.45v5.95A1.45 1.45 0 0 1 11.8 13H4.2A1.45 1.45 0 0 1 2.75 11.55V4.25Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/></svg></span><strong>Files</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><circle cx="4" cy="4" r="1.3" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="11.7" cy="5.2" r="1.3" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="7" cy="11.5" r="1.3" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.15 4.35 10.4 4.95M10.8 6.3 7.8 10.45M5.15 5.15l1 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/></svg></span><strong>Graph</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M4 4.2h8M4 8h8M4 11.8h5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.3"/></svg></span><strong>Plan</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="3.8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M10.1 10.1 13 13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/></svg></span><strong>Search</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="m8 2.35 1.1 2.58 2.55 1.07L9.1 7.07 8 9.65 6.9 7.07 4.35 6l2.55-1.07L8 2.35Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/><path d="m11.7 10.25.52 1.12 1.13.53-1.13.52-.52 1.13-.53-1.13-1.12-.52 1.12-.53.53-1.12Z" fill="currentColor"/></svg></span><strong>AI</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M8 3.1v2.1M8 10.8v2.1M12.1 8H10M6 8H3.9M10.9 5.1 9.4 6.6M6.6 9.4 5.1 10.9M10.9 10.9 9.4 9.4M6.6 6.6 5.1 5.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span><strong>Settings</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.3"/></svg></span><strong>Add</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M4 2.5h6l2 2v7.5A1.5 1.5 0 0 1 10.5 13.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/><path d="M10 2.7v2h2" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/></svg></span><strong>Document</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M3.25 4.4h9.5l-3.5 3.6v3l-2 1V8l-4-3.6Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/></svg></span><strong>Filter</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><circle cx="4" cy="8" r="1.45" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="4.25" r="1.45" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="11.75" r="1.45" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.2 7.1 10.7 5M5.2 8.9l5.5 2.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/></svg></span><strong>Share</strong></div>
+          <div class="standards-icon-cell"><span class="icon icon-board"><svg viewBox="0 0 16 16"><circle cx="4" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12" cy="8" r="1" fill="currentColor"/></svg></span><strong>More</strong></div>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">AI States</span>
+          <h2>AI Message And Card Standard</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-2">
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Lane Order Contract</strong>
+            </div>
+            <div class="standards-lane-sequence">
+              <span class="standards-lane-pill">User input</span>
+              <span class="standards-lane-pill">Thinking</span>
+              <span class="standards-lane-pill">Tool execution</span>
+              <span class="standards-lane-pill">Final answer</span>
+              <span class="standards-lane-pill">Confirm / next step</span>
+            </div>
+            <ul class="standards-list">
+              <li>Render process states as separate lanes, never as one merged chat blob</li>
+              <li>Thinking is transient process context and must not become the final body</li>
+              <li>Tool execution uses runtime facts, not rewritten assistant prose</li>
+              <li>Final answer is the only durable reading surface for the completed turn</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-card-dark">
+            <div class="standards-card-head">
+              <strong>Dark Theme Preview</strong>
+            </div>
+            <div class="ai-state-preview ai-state-theme-dark">
+              <div class="ai-state-card ai-state-card-final">
+                <div class="ai-state-header">
+                  <span class="ai-state-icon">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M4 2.5h6l2 2v7.5A1.5 1.5 0 0 1 10.5 13.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/>
+                      <path d="M10 2.7v2h2" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/>
+                    </svg>
+                  </span>
+                  <div class="ai-state-meta">
+                    <strong>Final answer</strong>
+                    <span>Readable first, chrome second</span>
+                  </div>
+                </div>
+                <div class="ai-note-lines">
+                  <span style="width: 84%"></span>
+                  <span style="width: 92%"></span>
+                  <span style="width: 66%"></span>
+                </div>
+              </div>
+              <div class="ai-state-card ai-state-card-tool">
+                <div class="ai-state-header">
+                  <span class="ai-state-icon">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 3.1v2.1M8 10.8v2.1M12.1 8H10M6 8H3.9M10.9 5.1 9.4 6.6M6.6 9.4 5.1 10.9M10.9 10.9 9.4 9.4M6.6 6.6 5.1 5.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/>
+                      <circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                    </svg>
+                  </span>
+                  <div class="ai-state-meta">
+                    <strong>Tool execution</strong>
+                    <span>Dark keeps the same hierarchy</span>
+                  </div>
+                </div>
+                <div class="ai-progress-track">
+                  <span class="ai-progress-bar"></span>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Do not invent a separate dark-mode structure for AI lanes</li>
+              <li>Dark mode lowers glare but preserves spacing, order, and card roles</li>
+              <li>Keep text contrast high and borders soft, not glowing</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="standards-card-grid standards-card-grid-3 standards-state-grid">
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head">
+              <strong>User Input</strong>
+            </div>
+            <div class="standards-preview-block">
+              <div class="ai-state-preview">
+                <div class="ai-state-card ai-state-card-user">
+                  <div class="ai-state-header">
+                    <span class="ai-state-icon">
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M4 2.5h8A1.5 1.5 0 0 1 13.5 4v8A1.5 1.5 0 0 1 12 13.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5Z" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                        <path d="M5 5.2h6M5 8h4.6M5 10.8h5.2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/>
+                      </svg>
+                    </span>
+                    <div class="ai-state-meta">
+                      <strong>User prompt</strong>
+                      <span>Compact source record</span>
+                    </div>
+                  </div>
+                  <p class="ai-state-copy">Keep the shell, add AI states, motion, and future-facing standards.</p>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Compact and direct, closer to a note row than a message bubble</li>
+              <li>Should anchor the turn without overpowering the final answer</li>
+              <li>Use short metadata only when it helps trace context</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head">
+              <strong>Thinking Note</strong>
+            </div>
+            <div class="standards-preview-block">
+              <div class="ai-state-preview">
+                <div class="ai-state-card ai-state-card-thinking">
+                  <div class="ai-state-header">
+                    <span class="ai-pulse-dot"></span>
+                    <div class="ai-state-meta">
+                      <strong>Thinking</strong>
+                      <span>Transient process context</span>
+                    </div>
+                  </div>
+                  <p class="ai-state-copy">Mapping the page structure and placing AI states into reusable cards<span class="ai-caret"></span></p>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Render like a quiet margin note, not like a hero reply</li>
+              <li>Keep it short, mutable, and visually secondary</li>
+              <li>Never persist thinking as the final answer body</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head">
+              <strong>Tool Execution</strong>
+            </div>
+            <div class="standards-preview-block">
+              <div class="ai-state-preview">
+                <div class="ai-state-card ai-state-card-tool">
+                  <div class="ai-state-header">
+                    <span class="ai-state-icon">
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M8 3.1v2.1M8 10.8v2.1M12.1 8H10M6 8H3.9M10.9 5.1 9.4 6.6M6.6 9.4 5.1 10.9M10.9 10.9 9.4 9.4M6.6 6.6 5.1 5.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/>
+                        <circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                      </svg>
+                    </span>
+                    <div class="ai-state-meta">
+                      <strong>Tool run</strong>
+                      <span>Runtime facts only</span>
+                    </div>
+                  </div>
+                  <p class="ai-state-copy">Read standard page and shared CSS</p>
+                  <div class="ai-progress-track">
+                    <span class="ai-progress-bar"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Use deterministic labels and stable runtime facts</li>
+              <li>Show progress, status, or result count without oversized loaders</li>
+              <li>Do not restyle tool output as assistant narrative</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head">
+              <strong>Final Answer</strong>
+            </div>
+            <div class="standards-preview-block">
+              <div class="ai-state-preview">
+                <div class="ai-state-card ai-state-card-final">
+                  <div class="ai-state-header">
+                    <span class="ai-state-icon">
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M4 2.5h6l2 2v7.5A1.5 1.5 0 0 1 10.5 13.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/>
+                        <path d="M10 2.7v2h2" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/>
+                      </svg>
+                    </span>
+                    <div class="ai-state-meta">
+                      <strong>Final</strong>
+                      <span>Durable answer body</span>
+                    </div>
+                  </div>
+                  <div class="ai-note-lines">
+                    <span style="width: 88%"></span>
+                    <span style="width: 93%"></span>
+                    <span style="width: 71%"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>This is the main reading surface for the finished turn</li>
+              <li>Allow more whitespace and cleaner typography than process cards</li>
+              <li>Keep it document-like, especially inside Notes-first layouts</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head">
+              <strong>Confirm Card</strong>
+            </div>
+            <div class="standards-preview-block">
+              <div class="ai-state-preview">
+                <div class="ai-state-card ai-state-card-confirm">
+                  <div class="ai-state-header">
+                    <span class="ai-state-icon">
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M3.5 8.15 6.6 11.2 12.4 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35"/>
+                      </svg>
+                    </span>
+                    <div class="ai-state-meta">
+                      <strong>Confirm next step</strong>
+                      <span>Decision before action</span>
+                    </div>
+                  </div>
+                  <p class="ai-state-copy">Apply this standard to AI chat and graph pages now?</p>
+                  <div class="ai-confirm-actions">
+                    <button class="ai-state-button ai-state-button-primary" type="button">Apply</button>
+                    <button class="ai-state-button" type="button">Review</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Use for risky changes, branching choices, or destructive actions</li>
+              <li>Primary action is singular and obvious</li>
+              <li>Cards should feel actionable without looking like marketing CTAs</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head">
+              <strong>Blocked / Review</strong>
+            </div>
+            <div class="standards-preview-block">
+              <div class="ai-state-preview">
+                <div class="ai-state-card ai-state-card-warning">
+                  <div class="ai-state-header">
+                    <span class="ai-state-icon">
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M8 3.2 13 12.3H3L8 3.2Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/>
+                        <path d="M8 6.4v2.9M8 11.2h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/>
+                      </svg>
+                    </span>
+                    <div class="ai-state-meta">
+                      <strong>Needs review</strong>
+                      <span>Polite escalation</span>
+                    </div>
+                  </div>
+                  <p class="ai-state-copy">Existing changes overlap this area. Review before continuing.</p>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Use when human confirmation or conflict review is genuinely needed</li>
+              <li>Visual emphasis comes from tone and border, not loud danger fills</li>
+              <li>Always pair the issue with a clear next action</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Motion System</span>
+          <h2>Interactive States And Motion Rules</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-3">
+          <article class="standards-card standards-token-card">
+            <span class="standards-token-label">Hover / Focus</span>
+            <strong>120-160ms, ease-out</strong>
+            <p>Use a tiny lift, border tint, or background wash to signal hover and keyboard focus.</p>
+          </article>
+          <article class="standards-card standards-token-card">
+            <span class="standards-token-label">Press / Select</span>
+            <strong>80-140ms, scale 0.985 or inset emphasis</strong>
+            <p>Pressed states should feel precise and native, not bouncy or playful.</p>
+          </article>
+          <article class="standards-card standards-token-card">
+            <span class="standards-token-label">Loading / Reveal</span>
+            <strong>180-240ms reveal, 900-1200ms pulse</strong>
+            <p>Use motion only to explain state changes such as thinking, tool work, and confirmation.</p>
+          </article>
+        </div>
+
+        <div class="standards-card-grid standards-card-grid-2">
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head">
+              <strong>Interactive State Sheet</strong>
+            </div>
+            <div class="motion-demo-sheet">
+              <div class="motion-demo-card">Default</div>
+              <div class="motion-demo-card is-hover">Hover</div>
+              <div class="motion-demo-card is-selected">Selected</div>
+              <div class="motion-demo-card is-disabled">Disabled</div>
+            </div>
+            <ul class="standards-list">
+              <li>Every tappable card needs default, hover, active, selected, and disabled states</li>
+              <li>Selection should read through background and border before shadow</li>
+              <li>Disabled never depends on opacity alone; reduce contrast and remove motion</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head">
+              <strong>Meaningful Motion Only</strong>
+            </div>
+            <div class="motion-demo-stack">
+              <div class="motion-demo-chip motion-demo-chip-thinking"><span></span>Thinking pulse</div>
+              <div class="motion-demo-chip motion-demo-chip-tool"><span></span>Tool progress</div>
+              <div class="motion-demo-chip motion-demo-chip-confirm"><span></span>Confirm reveal</div>
+            </div>
+            <ul class="standards-list">
+              <li>No decorative floating, bouncing, or gradient shimmer</li>
+              <li>Motion should clarify status, hierarchy, or readiness</li>
+              <li>Respect reduced motion: keep state changes visible even when animation is removed</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Component Standard</span>
+          <h2>Reusable UI Cards</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-2">
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Rail Navigation</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-rail-preview">
+                <div class="standards-rail-button active">AI</div>
+                <div class="standards-rail-button">FS</div>
+                <div class="standards-rail-button">KG</div>
+                <div class="standards-rail-button">PL</div>
+                <div class="standards-rail-button">HM</div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Primary navigation should be icon-first</li>
+              <li>Selected state uses a faint accent wash plus a slim guide line</li>
+              <li>Never use heavy blocks of saturated color</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Notes Sidebar</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-thread-preview">
+                <div class="standards-thread-item active">
+                  <span class="standards-thread-dot"></span>
+                  <div><strong>Desktop refinement</strong><span>Notes-like AI workbench</span></div>
+                </div>
+                <div class="standards-thread-item">
+                  <span class="standards-thread-dot subtle"></span>
+                  <div><strong>Output boundary</strong><span>Thinking / tool / final</span></div>
+                </div>
+                <div class="standards-thread-item">
+                  <span class="standards-thread-dot subtle"></span>
+                  <div><strong>Graph cleanup</strong><span>Canvas plus inspector</span></div>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Rows behave like Notes entries, not CRM cards</li>
+              <li>Title, summary, and time are enough in most cases</li>
+              <li>Metadata density stays low and calm</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Document Center</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-document-preview">
+                <span class="eyebrow">AI Workspace</span>
+                <h3>Make the workbench feel more like Notes</h3>
+                <p>The central stage should feel like a document the user can read, revise, and continue working from.</p>
+                <div class="standards-inline-callout">Assistant recommendation: keep AI close to the writing, not above it.</div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Narrow reading column, larger margin, cleaner typography</li>
+              <li>Inline AI callouts are allowed, but must stay light</li>
+              <li>Group structure with whitespace before borders</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>AI Companion Pane</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-assistant-preview">
+                <div class="standards-assistant-group"><strong>Current note</strong><span>Mode: Notes-first UI</span><span>Scope: Visual only</span></div>
+                <div class="standards-assistant-group"><strong>Quick actions</strong><span>Rewrite selection</span><span>Find related files</span><span>Turn note into plan</span></div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Companion pane summarizes and helps, it does not dominate</li>
+              <li>Use grouped lists instead of giant response cards</li>
+              <li>Icons are encouraged anywhere labels can be shortened</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Visual Heuristics</span>
+          <h2>Good vs Avoid</h2>
+        </div>
+        <div class="standards-compare-grid">
+          <article class="standards-compare-card">
+            <span class="eyebrow">Good</span>
+            <strong>Document-led hierarchy</strong>
+            <ul class="standards-list">
+              <li>one primary surface in the center</li>
+              <li>faint separators and restrained accent</li>
+              <li>icons replace repetitive labels where obvious</li>
+              <li>AI guidance sits inline or in the companion pane</li>
+            </ul>
+          </article>
+          <article class="standards-compare-card standards-compare-card-warn">
+            <span class="eyebrow">Avoid</span>
+            <strong>Dashboard or chat-app drift</strong>
+            <ul class="standards-list">
+              <li>multiple equally loud cards competing at once</li>
+              <li>heavy pills, bubbles, and glowing action blocks</li>
+              <li>too many text buttons saying the same thing as icons</li>
+              <li>AI taking over the entire page as a feed</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Page Recipes</span>
+          <h2>When Each Pattern Applies</h2>
+        </div>
+        <div class="standards-recipe-grid">
+          <article class="standards-card standards-recipe-card">
+            <span class="pill pill-blue">AI Workbench</span>
+            <strong>Document-first recipe</strong>
+            <p>The main stage is a note or thread. Sidebar is a thread list. Companion is AI help.</p>
+            <div class="standards-recipe-tags">
+              <span>Center: document</span>
+              <span>Sidebar: notes list</span>
+              <span>Right: AI</span>
+            </div>
+          </article>
+          <article class="standards-card standards-recipe-card">
+            <span class="pill pill-cyan">Knowledge Graph</span>
+            <strong>Canvas-first recipe</strong>
+            <p>The main stage is a graph canvas. Sidebar is sources. Companion is inspector and insights.</p>
+            <div class="standards-recipe-tags">
+              <span>Center: canvas</span>
+              <span>Sidebar: sources</span>
+              <span>Right: inspector</span>
+            </div>
+          </article>
+          <article class="standards-card standards-recipe-card">
+            <span class="pill pill-indigo">Overview</span>
+            <strong>Launcher recipe</strong>
+            <p>The main stage is orientation and next actions. Keep metrics light and secondary.</p>
+            <div class="standards-recipe-tags">
+              <span>Center: focus</span>
+              <span>Sidebar: recent work</span>
+              <span>Right: shortcuts</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Execution Rules</span>
+          <h2>Use / Avoid</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-2">
+          <article class="standards-card standards-do-card">
+            <div class="standards-card-head"><strong>Use</strong></div>
+            <ul class="standards-list">
+              <li>Pane hierarchy, toolbars, sidebars, and status bars</li>
+              <li>Icon plus short label instead of verbose controls</li>
+              <li>Whitespace to separate blocks before adding borders</li>
+              <li>One strong reading surface in the center of each work page</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-avoid-card">
+            <div class="standards-card-head"><strong>Avoid</strong></div>
+            <ul class="standards-list">
+              <li>Too many bubbles, pills, glow outlines, and floating cards</li>
+              <li>Repeated card-inside-card framing</li>
+              <li>Large brand color backgrounds or dashboard KPI clutter</li>
+              <li>Icon-only controls without meaning or hover help in real code</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Machine Readable</span>
+          <h2>AI Design Contract</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-2">
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>YAML Contract</strong>
+            </div>
+            <pre class="standards-code-block"><code>product_ui_contract:
+  style: "native desktop workbench"
+  mood: "quiet, capable, notes-first"
+  themes: ["light", "dark"]
+  layout:
+    - rail
+    - sidebar
+    - main_stage
+    - companion_pane
+  ai_lanes:
+    order: ["user_input", "thinking", "tool_execution", "final_answer", "confirm_or_next_step"]
+    rules:
+      - "thinking is process-only and never becomes final body"
+      - "tool execution is sourced from runtime events"
+      - "final answer is the durable reading surface"
+      - "confirm cards appear only when a decision is needed"
+  core_rules:
+    - "main_stage has one dominant surface"
+    - "ai is companion, not full-page chat feed"
+    - "use icons where labels are repetitive"
+    - "avoid bubble-heavy and dashboard-heavy framing"
+  tokens:
+    body_text: "13px"
+    section_title: "16px"
+    note_headline: "28-34px"
+    radius: [8, 10, 12, 16]
+    accents: ["#007aff", "#0891b2", "#4f46e5"]
+  theme_tokens:
+    light:
+      window: "#f5f5f7"
+      panel: "rgba(255,255,255,0.9)"
+      stage: "rgba(250,251,252,0.98)"
+      text: "#1f2328"
+    dark:
+      window: "#111317"
+      panel: "rgba(22,24,30,0.9)"
+      stage: "rgba(18,20,25,0.96)"
+      text: "#f3f4f6"
+  motion:
+    hover: "120-160ms ease-out with subtle lift or tint"
+    press: "80-140ms native-feeling press feedback"
+    reveal: "180-240ms opacity + translateY"
+    loading: "900-1200ms pulse or progress bar"
+    reduced_motion: "remove non-essential animation, keep state clarity"</code></pre>
+          </article>
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Page Blueprint JSON</strong>
+            </div>
+            <pre class="standards-code-block"><code>{
+  "ai_workbench": {
+    "center": "document",
+    "sidebar": "thread_list",
+    "right_pane": "ai_companion",
+    "ai_cards": ["user_input", "thinking", "tool_execution", "final_answer", "confirm_card"],
+    "avoid": ["chat_bubbles", "metric_dashboard"]
+  },
+  "knowledge_graph": {
+    "center": "graph_canvas",
+    "sidebar": "source_list",
+    "right_pane": "inspector",
+    "avoid": ["hero_cards", "marketing_layout"]
+  },
+  "overview": {
+    "center": "current_focus_and_entry_points",
+    "sidebar": "recent_work",
+    "right_pane": "quick_actions",
+    "avoid": ["big_kpi_grid", "landing_page_sections"]
+  }
+}</code></pre>
+          </article>
+        </div>
+
+        <article class="standards-card">
+          <div class="standards-card-head">
+            <strong>Prompt Snippet For AI</strong>
+          </div>
+          <pre class="standards-code-block"><code>Design a GoodNight desktop workbench page using a notes-first native macOS tone.
+Keep the shell as: rail + sidebar + main stage + companion pane.
+Make the center the dominant work surface.
+Support both light and dark mode using the same hierarchy and component structure.
+Render AI output as separate cards for user input, thinking, tool execution, final answer, and confirm-next-step when needed.
+Use subtle native-feeling motion for hover, selection, progress, and reveal.
+Use restrained color, compact desktop density, and icon-led controls.
+Avoid chat bubbles, KPI dashboards, pure black dark mode, and marketing-page composition.</code></pre>
+        </article>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Delivery Gate</span>
+          <h2>Implementation Checklist</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-2">
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Page-Level Acceptance</strong>
+            </div>
+            <ul class="standards-list">
+              <li>Use the same shell order: rail, sidebar, main stage, companion pane</li>
+              <li>Main stage has one clear dominant surface and avoids multi-hero competition</li>
+              <li>Icons replace repeated labels where the meaning is already obvious</li>
+              <li>Both light and dark themes share the same spacing, hierarchy, and card roles</li>
+              <li>No decorative gradients, floating bubbles, or dashboard KPI framing</li>
+            </ul>
+          </article>
+
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>AI Zone Acceptance</strong>
+            </div>
+            <ul class="standards-list">
+              <li>AI states are rendered as distinct cards, not a single merged chat blob</li>
+              <li>Thinking, tool execution, feedback, and final answer stay semantically separated</li>
+              <li>Every interactive card has default, hover, active, selected, loading, and disabled rules</li>
+              <li>All motion has a meaning and is disabled or reduced cleanly under reduced-motion</li>
+              <li>Confirm cards appear only for real decisions, not for every assistant suggestion</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

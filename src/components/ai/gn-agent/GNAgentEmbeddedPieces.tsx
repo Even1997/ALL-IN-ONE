@@ -240,12 +240,8 @@ export const GNAgentEmbeddedComposer: React.FC<{
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   placeholder: string;
-  agentStatusLabel?: string;
-  selectedRuntimeLabel: string;
   contextUsageLabel: string;
   contextUsageWarning: boolean;
-  runStateLabel?: string;
-  runStateTone?: string;
   isLoading: boolean;
   disabled: boolean;
   onSubmit: () => void;
@@ -261,12 +257,8 @@ export const GNAgentEmbeddedComposer: React.FC<{
   textareaRef,
   onKeyDown,
   placeholder,
-  agentStatusLabel,
-  selectedRuntimeLabel,
   contextUsageLabel,
   contextUsageWarning,
-  runStateLabel,
-  runStateTone,
   isLoading,
   disabled,
   onSubmit,
@@ -277,52 +269,43 @@ export const GNAgentEmbeddedComposer: React.FC<{
       {entrySwitch ? <div className="chat-composer-gn-agent-entry">{entrySwitch}</div> : null}
       <div className="chat-composer-embedded-input">
         {topContent}
-        {agentStatusLabel ? (
-          <div className="chat-composer-runtime-strip" aria-label="GN Agent status">
-            <span>{agentStatusLabel}</span>
-            <span>{selectedRuntimeLabel}</span>
-            <span className={contextUsageWarning ? 'warning' : ''}>{contextUsageLabel}</span>
-            {runStateLabel ? <span className={runStateTone || ''}>{runStateLabel}</span> : null}
-          </div>
-        ) : null}
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(event) => {
-            if (onInputChange) {
-              onInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length);
-              return;
-            }
+        <div className="chat-composer-input-area">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(event) => {
+              if (onInputChange) {
+                onInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length);
+                return;
+              }
 
-            setInput(event.target.value);
-          }}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          className="chat-composer-input chat-composer-input-embedded"
-          rows={1}
-        />
-
-        <div className="chat-composer-embedded-toolbar">
-          <div className="chat-composer-embedded-toolbar-start">
-            {toolbarStartContent}
-            {runtimeSwitcher}
-            {!agentStatusLabel ? (
-              <div className="chat-composer-meta chat-composer-meta-embedded">
-                <span>{selectedRuntimeLabel}</span>
-                <span className={contextUsageWarning ? 'warning' : ''}>{contextUsageLabel}</span>
-              </div>
-            ) : null}
-          </div>
+              setInput(event.target.value);
+            }}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            className="chat-composer-input chat-composer-input-embedded"
+            rows={1}
+          />
           <button
             type="button"
-            className="chat-send-btn"
-            aria-label={isLoading ? '终止' : '发送'}
-            title={isLoading ? '终止' : '发送'}
+            className="chat-send-btn chat-send-btn-inline"
+            aria-label={isLoading ? 'Stop' : 'Send'}
+            title={isLoading ? 'Stop' : 'Send'}
             disabled={disabled}
             onClick={onSubmit}
           >
             <SendIcon />
           </button>
+        </div>
+
+        <div className="chat-composer-embedded-toolbar">
+          <div className="chat-composer-embedded-toolbar-start">
+            {toolbarStartContent}
+            {runtimeSwitcher}
+            <div className="chat-composer-runtime-strip" aria-label="Context usage">
+              <span className={contextUsageWarning ? 'warning' : ''}>{contextUsageLabel}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

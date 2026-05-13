@@ -32,3 +32,82 @@ Rules:
 - `final` is the only durable assistant answer body for a completed turn.
 - If no tool is used, reply with `<final>...</final>` only.
 - If tools are used, use runtime tool events as the source of truth and keep any `<feedback>` short. Do not restate tool protocol blocks inside `<final>`.
+
+## Frontend UI standard
+
+For all future frontend work, treat the workbench UI standard in `design/workbench-unified-previews/` as the default design contract, especially:
+- `design/workbench-unified-previews/ui-standards.html`
+- `design/workbench-unified-previews/overview-home.html`
+- `design/workbench-unified-previews/workbench-preview.css`
+
+This standard is not optional reference material. New pages, refactors, and component rewrites should follow it unless the user explicitly requests an exception.
+
+### UI direction
+
+Rules:
+- Default to a native desktop tone: macOS-like, Finder / Notes-like, quiet, document-led, and tool-capable.
+- Prefer a notes-first workbench over chat-app, SaaS dashboard, or marketing-site composition.
+- Keep one dominant work surface in the main stage. Do not let multiple equally loud cards compete for attention.
+- AI is a companion to work, not a full-page bubble feed.
+- Prefer icon-led controls and concise labels over repeated text-heavy controls.
+
+### Shell layout
+
+Rules:
+- Use the workbench shell order as the default layout: `rail -> sidebar -> main stage -> companion pane`.
+- `rail` is for primary mode switching and should stay compact and icon-first.
+- `sidebar` is list-oriented and should behave more like Notes / Finder lists than stacked CRM cards.
+- `main stage` is the visual center and should hold the primary document, canvas, or work surface.
+- `companion pane` is secondary support: AI, inspector, quick actions, or context. It must not compete with the main stage.
+
+### Visual language
+
+Rules:
+- Keep the UI minimal, calm, and desktop-native. Use whitespace and hierarchy before adding borders or fills.
+- Use restrained rounding only. Avoid bubbly chat pills, oversized capsules, and soft-card-over-card framing.
+- Do not introduce decorative gradients into standard workbench UI.
+- Avoid loud KPI dashboards, landing-page hero sections, and glossy SaaS chrome unless the user explicitly asks for that direction.
+- Use restrained accent colors for focus, selection, AI emphasis, and status only.
+
+### Theme rules
+
+Rules:
+- Every new frontend surface should support both light and dark themes or be written so theme support can be added without structural changes.
+- Light and dark mode must keep the same hierarchy, spacing, and component roles.
+- Do not use pure black dark mode. Follow the existing dark surface direction from the standard.
+- Use semantic tokens and shared variables instead of hardcoded per-component colors when possible.
+
+### AI card and lane rules
+
+For AI-facing UI, the default lane order is:
+- `user_input`
+- `thinking`
+- `tool_execution`
+- `final_answer`
+- `confirm_or_next_step` when needed
+
+Rules:
+- Render these as distinct lanes or cards, not as one merged chat blob.
+- `thinking` is transient process context and must never become the durable final answer body.
+- `tool_execution` must be sourced from runtime truth, not reconstructed from assistant prose.
+- `final_answer` is the primary readable surface for a completed AI turn.
+- Use confirm cards only when a real decision, escalation, or risky action needs user confirmation.
+- If AI is embedded into a document workflow, prefer document-like cards and margin-note behavior over bubble chat.
+
+### Motion and interaction rules
+
+Rules:
+- Motion must explain state changes such as hover, selection, reveal, loading, or confirmation. It must not be decorative.
+- Keep interaction motion subtle and native-feeling.
+- Provide clear states for default, hover, active, selected, loading, confirm, warning, and disabled where applicable.
+- Respect `prefers-reduced-motion`; removing animation must not remove state clarity.
+- Avoid shimmer-heavy loading, floating animations, bouncy cards, and attention-seeking motion patterns.
+
+### Implementation guardrails
+
+Rules:
+- Before building new workbench UI, review the latest standard pages in `design/workbench-unified-previews/`.
+- Reuse shared tokens, card families, and layout patterns from the standard before inventing new ones.
+- When implementing a new AI page or refactoring AI chat, preserve the semantic separation between thinking, tools, feedback, and final.
+- If a requested design conflicts with this standard, pause and call out the tradeoff explicitly before implementing.
+- If a page intentionally deviates from the standard, document the reason in the relevant code or PR notes.
