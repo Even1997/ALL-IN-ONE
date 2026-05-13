@@ -233,6 +233,7 @@ export const GNAgentEmbeddedComposer: React.FC<{
   entrySwitch?: React.ReactNode;
   topContent?: React.ReactNode;
   toolbarStartContent?: React.ReactNode;
+  runtimeSwitcher?: React.ReactNode;
   input: string;
   setInput: (value: string) => void;
   onInputChange?: (value: string, cursorPos: number) => void;
@@ -253,6 +254,7 @@ export const GNAgentEmbeddedComposer: React.FC<{
   entrySwitch,
   topContent,
   toolbarStartContent,
+  runtimeSwitcher,
   input,
   setInput,
   onInputChange,
@@ -303,6 +305,7 @@ export const GNAgentEmbeddedComposer: React.FC<{
         <div className="chat-composer-embedded-toolbar">
           <div className="chat-composer-embedded-toolbar-start">
             {toolbarStartContent}
+            {runtimeSwitcher}
             {!agentStatusLabel ? (
               <div className="chat-composer-meta chat-composer-meta-embedded">
                 <span>{selectedRuntimeLabel}</span>

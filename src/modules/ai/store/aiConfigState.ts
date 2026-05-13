@@ -18,25 +18,44 @@ export type AIConfigEntry = {
   apiKey: string;
   baseURL: string;
   model: string;
+  savedModels: string[];
   contextWindowTokens: number;
   customHeaders: string;
   enabled: boolean;
 };
 
-const createDefaultName = () => `AI 配置 ${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+const createDefaultName = () => `AI 閰嶇疆 ${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 258000;
 
-export const createAIConfigEntry = (overrides: Partial<AIConfigEntry> = {}): AIConfigEntry => ({
-  id: overrides.id || `ai-config-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  name: overrides.name?.trim() || createDefaultName(),
-  provider: overrides.provider || 'openai-compatible',
-  apiKey: overrides.apiKey || '',
-  baseURL: overrides.baseURL || 'https://openrouter.ai/api/v1',
-  model: overrides.model || 'gpt-4o-mini',
-  contextWindowTokens: Math.max(1000, overrides.contextWindowTokens || DEFAULT_CONTEXT_WINDOW_TOKENS),
-  customHeaders: overrides.customHeaders || '',
-  enabled: overrides.enabled || false,
-});
+export const normalizeSavedModels = (savedModels: string[] | undefined, model: string) => {
+  const normalized = Array.from(
+    new Set((savedModels || []).map((item) => item.trim()).filter(Boolean))
+  );
+  const fallbackModel = model.trim();
+  return normalized.length > 0 ? normalized : (fallbackModel ? [fallbackModel] : []);
+};
+
+export const resolveActiveModel = (model: string, savedModels: string[]) => {
+  const normalizedModel = model.trim();
+  return savedModels.includes(normalizedModel) ? normalizedModel : savedModels[0] || '';
+};
+
+export const createAIConfigEntry = (overrides: Partial<AIConfigEntry> = {}): AIConfigEntry => {
+  const defaultModel = overrides.model || 'gpt-4o-mini';
+  const savedModels = normalizeSavedModels(overrides.savedModels, defaultModel);
+  return {
+    id: overrides.id || `ai-config-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: overrides.name?.trim() || createDefaultName(),
+    provider: overrides.provider || 'openai-compatible',
+    apiKey: overrides.apiKey || '',
+    baseURL: overrides.baseURL || 'https://openrouter.ai/api/v1',
+    model: resolveActiveModel(defaultModel, savedModels),
+    savedModels,
+    contextWindowTokens: Math.max(1000, overrides.contextWindowTokens || DEFAULT_CONTEXT_WINDOW_TOKENS),
+    customHeaders: overrides.customHeaders || '',
+    enabled: overrides.enabled || false,
+  };
+};
 
 export const buildPresetAIConfigEntry = (preset: ProviderPreset): AIConfigEntry =>
   createAIConfigEntry({

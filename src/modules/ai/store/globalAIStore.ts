@@ -17,6 +17,7 @@ import {
   createAIConfigEntry,
   hasUsableAIConfigEntry,
   mergePresetAIConfigEntries,
+  normalizeSavedModels,
   resolveSelectedAIConfigId,
   type AIConfigEntry,
 } from './aiConfigState';
@@ -285,11 +286,15 @@ export const useGlobalAIStore = create<GlobalAIState>()(
         const state = get();
         const nextConfigs = state.aiConfigs.map((item) =>
           item.id === configId
-            ? {
+            ? createAIConfigEntry({
                 ...item,
                 ...updates,
                 name: typeof updates.name === 'string' && updates.name.trim() ? updates.name.trim() : item.name,
-              }
+                savedModels: normalizeSavedModels(
+                  'savedModels' in updates ? updates.savedModels : item.savedModels,
+                  typeof updates.model === 'string' ? updates.model : item.model,
+                ),
+              })
             : item
         );
         const nextState = syncStateFromConfigs(nextConfigs, state.selectedConfigId);

@@ -128,8 +128,8 @@
     "hash": "466d0d508e9f4f592902c6d49025d903"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent\\GNAgentEmbeddedPieces.tsx": {
-    "mtime": 1778635252.3850281,
-    "hash": "abf7df4fac9ee9d30590df99e2f20da5"
+    "mtime": 1778644845.6669512,
+    "hash": "b4c9ff7e83b09d5b97d5f2ad763b7c7e"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ai\\gn-agent\\GNAgentMessageItem.tsx": {
     "mtime": 1778632321.9671006,
@@ -316,16 +316,20 @@
     "hash": "e70f27a5c1b0433710106d476e757f97"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChat.tsx": {
-    "mtime": 1778635237.5187385,
-    "hash": "7c43cd70c16fa5ca4aaa957549b552a9"
+    "mtime": 1778644876.461001,
+    "hash": "6eaf131ac7f4d65905cc3dde5fdf7657"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatAISettingsTab.tsx": {
-    "mtime": 1778399387.7204428,
-    "hash": "0f3e0aefa01db3b3028d8eb191cf7290"
+    "mtime": 1778644619.4267066,
+    "hash": "c3fbb4a904b5be316df26f31242924cf"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatAssistantParts.tsx": {
     "mtime": 1778593856.2178555,
     "hash": "1a5479b61a26da305f2ee0094e217e82"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatComposerModelSwitcher.tsx": {
+    "mtime": 1778644835.8476818,
+    "hash": "c2fd972d87c9fe722f7e6f9f82d116a3"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatConversationMessagesPane.tsx": {
     "mtime": 1778597213.131136,
@@ -391,13 +395,17 @@
     "mtime": 1778133816.1084104,
     "hash": "2bf6b5329af739398d16b361f68df42f"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\useAIChatComposerModelSwitcherState.ts": {
+    "mtime": 1778644835.844627,
+    "hash": "e0cc0a49900da476ebe9a8d606733610"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\useAIChatRuntimeInteractionState.ts": {
     "mtime": 1778471736.4957669,
     "hash": "19fbcb52811c18cf8020f70d492e4d55"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\useAIChatSettingsState.ts": {
-    "mtime": 1778399387.722435,
-    "hash": "fdc9fb3e436eb0b1ef1e2db44baaf668"
+    "mtime": 1778644433.0118504,
+    "hash": "93b4841ce6f890886758077eb7735ad8"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\useAIChatSidecarSessionActions.ts": {
     "mtime": 1778412989.6603265,
@@ -956,8 +964,8 @@
     "hash": "a34c620b76c09ee03498e069fd3a1aec"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\store\\aiConfigState.ts": {
-    "mtime": 1777737320.6265187,
-    "hash": "8c276192f26b9eacfef8c77c2c24c84b"
+    "mtime": 1778644058.5061934,
+    "hash": "419db797f25f0bc9f13216a1cca17e36"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\store\\aiContextStore.ts": {
     "mtime": 1777632985.8267455,
@@ -972,8 +980,8 @@
     "hash": "3bc662f2ffb39c6b442cbe84250577fc"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\store\\globalAIStore.ts": {
-    "mtime": 1777961800.3090503,
-    "hash": "6c2532f31df5172a73007e9d089101af"
+    "mtime": 1778644070.877571,
+    "hash": "caa593b27222d584e67779d81e7a26f0"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\workflow\\skillRouting.ts": {
     "mtime": 1777982320.0365753,
@@ -1435,6 +1443,10 @@
     "mtime": 1778399387.7404878,
     "hash": "bfbdb1071894da53b2eaa0609c7a550e"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-composer-model-switcher.test.mjs": {
+    "mtime": 1778643816.6555676,
+    "hash": "5641c6d6edd9807ce0b5604c08093397"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-direct-streaming-display-source.test.mjs": {
     "mtime": 1778597375.2217054,
     "hash": "5c8e6ce910b10eb6672b4ce3f70b2ccf"
@@ -1488,8 +1500,8 @@
     "hash": "62ea2e5df39e25c029204976cbf7a8da"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-settings-state-hook-boundary.test.mjs": {
-    "mtime": 1778399387.7424886,
-    "hash": "bd4e4a7d50fbf4677bc3019bd85a5e76"
+    "mtime": 1778643816.659726,
+    "hash": "2bd2e844353b87bed6dc9c366779ef13"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-sidecar-session-actions-hook-boundary.test.mjs": {
     "mtime": 1778412362.1111698,
@@ -1712,8 +1724,8 @@
     "hash": "c7608f0833de74b26573bae4b6d35da3"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\global-ai-settings.test.mjs": {
-    "mtime": 1778399387.7529955,
-    "hash": "f2c6bfc2df844b4c839e1992eccb6943"
+    "mtime": 1778644715.435623,
+    "hash": "95acfc916d2f0c17cd025dbbb0aefdb1"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\gn-agent-chat-structure.test.mjs": {
     "mtime": 1778430044.0335772,
@@ -1732,8 +1744,8 @@
     "hash": "178803a8d93d7f7e97cdcff0d8ca11a6"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\gn-agent-provider-lock.test.mjs": {
-    "mtime": 1778399387.7549949,
-    "hash": "c4623e4dd533703d1d092ec877e818c0"
+    "mtime": 1778643816.6612358,
+    "hash": "6d83828aaef2462d570e84274a1a08f3"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\gn-agent-provider-registry.test.mjs": {
     "mtime": 1777517340.1179333,
@@ -2464,8 +2476,8 @@
     "hash": "0629a6d0ea88e7a0363abeb852eea439"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-13-chat-composer-model-switch-implementation.md": {
-    "mtime": 1778605404.7639222,
-    "hash": "6e27ef45bfd0e43c68b2ee9b96e1fa61"
+    "mtime": 1778643484.9695675,
+    "hash": "5b33dff243fcdf9517fc8ba9aa882522"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-13-streaming-answer-chronology-boundary-fix.md": {
     "mtime": 1778638176.8643146,

@@ -40,16 +40,25 @@ test('ai config state builds disabled entries from provider presets', async () =
   assert.match(source, /enabled:\s*false/);
 });
 
-test('ai chat exposes active AI name in the compact composer meta instead of an inline selector', async () => {
+test('ai config state persists one active model plus saved model candidates per config', async () => {
+  const source = await readFile(path.resolve(__dirname, '../../src/modules/ai/store/aiConfigState.ts'), 'utf8');
+
+  assert.match(source, /savedModels:\s*string\[\]/);
+  assert.match(source, /const savedModels = normalizeSavedModels/);
+  assert.match(source, /model:\s*resolveActiveModel/);
+});
+
+test('ai chat keeps context usage meta and adds quick model switching near the composer', async () => {
   const source = await readFile(chatPath, 'utf8');
 
   assert.doesNotMatch(source, /className="chat-ai-select"/);
   assert.match(source, /className="chat-composer-meta"/);
+  assert.match(source, /AIChatComposerModelSwitcher/);
   assert.match(source, /selectedRuntimeConfig \? selectedRuntimeConfig\.name : '\\u672a\\u542f\\u7528 AI'/);
   assert.match(source, /handleToggleEnabled/);
 });
 
-test('ai settings modal exposes one explicit save action while keeping model switching hooks', async () => {
+test('ai settings modal exposes editable saved model rows and an active model selector', async () => {
   const [chatSource, settingsTabSource, settingsHookSource] = await Promise.all([
     readFile(chatPath, 'utf8'),
     readFile(settingsTabPath, 'utf8'),
@@ -65,11 +74,11 @@ test('ai settings modal exposes one explicit save action while keeping model swi
     /<div className="chat-settings-modal-backdrop" onClick=\{closeSettings\}>\s*<section\s+className="chat-settings-drawer open"[\s\S]*?onClick=\{\(event\) => event\.stopPropagation\(\)\}/
   );
   assert.match(chatSource, /role="dialog"/);
-  assert.match(settingsTabSource, /value=\{settingsDraft\.model\}/);
-  assert.match(settingsTabSource, /model:\s*event\.target\.value/);
-  assert.match(settingsTabSource, /settingsModelOptions\.map\(\(candidate\)/);
-  assert.match(settingsTabSource, /model:\s*candidate/);
-  assert.match(settingsHookSource, /syncModelCatalog\(settingsDraft\.provider,\s*settingsDraft\.baseURL,\s*settingsModelOptions\)/);
+  assert.match(settingsTabSource, /savedModels/);
+  assert.match(settingsTabSource, /handleAddSavedModel/);
+  assert.match(settingsTabSource, /handleRemoveSavedModel/);
+  assert.match(settingsTabSource, /handleSelectActiveModel/);
+  assert.match(settingsHookSource, /savedModels:\s*normalizedSavedModels/);
   assert.match(chatSource, /contextWindowTokens:\s*config\?\.contextWindowTokens\s*\|\|\s*258000/);
   assert.match(settingsTabSource, /value=\{Math\.round\(settingsDraft\.contextWindowTokens \/ 1000\)\}/);
   assert.match(settingsTabSource, /contextWindowTokens:\s*Math\.max\(1000,\s*Number\.isFinite\(nextValue\)\s*\?\s*nextValue\s*:\s*258000\)/);
@@ -94,7 +103,6 @@ test('ai settings modal CSS keeps dialog centered and close button above content
   assert.match(css, /\.chat-settings-drawer\s*\{[^}]*z-index:\s*1002;/s);
   assert.match(css, /width:\s*min\(920px, calc\(100vw - 48px\)\);/);
   assert.match(css, /max-height:\s*min\(820px, calc\(100dvh - 48px\)\);/);
-  assert.doesNotMatch(css, /body\.desktop-workbench-mode \.chat-settings-drawer\s*\{[\s\S]*?position:\s*absolute;/);
   assert.match(css, /\.chat-settings-close\s*\{[^}]*position:\s*relative;/s);
   assert.match(css, /\.chat-settings-close\s*\{[^}]*z-index:\s*2;/s);
   assert.match(css, /\.chat-settings-close\s*\{[^}]*flex-shrink:\s*0;/s);

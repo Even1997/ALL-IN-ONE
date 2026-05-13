@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listModelsSupportMode } from '../../modules/ai/core/configStatus';
 import type { AIProviderType } from '../../modules/ai/core/AIService';
 import type { ProviderPreset } from '../../modules/ai/providerPresets';
-import { hasUsableAIConfigEntry, type AIConfigEntry } from '../../modules/ai/store/aiConfigState';
+import {
+  hasUsableAIConfigEntry,
+  normalizeSavedModels,
+  resolveActiveModel,
+  type AIConfigEntry,
+} from '../../modules/ai/store/aiConfigState';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 
 type AISettingsDraft = {
@@ -12,6 +17,7 @@ type AISettingsDraft = {
   apiKey: string;
   baseURL: string;
   model: string;
+  savedModels: string[];
   contextWindowTokens: number;
   customHeaders: string;
   enabled: boolean;
@@ -65,6 +71,16 @@ export const useAIChatSettingsState = ({
   getSuggestedBaseURL,
   loadAIServiceModule,
 }: UseAIChatSettingsStateInput) => {
+  const buildDraftValidSavedModels = useCallback(
+    (savedModels: string[], model: string) => normalizeSavedModels(savedModels, model),
+    [],
+  );
+
+  const resolveDraftActiveModel = useCallback(
+    (model: string, savedModels: string[]) => resolveActiveModel(model, buildDraftValidSavedModels(savedModels, model)),
+    [buildDraftValidSavedModels],
+  );
+
   const [showApiKey, setShowApiKey] = useState(false);
   const [providerSearch, setProviderSearch] = useState('');
   const [testState, setTestState] = useState<TestState>('idle');
@@ -143,7 +159,7 @@ export const useAIChatSettingsState = ({
     syncModelCatalog(
       selectedRuntimeConfig.provider,
       selectedRuntimeConfig.baseURL,
-      [...matched.models, selectedRuntimeConfig.model],
+      [...matched.models, ...selectedRuntimeConfig.savedModels, selectedRuntimeConfig.model],
     );
   }, [customProviderPreset, findPresetByConfig, selectedRuntimeConfig, syncModelCatalog]);
 
@@ -166,6 +182,7 @@ export const useAIChatSettingsState = ({
     () =>
       mergeModelCandidates(
         selectedSettingsPreset.models,
+        settingsDraft.savedModels,
         modelCatalog[buildProviderKey(settingsDraft.provider, settingsDraft.baseURL)] || [],
         [settingsDraft.model],
       ),
@@ -177,6 +194,7 @@ export const useAIChatSettingsState = ({
       settingsDraft.baseURL,
       settingsDraft.model,
       settingsDraft.provider,
+      settingsDraft.savedModels,
     ],
   );
 
@@ -219,10 +237,14 @@ export const useAIChatSettingsState = ({
 
     try {
       if (selectedProviderListMode === 'preset-only') {
-        const fallbackModels = mergeModelCandidates(selectedSettingsPreset.models, [settingsDraft.model]);
+        const fallbackModels = mergeModelCandidates(
+          selectedSettingsPreset.models,
+          settingsDraft.savedModels,
+          [settingsDraft.model],
+        );
         syncModelCatalog(settingsDraft.provider, settingsDraft.baseURL, fallbackModels);
         setTestState('success');
-        setTestMessage('当前 provider 不支持远程拉取模型列表，已回退到内置模型候选。');
+        setTestMessage('Provider uses preset model candidates only.');
         return;
       }
 
@@ -231,10 +253,13 @@ export const useAIChatSettingsState = ({
       syncModelCatalog(settingsDraft.provider, settingsDraft.baseURL, list);
       setSettingsDraft((current) => ({
         ...current,
-        model: current.model.trim() && list.includes(current.model) ? current.model : list[0] || current.model,
+        model: resolveDraftActiveModel(
+          current.model,
+          mergeModelCandidates(current.savedModels, list, [current.model]),
+        ),
       }));
       setTestState('success');
-      setTestMessage(`已加载 ${list.length} 个模型。`);
+      setTestMessage(`Loaded ${list.length} models.`);
     } catch (error) {
       setTestState('error');
       setTestMessage(error instanceof Error ? error.message : String(error));
@@ -244,30 +269,97 @@ export const useAIChatSettingsState = ({
   }, [
     loadAIServiceModule,
     mergeModelCandidates,
+    resolveDraftActiveModel,
     selectedProviderListMode,
     selectedSettingsPreset.models,
     settingsDraft,
     syncModelCatalog,
   ]);
 
+  const handleAddSavedModel = useCallback(() => {
+    setSettingsDraft((current) => ({
+      ...current,
+      savedModels: [...current.savedModels, ''],
+    }));
+  }, []);
+
+  const handleUpdateSavedModel = useCallback((index: number, value: string) => {
+    setSettingsDraft((current) => {
+      const previousValue = current.savedModels[index]?.trim() || '';
+      const nextSavedModels = current.savedModels.map((item, itemIndex) => (
+        itemIndex === index ? value : item
+      ));
+      const nextModel = current.model.trim() === previousValue
+        ? resolveDraftActiveModel(value.trim() || current.model, nextSavedModels)
+        : resolveDraftActiveModel(current.model, nextSavedModels);
+      return {
+        ...current,
+        savedModels: nextSavedModels,
+        model: nextModel,
+      };
+    });
+  }, [resolveDraftActiveModel]);
+
+  const handleRemoveSavedModel = useCallback((index: number) => {
+    setSettingsDraft((current) => {
+      const nextSavedModels = current.savedModels.filter((_, itemIndex) => itemIndex !== index);
+      const nextModel = resolveDraftActiveModel(current.model, nextSavedModels);
+      return {
+        ...current,
+        savedModels: nextSavedModels.length > 0 ? nextSavedModels : (nextModel ? [nextModel] : ['']),
+        model: nextModel,
+      };
+    });
+  }, [resolveDraftActiveModel]);
+
+  const handleSelectActiveModel = useCallback((model: string) => {
+    const normalizedModel = model.trim();
+    if (!normalizedModel) {
+      return;
+    }
+
+    setSettingsDraft((current) => ({
+      ...current,
+      model: normalizedModel,
+      savedModels: current.savedModels.some((item) => item.trim() === normalizedModel)
+        ? current.savedModels
+        : [...current.savedModels, normalizedModel],
+    }));
+  }, []);
+
   const handleApplySettings = useCallback(() => {
     if (!settingsDraft.id) {
       return;
     }
 
+    const normalizedSavedModels = buildDraftValidSavedModels(settingsDraft.savedModels, settingsDraft.model);
+    const activeModel = resolveDraftActiveModel(settingsDraft.model, normalizedSavedModels);
     updateConfig(settingsDraft.id, {
-      name: settingsDraft.name.trim() || '未命名 AI',
+      name: settingsDraft.name.trim() || 'Untitled AI',
       provider: settingsDraft.provider,
       apiKey: settingsDraft.apiKey,
       baseURL: settingsDraft.baseURL,
-      model: settingsDraft.model,
+      model: activeModel,
+      savedModels: normalizedSavedModels,
       contextWindowTokens: settingsDraft.contextWindowTokens,
       customHeaders: settingsDraft.customHeaders,
     });
-    syncModelCatalog(settingsDraft.provider, settingsDraft.baseURL, settingsModelOptions);
+    syncModelCatalog(
+      settingsDraft.provider,
+      settingsDraft.baseURL,
+      mergeModelCandidates(settingsModelOptions, normalizedSavedModels, [activeModel]),
+    );
     setTestState('success');
-    setTestMessage(`已保存 ${settingsDraft.name.trim() || '当前 AI 配置'}。`);
-  }, [settingsDraft, settingsModelOptions, syncModelCatalog, updateConfig]);
+    setTestMessage(`Saved ${settingsDraft.name.trim() || 'current AI config'}.`);
+  }, [
+    buildDraftValidSavedModels,
+    mergeModelCandidates,
+    resolveDraftActiveModel,
+    settingsDraft,
+    settingsModelOptions,
+    syncModelCatalog,
+    updateConfig,
+  ]);
 
   const handleToggleEnabled = useCallback(() => {
     if (!settingsDraft.id) {
@@ -276,17 +368,20 @@ export const useAIChatSettingsState = ({
 
     if (!settingsDraft.enabled && !isSettingsDraftComplete) {
       setTestState('error');
-      setTestMessage('请先补全 API Key 和模型，再启用该 AI。');
+      setTestMessage('Complete API key and model before enabling this AI config.');
       return;
     }
 
     if (!settingsDraft.enabled) {
+      const normalizedSavedModels = buildDraftValidSavedModels(settingsDraft.savedModels, settingsDraft.model);
+      const activeModel = resolveDraftActiveModel(settingsDraft.model, normalizedSavedModels);
       updateConfig(settingsDraft.id, {
-        name: settingsDraft.name.trim() || '未命名 AI',
+        name: settingsDraft.name.trim() || 'Untitled AI',
         provider: settingsDraft.provider,
         apiKey: settingsDraft.apiKey,
         baseURL: settingsDraft.baseURL,
-        model: settingsDraft.model,
+        model: activeModel,
+        savedModels: normalizedSavedModels,
         contextWindowTokens: settingsDraft.contextWindowTokens,
         customHeaders: settingsDraft.customHeaders,
       });
@@ -295,37 +390,52 @@ export const useAIChatSettingsState = ({
     const changed = setConfigEnabled(settingsDraft.id, !settingsDraft.enabled);
     if (!changed) {
       setTestState('error');
-      setTestMessage('当前配置还不完整，不能启用。');
+      setTestMessage('This config is still incomplete and cannot be enabled.');
       return;
     }
 
     setTestState('success');
-    setTestMessage(!settingsDraft.enabled ? '已启用当前 AI。' : '已关闭当前 AI。');
-  }, [isSettingsDraftComplete, setConfigEnabled, settingsDraft, updateConfig]);
+    setTestMessage(!settingsDraft.enabled ? 'Enabled current AI config.' : 'Disabled current AI config.');
+  }, [
+    buildDraftValidSavedModels,
+    isSettingsDraftComplete,
+    resolveDraftActiveModel,
+    setConfigEnabled,
+    settingsDraft,
+    updateConfig,
+  ]);
 
   const handleCreateConfig = useCallback(() => {
     const nextId = addConfig({
-      name: `AI 配置 ${aiConfigs.length + 1}`,
+      name: `AI 閰嶇疆 ${aiConfigs.length + 1}`,
       provider: settingsDraft.provider,
       baseURL: settingsDraft.baseURL || getSuggestedBaseURL(settingsDraft.provider, selectedSettingsPreset),
       model: settingsDraft.model,
+      savedModels: buildDraftValidSavedModels(settingsDraft.savedModels, settingsDraft.model),
       contextWindowTokens: settingsDraft.contextWindowTokens,
     });
     setSelectedSettingsConfigId(nextId);
     setTestState('idle');
     setTestMessage('');
-  }, [addConfig, aiConfigs.length, getSuggestedBaseURL, selectedSettingsPreset, settingsDraft]);
+  }, [
+    addConfig,
+    aiConfigs.length,
+    buildDraftValidSavedModels,
+    getSuggestedBaseURL,
+    selectedSettingsPreset,
+    settingsDraft,
+  ]);
 
   const handleDeleteConfig = useCallback(() => {
     if (!settingsDraft.id || aiConfigs.length <= 1) {
       setTestState('error');
-      setTestMessage(aiConfigs.length <= 1 ? '至少保留一个 AI 配置。' : '');
+      setTestMessage(aiConfigs.length <= 1 ? 'Keep at least one AI config.' : '');
       return;
     }
 
     deleteConfig(settingsDraft.id);
     setTestState('success');
-    setTestMessage('已删除当前 AI 配置。');
+    setTestMessage('Deleted current AI config.');
   }, [aiConfigs.length, deleteConfig, settingsDraft.id]);
 
   const handleSelectConfig = useCallback(() => {
@@ -335,7 +445,7 @@ export const useAIChatSettingsState = ({
 
     selectConfig(settingsDraft.id);
     setTestState('success');
-    setTestMessage(`已切换到 "${settingsDraft.name || '当前 AI 配置'}"。`);
+    setTestMessage(`Switched to "${settingsDraft.name || 'current AI config'}".`);
   }, [selectConfig, settingsDraft.id, settingsDraft.name]);
 
   const handleExportConfigs = useCallback(async () => {
@@ -348,13 +458,13 @@ export const useAIChatSettingsState = ({
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(json);
       } else {
-        throw new Error('剪贴板不可用');
+        throw new Error('Clipboard not available');
       }
       setTestState('success');
-      setTestMessage('已复制 JSON 到剪贴板。');
+      setTestMessage('Copied AI config JSON to clipboard.');
     } catch {
       setTestState('error');
-      setTestMessage('导出失败：无法访问剪贴板。');
+      setTestMessage('Export failed: clipboard unavailable.');
     }
   }, [aiConfigs]);
 
@@ -364,7 +474,7 @@ export const useAIChatSettingsState = ({
       const importEntries = Array.isArray(parsed) ? parsed : parsed.configs;
       if (!Array.isArray(importEntries) || importEntries.length === 0) {
         setTestState('error');
-        setTestMessage('JSON 格式无效：缺少 configs 数组。');
+        setTestMessage('JSON is missing a configs array.');
         return;
       }
 
@@ -372,27 +482,28 @@ export const useAIChatSettingsState = ({
       for (const entry of importEntries) {
         if (entry.provider && entry.apiKey) {
           addConfig({
-            name: entry.name || `导入 ${entry.provider}`,
+            name: entry.name || `Imported ${entry.provider}`,
             provider: entry.provider,
             apiKey: entry.apiKey,
             baseURL: entry.baseURL,
             model: entry.model,
+            savedModels: Array.isArray(entry.savedModels) ? entry.savedModels : undefined,
             contextWindowTokens: entry.contextWindowTokens,
             customHeaders: entry.customHeaders || '',
             enabled: false,
           });
-          importedCount++;
+          importedCount += 1;
         }
       }
 
       setShowJsonImport(false);
       setJsonImportText('');
       setTestState('success');
-      setTestMessage(`成功导入 ${importedCount} 个 AI 配置。`);
+      setTestMessage(`Imported ${importedCount} AI configs.`);
     } catch (error) {
       console.warn('AI config import failed:', error);
       setTestState('error');
-      setTestMessage('JSON 格式无效，请检查后重试。');
+      setTestMessage('JSON format is invalid.');
     }
   }, [addConfig, jsonImportText]);
 
@@ -424,6 +535,7 @@ export const useAIChatSettingsState = ({
     testMessage,
     setTestMessage,
     isLoadingModels,
+    modelCatalog,
     selectedSettingsConfigId,
     setSelectedSettingsConfigId,
     settingsDraft,
@@ -434,6 +546,10 @@ export const useAIChatSettingsState = ({
     setShowJsonImport,
     handleTestConnection,
     handleLoadModels,
+    handleAddSavedModel,
+    handleUpdateSavedModel,
+    handleRemoveSavedModel,
+    handleSelectActiveModel,
     handleApplySettings,
     handleToggleEnabled,
     handleCreateConfig,

@@ -25,4 +25,7 @@ test('AIChat delegates settings state and provider management into a dedicated h
   assert.match(hookSource, /const handleLoadModels = useCallback/);
   assert.match(hookSource, /const handleApplySettings = useCallback/);
   assert.match(hookSource, /const handleImportConfigs = useCallback/);
+  assert.match(hookSource, /const handleAddSavedModel = useCallback/);
+  assert.match(hookSource, /const handleRemoveSavedModel = useCallback/);
+  assert.match(hookSource, /const handleSelectActiveModel = useCallback/);
 });

@@ -134,6 +134,8 @@ import {
   buildChatTimelineBubbleCards,
   ChatTimelineBubbleCard,
 } from './timeline/chatTimelineBubbleCards.tsx';
+import { AIChatComposerModelSwitcher } from './AIChatComposerModelSwitcher';
+import { useAIChatComposerModelSwitcherState } from './useAIChatComposerModelSwitcherState';
 import { useAIChatSettingsState } from './useAIChatSettingsState';
 import { useAIChatRuntimeInteractionState } from './useAIChatRuntimeInteractionState';
 import { useAIChatSidecarSessionActions } from './useAIChatSidecarSessionActions';
@@ -156,6 +158,7 @@ type AISettingsDraft = {
   apiKey: string;
   baseURL: string;
   model: string;
+  savedModels: string[];
   contextWindowTokens: number;
   customHeaders: string;
   enabled: boolean;
@@ -913,6 +916,7 @@ const buildSettingsDraft = (config: AIConfigEntry | null): AISettingsDraft => ({
   apiKey: config?.apiKey || '',
   baseURL: config?.baseURL || PROVIDER_PRESETS[0]?.baseURL || '',
   model: config?.model || PROVIDER_PRESETS[0]?.models[0] || '',
+  savedModels: config?.savedModels || (config?.model ? [config.model] : (PROVIDER_PRESETS[0]?.models[0] ? [PROVIDER_PRESETS[0].models[0]] : [])),
   contextWindowTokens: config?.contextWindowTokens || 258000,
   customHeaders: config?.customHeaders || '',
   enabled: config?.enabled || false,
@@ -1843,6 +1847,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     testMessage,
     setTestMessage,
     isLoadingModels,
+    modelCatalog,
     setSelectedSettingsConfigId,
     settingsDraft,
     setSettingsDraft,
@@ -1852,6 +1857,10 @@ export const AIChat: React.FC<AIChatProps> = ({
     setShowJsonImport,
     handleTestConnection,
     handleLoadModels,
+    handleAddSavedModel,
+    handleUpdateSavedModel,
+    handleRemoveSavedModel,
+    handleSelectActiveModel,
     handleApplySettings,
     handleToggleEnabled,
     handleCreateConfig,
@@ -1879,6 +1888,35 @@ export const AIChat: React.FC<AIChatProps> = ({
     getSuggestedBaseURL,
     loadAIServiceModule,
   });
+
+  const {
+    enabledRuntimeConfigs,
+    activeRuntimeConfig,
+    runtimeModelOptions,
+    isRuntimeConfigLocked,
+    handleSelectRuntimeConfig,
+    handleSelectRuntimeModel,
+  } = useAIChatComposerModelSwitcherState({
+    aiConfigs,
+    modelCatalog,
+    selectedConfigId,
+    runtimeConfigIdOverride,
+    selectConfig,
+    updateConfig,
+    findPresetByConfig,
+    buildProviderKey,
+    mergeModelCandidates,
+  });
+
+  const composerModelSwitcherProps = {
+    activeRuntimeConfig,
+    enabledRuntimeConfigs,
+    runtimeModelOptions,
+    isRuntimeConfigLocked,
+    allowConfigSelection: !isRuntimeConfigLocked,
+    onSelectConfig: handleSelectRuntimeConfig,
+    onSelectModel: handleSelectRuntimeModel,
+  };
 
   const selectedSettingsTabMeta = useMemo(
     () => SETTINGS_TABS.find((tab) => tab.id === activeSettingsTab) || SETTINGS_TABS[0],
@@ -3256,6 +3294,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                       }}
                     />
                   }
+                  runtimeSwitcher={<AIChatComposerModelSwitcher {...composerModelSwitcherProps} />}
                   input={input}
                   setInput={setInput}
                   onInputChange={handleInputChange}
@@ -3350,6 +3389,7 @@ export const AIChat: React.FC<AIChatProps> = ({
                           setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
                         }}
                       />
+                      <AIChatComposerModelSwitcher {...composerModelSwitcherProps} />
                       <div className="chat-composer-meta">
                         <span>{selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}</span>
                         <span className={currentContextUsage.ratio >= 0.8 ? 'warning' : ''}>
@@ -3555,6 +3595,10 @@ export const AIChat: React.FC<AIChatProps> = ({
                   selectedProviderListMode={selectedProviderListMode}
                   customHeadersJsonValid={customHeadersJsonValid}
                   settingsModelOptions={settingsModelOptions}
+                  handleAddSavedModel={handleAddSavedModel}
+                  handleUpdateSavedModel={handleUpdateSavedModel}
+                  handleRemoveSavedModel={handleRemoveSavedModel}
+                  handleSelectActiveModel={handleSelectActiveModel}
                   handleApplySettings={handleApplySettings}
                   handleToggleEnabled={handleToggleEnabled}
                   handleTestConnection={handleTestConnection}
