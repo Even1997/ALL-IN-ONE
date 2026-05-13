@@ -38,6 +38,7 @@ Rules:
 For all future frontend work, treat the workbench UI standard in `design/workbench-unified-previews/` as the default design contract, especially:
 - `design/workbench-unified-previews/ui-standards.html`
 - `design/workbench-unified-previews/overview-home.html`
+- `design/workbench-unified-previews/state-standards.html`
 - `design/workbench-unified-previews/workbench-preview.css`
 
 This standard is not optional reference material. New pages, refactors, and component rewrites should follow it unless the user explicitly requests an exception.
@@ -56,9 +57,23 @@ Rules:
 Rules:
 - Use the workbench shell order as the default layout: `rail -> sidebar -> main stage -> companion pane`.
 - `rail` is for primary mode switching and should stay compact and icon-first.
-- `sidebar` is list-oriented and should behave more like Notes / Finder lists than stacked CRM cards.
-- `main stage` is the visual center and should hold the primary document, canvas, or work surface.
+- `sidebar` is list-oriented and should behave more like Notes / Finder lists and directory trees than stacked CRM cards.
+- `main stage` is the visual center and should hold the primary note surface, infinite canvas, or work surface.
 - `companion pane` is secondary support: AI, inspector, quick actions, or context. It must not compete with the main stage.
+
+### Workspace primitives
+
+Rules:
+- Treat `note surface`, `directory tree`, and `infinite canvas` as first-class workbench primitives.
+- `note surface` is the default reading/writing surface for AI workbench, docs, and long-form editing flows.
+- `directory tree` is the default hierarchical navigation pattern for files, sources, and nested project structures.
+- `infinite canvas` is the default main-stage pattern for graph, whiteboard, map, and spatial exploration flows.
+- Choose one dominant primitive for the page center. Do not mix note surface and infinite canvas as equal co-heroes in the same stage.
+- Directory trees should use indentation, disclosure, and flat row selection. Do not render folders and files as stacked rounded cards.
+- Infinite canvas should feel open and edge-anchored, not boxed into dashboard cards or overly framed panels.
+- `note surface` must consider at least: expanded, focused editing, collapsed summary, empty, syncing, and conflict review states.
+- `directory tree` must consider at least: collapsed, expanded, selected, drag-over, loading children, and filtered-empty states.
+- `infinite canvas` must consider at least: idle, panning, zoomed, node-selected, marquee-select, collapsed cluster, and empty states.
 
 ### Visual language
 
@@ -99,7 +114,7 @@ Rules:
 Rules:
 - Motion must explain state changes such as hover, selection, reveal, loading, or confirmation. It must not be decorative.
 - Keep interaction motion subtle and native-feeling.
-- Provide clear states for default, hover, active, selected, loading, confirm, warning, and disabled where applicable.
+- Provide clear states for default, hover, active, selected, focused, collapsed, expanded, loading, empty, error, confirm, warning, and disabled where applicable.
 - Respect `prefers-reduced-motion`; removing animation must not remove state clarity.
 - Avoid shimmer-heavy loading, floating animations, bouncy cards, and attention-seeking motion patterns.
 
@@ -108,6 +123,8 @@ Rules:
 Rules:
 - Before building new workbench UI, review the latest standard pages in `design/workbench-unified-previews/`.
 - Reuse shared tokens, card families, and layout patterns from the standard before inventing new ones.
+- Reuse the standard workspace primitives intentionally: note surface, directory tree, and infinite canvas.
+- Do not ship only the default state of a component. Cover collapsed / expanded / empty / loading / error behavior during implementation.
 - When implementing a new AI page or refactoring AI chat, preserve the semantic separation between thinking, tools, feedback, and final.
 - If a requested design conflicts with this standard, pause and call out the tradeoff explicitly before implementing.
 - If a page intentionally deviates from the standard, document the reason in the relevant code or PR notes.

@@ -2084,8 +2084,8 @@
     "hash": "546f01b8ba8871527e9ef9e9aeaa7138"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\AGENTS.md": {
-    "mtime": 1778685336.993859,
-    "hash": "7f0f2fd3c3ffce725370ab8263faa01e"
+    "mtime": 1778686644.5888085,
+    "hash": "9b4dbbae815913846a5261b0bdc9a50b"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\CLAUDE.md": {
     "mtime": 1777727679.4549274,
@@ -2164,20 +2164,24 @@
     "hash": "94ecf56efdf314d1919eb35934de64a2"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\design\\workbench-unified-previews\\index.html": {
-    "mtime": 1778683545.1663954,
-    "hash": "e4a9a419c925259e9dffd165b89e2c56"
+    "mtime": 1778686948.468474,
+    "hash": "6a1dd66aa34b7fd2f04fe42a9c41d1cc"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\design\\workbench-unified-previews\\knowledge-graph.html": {
     "mtime": 1778677114.8636897,
     "hash": "b91d816da5ceb7c5238b9bc14fbd9cab"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\design\\workbench-unified-previews\\overview-home.html": {
-    "mtime": 1778685069.3212738,
-    "hash": "c9b1dafd518141c3e60334ee6df899de"
+    "mtime": 1778686644.3615482,
+    "hash": "7cb3b0365fd618ba685b0372e8cb2da7"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\design\\workbench-unified-previews\\state-standards.html": {
+    "mtime": 1778686508.2580373,
+    "hash": "7eecff3db66b304193183ddfbe70c45d"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\design\\workbench-unified-previews\\ui-standards.html": {
-    "mtime": 1778684898.1229887,
-    "hash": "2809f913ff76621e9c5ed83a6cc19810"
+    "mtime": 1778686644.1383274,
+    "hash": "f43ddc31a0d512590c2e870246bdb110"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\ai-architecture-cc-haha-comparison.html": {
     "mtime": 1777957092.7063644,
@@ -2499,9 +2503,17 @@
     "mtime": 1778643484.9695675,
     "hash": "5b33dff243fcdf9517fc8ba9aa882522"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-13-platform-ui-unification-plan.zh-CN.md": {
+    "mtime": 1778687926.97637,
+    "hash": "5e9d7b179f016e7942087123c35d9489"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-13-streaming-answer-chronology-boundary-fix.md": {
     "mtime": 1778638176.8643146,
     "hash": "b29e9fbf1458866c4347f8687facec61"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-14-platform-ui-unification-execution-plan.zh-CN.md": {
+    "mtime": 1778688499.7907171,
+    "hash": "63b5c9e7e22caf335a7d5e135b75114d"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\specs\\2026-04-24-ai-chat-unified-entry-design.md": {
     "mtime": 1776990247.5471349,

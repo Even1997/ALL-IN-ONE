@@ -19,6 +19,7 @@
         </div>
         <div class="standards-hero-actions">
           <a class="btn btn-primary" href="./overview-home.html">Open Standard Boards</a>
+          <a class="btn" href="./state-standards.html">Open State Sheet</a>
           <a class="btn" href="./index.html">Open Standards Hub</a>
         </div>
       </section>
@@ -61,10 +62,10 @@
                 <span>primary mode switch</span>
               </div>
               <div class="standards-anatomy-sidebar">Sidebar
-                <span>thread list, source list, project list</span>
+                <span>thread list, directory tree, source list, project list</span>
               </div>
               <div class="standards-anatomy-stage">Main Stage
-                <span>document, canvas, or current working surface</span>
+                <span>note surface, infinite canvas, or current working surface</span>
               </div>
               <div class="standards-anatomy-companion">Companion
                 <span>AI, inspector, quick actions, context</span>
@@ -79,11 +80,11 @@
             </article>
             <article class="standards-mini-card">
               <strong>Sidebar</strong>
-              <p>List-oriented. Behaves like Notes or Finder source lists, not like stacked cards.</p>
+              <p>List-oriented. Behaves like Notes or Finder source lists and directory trees, not like stacked cards.</p>
             </article>
             <article class="standards-mini-card">
               <strong>Main Stage</strong>
-              <p>The visual center. Only one thing should clearly dominate here.</p>
+              <p>The visual center. Usually a note surface or an infinite canvas, with only one dominant work mode at a time.</p>
             </article>
             <article class="standards-mini-card">
               <strong>Companion</strong>
@@ -737,6 +738,196 @@
 
       <section class="standards-section">
         <div class="standards-section-head">
+          <span class="eyebrow">Workspace Primitives</span>
+          <h2>Infinite Canvas, Note, And Tree Standard</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-3">
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Note Surface</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-note-surface-preview">
+                <span class="eyebrow">Note</span>
+                <strong>Design system alignment for desktop AI</strong>
+                <div class="standards-note-meta">
+                  <span>Updated today</span>
+                  <span>Visual standard</span>
+                </div>
+                <div class="ai-note-lines">
+                  <span style="width: 90%"></span>
+                  <span style="width: 94%"></span>
+                  <span style="width: 78%"></span>
+                  <span style="width: 86%"></span>
+                </div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Default reading surface for AI workbench, docs, and notes-first flows</li>
+              <li>Use a clean column, generous line height, and minimal chrome around the content</li>
+              <li>Inline callouts and margin-style AI hints are allowed, but the note stays primary</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Directory Tree</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-tree-preview">
+                <div class="standards-tree-row active"><span class="tree-chevron">v</span><strong>workspace</strong></div>
+                <div class="standards-tree-row depth-1"><span class="tree-chevron">v</span><span>notes</span></div>
+                <div class="standards-tree-row depth-2"><span class="tree-dot"></span><span>ui-standards.md</span></div>
+                <div class="standards-tree-row depth-2"><span class="tree-dot"></span><span>graph-spec.md</span></div>
+                <div class="standards-tree-row depth-1"><span class="tree-chevron">&gt;</span><span>assets</span></div>
+                <div class="standards-tree-row depth-1"><span class="tree-chevron">&gt;</span><span>runtime</span></div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Trees should feel Finder-like: flat rows, indentation, disclosure, and subtle selection</li>
+              <li>Do not turn folders and files into separate rounded cards</li>
+              <li>Use icons and indentation to express hierarchy before adding badges or color</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Infinite Canvas</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-canvas-preview">
+                <div class="standards-canvas-grid"></div>
+                <div class="standards-canvas-node node-note">Note</div>
+                <div class="standards-canvas-node node-idea">Idea</div>
+                <div class="standards-canvas-node node-link">Link</div>
+                <div class="standards-canvas-line canvas-line-a"></div>
+                <div class="standards-canvas-line canvas-line-b"></div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Canvas should feel open and border-light, with controls anchored to edges instead of floating everywhere</li>
+              <li>A faint grid is optional, but the canvas should not feel boxed into a card stack</li>
+              <li>Use this for graph, map, and exploratory spatial work where the stage itself is the product</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">State Coverage</span>
+          <h2>Expanded, Collapsed, Empty, And System States</h2>
+        </div>
+        <div class="standards-card-grid standards-card-grid-2">
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Shared Minimum States</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-state-badge-grid">
+                <span class="standards-state-badge">default</span>
+                <span class="standards-state-badge">hover</span>
+                <span class="standards-state-badge">active</span>
+                <span class="standards-state-badge">selected</span>
+                <span class="standards-state-badge">focused</span>
+                <span class="standards-state-badge">disabled</span>
+                <span class="standards-state-badge">loading</span>
+                <span class="standards-state-badge">empty</span>
+                <span class="standards-state-badge">error</span>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Every important interactive surface should define these shared baseline states</li>
+              <li>Selection and focus must be visually distinct from hover</li>
+              <li>Empty and error states should be first-class UI, not fallback text afterthoughts</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Progressive Density Rule</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-density-demo">
+                <div class="standards-density-card">Expanded</div>
+                <div class="standards-density-card is-collapsed">Collapsed</div>
+                <div class="standards-density-card is-empty">Empty</div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Expanded state reveals context and tools; collapsed state keeps only identity and essentials</li>
+              <li>Collapsed should reduce height and detail, not become a new visual component family</li>
+              <li>Empty state should stay calm and actionable instead of looking broken or abandoned</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Note Surface States</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-note-state-stack">
+                <div class="standards-note-state-row">Expanded note</div>
+                <div class="standards-note-state-row is-focused">Focused editing</div>
+                <div class="standards-note-state-row is-collapsed">Collapsed summary row</div>
+                <div class="standards-note-state-row is-empty">Empty note placeholder</div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Required: expanded, focused editing, collapsed summary, empty, syncing, and conflict review</li>
+              <li>Collapsed note keeps title, short summary, and critical metadata only</li>
+              <li>Syncing and conflict states should read like document workflow status, not alert banners</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Directory Tree States</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-tree-preview">
+                <div class="standards-tree-row active"><span class="tree-chevron">v</span><strong>Expanded selected</strong></div>
+                <div class="standards-tree-row depth-1"><span class="tree-chevron">&gt;</span><span>Collapsed folder</span></div>
+                <div class="standards-tree-row depth-1 is-drag-over"><span class="tree-dot"></span><span>Drag target</span></div>
+                <div class="standards-tree-row depth-1 is-muted"><span class="tree-dot"></span><span>Filtered out / empty</span></div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Required: collapsed, expanded, selected, drag-over, loading children, and filtered-empty</li>
+              <li>Folder disclosure is structural state, so it must be obvious even without color</li>
+              <li>Drag targets use a light inset emphasis, not a loud dropzone frame</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>Infinite Canvas States</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-canvas-preview standards-canvas-preview-stateful">
+                <div class="standards-canvas-grid"></div>
+                <div class="standards-canvas-marquee"></div>
+                <div class="standards-canvas-node node-note is-selected">Selected</div>
+                <div class="standards-canvas-node node-idea is-dimmed">Cluster</div>
+                <div class="standards-canvas-node node-link">Free node</div>
+                <div class="standards-canvas-line canvas-line-a"></div>
+                <div class="standards-canvas-line canvas-line-b"></div>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>Required: idle, panning, zoomed, node-selected, marquee-select, collapsed cluster, and empty canvas</li>
+              <li>Selected nodes should sharpen, while dimmed clusters and background nodes soften without disappearing</li>
+              <li>When the canvas is empty, keep controls anchored and show a calm starter state in the stage</li>
+            </ul>
+          </article>
+
+          <article class="standards-card standards-pattern-card">
+            <div class="standards-card-head"><strong>AI And Companion States</strong></div>
+            <div class="standards-preview-block">
+              <div class="standards-state-badge-grid">
+                <span class="standards-state-badge">thinking</span>
+                <span class="standards-state-badge">tool running</span>
+                <span class="standards-state-badge">collapsed details</span>
+                <span class="standards-state-badge">confirm</span>
+                <span class="standards-state-badge">warning</span>
+                <span class="standards-state-badge">resolved</span>
+              </div>
+            </div>
+            <ul class="standards-list">
+              <li>AI cards also need collapsed and expanded detail states for long tool output or reasoning metadata</li>
+              <li>Collapsed AI rows should preserve label, status, and one-line summary only</li>
+              <li>Resolved states should visually relax instead of staying highlighted forever</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
           <span class="eyebrow">Page Recipes</span>
           <h2>When Each Pattern Applies</h2>
         </div>
@@ -744,20 +935,20 @@
           <article class="standards-card standards-recipe-card">
             <span class="pill pill-blue">AI Workbench</span>
             <strong>Document-first recipe</strong>
-            <p>The main stage is a note or thread. Sidebar is a thread list. Companion is AI help.</p>
+            <p>The main stage is a note surface or thread. Sidebar is a thread list or directory tree. Companion is AI help.</p>
             <div class="standards-recipe-tags">
-              <span>Center: document</span>
-              <span>Sidebar: notes list</span>
+              <span>Center: note surface</span>
+              <span>Sidebar: notes list / tree</span>
               <span>Right: AI</span>
             </div>
           </article>
           <article class="standards-card standards-recipe-card">
             <span class="pill pill-cyan">Knowledge Graph</span>
             <strong>Canvas-first recipe</strong>
-            <p>The main stage is a graph canvas. Sidebar is sources. Companion is inspector and insights.</p>
+            <p>The main stage is an infinite canvas. Sidebar is a source tree or filter list. Companion is inspector and insights.</p>
             <div class="standards-recipe-tags">
-              <span>Center: canvas</span>
-              <span>Sidebar: sources</span>
+              <span>Center: infinite canvas</span>
+              <span>Sidebar: source tree</span>
               <span>Right: inspector</span>
             </div>
           </article>
@@ -821,6 +1012,19 @@
     - sidebar
     - main_stage
     - companion_pane
+  workspace_primitives:
+    note_surface:
+      role: "primary reading and writing surface"
+      style: "clean column, minimal chrome, notes-first"
+      required_states: ["expanded", "focused_editing", "collapsed_summary", "empty", "syncing", "conflict_review"]
+    directory_tree:
+      role: "hierarchical navigation in sidebar"
+      style: "flat rows, indentation, disclosure"
+      required_states: ["collapsed", "expanded", "selected", "drag_over", "loading_children", "filtered_empty"]
+    infinite_canvas:
+      role: "spatial exploration in main stage"
+      style: "open stage, faint grid optional, edge-anchored controls"
+      required_states: ["idle", "panning", "zoomed", "node_selected", "marquee_select", "collapsed_cluster", "empty"]
   ai_lanes:
     order: ["user_input", "thinking", "tool_execution", "final_answer", "confirm_or_next_step"]
     rules:
@@ -828,6 +1032,18 @@
       - "tool execution is sourced from runtime events"
       - "final answer is the durable reading surface"
       - "confirm cards appear only when a decision is needed"
+  shared_states:
+    - "default"
+    - "hover"
+    - "active"
+    - "selected"
+    - "focused"
+    - "collapsed"
+    - "expanded"
+    - "disabled"
+    - "loading"
+    - "empty"
+    - "error"
   core_rules:
     - "main_stage has one dominant surface"
     - "ai is companion, not full-page chat feed"
@@ -863,22 +1079,25 @@
             </div>
             <pre class="standards-code-block"><code>{
   "ai_workbench": {
-    "center": "document",
-    "sidebar": "thread_list",
+    "center": "note_surface",
+    "sidebar": "thread_list_or_directory_tree",
     "right_pane": "ai_companion",
     "ai_cards": ["user_input", "thinking", "tool_execution", "final_answer", "confirm_card"],
+    "required_states": ["expanded", "collapsed", "focused", "loading", "empty", "warning"],
     "avoid": ["chat_bubbles", "metric_dashboard"]
   },
   "knowledge_graph": {
-    "center": "graph_canvas",
-    "sidebar": "source_list",
+    "center": "infinite_canvas",
+    "sidebar": "source_tree_or_filter_list",
     "right_pane": "inspector",
+    "required_states": ["idle", "node_selected", "marquee_select", "collapsed_cluster", "empty"],
     "avoid": ["hero_cards", "marketing_layout"]
   },
   "overview": {
     "center": "current_focus_and_entry_points",
     "sidebar": "recent_work",
     "right_pane": "quick_actions",
+    "required_states": ["default", "selected", "collapsed", "empty"],
     "avoid": ["big_kpi_grid", "landing_page_sections"]
   }
 }</code></pre>
@@ -891,9 +1110,11 @@
           </div>
           <pre class="standards-code-block"><code>Design a GoodNight desktop workbench page using a notes-first native macOS tone.
 Keep the shell as: rail + sidebar + main stage + companion pane.
-Make the center the dominant work surface.
+Make the center the dominant work surface, usually either a note surface or an infinite canvas.
+Use directory-tree behavior for hierarchical file or source navigation.
 Support both light and dark mode using the same hierarchy and component structure.
 Render AI output as separate cards for user input, thinking, tool execution, final answer, and confirm-next-step when needed.
+Include collapsed, expanded, empty, loading, selected, and error states for each major primitive.
 Use subtle native-feeling motion for hover, selection, progress, and reveal.
 Use restrained color, compact desktop density, and icon-led controls.
 Avoid chat bubbles, KPI dashboards, pure black dark mode, and marketing-page composition.</code></pre>
@@ -913,6 +1134,8 @@ Avoid chat bubbles, KPI dashboards, pure black dark mode, and marketing-page com
             <ul class="standards-list">
               <li>Use the same shell order: rail, sidebar, main stage, companion pane</li>
               <li>Main stage has one clear dominant surface and avoids multi-hero competition</li>
+              <li>Choose a primary workspace primitive intentionally: note surface, directory tree, or infinite canvas</li>
+              <li>Each primary primitive must define expanded, collapsed, empty, loading, selected, and error behavior where applicable</li>
               <li>Icons replace repeated labels where the meaning is already obvious</li>
               <li>Both light and dark themes share the same spacing, hierarchy, and card roles</li>
               <li>No decorative gradients, floating bubbles, or dashboard KPI framing</li>
@@ -926,7 +1149,7 @@ Avoid chat bubbles, KPI dashboards, pure black dark mode, and marketing-page com
             <ul class="standards-list">
               <li>AI states are rendered as distinct cards, not a single merged chat blob</li>
               <li>Thinking, tool execution, feedback, and final answer stay semantically separated</li>
-              <li>Every interactive card has default, hover, active, selected, loading, and disabled rules</li>
+              <li>Every interactive card has default, hover, active, selected, collapsed, loading, and disabled rules</li>
               <li>All motion has a meaning and is disabled or reduced cleanly under reduced-motion</li>
               <li>Confirm cards appear only for real decisions, not for every assistant suggestion</li>
             </ul>

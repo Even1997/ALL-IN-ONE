@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodNight State Standards</title>
+    <link rel="stylesheet" href="./workbench-preview.css" />
+  </head>
+  <body>
+    <main class="standards-shell standards-shell-wide state-standards-shell">
+      <section class="standards-hero standards-hero-tight">
+        <div class="standards-hero-copy">
+          <span class="eyebrow">State Standard</span>
+          <h1>Workbench State Sheet</h1>
+          <p>
+            A dedicated state design page for future implementation. Use this sheet when building
+            default, hover, selected, collapsed, empty, loading, and error behavior across the
+            note surface, directory tree, canvas, and AI companion.
+          </p>
+        </div>
+        <div class="standards-hero-actions">
+          <a class="btn btn-primary" href="./ui-standards.html">Open Foundation Standard</a>
+          <a class="btn" href="./overview-home.html">Open Boards</a>
+          <a class="btn" href="./index.html">Open Standards Hub</a>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">State Contract</span>
+          <h2>One Shared Language</h2>
+        </div>
+        <div class="state-contract-grid">
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Required States</strong>
+            </div>
+            <div class="standards-state-badge-grid">
+              <span class="standards-state-badge">default</span>
+              <span class="standards-state-badge">hover</span>
+              <span class="standards-state-badge">selected</span>
+              <span class="standards-state-badge">collapsed</span>
+              <span class="standards-state-badge">empty</span>
+              <span class="standards-state-badge">loading</span>
+              <span class="standards-state-badge">error</span>
+            </div>
+            <ul class="standards-list">
+              <li>These states must be designed intentionally, not patched in later</li>
+              <li>Every major workbench surface should use the same visual logic for status and emphasis</li>
+              <li>Selection is stronger than hover, but should still feel quiet and desktop-native</li>
+            </ul>
+          </article>
+
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Behavior Rules</strong>
+            </div>
+            <div class="state-behavior-list">
+              <div><strong>default</strong><span>Calm resting state with clear hierarchy and no unnecessary emphasis.</span></div>
+              <div><strong>hover</strong><span>Subtle tint, shadow, or lift only. Never use loud glow or bubble chrome.</span></div>
+              <div><strong>selected</strong><span>Persistent focus state for the current file, node, note, or AI result.</span></div>
+              <div><strong>collapsed</strong><span>Keep identity, summary, and status. Remove depth, not meaning.</span></div>
+              <div><strong>empty</strong><span>Quiet starter state with one next action and clear context.</span></div>
+              <div><strong>loading</strong><span>Use pulse, skeleton, or progress. Avoid decorative shimmer walls.</span></div>
+              <div><strong>error</strong><span>Explain the issue inline and provide the recovery path inside the same surface.</span></div>
+            </div>
+          </article>
+
+          <article class="standards-card">
+            <div class="standards-card-head">
+              <strong>Motion Rules</strong>
+            </div>
+            <div class="motion-demo-sheet state-motion-sheet">
+              <div class="motion-demo-card">Default rest</div>
+              <div class="motion-demo-card is-hover">Hover 120-160ms</div>
+              <div class="motion-demo-card is-selected">Selected persistent</div>
+              <div class="motion-demo-card is-disabled">Error and empty stay static</div>
+            </div>
+            <ul class="standards-list">
+              <li>Hover and select motion should feel Finder / Notes-like, not playful</li>
+              <li>Loading uses pulse or progress only, while error and empty rely on clarity rather than motion</li>
+              <li>Dark mode must preserve the same interaction hierarchy, not invent a different one</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Light Theme</span>
+          <h2>Full-Page State Visuals</h2>
+        </div>
+
+        <div class="state-sheet-stack">
+          <article class="state-sheet-board">
+            <div class="state-sheet-board-head">
+              <div>
+                <span class="pill pill-blue">default</span>
+                <strong>Default State</strong>
+              </div>
+              <span>Base workbench rest state for note, tree, and AI surfaces.</span>
+            </div>
+            <div class="state-sheet-window state-default">
+              <header class="state-sheet-topbar">
+                <div class="traffic-lights"><span></span><span></span><span></span></div>
+                <div class="state-sheet-path">ALL-IN-ONE / State Standard / Default</div>
+                <div class="state-sheet-tools">
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="3.8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M10.1 10.1 13 13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/></svg></span>
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M4 4.2h8M4 8h8M4 11.8h5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.3"/></svg></span>
+                </div>
+              </header>
+              <div class="state-sheet-layout">
+                <aside class="state-sheet-rail">
+                  <span class="state-sheet-rail-item active">AI</span>
+                  <span class="state-sheet-rail-item">NT</span>
+                  <span class="state-sheet-rail-item">KG</span>
+                </aside>
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-sidebar-head">
+                    <strong>Directory tree</strong>
+                    <span>Default</span>
+                  </div>
+                  <div class="state-sheet-search">Search note or file</div>
+                  <div class="state-sheet-tree">
+                    <div class="state-sheet-tree-row is-selected"><span>v</span><strong>workbench-unified-previews</strong></div>
+                    <div class="state-sheet-tree-row depth-1"><span>.</span><span>ui-standards.html</span></div>
+                    <div class="state-sheet-tree-row depth-1"><span>.</span><span>overview-home.html</span></div>
+                    <div class="state-sheet-tree-row depth-1"><span>.</span><span>state-standards.html</span></div>
+                    <div class="state-sheet-tree-row"><span>&gt;</span><span>assets</span></div>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-note">
+                    <span class="eyebrow">Note Surface</span>
+                    <h3>Default note state keeps the document clean and readable.</h3>
+                    <p>
+                      The stage should feel like a calm writing surface first. Tree selection,
+                      note content, and AI support all remain visible, but none of them should
+                      overtake the work.
+                    </p>
+                    <div class="state-sheet-inline-callout">Status is present, but quiet.</div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-panel">
+                    <strong>AI companion</strong>
+                    <span>Default support state</span>
+                  </div>
+                  <div class="state-sheet-ai-card">
+                    <strong>Final answer</strong>
+                    <p>Use the right pane for support, summary, and next useful actions.</p>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-sheet-board">
+            <div class="state-sheet-board-head">
+              <div>
+                <span class="pill pill-cyan">hover</span>
+                <strong>Hover State</strong>
+              </div>
+              <span>Hover should be discoverable, restrained, and never louder than selection.</span>
+            </div>
+            <div class="state-sheet-window state-hover">
+              <header class="state-sheet-topbar">
+                <div class="traffic-lights"><span></span><span></span><span></span></div>
+                <div class="state-sheet-path">ALL-IN-ONE / State Standard / Hover</div>
+                <div class="state-sheet-tools">
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="3.8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M10.1 10.1 13 13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/></svg></span>
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.3"/></svg></span>
+                </div>
+              </header>
+              <div class="state-sheet-layout">
+                <aside class="state-sheet-rail">
+                  <span class="state-sheet-rail-item active">AI</span>
+                  <span class="state-sheet-rail-item">NT</span>
+                  <span class="state-sheet-rail-item">KG</span>
+                </aside>
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-sidebar-head">
+                    <strong>Directory tree</strong>
+                    <span>Hover</span>
+                  </div>
+                  <div class="state-sheet-search">Search note or file</div>
+                  <div class="state-sheet-tree">
+                    <div class="state-sheet-tree-row"><span>v</span><strong>workspace</strong></div>
+                    <div class="state-sheet-tree-row depth-1 is-hovered"><span>.</span><span>state-standards.html</span></div>
+                    <div class="state-sheet-tree-row depth-1"><span>.</span><span>ui-standards.html</span></div>
+                    <div class="state-sheet-tree-row depth-1"><span>.</span><span>workbench-preview.css</span></div>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-note is-hovered">
+                    <span class="eyebrow">Hovered Note Block</span>
+                    <h3>Hover adds a light tint, slight lift, and clearer boundary.</h3>
+                    <p>
+                      It should feel like the pointer has discovered a target inside a desktop app,
+                      not like a new card has appeared. Buttons and rows can sharpen gently, but
+                      the overall page should stay calm.
+                    </p>
+                    <div class="state-sheet-inline-callout">Use hover to suggest action, not declare ownership.</div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-panel is-hovered">
+                    <strong>Hover target</strong>
+                    <span>Quick action row under pointer</span>
+                  </div>
+                  <div class="state-sheet-ai-card is-hovered">
+                    <strong>Tool action</strong>
+                    <p>Hovered AI actions can lift slightly, but should keep the same footprint.</p>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-sheet-board">
+            <div class="state-sheet-board-head">
+              <div>
+                <span class="pill pill-indigo">selected</span>
+                <strong>Selected State</strong>
+              </div>
+              <span>Selection is persistent, stronger than hover, and used for the current object of work.</span>
+            </div>
+            <div class="state-sheet-window state-selected">
+              <header class="state-sheet-topbar">
+                <div class="traffic-lights"><span></span><span></span><span></span></div>
+                <div class="state-sheet-path">ALL-IN-ONE / State Standard / Selected</div>
+                <div class="state-sheet-tools">
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><circle cx="4" cy="4" r="1.3" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="11.7" cy="5.2" r="1.3" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="7" cy="11.5" r="1.3" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.15 4.35 10.4 4.95M10.8 6.3 7.8 10.45M5.15 5.15l1 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/></svg></span>
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M4 2.5h6l2 2v7.5A1.5 1.5 0 0 1 10.5 13.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/><path d="M10 2.7v2h2" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/></svg></span>
+                </div>
+              </header>
+              <div class="state-sheet-layout">
+                <aside class="state-sheet-rail">
+                  <span class="state-sheet-rail-item">AI</span>
+                  <span class="state-sheet-rail-item">NT</span>
+                  <span class="state-sheet-rail-item active">KG</span>
+                </aside>
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-sidebar-head">
+                    <strong>Directory tree</strong>
+                    <span>Selected</span>
+                  </div>
+                  <div class="state-sheet-search">Filter current graph notes</div>
+                  <div class="state-sheet-tree">
+                    <div class="state-sheet-tree-row is-selected"><span>v</span><strong>knowledge-graph</strong></div>
+                    <div class="state-sheet-tree-row depth-1"><span>.</span><span>graph-model.md</span></div>
+                    <div class="state-sheet-tree-row depth-1 is-selected"><span>.</span><span>selected-node-standard.md</span></div>
+                    <div class="state-sheet-tree-row depth-1"><span>.</span><span>inspector-contract.md</span></div>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-canvas">
+                    <div class="state-sheet-canvas-grid"></div>
+                    <div class="state-sheet-canvas-node node-a">Tree</div>
+                    <div class="state-sheet-canvas-node node-b is-selected">Selected</div>
+                    <div class="state-sheet-canvas-node node-c">AI</div>
+                    <div class="state-sheet-canvas-line line-a"></div>
+                    <div class="state-sheet-canvas-line line-b"></div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-panel is-selected">
+                    <strong>Inspector</strong>
+                    <span>Selected node: UI state contract</span>
+                  </div>
+                  <div class="state-sheet-ai-card is-selected">
+                    <strong>Selected result</strong>
+                    <p>Selected state stays visible even after pointer leaves the surface.</p>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-sheet-board">
+            <div class="state-sheet-board-head">
+              <div>
+                <span class="pill pill-orange">collapsed</span>
+                <strong>Collapsed State</strong>
+              </div>
+              <span>Collapsed keeps identity and summary while reducing visual and structural depth.</span>
+            </div>
+            <div class="state-sheet-window state-collapsed">
+              <header class="state-sheet-topbar">
+                <div class="traffic-lights"><span></span><span></span><span></span></div>
+                <div class="state-sheet-path">ALL-IN-ONE / State Standard / Collapsed</div>
+                <div class="state-sheet-tools">
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M3 8h10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.3"/></svg></span>
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><circle cx="4" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="12" cy="8" r="1" fill="currentColor"/></svg></span>
+                </div>
+              </header>
+              <div class="state-sheet-layout">
+                <aside class="state-sheet-rail">
+                  <span class="state-sheet-rail-item active">AI</span>
+                  <span class="state-sheet-rail-item">NT</span>
+                  <span class="state-sheet-rail-item">KG</span>
+                </aside>
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-sidebar-head">
+                    <strong>Directory tree</strong>
+                    <span>Collapsed</span>
+                  </div>
+                  <div class="state-sheet-tree">
+                    <div class="state-sheet-tree-row"><span>&gt;</span><strong>design</strong></div>
+                    <div class="state-sheet-tree-row"><span>&gt;</span><strong>runtime</strong></div>
+                    <div class="state-sheet-tree-row"><span>&gt;</span><strong>notes</strong></div>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-collapse-stack">
+                    <div class="state-sheet-collapse-row">
+                      <strong>Workbench state sheet</strong>
+                      <span>7 states mapped to one shared UI language</span>
+                    </div>
+                    <div class="state-sheet-collapse-row">
+                      <strong>AI lane standard</strong>
+                      <span>User input, thinking, tool, final, confirm</span>
+                    </div>
+                    <div class="state-sheet-collapse-row">
+                      <strong>Tree and canvas behavior</strong>
+                      <span>Keep summaries visible, hide depth until expanded</span>
+                    </div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-ai-card is-collapsed">
+                    <strong>Thinking summary</strong>
+                    <p>Collapsed details keep label, status, and one-line meaning only.</p>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-sheet-board">
+            <div class="state-sheet-board-head">
+              <div>
+                <span class="pill">empty</span>
+                <strong>Empty State</strong>
+              </div>
+              <span>Empty states should be quiet, contextual, and actionable rather than feeling broken.</span>
+            </div>
+            <div class="state-sheet-window state-empty">
+              <header class="state-sheet-topbar">
+                <div class="traffic-lights"><span></span><span></span><span></span></div>
+                <div class="state-sheet-path">ALL-IN-ONE / State Standard / Empty</div>
+                <div class="state-sheet-tools">
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M3 8h10M8 3v10" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.3"/></svg></span>
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M3.25 4.4h9.5l-3.5 3.6v3l-2 1V8l-4-3.6Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/></svg></span>
+                </div>
+              </header>
+              <div class="state-sheet-layout">
+                <aside class="state-sheet-rail">
+                  <span class="state-sheet-rail-item active">AI</span>
+                  <span class="state-sheet-rail-item">NT</span>
+                  <span class="state-sheet-rail-item">KG</span>
+                </aside>
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-sidebar-head">
+                    <strong>Directory tree</strong>
+                    <span>Empty</span>
+                  </div>
+                  <div class="state-sheet-empty-box">
+                    <strong>No results</strong>
+                    <span>Try clearing filters or create a new note.</span>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-empty-stage">
+                    <strong>No note selected</strong>
+                    <p>Choose a document, create a note, or open the graph canvas.</p>
+                    <div class="state-sheet-empty-actions">
+                      <span class="btn btn-primary">New Note</span>
+                      <span class="btn">Open Canvas</span>
+                    </div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-empty-box">
+                    <strong>AI is ready</strong>
+                    <span>Ask a question after selecting a note or source.</span>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-sheet-board">
+            <div class="state-sheet-board-head">
+              <div>
+                <span class="pill pill-cyan">loading</span>
+                <strong>Loading State</strong>
+              </div>
+              <span>Loading should preserve layout and use skeleton, pulse, or progress instead of visual noise.</span>
+            </div>
+            <div class="state-sheet-window state-loading">
+              <header class="state-sheet-topbar">
+                <div class="traffic-lights"><span></span><span></span><span></span></div>
+                <div class="state-sheet-path">ALL-IN-ONE / State Standard / Loading</div>
+                <div class="state-sheet-tools">
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="m8 2.35 1.1 2.58 2.55 1.07L9.1 7.07 8 9.65 6.9 7.07 4.35 6l2.55-1.07L8 2.35Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/></svg></span>
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M8 3.1v2.1M8 10.8v2.1M12.1 8H10M6 8H3.9M10.9 5.1 9.4 6.6M6.6 9.4 5.1 10.9M10.9 10.9 9.4 9.4M6.6 6.6 5.1 5.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span>
+                </div>
+              </header>
+              <div class="state-sheet-layout">
+                <aside class="state-sheet-rail">
+                  <span class="state-sheet-rail-item active">AI</span>
+                  <span class="state-sheet-rail-item">NT</span>
+                  <span class="state-sheet-rail-item">KG</span>
+                </aside>
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-sidebar-head">
+                    <strong>Directory tree</strong>
+                    <span>Loading</span>
+                  </div>
+                  <div class="state-sheet-skeleton state-sheet-skeleton-row"></div>
+                  <div class="state-sheet-skeleton state-sheet-skeleton-row short"></div>
+                  <div class="state-sheet-skeleton state-sheet-skeleton-row"></div>
+                  <div class="state-sheet-skeleton state-sheet-skeleton-row short"></div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-note">
+                    <span class="eyebrow">Loading document</span>
+                    <div class="state-sheet-skeleton state-sheet-skeleton-title"></div>
+                    <div class="state-sheet-skeleton state-sheet-skeleton-line"></div>
+                    <div class="state-sheet-skeleton state-sheet-skeleton-line"></div>
+                    <div class="state-sheet-skeleton state-sheet-skeleton-line short"></div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-ai-card is-loading">
+                    <strong>Tool execution</strong>
+                    <p>Updating files and reading standard pages.</p>
+                    <div class="ai-progress-track"><span class="ai-progress-bar"></span></div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-sheet-board">
+            <div class="state-sheet-board-head">
+              <div>
+                <span class="pill pill-red">error</span>
+                <strong>Error State</strong>
+              </div>
+              <span>Error is inline, specific, and paired with a next recovery action inside the affected surface.</span>
+            </div>
+            <div class="state-sheet-window state-error">
+              <header class="state-sheet-topbar">
+                <div class="traffic-lights"><span></span><span></span><span></span></div>
+                <div class="state-sheet-path">ALL-IN-ONE / State Standard / Error</div>
+                <div class="state-sheet-tools">
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M8 2.7 13.1 12H2.9L8 2.7Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.2"/><path d="M8 6.1v2.9M8 10.9h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2"/></svg></span>
+                  <span class="icon icon-board"><svg viewBox="0 0 16 16"><path d="M3.5 8.15 6.6 11.2 12.4 4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35"/></svg></span>
+                </div>
+              </header>
+              <div class="state-sheet-layout">
+                <aside class="state-sheet-rail">
+                  <span class="state-sheet-rail-item active">AI</span>
+                  <span class="state-sheet-rail-item">NT</span>
+                  <span class="state-sheet-rail-item">KG</span>
+                </aside>
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-sidebar-head">
+                    <strong>Directory tree</strong>
+                    <span>Error</span>
+                  </div>
+                  <div class="state-sheet-error-box">
+                    <strong>Could not load children</strong>
+                    <span>Retry from the same row. Do not replace the whole sidebar with a blank screen.</span>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-note has-error">
+                    <span class="eyebrow">Sync issue</span>
+                    <h3>Conflict detected while saving the note surface.</h3>
+                    <p>
+                      Error messaging should stay close to the document and explain what happened.
+                      The surface keeps context, and the recovery path lives in the same area.
+                    </p>
+                    <div class="state-sheet-error-box">
+                      <strong>Review conflict</strong>
+                      <span>Open compare, keep local copy, or retry sync.</span>
+                    </div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-ai-card has-error">
+                    <strong>Tool failed</strong>
+                    <p>One file could not be written. Show the reason and the retry path.</p>
+                    <div class="state-sheet-error-actions">
+                      <span class="btn">Retry</span>
+                      <span class="btn">Open file</span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">Dark Parity</span>
+          <h2>Same State Logic, Dark Theme</h2>
+        </div>
+        <div class="state-dark-grid">
+          <article class="state-dark-card">
+            <span class="pill pill-blue">default</span>
+            <div class="state-sheet-window theme-dark state-default">
+              <div class="state-sheet-layout state-sheet-layout-compact">
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-tree">
+                    <div class="state-sheet-tree-row is-selected"><span>v</span><strong>design</strong></div>
+                    <div class="state-sheet-tree-row depth-1"><span>.</span><span>state-standards.html</span></div>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-note">
+                    <span class="eyebrow">Dark default</span>
+                    <h3>Hierarchy stays identical.</h3>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-ai-card"><strong>AI</strong><p>Quiet by default.</p></div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-dark-card">
+            <span class="pill pill-indigo">selected</span>
+            <div class="state-sheet-window theme-dark state-selected">
+              <div class="state-sheet-layout state-sheet-layout-compact">
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-tree">
+                    <div class="state-sheet-tree-row is-selected"><span>v</span><strong>graph</strong></div>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-canvas">
+                    <div class="state-sheet-canvas-grid"></div>
+                    <div class="state-sheet-canvas-node node-b is-selected">Node</div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-panel is-selected"><strong>Inspector</strong><span>Selected object</span></div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-dark-card">
+            <span class="pill pill-cyan">loading</span>
+            <div class="state-sheet-window theme-dark state-loading">
+              <div class="state-sheet-layout state-sheet-layout-compact">
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-skeleton state-sheet-skeleton-row"></div>
+                  <div class="state-sheet-skeleton state-sheet-skeleton-row short"></div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-note">
+                    <div class="state-sheet-skeleton state-sheet-skeleton-title"></div>
+                    <div class="state-sheet-skeleton state-sheet-skeleton-line"></div>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-ai-card is-loading">
+                    <strong>Loading</strong>
+                    <div class="ai-progress-track"><span class="ai-progress-bar"></span></div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </article>
+
+          <article class="state-dark-card">
+            <span class="pill pill-red">error</span>
+            <div class="state-sheet-window theme-dark state-error">
+              <div class="state-sheet-layout state-sheet-layout-compact">
+                <aside class="state-sheet-sidebar">
+                  <div class="state-sheet-error-box">
+                    <strong>Tree failed</strong>
+                    <span>Retry inside the row.</span>
+                  </div>
+                </aside>
+                <section class="state-sheet-stage">
+                  <div class="state-sheet-note has-error">
+                    <h3>Error keeps context visible.</h3>
+                  </div>
+                </section>
+                <aside class="state-sheet-companion">
+                  <div class="state-sheet-ai-card has-error"><strong>Tool error</strong><p>Explain and recover.</p></div>
+                </aside>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="standards-section">
+        <div class="standards-section-head">
+          <span class="eyebrow">AI Contract</span>
+          <h2>Machine-Readable State Rules</h2>
+        </div>
+        <article class="standards-card">
+          <pre class="standards-code-block"><code>state_standard:
+  required_states:
+    - default
+    - hover
+    - selected
+    - collapsed
+    - empty
+    - loading
+    - error
+  surfaces:
+    directory_tree:
+      state_meaning:
+        default: "flat rows, neutral hierarchy"
+        hover: "subtle tint or row lift"
+        selected: "persistent current file/folder state"
+        collapsed: "disclosure closed, identity remains"
+        empty: "no results or no children with next action"
+        loading: "child rows use skeleton or pulse"
+        error: "row-local retry and reason"
+    note_surface:
+      state_meaning:
+        default: "clean reading and writing page"
+        hover: "light action affordance only"
+        selected: "active block or current note"
+        collapsed: "summary row with key metadata"
+        empty: "starter prompt with one primary next action"
+        loading: "preserved layout with text skeleton"
+        error: "inline conflict or sync status with recovery"
+    infinite_canvas:
+      state_meaning:
+        default: "open stage"
+        hover: "node hover or edge emphasis"
+        selected: "chosen node or cluster"
+        collapsed: "cluster summary remains visible"
+        empty: "starter state inside stage"
+        loading: "graph or node hydration in place"
+        error: "overlay or inspector-local recovery"
+    ai_companion:
+      state_meaning:
+        default: "quiet support panel"
+        hover: "action discovery only"
+        selected: "active result or inspector focus"
+        collapsed: "one-line summary of long thinking or tool output"
+        empty: "ready prompt before work starts"
+        loading: "progress or pulse, no prose wall"
+        error: "specific failure plus retry path"
+  interaction_rules:
+    hover: "120-160ms ease-out"
+    selected: "persistent, stronger than hover"
+    loading: "pulse, skeleton, or progress only"
+    error: "avoid animation unless needed for immediate clarity"
+  design_rules:
+    - "keep a native desktop tone"
+    - "avoid chat bubbles and loud dashboard framing"
+    - "use the same hierarchy in light and dark mode"
+    - "make empty and error states first-class design work"</code></pre>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
