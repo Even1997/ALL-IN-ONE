@@ -3382,6 +3382,13 @@ body.desktop-workbench-mode .chat-shell.is-collapsed {
   color: var(--gn-agent-text, #e9e9e6);
 }
 
+.gn-agent-workspace .chat-shell-embedded .chat-embedded-content-frame {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .gn-agent-workspace .chat-shell-embedded .chat-shell-header {
   padding: 8px 12px 6px;
   gap: 6px;
@@ -3616,17 +3623,39 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-composer-shell {
-  width: var(--gn-agent-content-width);
+  width: 100%;
+  max-width: var(--gn-agent-content-width);
+  min-width: 0;
   margin-inline: auto;
+  box-sizing: border-box;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-composer-embedded-input {
+  min-width: 0;
   min-height: 98px;
   max-width: 100%;
   border-color: var(--gn-agent-border, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
   background: var(--gn-agent-composer, #1a1c1f);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-selected-reference-chips-embedded {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-composer-runtime-strip {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-composer-embedded-toolbar,
+.gn-agent-workspace .chat-shell-embedded .chat-composer-embedded-toolbar-start {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-composer-runtime-strip span {
@@ -5313,15 +5342,57 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
   background: var(--gn-agent-bg, #171819);
 }
 
+.gn-agent-workspace .chat-shell-embedded .chat-message-list-frame {
+  width: var(--gn-agent-content-width);
+  max-width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .gn-agent-workspace .chat-shell-embedded .chat-message.assistant {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message.user {
+  width: 100%;
+  max-width: 100%;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-content-frame {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-inline: 0;
+  box-sizing: border-box;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-content-frame-assistant {
   display: grid;
   gap: 6px;
 }
 
+.gn-agent-workspace .chat-shell-embedded .chat-message-content-frame-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
 .gn-agent-workspace .chat-shell-embedded .chat-message.assistant .chat-message-bubble {
-  width: var(--gn-agent-linear-lane-width);
+  width: 100%;
   max-width: 100%;
   padding: 0;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message.user .chat-message-bubble {
+  width: 100%;
+  max-width: 100%;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-message.assistant .chat-message-content {
@@ -5355,20 +5426,92 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
   display: none;
 }
 
+.gn-agent-workspace .chat-shell-embedded .chat-message-process-inline,
+.gn-agent-workspace .chat-shell-embedded .chat-message.assistant .chat-message-bubble,
+.gn-agent-workspace .chat-shell-embedded .chat-message-content {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .gn-agent-workspace .chat-shell-embedded .chat-message-process-inline {
-  width: var(--gn-agent-linear-lane-width);
+  width: 100%;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-message-final-answer {
-  width: var(--gn-agent-linear-lane-width);
+  width: 100%;
 }
 
+.gn-agent-workspace .chat-shell-embedded .chat-message-thinking-lane,
 .gn-agent-workspace .chat-shell-embedded .chat-message-card-lane,
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream {
-  width: var(--gn-agent-linear-lane-width);
+  width: 100%;
+  max-width: 100%;
   gap: 6px;
 }
 
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-view,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-head,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-main,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-copy,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-actions,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-drawer,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-line,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-copy,
+.gn-agent-workspace .chat-shell-embedded .chat-inline-disclosure,
+.gn-agent-workspace .chat-shell-embedded .chat-inline-disclosure-copy {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-view,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-drawer {
+  width: 100%;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-head,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-main,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-copy,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-drawer,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-line,
+.gn-agent-workspace .chat-shell-embedded .chat-inline-disclosure {
+  overflow: hidden;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-copy strong,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-card-summary-inline,
+.gn-agent-workspace .chat-shell-embedded .chat-inline-disclosure-copy strong,
+.gn-agent-workspace .chat-shell-embedded .chat-inline-disclosure-copy span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-value {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-value-text,
+.gn-agent-workspace .chat-shell-embedded .chat-timeline-detail-value-mono {
+  white-space: nowrap;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-thinking-lane,
 .gn-agent-workspace .chat-shell-embedded .chat-message.assistant .chat-message-bubble,
 .gn-agent-workspace .chat-shell-embedded .chat-message-process-inline,
 .gn-agent-workspace .chat-shell-embedded .chat-message-final-answer,
@@ -5380,6 +5523,7 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 .gn-agent-workspace .chat-shell-embedded .chat-tool-card,
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-card,
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-card-inline {
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
@@ -5387,6 +5531,8 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-summary {
   min-width: 0;
+  max-width: 100%;
+  align-items: flex-start;
   flex-wrap: wrap;
 }
 
@@ -5399,6 +5545,9 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-meta {
   max-width: 100%;
   margin-left: 0;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-detail,
@@ -5414,6 +5563,35 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 .gn-agent-workspace .chat-shell-embedded .chat-tool-output,
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-step pre,
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-member pre {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-runtime-approval-pre {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-step-shell,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-step-detail,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-children,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group-summary,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group-detail,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group-main,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group-copy,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-detail-line,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-detail-stack,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-line-copy,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-detail-card,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-detail-pre {
+  min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
 }
@@ -5456,13 +5634,47 @@ body.desktop-workbench-mode .desktop-ai-shell .gn-agent-workspace .chat-shell-em
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-summary-copy {
   display: inline-flex;
   min-width: 0;
-  align-items: center;
+  max-width: 100%;
+  align-items: flex-start;
   gap: 8px;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-copy {
+  flex-wrap: wrap;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-copy strong,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-copy span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-inline-meta {
   color: var(--gn-agent-muted, var(--mode-muted, #6b7280));
   font-size: 12px;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group-copy,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-line-copy {
+  flex-wrap: wrap;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group-main,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-detail-line {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group-copy strong,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-group-meta,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-line-copy strong,
+.gn-agent-workspace .chat-shell-embedded .chat-tool-trace-stream.compact .chat-tool-trace-line-copy span {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .gn-agent-workspace .chat-shell-embedded .chat-tool-trace-glyph {
@@ -6197,6 +6409,26 @@ body.desktop-workbench-mode .chat-settings-panel-surface-skills .gn-agent-skills
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  overflow: hidden;
+}
+
+.chat-timeline-card.is-disclosable {
+  cursor: pointer;
+}
+
+.chat-timeline-card-hitbox {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.chat-timeline-card-hitbox:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--workbench-role-accent, #3b82f6) 54%, transparent);
+  outline-offset: -1px;
 }
 
 .chat-timeline-card::before {
@@ -6249,6 +6481,8 @@ body.desktop-workbench-mode .chat-settings-panel-surface-skills .gn-agent-skills
 }
 
 .chat-timeline-card-head {
+  position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6372,29 +6606,26 @@ body.desktop-workbench-mode .chat-settings-panel-surface-skills .gn-agent-skills
   color: color-mix(in srgb, var(--desktop-shell-text-muted, rgba(214, 221, 232, 0.72)) 92%, transparent);
 }
 
-.chat-timeline-card-toggle {
-  flex: 0 0 auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
+.chat-timeline-card-caret {
+  margin-left: 0;
   color: color-mix(in srgb, var(--desktop-shell-text-muted, rgba(214, 221, 232, 0.72)) 70%, transparent);
-  font-size: 9px;
-  line-height: 1.2;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   opacity: 0.44;
-  cursor: pointer;
   transition:
     opacity 160ms ease,
     color 160ms ease,
-    letter-spacing 160ms ease;
+    transform 180ms ease;
 }
 
-.chat-timeline-card-toggle:hover,
-.chat-timeline-card-toggle:focus-visible {
+.chat-timeline-card.is-open .chat-timeline-card-caret::before {
+  transform: rotate(-135deg) translate(-1px, 1px);
+}
+
+.chat-timeline-card.is-disclosable:hover .chat-timeline-card-status,
+.chat-timeline-card.is-disclosable:hover .chat-timeline-card-caret,
+.chat-timeline-card-hitbox:focus-visible + .chat-timeline-card-head .chat-timeline-card-status,
+.chat-timeline-card-hitbox:focus-visible + .chat-timeline-card-head .chat-timeline-card-caret {
   opacity: 0.72;
   color: color-mix(in srgb, var(--desktop-shell-text, #f5f7fb) 58%, transparent);
-  letter-spacing: 0.02em;
 }
 
 .chat-timeline-detail-drawer {
@@ -6479,7 +6710,7 @@ body.desktop-workbench-mode .chat-settings-panel-surface-skills .gn-agent-skills
   .chat-answer-text,
   .chat-thinking-block,
   .chat-timeline-card,
-  .chat-timeline-card-toggle,
+  .chat-timeline-card-caret,
   .chat-timeline-detail-line,
   .chat-tool-trace-stream.compact .chat-tool-trace-group-summary,
   .chat-tool-trace-stream.compact .chat-tool-trace-detail-line,

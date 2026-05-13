@@ -4,10 +4,7 @@ import type { StreamingLatencyTrace } from '../../../modules/ai/runtime/streamin
 import type { AssistantDraftState } from '../../workspace/assistantRenderModel.ts';
 import { buildAssistantMessageOutputModel } from '../../workspace/assistantMessageOutputModel.ts';
 import type { AIChatMessagePart } from '../../workspace/aiChatMessageParts';
-import {
-  type ChatMessageTimelineRenderGroup,
-  type ChatMessageTimelineRenderItem,
-} from '../../workspace/timeline/chatMessageTimelineRenderModel.ts';
+import type { ChatMessageTimelineRenderItem } from '../../workspace/timeline/chatMessageTimelineRenderModel.ts';
 
 type MessagePartRenderer = (
   message: StoredChatMessage,
@@ -41,29 +38,6 @@ type GNAgentMessageItemProps = {
     elapsedSeconds?: number;
   } | null;
 };
-
-const renderProcessGroups = (
-  processGroups: ChatMessageTimelineRenderGroup[],
-  messageId: string,
-  variant: 'inline',
-) =>
-  processGroups.map((group, groupIndex) =>
-    group.kind === 'thinking_lane' ? (
-      <div key={`${messageId}-process-${variant}-${groupIndex}`} className="chat-message-thinking-lane">
-        {group.items.map((item) => (
-          <React.Fragment key={item.key}>{item.node}</React.Fragment>
-        ))}
-      </div>
-    ) : (
-      <div key={`${messageId}-process-${variant}-${groupIndex}`} className="chat-message-bubble">
-        <div className="chat-message-content chat-message-content-timeline">
-          {group.items.map((item) => (
-            <React.Fragment key={item.key}>{item.node}</React.Fragment>
-          ))}
-        </div>
-      </div>
-    ),
-  );
 
 const AssistantMessageActionBar: React.FC<{
   copyText?: string;
@@ -133,9 +107,7 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
     });
   }
 
-  const processGroups = assistantOutputModel?.timelineRenderModel.processGroups || [];
-  const hasProcessArtifacts = (assistantOutputModel?.processItems.length || 0) > 0;
-  const answerBodyRenderItem = assistantOutputModel?.finalAnswerItem ?? null;
+  const orderedAssistantItems = assistantOutputModel?.timelineRenderModel.orderedItems || [];
   const hasVisibleContent =
     message.role === 'assistant'
       ? (assistantOutputModel?.hasVisibleContent ?? false)
@@ -144,17 +116,25 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
   return (
     <article className={`chat-message ${message.role} ${message.tone === 'error' ? 'is-error' : ''}`}>
       {message.role === 'assistant' && hasVisibleContent ? (
-        <>
-          {hasProcessArtifacts ? (
-            <div className="chat-message-process-inline">{renderProcessGroups(processGroups, message.id, 'inline')}</div>
-          ) : null}
-          {answerBodyRenderItem ? (
-            <div className="chat-message-bubble chat-message-final-answer">
-              <div className="chat-message-content chat-message-content-timeline">
-                {answerBodyRenderItem.node}
-              </div>
-            </div>
-          ) : null}
+        <div className="chat-message-content-frame chat-message-content-frame-assistant">
+          <div className="chat-message-process-inline">
+            {orderedAssistantItems.map((item) =>
+              item.laneKind === 'thinking_lane' ? (
+                <div key={item.key} className="chat-message-thinking-lane">
+                  {item.node}
+                </div>
+              ) : (
+                <div
+                  key={item.key}
+                  className={`chat-message-bubble ${item.laneKind === 'answer_lane' ? 'chat-message-final-answer' : ''}`.trim()}
+                >
+                  <div className="chat-message-content chat-message-content-timeline">
+                    {item.node}
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
           <AssistantMessageActionBar
             copyText={
               isStreaming
@@ -163,14 +143,16 @@ export const GNAgentMessageItem = React.memo(function GNAgentMessageItem({
             }
           />
           <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
-        </>
+        </div>
       ) : null}
       {message.role !== 'assistant' && hasVisibleContent ? (
-        <div className="chat-message-bubble">
-          <div className="chat-message-content chat-message-content-timeline">
-            {nonAssistantRenderItems.map((item) => (
-              <React.Fragment key={item.key}>{item.node}</React.Fragment>
-            ))}
+        <div className="chat-message-content-frame chat-message-content-frame-user">
+          <div className="chat-message-bubble">
+            <div className="chat-message-content chat-message-content-timeline">
+              {nonAssistantRenderItems.map((item) => (
+                <React.Fragment key={item.key}>{item.node}</React.Fragment>
+              ))}
+            </div>
           </div>
           <div className="chat-message-meta">{formatTimestamp(message.createdAt)}</div>
         </div>

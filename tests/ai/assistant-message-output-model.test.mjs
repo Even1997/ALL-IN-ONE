@@ -77,15 +77,16 @@ test('assistant output model keeps the active answer in the shared process chron
 
   assert.deepEqual(rendered, [
     { type: 'thinking', content: 'Working through it', isStreaming: true },
-    { type: 'text', content: 'Streaming paragraph one\n\nStreaming paragraph two', isStreaming: true },
+    { type: 'text', content: 'Streaming paragraph one', isStreaming: true },
+    { type: 'text', content: 'Streaming paragraph two', isStreaming: true },
   ]);
   assert.deepEqual(
     model.processItems.map((item) => item.key),
-    ['assistant-2-reasoning-draft', 'assistant-2-answer-text'],
+    ['assistant-2-reasoning-draft', 'assistant-2-text-draft-1', 'assistant-2-answer-text'],
   );
   assert.equal(model.finalAnswerItem, null);
   assert.equal(model.isStreaming, true);
-  assert.equal(model.copyText, 'Streaming paragraph one\n\nStreaming paragraph two');
+  assert.equal(model.copyText, 'Streaming paragraph two');
 });
 
 test('assistant output model keeps interleaved assistant feedback in the process stream when tools separate it from the final answer', async () => {

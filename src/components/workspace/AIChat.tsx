@@ -3200,86 +3200,14 @@ export const AIChat: React.FC<AIChatProps> = ({
         </header>
 
           {showExpandedShell ? (
-            <>
-            {agentChatContent}
-            {isEmbedded ? (
-                <>
-                  <GNAgentEmbeddedComposer
-                    topContent={
-                      <>
-                        {explicitSelectedReferenceFiles.length > 0 ? (
-                          <div className="chat-selected-reference-chips chat-selected-reference-chips-embedded">
-                            {explicitSelectedReferenceFiles.map((file) => (
-                              <button
-                                key={file.id}
-                                type="button"
-                                className="chat-reference-chip compact"
-                                onClick={() =>
-                                  currentProject
-                                    ? setSelectedReferenceFileIds(
-                                        currentProject.id,
-                                        (aiContextState?.selectedReferenceFileIds || []).filter((id) => id !== file.id)
-                                      )
-                                    : undefined
-                                }
-                              >
-                                <strong>@{file.title}</strong>
-                                <span title={file.path}>{summarizeReferencePath(file.path)}</span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                        {referenceSearchOpen ? (
-                          <AIChatReferenceSearchMenu
-                            entries={filteredReferenceSearchFiles}
-                            selectedIndex={referenceSearchIndex}
-                            onHover={setReferenceSearchIndex}
-                            onSelect={handleReferenceSearchSelect}
-                          />
-                        ) : null}
-                        {slashMenuOpen ? (
-                          <AIChatSlashCommandMenu
-                            entries={filteredSlashCommands}
-                            selectedIndex={slashSelectedIndex}
-                            onHover={setSlashSelectedIndex}
-                            onSelect={handleSlashCommandSelect}
-                          />
-                        ) : null}
-                      </>
-                    }
-                    toolbarStartContent={
-                      <ChatSandboxPolicySelector
-                        value={permissionMode}
-                        onChange={async (mode) => {
-                          const nextMode = await setAgentPermissionMode(mode);
-                          setPermissionMode(nextMode);
-                          setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
-                        }}
-                      />
-                    }
-                    input={input}
-                    setInput={setInput}
-                    onInputChange={handleInputChange}
-                    textareaRef={textareaRef}
-                    onKeyDown={handleKeyDown}
-                    placeholder={getComposerPlaceholder(isRuntimeConfigured)}
-                    agentStatusLabel={isGNAgentEmbedded ? selectedAgent.label : undefined}
-                    selectedRuntimeLabel={selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}
-                    contextUsageLabel={`${currentContextUsage.usedLabel} / ${currentContextUsage.limitLabel}`}
-                    contextUsageWarning={currentContextUsage.ratio >= 0.8}
-                    runStateLabel={isGNAgentEmbedded ? runStateLabel : undefined}
-                    runStateTone={isGNAgentEmbedded ? runStateTone : undefined}
-                    isLoading={isLoading}
-                    disabled={!input.trim() && !isLoading}
-                    onSubmit={isLoading ? handleStopGeneration : () => { void handleSubmit(); }}
-                    SendIcon={isLoading ? PauseIcon : SendIcon}
-                  />
-                </>
-              ) : (
-                <form className="chat-composer" onSubmit={handleSubmit}>
-                  <div className="chat-composer-shell">
+            isEmbedded ? (
+              <div className="chat-embedded-content-frame">
+                {agentChatContent}
+                <GNAgentEmbeddedComposer
+                  topContent={
+                    <>
                       {explicitSelectedReferenceFiles.length > 0 ? (
-                        <div className="chat-selected-reference-chips">
+                        <div className="chat-selected-reference-chips chat-selected-reference-chips-embedded">
                           {explicitSelectedReferenceFiles.map((file) => (
                             <button
                               key={file.id}
@@ -3300,67 +3228,140 @@ export const AIChat: React.FC<AIChatProps> = ({
                           ))}
                         </div>
                       ) : null}
-                      <div className="chat-composer-main">
-                        {referenceSearchOpen ? (
-                          <AIChatReferenceSearchMenu
-                            entries={filteredReferenceSearchFiles}
-                            selectedIndex={referenceSearchIndex}
-                            onHover={setReferenceSearchIndex}
-                            onSelect={handleReferenceSearchSelect}
-                          />
-                        ) : null}
-                        {slashMenuOpen ? (
-                          <AIChatSlashCommandMenu
-                            entries={filteredSlashCommands}
-                            selectedIndex={slashSelectedIndex}
-                            onHover={setSlashSelectedIndex}
-                            onSelect={handleSlashCommandSelect}
-                          />
-                        ) : null}
-                        <textarea
-                          ref={textareaRef}
-                          value={input}
-                          onChange={(event) =>
-                            handleInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length)
-                          }
-                          onKeyDown={handleKeyDown}
-                          placeholder={getComposerPlaceholder(isRuntimeConfigured)}
-                          className="chat-composer-input"
-                          rows={1}
+                      {referenceSearchOpen ? (
+                        <AIChatReferenceSearchMenu
+                          entries={filteredReferenceSearchFiles}
+                          selectedIndex={referenceSearchIndex}
+                          onHover={setReferenceSearchIndex}
+                          onSelect={handleReferenceSearchSelect}
                         />
-                        <button
-                          type={isLoading ? 'button' : 'submit'}
-                          className="chat-send-btn"
-                          aria-label={isLoading ? '终止' : '发送'}
-                          title={isLoading ? '终止' : '发送'}
-                          disabled={!input.trim() && !isLoading}
-                          onClick={isLoading ? handleStopGeneration : undefined}
-                        >
-                          {isLoading ? <PauseIcon /> : <SendIcon />}
-                        </button>
+                      ) : null}
+                      {slashMenuOpen ? (
+                        <AIChatSlashCommandMenu
+                          entries={filteredSlashCommands}
+                          selectedIndex={slashSelectedIndex}
+                          onHover={setSlashSelectedIndex}
+                          onSelect={handleSlashCommandSelect}
+                        />
+                      ) : null}
+                    </>
+                  }
+                  toolbarStartContent={
+                    <ChatSandboxPolicySelector
+                      value={permissionMode}
+                      onChange={async (mode) => {
+                        const nextMode = await setAgentPermissionMode(mode);
+                        setPermissionMode(nextMode);
+                        setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
+                      }}
+                    />
+                  }
+                  input={input}
+                  setInput={setInput}
+                  onInputChange={handleInputChange}
+                  textareaRef={textareaRef}
+                  onKeyDown={handleKeyDown}
+                  placeholder={getComposerPlaceholder(isRuntimeConfigured)}
+                  agentStatusLabel={isGNAgentEmbedded ? selectedAgent.label : undefined}
+                  selectedRuntimeLabel={selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}
+                  contextUsageLabel={`${currentContextUsage.usedLabel} / ${currentContextUsage.limitLabel}`}
+                  contextUsageWarning={currentContextUsage.ratio >= 0.8}
+                  runStateLabel={isGNAgentEmbedded ? runStateLabel : undefined}
+                  runStateTone={isGNAgentEmbedded ? runStateTone : undefined}
+                  isLoading={isLoading}
+                  disabled={!input.trim() && !isLoading}
+                  onSubmit={isLoading ? handleStopGeneration : () => { void handleSubmit(); }}
+                  SendIcon={isLoading ? PauseIcon : SendIcon}
+                />
+              </div>
+            ) : (
+              <>
+                {agentChatContent}
+                <form className="chat-composer" onSubmit={handleSubmit}>
+                  <div className="chat-composer-shell">
+                    {explicitSelectedReferenceFiles.length > 0 ? (
+                      <div className="chat-selected-reference-chips">
+                        {explicitSelectedReferenceFiles.map((file) => (
+                          <button
+                            key={file.id}
+                            type="button"
+                            className="chat-reference-chip compact"
+                            onClick={() =>
+                              currentProject
+                                ? setSelectedReferenceFileIds(
+                                    currentProject.id,
+                                    (aiContextState?.selectedReferenceFileIds || []).filter((id) => id !== file.id)
+                                  )
+                                : undefined
+                            }
+                          >
+                            <strong>@{file.title}</strong>
+                            <span title={file.path}>{summarizeReferencePath(file.path)}</span>
+                          </button>
+                        ))}
                       </div>
+                    ) : null}
+                    <div className="chat-composer-main">
+                      {referenceSearchOpen ? (
+                        <AIChatReferenceSearchMenu
+                          entries={filteredReferenceSearchFiles}
+                          selectedIndex={referenceSearchIndex}
+                          onHover={setReferenceSearchIndex}
+                          onSelect={handleReferenceSearchSelect}
+                        />
+                      ) : null}
+                      {slashMenuOpen ? (
+                        <AIChatSlashCommandMenu
+                          entries={filteredSlashCommands}
+                          selectedIndex={slashSelectedIndex}
+                          onHover={setSlashSelectedIndex}
+                          onSelect={handleSlashCommandSelect}
+                        />
+                      ) : null}
+                      <textarea
+                        ref={textareaRef}
+                        value={input}
+                        onChange={(event) =>
+                          handleInputChange(event.target.value, event.target.selectionStart ?? event.target.value.length)
+                        }
+                        onKeyDown={handleKeyDown}
+                        placeholder={getComposerPlaceholder(isRuntimeConfigured)}
+                        className="chat-composer-input"
+                        rows={1}
+                      />
+                      <button
+                        type={isLoading ? 'button' : 'submit'}
+                        className="chat-send-btn"
+                        aria-label={isLoading ? '终止' : '发送'}
+                        title={isLoading ? '终止' : '发送'}
+                        disabled={!input.trim() && !isLoading}
+                        onClick={isLoading ? handleStopGeneration : undefined}
+                      >
+                        {isLoading ? <PauseIcon /> : <SendIcon />}
+                      </button>
+                    </div>
 
-                      <div className="chat-composer-footer">
-                        <ChatSandboxPolicySelector
-                          value={permissionMode}
-                          onChange={async (mode) => {
-                            const nextMode = await setAgentPermissionMode(mode);
-                            setPermissionMode(nextMode);
-                            setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
-                          }}
-                        />
-                        <div className="chat-composer-meta">
-                          <span>{selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}</span>
-                          <span className={currentContextUsage.ratio >= 0.8 ? 'warning' : ''}>
-                            {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
-                          </span>
-                        </div>
+                    <div className="chat-composer-footer">
+                      <ChatSandboxPolicySelector
+                        value={permissionMode}
+                        onChange={async (mode) => {
+                          const nextMode = await setAgentPermissionMode(mode);
+                          setPermissionMode(nextMode);
+                          setSandboxPolicy(permissionModeToSandboxPolicy(nextMode));
+                        }}
+                      />
+                      <div className="chat-composer-meta">
+                        <span>{selectedRuntimeConfig ? selectedRuntimeConfig.name : '\u672a\u542f\u7528 AI'}</span>
+                        <span className={currentContextUsage.ratio >= 0.8 ? 'warning' : ''}>
+                          {currentContextUsage.usedLabel} / {currentContextUsage.limitLabel}
+                        </span>
                       </div>
+                    </div>
                   </div>
                 </form>
-              )}
-          </>
-        ) : (
+              </>
+            )
+          ) : (
           <div className="chat-collapsed-state">
             <span>GN Agent 已收起</span>
           </div>

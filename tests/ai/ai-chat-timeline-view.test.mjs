@@ -16,7 +16,11 @@ test('timeline cards render as compact log rows with inline summary and lightwei
   assert.match(source, /className="chat-timeline-card-main"/);
   assert.match(source, /className="chat-timeline-card-summary-inline"/);
   assert.match(source, /className="chat-timeline-card-actions"/);
+  assert.match(source, /className="chat-timeline-card-hitbox"/);
+  assert.match(source, /className="chat-inline-disclosure-caret chat-timeline-card-caret"/);
   assert.doesNotMatch(source, /className="chat-timeline-card-chip"/);
+  assert.doesNotMatch(source, /formatCompactTime/);
+  assert.doesNotMatch(source, /chat-timeline-card-toggle/);
 });
 
 test('timeline detail formatter exposes tool IO and file changes as structured detail items', async () => {

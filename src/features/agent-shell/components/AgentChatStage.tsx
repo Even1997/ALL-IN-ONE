@@ -59,7 +59,7 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
   const showEmptyState = !messages.some((message) => message.role === 'user' || message.role === 'system');
 
   return (
-    <section className={`agent-chat-stage agent-chat-stage-${mode}`}>
+    <section className={`agent-chat-stage agent-chat-stage-${mode} gn-agent-workspace`}>
       <div className="agent-chat-stage-body">
         <AIChat
           variant={providerId === 'classic' ? 'gn-agent-embedded' : 'provider-embedded'}

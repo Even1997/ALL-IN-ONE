@@ -11,8 +11,22 @@ export const TimelineDetailDrawer: React.FC<{
           <strong>{item.label}</strong>
           {item.value
             ? item.mono
-              ? <pre>{item.value}</pre>
-              : <span>{item.value}</span>
+              ? (
+                <pre
+                  className="chat-timeline-detail-value chat-timeline-detail-value-mono"
+                  title={item.value}
+                >
+                  {item.value}
+                </pre>
+              )
+              : (
+                <span
+                  className="chat-timeline-detail-value chat-timeline-detail-value-text"
+                  title={item.value}
+                >
+                  {item.value}
+                </span>
+              )
             : null}
         </div>
       </div>

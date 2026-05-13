@@ -13,6 +13,14 @@ const gnAgentChatPagePath = path.resolve(
   __dirname,
   '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx',
 );
+const aiWorkspacePath = path.resolve(
+  __dirname,
+  '../../src/components/ai/AIWorkspace.tsx',
+);
+const agentChatStagePath = path.resolve(
+  __dirname,
+  '../../src/features/agent-shell/components/AgentChatStage.tsx',
+);
 const agentShellPageCssPath = path.resolve(
   __dirname,
   '../../src/features/agent-shell/pages/AgentShellPage.css',
@@ -40,6 +48,18 @@ const tauriLibPath = path.resolve(
 const aiChatCssPath = path.resolve(
   __dirname,
   '../../src/components/workspace/AIChat.css',
+);
+const aiChatPath = path.resolve(
+  __dirname,
+  '../../src/components/workspace/AIChat.tsx',
+);
+const embeddedPiecesPath = path.resolve(
+  __dirname,
+  '../../src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx',
+);
+const timelineDetailDrawerPath = path.resolve(
+  __dirname,
+  '../../src/components/workspace/timeline/TimelineDetailDrawer.tsx',
 );
 
 test('AgentShellPage composes the new workbench shell', async () => {
@@ -69,6 +89,20 @@ test('GNAgentChatPage is no longer a competing full page shell', async () => {
   assert.match(source, /AgentChatStage|useGNAgentWorkbenchSession/);
 });
 
+test('embedded GN agent hosts provide the gn-agent-workspace ancestor required by AI chat layout rules', async () => {
+  const [aiWorkspaceSource, agentChatStageSource, aiChatSource, messageListSource] = await Promise.all([
+    readFile(aiWorkspacePath, 'utf8'),
+    readFile(agentChatStagePath, 'utf8'),
+    readFile(aiChatPath, 'utf8'),
+    readFile(embeddedPiecesPath, 'utf8'),
+  ]);
+
+  assert.match(aiWorkspaceSource, /gn-agent-workspace/);
+  assert.match(agentChatStageSource, /gn-agent-workspace/);
+  assert.match(aiChatSource, /className="chat-embedded-content-frame"/);
+  assert.match(messageListSource, /className="chat-message-list-frame"/);
+});
+
 test('Agent workbench has low-height responsive rules for the floating plan and stage spacing', async () => {
   const css = await readFile(agentWorkbenchCssPath, 'utf8');
 
@@ -96,10 +130,17 @@ test('embedded agent chat content shares a responsive width lane with the compos
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s*{[\s\S]*?--gn-agent-content-width:\s*min\(880px,\s*100%\);/);
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s*{[\s\S]*?--gn-agent-content-gutter:\s*clamp\(10px,\s*3vw,\s*24px\);/);
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s*{[\s\S]*?--gn-agent-linear-lane-width:\s*var\(--gn-agent-content-width\);/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-embedded-content-frame\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto;/);
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-list\s*{[\s\S]*?padding-inline:\s*var\(--gn-agent-content-gutter\);/);
-  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message\.assistant\s+\.chat-message-bubble,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\s*{[\s\S]*?margin-inline:\s*auto;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-list-frame\s*\{[\s\S]*?width:\s*var\(--gn-agent-content-width\);[\s\S]*?margin-inline:\s*auto;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-content-frame\s*\{[\s\S]*?width:\s*100%;[\s\S]*?margin-inline:\s*0;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-content-frame-user\s*\{[\s\S]*?align-items:\s*flex-end;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-thinking-lane,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\s*{[\s\S]*?width:\s*100%;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-thinking-lane,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\s*{[\s\S]*?margin-inline:\s*auto;/);
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-composer\s*{[\s\S]*?padding-inline:\s*var\(--gn-agent-content-gutter\);/);
-  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-composer-shell\s*{[\s\S]*?width:\s*var\(--gn-agent-content-width\);[\s\S]*?margin-inline:\s*auto;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-composer-shell\s*\{[\s\S]*?width:\s*100%;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-timeline-view,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-inline-disclosure-copy\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-timeline-view,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-timeline-detail-drawer\s*\{[\s\S]*?width:\s*100%;/);
 });
 
 test('embedded agent tool execution cards shrink inside the shared content lane', async () => {
@@ -107,8 +148,27 @@ test('embedded agent tool execution cards shrink inside the shared content lane'
 
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-card,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-card-inline\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;/);
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-inline-summary\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?flex-wrap:\s*wrap;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-inline-copy\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-inline-copy\s+strong,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-inline-copy\s+span\s*\{[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/);
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-inline-meta\s*\{[\s\S]*?max-width:\s*100%;[\s\S]*?margin-left:\s*0;/);
   assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-command,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-member\s+pre\s*\{[\s\S]*?max-width:\s*100%;[\s\S]*?box-sizing:\s*border-box;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-process-inline,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-message-content\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\.compact\s+\.chat-tool-step-shell,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\.compact\s+\.chat-tool-trace-detail-pre\s*\{[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;[\s\S]*?box-sizing:\s*border-box;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\.compact\s+\.chat-tool-trace-group-main,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\.compact\s+\.chat-tool-trace-detail-line\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\.compact\s+\.chat-tool-trace-group-copy,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\.compact\s+\.chat-tool-trace-line-copy\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\.compact\s+\.chat-tool-trace-group-copy\s+strong,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-tool-trace-stream\.compact\s+\.chat-tool-trace-line-copy\s+span\s*\{[\s\S]*?white-space:\s*normal;[\s\S]*?word-break:\s*break-word;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-composer-runtime-strip\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-selected-reference-chips-embedded\s*\{[\s\S]*?max-width:\s*100%;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-timeline-card-copy\s+strong,[\s\S]*?\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-inline-disclosure-copy\s+span\s*\{[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/);
+  assert.match(css, /\.gn-agent-workspace\s+\.chat-shell-embedded\s+\.chat-timeline-detail-value\s*\{[\s\S]*?text-overflow:\s*ellipsis;/);
+});
+
+test('timeline detail drawer exposes full values via title while using dedicated truncation classes', async () => {
+  const source = await readFile(timelineDetailDrawerPath, 'utf8');
+
+  assert.match(source, /className="chat-timeline-detail-value chat-timeline-detail-value-mono"/);
+  assert.match(source, /className="chat-timeline-detail-value chat-timeline-detail-value-text"/);
+  assert.match(source, /title=\{item\.value\}/);
 });
 
 test('desktop workbench shell constrains the embedded agent page instead of letting it bleed past the frame', async () => {

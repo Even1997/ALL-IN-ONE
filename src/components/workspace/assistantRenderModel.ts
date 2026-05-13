@@ -43,36 +43,9 @@ type AssistantTextTimelineBlock = {
 
 const buildAssistantTextTimelineBlocks = (timeline: AssistantTimelineEvent[]) => {
   const blocks: AssistantTextTimelineBlock[] = [];
-  let currentBlock:
-    | {
-        firstEventId: string;
-        segments: string[];
-        createdAt: number;
-        timelineOrder: number;
-      }
-    | null = null;
-
-  const flushCurrentBlock = () => {
-    if (!currentBlock) {
-      return;
-    }
-
-    const content = currentBlock.segments.join('\n\n').trim();
-    if (content) {
-      blocks.push({
-        firstEventId: currentBlock.firstEventId,
-        content,
-        createdAt: currentBlock.createdAt,
-        timelineOrder: currentBlock.timelineOrder,
-      });
-    }
-
-    currentBlock = null;
-  };
 
   timeline.forEach((event, timelineOrder) => {
     if (event.kind !== 'text') {
-      flushCurrentBlock();
       return;
     }
 
@@ -81,20 +54,14 @@ const buildAssistantTextTimelineBlocks = (timeline: AssistantTimelineEvent[]) =>
       return;
     }
 
-    if (!currentBlock) {
-      currentBlock = {
-        firstEventId: event.id,
-        segments: [content],
-        createdAt: event.createdAt,
-        timelineOrder,
-      };
-      return;
-    }
-
-    currentBlock.segments.push(content);
+    blocks.push({
+      firstEventId: event.id,
+      content,
+      createdAt: event.createdAt,
+      timelineOrder,
+    });
   });
 
-  flushCurrentBlock();
   return blocks;
 };
 
@@ -132,7 +99,7 @@ export const buildAssistantRenderModel = (
     ? draftState?.streamingStartedAt ?? fallbackAnswerCreatedAt
     : fallbackAnswerCreatedAt;
 
-  timeline.forEach((event, timelineOrder, events) => {
+  timeline.forEach((event, timelineOrder) => {
     if (event.kind === 'reasoning') {
       const part = {
         type: 'thinking' as const,
@@ -157,11 +124,6 @@ export const buildAssistantRenderModel = (
     }
 
     if (event.kind !== 'text' || finalTextBlock?.firstEventId === event.id) {
-      return;
-    }
-
-    const previousEvent = timelineOrder > 0 ? events[timelineOrder - 1] : null;
-    if (previousEvent?.kind === 'text') {
       return;
     }
 

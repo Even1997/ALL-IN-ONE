@@ -85,7 +85,7 @@ test('GN Agent message item keeps thinking in the shared process lane without lo
   assert.doesNotMatch(messageItemSource, /setExpandedThinkingKeys/);
   assert.doesNotMatch(messageItemSource, /thinkingExpanded/);
   assert.doesNotMatch(messageItemSource, /onToggleThinking/);
-  assert.match(messageItemSource, /timelineRenderModel\.processGroups/);
+  assert.match(messageItemSource, /timelineRenderModel\.orderedItems/);
   assert.match(messageItemSource, /className=\"chat-message-thinking-lane\"/);
 });
 
@@ -98,7 +98,7 @@ test('GN Agent message item consumes a unified timeline model instead of sorting
 
   assert.match(messageItemSource, /buildAssistantMessageOutputModel/);
   assert.match(outputModelSource, /buildChatMessageTimelineRenderModel/);
-  assert.match(messageItemSource, /timelineRenderModel\.processGroups/);
+  assert.match(messageItemSource, /timelineRenderModel\.orderedItems/);
   assert.doesNotMatch(messageItemSource, /assistantDisplayMode/);
   assert.doesNotMatch(messageItemSource, /streamingState\?: AssistantStreamingState;/);
   assert.doesNotMatch(messageItemSource, /streamingState,/);

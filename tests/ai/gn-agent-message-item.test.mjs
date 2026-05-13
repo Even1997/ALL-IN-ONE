@@ -147,11 +147,13 @@ test('GN Agent message item separates process rendering from the final answer bo
   const outputModelSource = await readFile('src/components/workspace/assistantMessageOutputModel.ts', 'utf8');
 
   assert.match(messageItemSource, /buildAssistantMessageOutputModel/);
+  assert.match(messageItemSource, /className="chat-message-content-frame chat-message-content-frame-assistant"/);
+  assert.match(messageItemSource, /className="chat-message-content-frame chat-message-content-frame-user"/);
   assert.doesNotMatch(messageItemSource, /assistantDisplayMode/);
-  assert.match(messageItemSource, /const processGroups = assistantOutputModel\?\.timelineRenderModel\.processGroups \|\| \[\];/);
-  assert.match(messageItemSource, /const answerBodyRenderItem = assistantOutputModel\?\.finalAnswerItem \?\? null;/);
-  assert.match(messageItemSource, /const hasProcessArtifacts =/);
-  assert.match(messageItemSource, /className="chat-message-process-inline"/);
+  assert.match(messageItemSource, /const orderedAssistantItems = assistantOutputModel\?\.timelineRenderModel\.orderedItems \|\| \[\];/);
+  assert.match(messageItemSource, /orderedAssistantItems\.map\(\(item\) =>/);
+  assert.match(messageItemSource, /item\.laneKind === 'thinking_lane'/);
+  assert.match(messageItemSource, /item\.laneKind === 'answer_lane'/);
   assert.doesNotMatch(messageItemSource, /chat-message-process-fold/);
   assert.doesNotMatch(messageItemSource, /chat-message-process-summary/);
   assert.doesNotMatch(messageItemSource, /chat-message-process-elapsed/);
@@ -159,7 +161,7 @@ test('GN Agent message item separates process rendering from the final answer bo
   assert.doesNotMatch(messageItemSource, /chat-message-process-status/);
   assert.doesNotMatch(messageItemSource, /chat-message-process-detail-toggle/);
   assert.doesNotMatch(messageItemSource, /TimelineDetailDrawer/);
-  assert.match(messageItemSource, /chat-message-final-answer/);
+  assert.doesNotMatch(messageItemSource, /const answerBodyRenderItem = assistantOutputModel\?\.finalAnswerItem \?\? null;/);
   assert.doesNotMatch(messageItemSource, /sortMessageRenderItems\(\[\.\.\.thinkingRenderItems,\s*\.\.\.bubbleRenderItems\]\)/);
   assert.match(outputModelSource, /buildChatMessageTimelineRenderModel/);
   assert.match(outputModelSource, /activeResponseItem:\s*isStreaming \? answerRenderItem : null/);

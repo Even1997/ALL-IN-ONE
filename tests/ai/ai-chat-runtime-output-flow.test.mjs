@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const chatPath = path.resolve(testDir, '../../src/components/workspace/AIChat.tsx');
+const timelineDetailDrawerPath = path.resolve(
+  testDir,
+  '../../src/components/workspace/timeline/TimelineDetailDrawer.tsx',
+);
 const coordinatorPath = path.resolve(
   testDir,
   '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts',
@@ -555,11 +559,39 @@ test('assistant narrative, thinking, and runtime cards share a unified surface l
   );
   assert.match(
     cssSource,
-    /\.gn-agent-workspace \.chat-shell-embedded \.chat-message\.assistant \.chat-message-bubble\s*\{[\s\S]*width:\s*var\(--gn-agent-linear-lane-width\)/
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-embedded-content-frame\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/
   );
   assert.match(
     cssSource,
-    /\.gn-agent-workspace \.chat-shell-embedded \.chat-message-card-lane,\s*\r?\n\.gn-agent-workspace \.chat-shell-embedded \.chat-tool-trace-stream\s*\{[\s\S]*width:\s*var\(--gn-agent-linear-lane-width\)/
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-message-list-frame\s*\{[\s\S]*width:\s*var\(--gn-agent-content-width\)[\s\S]*margin-inline:\s*auto/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-message-content-frame\s*\{[\s\S]*width:\s*100%[\s\S]*margin-inline:\s*0/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-message-card-lane,\s*\r?\n\.gn-agent-workspace \.chat-shell-embedded \.chat-tool-trace-stream\s*\{[\s\S]*width:\s*100%/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-composer-runtime-strip\s*\{[\s\S]*flex-wrap:\s*wrap/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-selected-reference-chips-embedded\s*\{[\s\S]*max-width:\s*100%/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-timeline-view,\s*\r?\n\.gn-agent-workspace \.chat-shell-embedded \.chat-timeline-card,\s*\r?\n[\s\S]*?\.gn-agent-workspace \.chat-shell-embedded \.chat-inline-disclosure-copy\s*\{[\s\S]*min-width:\s*0[\s\S]*max-width:\s*100%/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-timeline-card-copy strong,\s*\r?\n\.gn-agent-workspace \.chat-shell-embedded \.chat-timeline-card-summary-inline,\s*\r?\n[\s\S]*?\.gn-agent-workspace \.chat-shell-embedded \.chat-inline-disclosure-copy span\s*\{[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/
+  );
+  assert.match(
+    cssSource,
+    /\.gn-agent-workspace \.chat-shell-embedded \.chat-timeline-detail-value\s*\{[\s\S]*display:\s*block[\s\S]*text-overflow:\s*ellipsis/
   );
   assert.match(
     cssSource,
@@ -592,7 +624,11 @@ test('assistant narrative and runtime cards use a consistent typography scale', 
   );
   assert.match(
     cssSource,
-    /\.chat-timeline-card-toggle\s*\{[\s\S]*font-size:\s*9px[\s\S]*opacity:\s*0\.44/
+    /\.chat-timeline-card-hitbox\s*\{[\s\S]*position:\s*absolute[\s\S]*inset:\s*0/
+  );
+  assert.match(
+    cssSource,
+    /\.chat-timeline-card-caret\s*\{[\s\S]*opacity:\s*0\.44/
   );
   assert.match(
     cssSource,
@@ -618,6 +654,14 @@ test('assistant narrative and runtime cards use a consistent typography scale', 
     cssSource,
     /\.gn-agent-runtime-details-summary code\s*\{[\s\S]*font-size:\s*9px[\s\S]*opacity:\s*0\.62/
   );
+});
+
+test('timeline detail drawer keeps the full detail text on hover while rendering truncation hooks', async () => {
+  const source = await readFile(timelineDetailDrawerPath, 'utf8');
+
+  assert.match(source, /chat-timeline-detail-value chat-timeline-detail-value-mono/);
+  assert.match(source, /chat-timeline-detail-value chat-timeline-detail-value-text/);
+  assert.match(source, /title=\{item\.value\}/);
 });
 
 test('built-in runtime seeds a visible thinking placeholder before the first model event', async () => {

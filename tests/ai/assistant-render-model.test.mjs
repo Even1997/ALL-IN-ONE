@@ -27,17 +27,21 @@ test('assistant render model keeps completed assistant thinking in the visible p
     model.items.map((item) => [item.kind, item.part.type, item.part.content]),
     [
       ['thinking_lane', 'thinking', 'Check project first'],
-      ['answer_lane', 'text', 'Checked the first file.\n\nFinal answer'],
+      ['feedback_lane', 'text', 'Checked the first file.'],
+      ['answer_lane', 'text', 'Final answer'],
     ]
   );
   assert.equal(model.hasFinalAnswer, true);
   assert.deepEqual(
     model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
-    [['thinking_lane', 'thinking', 'Check project first']],
+    [
+      ['thinking_lane', 'thinking', 'Check project first'],
+      ['feedback_lane', 'text', 'Checked the first file.'],
+    ],
   );
   assert.equal(model.finalAnswerItem?.kind, 'answer_lane');
-  assert.equal(model.finalAnswerItem?.part.content, 'Checked the first file.\n\nFinal answer');
-  assert.equal(model.copyText, 'Checked the first file.\n\nFinal answer');
+  assert.equal(model.finalAnswerItem?.part.content, 'Final answer');
+  assert.equal(model.copyText, 'Final answer');
 });
 
 test('assistant render model keeps completed and active thinking in timeline order', async () => {
@@ -156,8 +160,12 @@ test('assistant render model shows the buffered answer lane once when streaming 
   });
 
   assert.deepEqual(
+    model.processItems.map((item) => [item.kind, item.part.content]),
+    [['feedback_lane', 'First sentence.']],
+  );
+  assert.deepEqual(
     model.items.filter((item) => item.kind === 'answer_lane').map((item) => item.part.content),
-    ['First sentence.\n\nSecond sentence.'],
+    ['Second sentence.'],
   );
 });
 

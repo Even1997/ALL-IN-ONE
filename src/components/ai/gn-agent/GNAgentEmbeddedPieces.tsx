@@ -211,18 +211,20 @@ export const GNAgentMessageList = React.memo(function GNAgentMessageList({
 
   return (
     <div ref={listRef} className="chat-message-list">
-      {leadingContent}
-      {shouldFold ? (
-        <details className="chat-message-list-fold">
-          <summary className="chat-inline-disclosure chat-message-list-fold-summary">
-            <span className="chat-inline-disclosure-copy">{`Show earlier ${foldCount} messages`}</span>
-            <span className="chat-inline-disclosure-caret" aria-hidden="true" />
-          </summary>
-          {messages.slice(0, foldCount).map(renderMessageItem)}
-        </details>
-      ) : null}
-      {messages.slice(foldCount).map(renderMessageItem)}
-      <div ref={messagesEndRef} />
+      <div className="chat-message-list-frame">
+        {leadingContent}
+        {shouldFold ? (
+          <details className="chat-message-list-fold">
+            <summary className="chat-inline-disclosure chat-message-list-fold-summary">
+              <span className="chat-inline-disclosure-copy">{`Show earlier ${foldCount} messages`}</span>
+              <span className="chat-inline-disclosure-caret" aria-hidden="true" />
+            </summary>
+            {messages.slice(0, foldCount).map(renderMessageItem)}
+          </details>
+        ) : null}
+        {messages.slice(foldCount).map(renderMessageItem)}
+        <div ref={messagesEndRef} />
+      </div>
     </div>
   );
 });
