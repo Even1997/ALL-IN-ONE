@@ -6,6 +6,7 @@ export type LayoutSizeBounds = {
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 
 export const LAYOUT_PREFERENCE_KEYS = {
+  agentWorkbenchSidebarWidth: 'layout.agentWorkbench.sidebarWidth',
   productWorkbenchLeftNavWidth: 'layout.productWorkbench.leftNavWidth',
   workspaceSidebarWidth: 'layout.workspace.sidebarWidth',
   workspaceActivityWidth: 'layout.workspace.activityWidth',

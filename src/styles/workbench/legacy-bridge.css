@@ -54,19 +54,18 @@
   background: var(--wb-window-background);
 }
 
-.desktop-active .desktop-primary-rail.mac-sidebar-panel,
-.desktop-active .desktop-workbench-topbar.mac-toolbar.mac-panel {
-  background: transparent !important;
-  border: 0 !important;
+.desktop-active .desktop-primary-rail.mac-sidebar-panel {
+  background: var(--wb-sidebar-background) !important;
+  border-right: 1px solid var(--wb-divider) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
 
-.desktop-active .desktop-primary-rail.mac-sidebar-panel {
-  border-right: 1px solid var(--wb-divider) !important;
-}
-
 .desktop-active .desktop-workbench-topbar.mac-toolbar.mac-panel {
+  background: var(--wb-toolbar-background) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   display: flex !important;
   width: 100% !important;
   min-width: 0 !important;

@@ -340,6 +340,19 @@ const SortIcon = () => (
   </svg>
 );
 
+const CheckIcon = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path
+      d="m3.5 8.25 2.6 2.6 6.4-6.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const CollapseAllIcon = () => (
   <svg viewBox="0 0 20 20" aria-hidden="true">
     <path
@@ -671,6 +684,7 @@ export const KnowledgeNoteWorkspace = ({
   const [railWidth, setRailWidth] = useState(NOTE_RAIL_DEFAULT_WIDTH);
   const [isRailResizing, setIsRailResizing] = useState(false);
   const [treeSortMode, setTreeSortMode] = useState<KnowledgeTreeSortMode>('name-asc');
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<Set<string>>(() => new Set());
   const [selectedTreePaths, setSelectedTreePaths] = useState<string[]>([]);
   const [anchorTreePath, setAnchorTreePath] = useState<string | null>(null);
@@ -679,6 +693,7 @@ export const KnowledgeNoteWorkspace = ({
   const [viewMode, setViewMode] = useState<KnowledgeViewMode>('read');
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
   const searchActive = searchValue.trim().length > 0;
   const visibleNotes = filteredNotes;
   const visibleKnowledgeTree = useMemo(
@@ -807,6 +822,10 @@ export const KnowledgeNoteWorkspace = ({
 
   const closeKnowledgeContextMenu = useCallback(() => {
     setContextMenuState(null);
+  }, []);
+
+  const closeSortMenu = useCallback(() => {
+    setSortMenuOpen(false);
   }, []);
 
   const handleOpenFilePreview = useCallback(async (file: KnowledgeTreeFileNode) => {
@@ -985,6 +1004,34 @@ export const KnowledgeNoteWorkspace = ({
       menu.style.top = `${Math.max(0, window.innerHeight - rect.height - 4)}px`;
     }
   }, [contextMenuState]);
+
+  useEffect(() => {
+    if (!sortMenuOpen) {
+      return;
+    }
+
+    const closeMenu = (event: Event) => {
+      if (event.target instanceof Node && sortMenuRef.current?.contains(event.target)) {
+        return;
+      }
+      setSortMenuOpen(false);
+    };
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSortMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', closeMenu);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('pointerdown', closeMenu);
+      window.removeEventListener('resize', closeMenu);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [sortMenuOpen]);
 
   useEffect(() => {
     if (!filePreview) {
@@ -1226,25 +1273,42 @@ export const KnowledgeNoteWorkspace = ({
           >
             <FolderIcon />
           </button>
-          <label
-            className="doc-action-btn gn-note-icon-btn gn-note-icon-select"
-            title="知识库排序"
-            aria-label="知识库排序"
-          >
-            <SortIcon />
-            <select
-              className="gn-note-icon-select-input"
-              value={treeSortMode}
-              onChange={(event) => setTreeSortMode(event.target.value as KnowledgeTreeSortMode)}
+          <div className="gn-note-sort-menu" ref={sortMenuRef}>
+            <button
+              className={`doc-action-btn gn-note-icon-btn gn-note-sort-menu-trigger${sortMenuOpen ? ' is-active' : ''}`}
+              type="button"
+              title="知识库排序"
               aria-label="知识库排序"
+              aria-haspopup="menu"
+              aria-expanded={sortMenuOpen}
+              onClick={() => setSortMenuOpen((current) => !current)}
             >
-              {KNOWLEDGE_TREE_SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SortIcon />
+            </button>
+            {sortMenuOpen ? (
+              <div className="gn-note-sort-menu-popup pm-knowledge-context-menu" role="menu" aria-label="知识库排序">
+                {KNOWLEDGE_TREE_SORT_OPTIONS.map((option) => {
+                  const active = option.value === treeSortMode;
+                  return (
+                    <button
+                      key={option.value}
+                      className={`pm-knowledge-context-action gn-note-sort-menu-item${active ? ' is-active' : ''}`}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={active}
+                      onClick={() => {
+                        setTreeSortMode(option.value);
+                        closeSortMenu();
+                      }}
+                    >
+                      <span>{option.label}</span>
+                      {active ? <CheckIcon /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
           <button
             className="doc-action-btn gn-note-icon-btn"
             type="button"

@@ -10,9 +10,10 @@
   --agent-chip-bg: var(--wb-muted-background);
   --agent-chip-fg: var(--wb-text-secondary);
   --agent-shadow: var(--wb-shadow-panel);
+  --agent-main-divider-width: 10px;
   border-radius: inherit;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(248px, 284px);
+  grid-template-columns: auto var(--agent-main-divider-width) minmax(0, 1fr) minmax(248px, 284px);
   gap: 0;
   min-height: 100%;
   height: 100%;
@@ -22,10 +23,19 @@
 }
 
 .agent-workbench-shell.has-collapsed-companion {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto var(--agent-main-divider-width) minmax(0, 1fr);
 }
 
 .agent-workbench-shell.has-no-companion {
+  grid-template-columns: auto var(--agent-main-divider-width) minmax(0, 1fr);
+}
+
+.agent-workbench-shell.has-collapsed-sidebar {
+  grid-template-columns: auto minmax(0, 1fr) minmax(248px, 284px);
+}
+
+.agent-workbench-shell.has-collapsed-sidebar.has-collapsed-companion,
+.agent-workbench-shell.has-collapsed-sidebar.has-no-companion {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
@@ -50,22 +60,58 @@
 .agent-workbench-sidebar-shell {
   display: flex;
   min-width: 0;
+  overflow: hidden;
+}
+
+.agent-workbench-main-divider {
+  position: relative;
+  align-self: stretch;
+  min-width: 0;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.agent-workbench-main-divider::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--agent-panel-border-strong) 82%, transparent);
+}
+
+.agent-workbench-main-divider:hover::after,
+.agent-workbench-main-divider:focus-visible::after,
+.agent-workbench-shell.is-resizing-sidebar .agent-workbench-main-divider::after {
+  background: color-mix(in srgb, var(--wb-accent) 42%, var(--agent-panel-border-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-accent) 12%, transparent);
+}
+
+.agent-workbench-shell.has-collapsed-sidebar .agent-workbench-main-divider {
+  display: none;
 }
 
 .agent-workbench-sidebar {
   display: grid;
-  grid-template-columns: 60px 304px;
+  grid-template-columns:
+    var(--agent-sidebar-rail-width, 60px)
+    minmax(0, var(--agent-sidebar-panel-track-width, var(--agent-sidebar-panel-width, 304px)));
   height: 100%;
   align-items: stretch;
   min-height: 0;
+  overflow: hidden;
+  transition: grid-template-columns 180ms ease;
 }
 
 .agent-workbench-sidebar.is-collapsed {
-  grid-template-columns: 60px;
+  grid-template-columns: var(--agent-sidebar-rail-width, 60px) minmax(0, 0px);
 }
 
-.agent-workbench-sidebar.is-empty {
-  grid-template-columns: 60px 276px;
+.agent-workbench-sidebar.is-empty:not(.is-collapsed) {
+  grid-template-columns: var(--agent-sidebar-rail-width, 60px) var(--agent-sidebar-panel-width, 304px);
 }
 
 .agent-workbench-left-rail {
@@ -146,7 +192,8 @@
 }
 
 .agent-workbench-left-panel {
-  min-width: 304px;
+  min-width: 0;
+  width: var(--agent-sidebar-panel-width, 304px);
   border: 1px solid var(--agent-panel-border);
   border-left: 0;
   border-radius: 0 16px 16px 0;
@@ -157,6 +204,26 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transform-origin: left center;
+  transition:
+    width 180ms ease,
+    opacity 140ms ease,
+    transform 180ms ease,
+    border-color 140ms ease;
+}
+
+.agent-workbench-sidebar.is-collapsed .agent-workbench-left-panel {
+  width: 0;
+  border-color: transparent;
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+  visibility: hidden;
+  box-shadow: none;
+}
+
+.agent-workbench-sidebar.is-collapsed .agent-workbench-left-panel > * {
+  opacity: 0;
 }
 
 .agent-sidebar-panel-head {
@@ -517,7 +584,7 @@
   overflow: hidden;
 }
 
-.agent-workbench-sidebar.is-empty .agent-workbench-left-panel {
+.agent-workbench-sidebar.is-empty:not(.is-collapsed) .agent-workbench-left-panel {
   min-width: 260px;
 }
 
@@ -1194,6 +1261,10 @@
   .agent-workbench-shell {
     display: flex;
     flex-direction: column;
+  }
+
+  .agent-workbench-main-divider {
+    display: none;
   }
 
   .agent-workbench-sidebar {

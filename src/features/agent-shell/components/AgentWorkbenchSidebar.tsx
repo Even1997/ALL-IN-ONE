@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type CSSProperties } from 'react';
 import { GNAgentThreadList } from '../../../components/ai/gn-agent-shell/GNAgentThreadList';
 import { WorkbenchIcon } from '../../../components/ui/WorkbenchIcon';
 import type { ChatSession } from '../../../modules/ai/store/aiChatStore';
@@ -13,6 +13,7 @@ type AgentWorkbenchSidebarProps = {
   onOpenSearch: () => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  panelWidth: number;
 };
 
 const SIDEBAR_ITEMS: Array<{
@@ -34,15 +35,22 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
   onOpenSearch,
   collapsed,
   onToggleCollapsed,
+  panelWidth,
 }) => {
   const sessionMeta =
     sessions.length > 0
-      ? `${sessions.length} 条会话${projectName ? ` · ${projectName}` : ''}`
+      ? `${sessions.length} 条对话${projectName ? ` · ${projectName}` : ''}`
       : projectName || '等待第一条对话';
 
   return (
     <div
-      className={`agent-workbench-sidebar${collapsed ? ' is-collapsed' : ''}${sessions.length === 0 ? ' is-empty' : ''}`}
+      className={`agent-workbench-sidebar${collapsed ? ' is-collapsed' : ''}${sessions.length === 0 && !collapsed ? ' is-empty' : ''}`}
+      style={
+        {
+          '--agent-sidebar-panel-width': `${panelWidth}px`,
+          '--agent-sidebar-panel-track-width': collapsed ? '0px' : `${panelWidth}px`,
+        } as CSSProperties
+      }
     >
       <div className="agent-workbench-left-rail">
         <nav className="agent-workbench-rail-nav" aria-label="Agent workbench actions">
@@ -87,30 +95,28 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
         </div>
       </div>
 
-      {!collapsed ? (
-        <div className="agent-workbench-left-panel">
-          <header className="agent-sidebar-panel-head">
-            <div className="agent-sidebar-panel-head-copy">
-              <span className="agent-sidebar-panel-head-icon">
-                <WorkbenchIcon name="note" />
-              </span>
-              <div>
-                <strong>对话历史</strong>
-                <span>{sessionMeta}</span>
-              </div>
+      <div className="agent-workbench-left-panel" aria-hidden={collapsed}>
+        <header className="agent-sidebar-panel-head">
+          <div className="agent-sidebar-panel-head-copy">
+            <span className="agent-sidebar-panel-head-icon">
+              <WorkbenchIcon name="note" />
+            </span>
+            <div>
+              <strong>对话历史</strong>
+              <span>{sessionMeta}</span>
             </div>
-          </header>
+          </div>
+        </header>
 
-          <section className="agent-sidebar-panel-body agent-sidebar-panel-body-threads">
-            <GNAgentThreadList
-              sessions={sessions}
-              activeSessionId={activeSessionId}
-              onSelectThread={onSelectThread}
-              onDeleteSession={onDeleteSession}
-            />
-          </section>
-        </div>
-      ) : null}
+        <section className="agent-sidebar-panel-body agent-sidebar-panel-body-threads">
+          <GNAgentThreadList
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelectThread={onSelectThread}
+            onDeleteSession={onDeleteSession}
+          />
+        </section>
+      </div>
     </div>
   );
 };

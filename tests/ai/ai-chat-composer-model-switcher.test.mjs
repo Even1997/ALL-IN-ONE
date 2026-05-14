@@ -44,9 +44,14 @@ test('the composer switcher exposes provider nav cards and model detail metadata
   assert.match(switcherSource, /Switch model \(\$\{activeModelLabel\}\)/);
   assert.match(switcherSource, /chat-model-switcher-provider-avatar/);
   assert.match(switcherSource, /chat-model-switcher-trigger-brand/);
-  assert.match(switcherSource, /chat-model-switcher-provider-meta/);
+  assert.match(switcherSource, /chat-model-switcher-provider-icon/);
   assert.match(switcherSource, /chat-model-switcher-model-meta/);
-  assert.match(switcherSource, /chat-model-switcher-model-panel-header/);
-  assert.match(switcherSource, /Current selection/);
-  assert.match(switcherSource, /Saved in settings/);
+  assert.doesNotMatch(switcherSource, /chat-model-switcher-model-panel-header/);
+  assert.doesNotMatch(switcherSource, /chat-model-switcher-provider-mark/);
+  assert.doesNotMatch(switcherSource, /chat-model-switcher-provider-meta/);
+  assert.doesNotMatch(switcherSource, /style=\{buildProviderToneStyle\(config\.provider\)\}/);
+  assert.doesNotMatch(switcherSource, />AGENT</);
+  assert.doesNotMatch(switcherSource, />MODEL</);
+  assert.doesNotMatch(switcherSource, /Current selection/);
+  assert.doesNotMatch(switcherSource, /Saved in settings/);
 });

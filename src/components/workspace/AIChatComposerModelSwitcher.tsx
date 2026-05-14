@@ -25,15 +25,6 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
   const activeConfigLabel = activeRuntimeConfig?.name || 'No AI Enabled';
   const activeModelLabel = activeRuntimeConfig?.model || 'Select Model';
   const activeProviderMonogram = activeRuntimeConfig ? getProviderMonogram(activeRuntimeConfig.provider) : '--';
-  const activeProviderTone = buildProviderToneStyle(activeRuntimeConfig?.provider);
-  const activeConfigMeta = activeRuntimeConfig
-    ? activeRuntimeConfig.baseURL
-      ? formatCompactBaseURL(activeRuntimeConfig.baseURL)
-      : activeRuntimeConfig.provider
-    : 'Pick a config';
-  const activeConfigHint = activeRuntimeConfig ? `${activeConfigLabel} / ${activeConfigMeta}` : activeConfigMeta;
-
-  const getModelMeta = (model: string) => getModelStatusMeta(getModelStatus(activeRuntimeConfig, model));
 
   useEffect(() => {
     if (!open) {
@@ -61,7 +52,7 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
   }, [open]);
 
   return (
-    <div ref={containerRef} className="chat-model-switcher" style={activeProviderTone}>
+    <div ref={containerRef} className="chat-model-switcher">
       <button
         type="button"
         className={`chat-model-switcher-trigger ${isRuntimeConfigLocked ? 'locked' : ''}`}
@@ -79,21 +70,14 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
 
       {open ? (
         <div className="chat-model-switcher-menu" role="menu" aria-label="Model switcher">
-          <div className="chat-model-switcher-provider-rail chat-model-switcher-configs">
-            <div className="chat-model-switcher-panel-heading">
-              <PanelStackIcon />
-              <span>AGENT</span>
-            </div>
+          <div className="chat-model-switcher-provider-rail chat-model-switcher-configs" aria-label="Providers">
             {enabledRuntimeConfigs.map((config) => {
-              const configMeta = config.baseURL ? formatCompactBaseURL(config.baseURL) : config.provider;
-
               return (
                 <button
                   key={config.id}
                   type="button"
                   className={`chat-model-switcher-config-item ${activeRuntimeConfig?.id === config.id ? 'active' : ''}`}
-                  style={buildProviderToneStyle(config.provider)}
-                  title={`${config.name} / ${configMeta}`}
+                  title={config.name}
                   disabled={!allowConfigSelection}
                   onClick={() => {
                     onSelectConfig(config.id);
@@ -102,13 +86,11 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
                     }
                   }}
                 >
-                  <span className="chat-model-switcher-provider-mark" aria-hidden="true" />
                   <span className="chat-model-switcher-provider-avatar" aria-hidden="true">
-                    {getProviderMonogram(config.provider)}
+                    <span className="chat-model-switcher-provider-icon">{getProviderMonogram(config.provider)}</span>
                   </span>
                   <span className="chat-model-switcher-provider-copy">
                     <strong>{config.name}</strong>
-                    <span className="chat-model-switcher-provider-meta sr-only">{configMeta}</span>
                   </span>
                 </button>
               );
@@ -118,22 +100,7 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
             ) : null}
           </div>
 
-          <div className="chat-model-switcher-model-panel chat-model-switcher-models">
-            <div className="chat-model-switcher-model-panel-header">
-              <div className="chat-model-switcher-panel-heading">
-                <ModelOrbitIcon />
-                <span>MODEL</span>
-              </div>
-              <div className="chat-model-switcher-model-summary">
-                <span className="chat-model-switcher-model-summary-badge" aria-hidden="true">
-                  {activeProviderMonogram}
-                </span>
-                <span className="chat-model-switcher-model-summary-copy">
-                  <strong>{activeModelLabel}</strong>
-                  <span>{activeConfigHint}</span>
-                </span>
-              </div>
-            </div>
+          <div className="chat-model-switcher-model-panel chat-model-switcher-models" aria-label="Models">
             {runtimeModelOptions.map((model) => {
               const status = getModelStatus(activeRuntimeConfig, model);
 
@@ -142,7 +109,8 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
                   key={model}
                   type="button"
                   className={`chat-model-switcher-model-item ${activeRuntimeConfig?.model === model ? 'active' : ''}`}
-                  title={`${model} / ${getModelMeta(model)}`}
+                  title={model}
+                  aria-pressed={activeRuntimeConfig?.model === model}
                   onClick={() => {
                     onSelectModel(model);
                     setOpen(false);
@@ -158,7 +126,6 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
                       <StatusDotIcon />
                     )}
                   </span>
-                  <span className="sr-only">{getModelMeta(model)}</span>
                 </button>
               );
             })}
@@ -174,17 +141,6 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
 
 type ModelStatus = 'current' | 'saved' | 'available';
 
-const formatCompactBaseURL = (value: string) => {
-  try {
-    const parsed = new URL(value);
-    const host = parsed.host.replace(/^www\./, '');
-    const path = parsed.pathname.replace(/\/$/, '');
-    return path ? `${host}${path}` : host;
-  } catch {
-    return value.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  }
-};
-
 const getModelStatus = (activeRuntimeConfig: AIConfigEntry | null, model: string): ModelStatus => {
   if (activeRuntimeConfig?.model === model) {
     return 'current';
@@ -195,17 +151,6 @@ const getModelStatus = (activeRuntimeConfig: AIConfigEntry | null, model: string
   }
 
   return 'available';
-};
-
-const getModelStatusMeta = (status: ModelStatus) => {
-  switch (status) {
-    case 'current':
-      return 'Current selection';
-    case 'saved':
-      return 'Saved in settings';
-    default:
-      return 'Available model';
-  }
 };
 
 const getProviderMonogram = (provider: string) => {
@@ -239,35 +184,6 @@ const getProviderMonogram = (provider: string) => {
   }
 };
 
-const getProviderAccent = (provider?: string | null) => {
-  const normalized = provider?.trim().toLowerCase();
-
-  switch (normalized) {
-    case 'openai':
-      return '#10b981';
-    case 'anthropic':
-      return '#f59e0b';
-    case 'deepseek':
-      return '#38bdf8';
-    case 'google':
-    case 'gemini':
-      return '#60a5fa';
-    case 'openrouter':
-      return '#f97316';
-    case 'xai':
-      return '#94a3b8';
-    case 'ollama':
-      return '#22c55e';
-    case 'moonshot':
-      return '#fb7185';
-    default:
-      return '#60a5fa';
-  }
-};
-
-const buildProviderToneStyle = (provider?: string | null) =>
-  ({ '--chat-provider-accent': getProviderAccent(provider) } as React.CSSProperties);
-
 const TriggerSparkIcon = () => (
   <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
     <path
@@ -275,21 +191,6 @@ const TriggerSparkIcon = () => (
       fill="currentColor"
     />
     <circle cx="11.85" cy="11.85" r="1.1" fill="currentColor" opacity="0.7" />
-  </svg>
-);
-
-const PanelStackIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
-    <rect x="2.5" y="3.25" width="4.25" height="9.5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-    <rect x="9.25" y="4.5" width="4.25" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.2" opacity="0.82" />
-  </svg>
-);
-
-const ModelOrbitIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
-    <circle cx="8" cy="8" r="1.35" fill="currentColor" />
-    <path d="M3.25 8C3.25 5.53 5.53 3.5 8 3.5C10.47 3.5 12.75 5.53 12.75 8C12.75 10.47 10.47 12.5 8 12.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <path d="M8.05 1.95C10.92 2.17 13.35 4.67 13.35 7.95C13.35 11.24 10.96 13.82 8.05 14.05" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
   </svg>
 );
 

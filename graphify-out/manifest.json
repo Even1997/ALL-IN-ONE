@@ -384,8 +384,8 @@
     "hash": "1a5479b61a26da305f2ee0094e217e82"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatComposerModelSwitcher.tsx": {
-    "mtime": 1778664588.8171668,
-    "hash": "f2a1b642f10b2cb8819543e43c06f8db"
+    "mtime": 1778754934.3604472,
+    "hash": "670dada72992e9b5e9161dcf0c883413"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChatConversationMessagesPane.tsx": {
     "mtime": 1778597213.131136,
@@ -512,16 +512,16 @@
     "hash": "34aff908b3be6d111f2c5238903d1d54"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentWorkbenchLayout.tsx": {
-    "mtime": 1778733368.5911453,
-    "hash": "a8e4f9de8ae5c71f7add04de45634c62"
+    "mtime": 1778750620.3940294,
+    "hash": "992fbefadbef49bfacc474f8622a074e"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentWorkbenchSidebar.tsx": {
-    "mtime": 1778744981.3700953,
-    "hash": "9ec96a1fba82b480149d43c537169823"
+    "mtime": 1778751159.6360939,
+    "hash": "b6f2243dde9afeb63bfbf0465dab7ea2"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\pages\\AgentShellPage.tsx": {
-    "mtime": 1778746071.7203972,
-    "hash": "5a0888f909c8531b8811be4acba253ae"
+    "mtime": 1778750650.5946412,
+    "hash": "07a8385716aa13aeba057e6664ba3c74"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\desktopShell\\desktopShell.test.ts": {
     "mtime": 1778417427.098699,
@@ -580,8 +580,8 @@
     "hash": "85430f6d4e6f367aba574636e1b0c38b"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\knowledge\\workspace\\KnowledgeNoteWorkspace.tsx": {
-    "mtime": 1778693323.1670098,
-    "hash": "f7b02930eec2ba54a229b4096668a27c"
+    "mtime": 1778753221.2991188,
+    "hash": "683e9d52172bb68b052e48769c3b8480"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\modules\\ai\\providerPresets.ts": {
     "mtime": 1776965054.6463733,
@@ -1128,8 +1128,8 @@
     "hash": "ca359f068870547bba053e40858b2379"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\utils\\layoutPreferences.ts": {
-    "mtime": 1777166444.8181078,
-    "hash": "fe850edd891a71e4c6537083eb7f47ce"
+    "mtime": 1778750738.551417,
+    "hash": "b63e8b4450f9dbbcc2bbdfbf1ee9b5b9"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\utils\\projectPersistence.ts": {
     "mtime": 1778399387.7339501,
@@ -1144,8 +1144,8 @@
     "hash": "1be34a5c61c2c35365de3dab14298f0b"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src-tauri\\src\\lib.rs": {
-    "mtime": 1778570724.2369885,
-    "hash": "b1af9a621d960405a2a5367c5630d748"
+    "mtime": 1778755468.3436248,
+    "hash": "cb012299f7bf83d8a8fd021003042ec9"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src-tauri\\src\\main.rs": {
     "mtime": 1777348617.3139012,
@@ -1239,6 +1239,10 @@
     "mtime": 1777971265.554347,
     "hash": "133b932beb4f8123a9ff60b0c9b2f492"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\desktop-shell-drag-theme.test.mjs": {
+    "mtime": 1778755553.807375,
+    "hash": "b2f08e5397a95fd271fbc293f32447d0"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\desktop-workbench-ui.test.mjs": {
     "mtime": 1778399387.7641587,
     "hash": "8b032f7dc03ccb6aaf26a999899e8fa4"
@@ -1324,8 +1328,8 @@
     "hash": "690c19758549deb2fd718352370d9ac9"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\macos-ui-system.test.mjs": {
-    "mtime": 1778399387.767657,
-    "hash": "c44e079d16e0bd6b498ee8d3bede199b"
+    "mtime": 1778755541.7736626,
+    "hash": "47cd78ef9b39ce045b16c1c534342a65"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\node-runtime-windows-encoding.test.mjs": {
     "mtime": 1778595644.992759,
@@ -1508,8 +1512,8 @@
     "hash": "bfbdb1071894da53b2eaa0609c7a550e"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-composer-model-switcher.test.mjs": {
-    "mtime": 1778663598.1769822,
-    "hash": "c2ee230acb9b178772022db854ba0d2f"
+    "mtime": 1778754905.2194984,
+    "hash": "8cb6cadfa12e056e43a6fd7b3af3ffc6"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\tests\\ai\\ai-chat-direct-streaming-display-source.test.mjs": {
     "mtime": 1778597375.2217054,

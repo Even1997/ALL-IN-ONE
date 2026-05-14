@@ -1,18 +1,34 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useGNAgentWorkbenchSession } from '../../../components/ai/gn-agent-shell/useGNAgentWorkbenchSession';
 import { MacDialog } from '../../../components/ui/MacDialog';
 import { useKnowledgeStore } from '../../../features/knowledge/store/knowledgeStore';
 import { buildKnowledgeSearchIndex, searchKnowledgeEntries } from '../../../modules/knowledge/knowledgeSearch';
 import { useProjectStore } from '../../../store/projectStore';
+import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from '../../../utils/layoutPreferences';
 import { AgentChatStage } from '../components/AgentChatStage';
 import { AgentUtilitySidebar, hasAgentReviewContent } from '../components/AgentUtilitySidebar';
 import { AgentWorkbenchLayout } from '../components/AgentWorkbenchLayout';
 import { AgentWorkbenchSidebar } from '../components/AgentWorkbenchSidebar';
 import './AgentShellPage.css';
 
+const AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS = { min: 240, max: 420 };
+const AGENT_SIDEBAR_DEFAULT_PANEL_WIDTH = 304;
+
+const clampAgentSidebarPanelWidth = (value: number) =>
+  Math.min(AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS.max, Math.max(AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS.min, value));
+
 export const AgentShellPage: React.FC = () => {
   const session = useGNAgentWorkbenchSession();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarPanelWidth, setSidebarPanelWidth] = useState(() =>
+    readLayoutSize(
+      LAYOUT_PREFERENCE_KEYS.agentWorkbenchSidebarWidth,
+      AGENT_SIDEBAR_DEFAULT_PANEL_WIDTH,
+      AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS,
+    ),
+  );
+  const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [utilitySidebarCollapsed, setUtilitySidebarCollapsed] = useState(true);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,6 +70,75 @@ export const AgentShellPage: React.FC = () => {
 
   const showUtilitySidebar = hasAgentReviewContent(session);
 
+  const persistSidebarPanelWidth = useCallback((value: number) => {
+    setSidebarPanelWidth(
+      writeLayoutSize(
+        LAYOUT_PREFERENCE_KEYS.agentWorkbenchSidebarWidth,
+        value,
+        AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS,
+      ),
+    );
+  }, []);
+
+  const handleSidebarResizePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+
+      const startX = event.clientX;
+      const startWidth = sidebarPanelWidth;
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+
+      setIsSidebarResizing(true);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        setSidebarPanelWidth(clampAgentSidebarPanelWidth(startWidth + moveEvent.clientX - startX));
+      };
+
+      const handlePointerUp = () => {
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        setIsSidebarResizing(false);
+        setSidebarPanelWidth((current) =>
+          writeLayoutSize(
+            LAYOUT_PREFERENCE_KEYS.agentWorkbenchSidebarWidth,
+            current,
+            AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS,
+          ),
+        );
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        window.removeEventListener('pointercancel', handlePointerUp);
+      };
+
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
+    },
+    [sidebarPanelWidth],
+  );
+
+  const handleSidebarResizeKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') {
+        return;
+      }
+
+      event.preventDefault();
+
+      persistSidebarPanelWidth(
+        event.key === 'Home'
+          ? AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS.min
+          : event.key === 'End'
+            ? AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS.max
+            : clampAgentSidebarPanelWidth(sidebarPanelWidth + (event.key === 'ArrowRight' ? 16 : -16)),
+      );
+    },
+    [persistSidebarPanelWidth, sidebarPanelWidth],
+  );
+
   return (
     <section className="agent-workspace-page">
       <AgentWorkbenchLayout
@@ -68,6 +153,7 @@ export const AgentShellPage: React.FC = () => {
             onOpenSearch={() => setIsSearchDialogOpen(true)}
             collapsed={sidebarCollapsed}
             onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+            panelWidth={sidebarPanelWidth}
           />
         }
         centerStage={
@@ -78,6 +164,12 @@ export const AgentShellPage: React.FC = () => {
             projectName={session.currentProjectName}
           />
         }
+        sidebarCollapsed={sidebarCollapsed}
+        sidebarWidth={sidebarPanelWidth}
+        sidebarWidthBounds={AGENT_SIDEBAR_PANEL_WIDTH_BOUNDS}
+        sidebarResizing={isSidebarResizing}
+        onSidebarResizePointerDown={handleSidebarResizePointerDown}
+        onSidebarResizeKeyDown={handleSidebarResizeKeyDown}
         companion={
           showUtilitySidebar ? (
             <AgentUtilitySidebar

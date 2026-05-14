@@ -1784,13 +1784,10 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
   grid-template-columns: minmax(98px, 112px) minmax(180px, 1fr);
   gap: 0;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid var(--chat-composer-shell-border);
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 12%, transparent), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
-    color-mix(in srgb, var(--mode-panel, rgba(10, 14, 21, 0.98)) 95%, transparent);
-  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.2);
+  background: color-mix(in srgb, var(--mode-panel, rgba(10, 14, 21, 0.98)) 97%, transparent);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.16);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -1807,94 +1804,11 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
 
 .chat-model-switcher-provider-rail {
   border-right: 1px solid color-mix(in srgb, var(--mode-border, rgba(255, 255, 255, 0.08)) 88%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 7%, transparent), transparent),
-    color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.05)) 56%, transparent);
+  background: color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.05)) 78%, transparent);
 }
 
 .chat-model-switcher-model-panel {
-  background: color-mix(in srgb, var(--mode-panel, rgba(10, 14, 21, 0.98)) 96%, transparent);
-}
-
-.chat-model-switcher-model-panel-header {
-  display: grid;
-  gap: 6px;
-  padding: 4px 4px 6px;
-}
-
-.chat-model-switcher-model-summary {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 7px;
-  padding: 1px 0 0;
-}
-
-.chat-model-switcher-model-summary-badge {
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 20%, var(--mode-border, rgba(255, 255, 255, 0.08)));
-  background:
-    radial-gradient(circle at 30% 28%, color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 34%, transparent), transparent 55%),
-    color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 14%, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)));
-  color: color-mix(in srgb, var(--mode-text, #f8fafc) 86%, transparent);
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.chat-model-switcher-model-summary-badge svg {
-  width: 9px;
-  height: 9px;
-}
-
-.chat-model-switcher-model-summary-copy {
-  min-width: 0;
-  display: grid;
-  gap: 1px;
-}
-
-.chat-model-switcher-model-summary-copy strong {
-  color: var(--mode-text, #f8fafc);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.chat-model-switcher-model-summary-copy span {
-  color: color-mix(in srgb, var(--mode-text, #f8fafc) 50%, transparent);
-  font-size: 8px;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.chat-model-switcher-panel-heading {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: color-mix(in srgb, var(--mode-text, #f8fafc) 50%, transparent);
-  padding-left: 4px;
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-}
-
-.chat-model-switcher-panel-heading svg {
-  width: 10px;
-  height: 10px;
+  background: color-mix(in srgb, var(--mode-panel, rgba(10, 14, 21, 0.98)) 99%, transparent);
 }
 
 .chat-model-switcher-config-item,
@@ -1914,12 +1828,13 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
 
 .chat-model-switcher-config-item {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
-  padding: 6px 7px;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: 11px;
+  border-radius: 8px;
   background: transparent;
 }
 
@@ -1929,56 +1844,43 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
   align-items: center;
   gap: 7px;
   min-height: 32px;
-  padding: 6px 8px 6px 9px;
-  border-radius: 11px;
-  border: 1px solid color-mix(in srgb, var(--mode-border, rgba(255, 255, 255, 0.08)) 88%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.06)) 70%, transparent), transparent),
-    color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)) 90%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.chat-model-switcher-provider-mark {
-  width: 2px;
-  min-height: 18px;
-  align-self: stretch;
-  border-radius: 999px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 0;
   background: transparent;
+  box-shadow: none;
 }
 
 .chat-model-switcher-provider-avatar {
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 18%, var(--mode-border, rgba(255, 255, 255, 0.1)));
-  background:
-    radial-gradient(circle at 30% 28%, color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 22%, transparent), transparent 54%),
-    color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 11%, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)));
-  color: color-mix(in srgb, var(--mode-text, #f8fafc) 80%, transparent);
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--mode-border, rgba(255, 255, 255, 0.08)) 92%, transparent);
+  background: color-mix(in srgb, var(--mode-panel-alt, rgba(255, 255, 255, 0.05)) 92%, transparent);
+  color: color-mix(in srgb, var(--mode-text, #f8fafc) 66%, transparent);
+}
+
+.chat-model-switcher-provider-icon {
   font-size: 7px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 0 0 1px color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 10%, transparent);
 }
 
 .chat-model-switcher-provider-copy {
   min-width: 0;
-  display: grid;
-  gap: 0;
+  display: block;
 }
 
 .chat-model-switcher-provider-copy strong,
 .chat-model-switcher-model-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.1;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2013,9 +1915,9 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
 }
 
 .chat-model-switcher-model-meta.current {
-  color: color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 82%, white);
-  border-color: color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 24%, transparent);
-  background: color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 14%, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)));
+  color: color-mix(in srgb, var(--mode-accent, #60a5fa) 82%, white);
+  border-color: color-mix(in srgb, var(--mode-accent, #60a5fa) 24%, transparent);
+  background: color-mix(in srgb, var(--mode-accent, #60a5fa) 14%, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)));
 }
 
 .chat-model-switcher-model-meta.saved {
@@ -2032,14 +1934,9 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
 .chat-model-switcher-model-item.active,
 .chat-model-switcher-config-item:hover,
 .chat-model-switcher-model-item:hover {
-  transform: translateY(-1px);
-  background: color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 12%, var(--mode-panel-alt, rgba(255, 255, 255, 0.06)));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 16%, transparent);
-}
-
-.chat-model-switcher-config-item.active .chat-model-switcher-provider-mark,
-.chat-model-switcher-config-item:hover .chat-model-switcher-provider-mark {
-  background: color-mix(in srgb, var(--chat-provider-accent, var(--mode-accent, #60a5fa)) 74%, white);
+  transform: none;
+  background: color-mix(in srgb, var(--mode-accent, #60a5fa) 10%, var(--mode-panel-alt, rgba(255, 255, 255, 0.05)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mode-accent, #60a5fa) 14%, transparent);
 }
 
 .chat-model-switcher-config-item.active .chat-model-switcher-provider-avatar,
@@ -2047,6 +1944,12 @@ details[open] > summary.chat-inline-disclosure .chat-inline-disclosure-caret::be
 .chat-model-switcher-model-item.active .chat-model-switcher-model-meta,
 .chat-model-switcher-model-item:hover .chat-model-switcher-model-meta {
   color: var(--mode-text, #f8fafc);
+}
+
+.chat-model-switcher-config-item.active .chat-model-switcher-provider-avatar,
+.chat-model-switcher-config-item:hover .chat-model-switcher-provider-avatar {
+  border-color: color-mix(in srgb, var(--mode-accent, #60a5fa) 24%, transparent);
+  background: color-mix(in srgb, var(--mode-accent, #60a5fa) 12%, var(--mode-panel-alt, rgba(255, 255, 255, 0.04)));
 }
 
 .chat-model-switcher-config-item:disabled {

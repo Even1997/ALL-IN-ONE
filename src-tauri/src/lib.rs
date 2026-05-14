@@ -2709,17 +2709,6 @@ pub fn run() {
 
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
-                window
-                    .set_effects(tauri::utils::config::WindowEffectsConfig {
-                        effects: vec![tauri::utils::WindowEffect::WindowBackground],
-                        state: None,
-                        radius: Some(14.0),
-                        color: None,
-                    })
-                    .ok();
-                window
-                    .set_background_color(Some(tauri::utils::config::Color(0, 0, 0, 0)))
-                    .ok();
                 window.set_shadow(false).ok();
             }
 
