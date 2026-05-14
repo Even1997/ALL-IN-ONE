@@ -10572,6 +10572,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 
 :root {
   --desktop-topbar-height: 40px;
+  --desktop-primary-rail-width: 56px;
   --desktop-workbench-gutter: 12px;
   --desktop-window-radius: 14px;
   --desktop-workbench-radius: 18px;

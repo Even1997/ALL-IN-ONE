@@ -10,6 +10,8 @@ const cssPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.c
 const workspaceCssPath = path.resolve(__dirname, '../../src/components/ai/AIWorkspace.css');
 const storePath = path.resolve(__dirname, '../../src/modules/ai/store/globalAIStore.ts');
 const chatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const appPath = path.resolve(__dirname, '../../src/App.tsx');
+const globalSettingsPagePath = path.resolve(__dirname, '../../src/components/workspace/GlobalSettingsPage.tsx');
 const embeddedPiecesPath = path.resolve(__dirname, '../../src/components/ai/gn-agent/GNAgentEmbeddedPieces.tsx');
 const settingsTabPath = path.resolve(__dirname, '../../src/components/workspace/AIChatAISettingsTab.tsx');
 const settingsHookPath = path.resolve(__dirname, '../../src/components/workspace/useAIChatSettingsState.ts');
@@ -55,25 +57,28 @@ test('ai chat keeps context usage meta and adds quick model switching near the c
   assert.doesNotMatch(source, /className="chat-ai-select"/);
   assert.match(source, /className="chat-composer-runtime-strip"/);
   assert.match(source, /AIChatComposerModelSwitcher/);
-  assert.match(source, /handleToggleEnabled/);
+  assert.match(source, /new CustomEvent\(AI_CHAT_SETTINGS_EVENT/);
 });
 
-test('ai settings modal exposes editable saved model rows and an active model selector', async () => {
-  const [chatSource, settingsTabSource, settingsHookSource] = await Promise.all([
+test('global settings page owns editable saved model rows with an inline back action', async () => {
+  const [appSource, chatSource, pageSource, settingsTabSource, settingsHookSource] = await Promise.all([
+    readFile(appPath, 'utf8'),
     readFile(chatPath, 'utf8'),
+    readFile(globalSettingsPagePath, 'utf8'),
     readFile(settingsTabPath, 'utf8'),
     readFile(settingsHookPath, 'utf8'),
   ]);
 
   assert.equal((settingsTabSource.match(/onClick=\{handleApplySettings\}/g) || []).length, 1);
-  assert.match(chatSource, /createPortal/);
-  assert.match(chatSource, /document\.body/);
-  assert.match(chatSource, /chat-settings-modal-backdrop/);
-  assert.match(
-    chatSource,
-    /<div className="chat-settings-modal-backdrop" onClick=\{closeSettings\}>\s*<section\s+className="chat-settings-drawer open"[\s\S]*?onClick=\{\(event\) => event\.stopPropagation\(\)\}/
-  );
-  assert.match(chatSource, /role="dialog"/);
+  assert.match(appSource, /GlobalSettingsPage/);
+  assert.match(pageSource, /className="chat-settings-back"/);
+  assert.match(pageSource, /aria-label="退出设置"/);
+  assert.match(pageSource, />\s*←\s*<\/button>/);
+  assert.match(pageSource, /<LazyAIChatAISettingsTab/);
+  assert.match(chatSource, /dispatchEvent\([\s\S]*?new CustomEvent\(AI_CHAT_SETTINGS_EVENT/);
+  assert.doesNotMatch(chatSource, /chat-settings-drawer-embedded/);
+  assert.doesNotMatch(chatSource, /chat-settings-modal-backdrop/);
+  assert.doesNotMatch(chatSource, /chat-settings-close/);
   assert.match(settingsTabSource, /savedModels/);
   assert.match(settingsTabSource, /handleAddSavedModel/);
   assert.match(settingsTabSource, /handleRemoveSavedModel/);
@@ -115,19 +120,19 @@ test('composer runtime meta only keeps context usage and removes duplicated runt
   assert.doesNotMatch(embeddedSource, /chat-composer-embedded-toolbar-stack/);
 });
 
-test('ai settings modal CSS keeps dialog centered and close button above content', async () => {
+test('global settings page CSS fills the main stage and styles the inline back button', async () => {
   const css = await readFile(cssPath, 'utf8');
   const workspaceCss = await readFile(workspaceCssPath, 'utf8');
 
   assert.match(workspaceCss, /\.floating-ai-workspace\s*\{[^}]*z-index:\s*1000;/s);
-  assert.match(css, /\.chat-settings-modal-backdrop\s*\{[^}]*place-items:\s*center;/s);
-  assert.match(css, /\.chat-settings-drawer\s*\{[^}]*position:\s*relative;/s);
-  assert.match(css, /\.chat-settings-drawer\s*\{[^}]*z-index:\s*1002;/s);
-  assert.match(css, /width:\s*min\(920px, calc\(100vw - 48px\)\);/);
-  assert.match(css, /max-height:\s*min\(820px, calc\(100dvh - 48px\)\);/);
-  assert.match(css, /\.chat-settings-close\s*\{[^}]*position:\s*relative;/s);
-  assert.match(css, /\.chat-settings-close\s*\{[^}]*z-index:\s*2;/s);
-  assert.match(css, /\.chat-settings-close\s*\{[^}]*flex-shrink:\s*0;/s);
+  assert.match(css, /\.global-settings-page\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;/s);
+  assert.match(css, /\.global-settings-page-body\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0;/s);
+  assert.match(css, /\.chat-settings-back\s*\{[^}]*min-height:\s*32px;/s);
+  assert.match(css, /\.chat-settings-back\s*\{[^}]*min-width:\s*32px;[^}]*padding:\s*0;[^}]*border-radius:\s*8px;/s);
+  assert.match(css, /\.global-settings-page\s+\.chat-settings-note-surface\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s);
+  assert.doesNotMatch(css, /\.chat-settings-modal-backdrop\s*\{/);
+  assert.doesNotMatch(css, /\.chat-settings-close\s*\{/);
+  assert.doesNotMatch(css, /ai-chat-settings-overlay-open/);
   assert.match(css, /\.chat-composer-runtime-strip\s*\{/);
   assert.match(css, /\.chat-composer-footer-start\s*\{/);
 });

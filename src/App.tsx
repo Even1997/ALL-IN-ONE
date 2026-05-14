@@ -31,6 +31,7 @@ import {
   type RoleView,
 } from './appNavigation';
 import { AI_CHAT_SETTINGS_EVENT } from './modules/ai/chat/chatCommands';
+import { resolveSettingsTabId, type SettingsTabId } from './components/workspace/globalSettingsPageShared';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type {
   FeatureNode,
@@ -96,6 +97,11 @@ const LazyAgentShellPage = lazy(async () => {
 const LazyDesignWorkbenchView = lazy(async () => {
   const module = await import('./components/design/DesignWorkbenchScreen');
   return { default: module.DesignWorkbenchScreen };
+});
+
+const LazyGlobalSettingsPage = lazy(async () => {
+  const module = await import('./components/workspace/GlobalSettingsPage');
+  return { default: module.GlobalSettingsPage };
 });
 
 const WORKBENCH_LAZY_FALLBACK = <div className="app-surface-loading">正在载入工作台…</div>;
@@ -340,6 +346,8 @@ const App: React.FC = () => {
   const [selectedFeature, setSelectedFeature] = useState<FeatureNode | null>(null);
   const [pageWorkbenchTargetPageId, setPageWorkbenchTargetPageId] = useState<string | null>(null);
   const [openDesktopMenuId, setOpenDesktopMenuId] = useState<string | null>(null);
+  const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
+  const [activeGlobalSettingsTab, setActiveGlobalSettingsTab] = useState<SettingsTabId>('ai');
   const desktopAiTransitionTimerRef = useRef<number | null>(null);
   const desktopAiEnterFrameRef = useRef<number | null>(null);
   const desktopAiEnterCommitFrameRef = useRef<number | null>(null);
@@ -397,7 +405,21 @@ const App: React.FC = () => {
     [currentRole]
   );
   const isDesktopWorkbenchMode = Boolean(currentProject);
-  const showWorkspaceSidebar = activeDesktopRole.showCompanionPane;
+  const showWorkspaceSidebar = !isGlobalSettingsOpen && activeDesktopRole.showCompanionPane;
+
+  useEffect(() => {
+    const handleOpenGlobalSettings = (event: Event) => {
+      const detail = (event as CustomEvent<{ tab?: string }>).detail || {};
+      setActiveGlobalSettingsTab(resolveSettingsTabId(detail.tab));
+      setIsProjectManagerOpen(false);
+      setIsGlobalSettingsOpen(true);
+    };
+
+    window.addEventListener(AI_CHAT_SETTINGS_EVENT, handleOpenGlobalSettings as EventListener);
+    return () => {
+      window.removeEventListener(AI_CHAT_SETTINGS_EVENT, handleOpenGlobalSettings as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     document.body.classList.toggle('desktop-workbench-mode', isDesktopWorkbenchMode);
@@ -1441,7 +1463,13 @@ const App: React.FC = () => {
             ? renderTestView()
             : renderOperationsView();
 
-  const appMainContent = isProjectManagerOpen ? (
+  const appMainContent = isGlobalSettingsOpen ? (
+    <LazyGlobalSettingsPage
+      activeSettingsTab={activeGlobalSettingsTab}
+      onSelectTab={setActiveGlobalSettingsTab}
+      onExit={() => setIsGlobalSettingsOpen(false)}
+    />
+  ) : isProjectManagerOpen ? (
     <ProjectSetup
       projects={projects}
       activeProjectId={currentProjectId}
@@ -1541,7 +1569,10 @@ const App: React.FC = () => {
               <MacIconButton
                 key={role.id}
                 className={`desktop-rail-icon-btn ${currentRole === role.id ? 'active' : ''}`}
-                onClick={() => setCurrentRole(role.id)}
+                onClick={() => {
+                  setIsGlobalSettingsOpen(false);
+                  setCurrentRole(role.id);
+                }}
                 aria-label={role.label}
                 title={role.label}
               >
@@ -1553,11 +1584,11 @@ const App: React.FC = () => {
       footer={(
         <>
           <MacIconButton
-            className="desktop-rail-icon-btn"
+            className={`desktop-rail-icon-btn ${isGlobalSettingsOpen ? 'active' : ''}`}
             onClick={() => {
               window.dispatchEvent(
                 new CustomEvent(AI_CHAT_SETTINGS_EVENT, {
-                  detail: { tab: 'skills' },
+                  detail: { tab: 'ai' },
                 }),
               );
             }}
@@ -1576,7 +1607,10 @@ const App: React.FC = () => {
           </MacIconButton>
           <MacIconButton
             className="desktop-rail-icon-btn"
-            onClick={() => setIsProjectManagerOpen(true)}
+            onClick={() => {
+              setIsGlobalSettingsOpen(false);
+              setIsProjectManagerOpen(true);
+            }}
             aria-label="Project list"
             title="Project list"
           >
@@ -1589,10 +1623,10 @@ const App: React.FC = () => {
   const desktopTopbar = (
     <DesktopWorkbenchTopbar
       menuBar={desktopMenuBar}
-      roleLabel={activeDesktopRole.label}
+      roleLabel={isGlobalSettingsOpen ? 'Settings' : activeDesktopRole.label}
       projectName={currentProject.name}
-      projectSubtitle={`${activeDesktopRole.label} Workspace`}
-      context={(
+      projectSubtitle={isGlobalSettingsOpen ? 'Global Preferences' : `${activeDesktopRole.label} Workspace`}
+      context={isGlobalSettingsOpen ? <span className="desktop-feature-pill">Global settings</span> : (
         <>
           {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
           <MacSelectField
@@ -1611,9 +1645,11 @@ const App: React.FC = () => {
       )}
       actions={(
         <>
-          <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
-            Projects
-          </MacButton>
+          {!isGlobalSettingsOpen ? (
+            <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
+              Projects
+            </MacButton>
+          ) : null}
           {showWorkspaceSidebar ? (
             <MacIconButton
               className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
@@ -1631,7 +1667,7 @@ const App: React.FC = () => {
     />
   );
   const desktopInspector =
-    showWorkspaceSidebar && isDesktopAiPaneMounted ? (
+    !isGlobalSettingsOpen && showWorkspaceSidebar && isDesktopAiPaneMounted ? (
       <InspectorPane
         ref={desktopAiPaneElementRef}
         visible={isDesktopAiPaneVisible}
@@ -1645,7 +1681,7 @@ const App: React.FC = () => {
       </InspectorPane>
     ) : null;
   const desktopResizeHandle =
-    showWorkspaceSidebar && isDesktopAiPaneMounted && isDesktopAiPaneVisible ? (
+    !isGlobalSettingsOpen && showWorkspaceSidebar && isDesktopAiPaneMounted && isDesktopAiPaneVisible ? (
       <div
         ref={desktopAiResizeHandleRef}
         className="desktop-ai-resize-handle"

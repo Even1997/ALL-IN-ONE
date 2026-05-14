@@ -5,22 +5,32 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const globalSettingsPagePath = path.resolve(__dirname, '../../src/components/workspace/GlobalSettingsPage.tsx');
 const aiSettingsTabPath = path.resolve(__dirname, '../../src/components/workspace/AIChatAISettingsTab.tsx');
 
-test('AIChat lazy-loads the heavy AI settings tab instead of inlining it in the main chat module', async () => {
-  const [chatSource, tabSource] = await Promise.all([
-    readFile(aiChatPath, 'utf8'),
+test('global settings page lazy-loads the heavy AI settings tab instead of inlining it in App or AIChat', async () => {
+  const [pageSource, tabSource] = await Promise.all([
+    readFile(globalSettingsPagePath, 'utf8'),
     readFile(aiSettingsTabPath, 'utf8'),
   ]);
 
-  assert.match(chatSource, /const LazyAIChatAISettingsTab = lazy\(async \(\) =>/);
-  assert.match(chatSource, /import\('\.\/AIChatAISettingsTab'\)/);
-  assert.match(chatSource, /<LazyAIChatAISettingsTab/);
-  assert.doesNotMatch(chatSource, /className="chat-settings-ai-layout"/);
+  assert.match(pageSource, /const LazyAIChatAISettingsTab = lazy\(async \(\) =>/);
+  assert.match(pageSource, /import\('\.\/AIChatAISettingsTab'\)/);
+  assert.match(pageSource, /<LazyAIChatAISettingsTab/);
+  assert.doesNotMatch(pageSource, /className="chat-settings-ai-layout"/);
 
   assert.match(tabSource, /export const AIChatAISettingsTab/);
   assert.match(tabSource, /chat-settings-ai-layout/);
   assert.match(tabSource, /chat-settings-provider-list/);
-  assert.match(tabSource, /chat-settings-detail/);
+  assert.match(tabSource, /chat-settings-ai-stage/);
+  assert.doesNotMatch(tabSource, /chat-settings-ai-companion/);
+  assert.doesNotMatch(tabSource, /Current config/);
+  assert.doesNotMatch(tabSource, /Custom Headers/);
+  assert.doesNotMatch(tabSource, /Export JSON/);
+  assert.doesNotMatch(tabSource, /Import JSON/);
+  assert.doesNotMatch(tabSource, /Import AI Config JSON/);
+  assert.doesNotMatch(tabSource, /View Docs/);
+  assert.doesNotMatch(tabSource, /Provider details/);
+  assert.doesNotMatch(tabSource, /Quick reminder/);
+  assert.doesNotMatch(tabSource, /chat-settings-summary-card/);
 });

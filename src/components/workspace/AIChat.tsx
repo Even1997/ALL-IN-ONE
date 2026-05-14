@@ -1,4 +1,4 @@
-﻿import React, { Suspense, lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 import type { AIProviderType } from '../../modules/ai/core/AIService';
@@ -80,7 +80,6 @@ import {
   AI_CHAT_COMMAND_EVENT,
   AI_CHAT_SETTINGS_EVENT,
   type AIChatCommandDetail,
-  type AIChatSettingsDetail,
 } from '../../modules/ai/chat/chatCommands';
 import {
   type ProjectFileOperation,
@@ -108,10 +107,8 @@ import {
   type MessageBubbleCard,
   type MessageProcessSummary,
 } from '../ai/gn-agent/GNAgentEmbeddedPieces';
-import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
 import { AIChatReferenceSearchMenu } from './AIChatReferenceSearchMenu';
 import { AIChatSlashCommandMenu, type SlashCommandEntry } from './AIChatSlashCommandMenu';
-import { RuntimeMcpSettingsPage } from './RuntimeMcpSettingsPage';
 import { AIChatConversationMessagesPane } from './AIChatConversationMessagesPane';
 import { AIChatRuntimeTimelineInteractionEvent } from './AIChatRuntimeInteractionCards.tsx';
 import {
@@ -142,11 +139,7 @@ import './AIChat.css';
 let aiServiceModulePromise: Promise<typeof import('../../modules/ai/core/AIService')> | null = null;
 
 const loadAIServiceModule = () => (aiServiceModulePromise ??= import('../../modules/ai/core/AIService'));
-
-const LazyAIChatAISettingsTab = lazy(async () => {
-  const module = await import('./AIChatAISettingsTab');
-  return { default: module.AIChatAISettingsTab };
-});
+void lazy;
 
 type AISettingsDraft = {
   id: string | null;
@@ -177,20 +170,6 @@ type AIChatProps = {
   showHeaderChrome?: boolean;
 };
 
-type SettingsTabId =
-  | 'ai'
-  | 'permissions'
-  | 'general'
-  | 'adapters'
-  | 'terminal'
-  | 'skills'
-  | 'mcp'
-  | 'agents'
-  | 'plugins'
-  | 'computerUse'
-  | 'diagnostics'
-  | 'about';
-
 type ChatAgentAvailability = {
   ready: boolean;
   title: string;
@@ -204,102 +183,6 @@ type RunDiffState = {
 };
 
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
-const SETTINGS_TABS: Array<{
-  id: SettingsTabId;
-  label: string;
-  eyebrow: string;
-  title: string;
-  description: string;
-}> = [
-  {
-    id: 'ai',
-    label: 'AI',
-    eyebrow: 'Model Settings',
-    title: 'AI 设置',
-    description: '管理当前聊天使用的模型配置与 Provider。',
-  },
-  {
-    id: 'permissions',
-    label: '权限',
-    eyebrow: 'Permissions',
-    title: '权限设置',
-    description: '管理审批、sandbox 和自动执行边界。',
-  },
-  {
-    id: 'general',
-    label: '通用',
-    eyebrow: 'General',
-    title: '通用设置',
-    description: '管理 Agent 工作台的默认行为与显示偏好。',
-  },
-  {
-    id: 'adapters',
-    label: '适配器',
-    eyebrow: 'Adapters',
-    title: '适配器设置',
-    description: '管理本地模型、外部 CLI 与运行时桥接能力。',
-  },
-  {
-    id: 'terminal',
-    label: '终端',
-    eyebrow: 'Terminal',
-    title: '终端设置',
-    description: '管理 shell、工作目录和命令执行偏好。',
-  },
-  {
-    id: 'skills',
-    label: '技能',
-    eyebrow: 'Skills Library',
-    title: '技能设置',
-    description: '统一管理技能导入、查看与删除，不再放在 Agent 里单独维护。',
-  },
-  {
-    id: 'mcp',
-    label: 'MCP',
-    eyebrow: 'Runtime MCP',
-    title: 'MCP 设置',
-    description: '统一管理 MCP server 的查看、编辑、启停与运行记录。',
-  },
-  {
-    id: 'agents',
-    label: 'Agents',
-    eyebrow: 'Agents',
-    title: 'Agents 设置',
-    description: '管理本地 Agent、团队执行与默认分工。',
-  },
-  {
-    id: 'plugins',
-    label: '插件',
-    eyebrow: 'Plugins',
-    title: '插件设置',
-    description: '管理扩展入口与未来插件能力。',
-  },
-  {
-    id: 'computerUse',
-    label: 'Computer Use',
-    eyebrow: 'Computer Use',
-    title: 'Computer Use 设置',
-    description: '管理桌面自动化与可视操作能力。',
-  },
-  {
-    id: 'diagnostics',
-    label: '诊断',
-    eyebrow: 'Diagnostics',
-    title: '诊断信息',
-    description: '查看运行时状态、连接情况与故障排查信息。',
-  },
-  {
-    id: 'about',
-    label: '关于',
-    eyebrow: 'About',
-    title: '关于 GoodNight Agent',
-    description: '查看版本、能力边界与本地运行说明。',
-  },
-];
-
-const SETTINGS_TAB_IDS = new Set<SettingsTabId>(SETTINGS_TABS.map((tab) => tab.id));
-const resolveSettingsTabId = (tab: AIChatSettingsDetail['tab']): SettingsTabId =>
-  tab && SETTINGS_TAB_IDS.has(tab) ? tab : SETTINGS_TABS[0].id;
 const formatTimestamp = (value: number) =>
   new Date(value).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
@@ -753,9 +636,6 @@ const findPresetByConfig = (provider: AIProviderType, baseURL: string) =>
     (item) => item.id !== CUSTOM_PROVIDER_PRESET.id && item.type === provider && item.baseURL === baseURL
   ) || null;
 
-const providerTypeLabel = (provider: AIProviderType) =>
-  provider === 'anthropic' ? 'Anthropic' : 'OpenAI Compatible';
-
 const buildProviderEndpointPreview = (provider: AIProviderType, baseURL: string) =>
   `${baseURL.replace(/\/+$/, '')}/${provider === 'anthropic' ? 'messages' : 'chat/completions'}`;
 
@@ -978,8 +858,6 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTabId>('ai');
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [selectedChatAgentId, setSelectedChatAgentId] = useState<ChatAgentId>('built-in');
   const [localAgentSnapshot, setLocalAgentSnapshot] = useState<LocalAgentConfigSnapshot | null>(null);
@@ -1781,49 +1659,9 @@ export const AIChat: React.FC<AIChatProps> = ({
   ]);
 
   const {
-    filteredConfigs,
     selectedRuntimeConfig,
     isRuntimeConfigured,
-    selectedSettingsConfig,
-    selectedSettingsPreset,
-    selectedProviderTypeOption,
-    settingsModelOptions,
-    selectedProviderListMode,
-    selectedProviderEndpoint,
-    isSettingsDraftComplete,
-    isSettingsDraftSelected,
-    customHeadersJsonValid,
-    showApiKey,
-    setShowApiKey,
-    providerSearch,
-    setProviderSearch,
-    testState,
-    setTestState,
-    testMessage,
-    setTestMessage,
-    isLoadingModels,
     modelCatalog,
-    setSelectedSettingsConfigId,
-    settingsDraft,
-    setSettingsDraft,
-    jsonImportText,
-    setJsonImportText,
-    showJsonImport,
-    setShowJsonImport,
-    handleTestConnection,
-    handleLoadModels,
-    handleAddSavedModel,
-    handleUpdateSavedModel,
-    handleRemoveSavedModel,
-    handleSelectActiveModel,
-    handleApplySettings,
-    handleToggleEnabled,
-    handleCreateConfig,
-    handleDeleteConfig,
-    handleSelectConfig,
-    handleExportConfigs,
-    handleImportConfigs,
-    resetSettingsTransientUi,
   } = useAIChatSettingsState({
     aiConfigs,
     runtimeConfigIdOverride,
@@ -1872,28 +1710,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     onSelectConfig: handleSelectRuntimeConfig,
     onSelectModel: handleSelectRuntimeModel,
   };
-
-  const selectedSettingsTabMeta = useMemo(
-    () => SETTINGS_TABS.find((tab) => tab.id === activeSettingsTab) || SETTINGS_TABS[0],
-    [activeSettingsTab]
-  );
-  const renderSettingsPlaceholder = useCallback(
-    (tab: typeof SETTINGS_TABS[number]) => (
-      <div className="chat-settings-placeholder-page">
-        <section className="chat-settings-placeholder-card">
-          <div className="chat-settings-eyebrow">{tab.eyebrow}</div>
-          <strong>{tab.title}</strong>
-          <p>{tab.description}</p>
-          <span>这个页面已经进入 Agent Settings 信息架构，底层能力会按 GoodNight runtime 逐步接入。</span>
-        </section>
-        <section className="chat-settings-placeholder-card muted">
-          <strong>当前状态</strong>
-          <p>保留完整入口，避免设置页出现空白、死链或分散管理。</p>
-        </section>
-      </div>
-    ),
-    [],
-  );
 
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
   const agentAvailability: Record<ChatAgentId, ChatAgentAvailability> = useMemo(() => ({
@@ -2660,11 +2476,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     ];
   }, [
   ]);
-  const closeSettings = useCallback(() => {
-    setIsSettingsOpen(false);
-    setActiveSettingsTab('ai');
-    resetSettingsTransientUi();
-  }, [resetSettingsTransientUi]);
   const { handleCreateSession, submitPrompt } = useAIChatSidecarSessionActions({
     currentProjectId,
     currentProjectName: currentProject?.name || null,
@@ -2757,19 +2568,6 @@ export const AIChat: React.FC<AIChatProps> = ({
       window.removeEventListener(AI_CHAT_COMMAND_EVENT, handleExternalCommand as EventListener);
     };
   }, [activeSessionId, currentProject, queueComposerPrefill, submitPrompt]);
-
-  useEffect(() => {
-    const handleOpenSettings = (event: Event) => {
-      const detail = (event as CustomEvent<AIChatSettingsDetail>).detail || {};
-      setActiveSettingsTab(resolveSettingsTabId(detail.tab));
-      setIsSettingsOpen(true);
-    };
-
-    window.addEventListener(AI_CHAT_SETTINGS_EVENT, handleOpenSettings as EventListener);
-    return () => {
-      window.removeEventListener(AI_CHAT_SETTINGS_EVENT, handleOpenSettings as EventListener);
-    };
-  }, []);
 
   useEffect(() => {
     const composerPrefill = activeSession?.composerPrefill;
@@ -3119,7 +2917,13 @@ export const AIChat: React.FC<AIChatProps> = ({
                       type="button"
                       aria-label="设置"
                       title="设置"
-                      onClick={() => setIsSettingsOpen(true)}
+                      onClick={() => {
+                        window.dispatchEvent(
+                          new CustomEvent(AI_CHAT_SETTINGS_EVENT, {
+                            detail: { tab: 'ai' },
+                          }),
+                        );
+                      }}
                     >
                       <SettingsIcon />
                     </button>
@@ -3425,130 +3229,6 @@ export const AIChat: React.FC<AIChatProps> = ({
           )
         : null}
 
-      {isSettingsOpen
-        ? createPortal(
-            <div className="chat-settings-modal-backdrop" onClick={closeSettings}>
-              <section
-                className="chat-settings-drawer open"
-                role="dialog"
-                aria-modal="true"
-                aria-label={selectedSettingsTabMeta.title}
-                onClick={(event) => event.stopPropagation()}
-              >
-        <div className="chat-settings-drawer-header">
-          <div>
-            <div className="chat-settings-eyebrow">{selectedSettingsTabMeta.eyebrow}</div>
-            <strong>{selectedSettingsTabMeta.title}</strong>
-            <div className="chat-settings-header-description">{selectedSettingsTabMeta.description}</div>
-          </div>
-          <button className="chat-settings-close" type="button" aria-label="关闭 AI 设置" onClick={closeSettings}>
-            ×
-          </button>
-        </div>
-
-        <div className="chat-settings-drawer-body">
-          <aside className="chat-settings-sidebar">
-            <div className="chat-settings-tab-list">
-              {SETTINGS_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`chat-settings-tab${activeSettingsTab === tab.id ? ' active' : ''}`}
-                  onClick={() => setActiveSettingsTab(tab.id)}
-                >
-                  <strong>{tab.label}</strong>
-                  <span>{tab.description}</span>
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <div className="chat-settings-panel">
-            {activeSettingsTab === 'ai' ? (
-              <Suspense
-                fallback={(
-                  <div className="chat-settings-panel-surface">
-                    <div className="chat-settings-placeholder-card muted">
-                      <strong>加载 AI 设置中...</strong>
-                    </div>
-                  </div>
-                )}
-              >
-                <LazyAIChatAISettingsTab
-                  providerSearch={providerSearch}
-                  setProviderSearch={setProviderSearch}
-                  handleCreateConfig={handleCreateConfig}
-                  filteredConfigs={filteredConfigs}
-                  selectedSettingsConfig={selectedSettingsConfig}
-                  getConfigPreset={(config) => findPresetByConfig(config.provider, config.baseURL) || CUSTOM_PROVIDER_PRESET}
-                  providerTypeLabel={providerTypeLabel}
-                  setSelectedSettingsConfigId={setSelectedSettingsConfigId}
-                  setTestState={setTestState}
-                  setTestMessage={setTestMessage}
-                  settingsDraft={settingsDraft}
-                  selectedSettingsPreset={selectedSettingsPreset}
-                  isSettingsDraftComplete={isSettingsDraftComplete}
-                  isSettingsDraftSelected={isSettingsDraftSelected}
-                  selectedProviderTypeDescription={selectedProviderTypeOption.description}
-                  providerTypeOptions={AI_PROVIDER_TYPE_OPTIONS}
-                  setSettingsDraft={setSettingsDraft}
-                  customProviderPresetId={CUSTOM_PROVIDER_PRESET.id}
-                  getSuggestedBaseURL={getSuggestedBaseURL}
-                  selectedProviderEndpoint={selectedProviderEndpoint}
-                  handleLoadModels={handleLoadModels}
-                  isLoadingModels={isLoadingModels}
-                  selectedProviderListMode={selectedProviderListMode}
-                  customHeadersJsonValid={customHeadersJsonValid}
-                  settingsModelOptions={settingsModelOptions}
-                  handleAddSavedModel={handleAddSavedModel}
-                  handleUpdateSavedModel={handleUpdateSavedModel}
-                  handleRemoveSavedModel={handleRemoveSavedModel}
-                  handleSelectActiveModel={handleSelectActiveModel}
-                  handleApplySettings={handleApplySettings}
-                  handleToggleEnabled={handleToggleEnabled}
-                  handleTestConnection={handleTestConnection}
-                  selectedConfigId={selectedConfigId}
-                  handleSelectConfig={handleSelectConfig}
-                  handleExportConfigs={handleExportConfigs}
-                  setShowJsonImport={setShowJsonImport}
-                  showJsonImport={showJsonImport}
-                  jsonImportText={jsonImportText}
-                  setJsonImportText={setJsonImportText}
-                  handleImportConfigs={handleImportConfigs}
-                  aiConfigs={aiConfigs}
-                  handleDeleteConfig={handleDeleteConfig}
-                  showApiKey={showApiKey}
-                  setShowApiKey={setShowApiKey}
-                  testMessage={testMessage}
-                  testState={testState}
-                />
-              </Suspense>
-            ) : null}
-
-            {activeSettingsTab === 'skills' ? (
-              <div className="chat-settings-surface chat-settings-panel-surface chat-settings-panel-surface-skills">
-                <GNAgentSkillsPage />
-              </div>
-            ) : null}
-
-            {activeSettingsTab === 'mcp' ? (
-              <div className="chat-settings-panel-surface">
-                <RuntimeMcpSettingsPage threadId={activeSession?.runtimeThreadId || null} />
-              </div>
-            ) : null}
-
-            {!['ai', 'skills', 'mcp'].includes(activeSettingsTab) ? (
-              <div className="chat-settings-panel-surface">
-                {renderSettingsPlaceholder(selectedSettingsTabMeta)}
-              </div>
-            ) : null}
-          </div>
-        </div>
-              </section>
-            </div>,
-            document.body
-          )
-        : null}
     </>
   );
 };

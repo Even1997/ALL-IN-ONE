@@ -6,58 +6,72 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const appPath = path.resolve(__dirname, '../../src/App.tsx');
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const globalSettingsPagePath = path.resolve(__dirname, '../../src/components/workspace/GlobalSettingsPage.tsx');
+const settingsSharedPath = path.resolve(__dirname, '../../src/components/workspace/globalSettingsPageShared.ts');
 const aiChatCssPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.css');
 const mcpPagePath = path.resolve(__dirname, '../../src/components/workspace/RuntimeMcpSettingsPage.tsx');
 const sidecarBridgePath = path.resolve(__dirname, '../../src/modules/runtime-sidecar/runtimeSidecarSessionBridge.ts');
 
-test('ai chat settings drawer exposes ai, skills, and mcp tabs', async () => {
-  const source = await readFile(aiChatPath, 'utf8');
+test('global settings page exposes ai, skills, and mcp tabs', async () => {
+  const [sharedSource, pageSource] = await Promise.all([
+    readFile(settingsSharedPath, 'utf8'),
+    readFile(globalSettingsPagePath, 'utf8'),
+  ]);
 
-  assert.match(source, /const SETTINGS_TABS/);
-  assert.match(source, /id:\s*'ai'/);
-  assert.match(source, /id:\s*'permissions'/);
-  assert.match(source, /id:\s*'general'/);
-  assert.match(source, /id:\s*'adapters'/);
-  assert.match(source, /id:\s*'terminal'/);
-  assert.match(source, /id:\s*'skills'/);
-  assert.match(source, /id:\s*'mcp'/);
-  assert.match(source, /id:\s*'agents'/);
-  assert.match(source, /id:\s*'plugins'/);
-  assert.match(source, /id:\s*'computerUse'/);
-  assert.match(source, /id:\s*'diagnostics'/);
-  assert.match(source, /id:\s*'about'/);
-  assert.match(source, /activeSettingsTab === 'ai'/);
-  assert.match(source, /activeSettingsTab === 'skills'/);
-  assert.match(source, /activeSettingsTab === 'mcp'/);
-  assert.match(source, /renderSettingsPlaceholder/);
-  assert.match(source, /chat-settings-placeholder-card/);
-  assert.match(source, /<GNAgentSkillsPage \/>/);
-  assert.match(source, /<RuntimeMcpSettingsPage/);
+  assert.match(sharedSource, /const SETTINGS_TABS/);
+  assert.match(sharedSource, /id:\s*'ai'/);
+  assert.match(sharedSource, /id:\s*'permissions'/);
+  assert.match(sharedSource, /id:\s*'general'/);
+  assert.match(sharedSource, /id:\s*'adapters'/);
+  assert.match(sharedSource, /id:\s*'terminal'/);
+  assert.match(sharedSource, /id:\s*'skills'/);
+  assert.match(sharedSource, /id:\s*'mcp'/);
+  assert.match(sharedSource, /id:\s*'agents'/);
+  assert.match(sharedSource, /id:\s*'plugins'/);
+  assert.match(sharedSource, /id:\s*'computerUse'/);
+  assert.match(sharedSource, /id:\s*'diagnostics'/);
+  assert.match(sharedSource, /id:\s*'about'/);
+  assert.match(pageSource, /activeSettingsTab === 'ai'/);
+  assert.match(pageSource, /activeSettingsTab === 'skills'/);
+  assert.match(pageSource, /activeSettingsTab === 'mcp'/);
+  assert.match(pageSource, /renderSettingsPlaceholder/);
+  assert.match(pageSource, /chat-settings-placeholder-note/);
+  assert.match(pageSource, /chat-settings-workbench-shell/);
+  assert.match(pageSource, /chat-settings-workbench-sidebar/);
+  assert.match(pageSource, /chat-settings-workbench-stage/);
+  assert.doesNotMatch(pageSource, /chat-settings-workbench-companion/);
+  assert.match(pageSource, /<GNAgentSkillsPage \/>/);
+  assert.match(pageSource, /<RuntimeMcpSettingsPage/);
 });
 
-test('ai chat settings can be opened from an external settings event and target a specific tab', async () => {
-  const source = await readFile(aiChatPath, 'utf8');
+test('global settings page can be opened from an external settings event and target a specific tab', async () => {
+  const [appSource, chatSource] = await Promise.all([
+    readFile(appPath, 'utf8'),
+    readFile(aiChatPath, 'utf8'),
+  ]);
 
-  assert.match(source, /AI_CHAT_SETTINGS_EVENT/);
-  assert.match(source, /window\.addEventListener\(AI_CHAT_SETTINGS_EVENT/);
-  assert.match(source, /setIsSettingsOpen\(true\)/);
-  assert.match(source, /resolveSettingsTabId\(detail\.tab\)/);
-  assert.doesNotMatch(source, /setActiveSettingsTab\(detail\.tab \|\| SETTINGS_TABS\[0\]\.id\)/);
+  assert.match(appSource, /AI_CHAT_SETTINGS_EVENT/);
+  assert.match(appSource, /window\.addEventListener\(AI_CHAT_SETTINGS_EVENT/);
+  assert.match(appSource, /setIsGlobalSettingsOpen\(true\)/);
+  assert.match(appSource, /resolveSettingsTabId\(detail\.tab\)/);
+  assert.doesNotMatch(appSource, /setActiveGlobalSettingsTab\(detail\.tab \|\| SETTINGS_TABS\[0\]\.id\)/);
+  assert.match(chatSource, /dispatchEvent\([\s\S]*?new CustomEvent\(AI_CHAT_SETTINGS_EVENT/);
+  assert.doesNotMatch(chatSource, /window\.addEventListener\(AI_CHAT_SETTINGS_EVENT/);
 });
 
-test('ai chat settings drawer keeps desktop and mobile content scrollable', async () => {
+test('global settings page keeps the workbench shell scrollable on desktop and mobile', async () => {
   const css = await readFile(aiChatCssPath, 'utf8');
 
-  assert.match(css, /\.chat-settings-drawer\s*\{[^}]*height:\s*min\(820px, calc\(100dvh - 48px\)\);/s);
-  assert.match(css, /\.chat-settings-drawer-body\s*\{[^}]*overflow:\s*hidden;/s);
-  assert.match(css, /\.chat-settings-sidebar\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
-  assert.match(css, /\.chat-settings-tab-list\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s);
+  assert.match(css, /\.global-settings-page-body\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
+  assert.match(css, /\.chat-settings-workbench-shell\s*\{[^}]*height:\s*100%;/s);
+  assert.match(css, /\.chat-settings-workbench-sidebar\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s);
+  assert.match(css, /\.chat-settings-source-list\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s);
   assert.match(css, /\.chat-settings-ai-layout\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;/s);
-  assert.match(css, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.chat-settings-drawer-body\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s);
-  assert.match(css, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.chat-settings-tab-list\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;/s);
-  assert.match(css, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.chat-settings-tab\s*\{[^}]*flex:\s*0 0 auto;[^}]*width:\s*auto;/s);
-  assert.doesNotMatch(css, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.chat-settings-drawer-header,\s*\.chat-settings-detail-header,\s*\.chat-settings-inline,\s*\.chat-settings-actions\s*\{[\s\S]*?flex-direction:\s*column;/s);
+  assert.match(css, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.chat-settings-workbench-shell\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s);
+  assert.match(css, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.chat-settings-source-list\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;/s);
+  assert.match(css, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.chat-settings-source-row\s*\{[^}]*flex:\s*0 0 auto;[^}]*width:\s*auto;/s);
 });
 
 test('runtime mcp settings page owns CRUD-style management hooks', async () => {
@@ -68,21 +82,17 @@ test('runtime mcp settings page owns CRUD-style management hooks', async () => {
   assert.match(pageSource, /upsertRuntimeSidecarMcpServer/);
   assert.match(pageSource, /deleteRuntimeSidecarMcpServer/);
   assert.match(pageSource, /invokeRuntimeSidecarMcpTool/);
-  assert.match(pageSource, /chat-settings-mcp-toolbar-bar/);
-  assert.match(pageSource, /chat-settings-mcp-panel-header/);
-  assert.match(pageSource, /chat-settings-mcp-list-meta/);
-  assert.match(pageSource, /chat-settings-mcp-detail-section/);
-  assert.match(pageSource, /chat-settings-mcp-kv/);
-  assert.match(pageSource, /启用/);
-  assert.match(pageSource, /停用/);
-  assert.match(pageSource, /删除/);
-  assert.match(pageSource, /新建服务器/);
-  assert.match(pageSource, /刷新列表/);
+  assert.match(pageSource, /chat-settings-mcp-layout/);
+  assert.match(pageSource, /chat-settings-mcp-list/);
+  assert.match(pageSource, /chat-settings-mcp-stage/);
+  assert.match(pageSource, /chat-settings-mcp-companion/);
+  assert.match(pageSource, /chat-settings-companion-panel/);
   assert.match(pageSource, /SSE/);
-  assert.match(pageSource, /环境变量/);
-  assert.match(pageSource, /请求头/);
-  assert.match(pageSource, /OAuth Client ID/);
-  assert.match(pageSource, /Headers Helper/);
+  assert.doesNotMatch(pageSource, /OAuth Client ID/);
+  assert.doesNotMatch(pageSource, /OAuth Callback Port/);
+  assert.doesNotMatch(pageSource, /Headers Helper/);
+  assert.doesNotMatch(pageSource, /<span>Description<\/span>/);
+  assert.doesNotMatch(pageSource, /chat-settings-mcp-toolbar-bar/);
   assert.doesNotMatch(pageSource, /chat-settings-mcp-hero/);
   assert.doesNotMatch(pageSource, /chat-settings-mcp-summary/);
 

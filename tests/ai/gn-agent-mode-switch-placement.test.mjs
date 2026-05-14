@@ -7,18 +7,24 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const aiChatPath = path.resolve(__dirname, '../../src/components/workspace/AIChat.tsx');
+const appPath = path.resolve(__dirname, '../../src/App.tsx');
 
-test('ai chat settings own the skills and mcp management entry points', async () => {
-  const source = await readFile(aiChatPath, 'utf8');
+test('ai chat still exposes settings entry points while App owns the global settings page', async () => {
+  const [chatSource, appSource] = await Promise.all([
+    readFile(aiChatPath, 'utf8'),
+    readFile(appPath, 'utf8'),
+  ]);
 
-  assert.match(source, /isSettingsOpen/);
-  assert.match(source, /activeSettingsTab/);
-  assert.match(source, /label:\s*'技能'/);
-  assert.match(source, /label:\s*'MCP'/);
-  assert.match(source, /GNAgentSkillsPage/);
-  assert.match(source, /RuntimeMcpSettingsPage/);
-  assert.doesNotMatch(source, /GNAgentSkillsEntryButton/);
-  assert.doesNotMatch(source, /SkillsIcon/);
-  assert.doesNotMatch(source, /isSkillsModalOpen/);
-  assert.doesNotMatch(source, /chat-skills-modal-backdrop/);
+  assert.match(chatSource, /new CustomEvent\(AI_CHAT_SETTINGS_EVENT/);
+  assert.match(chatSource, /detail:\s*\{\s*tab:\s*'ai'\s*\}/);
+  assert.doesNotMatch(chatSource, /isSettingsOpen/);
+  assert.doesNotMatch(chatSource, /activeSettingsTab/);
+  assert.doesNotMatch(chatSource, /GNAgentSkillsPage/);
+  assert.doesNotMatch(chatSource, /RuntimeMcpSettingsPage/);
+  assert.doesNotMatch(chatSource, /isSkillsModalOpen/);
+  assert.doesNotMatch(chatSource, /chat-skills-modal-backdrop/);
+  assert.match(appSource, /window\.addEventListener\(AI_CHAT_SETTINGS_EVENT/);
+  assert.match(appSource, /setActiveGlobalSettingsTab\(resolveSettingsTabId\(detail\.tab\)\)/);
+  assert.match(appSource, /setIsGlobalSettingsOpen\(true\)/);
+  assert.match(appSource, /<LazyGlobalSettingsPage/);
 });
