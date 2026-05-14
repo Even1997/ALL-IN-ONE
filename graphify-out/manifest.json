@@ -108,8 +108,8 @@
     "hash": "242855dbf83e094b2d3f36c53b4b0829"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\App.tsx": {
-    "mtime": 1778720072.6874046,
-    "hash": "9507188cb12bcdf6ba314f56ae225727"
+    "mtime": 1778728829.8540356,
+    "hash": "0c9eb9fe46d4e1de0c791746350e5784"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\appNavigation.ts": {
     "mtime": 1778691538.2623162,
@@ -284,8 +284,8 @@
     "hash": "42857a5e6817028e9cf01db294857f98"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\product\\WorkbenchShell.tsx": {
-    "mtime": 1778720072.4816384,
-    "hash": "6f62fc9bc0270315a0247caa1171974b"
+    "mtime": 1778730635.7460933,
+    "hash": "49d5d49f9a4ad1562583f317c5a316ec"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\project\\ProjectSetup.tsx": {
     "mtime": 1777862490.7279887,
@@ -324,8 +324,8 @@
     "hash": "8e17c850a2ca18039416da5e04e468bc"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ui\\workbench\\DesktopWorkbenchRail.tsx": {
-    "mtime": 1778689486.6973085,
-    "hash": "13fd8bea0be7bfae164d95bd3c7b963c"
+    "mtime": 1778728829.6619592,
+    "hash": "647a6c800cb7bd2c3361945b62e733b9"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ui\\workbench\\DesktopWorkbenchTopbar.tsx": {
     "mtime": 1778689813.672124,
@@ -339,9 +339,13 @@
     "mtime": 1778692102.1489544,
     "hash": "b666614e2587fc9d9fc6438b58556622"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ui\\workbench\\FloatingRunCompanion.tsx": {
+    "mtime": 1778730115.591354,
+    "hash": "b5dd2892f4e203f640cf68fdcff5c30f"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ui\\workbench\\index.ts": {
-    "mtime": 1778692848.8663497,
-    "hash": "ff7f46d8a9254d10a909a3066e1fc35d"
+    "mtime": 1778730115.8182716,
+    "hash": "5f5aec482f0ae4d7e66449040cd00a8a"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ui\\workbench\\InspectorPane.tsx": {
     "mtime": 1778689487.0114403,
@@ -358,6 +362,14 @@
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ui\\workbench\\StatusBanner.tsx": {
     "mtime": 1778692102.3367062,
     "hash": "b9c698d0d6f01d208475281439ce78f9"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ui\\workbench\\UtilitySidebar.tsx": {
+    "mtime": 1778730115.425791,
+    "hash": "e2fc25210232dd4c140a652a0c79a8ba"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\ui\\workbench\\UtilitySidebarTab.tsx": {
+    "mtime": 1778730115.2534318,
+    "hash": "470610ba122b5c826278f35660266693"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\components\\workspace\\AIChat.tsx": {
     "mtime": 1778666323.4303524,
@@ -492,24 +504,28 @@
     "hash": "02cf349474aafddd152465ba14dd06f6"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentChatStage.tsx": {
-    "mtime": 1778630986.428933,
-    "hash": "d18641c36f3d553a242c917c06b0d977"
+    "mtime": 1778730474.7786088,
+    "hash": "39d1a4e91a714fa08af2e4a6aab24c0c"
   },
-  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentFloatingPlanCard.tsx": {
-    "mtime": 1778428483.7342496,
-    "hash": "54e2337c0de5433d3719366a61e7f08f"
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentFloatingRunCompanion.tsx": {
+    "mtime": 1778730474.9456353,
+    "hash": "6b01d8562f5f8c5dac5fec1507142df1"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentUtilitySidebar.tsx": {
+    "mtime": 1778730474.366225,
+    "hash": "caae939e285f3e9e0f70bf559dfced7a"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentWorkbenchLayout.tsx": {
-    "mtime": 1778722361.8606822,
-    "hash": "d8cecdd83c56b3138d659dd99ec299c7"
+    "mtime": 1778726432.8837721,
+    "hash": "5de0bcbd81e5c6fa63d2f75599970df2"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\components\\AgentWorkbenchSidebar.tsx": {
-    "mtime": 1778399387.7244425,
-    "hash": "0062f4f282d027ba1cf69e1994e3084a"
+    "mtime": 1778728830.087258,
+    "hash": "d921e1af42e552d78f742d55ad59f920"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\agent-shell\\pages\\AgentShellPage.tsx": {
-    "mtime": 1778722362.0272627,
-    "hash": "5f9123ac52f16d0a88b42b065066fe02"
+    "mtime": 1778727336.609675,
+    "hash": "141e5503604d921f0ebb8af975f0faa5"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\src\\features\\desktopShell\\desktopShell.test.ts": {
     "mtime": 1778417427.098699,
@@ -2215,6 +2231,10 @@
     "mtime": 1778681918.5076456,
     "hash": "94ecf56efdf314d1919eb35934de64a2"
   },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\design\\workbench-unified-previews\\codex-companion-preview.html": {
+    "mtime": 1778725587.3207836,
+    "hash": "1fd44d8f329af3509a4793fb2c421b05"
+  },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\design\\workbench-unified-previews\\index.html": {
     "mtime": 1778686948.468474,
     "hash": "6a1dd66aa34b7fd2f04fe42a9c41d1cc"
@@ -2562,6 +2582,10 @@
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-13-streaming-answer-chronology-boundary-fix.md": {
     "mtime": 1778638176.8643146,
     "hash": "b29e9fbf1458866c4347f8687facec61"
+  },
+  "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-14-agent-workbench-codex-companion-plan.zh-CN.md": {
+    "mtime": 1778725354.3456073,
+    "hash": "f49dc397a2811863441c5ace3322bbcd"
   },
   "C:\\Users\\Even\\Documents\\ALL-IN-ONE\\docs\\superpowers\\plans\\2026-05-14-platform-desktop-ui-complete-optimization-plan.zh-CN.md": {
     "mtime": 1778696983.5926888,

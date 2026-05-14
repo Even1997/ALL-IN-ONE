@@ -195,13 +195,18 @@ body.desktop-workbench-mode {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 10px;
   padding: 10px 6px;
   border-radius: 0;
   background: color-mix(in srgb, var(--desktop-shell-rail-bg) 94%, transparent);
   border: 0;
   border-right: 1px solid var(--desktop-shell-border);
   box-shadow: none;
+}
+
+.desktop-primary-brand {
+  display: contents;
 }
 
 .desktop-brand-chip img,
@@ -259,8 +264,10 @@ body.desktop-workbench-mode {
 .pm-workbench-shell,
 .pm-workbench-sidebar,
 .pm-workbench-main,
+.pm-workbench-main-stage,
 .pm-workbench-main-with-ai,
-.pm-workbench-ai-pane {
+.pm-workbench-ai-pane,
+.pm-workbench-floating-companion-slot {
   min-width: 0;
   min-height: 0;
 }
@@ -285,6 +292,22 @@ body.desktop-workbench-mode {
 
 .pm-workbench-main {
   background: color-mix(in srgb, var(--wb-pane-background-strong) 92%, transparent);
+}
+
+.pm-workbench-main-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.pm-workbench-floating-companion-slot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pm-workbench-floating-companion-slot > * {
+  pointer-events: auto;
 }
 
 .pm-workbench-ai-pane {

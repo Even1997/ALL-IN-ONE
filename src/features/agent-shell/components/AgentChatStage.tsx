@@ -7,6 +7,7 @@ import { useGlobalAIStore } from '../../../modules/ai/store/globalAIStore';
 import type { GNAgentWorkbenchSession } from '../../../components/ai/gn-agent-shell/useGNAgentWorkbenchSession';
 import { WorkbenchIcon } from '../../../components/ui/WorkbenchIcon';
 import { AIChat } from '../../../components/workspace/AIChat';
+import { AgentFloatingRunCompanion } from './AgentFloatingRunCompanion';
 import './agentWorkbench.css';
 
 const claudeRuntime = new ClaudeRuntime();
@@ -66,6 +67,7 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
           runtimeConfigIdOverride={runtimeConfigIdOverride}
           providerExecutionMode={providerId === 'classic' ? null : providerId}
         />
+        <AgentFloatingRunCompanion session={session} />
         {showEmptyState ? (
           <div className="agent-chat-stage-empty" aria-hidden="true">
             <span className="agent-chat-stage-empty-icon">

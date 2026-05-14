@@ -443,7 +443,7 @@
 }
 
 .desktop-active .agent-workbench-shell {
-  grid-template-columns: auto minmax(0, 1fr) minmax(280px, 320px);
+  grid-template-columns: auto minmax(0, 1fr) minmax(248px, 284px);
 }
 
 .desktop-active .agent-workbench-left-rail,

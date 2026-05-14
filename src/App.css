@@ -10573,7 +10573,8 @@ body.ai-chat-sidebar-collapsed .app-main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 10px;
   padding: 4px 4px 6px;
   border-radius: 0;
   background: transparent;
@@ -10621,8 +10622,12 @@ body.ai-chat-sidebar-collapsed .app-main {
 }
 
 .desktop-primary-nav {
-  flex: 1 1 auto;
-  justify-content: center;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+}
+
+.desktop-primary-foot {
+  margin-top: auto;
 }
 
 .desktop-rail-icon-btn {
@@ -12297,7 +12302,8 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .desktop-primary-rail.mac-sidebar-panel {
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 10px;
   padding: 10px 6px 12px;
   border-radius: 22px;
   background: var(--desktop-shell-rail-bg);

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { MacPanel } from '../MacPanel';
 
 type DesktopWorkbenchRailProps = {
-  brand: ReactNode;
+  brand?: ReactNode;
   navigation: ReactNode;
   footer: ReactNode;
 };
@@ -13,7 +13,7 @@ export const DesktopWorkbenchRail = ({
   footer,
 }: DesktopWorkbenchRailProps) => (
   <MacPanel as="aside" className="desktop-primary-rail mac-sidebar-panel">
-    {brand}
+    {brand ? <div className="desktop-primary-brand">{brand}</div> : null}
     <nav className="desktop-primary-nav" aria-label="Primary workbench navigation">
       {navigation}
     </nav>

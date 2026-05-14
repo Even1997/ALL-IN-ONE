@@ -5,15 +5,15 @@ import { useKnowledgeStore } from '../../../features/knowledge/store/knowledgeSt
 import { buildKnowledgeSearchIndex, searchKnowledgeEntries } from '../../../modules/knowledge/knowledgeSearch';
 import { useProjectStore } from '../../../store/projectStore';
 import { AgentChatStage } from '../components/AgentChatStage';
-import { AgentFloatingPlanCard } from '../components/AgentFloatingPlanCard';
 import { AgentWorkbenchLayout } from '../components/AgentWorkbenchLayout';
 import { AgentWorkbenchSidebar } from '../components/AgentWorkbenchSidebar';
+import { AgentUtilitySidebar } from '../components/AgentUtilitySidebar';
 import './AgentShellPage.css';
 
 export const AgentShellPage: React.FC = () => {
   const session = useGNAgentWorkbenchSession();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [floatingPlanCollapsed, setFloatingPlanCollapsed] = useState(false);
+  const [utilitySidebarCollapsed, setUtilitySidebarCollapsed] = useState(true);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const notes = useKnowledgeStore((state) => state.notes);
@@ -42,6 +42,7 @@ export const AgentShellPage: React.FC = () => {
       ),
     [notes],
   );
+
   const searchResults = useMemo(() => {
     const matches = searchKnowledgeEntries(knowledgeSearchState, searchQuery);
 
@@ -76,12 +77,13 @@ export const AgentShellPage: React.FC = () => {
           />
         }
         companion={
-          <AgentFloatingPlanCard
-            session={session.latestTurnSession}
-            collapsed={floatingPlanCollapsed}
-            onToggleCollapsed={() => setFloatingPlanCollapsed((value) => !value)}
+          <AgentUtilitySidebar
+            session={session}
+            collapsed={utilitySidebarCollapsed}
+            onToggleCollapsed={() => setUtilitySidebarCollapsed((value) => !value)}
           />
         }
+        companionCollapsed={utilitySidebarCollapsed}
       />
 
       <MacDialog
@@ -114,7 +116,7 @@ export const AgentShellPage: React.FC = () => {
           ) : null}
 
           {session.currentProjectId && isNotesLoading ? (
-            <p className="agent-workbench-search-empty">正在载入项目文档…</p>
+            <p className="agent-workbench-search-empty">正在加载项目文档…</p>
           ) : null}
 
           {session.currentProjectId && !isNotesLoading && notesError ? (

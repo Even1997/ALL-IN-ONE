@@ -5,7 +5,9 @@ type WorkbenchShellProps = {
   header?: ReactNode;
   sidebar?: ReactNode;
   main?: ReactNode;
+  floatingCompanion?: ReactNode;
   companion?: ReactNode;
+  utilitySidebar?: ReactNode;
   resizeHandle?: ReactNode;
   statusBar?: ReactNode;
   sidebarWidth?: number;
@@ -24,7 +26,9 @@ export const WorkbenchShell = ({
   header,
   sidebar,
   main,
+  floatingCompanion,
   companion,
+  utilitySidebar,
   resizeHandle,
   statusBar,
   sidebarWidth,
@@ -37,7 +41,7 @@ export const WorkbenchShell = ({
 }: WorkbenchShellProps) => {
   const resolvedSidebar = sidebar ?? leftPane ?? null;
   const resolvedMain = main ?? centerPane ?? null;
-  const resolvedCompanion = companion ?? rightPane ?? null;
+  const resolvedCompanion = utilitySidebar ?? companion ?? rightPane ?? null;
   const resolvedSidebarWidth = sidebarWidth ?? leftSize;
   const resolvedCompanionWidth = companionWidth ?? rightSize;
 
@@ -60,7 +64,14 @@ export const WorkbenchShell = ({
           </aside>
         ) : null}
         <div className="pm-workbench-main-with-ai">
-          <main className="pm-workbench-main wb-module-main">{resolvedMain}</main>
+          <main className="pm-workbench-main wb-module-main">
+            <div className="pm-workbench-main-stage">
+              {resolvedMain}
+              {floatingCompanion ? (
+                <div className="pm-workbench-floating-companion-slot">{floatingCompanion}</div>
+              ) : null}
+            </div>
+          </main>
           {resizeHandle}
           {resolvedCompanion ? (
             <aside className="pm-workbench-ai-pane wb-module-companion" style={companionStyle}>

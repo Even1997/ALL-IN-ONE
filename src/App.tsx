@@ -1534,18 +1534,6 @@ const App: React.FC = () => {
   );
   const desktopRail = (
     <DesktopWorkbenchRail
-      brand={(
-        <MacButton
-          className="desktop-brand-chip"
-          variant="ghost"
-          size="sm"
-          onClick={() => setCurrentRole('knowledge')}
-          aria-label="Open knowledge workspace"
-          title="Open knowledge workspace"
-        >
-          <WorkbenchIcon name="knowledge" />
-        </MacButton>
-      )}
       navigation={DESKTOP_PRIMARY_ROLES.flatMap((roleId) => {
         const role = getDesktopWorkbenchRole(roleId);
         return role

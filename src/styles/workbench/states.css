@@ -221,3 +221,23 @@
 .wb-status-banner-copy strong {
   display: block;
 }
+
+.wb-floating-run-companion.is-collapsed,
+.wb-utility-sidebar.is-collapsed {
+  opacity: 1;
+}
+
+.wb-floating-run-companion.is-collapsed .wb-floating-run-companion-head {
+  border-bottom: 0;
+}
+
+.wb-utility-sidebar-tab.is-active,
+.wb-floating-run-companion .wb-utility-sidebar-tab.is-active {
+  background: var(--wb-selected-background);
+  color: var(--wb-accent);
+  box-shadow: var(--wb-shadow-selected);
+}
+
+.wb-floating-run-companion[data-ui-state='collapsed'] {
+  box-shadow: var(--wb-shadow-panel);
+}

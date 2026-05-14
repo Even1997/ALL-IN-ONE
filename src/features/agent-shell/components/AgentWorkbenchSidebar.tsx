@@ -37,23 +37,6 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
 }) => (
   <div className={`agent-workbench-sidebar${collapsed ? ' is-collapsed' : ''}`}>
     <div className="agent-workbench-left-rail">
-      <button
-        type="button"
-        className="agent-workbench-brand"
-        onClick={() => {
-          if (collapsed) {
-            onToggleCollapsed();
-          }
-        }}
-        aria-label="Agent 工作台"
-        title="Agent 工作台"
-      >
-        <span className="agent-workbench-brand-mark">
-          <WorkbenchIcon name="terminal" />
-        </span>
-        <span>Agent</span>
-      </button>
-
       <nav className="agent-workbench-rail-nav" aria-label="Agent workbench actions">
         {SIDEBAR_ITEMS.map((item) => (
           <button
