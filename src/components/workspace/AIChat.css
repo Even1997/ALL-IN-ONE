@@ -7247,3 +7247,300 @@ body.desktop-workbench-mode .chat-settings-panel-surface-skills .gn-agent-skills
     transform: none;
   }
 }
+/* 2026 workbench state card unification */
+
+.chat-runtime-approval-card.wb-state-card,
+.chat-runtime-question-card.wb-state-card {
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--wb-radius-lg);
+  border: 1px solid var(--wb-divider);
+  background: var(--wb-pane-background);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.chat-runtime-approval-card.wb-state-card .wb-state-card-meta,
+.chat-runtime-question-card.wb-state-card .wb-state-card-meta {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chat-runtime-approval-card .wb-state-card-body,
+.chat-runtime-question-card .wb-state-card-body {
+  gap: 10px;
+}
+
+.chat-runtime-approval-card .chat-runtime-approval-file code {
+  border-radius: 999px;
+  border-color: color-mix(in srgb, var(--wb-accent) 16%, var(--wb-divider));
+  background: color-mix(in srgb, var(--wb-accent) 10%, var(--wb-pane-background));
+  color: var(--wb-accent);
+}
+
+.chat-runtime-approval-card .chat-runtime-approval-diff,
+.chat-runtime-approval-card .chat-runtime-approval-write-preview,
+.chat-runtime-approval-card .chat-runtime-approval-command,
+.chat-runtime-approval-card .chat-runtime-approval-pre,
+.chat-runtime-question-item {
+  border: 1px solid var(--wb-divider);
+  border-radius: var(--wb-radius-md);
+  background: var(--wb-pane-background-strong);
+  box-shadow: none;
+}
+
+.chat-runtime-question-item {
+  padding: 12px;
+}
+
+.chat-runtime-question-options button {
+  border-radius: var(--wb-radius-sm);
+  border-color: var(--wb-divider);
+  background: var(--wb-pane-background);
+  box-shadow: none;
+}
+
+.chat-runtime-question-options button.active {
+  border-color: color-mix(in srgb, var(--wb-accent) 28%, var(--wb-divider));
+  background: var(--wb-selected-background);
+  transform: none;
+}
+
+.chat-runtime-question-input.mac-input {
+  min-height: 34px;
+}
+
+.chat-runtime-question-submit.mac-button {
+  min-height: 34px;
+}
+
+.chat-runtime-approval-actions,
+.chat-runtime-question-actions {
+  justify-content: flex-end;
+}
+
+/* Unified desktop polish: fewer bubbles, more document rhythm, no glass gradients */
+
+.chat-shell,
+.chat-shell-header,
+.chat-shell-drawer-panel,
+.chat-shell-drawer-summary-card,
+.chat-shell-artifact-card,
+.chat-composer-shell,
+.chat-project-file-proposal-card,
+.chat-run-summary-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.chat-shell {
+  border-radius: var(--wb-radius-xl);
+  border-color: var(--wb-divider);
+  background: color-mix(in srgb, var(--mode-panel, var(--wb-pane-background)) 98%, transparent);
+}
+
+.chat-shell-header,
+.chat-shell-drawer-panel,
+.chat-project-file-proposal-card,
+.chat-run-summary-card {
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 98%, transparent);
+}
+
+.chat-shell-header {
+  border-bottom-color: var(--wb-divider);
+}
+
+.chat-shell-header-actions {
+  gap: 4px;
+}
+
+.chat-shell-icon-btn,
+.chat-composer-icon-btn,
+.chat-composer-plus-btn,
+.chat-shell-drawer-toggle,
+.chat-shell-drawer-close,
+.chat-run-summary-action,
+.chat-project-file-proposal-actions button {
+  border-radius: var(--wb-radius-sm);
+  border-color: var(--wb-divider);
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-shell-icon-btn:hover,
+.chat-composer-icon-btn:hover,
+.chat-composer-plus-btn:hover,
+.chat-shell-drawer-toggle:hover,
+.chat-shell-drawer-close:hover,
+.chat-run-summary-action:hover,
+.chat-project-file-proposal-actions button:hover {
+  background: var(--wb-hover-background);
+}
+
+.chat-message-list {
+  gap: 16px;
+  padding-inline: 18px;
+}
+
+.chat-message.assistant,
+.chat-message.system {
+  padding-inline-end: 56px;
+}
+
+.chat-message.user {
+  padding-inline-start: 72px;
+}
+
+.chat-message-bubble,
+.chat-message-process-inline,
+.chat-message-card-lane,
+.chat-message-thinking-lane,
+.chat-message-final-answer {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-message.assistant .chat-message-bubble,
+.chat-message.system .chat-message-bubble {
+  border: 0;
+  background: transparent;
+}
+
+.chat-message.user .chat-message-bubble {
+  border-radius: var(--wb-radius-lg);
+  border: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-muted-background) 84%, var(--wb-pane-background));
+}
+
+.chat-answer-text,
+.chat-answer-text.document,
+.chat-thinking-block {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-answer-text::before,
+.chat-thinking-block::before {
+  display: none;
+}
+
+.chat-answer-text {
+  padding: 0;
+}
+
+.chat-answer-markdown {
+  padding: 0;
+}
+
+.chat-message.assistant .chat-answer-text,
+.chat-message.system .chat-answer-text {
+  max-width: 78ch;
+}
+
+.chat-answer-text p,
+.chat-answer-text ul,
+.chat-answer-text ol,
+.chat-answer-text blockquote,
+.chat-answer-text pre,
+.chat-answer-text table,
+.chat-answer-text h1,
+.chat-answer-text h2,
+.chat-answer-text h3,
+.chat-answer-text h4,
+.chat-answer-text h5,
+.chat-answer-text h6 {
+  margin-top: 0;
+}
+
+.chat-answer-text blockquote {
+  border-left-color: color-mix(in srgb, var(--wb-accent) 22%, var(--wb-divider));
+  color: var(--wb-text-secondary);
+}
+
+.chat-answer-text pre,
+.chat-runtime-approval-card .chat-runtime-approval-diff,
+.chat-runtime-approval-card .chat-runtime-approval-write-preview,
+.chat-runtime-approval-card .chat-runtime-approval-command,
+.chat-runtime-approval-card .chat-runtime-approval-pre,
+.chat-project-file-proposal-operation pre {
+  border-radius: var(--wb-radius-md);
+  border: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-muted-background) 78%, var(--wb-pane-background));
+  box-shadow: none;
+}
+
+.chat-thinking-block {
+  margin-inline-start: 0;
+  padding: 0;
+}
+
+.chat-thinking-summary,
+.chat-thinking-summary-text {
+  min-height: auto;
+  padding: 0;
+  color: var(--wb-text-tertiary);
+}
+
+.chat-composer {
+  --chat-composer-shell-border: var(--wb-divider);
+  --chat-composer-shell-bg: color-mix(in srgb, var(--wb-pane-background-strong) 98%, transparent);
+  --chat-composer-shell-shadow: none;
+  --chat-composer-shell-ring: transparent;
+  --chat-composer-control-bg: transparent;
+  --chat-composer-control-border: var(--wb-divider);
+  --chat-composer-control-hover: var(--wb-hover-background);
+  --chat-composer-input-bg: color-mix(in srgb, var(--wb-input-background) 96%, transparent);
+  --chat-composer-input-border: var(--wb-divider);
+  --chat-composer-input-focus-bg: color-mix(in srgb, var(--wb-input-background) 98%, transparent);
+  --chat-composer-input-shadow: none;
+  --chat-composer-send-bg: var(--wb-accent);
+  --chat-composer-send-text: #ffffff;
+}
+
+.chat-composer-shell {
+  border-radius: var(--wb-radius-xl);
+}
+
+.chat-composer-input,
+.chat-composer-input-embedded {
+  border-radius: var(--wb-radius-md);
+}
+
+.chat-composer-runtime-strip span,
+.chat-project-file-proposal-badge {
+  border-radius: var(--wb-radius-sm);
+}
+
+.chat-project-file-proposal-card,
+.chat-project-file-proposal-stage,
+.chat-project-file-proposal-operation,
+.chat-project-file-proposal-note,
+.chat-run-summary-item,
+.chat-activity-entry-path-btn {
+  border-color: var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-pane-background) 96%, transparent);
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message-list {
+  padding: 22px 22px 18px;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message.assistant .chat-message-bubble,
+.gn-agent-workspace .chat-shell-embedded .chat-message.user .chat-message-bubble,
+.gn-agent-workspace .chat-shell-embedded .chat-message-process-inline,
+.gn-agent-workspace .chat-shell-embedded .chat-message-final-answer,
+.gn-agent-workspace .chat-shell-embedded .chat-message-card-lane,
+.gn-agent-workspace .chat-shell-embedded .chat-message-thinking-lane {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.gn-agent-workspace .chat-shell-embedded .chat-message.assistant .chat-answer-text {
+  max-width: 76ch;
+}

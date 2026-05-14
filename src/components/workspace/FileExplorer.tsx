@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './FileExplorer.css';
 import { GeneratedFile } from '../../types';
 import { getDirectoryPath, joinFileSystemPath, normalizeRelativeFileSystemPath } from '../../utils/fileSystemPaths.ts';
+import { DirectoryTree, EmptyStateView, MacIconButton, StatusBanner, WorkbenchIcon, type DirectoryTreeItem } from '../ui';
 
 interface FileNode {
   name: string;
@@ -25,13 +26,6 @@ type ToolResult = {
   error: string | null;
 };
 
-const FileIcon: React.FC<{ type: 'file' | 'folder'; expanded?: boolean }> = ({ type, expanded }) => {
-  if (type === 'folder') {
-    return <span className="file-icon">{expanded ? 'DIR' : 'FOL'}</span>;
-  }
-  return <span className="file-icon">FILE</span>;
-};
-
 const updateFolderChildren = (nodes: FileNode[], targetPath: string, children: FileNode[]): FileNode[] =>
   nodes.map((node) => {
     if (node.path === targetPath && node.type === 'folder') {
@@ -42,6 +36,24 @@ const updateFolderChildren = (nodes: FileNode[], targetPath: string, children: F
     }
     return node;
   });
+
+const updateFolderExpanded = (nodes: FileNode[], targetPath: string): FileNode[] =>
+  nodes.map((node) => {
+    if (node.path === targetPath && node.type === 'folder') {
+      return { ...node, expanded: !node.expanded };
+    }
+    if (node.children) {
+      return { ...node, children: updateFolderExpanded(node.children, targetPath) };
+    }
+    return node;
+  });
+
+const collapseAllFolders = (nodes: FileNode[]): FileNode[] =>
+  nodes.map((node) => ({
+    ...node,
+    expanded: node.type === 'folder' ? false : node.expanded,
+    children: node.children ? collapseAllFolders(node.children) : node.children,
+  }));
 
 const isSameOrNestedPath = (path: string, targetPath: string) =>
   path === targetPath || path.startsWith(`${targetPath}/`) || path.startsWith(`${targetPath}\\`);
@@ -79,6 +91,33 @@ const removeNodeFromTree = (nodes: FileNode[], targetPath: string): FileNode[] =
     .map((node) =>
       node.children ? { ...node, children: removeNodeFromTree(node.children, targetPath) } : node
     );
+
+const getFileNodeIcon = (node: FileNode) => {
+  if (node.type === 'folder') {
+    return 'folder';
+  }
+
+  const extension = node.name.split('.').pop()?.toLowerCase();
+  if (extension === 'md' || extension === 'markdown') {
+    return 'note';
+  }
+
+  if (['ts', 'tsx', 'js', 'jsx', 'css', 'json', 'html', 'yml', 'yaml', 'sh'].includes(extension || '')) {
+    return 'code';
+  }
+
+  return 'document';
+};
+
+const toTreeItems = (nodes: FileNode[], selectedPath: string | null): DirectoryTreeItem[] =>
+  nodes.map((node) => ({
+    id: node.path,
+    label: node.name,
+    icon: getFileNodeIcon(node),
+    selected: selectedPath === node.path,
+    expanded: node.expanded,
+    children: node.children ? toTreeItems(node.children, selectedPath) : undefined,
+  }));
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({
   onFileSelect,
@@ -131,7 +170,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       const cleanPath = normalizeRelativeFileSystemPath(file.path);
       const segments = cleanPath.split('/');
       const fileName = segments.pop();
-      if (!fileName) return;
+      if (!fileName) {
+        return;
+      }
       const folders = ensureFolder(segments);
       folders.push({
         name: fileName,
@@ -146,6 +187,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const [fileTree, setFileTree] = useState<FileNode[]>(buildTreeFromFiles(files));
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -177,67 +219,11 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       });
   }, []);
 
-  const toggleFolder = useCallback((path: string) => {
-    const toggleNode = (nodes: FileNode[]): FileNode[] => {
-      return nodes.map((node) => {
-        if (node.path === path && node.type === 'folder') {
-          return { ...node, expanded: !node.expanded };
-        }
-        if (node.children) {
-          return { ...node, children: toggleNode(node.children) };
-        }
-        return node;
-      });
-    };
-    setFileTree((prev) => toggleNode(prev));
-  }, []);
-
-  const handleClick = useCallback(async (node: FileNode) => {
-    setSelectedPath(node.path);
-    if (node.type === 'folder') {
-      if (files.length === 0 && (node.children?.length || 0) === 0) {
-        const children = await loadFolderChildren(node.path);
-        setFileTree((prev) => {
-          const attachChildren = (nodes: FileNode[]): FileNode[] =>
-            nodes.map((item) => {
-              if (item.path === node.path) {
-                return { ...item, children };
-              }
-              if (item.children) {
-                return { ...item, children: attachChildren(item.children) };
-              }
-              return item;
-            });
-
-          return attachChildren(prev);
-        });
-      }
-      toggleFolder(node.path);
-    }
-    if (node.type === 'file') {
-      onFileSelect?.(node.path);
-    }
-  }, [toggleFolder, onFileSelect, files.length, loadFolderChildren]);
-
-  const handleDoubleClick = useCallback((node: FileNode) => {
-    if (node.type === 'file') {
-      onFileDoubleClick?.(node.path);
-    }
-  }, [onFileDoubleClick]);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
-    e.preventDefault();
-    setSelectedPath(node.path);
-    setContextMenu({ x: e.clientX, y: e.clientY, node });
-  }, []);
-
-  const closeContextMenu = useCallback(() => {
-    setContextMenu(null);
-  }, []);
-
   useLayoutEffect(() => {
     const menu = contextMenuRef.current;
-    if (!menu) return;
+    if (!menu) {
+      return;
+    }
 
     const rect = menu.getBoundingClientRect();
     if (rect.bottom > window.innerHeight) {
@@ -245,7 +231,17 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     }
   }, [contextMenu]);
 
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const toggleFolder = useCallback((path: string) => {
+    setFileTree((prev) => updateFolderExpanded(prev, path));
+  }, []);
+
   const handleRefresh = useCallback(async (targetPath?: string) => {
+    setErrorMessage(null);
+
     if (files.length > 0) {
       setFileTree(buildTreeFromFiles(files));
       return;
@@ -255,6 +251,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     const children = await loadFolderChildren(folderPath);
     setFileTree((prev) => updateFolderChildren(prev, folderPath, children));
   }, [buildTreeFromFiles, files, loadFolderChildren, rootPath]);
+
+  const handleClick = useCallback(async (node: FileNode) => {
+    setSelectedPath(node.path);
+    setErrorMessage(null);
+
+    if (node.type === 'folder') {
+      if (files.length === 0 && (node.children?.length || 0) === 0) {
+        const children = await loadFolderChildren(node.path);
+        setFileTree((prev) => updateFolderChildren(prev, node.path, children));
+      }
+      toggleFolder(node.path);
+      return;
+    }
+
+    onFileSelect?.(node.path);
+  }, [files.length, loadFolderChildren, onFileSelect, toggleFolder]);
 
   const handleOpenNode = useCallback(async (node: FileNode) => {
     setSelectedPath(node.path);
@@ -339,50 +351,93 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     }
 
     void Promise.resolve(action(node)).catch((error) => {
-      window.alert(error instanceof Error ? error.message : String(error));
+      setErrorMessage(error instanceof Error ? error.message : String(error));
     });
-  }, [closeContextMenu, contextMenu]);
+  }, [closeContextMenu, contextMenu?.node]);
 
-  const renderNode = (node: FileNode, depth = 0): React.ReactNode => {
-    const isSelected = selectedPath === node.path;
-    const paddingLeft = depth * 14 + 8;
+  const resolveNodeByPath = useCallback((path: string, nodes: FileNode[]): FileNode | null => {
+    for (const node of nodes) {
+      if (node.path === path) {
+        return node;
+      }
 
-    return (
-      <React.Fragment key={node.path}>
-        <div
-          className={`file-item ${node.type} ${isSelected ? 'selected' : ''}`}
-          style={{ paddingLeft }}
-          onClick={() => handleClick(node)}
-          onDoubleClick={() => handleDoubleClick(node)}
-          onContextMenu={(e) => handleContextMenu(e, node)}
-        >
-          {node.type === 'folder' && (
-            <button className="expand-btn" onClick={(e) => { e.stopPropagation(); toggleFolder(node.path); }} type="button">
-              {node.expanded ? '-' : '+'}
-            </button>
-          )}
-          <FileIcon type={node.type} expanded={node.expanded} />
-          <span className="file-name">{node.name}</span>
-        </div>
-        {node.type === 'folder' && node.expanded && node.children?.map((child) => renderNode(child, depth + 1))}
-      </React.Fragment>
-    );
-  };
+      if (node.children) {
+        const match = resolveNodeByPath(path, node.children);
+        if (match) {
+          return match;
+        }
+      }
+    }
+
+    return null;
+  }, []);
+
+  const treeItems = useMemo(() => toTreeItems(fileTree, selectedPath), [fileTree, selectedPath]);
 
   return (
     <div className="file-explorer" onClick={closeContextMenu}>
       <div className="explorer-header">
-        <span className="explorer-title">Explorer</span>
+        <div className="explorer-title-group">
+          <span className="explorer-title-icon" aria-hidden="true">
+            <WorkbenchIcon name="files" />
+          </span>
+          <div>
+            <strong className="explorer-title">文件</strong>
+            <span className="explorer-subtitle">{rootPath}</span>
+          </div>
+        </div>
         <div className="explorer-actions">
-          <button className="icon-btn" title="New File" type="button">+</button>
-          <button className="icon-btn" title="New Folder" type="button">D+</button>
-          <button className="icon-btn" title="Refresh" type="button">R</button>
-          <button className="icon-btn" title="Collapse All" type="button">-</button>
+          <MacIconButton title="刷新" aria-label="刷新" onClick={() => void handleRefresh()}>
+            <WorkbenchIcon name="refresh" />
+          </MacIconButton>
+          <MacIconButton
+            title="全部折叠"
+            aria-label="全部折叠"
+            onClick={() => setFileTree((prev) => collapseAllFolders(prev))}
+          >
+            <WorkbenchIcon name="chevronDown" />
+          </MacIconButton>
         </div>
       </div>
 
+      {errorMessage ? (
+        <StatusBanner
+          tone="danger"
+          icon="alertTriangle"
+          title="文件树操作失败"
+          message={errorMessage}
+          className="explorer-banner"
+        />
+      ) : null}
+
       <div className="explorer-content">
-        {fileTree.map((node) => renderNode(node))}
+        {treeItems.length > 0 ? (
+          <DirectoryTree
+            items={treeItems}
+            onSelect={(item) => {
+              const node = resolveNodeByPath(item.id, fileTree);
+              if (node) {
+                void handleClick(node);
+              }
+            }}
+            onToggle={(item) => toggleFolder(item.id)}
+            onContextMenu={(event, item) => {
+              event.preventDefault();
+              const node = resolveNodeByPath(item.id, fileTree);
+              if (!node) {
+                return;
+              }
+              setSelectedPath(node.path);
+              setContextMenu({ x: event.clientX, y: event.clientY, node });
+            }}
+          />
+        ) : (
+          <EmptyStateView
+            icon="folder"
+            title="这里还没有文件"
+            description="生成代码后，文件会按统一的目录树样式出现在这里。"
+          />
+        )}
       </div>
 
       {contextMenu && (
@@ -390,38 +445,39 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           ref={contextMenuRef}
           className="context-menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
-          <div className="context-menu-item" onClick={() => runContextMenuAction(handleOpenNode)}>
-            <span>Open</span>
-          </div>
+          <button className="context-menu-item" type="button" onClick={() => runContextMenuAction(handleOpenNode)}>
+            打开
+          </button>
           {contextMenu.node.path !== rootPath ? (
-            <div className="context-menu-item" onClick={() => runContextMenuAction(handleRenameNode)}>
-              <span>Rename</span>
-            </div>
+            <button className="context-menu-item" type="button" onClick={() => runContextMenuAction(handleRenameNode)}>
+              重命名
+            </button>
           ) : null}
           {contextMenu.node.path !== rootPath ? (
-            <div className="context-menu-item" onClick={() => runContextMenuAction(handleDeleteNode)}>
-              <span>Delete</span>
-            </div>
+            <button className="context-menu-item danger" type="button" onClick={() => runContextMenuAction(handleDeleteNode)}>
+              删除
+            </button>
           ) : null}
           <div className="context-menu-divider" />
-          <div className="context-menu-item" onClick={() => runContextMenuAction(handleCopyPath)}>
-            <span>Copy Path</span>
-          </div>
-          <div className="context-menu-item" onClick={() => runContextMenuAction(handleOpenInSystem)}>
-            <span>在实际目录中打开</span>
-          </div>
-          <div
+          <button className="context-menu-item" type="button" onClick={() => runContextMenuAction(handleCopyPath)}>
+            复制路径
+          </button>
+          <button className="context-menu-item" type="button" onClick={() => runContextMenuAction(handleOpenInSystem)}>
+            在系统中打开
+          </button>
+          <button
             className="context-menu-item"
+            type="button"
             onClick={() =>
               runContextMenuAction((node) =>
                 handleRefresh(node.type === 'folder' ? node.path : getDirectoryPath(node.path) || rootPath)
               )
             }
           >
-            <span>Refresh</span>
-          </div>
+            刷新
+          </button>
         </div>
       )}
     </div>

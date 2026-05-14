@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Codex Companion Preview</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #121316;
+        --window: #181a1f;
+        --panel: #1d2026;
+        --panel-strong: #23262d;
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.14);
+        --text: #f3f4f6;
+        --text-soft: rgba(243, 244, 246, 0.68);
+        --text-faint: rgba(243, 244, 246, 0.44);
+        --accent: #7dd3fc;
+        --good: #4ade80;
+        --warn: #fbbf24;
+        --bad: #f87171;
+        --shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+        --radius-lg: 18px;
+        --radius-md: 14px;
+        --radius-sm: 10px;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        background: #0f1115;
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      }
+      a { color: inherit; text-decoration: none; }
+
+      .page {
+        min-height: 100vh;
+        padding: 14px;
+        background: var(--bg);
+      }
+
+      .window {
+        min-height: calc(100vh - 28px);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 22px;
+        background: var(--window);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .topbar {
+        height: 54px;
+        padding: 0 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .traffic-lights { display: flex; gap: 8px; }
+      .traffic-lights span {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        display: inline-block;
+      }
+      .traffic-lights span:nth-child(1) { background: #ff5f57; }
+      .traffic-lights span:nth-child(2) { background: #febc2e; }
+      .traffic-lights span:nth-child(3) { background: #28c840; }
+
+      .topbar-title {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+      .topbar-title strong { color: var(--text); font-size: 13px; }
+
+      .topbar-paths {
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .path-chip {
+        min-height: 28px;
+        padding: 0 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .path-chip .mini-icon,
+      .icon-badge,
+      .tab-icon {
+        width: 16px;
+        height: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+      }
+
+      .icon-badge {
+        width: 20px;
+        height: 20px;
+        border-radius: 7px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--text-soft);
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 62px 280px minmax(0, 1fr) 316px;
+        min-height: calc(100vh - 82px);
+      }
+
+      .rail,
+      .sidebar,
+      .utility {
+        min-width: 0;
+        min-height: 0;
+        border-right: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .rail {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 8px;
+      }
+
+      .rail .brand {
+        width: 34px;
+        height: 34px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        background: var(--panel-strong);
+        border: 1px solid var(--line);
+        color: var(--accent);
+        font-weight: 700;
+        font-size: 12px;
+      }
+
+      .rail .icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        border: 1px solid transparent;
+        color: var(--text-soft);
+        background: transparent;
+      }
+      .rail .icon.active {
+        background: var(--panel-strong);
+        border-color: var(--line);
+        color: var(--text);
+      }
+
+      .sidebar {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .section-title {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        margin-bottom: 8px;
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .list-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 42px;
+        padding: 8px 10px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--text-soft);
+      }
+      .list-row.active {
+        background: var(--panel-strong);
+        border-color: var(--line);
+        color: var(--text);
+      }
+      .list-row strong { display: block; color: var(--text); font-size: 13px; }
+      .list-row span { display: block; font-size: 12px; color: var(--text-faint); }
+
+      .main {
+        min-width: 0;
+        min-height: 0;
+        background: #171920;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .main-header {
+        padding: 18px 22px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .main-header h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 650;
+      }
+      .main-header p {
+        margin: 0;
+        max-width: 54ch;
+        color: var(--text-soft);
+        line-height: 1.6;
+        font-size: 13px;
+      }
+
+      .stage {
+        position: relative;
+        min-height: calc(100% - 74px);
+        padding: 22px;
+      }
+
+      .document {
+        height: 100%;
+        min-height: 640px;
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: #1b1e24;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        padding: 24px 24px 26px;
+      }
+
+      .document h2 {
+        margin: 0 0 8px;
+        font-size: 24px;
+        font-weight: 650;
+      }
+      .document p {
+        margin: 0;
+        color: var(--text-soft);
+        line-height: 1.7;
+        max-width: 60ch;
+      }
+
+      .floating {
+        position: absolute;
+        right: 34px;
+        top: 34px;
+        width: 420px;
+        border-radius: 20px;
+        border: 1px solid var(--line-strong);
+        background: rgba(28, 31, 37, 0.98);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+        overflow: hidden;
+      }
+
+      .floating header,
+      .utility-head,
+      .floating-tabs,
+      .utility-tabs {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .floating header,
+      .utility-head {
+        border-bottom: 0;
+        padding-bottom: 10px;
+      }
+
+      .floating-head-copy,
+      .utility-head-copy {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .floating header strong,
+      .utility-head strong { font-size: 14px; }
+      .floating header span,
+      .utility-head span { color: var(--text-faint); font-size: 12px; }
+
+      .floating-tabs,
+      .utility-tabs {
+        padding-top: 0;
+        justify-content: flex-start;
+        overflow: auto;
+        scrollbar-width: none;
+      }
+      .floating-tabs::-webkit-scrollbar,
+      .utility-tabs::-webkit-scrollbar { display: none; }
+
+      .tab {
+        min-height: 30px;
+        padding: 0 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text-soft);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .tab.active {
+        background: var(--panel-strong);
+        border-color: var(--line);
+        color: var(--text);
+      }
+
+      .floating .body {
+        padding: 12px 16px 16px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .block h3 {
+        margin: 0 0 10px;
+        font-size: 11px;
+        color: var(--text-faint);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .progress {
+        display: grid;
+        gap: 10px;
+      }
+      .progress-item {
+        display: flex;
+        gap: 10px;
+        color: var(--text-soft);
+        line-height: 1.45;
+      }
+      .progress-item .dot {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1px solid var(--line-strong);
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        margin-top: 1px;
+      }
+      .progress-item.active { color: var(--text); }
+      .progress-item.active .dot {
+        border-color: rgba(125, 211, 252, 0.55);
+        background: rgba(125, 211, 252, 0.1);
+      }
+
+      .meta-grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .meta-card {
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .meta-card strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+      .meta-card span {
+        color: var(--text-soft);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .chip {
+        padding: 7px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .terminal {
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: #13161b;
+        color: #d1d5db;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .terminal .cmd { color: #f9fafb; font-weight: 600; }
+
+      .utility {
+        display: flex;
+        flex-direction: column;
+        background: #1b1d22;
+      }
+
+      .utility-body {
+        padding: 14px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .utility-card {
+        padding: 13px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .utility-card strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+      .utility-card p,
+      .utility-card li {
+        margin: 0;
+        color: var(--text-soft);
+        line-height: 1.6;
+        font-size: 12px;
+      }
+      .utility-card ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+
+      .compact-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-faint);
+      }
+
+      .compact-toolbar .tool-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--text-soft);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .compact-toolbar .tool-btn.active {
+        background: var(--panel-strong);
+        color: var(--text);
+      }
+
+      .split {
+        display: grid;
+        gap: 10px;
+      }
+
+      .footer-note {
+        padding: 14px 22px 22px;
+        color: var(--text-faint);
+        font-size: 12px;
+      }
+
+      @media (max-width: 1280px) {
+        .shell { grid-template-columns: 62px 260px minmax(0, 1fr); }
+        .utility { display: none; }
+      }
+
+      @media (max-width: 960px) {
+        .shell { grid-template-columns: 62px minmax(0, 1fr); }
+        .sidebar { display: none; }
+        .floating { position: static; width: auto; margin-top: 18px; }
+        .document { min-height: 520px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="window">
+        <header class="topbar">
+          <div class="traffic-lights"><span></span><span></span><span></span></div>
+          <div class="topbar-title">
+            <strong>Codex Companion Preview</strong>
+            <span>main stage + floating run companion + utility sidebar</span>
+          </div>
+          <div class="topbar-paths">
+            <div class="path-chip"><span class="mini-icon">⌘</span>Agent</div>
+            <div class="path-chip"><span class="mini-icon">▣</span>Review</div>
+            <div class="path-chip"><span class="mini-icon">◌</span>Browser</div>
+            <div class="path-chip"><span class="mini-icon">◇</span>Files</div>
+          </div>
+        </header>
+
+        <section class="shell">
+          <aside class="rail">
+            <div class="brand">GN</div>
+            <div class="icon active">◉</div>
+            <div class="icon">▣</div>
+            <div class="icon">⌘</div>
+            <div class="icon">◎</div>
+            <div style="flex:1 1 auto"></div>
+            <div class="icon">⚙</div>
+          </aside>
+
+          <aside class="sidebar">
+            <div>
+              <div class="section-title">Source Sidebar</div>
+              <div class="list">
+                <div class="list-row active">
+                  <span class="icon-badge">▤</span>
+                  <div><strong>Current task</strong><span>Agent shell companion</span></div>
+                </div>
+                <div class="list-row">
+                  <span class="icon-badge">◇</span>
+                  <div><strong>Review set</strong><span>Files / diff / browser</span></div>
+                </div>
+                <div class="list-row">
+                  <span class="icon-badge">≡</span>
+                  <div><strong>Notes</strong><span>Context and next steps</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="section-title">Behavior</div>
+              <div class="list">
+                <div class="list-row"><span class="icon-badge">◌</span><div><strong>Quiet</strong><span>Less card noise</span></div></div>
+                <div class="list-row"><span class="icon-badge">⌘</span><div><strong>Native</strong><span>macOS rhythm</span></div></div>
+                <div class="list-row"><span class="icon-badge">◎</span><div><strong>Icon-led</strong><span>More symbols, less text</span></div></div>
+              </div>
+            </div>
+          </aside>
+
+          <section class="main">
+            <div class="main-header">
+              <h1>Agent workbench, rebuilt like a desktop tool</h1>
+              <p>
+                The rightmost pane becomes a universal utility sidebar. Current task progress moves into a
+                floating card inside the main stage, like the Codex screenshot you shared.
+              </p>
+            </div>
+
+            <div class="stage">
+              <section class="document">
+                <h2>Markdown / note surface</h2>
+                <p>
+                  The center stays calm and document-led. The floating run companion carries live progress,
+                  while the utility sidebar handles review and browser tasks.
+                </p>
+              </section>
+
+              <section class="floating">
+                <header>
+                  <div class="floating-head-copy">
+                    <span class="icon-badge">◎</span>
+                    <div>
+                      <strong>Progress</strong>
+                      <span>current turn</span>
+                    </div>
+                  </div>
+                  <div class="compact-toolbar">
+                    <button class="tool-btn active" type="button" aria-label="pin">⌘</button>
+                    <button class="tool-btn" type="button" aria-label="collapse">▤</button>
+                    <button class="tool-btn" type="button" aria-label="more">⋯</button>
+                  </div>
+                </header>
+                <div class="floating-tabs">
+                  <div class="tab active"><span class="tab-icon">◉</span>Overview</div>
+                  <div class="tab"><span class="tab-icon">↺</span>Changes</div>
+                  <div class="tab"><span class="tab-icon">◫</span>Outputs</div>
+                  <div class="tab"><span class="tab-icon">⌘</span>Source</div>
+                </div>
+                <div class="body">
+                  <div class="block">
+                    <h3>Steps</h3>
+                    <div class="progress">
+                      <div class="progress-item active"><div class="dot">✓</div><div>Check the current desktop shell and lock the shared frame points.</div></div>
+                      <div class="progress-item"><div class="dot"></div><div>Rebuild the top shell so rail, topbar, main stage, and inspector read as one native window.</div></div>
+                      <div class="progress-item"><div class="dot"></div><div>Consolidate WorkbenchShell and main content containers into one shared pane vocabulary.</div></div>
+                      <div class="progress-item"><div class="dot"></div><div>Run build and key checks, then summarize remaining adaptations.</div></div>
+                    </div>
+                  </div>
+
+                  <div class="block">
+                    <h3>Branch details</h3>
+                    <div class="meta-grid">
+                      <div class="meta-card"><strong>Changes</strong><span>+28,910 / -11,637</span></div>
+                      <div class="meta-card"><strong>Git</strong><span>Working tree, no publish</span></div>
+                    </div>
+                  </div>
+
+                  <div class="block">
+                    <h3>Generated results</h3>
+                    <div class="chips">
+                      <span class="chip">◌ localhost:1420</span>
+                      <span class="chip">▤ AGENTS.md</span>
+                      <span class="chip">◎ ui-standards.html</span>
+                      <span class="chip">≡ plan.md</span>
+                    </div>
+                  </div>
+
+                  <div class="block">
+                    <h3>Terminal</h3>
+                    <div class="terminal"><span class="cmd">npm run dev</span><br />build is clean, shell is mounted, continue with the next pass.</div>
+                  </div>
+
+                  <div class="block">
+                    <h3>Source</h3>
+                    <div class="chips">
+                      <span class="chip">⌕ web search</span>
+                      <span class="chip">◇ project files</span>
+                      <span class="chip">⌥ runtime state</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <aside class="utility">
+            <div class="utility-head">
+              <div class="utility-head-copy">
+                <span class="icon-badge">◫</span>
+                <div>
+                  <strong>Review</strong>
+                  <span>utility sidebar</span>
+                </div>
+              </div>
+              <div class="compact-toolbar">
+                <button class="tool-btn active" type="button" aria-label="review">◫</button>
+                <button class="tool-btn" type="button" aria-label="browser">◌</button>
+                <button class="tool-btn" type="button" aria-label="inspect">⌘</button>
+              </div>
+            </div>
+
+            <div class="utility-tabs">
+              <div class="tab active"><span class="tab-icon">◫</span>审查</div>
+              <div class="tab"><span class="tab-icon">◌</span>浏览器</div>
+              <div class="tab"><span class="tab-icon">↕</span>Diff</div>
+              <div class="tab"><span class="tab-icon">◇</span>Files</div>
+            </div>
+
+            <div class="utility-body">
+              <section class="utility-card">
+                <strong>审查</strong>
+                <ul>
+                  <li>Shell hierarchy is stable.</li>
+                  <li>Floating companion stays inside stage.</li>
+                  <li>Right sidebar is shared, not agent-only.</li>
+                </ul>
+              </section>
+              <section class="utility-card">
+                <strong>Browser</strong>
+                <p>localhost:1420</p>
+                <p>Preview / inspect / verify.</p>
+              </section>
+              <section class="utility-card">
+                <strong>Files</strong>
+                <ul>
+                  <li>AgentShellPage.tsx</li>
+                  <li>WorkbenchShell.tsx</li>
+                  <li>DesktopWorkbenchFrame.tsx</li>
+                </ul>
+              </section>
+              <section class="utility-card">
+                <strong>State</strong>
+                <p>default / hover / selected / collapsed / empty / loading / error</p>
+              </section>
+            </div>
+          </aside>
+        </section>
+
+        <div class="footer-note">
+          This is the Codex-like direction: one quiet center, one floating run card, one shared right utility rail.
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -124,6 +124,7 @@ Rules:
 - Before building new workbench UI, review the latest standard pages in `design/workbench-unified-previews/`.
 - Reuse shared tokens, card families, and layout patterns from the standard before inventing new ones.
 - Reuse the standard workspace primitives intentionally: note surface, directory tree, and infinite canvas.
+- If Chinese copy looks broken, run `python scripts/check_mojibake.py` before assuming the source file is corrupted. Distinguish real file mojibake from terminal or console encoding noise.
 - Do not ship only the default state of a component. Cover collapsed / expanded / empty / loading / error behavior during implementation.
 - When implementing a new AI page or refactoring AI chat, preserve the semantic separation between thinking, tools, feedback, and final.
 - If a requested design conflicts with this standard, pause and call out the tradeoff explicitly before implementing.

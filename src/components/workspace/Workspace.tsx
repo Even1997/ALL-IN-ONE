@@ -11,6 +11,7 @@ import {
   readLayoutSize,
   writeLayoutSize,
 } from '../../utils/layoutPreferences';
+import { EmptyStateView, StateCard, StatusBanner } from '../ui';
 import './Workspace.css';
 
 type WorkspaceView = 'files' | 'terminal';
@@ -248,10 +249,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                     {tasks.length > 0 ? (
                       <div className="workspace-task-strip">
                         {tasks.slice(0, 4).map((task) => (
-                          <div key={task.id} className="workspace-task-chip">
-                            <strong>{task.owner}</strong>
-                            <span>{task.title}</span>
-                          </div>
+                          <StateCard
+                            key={task.id}
+                            className="workspace-task-chip"
+                            icon={task.owner === 'backend' ? 'server' : task.owner === 'qa' ? 'checkCircle' : task.owner === 'devops' ? 'rocket' : 'code'}
+                            tone={task.owner === 'qa' ? 'warning' : task.owner === 'devops' ? 'success' : 'info'}
+                            title={task.title}
+                            description={task.summary}
+                            meta={<span>{task.owner}</span>}
+                          />
                         ))}
                       </div>
                     ) : null}
@@ -271,14 +277,30 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                           spellCheck={false}
                         />
                       </div>
-                    ) : null}
+                    ) : (
+                      <EmptyStateView
+                        className="workspace-file-empty"
+                        icon="document"
+                        title="选择一个文件开始查看"
+                        description="左侧目录树已经统一到桌面工作台规范，选中文件后会在这里打开。"
+                      />
+                    )}
 
                     <div className="workspace-content">
-                      <div className="workspace-inline-note">
-                        <strong>{currentView === 'terminal' ? '终端已固定在底部' : '桌面工作区'}</strong>
-                        <p>文件区、主工作区、活动栏和底部终端都可以通过分隔条调整大小。</p>
-                        <span>右侧 AI 活动窗已停靠到桌面工作台，不再使用右下角浮窗。</span>
-                      </div>
+                      <StatusBanner
+                        tone={syncState === 'error' ? 'danger' : syncState === 'done' ? 'success' : 'info'}
+                        icon={syncState === 'error' ? 'alertTriangle' : syncState === 'done' ? 'checkCircle' : 'monitor'}
+                        title={currentView === 'terminal' ? '终端固定在底部区域' : '桌面开发工作区'}
+                        message={
+                          syncState === 'syncing'
+                            ? '正在把生成文件写回项目目录。'
+                            : syncState === 'done'
+                              ? '生成文件已经同步到项目目录。'
+                              : syncState === 'error'
+                                ? '生成文件写回失败，请检查路径或权限。'
+                                : '文件区、主工作区、活动栏和底部终端都可以通过分隔条调整大小。'
+                        }
+                      />
                     </div>
                   </div>
                 </div>

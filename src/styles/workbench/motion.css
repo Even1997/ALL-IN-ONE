@@ -1,0 +1,28 @@
+:root {
+  --wb-transition-fast: 160ms ease;
+  --wb-transition-base: 220ms ease;
+}
+
+.desktop-brand-chip,
+.desktop-rail-icon-btn,
+.mac-button,
+.app-menu-trigger,
+.app-menu-item,
+.desktop-ai-resize-handle::before {
+  transition:
+    background var(--wb-transition-fast),
+    border-color var(--wb-transition-fast),
+    color var(--wb-transition-fast),
+    opacity var(--wb-transition-fast),
+    box-shadow var(--wb-transition-fast),
+    transform var(--wb-transition-fast);
+}
+
+.app-workbench-ai-shell,
+.desktop-workbench-panels,
+.app-workbench-pane {
+  transition:
+    background var(--wb-transition-base),
+    border-color var(--wb-transition-base),
+    box-shadow var(--wb-transition-base);
+}

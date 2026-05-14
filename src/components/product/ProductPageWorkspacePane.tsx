@@ -4,7 +4,7 @@ import { Canvas } from '../canvas/Canvas';
 import { usePreviewStore } from '../../store/previewStore';
 import { useProjectStore } from '../../store/projectStore';
 import { AppType, CanvasElement, type FeatureTree, type PageStructureNode } from '../../types';
-import { WorkbenchIcon } from '../ui/WorkbenchIcon';
+import { EmptyStateView, NoteSurface, WorkbenchIcon } from '../ui';
 import {
   buildPageWireframeMarkdown,
   createWireframeModule,
@@ -827,10 +827,11 @@ const ModuleListFloat = memo<ModuleListFloatProps>(({ selectedPage, appType, fea
               />
             ))
           ) : (
-            <div className="pm-context-card">
-              <strong>暂无模块</strong>
-              <span>点击"添加模块"或"生成示例草图"开始编辑。</span>
-            </div>
+            <EmptyStateView
+              icon="page"
+              title="暂无模块"
+              description='点击“添加模块”后，这里会按统一的模块列表卡片标准展示。'
+            />
           )}
         </div>
 
@@ -915,14 +916,18 @@ export const ProductPageWorkspacePane = ({
     return (
       <PageWorkspace
         content={
-          <section className="pm-card pm-empty-panel">
-            <div className="pm-card-header">
-              <div>
-                <h3>页面草图</h3>
-              </div>
-            </div>
-            <div className="empty-state">还没有页面草图。</div>
-          </section>
+          <NoteSurface
+            className="pm-empty-panel pm-page-panel-surface"
+            eyebrow="Page"
+            title="页面工作区"
+            subtitle="先创建一个页面，再进入统一的线框与模块工作流。"
+          >
+            <EmptyStateView
+              icon="page"
+              title="还没有页面草图"
+              description="页面树、线框画布和模块侧栏都已经按统一工作台标准组织好，选中页面后会直接展开。"
+            />
+          </NoteSurface>
         }
       />
     );
@@ -932,14 +937,15 @@ export const ProductPageWorkspacePane = ({
     <PageWorkspace
       content={
         <div className="pm-page-hub-grid">
-          <section className="pm-card pm-page-structure-panel">
-            <div className="pm-card-header">
-              <div>
-                <h3>页面结构</h3>
-              </div>
+          <NoteSurface
+            className="pm-page-structure-panel pm-page-panel-surface"
+            eyebrow="Pages"
+            title="页面结构"
+            subtitle="用统一的目录树视觉管理页面层级、选择与删除。"
+            toolbar={
               <div className="pm-inline-actions">
                 <input
-                  className="product-input"
+                  className="product-input pm-page-search-input"
                   type="search"
                   value={pageSearch}
                   onChange={(event) => onPageSearchChange(event.target.value)}
@@ -949,7 +955,8 @@ export const ProductPageWorkspacePane = ({
                   + 页面
                 </button>
               </div>
-            </div>
+            }
+          >
             {designPages.length > 0 ? (
               filteredDesignPages.length > 0 ? (
                 <div className="pm-page-tree">
@@ -965,21 +972,30 @@ export const ProductPageWorkspacePane = ({
                   ))}
                 </div>
               ) : (
-                <div className="pm-page-tree-empty">没有匹配的页面</div>
+                <EmptyStateView
+                  icon="search"
+                  title="没有匹配的页面"
+                  description="换一个关键词试试，或者直接创建新页面。"
+                />
               )
             ) : (
-              <div className="pm-page-tree-empty">还没有页面，请先创建</div>
+              <EmptyStateView
+                icon="document"
+                title="还没有页面"
+                description="先创建一个页面，后续画布、模块和属性面板会自动接到这套统一 UI。"
+              />
             )}
-          </section>
+          </NoteSurface>
 
           <div className="pm-page-hub-canvas">
             <div className="pm-page-workspace-frame">
               <div className="pm-page-workspace">
-                <section className="pm-card pm-wireframe-main pm-wireframe-main-canvas">
-                  <div className="pm-card-header pm-wireframe-section-header pm-wireframe-canvas-header">
-                    <div>
-                      <h3>页面画布</h3>
-                    </div>
+                <NoteSurface
+                  className="pm-wireframe-main pm-wireframe-main-canvas pm-page-panel-surface"
+                  eyebrow="Canvas"
+                  title="页面画布"
+                  subtitle="更接近原生桌面文档工作台的线框舞台，保留现有模块编辑能力。"
+                  toolbar={
                     <div className="pm-inline-actions pm-wireframe-canvas-actions">
                       <button
                         className={`doc-action-btn secondary ${canvasPreset.frameType === 'browser' ? 'active' : ''}`}
@@ -999,7 +1015,8 @@ export const ProductPageWorkspacePane = ({
                         添加模块
                       </button>
                     </div>
-                  </div>
+                  }
+                >
                   <div className="pm-canvas-shell">
                     <div className="pm-canvas-frame-editor">
                       <button className="doc-action-btn secondary" type="button" onClick={onToggleFrameEditor}>
@@ -1053,7 +1070,7 @@ export const ProductPageWorkspacePane = ({
                       onClosePanel={onCloseModulePanel}
                     />
                   ) : null}
-                </section>
+                </NoteSurface>
               </div>
               <WireframeSyncBridge selectedPage={selectedPage} />
             </div>

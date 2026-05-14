@@ -75,7 +75,7 @@ export const AgentShellPage: React.FC = () => {
             projectName={session.currentProjectName}
           />
         }
-        floatingOverlay={
+        companion={
           <AgentFloatingPlanCard
             session={session.latestTurnSession}
             collapsed={floatingPlanCollapsed}

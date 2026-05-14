@@ -1,0 +1,142 @@
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --wb-font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --wb-font-size-body: 13px;
+  --wb-line-height-body: 1.55;
+
+  --wb-radius-xs: 8px;
+  --wb-radius-sm: 10px;
+  --wb-radius-md: 12px;
+  --wb-radius-lg: 14px;
+  --wb-radius-xl: 16px;
+  --wb-radius-window: 14px;
+
+  --wb-space-1: 4px;
+  --wb-space-2: 8px;
+  --wb-space-3: 12px;
+  --wb-space-4: 16px;
+  --wb-space-5: 20px;
+  --wb-space-6: 24px;
+
+  --wb-shadow-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --wb-shadow-panel: 0 10px 24px rgba(15, 23, 42, 0.06);
+  --wb-shadow-floating: 0 16px 32px rgba(15, 23, 42, 0.1);
+  --wb-shadow-selected: 0 0 0 1px rgba(59, 130, 246, 0.18);
+  --wb-focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.18);
+
+  --wb-app-background: #ebedf0;
+  --wb-window-background: #f5f5f7;
+  --wb-stage-background: #f7f7f9;
+  --wb-sidebar-background: rgba(255, 255, 255, 0.84);
+  --wb-toolbar-background: rgba(255, 255, 255, 0.82);
+  --wb-pane-background: rgba(255, 255, 255, 0.88);
+  --wb-pane-background-strong: rgba(255, 255, 255, 0.96);
+  --wb-inspector-background: rgba(248, 249, 251, 0.96);
+  --wb-input-background: rgba(255, 255, 255, 0.92);
+  --wb-selected-background: rgba(0, 122, 255, 0.1);
+  --wb-hover-background: rgba(15, 23, 42, 0.045);
+  --wb-muted-background: rgba(15, 23, 42, 0.032);
+  --wb-divider: rgba(100, 116, 139, 0.14);
+  --wb-divider-strong: rgba(100, 116, 139, 0.22);
+  --wb-text-primary: #111827;
+  --wb-text-secondary: #4b5563;
+  --wb-text-tertiary: #6b7280;
+  --wb-text-quaternary: #94a3b8;
+  --wb-accent: #0a84ff;
+  --wb-accent-strong: #0067d8;
+  --wb-danger: #e11d48;
+  --wb-warning: #d97706;
+  --wb-success: #059669;
+
+  --desktop-topbar-height: 42px;
+  --desktop-workbench-gutter: 10px;
+  --desktop-window-radius: var(--wb-radius-window);
+  --desktop-workbench-radius: var(--wb-radius-lg);
+
+  --macos-window-bg: var(--wb-window-background);
+  --macos-chrome-bg: var(--wb-toolbar-background);
+  --macos-chrome-border: var(--wb-divider);
+  --macos-panel-bg: var(--wb-pane-background);
+  --macos-panel-bg-strong: var(--wb-pane-background-strong);
+  --macos-panel-border: var(--wb-divider);
+  --macos-input-bg: var(--wb-input-background);
+  --macos-text-primary: var(--wb-text-primary);
+  --macos-text-secondary: var(--wb-text-secondary);
+  --macos-text-tertiary: var(--wb-text-tertiary);
+  --macos-shadow-panel: var(--wb-shadow-panel);
+  --macos-shadow-floating: var(--wb-shadow-floating);
+  --macos-focus-ring: var(--wb-focus-ring);
+
+  --desktop-shell-surface: #eef0f3;
+  --desktop-shell-surface-strong: #ffffff;
+  --desktop-shell-surface-muted: #e8ebef;
+  --desktop-shell-border: var(--wb-divider);
+  --desktop-shell-border-strong: var(--wb-divider-strong);
+  --desktop-shell-shadow: var(--wb-shadow-panel);
+  --desktop-shell-shadow-strong: var(--wb-shadow-floating);
+  --desktop-shell-text: var(--wb-text-primary);
+  --desktop-shell-text-muted: var(--wb-text-secondary);
+  --desktop-shell-hover: var(--wb-hover-background);
+  --desktop-shell-toolbar-bg: var(--wb-toolbar-background);
+  --desktop-shell-toolbar-bg-subtle: var(--wb-muted-background);
+  --desktop-shell-toolbar-border: var(--wb-divider);
+  --desktop-shell-control-bg: rgba(255, 255, 255, 0.72);
+  --desktop-shell-control-divider: var(--wb-divider);
+  --desktop-shell-resize-track: rgba(100, 116, 139, 0.16);
+  --desktop-shell-button-shadow: var(--wb-shadow-hairline);
+  --desktop-shell-role-pill-bg: rgba(10, 132, 255, 0.1);
+  --desktop-shell-rail-bg: var(--wb-sidebar-background);
+  --desktop-shell-topbar-bg: var(--wb-toolbar-background);
+  --desktop-shell-pane-bg: var(--wb-pane-background);
+  --desktop-shell-ai-pane-bg: var(--wb-inspector-background);
+
+  --desktop-titlebar-fg: var(--wb-text-secondary);
+  --desktop-titlebar-fg-strong: var(--wb-text-primary);
+  --desktop-titlebar-hover-bg: var(--wb-hover-background);
+  --desktop-titlebar-menu-bg: rgba(255, 255, 255, 0.96);
+  --desktop-titlebar-menu-border: var(--wb-divider);
+  --desktop-titlebar-menu-shadow: var(--wb-shadow-floating);
+  --desktop-titlebar-divider: var(--wb-divider);
+
+  --role-knowledge-accent: #0a84ff;
+  --role-wiki-accent: #14b8a6;
+  --role-page-accent: #4f46e5;
+  --role-design-accent: #ec4899;
+  --role-develop-accent: #16a34a;
+  --role-test-accent: #f97316;
+  --role-operations-accent: #ef4444;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --wb-app-background: #17191d;
+  --wb-window-background: #1b1d22;
+  --wb-stage-background: #1c1f24;
+  --wb-sidebar-background: rgba(30, 33, 38, 0.92);
+  --wb-toolbar-background: rgba(27, 30, 35, 0.9);
+  --wb-pane-background: rgba(32, 36, 42, 0.94);
+  --wb-pane-background-strong: rgba(36, 40, 46, 0.97);
+  --wb-inspector-background: rgba(27, 30, 35, 0.97);
+  --wb-input-background: rgba(255, 255, 255, 0.06);
+  --wb-selected-background: rgba(10, 132, 255, 0.18);
+  --wb-hover-background: rgba(255, 255, 255, 0.06);
+  --wb-muted-background: rgba(255, 255, 255, 0.04);
+  --wb-divider: rgba(148, 163, 184, 0.16);
+  --wb-divider-strong: rgba(148, 163, 184, 0.24);
+  --wb-text-primary: #f3f4f6;
+  --wb-text-secondary: rgba(243, 244, 246, 0.78);
+  --wb-text-tertiary: rgba(243, 244, 246, 0.56);
+  --wb-text-quaternary: rgba(243, 244, 246, 0.4);
+  --wb-shadow-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --wb-shadow-panel: 0 12px 26px rgba(0, 0, 0, 0.24);
+  --wb-shadow-floating: 0 18px 38px rgba(0, 0, 0, 0.32);
+  --wb-shadow-selected: 0 0 0 1px rgba(96, 165, 250, 0.22);
+  --wb-focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.24);
+
+  --desktop-shell-surface: #20242b;
+  --desktop-shell-surface-strong: #272c34;
+  --desktop-shell-surface-muted: #232830;
+  --desktop-shell-control-bg: rgba(255, 255, 255, 0.06);
+  --desktop-titlebar-menu-bg: rgba(28, 31, 36, 0.98);
+}

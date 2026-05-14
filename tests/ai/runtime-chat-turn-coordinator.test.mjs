@@ -40,3 +40,14 @@ test('runtime chat turn coordinator does not overwrite final assistant narrative
     /projectCurrentCanonicalTimeline\(\)\.length > 0[\s\S]*?\?\s*projectCurrentCanonicalTimeline\(\)/,
   );
 });
+
+test('runtime chat turn coordinator keeps streaming draft narrative boundaries from the assembler during model deltas', async () => {
+  const source = await readFile(
+    path.resolve(__dirname, '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts'),
+    'utf8',
+  );
+
+  assert.match(source, /const draftState = streamingAssembler\.append\(event\);/);
+  assert.match(source, /buildAssistantStreamingTimeline\(\s*draftState\.content,/);
+  assert.match(source, /preferredAssistantParts:\s*draftState\.assistantParts/);
+});

@@ -1,4 +1,4 @@
-import type { ChangeEventHandler, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type { ChangeEventHandler, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 
 type MacFieldProps = {
   label: ReactNode;
@@ -21,6 +21,10 @@ type MacInputProps = InputHTMLAttributes<HTMLInputElement> & {
   className?: string;
 };
 
+type MacTextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  className?: string;
+};
+
 const joinClasses = (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' ');
 
 export const MacField = ({ label, hint, className, children }: MacFieldProps) => (
@@ -33,6 +37,10 @@ export const MacField = ({ label, hint, className, children }: MacFieldProps) =>
 
 export const MacInput = ({ className, ...props }: MacInputProps) => (
   <input className={joinClasses('mac-input', className)} {...props} />
+);
+
+export const MacTextarea = ({ className, ...props }: MacTextareaProps) => (
+  <textarea className={joinClasses('mac-input', 'mac-textarea', className)} {...props} />
 );
 
 export const MacSelectField = ({

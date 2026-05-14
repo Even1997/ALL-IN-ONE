@@ -20,6 +20,19 @@ export type WorkbenchIconName =
   | 'puzzle'
   | 'settings'
   | 'document'
+  | 'note'
+  | 'code'
+  | 'refresh'
+  | 'eye'
+  | 'pencil'
+  | 'checkCircle'
+  | 'alertTriangle'
+  | 'loader'
+  | 'chevronDown'
+  | 'clock'
+  | 'rocket'
+  | 'server'
+  | 'monitor'
   | 'panelRightOpen'
   | 'panelRightClose';
 
@@ -143,6 +156,83 @@ const ICON_PATHS: Record<WorkbenchIconName, ReactNode> = {
     <>
       <path d="M8 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 7 20V5A1.5 1.5 0 0 1 8.5 3.5Z" />
       <path d="M15 3.5V8h4" />
+    </>
+  ),
+  note: (
+    <>
+      <path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 17 20.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5Z" />
+      <path d="M9 8.25h6M9 12h6M9 15.75h4" />
+    </>
+  ),
+  code: (
+    <>
+      <path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13 5l-2 14" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M20 6v5h-5" />
+      <path d="M19 11a7 7 0 1 1-2.05-4.95L20 6" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  pencil: (
+    <>
+      <path d="M4 19.5h4l9.25-9.25a2 2 0 1 0-2.83-2.83L5.17 16.67 4 19.5Z" />
+      <path d="m13.5 6.5 4 4" />
+    </>
+  ),
+  checkCircle: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m8.5 12 2.25 2.25L15.5 9.5" />
+    </>
+  ),
+  alertTriangle: (
+    <>
+      <path d="M12 4 20 18H4L12 4Z" />
+      <path d="M12 9v4.5M12 16h.01" />
+    </>
+  ),
+  loader: (
+    <>
+      <path d="M12 4.5a7.5 7.5 0 1 1-5.3 2.2" />
+      <path d="M12 2.5v3" />
+    </>
+  ),
+  chevronDown: (
+    <>
+      <path d="m6 9 6 6 6-6" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5v5l3 2" />
+    </>
+  ),
+  rocket: (
+    <>
+      <path d="M14.5 4.5c2.8.2 5 2.4 5 5-2.1 1.6-4.6 2.5-7.2 2.7L9.8 14.7l-2.5 2.5-2-2 2.5-2.5 2.5-2.5c.2-2.6 1.1-5.1 2.7-7.2 0 0 .7-.1 1.5 0Z" />
+      <path d="M7 17 4.5 19.5M14 10l3 3" />
+    </>
+  ),
+  server: (
+    <>
+      <rect x="4" y="4.5" width="16" height="5.5" rx="1.5" />
+      <rect x="4" y="13.5" width="16" height="5.5" rx="1.5" />
+      <path d="M7.5 7.25h.01M7.5 16.25h.01M11 7.25h5M11 16.25h5" />
+    </>
+  ),
+  monitor: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="11.5" rx="2" />
+      <path d="M9.5 19.5h5M12 16v3.5" />
     </>
   ),
   panelRightOpen: (

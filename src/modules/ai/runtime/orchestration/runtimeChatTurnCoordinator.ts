@@ -13,7 +13,6 @@ import {
 } from './executeRuntimeBuiltInAgentTurn.ts';
 import { executeRuntimeMcpTurn } from './executeRuntimeMcpTurn.ts';
 import { createBuiltinRuntimeAdapter } from '../adapters/builtinRuntimeAdapter.ts';
-import { projectCanonicalEventsToAssistantTimeline } from '../timeline/canonicalNarrativeProjection.ts';
 import { useAIChatStore } from '../../store/aiChatStore.ts';
 import { useAgentRuntimeStore } from '../agentRuntimeStore.ts';
 import { useRuntimeMcpStore } from '../mcp/runtimeMcpStore.ts';
@@ -304,8 +303,6 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
   };
   const emitCanonicalProviderEvent = (event: any) =>
     canonicalAdapter.onProviderEvent(event, appendCanonicalEventToSession);
-  const projectCurrentCanonicalTimeline = () =>
-    projectCanonicalEventsToAssistantTimeline(canonicalEventsForTurn as any);
   const seenToolStatuses = new Map<string, RuntimeToolStep['status']>();
   const emitCanonicalToolLifecycle = (toolCalls: RuntimeToolStep[]) => {
     for (const toolCall of toolCalls) {
@@ -1868,8 +1865,9 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
             ? { kind: 'thinking', delta: event.delta }
             : { kind: 'text', delta: event.delta }
         );
-        streamingAssembler.append(event);
-        const currentDraftTimeline = projectCurrentCanonicalTimeline();
+        const draftState = streamingAssembler.append(event);
+        const currentDraftTimeline =
+          streamingDraftBufferRef.current[assistantMessage.id]?.timeline || assistantBaseTimeline;
         const reasoningReferenceTime = Date.now();
         const reasoningProgress = {
           active: event.kind === 'thinking',
@@ -1877,7 +1875,10 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
         };
         const draft = {
           timeline: applyAssistantReasoningProgress(
-            currentDraftTimeline.length > 0 ? currentDraftTimeline : assistantBaseTimeline,
+            buildAssistantStreamingTimeline(draftState.content, currentDraftTimeline, {
+              fallbackThinkingContent: draftState.thinkingContent,
+              preferredAssistantParts: draftState.assistantParts as AIChatMessagePart[],
+            }),
             reasoningProgress
           ),
         };

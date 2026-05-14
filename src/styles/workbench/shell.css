@@ -1,0 +1,293 @@
+html.desktop-workbench-mode {
+  overflow: hidden;
+  clip-path: inset(0 round var(--desktop-window-radius));
+}
+
+body,
+#root,
+.app-shell-desktop,
+.desktop-native-window,
+.desktop-native-body,
+.desktop-workbench-column,
+.desktop-workbench-panels,
+.app-workbench-pane,
+.app-main-desktop,
+.app-ai-activity-pane {
+  min-height: 0;
+}
+
+body.desktop-workbench-mode,
+body.desktop-workbench-mode #root {
+  overflow: hidden;
+}
+
+body.desktop-workbench-mode {
+  background: transparent;
+}
+
+.app-shell-desktop {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+}
+
+.app-shell-desktop.desktop-active {
+  flex: 1 1 auto;
+  background: var(--wb-app-background);
+}
+
+.desktop-shell-codex {
+  background: var(--wb-app-background);
+}
+
+.desktop-native-window {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: calc(var(--desktop-window-radius) + 2px);
+  border: 1px solid var(--desktop-shell-border);
+  background: color-mix(in srgb, var(--wb-window-background) 96%, transparent);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+}
+
+.desktop-native-body {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--wb-window-background);
+}
+
+.desktop-workbench-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-space-2);
+}
+
+.desktop-workbench-topbar.mac-toolbar.mac-panel {
+  min-height: var(--desktop-topbar-height);
+  padding: 8px 12px;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--desktop-shell-topbar-bg) 98%, transparent);
+  border: 0;
+  border-bottom: 1px solid var(--desktop-shell-border);
+  box-shadow: none;
+}
+
+.desktop-workbench-menubar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.desktop-workbench-leading {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.desktop-workbench-title-shell {
+  display: flex;
+  align-items: center;
+  flex: 1 1 320px;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 12px;
+  border-left: 1px solid var(--desktop-titlebar-divider);
+}
+
+.desktop-workbench-title.compact {
+  min-width: 0;
+}
+
+.desktop-workbench-title.compact h1,
+.desktop-workbench-title.compact p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-workbench-tools {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.desktop-workbench-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.desktop-workbench-toolbar-group.is-context {
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+.desktop-workbench-toolbar-group.is-actions {
+  flex: 0 0 auto;
+}
+
+.desktop-window-controls {
+  display: inline-flex;
+  align-items: stretch;
+  align-self: stretch;
+  flex: 0 0 auto;
+}
+
+.desktop-workbench-drag-spacer {
+  flex: 1 1 auto;
+  min-width: 24px;
+}
+
+.desktop-workbench-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--wb-space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.desktop-workbench-panels .app-workbench-main-shell {
+  min-width: 0;
+}
+
+.app-workbench-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.app-workbench-main-shell {
+  background: color-mix(in srgb, var(--desktop-shell-pane-bg) 98%, transparent);
+}
+
+.app-workbench-ai-shell {
+  background: color-mix(in srgb, var(--desktop-shell-ai-pane-bg) 98%, transparent);
+  border-left: 1px solid var(--desktop-shell-border);
+}
+
+.app-main-desktop,
+.app-ai-activity-pane {
+  width: 100%;
+  height: 100%;
+}
+
+.desktop-primary-rail.mac-sidebar-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 6px;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--desktop-shell-rail-bg) 94%, transparent);
+  border: 0;
+  border-right: 1px solid var(--desktop-shell-border);
+  box-shadow: none;
+}
+
+.desktop-brand-chip img,
+.desktop-brand-chip svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.desktop-ai-resize-handle {
+  width: 6px;
+  min-width: 6px;
+  border-radius: 999px;
+  align-self: stretch;
+  background: transparent;
+  position: relative;
+}
+
+.desktop-ai-resize-handle::before {
+  content: '';
+  position: absolute;
+  inset: 10px 2px;
+  border-radius: 999px;
+  background: var(--desktop-shell-resize-track);
+  opacity: 0.45;
+  transition: opacity 0.18s ease;
+}
+
+.desktop-ai-resize-handle:hover::before,
+.desktop-workbench-panels.is-resizing-ai .desktop-ai-resize-handle::before {
+  opacity: 1;
+}
+
+.product-workbench-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: transparent;
+}
+
+.pm-workbench-header-slot,
+.pm-workbench-status-slot {
+  flex: 0 0 auto;
+}
+
+.pm-workbench-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pm-workbench-shell,
+.pm-workbench-sidebar,
+.pm-workbench-main,
+.pm-workbench-main-with-ai,
+.pm-workbench-ai-pane {
+  min-width: 0;
+  min-height: 0;
+}
+
+.pm-workbench-shell {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+.pm-workbench-sidebar {
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-sidebar-background) 92%, transparent);
+}
+
+.pm-workbench-main-with-ai {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pm-workbench-main {
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 92%, transparent);
+}
+
+.pm-workbench-ai-pane {
+  border-left: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-inspector-background) 94%, transparent);
+}

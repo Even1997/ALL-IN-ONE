@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { WorkbenchIcon } from '../ui/WorkbenchIcon';
 import './Terminal.css';
 
 interface TerminalLine {
@@ -39,7 +40,9 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
 
   const executeCommand = useCallback(async (cmd: string) => {
     const trimmedCmd = cmd.trim();
-    if (!trimmedCmd) return;
+    if (!trimmedCmd) {
+      return;
+    }
 
     setCommandHistory((prev) => [...prev, trimmedCmd]);
     setHistoryIndex(-1);
@@ -71,7 +74,7 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
 
   const processCommand = async (
     cmd: string,
-    args: string[]
+    args: string[],
   ): Promise<{ type: 'output' | 'error' | 'success'; content: string } | null> => {
     switch (cmd) {
       case 'help':
@@ -91,7 +94,7 @@ export const Terminal: React.FC<TerminalProps> = ({ recommendedCommands = [] }) 
 
 提示：
   - 方向键上下可切换历史命令
-  - Tab 自动补全后续可以继续补
+  - 回车立即执行当前命令
 ${recommendedCommands.length > 0 ? `\n推荐命令：\n${recommendedCommands.map((command) => `  ${command}`).join('\n')}` : ''}`,
         };
 
@@ -142,22 +145,22 @@ ${recommendedCommands.length > 0 ? `\n推荐命令：\n${recommendedCommands.map
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      executeCommand(currentCommand);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter') {
+      void executeCommand(currentCommand);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
       if (commandHistory.length > 0) {
-        const newIndex = historyIndex < commandHistory.length - 1 ? historyIndex + 1 : historyIndex;
-        setHistoryIndex(newIndex);
-        setCurrentCommand(commandHistory[commandHistory.length - 1 - newIndex] || '');
+        const nextIndex = historyIndex < commandHistory.length - 1 ? historyIndex + 1 : historyIndex;
+        setHistoryIndex(nextIndex);
+        setCurrentCommand(commandHistory[commandHistory.length - 1 - nextIndex] || '');
       }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
       if (historyIndex > 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setCurrentCommand(commandHistory[commandHistory.length - 1 - newIndex] || '');
+        const nextIndex = historyIndex - 1;
+        setHistoryIndex(nextIndex);
+        setCurrentCommand(commandHistory[commandHistory.length - 1 - nextIndex] || '');
       } else if (historyIndex === 0) {
         setHistoryIndex(-1);
         setCurrentCommand('');
@@ -165,12 +168,8 @@ ${recommendedCommands.length > 0 ? `\n推荐命令：\n${recommendedCommands.map
     }
   };
 
-  const handleContainerClick = () => {
-    inputRef.current?.focus();
-  };
-
   return (
-    <div className="terminal" onClick={handleContainerClick}>
+    <div className="terminal" onClick={() => inputRef.current?.focus()}>
       <div className="terminal-header">
         <div className="terminal-dots">
           <span className="dot red" />
@@ -180,7 +179,7 @@ ${recommendedCommands.length > 0 ? `\n推荐命令：\n${recommendedCommands.map
         <span className="terminal-title">{cwd}</span>
         <div className="terminal-actions">
           <button className="terminal-action" onClick={() => setLines([])} title="清空" type="button">
-            C
+            <WorkbenchIcon name="trash" />
           </button>
         </div>
       </div>
@@ -199,7 +198,7 @@ ${recommendedCommands.length > 0 ? `\n推荐命令：\n${recommendedCommands.map
           ref={inputRef}
           type="text"
           value={currentCommand}
-          onChange={(e) => setCurrentCommand(e.target.value)}
+          onChange={(event) => setCurrentCommand(event.target.value)}
           onKeyDown={handleKeyDown}
           className="terminal-input"
           autoFocus
@@ -207,7 +206,7 @@ ${recommendedCommands.length > 0 ? `\n推荐命令：\n${recommendedCommands.map
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          placeholder="输入命令后回车..."
+          placeholder="输入命令后回车…"
         />
       </div>
     </div>

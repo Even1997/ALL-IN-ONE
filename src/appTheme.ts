@@ -1,4 +1,4 @@
-export type AppStyle = 'minimal' | 'workbench' | 'cartoon';
+export type AppStyle = 'workbench';
 
 export type AppStyleOption = {
   id: AppStyle;
@@ -8,15 +8,9 @@ export type AppStyleOption = {
 export const APP_STYLE_STORAGE_KEY = 'goodnight-app-style';
 
 export const APP_STYLE_OPTIONS: AppStyleOption[] = [
-  { id: 'workbench', label: '蓝白工具' },
-  { id: 'minimal', label: '简约' },
-  { id: 'cartoon', label: '卡通' },
+  { id: 'workbench', label: 'Workbench Standard' },
 ];
 
-export const isAppStyle = (value: string | null): value is AppStyle =>
-  APP_STYLE_OPTIONS.some((option) => option.id === value);
+export const isAppStyle = (value: string | null): value is AppStyle => value === 'workbench';
 
-export const getInitialAppStyle = (readStoredStyle: () => string | null): AppStyle => {
-  const storedStyle = readStoredStyle();
-  return isAppStyle(storedStyle) ? storedStyle : 'workbench';
-};
+export const getInitialAppStyle = (_readStoredStyle: () => string | null): AppStyle => 'workbench';

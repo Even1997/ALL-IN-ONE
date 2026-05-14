@@ -21,18 +21,29 @@ export const ROLE_TAB_ICONS = {
   operations: 'settings',
 } satisfies Record<RoleView, WorkbenchIconName>;
 
-export const DESKTOP_WORKBENCH_ROLES: Array<{
+export type DesktopRoleGroup = 'primary' | 'secondary';
+
+export type DesktopWorkbenchRole = {
   id: RoleView;
   label: string;
   summary: string;
-}> = [
-  { id: 'knowledge', label: 'Wiki', summary: 'Notes and references' },
-  { id: 'page', label: 'Sketch', summary: 'Pages and canvas drafts' },
-  { id: 'agent', label: 'Agent', summary: 'Unified AI runtime workspace' },
-  { id: 'design', label: 'UI Design', summary: 'Boards and visual system' },
-  { id: 'develop', label: 'Develop', summary: 'Files and tasks' },
-  { id: 'test', label: 'Test', summary: 'Plans and defects' },
-  { id: 'operations', label: 'Ops', summary: 'Deploy and release flow' },
+  group: DesktopRoleGroup;
+  showCompanionPane: boolean;
+};
+
+export const DESKTOP_WORKBENCH_ROLES: DesktopWorkbenchRole[] = [
+  { id: 'knowledge', label: 'Wiki', summary: 'Notes and references', group: 'primary', showCompanionPane: true },
+  { id: 'page', label: 'Sketch', summary: 'Pages and canvas drafts', group: 'primary', showCompanionPane: true },
+  { id: 'agent', label: 'Agent', summary: 'Unified AI runtime workspace', group: 'primary', showCompanionPane: false },
+  { id: 'design', label: 'UI Design', summary: 'Boards and visual system', group: 'primary', showCompanionPane: true },
+  { id: 'develop', label: 'Develop', summary: 'Files and tasks', group: 'secondary', showCompanionPane: true },
+  { id: 'test', label: 'Test', summary: 'Plans and defects', group: 'secondary', showCompanionPane: true },
+  { id: 'operations', label: 'Ops', summary: 'Deploy and release flow', group: 'secondary', showCompanionPane: true },
 ];
 
-export const DESKTOP_PRIMARY_ROLES: RoleView[] = ['agent', 'knowledge', 'page', 'design'];
+export const DESKTOP_PRIMARY_ROLES: RoleView[] = DESKTOP_WORKBENCH_ROLES
+  .filter((role) => role.group === 'primary')
+  .map((role) => role.id);
+
+export const getDesktopWorkbenchRole = (role: RoleView): DesktopWorkbenchRole | null =>
+  DESKTOP_WORKBENCH_ROLES.find((item) => item.id === role) || null;

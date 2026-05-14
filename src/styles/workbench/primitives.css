@@ -1,0 +1,322 @@
+:root {
+  font-family: var(--wb-font-sans);
+  font-size: var(--wb-font-size-body);
+  line-height: var(--wb-line-height-body);
+}
+
+.mac-panel {
+  border-radius: var(--wb-radius-lg);
+  background: var(--macos-panel-bg);
+  border: 1px solid var(--macos-panel-border);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--macos-text-primary);
+}
+
+.mac-toolbar {
+  min-height: var(--desktop-topbar-height);
+  padding: 8px 12px;
+}
+
+.mac-button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--wb-radius-sm);
+  min-height: 32px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--macos-text-primary);
+  background: transparent;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.mac-button:focus-visible,
+.mac-input:focus-visible,
+.mac-select:focus-visible,
+.mac-textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--macos-focus-ring);
+}
+
+.mac-button:hover {
+  background: var(--wb-hover-background);
+}
+
+.mac-button-primary {
+  background: var(--wb-accent);
+  border-color: color-mix(in srgb, var(--wb-accent) 78%, black);
+  color: #fff;
+}
+
+.mac-button-primary:hover {
+  background: var(--wb-accent-strong);
+}
+
+.mac-button-secondary {
+  background: var(--wb-muted-background);
+  border-color: var(--macos-panel-border);
+}
+
+.mac-button-ghost {
+  color: var(--macos-text-secondary);
+}
+
+.mac-button-danger {
+  background: color-mix(in srgb, var(--wb-danger) 14%, var(--wb-pane-background-strong));
+  border-color: color-mix(in srgb, var(--wb-danger) 24%, var(--wb-divider));
+  color: var(--wb-danger);
+}
+
+.mac-button-sm {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.mac-button-icon {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+}
+
+.mac-button-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mac-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mac-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--macos-text-tertiary);
+}
+
+.mac-field-hint {
+  font-size: 12px;
+  color: var(--macos-text-tertiary);
+}
+
+.mac-input,
+.mac-select-shell {
+  width: 100%;
+  min-height: 34px;
+  border-radius: var(--wb-radius-sm);
+  border: 1px solid var(--macos-panel-border);
+  background: var(--macos-input-bg);
+  color: var(--macos-text-primary);
+  box-shadow: none;
+}
+
+.mac-input {
+  padding: 0 12px;
+  font: inherit;
+}
+
+.mac-textarea {
+  min-height: 120px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.mac-select-shell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+}
+
+.mac-select-shell::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--macos-text-tertiary);
+  transform: translateY(-60%) rotate(45deg);
+  pointer-events: none;
+}
+
+.mac-select {
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  padding: 0 20px 0 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  appearance: none;
+}
+
+.app-surface-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--wb-text-tertiary);
+}
+
+.wb-directory-tree {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.wb-directory-tree-row {
+  display: grid;
+  grid-template-columns: 14px 18px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--wb-radius-sm);
+  background: transparent;
+  color: var(--wb-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-directory-tree-row:hover {
+  background: var(--wb-hover-background);
+}
+
+.wb-directory-tree-row.is-selected {
+  background: var(--wb-selected-background);
+  color: var(--wb-accent);
+}
+
+.wb-directory-tree-caret,
+.wb-directory-tree-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wb-text-quaternary);
+}
+
+.wb-directory-tree-caret {
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+}
+
+.wb-directory-tree-caret.is-visible {
+  opacity: 1;
+}
+
+.wb-directory-tree-caret svg,
+.wb-directory-tree-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.wb-directory-tree-caret.is-expanded svg {
+  transform: rotate(90deg);
+}
+
+.wb-directory-tree-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wb-directory-tree-copy strong,
+.wb-directory-tree-copy span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-directory-tree-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.wb-directory-tree-copy span {
+  color: var(--wb-text-tertiary);
+  font-size: 12px;
+}
+
+.wb-directory-tree-badge,
+.wb-directory-tree-trailing {
+  color: var(--wb-text-tertiary);
+  font-size: 11px;
+}
+
+.wb-note-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--wb-radius-xl);
+  border: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+}
+
+.wb-note-surface-header,
+.wb-note-surface-toolbar,
+.wb-note-surface-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.wb-note-surface-header,
+.wb-note-surface-toolbar {
+  border-bottom: 1px solid var(--wb-divider);
+}
+
+.wb-note-surface-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wb-note-surface-eyebrow {
+  color: var(--wb-text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.wb-note-surface-copy h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.wb-note-surface-copy p {
+  margin: 0;
+  color: var(--wb-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.wb-note-surface-actions,
+.wb-note-surface-toolbar,
+.wb-note-surface-footer {
+  flex-wrap: wrap;
+}
+
+.wb-note-surface-body {
+  min-height: 0;
+  flex: 1 1 auto;
+}

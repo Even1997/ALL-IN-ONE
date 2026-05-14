@@ -1,0 +1,223 @@
+.desktop-rail-icon-btn:hover,
+.desktop-brand-chip:hover,
+.mac-button:hover,
+.app-menu-trigger:hover,
+.app-menu-item:hover {
+  background: var(--wb-hover-background);
+}
+
+.desktop-rail-icon-btn.active,
+.desktop-topbar-btn.active,
+.app-menu-group.open .app-menu-trigger {
+  background: var(--wb-selected-background);
+  color: var(--wb-accent);
+  box-shadow: var(--wb-shadow-selected);
+}
+
+.desktop-feature-pill,
+.desktop-workbench-role-indicator {
+  background: var(--desktop-shell-role-pill-bg);
+  color: var(--wb-accent);
+  border: 1px solid color-mix(in srgb, var(--wb-accent) 18%, var(--desktop-shell-border));
+}
+
+.is-hidden {
+  opacity: 0;
+}
+
+.is-empty,
+[data-ui-state='empty'] {
+  color: var(--wb-text-tertiary);
+}
+
+.is-loading,
+[data-ui-state='loading'] {
+  color: var(--wb-text-secondary);
+}
+
+.is-hover,
+[data-ui-state='hover'] {
+  background: var(--wb-hover-background);
+}
+
+.is-error,
+[data-ui-state='error'] {
+  color: var(--wb-danger);
+}
+
+.is-syncing,
+[data-ui-state='syncing'] {
+  color: var(--wb-accent);
+}
+
+.is-confirm,
+[data-ui-state='confirm'] {
+  color: var(--wb-accent);
+}
+
+.is-collapsed,
+[data-ui-state='collapsed'] {
+  opacity: 0.84;
+}
+
+.wb-state-card,
+.wb-empty-state,
+.wb-status-banner {
+  border: 1px solid var(--wb-divider);
+  background: var(--wb-pane-background);
+  color: var(--wb-text-primary);
+  box-shadow: var(--wb-shadow-panel);
+}
+
+.wb-state-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--wb-radius-lg);
+}
+
+.wb-state-card-header {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.wb-state-card-icon,
+.wb-empty-state-icon,
+.wb-status-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  color: var(--wb-accent);
+  background: color-mix(in srgb, var(--wb-accent) 10%, var(--wb-pane-background));
+}
+
+.wb-state-card-icon svg,
+.wb-empty-state-icon svg,
+.wb-status-banner-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.wb-state-card-copy,
+.wb-empty-state-copy,
+.wb-status-banner-copy {
+  min-width: 0;
+}
+
+.wb-state-card-copy h3,
+.wb-empty-state-copy h3,
+.wb-status-banner-copy strong {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.wb-state-card-copy p,
+.wb-empty-state-copy p,
+.wb-status-banner-copy p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--wb-text-secondary);
+}
+
+.wb-state-card-meta,
+.wb-state-card-body,
+.wb-state-card-footer,
+.wb-empty-state-action,
+.wb-status-banner-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-state-card-meta {
+  color: var(--wb-text-tertiary);
+  font-size: 12px;
+}
+
+.wb-state-card-body {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.wb-state-card-footer {
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.wb-state-card.is-selected {
+  border-color: color-mix(in srgb, var(--wb-accent) 34%, var(--wb-divider));
+  box-shadow: var(--wb-shadow-selected);
+}
+
+.wb-state-card.is-loading,
+.wb-state-card.is-error,
+.wb-state-card.is-collapsed,
+.wb-state-card.is-empty,
+.wb-state-card.is-confirm,
+.wb-state-card.is-syncing {
+  background: var(--wb-pane-background-strong);
+}
+
+.wb-state-card.is-hover {
+  background: color-mix(in srgb, var(--wb-hover-background) 72%, var(--wb-pane-background));
+}
+
+.wb-state-card.is-success .wb-state-card-icon,
+.wb-status-banner.is-success .wb-status-banner-icon {
+  color: var(--wb-success);
+  background: color-mix(in srgb, var(--wb-success) 10%, var(--wb-pane-background));
+}
+
+.wb-state-card.is-warning .wb-state-card-icon,
+.wb-status-banner.is-warning .wb-status-banner-icon {
+  color: var(--wb-warning);
+  background: color-mix(in srgb, var(--wb-warning) 12%, var(--wb-pane-background));
+}
+
+.wb-state-card.is-danger .wb-state-card-icon,
+.wb-status-banner.is-danger .wb-status-banner-icon {
+  color: var(--wb-danger);
+  background: color-mix(in srgb, var(--wb-danger) 10%, var(--wb-pane-background));
+}
+
+.wb-state-card.is-confirm .wb-state-card-icon,
+.wb-state-card.is-syncing .wb-state-card-icon {
+  color: var(--wb-accent);
+  background: color-mix(in srgb, var(--wb-accent) 10%, var(--wb-pane-background));
+}
+
+.wb-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  border-radius: var(--wb-radius-xl);
+}
+
+.wb-empty-state-action,
+.wb-status-banner-action {
+  margin-top: 2px;
+}
+
+.wb-status-banner {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: var(--wb-radius-lg);
+}
+
+.wb-status-banner-copy strong {
+  display: block;
+}

@@ -2,8 +2,21 @@ import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useStat
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm, open } from '@tauri-apps/plugin-dialog';
 import { ProjectSetup } from './components/project/ProjectSetup';
+import { OperationsWorkbench, TestWorkbench } from './components/workspace';
 import { WorkbenchIcon } from './components/ui/WorkbenchIcon';
-import { MacButton, MacIconButton, MacInput, MacPanel, MacSelectField } from './components/ui';
+import {
+  DesktopWorkbenchFrame,
+  DesktopWorkbenchRail,
+  DesktopWorkbenchTopbar,
+  EmptyStateView,
+  InspectorPane,
+  MacButton,
+  MacIconButton,
+  MacSelectField,
+  NoteSurface,
+  StateCard,
+  StatusBanner,
+} from './components/ui';
 import { UiFeedbackMode } from './components/ui/UiFeedbackMode';
 import { usePreviewStore } from './store/previewStore';
 import { useFeatureTreeStore } from './store/featureTreeStore';
@@ -13,6 +26,7 @@ import { APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appT
 import {
   DESKTOP_PRIMARY_ROLES,
   DESKTOP_WORKBENCH_ROLES,
+  getDesktopWorkbenchRole,
   ROLE_TAB_ICONS,
   type RoleView,
 } from './appNavigation';
@@ -20,7 +34,6 @@ import { AI_CHAT_SETTINGS_EVENT } from './modules/ai/chat/chatCommands';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type {
   FeatureNode,
-  GeneratedFile,
   PageStructureNode,
   ProjectConfig,
 } from './types';
@@ -52,7 +65,13 @@ import {
 } from './utils/projectPersistence';
 import { normalizeComparableFileSystemPath, stripWindowsExtendedLengthPathPrefix } from './utils/fileSystemPaths.ts';
 import 'allotment/dist/style.css';
+import './styles/workbench/tokens.css';
+import './styles/workbench/shell.css';
+import './styles/workbench/primitives.css';
+import './styles/workbench/states.css';
+import './styles/workbench/motion.css';
 import './App.css';
+import './styles/workbench/legacy-bridge.css';
 
 const LazyAIWorkspace = lazy(async () => {
   const module = await import('./components/ai/AIWorkspace');
@@ -79,7 +98,7 @@ const LazyDesignWorkbenchView = lazy(async () => {
   return { default: module.DesignWorkbenchScreen };
 });
 
-const WORKBENCH_LAZY_FALLBACK = <div className="app-surface-loading">加载工作区中...</div>;
+const WORKBENCH_LAZY_FALLBACK = <div className="app-surface-loading">正在载入工作台…</div>;
 let aiServiceModulePromise: Promise<typeof import('./modules/ai/core/AIService')> | null = null;
 
 const loadAIServiceModule = () => (aiServiceModulePromise ??= import('./modules/ai/core/AIService'));
@@ -108,54 +127,54 @@ type DesktopMenuGroup = {
 const DESKTOP_APP_MENUS: DesktopMenuGroup[] = [
   {
     id: 'file',
-    label: '文件',
+    label: 'File',
     items: [
-      { label: '新建项目', hint: 'Ctrl+N', action: { kind: 'native', id: 'file.new_project' } },
-      { label: '项目列表', hint: 'Ctrl+O', action: { kind: 'native', id: 'file.project_manager' } },
+      { label: 'New Project', hint: 'Ctrl+N', action: { kind: 'native', id: 'file.new_project' } },
+      { label: 'Project List', hint: 'Ctrl+O', action: { kind: 'native', id: 'file.project_manager' } },
     ],
   },
   {
     id: 'edit',
-    label: '编辑',
+    label: 'Edit',
     items: [
-      { label: '剪切', hint: 'Ctrl+X', action: { kind: 'edit', command: 'cut' } },
-      { label: '复制', hint: 'Ctrl+C', action: { kind: 'edit', command: 'copy' } },
-      { label: '粘贴', hint: 'Ctrl+V', action: { kind: 'edit', command: 'paste' } },
-      { label: '全选', hint: 'Ctrl+A', action: { kind: 'edit', command: 'selectAll' } },
+      { label: 'Cut', hint: 'Ctrl+X', action: { kind: 'edit', command: 'cut' } },
+      { label: 'Copy', hint: 'Ctrl+C', action: { kind: 'edit', command: 'copy' } },
+      { label: 'Paste', hint: 'Ctrl+V', action: { kind: 'edit', command: 'paste' } },
+      { label: 'Select all', hint: 'Ctrl+A', action: { kind: 'edit', command: 'selectAll' } },
     ],
   },
   {
     id: 'view',
-    label: '查看',
+    label: 'View',
     items: [
-      { label: '知识库', action: { kind: 'native', id: 'view.knowledge' } },
-      { label: 'Wiki 图谱', action: { kind: 'native', id: 'view.wiki' } },
-      { label: '页面', action: { kind: 'native', id: 'view.page' } },
-      { label: '设计', action: { kind: 'native', id: 'view.design' } },
+      { label: 'Knowledge', action: { kind: 'native', id: 'view.knowledge' } },
+      { label: 'Wiki Graph', action: { kind: 'native', id: 'view.wiki' } },
+      { label: 'Pages', action: { kind: 'native', id: 'view.page' } },
+      { label: 'Design', action: { kind: 'native', id: 'view.design' } },
       { label: 'Agent', action: { kind: 'native', id: 'view.agent' } },
-      { label: '开发', action: { kind: 'native', id: 'view.develop' } },
-      { label: '测试', action: { kind: 'native', id: 'view.test' } },
-      { label: '发布', action: { kind: 'native', id: 'view.operations' } },
-      { label: '切换主题', action: { kind: 'native', id: 'view.toggle_theme' } },
+      { label: 'Develop', action: { kind: 'native', id: 'view.develop' } },
+      { label: 'Test', action: { kind: 'native', id: 'view.test' } },
+      { label: 'Ops', action: { kind: 'native', id: 'view.operations' } },
+      { label: 'Toggle Theme', action: { kind: 'native', id: 'view.toggle_theme' } },
     ],
   },
   {
     id: 'window',
-    label: '窗口',
+    label: 'Window',
     items: [
-      { label: '最小化', action: { kind: 'window', command: 'minimize' } },
-      { label: '切换最大化', action: { kind: 'window', command: 'toggleMaximize' } },
-      { label: '关闭窗口', action: { kind: 'window', command: 'close' } },
+      { label: 'Minimize', action: { kind: 'window', command: 'minimize' } },
+      { label: 'Toggle Maximize', action: { kind: 'window', command: 'toggleMaximize' } },
+      { label: 'Close Window', action: { kind: 'window', command: 'close' } },
     ],
   },
   {
     id: 'help',
-    label: '帮助',
+    label: 'Help',
     items: [
-      { label: '关于 GoodNight', action: { kind: 'native', id: 'help.about' } },
-      { label: '布局说明', action: { kind: 'native', id: 'help.layout_overview' } },
-      { label: '知识库说明', action: { kind: 'native', id: 'help.knowledge_overview' } },
-      { label: '页面说明', action: { kind: 'native', id: 'help.page_overview' } },
+      { label: 'About GoodNight', action: { kind: 'native', id: 'help.about' } },
+      { label: 'Layout Guide', action: { kind: 'native', id: 'help.layout_overview' } },
+      { label: 'Knowledge Guide', action: { kind: 'native', id: 'help.knowledge_overview' } },
+      { label: 'Page Guide', action: { kind: 'native', id: 'help.page_overview' } },
     ],
   },
 ];
@@ -272,9 +291,6 @@ const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
 
 const getDesignBoardStorageKey = (projectId: string) => `${DESIGN_BOARD_STORAGE_PREFIX}:${projectId}`;
 
-
-const renderGeneratedFileLabel = (file: GeneratedFile) => file.path.split('/').pop() || file.path;
-
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<RoleView>('agent');
   const isDesignWorkbenchActive = currentRole === 'design';
@@ -377,11 +393,11 @@ const App: React.FC = () => {
 
   const canUseProjectFilesystem = isTauriRuntimeAvailable();
   const activeDesktopRole = useMemo(
-    () => DESKTOP_WORKBENCH_ROLES.find((role) => role.id === currentRole) || DESKTOP_WORKBENCH_ROLES[0],
+    () => getDesktopWorkbenchRole(currentRole) || DESKTOP_WORKBENCH_ROLES[0],
     [currentRole]
   );
   const isDesktopWorkbenchMode = Boolean(currentProject);
-  const showWorkspaceSidebar = currentRole !== 'agent';
+  const showWorkspaceSidebar = activeDesktopRole.showCompanionPane;
 
   useEffect(() => {
     document.body.classList.toggle('desktop-workbench-mode', isDesktopWorkbenchMode);
@@ -656,7 +672,7 @@ const App: React.FC = () => {
         }
 
         setProjectStorageState('error');
-        setProjectStorageMessage('项目存储路径读取失败。');
+        setProjectStorageMessage('Project storage path could not be loaded.');
       });
 
     return () => {
@@ -859,10 +875,10 @@ const App: React.FC = () => {
       setProjectStorageSettings(nextSettings);
       setProjectStorageDraftOverride(null);
       setProjectStorageState('saved');
-      setProjectStorageMessage('项目存储路径已更新。');
+      setProjectStorageMessage('Project storage path updated.');
     } catch (error) {
       setProjectStorageState('error');
-      setProjectStorageMessage(error instanceof Error ? error.message : '项目存储路径保存失败。');
+      setProjectStorageMessage(error instanceof Error ? error.message : 'Project storage path could not be saved.');
     }
   }, []);
 
@@ -884,10 +900,10 @@ const App: React.FC = () => {
 
       setProjectStorageDraftOverride(selectedPath);
       setProjectStorageState('idle');
-      setProjectStorageMessage('已选择目录，点击“保存路径”后生效。');
+      setProjectStorageMessage('Directory selected. Save the path to apply it.');
     } catch (error) {
       setProjectStorageState('error');
-      setProjectStorageMessage(error instanceof Error ? error.message : '目录选择失败。');
+      setProjectStorageMessage(error instanceof Error ? error.message : 'Directory selection failed.');
     }
   }, [projectStorageSettings]);
 
@@ -914,7 +930,7 @@ const App: React.FC = () => {
       setProjectVaultDraftOverride(selectedPath);
     } catch (error) {
       setProjectStorageState('error');
-      setProjectStorageMessage(error instanceof Error ? error.message : '知识库目录选择失败。');
+      setProjectStorageMessage(error instanceof Error ? error.message : 'Knowledge directory selection failed.');
     }
   }, [currentProject?.vaultPath, projectStorageSettings?.defaultPath, projectStorageSettings?.rootPath, projectVaultDraftOverride]);
 
@@ -931,10 +947,10 @@ const App: React.FC = () => {
       setProjectStorageSettings(nextSettings);
       setProjectStorageDraftOverride(null);
       setProjectStorageState('saved');
-      setProjectStorageMessage('已恢复默认项目路径。');
+      setProjectStorageMessage('Default project path restored.');
     } catch (error) {
       setProjectStorageState('error');
-      setProjectStorageMessage(error instanceof Error ? error.message : '恢复默认项目路径失败。');
+      setProjectStorageMessage(error instanceof Error ? error.message : 'Could not reset the default project path.');
     }
   }, []);
 
@@ -1024,12 +1040,12 @@ const App: React.FC = () => {
     }
 
     const confirmed = isTauriRuntimeAvailable()
-      ? await confirm(`确定删除项目“${targetProject.name}”吗？`, {
+      ? await confirm(`Delete project "${targetProject.name}"?`, {
           kind: 'warning',
-          okLabel: '删除',
-          cancelLabel: '取消',
+          okLabel: 'Delete',
+          cancelLabel: 'Cancel',
         })
-      : window.confirm(`确定删除项目“${targetProject.name}”吗？`);
+      : window.confirm(`Delete project "${targetProject.name}"?`);
 
     if (!confirmed) {
       return;
@@ -1113,16 +1129,16 @@ const App: React.FC = () => {
         toggleThemeMode();
         break;
       case 'help.layout_overview':
-        window.alert('当前界面参考桌面应用菜单栏布局：左侧切换工作区，顶部菜单负责项目级操作，内容区按默认窗口尺寸排布。');
+        window.alert('The current layout uses a desktop-style menu bar: workspace navigation on the left, project actions on the top, and content arranged like a native window.');
         break;
       case 'help.knowledge_overview':
-        window.alert('知识库用于承载用户内容；AI 会直接结合当前项目内容和技能上下文来回答问题。');
+        window.alert('Knowledge stores user content, and AI answers directly against the current project and skill context.');
         break;
       case 'help.page_overview':
-        window.alert('页面用于维护页面结构、页面草图和画布模块。');
+        window.alert('Pages are used to manage page structure, sketches, and canvas modules.');
         break;
       case 'help.about':
-        window.alert('GoodNight · 可视化软件开发平台');
+        window.alert('GoodNight - visual software development platform');
         break;
       default:
         break;
@@ -1265,215 +1281,125 @@ const App: React.FC = () => {
   const renderAgentView = () => <LazyAgentShellPage />;
 
   const renderDevelopView = () => (
-    <div className="develop-view">
-      <div className="workspace-shell">
-        <div className="delivery-summary-bar">
-          <div className="graph-metric">
-            <span>Files</span>
-            <strong>{generatedFiles.length}</strong>
-          </div>
-          <div className="graph-metric">
-            <span>Frontend Tasks</span>
-            <strong>{devTasks.filter((task) => task.owner === 'frontend').length}</strong>
-          </div>
-          <div className="graph-metric">
-            <span>Backend Tasks</span>
-            <strong>{devTasks.filter((task) => task.owner === 'backend').length}</strong>
-          </div>
-          <button className="doc-action-btn" onClick={handleGenerateDelivery} type="button">
-            更新交付物
+    <div className="platform-review-workbench platform-review-workbench-develop">
+      <aside className="platform-review-sidebar">
+        {[
+          { id: 'files', label: '文件', icon: 'files' as const, active: true },
+          { id: 'tasks', label: '任务', icon: 'code' as const, active: false },
+          { id: 'terminal', label: '终端', icon: 'terminal' as const, active: false },
+        ].map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            className={`platform-review-nav-item${section.active ? ' active' : ''}`}
+          >
+            <WorkbenchIcon name={section.icon} />
+            <span>{section.label}</span>
           </button>
+        ))}
+      </aside>
+
+      <div className="platform-review-stage">
+        <div className="platform-review-summary">
+          <StateCard title="生成文件" description={`${generatedFiles.length} 个`} icon="files" tone="info" />
+          <StateCard
+            title="前端任务"
+            description={`${devTasks.filter((task) => task.owner === 'frontend').length} 个`}
+            icon="design"
+            tone="warning"
+          />
+          <StateCard
+            title="后端任务"
+            description={`${devTasks.filter((task) => task.owner === 'backend').length} 个`}
+            icon="server"
+            tone="success"
+          />
         </div>
 
-        <div className="delivery-card-grid">
-          {devTasks.map((task) => (
-            <div key={task.id} className="delivery-card">
-              <strong>{task.title}</strong>
-              <p>{task.summary}</p>
-              <span>
-                {task.owner} · {task.relatedFilePaths.length} files
-              </span>
+        <NoteSurface
+          eyebrow="Develop Workspace"
+          title="开发工作台"
+          subtitle="把生成文件、实施任务和推荐命令统一收敛到桌面工作台语义中，避免继续停留在临时工具卡片样式。"
+          actions={(
+            <MacButton type="button" variant="primary" onClick={handleGenerateDelivery}>
+              生成交付摘要
+            </MacButton>
+          )}
+        >
+          <div className="platform-review-list platform-review-list-compact">
+            {devTasks.length > 0 ? (
+              devTasks.slice(0, 6).map((task) => (
+                <div key={task.id} className="platform-review-row">
+                  <span
+                    className={`platform-review-dot is-${
+                      task.owner === 'frontend' ? 'warning' : task.owner === 'backend' ? 'success' : 'info'
+                    }`}
+                  />
+                  <div className="platform-review-copy">
+                    <strong>{task.title}</strong>
+                    <span>
+                      {task.owner} / {task.relatedFilePaths.length} files
+                    </span>
+                  </div>
+                  <span className="platform-review-badge">{task.relatedFilePaths.length} refs</span>
+                </div>
+              ))
+            ) : (
+              <EmptyStateView
+                icon="code"
+                title="还没有开发任务"
+                description="生成交付摘要后，这里会先展示统一格式的实施任务和关联文件。"
+              />
+            )}
+          </div>
+
+          {recommendedCommands.length > 0 ? (
+            <div className="platform-review-command-list">
+              {recommendedCommands.slice(0, 4).map((command) => (
+                <code key={command}>{command}</code>
+              ))}
             </div>
-          ))}
-        </div>
+          ) : (
+            <StatusBanner
+              tone="info"
+              icon="monitor"
+              title="命令建议会出现在这里"
+              message="当生成文件和任务上下文更完整时，开发面板会同步给出推荐命令。"
+            />
+          )}
+        </NoteSurface>
 
-        <LazyWorkspace
-          files={generatedFiles}
-          tasks={devTasks}
-          recommendedCommands={recommendedCommands}
-          projectRoot={currentProjectDir || undefined}
-        />
+        <div className="platform-review-workspace-host">
+          <LazyWorkspace
+            files={generatedFiles}
+            tasks={devTasks}
+            recommendedCommands={recommendedCommands}
+            projectRoot={currentProjectDir || undefined}
+          />
+        </div>
       </div>
     </div>
   );
 
   const renderTestView = () => (
-    <div className="test-view">
-      <div className="test-sidebar">
-        <div className="test-nav">
-          <button className="test-nav-item active" type="button">
-            <span>测试计划</span>
-          </button>
-          <button className="test-nav-item" type="button">
-            <span>Bug 跟踪</span>
-          </button>
-          <button className="test-nav-item" type="button">
-            <span>测试报告</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="test-content">
-        <div className="test-header">
-          <div className="test-stats">
-            <div className="stat-card">
-              <span className="stat-num">{graph.nodes.filter((node) => node.type === 'feature').length}</span>
-              <span className="stat-label">功能数</span>
-            </div>
-            <div className="stat-card success">
-              <span className="stat-num">{requirementDocs.length}</span>
-              <span className="stat-label">知识笔记</span>
-            </div>
-            <div className="stat-card warning">
-              <span className="stat-num">{featureTree?.children.length || 0}</span>
-              <span className="stat-label">功能节点</span>
-            </div>
-            <div className="stat-card info">
-              <span className="stat-num">{testPlan?.coverage.caseCount || 0}</span>
-              <span className="stat-label">测试用例</span>
-            </div>
-          </div>
-
-          <div className="test-actions">
-            <button className="test-btn primary" onClick={handleGenerateDelivery} type="button">
-              生成测试计划
-            </button>
-            <button className="test-btn" type="button">
-              建立 QA 流程
-            </button>
-          </div>
-        </div>
-
-        <div className="test-cases">
-          {testCases.map((testCase) => (
-            <div key={testCase.id} className="case-item">
-              <div className={`case-status ${testCase.priority === 'high' ? 'pending' : 'passed'}`}></div>
-              <div className="case-info">
-                <span className="case-name">{testCase.title}</span>
-                <span className="case-module">
-                  {testCase.module} · {testCase.type}
-                </span>
-              </div>
-              <span className="case-time">{testCase.status}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <TestWorkbench
+      requirementCount={requirementDocs.length}
+      featureCount={graph.nodes.filter((node) => node.type === 'feature').length}
+      caseCount={testPlan?.coverage.caseCount || 0}
+      testCases={testCases}
+      onGeneratePlan={handleGenerateDelivery}
+    />
   );
 
   const renderOperationsView = () => (
-    <div className="operations-view">
-      <div className="ops-sidebar">
-        <div className="ops-nav">
-          <button className="ops-nav-item active" type="button">
-            <span>部署</span>
-          </button>
-          <button className="ops-nav-item" type="button">
-            <span>构建</span>
-          </button>
-          <button className="ops-nav-item" type="button">
-            <span>监控</span>
-          </button>
-          <button className="ops-nav-item" type="button">
-            <span>配置</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="ops-content">
-        <div className="ops-header">
-          <h2>部署中心</h2>
-          <div className="ops-actions">
-            <button className="ops-btn primary" onClick={handleGenerateDelivery} type="button">
-              生成部署脚本
-            </button>
-            <button className="ops-btn success" type="button">
-              规划发布流程
-            </button>
-          </div>
-        </div>
-
-        <div className="deploy-targets">
-          <div className="target-card">
-            <div className="target-info">
-              <span className="target-name">{currentProject?.name || '当前项目'}</span>
-              <span className="target-desc">当前工作区</span>
-            </div>
-            <span className="target-status connected">在线</span>
-          </div>
-          <div className="target-card">
-            <div className="target-info">
-              <span className="target-name">Project Memory</span>
-              <span className="target-desc">
-                {Object.keys(memory?.designSystem || {}).length + Object.keys(memory?.codeStructure || {}).length} 项工作记忆
-              </span>
-            </div>
-            <span className="target-status connected">在线</span>
-          </div>
-        </div>
-
-        <div className="deploy-history">
-          <h3>阶段进度</h3>
-          <div className="history-list">
-            <div className="history-item">
-              <span className="history-status success">完成</span>
-              <span className="history-version">Phase 1</span>
-              <span className="history-time">当前项目基线已建立</span>
-              <span className="history-target">{currentProject?.name}</span>
-            </div>
-            <div className="history-item">
-              <span className="history-status success">完成</span>
-              <span className="history-version">Phase 2-6</span>
-              <span className="history-time">Wiki / Sketch / UI / Dev / Test / Deploy</span>
-              <span className="history-target">{deployPlan?.target || 'Workspace'}</span>
-            </div>
-          </div>
-        </div>
-
-        {deployPlan ? (
-          <div className="deploy-history">
-            <h3>部署步骤</h3>
-            <div className="history-list">
-              {deploySteps.map((step, index) => (
-                <div key={step} className="history-item">
-                  <span className="history-status success">{index + 1}</span>
-                  <span className="history-version">Step</span>
-                  <span className="history-time">{step}</span>
-                  <span className="history-target">{deployPlan.target}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {generatedFiles.length > 0 ? (
-          <div className="deploy-history">
-            <h3>交付清单</h3>
-            <div className="history-list">
-              {generatedFiles.slice(0, 8).map((file) => (
-                <div key={file.path} className="history-item">
-                  <span className="history-status success">{file.category}</span>
-                  <span className="history-version">{renderGeneratedFileLabel(file)}</span>
-                  <span className="history-time">{file.summary}</span>
-                  <span className="history-target">{file.language}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </div>
+    <OperationsWorkbench
+      projectName={currentProject?.name || 'Current project'}
+      memoryCount={Object.keys(memory?.designSystem || {}).length + Object.keys(memory?.codeStructure || {}).length}
+      deployTarget={deployPlan?.target || 'Workspace'}
+      deploySteps={deploySteps}
+      generatedFiles={generatedFiles}
+      onGenerateDeployScript={handleGenerateDelivery}
+    />
   );
 
   if (!currentProject) {
@@ -1535,389 +1461,231 @@ const App: React.FC = () => {
     />
   ) : roleContent;
   const appDesktopContent = appMainContent;
-  if (isDesktopWorkbenchMode) {
-    return (
-      <div className="app app-shell-desktop desktop-active desktop-shell-codex" data-role={currentRole}>
-        <div className="desktop-shell-frame">
-          <MacPanel as="aside" className="desktop-primary-rail mac-sidebar-panel">
-            <MacButton
-              className="desktop-brand-chip"
-              variant="ghost"
-              size="sm"
-              onClick={() => setCurrentRole('knowledge')}
-              aria-label="返回知识库"
-              title="返回知识库"
+  const desktopMenuBar = (
+    <nav className="app-menu-bar standard desktop-titlebar-menu" aria-label="Application menu" data-app-menu-root="desktop">
+      {DESKTOP_APP_MENUS.map((menu) => {
+        const isOpen = openDesktopMenuId === menu.id;
+
+        return (
+          <div key={menu.id} className={`app-menu-group ${isOpen ? 'open' : ''}`}>
+            <button
+              className="app-menu-trigger"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={isOpen}
+              onClick={() => setOpenDesktopMenuId((current) => (current === menu.id ? null : menu.id))}
+              onMouseEnter={() => {
+                setOpenDesktopMenuId((current) => (current ? menu.id : current));
+              }}
             >
-              <img src="/branding/goodnight-icon.svg" alt="GoodNight" />
-            </MacButton>
-
-            <nav className="desktop-primary-nav" aria-label="工作区切换">
-              {DESKTOP_PRIMARY_ROLES.flatMap((roleId) => {
-                const role = DESKTOP_WORKBENCH_ROLES.find((item) => item.id === roleId);
-                return role ? [
-                <MacIconButton
-                  key={role.id}
-                  className={`desktop-rail-icon-btn ${currentRole === role.id ? 'active' : ''}`}
-                  onClick={() => setCurrentRole(role.id)}
-                  aria-label={role.label}
-                  title={role.label}
-                >
-                  <WorkbenchIcon name={ROLE_TAB_ICONS[role.id]} />
-                </MacIconButton>
-                ] : [];
-              })}
-            </nav>
-
-            <div className="desktop-primary-foot">
-              <MacIconButton
-                className="desktop-rail-icon-btn"
-                onClick={() => {
-                  window.dispatchEvent(
-                    new CustomEvent(AI_CHAT_SETTINGS_EVENT, {
-                      detail: { tab: 'skills' },
-                    }),
-                  );
-                }}
-                aria-label="设置"
-                title="设置"
-              >
-                <WorkbenchIcon name="settings" />
-              </MacIconButton>
-              <MacIconButton
-                className="desktop-rail-icon-btn"
-                onClick={toggleThemeMode}
-                aria-label={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
-                title={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
-              >
-                <WorkbenchIcon name={themeMode === 'dark' ? 'sun' : 'moon'} />
-              </MacIconButton>
-              <MacIconButton
-                className="desktop-rail-icon-btn"
-                onClick={() => setIsProjectManagerOpen(true)}
-                aria-label="项目列表"
-                title="项目列表"
-              >
-                <WorkbenchIcon name="folder" />
-              </MacIconButton>
-            </div>
-          </MacPanel>
-
-          <section className="desktop-workbench-column">
-            <MacPanel
-              as="header"
-              className="desktop-workbench-topbar mac-toolbar mac-panel desktop-workbench-menubar"
-            >
-              <div className="desktop-workbench-leading">
-                <nav className="app-menu-bar standard desktop-titlebar-menu" aria-label="应用菜单" data-app-menu-root="desktop">
-                  {DESKTOP_APP_MENUS.map((menu) => {
-                    const isOpen = openDesktopMenuId === menu.id;
-
-                    return (
-                      <div key={menu.id} className={`app-menu-group ${isOpen ? 'open' : ''}`}>
-                        <button
-                          className="app-menu-trigger"
-                          type="button"
-                          aria-haspopup="menu"
-                          aria-expanded={isOpen}
-                          onClick={() => setOpenDesktopMenuId((current) => (current === menu.id ? null : menu.id))}
-                          onMouseEnter={() => {
-                            setOpenDesktopMenuId((current) => (current ? menu.id : current));
-                          }}
-                        >
-                          {menu.label}
-                        </button>
-                        {isOpen ? (
-                          <div className="app-menu-panel" role="menu">
-                            {menu.items.map((item) => (
-                              <button
-                                key={item.label}
-                                className="app-menu-item"
-                                type="button"
-                                role="menuitem"
-                                onClick={() => void handleDesktopMenuAction(item.action)}
-                              >
-                                <span>{item.label}</span>
-                                {item.hint ? <em>{item.hint}</em> : null}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </nav>
-                <div
-                  className="desktop-workbench-title-shell desktop-window-drag-region"
-                  data-tauri-drag-region
-                  onDoubleClick={(event) => void handleDesktopTopbarDoubleClick(event)}
-                >
-                  <span className="desktop-workbench-role-indicator" aria-hidden="true">
-                    {activeDesktopRole.label}
-                  </span>
-                  <div className="desktop-workbench-title compact">
-                    <h1>{currentProject.name}</h1>
-                    <p>{activeDesktopRole.label} 工作台</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="desktop-workbench-tools">
-                <div className="desktop-workbench-toolbar-group is-context">
-                  {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
-                  <MacSelectField
-                    className="desktop-project-switcher"
-                    label="项目"
-                    value={currentProject.id}
-                    onChange={(event) => handleOpenProject(event.target.value)}
+              {menu.label}
+            </button>
+            {isOpen ? (
+              <div className="app-menu-panel" role="menu">
+                {menu.items.map((item) => (
+                  <button
+                    key={item.label}
+                    className="app-menu-item"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void handleDesktopMenuAction(item.action)}
                   >
-                      {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.name}
-                        </option>
-                      ))}
-                  </MacSelectField>
-                </div>
-                <div className="desktop-workbench-toolbar-group is-actions">
-                  <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
-                    项目
-                  </MacButton>
-                  {showWorkspaceSidebar ? (
-                    <MacIconButton
-                      className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
-                      onClick={() => setIsDesktopAiCollapsed((current) => !current)}
-                      aria-label={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
-                      title={isDesktopAiCollapsed ? '展开 AI 侧栏' : '收起 AI 侧栏'}
-                    >
-                      <WorkbenchIcon name={isDesktopAiCollapsed ? 'panelRightOpen' : 'panelRightClose'} />
-                    </MacIconButton>
-                  ) : null}
-                </div>
+                    <span>{item.label}</span>
+                    {item.hint ? <em>{item.hint}</em> : null}
+                  </button>
+                ))}
               </div>
-              <div
-                className="desktop-workbench-drag-spacer desktop-window-drag-region"
-                aria-hidden="true"
-                data-tauri-drag-region
-                onDoubleClick={(event) => void handleDesktopTopbarDoubleClick(event)}
-              />
-              <div className="desktop-window-controls" aria-label="窗口控制">
-                <button
-                  type="button"
-                  className="desktop-window-control"
-                  aria-label="最小化"
-                  title="最小化"
-                  onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'minimize' })}
-                >
-                  <span className="desktop-window-control-glyph minimize" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="desktop-window-control"
-                  aria-label="切换最大化"
-                  title="切换最大化"
-                  onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'toggleMaximize' })}
-                >
-                  <span className="desktop-window-control-glyph maximize" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="desktop-window-control close"
-                  aria-label="关闭"
-                  title="关闭"
-                  onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'close' })}
-                >
-                  <span className="desktop-window-control-glyph close" aria-hidden="true" />
-                </button>
-              </div>
-            </MacPanel>
-
-            <div className={`desktop-workbench-panels ${isDesktopAiPaneResizing ? 'is-resizing-ai' : ''}`}>
-              <div className="app-workbench-pane app-workbench-main-shell">
-                <main className="app-main app-main-desktop">
-                  <Suspense fallback={WORKBENCH_LAZY_FALLBACK}>{appDesktopContent}</Suspense>
-                </main>
-              </div>
-              {showWorkspaceSidebar && isDesktopAiPaneMounted ? (
-                <>
-                  {isDesktopAiPaneVisible ? (
-                    <div
-                      ref={desktopAiResizeHandleRef}
-                      className="desktop-ai-resize-handle"
-                      role="separator"
-                      aria-label="调整 AI 栏宽度"
-                      aria-orientation="vertical"
-                      aria-valuemin={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
-                      aria-valuemax={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
-                      aria-valuenow={desktopAiPaneWidth}
-                      tabIndex={0}
-                      onPointerDown={handleDesktopAiResizePointerDown}
-                      onKeyDown={handleDesktopAiResizeKeyDown}
-                    />
-                  ) : null}
-                  <div
-                    ref={desktopAiPaneElementRef}
-                    className={`app-workbench-pane app-workbench-ai-shell desktop-ai-shell ${isDesktopAiPaneVisible ? '' : 'is-hidden'}`}
-                    style={{
-                      flex: `0 0 ${desktopAiPaneWidth}px`,
-                      width: desktopAiPaneWidth,
-                      minWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.min,
-                      maxWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.max,
-                    }}
-                  >
-                    <aside className="app-ai-activity-pane">
-                      <Suspense fallback={WORKBENCH_LAZY_FALLBACK}>
-                        <LazyAIWorkspace collapsed={isDesktopAiCollapsed} onCollapsedChange={setIsDesktopAiCollapsed} />
-                      </Suspense>
-                    </aside>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </section>
-        </div>
-        <UiFeedbackMode />
-      </div>
-    );
-  }
-
-  return (
-    <div className={`app app-shell-desktop ${isDesktopWorkbenchMode ? 'desktop-active' : ''}`} data-role={currentRole}>
-      <header className="app-header">
-        <div className="header-left app-window-drag-region" data-tauri-drag-region>
-          <div className="app-brand">
-            <img className="app-brand-logo" src="/branding/goodnight-logo-horizontal.svg" alt="GoodNight" />
+            ) : null}
           </div>
-          <div className="header-project">
-            <h1 className="app-title">{currentProject.name}</h1>
-            <span className="app-subtitle">
-              {currentProject.description || currentProject.appType}
-            </span>
-          </div>
-        </div>
-
-        <div className="header-right">
-          <MacSelectField
-            className="project-switcher"
-            label="项目"
-            value={currentProject.id}
-            onChange={(event) => handleOpenProject(event.target.value)}
-          >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-          </MacSelectField>
-
-          <MacButton className="reset-project-btn" onClick={() => setIsProjectManagerOpen(true)}>
-            查看项目列表
-          </MacButton>
-
-          <label className="header-search mac-field">
-            <span className="header-search-icon">
-              <WorkbenchIcon name="search" />
-            </span>
-            <MacInput placeholder="搜索项目..." type="text" />
-          </label>
-
+        );
+      })}
+    </nav>
+  );
+  const desktopWindowControls = (
+    <div className="desktop-window-controls" aria-label="Window controls">
+      <button
+        type="button"
+        className="desktop-window-control"
+        aria-label="Minimize"
+        title="Minimize"
+        onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'minimize' })}
+      >
+        <span className="desktop-window-control-glyph minimize" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="desktop-window-control"
+        aria-label="Toggle maximize"
+        title="Toggle maximize"
+        onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'toggleMaximize' })}
+      >
+        <span className="desktop-window-control-glyph maximize" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="desktop-window-control close"
+        aria-label="Close"
+        title="Close"
+        onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'close' })}
+      >
+        <span className="desktop-window-control-glyph close" aria-hidden="true" />
+      </button>
+    </div>
+  );
+  const desktopRail = (
+    <DesktopWorkbenchRail
+      brand={(
+        <MacButton
+          className="desktop-brand-chip"
+          variant="ghost"
+          size="sm"
+          onClick={() => setCurrentRole('knowledge')}
+          aria-label="Open knowledge workspace"
+          title="Open knowledge workspace"
+        >
+          <WorkbenchIcon name="knowledge" />
+        </MacButton>
+      )}
+      navigation={DESKTOP_PRIMARY_ROLES.flatMap((roleId) => {
+        const role = getDesktopWorkbenchRole(roleId);
+        return role
+          ? [
+              <MacIconButton
+                key={role.id}
+                className={`desktop-rail-icon-btn ${currentRole === role.id ? 'active' : ''}`}
+                onClick={() => setCurrentRole(role.id)}
+                aria-label={role.label}
+                title={role.label}
+              >
+                <WorkbenchIcon name={ROLE_TAB_ICONS[role.id]} />
+              </MacIconButton>,
+            ]
+          : [];
+      })}
+      footer={(
+        <>
           <MacIconButton
-            className="theme-mode-btn"
+            className="desktop-rail-icon-btn"
+            onClick={() => {
+              window.dispatchEvent(
+                new CustomEvent(AI_CHAT_SETTINGS_EVENT, {
+                  detail: { tab: 'skills' },
+                }),
+              );
+            }}
+            aria-label="AI settings"
+            title="AI settings"
+          >
+            <WorkbenchIcon name="settings" />
+          </MacIconButton>
+          <MacIconButton
+            className="desktop-rail-icon-btn"
             onClick={toggleThemeMode}
-            aria-label={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
-            title={themeMode === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+            aria-label={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             <WorkbenchIcon name={themeMode === 'dark' ? 'sun' : 'moon'} />
           </MacIconButton>
-
-          {selectedFeature ? <span className="current-feature">当前功能：{selectedFeature.name}</span> : null}
-
-          <MacButton className="reset-project-btn" variant="primary" onClick={handleResetProject}>
-            新建项目
+          <MacIconButton
+            className="desktop-rail-icon-btn"
+            onClick={() => setIsProjectManagerOpen(true)}
+            aria-label="Project list"
+            title="Project list"
+          >
+            <WorkbenchIcon name="folder" />
+          </MacIconButton>
+        </>
+      )}
+    />
+  );
+  const desktopTopbar = (
+    <DesktopWorkbenchTopbar
+      menuBar={desktopMenuBar}
+      roleLabel={activeDesktopRole.label}
+      projectName={currentProject.name}
+      projectSubtitle={`${activeDesktopRole.label} Workspace`}
+      context={(
+        <>
+          {selectedFeature ? <span className="desktop-feature-pill">{selectedFeature.name}</span> : null}
+          <MacSelectField
+            className="desktop-project-switcher"
+            label="Project"
+            value={currentProject.id}
+            onChange={(event) => handleOpenProject(event.target.value)}
+          >
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </MacSelectField>
+        </>
+      )}
+      actions={(
+        <>
+          <MacButton className="desktop-topbar-btn" onClick={() => setIsProjectManagerOpen(true)}>
+            Projects
           </MacButton>
-          <div className="desktop-window-controls app-header-window-controls" aria-label="窗口控制">
-            <button
-              type="button"
-              className="desktop-window-control"
-              aria-label="最小化"
-              title="最小化"
-              onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'minimize' })}
+          {showWorkspaceSidebar ? (
+            <MacIconButton
+              className={`desktop-topbar-btn icon ${isDesktopAiCollapsed ? 'active' : ''}`}
+              onClick={() => setIsDesktopAiCollapsed((current) => !current)}
+              aria-label={isDesktopAiCollapsed ? 'Show AI pane' : 'Hide AI pane'}
+              title={isDesktopAiCollapsed ? 'Show AI pane' : 'Hide AI pane'}
             >
-              <span className="desktop-window-control-glyph minimize" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="desktop-window-control"
-              aria-label="切换最大化"
-              title="切换最大化"
-              onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'toggleMaximize' })}
-            >
-              <span className="desktop-window-control-glyph maximize" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="desktop-window-control close"
-              aria-label="关闭"
-              title="关闭"
-              onClick={() => void handleDesktopMenuAction({ kind: 'window', command: 'close' })}
-            >
-              <span className="desktop-window-control-glyph close" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="app-workbench-row">
-        {isDesktopWorkbenchMode ? (
-          <div className={`app-workbench-desktop-layout ${isDesktopAiPaneResizing ? 'is-resizing-ai' : ''}`}>
-            <div className="app-workbench-pane app-workbench-main-shell">
-              <main className="app-main app-main-desktop">
-                <Suspense fallback={WORKBENCH_LAZY_FALLBACK}>{appDesktopContent}</Suspense>
-              </main>
-            </div>
-            {showWorkspaceSidebar ? (
-              <>
-                <div
-                  className="desktop-ai-resize-handle"
-                  role="separator"
-                  aria-label="调整 AI 栏宽度"
-                  aria-orientation="vertical"
-                  aria-valuemin={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
-                  aria-valuemax={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
-                  aria-valuenow={desktopAiPaneWidth}
-                  tabIndex={0}
-                  onPointerDown={handleDesktopAiResizePointerDown}
-                  onKeyDown={handleDesktopAiResizeKeyDown}
-                />
-                <div
-                  className="app-workbench-pane app-workbench-ai-shell"
-                  style={{
-                    flex: `0 0 ${desktopAiPaneWidth}px`,
-                    width: desktopAiPaneWidth,
-                    minWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.min,
-                    maxWidth: DESKTOP_AI_PANE_WIDTH_BOUNDS.max,
-                  }}
-                >
-                  <aside className="app-ai-activity-pane">
-                    <Suspense fallback={WORKBENCH_LAZY_FALLBACK}>
-                      <LazyAIWorkspace />
-                    </Suspense>
-                  </aside>
-                </div>
-              </>
-            ) : null}
-          </div>
-        ) : (
-          <>
-            <main className="app-main app-main-desktop">
-              <Suspense fallback={WORKBENCH_LAZY_FALLBACK}>{appMainContent}</Suspense>
-            </main>
-            {showWorkspaceSidebar ? (
-              <Suspense fallback={WORKBENCH_LAZY_FALLBACK}>
-                <LazyAIWorkspace />
-              </Suspense>
-            ) : null}
-          </>
+              <WorkbenchIcon name={isDesktopAiCollapsed ? 'panelRightOpen' : 'panelRightClose'} />
+            </MacIconButton>
+          ) : null}
+        </>
+      )}
+      windowControls={desktopWindowControls}
+      onTitleDoubleClick={(event) => void handleDesktopTopbarDoubleClick(event)}
+    />
+  );
+  const desktopInspector =
+    showWorkspaceSidebar && isDesktopAiPaneMounted ? (
+      <InspectorPane
+        ref={desktopAiPaneElementRef}
+        visible={isDesktopAiPaneVisible}
+        width={desktopAiPaneWidth}
+        minWidth={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
+        maxWidth={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
+      >
+        <Suspense fallback={WORKBENCH_LAZY_FALLBACK}>
+          <LazyAIWorkspace collapsed={isDesktopAiCollapsed} onCollapsedChange={setIsDesktopAiCollapsed} />
+        </Suspense>
+      </InspectorPane>
+    ) : null;
+  const desktopResizeHandle =
+    showWorkspaceSidebar && isDesktopAiPaneMounted && isDesktopAiPaneVisible ? (
+      <div
+        ref={desktopAiResizeHandleRef}
+        className="desktop-ai-resize-handle"
+        role="separator"
+        aria-label="Resize AI pane"
+        aria-orientation="vertical"
+        aria-valuemin={DESKTOP_AI_PANE_WIDTH_BOUNDS.min}
+        aria-valuemax={DESKTOP_AI_PANE_WIDTH_BOUNDS.max}
+        aria-valuenow={desktopAiPaneWidth}
+        tabIndex={0}
+        onPointerDown={handleDesktopAiResizePointerDown}
+        onKeyDown={handleDesktopAiResizeKeyDown}
+      />
+    ) : null;
+  return (
+    <div className="app app-shell-desktop desktop-active desktop-shell-codex" data-role={currentRole}>
+      <DesktopWorkbenchFrame
+        rail={desktopRail}
+        topbar={desktopTopbar}
+        main={(
+          <main className="app-main app-main-desktop">
+            <Suspense fallback={WORKBENCH_LAZY_FALLBACK}>{appDesktopContent}</Suspense>
+          </main>
         )}
-      </div>
+        resizeHandle={desktopResizeHandle}
+        inspector={desktopInspector}
+        isResizing={isDesktopAiPaneResizing}
+      />
       <UiFeedbackMode />
     </div>
   );

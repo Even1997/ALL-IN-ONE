@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMarkdownEditor';
+import { EmptyStateView, StateCard, StatusBanner } from '../../../components/ui';
 import { getRelativePathFromRoot, normalizeRelativeFileSystemPath } from '../../../utils/fileSystemPaths';
 import type { KnowledgeDiskItem } from '../../../modules/knowledge/knowledgeTree';
 import type { KnowledgeNote } from '../model/knowledge';
@@ -1274,7 +1275,15 @@ export const KnowledgeNoteWorkspace = ({
           </div>
         ) : null}
 
-        {error ? <div className="gn-note-error">{error}</div> : null}
+        {error ? (
+          <StatusBanner
+            tone="danger"
+            icon="alertTriangle"
+            title="知识区状态异常"
+            message={error}
+            className="gn-note-error"
+          />
+        ) : null}
 
         <div
           className="gn-note-list"
@@ -1293,7 +1302,12 @@ export const KnowledgeNoteWorkspace = ({
           {hasVisibleTreeNodes ? (
             renderKnowledgeTree(visibleKnowledgeTree)
           ) : (
-            <div className="gn-note-empty">{searchActive ? '没有匹配的笔记。' : '还没有知识笔记。'}</div>
+            <EmptyStateView
+              icon={searchActive ? 'search' : 'note'}
+              title={searchActive ? '没有匹配的笔记' : '还没有知识笔记'}
+              description={searchActive ? '换个关键词试试，或检查目录筛选。' : '从这里新建第一条知识笔记，后续页面树和附件会一起落到这套标准里。'}
+              className="gn-note-empty"
+            />
           )}
         </div>
 
@@ -1422,14 +1436,16 @@ export const KnowledgeNoteWorkspace = ({
       <main className="gn-note-editor-column">
         <style>{TEMPORARY_PREVIEW_STYLES}</style>
         {temporaryContentPreview ? (
-          <section className="gn-note-temporary-preview">
-            <div className="gn-note-temporary-preview-head">
-              <strong>{temporaryContentPreview.title}</strong>
-              <span>{temporaryContentPreview.artifactType}</span>
-            </div>
-            <p>{temporaryContentPreview.summary}</p>
+          <StateCard
+            className="gn-note-temporary-preview"
+            icon="spark"
+            tone="info"
+            title={temporaryContentPreview.title}
+            description={temporaryContentPreview.summary}
+            meta={<span>{temporaryContentPreview.artifactType}</span>}
+          >
             <pre>{temporaryContentPreview.body}</pre>
-          </section>
+          </StateCard>
         ) : null}
         {filePreview ? (
           <>

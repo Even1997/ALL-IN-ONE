@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap');
-
 * {
   box-sizing: border-box;
 }
@@ -309,10 +307,7 @@ body.desktop-workbench-mode::before {
   min-width: 0;
   padding: 12px;
   container-type: inline-size;
-  background:
-    radial-gradient(circle at top left, rgba(13, 148, 136, 0.08), transparent 28%),
-    radial-gradient(circle at top right, rgba(14, 165, 233, 0.08), transparent 26%),
-    linear-gradient(180deg, #f3f7fb 0%, #eef3f7 100%);
+  background: var(--wb-stage-background, #f7f8fb);
 }
 
 .pm-left-nav {
@@ -5207,6 +5202,26 @@ body,
   overflow: hidden;
 }
 
+.pm-page-panel-surface {
+  height: 100%;
+}
+
+.pm-page-panel-surface .wb-note-surface-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pm-page-panel-surface .wb-note-surface-toolbar {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pm-page-panel-surface .wb-empty-state {
+  min-height: 220px;
+}
+
 .pm-page-structure-panel .pm-page-tree {
   flex: 1 1 auto;
   min-height: 0;
@@ -5230,9 +5245,7 @@ body,
 }
 
 .pm-wireframe-main-canvas {
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--mode-accent) 10%, transparent), transparent 26%),
-    linear-gradient(180deg, color-mix(in srgb, var(--mode-panel) 90%, transparent), color-mix(in srgb, var(--mode-panel-alt) 96%, transparent));
+  background: var(--wb-pane-background-strong);
 }
 
 .pm-wireframe-canvas-header {
@@ -5266,20 +5279,20 @@ body,
 }
 
 .pm-page-props-float.is-compact {
-  background: color-mix(in srgb, var(--mode-panel-alt) 94%, transparent);
-  border: 1px solid var(--mode-border);
-  border-radius: var(--style-radius-lg);
-  box-shadow: var(--mode-shadow-soft);
-  backdrop-filter: blur(18px);
+  background: var(--wb-pane-background-strong);
+  border: 1px solid var(--wb-divider);
+  border-radius: var(--wb-radius-lg);
+  box-shadow: var(--wb-shadow-panel);
+  backdrop-filter: none;
   overflow: hidden;
 }
 
 .pm-page-props-float.is-expanded {
-  background: color-mix(in srgb, var(--mode-panel-alt) 96%, transparent);
-  border: 1px solid var(--mode-border);
-  border-radius: var(--style-radius-lg);
-  box-shadow: var(--mode-shadow-strong);
-  backdrop-filter: blur(20px);
+  background: var(--wb-pane-background-strong);
+  border: 1px solid var(--wb-divider);
+  border-radius: var(--wb-radius-lg);
+  box-shadow: var(--wb-shadow-floating);
+  backdrop-filter: none;
 }
 
 .pm-page-props-float-trigger {
@@ -5365,9 +5378,9 @@ body,
   width: 340px;
   z-index: 21;
   animation: pm-module-list-slide-in 0.18s ease;
-  background: var(--mode-panel);
-  border-left: 1px solid var(--mode-border);
-  box-shadow: var(--mode-shadow-strong);
+  background: var(--wb-inspector-background);
+  border-left: 1px solid var(--wb-divider);
+  box-shadow: var(--wb-shadow-floating);
   display: flex;
   flex-direction: column;
   padding: 16px;
@@ -5620,12 +5633,12 @@ body,
 .pm-canvas-frame-editor-popover {
   min-width: 260px;
   padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--mode-border);
-  background: color-mix(in srgb, var(--mode-panel-alt) 96%, transparent);
-  color: var(--mode-text);
-  box-shadow: var(--mode-shadow-strong);
-  backdrop-filter: blur(20px);
+  border-radius: var(--wb-radius-lg);
+  border: 1px solid var(--wb-divider);
+  background: var(--wb-pane-background-strong);
+  color: var(--wb-text-primary);
+  box-shadow: var(--wb-shadow-panel);
+  backdrop-filter: none;
 }
 
 .pm-canvas-frame-editor-field {
@@ -10536,10 +10549,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 }
 
 .desktop-shell-codex {
-  background:
-    radial-gradient(circle at top left, rgba(39, 174, 96, 0.08), transparent 24%),
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 22%),
-    #111214;
+  background: var(--wb-app-background, #16181c);
 }
 
 .desktop-shell-frame {
@@ -11976,12 +11986,12 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .mac-panel {
-  border-radius: 16px;
-  backdrop-filter: blur(26px) saturate(170%);
-  -webkit-backdrop-filter: blur(26px) saturate(170%);
-  background: color-mix(in srgb, var(--macos-panel-bg) 92%, transparent);
+  border-radius: 14px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--macos-panel-bg);
   border: 1px solid var(--macos-panel-border);
-  box-shadow: var(--macos-shadow-panel);
+  box-shadow: none;
   color: var(--macos-text-primary);
 }
 
@@ -12027,9 +12037,9 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .mac-button-primary {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--workbench-role-accent, var(--role-knowledge-accent)) 86%, white), var(--workbench-role-accent, var(--role-knowledge-accent)));
+  background: var(--wb-accent, var(--workbench-role-accent, var(--role-knowledge-accent)));
   color: #ffffff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  box-shadow: none;
 }
 
 .mac-button-secondary {
@@ -12220,10 +12230,10 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   --desktop-titlebar-menu-border: rgba(255, 255, 255, 0.08);
   --desktop-titlebar-menu-shadow: 0 24px 48px rgba(0, 0, 0, 0.38);
   --desktop-titlebar-divider: rgba(255, 255, 255, 0.07);
-  --desktop-shell-rail-bg: linear-gradient(180deg, rgba(32, 39, 51, 0.98), rgba(22, 28, 36, 0.98));
-  --desktop-shell-topbar-bg: linear-gradient(180deg, rgba(31, 38, 49, 0.98), rgba(23, 28, 37, 0.98));
-  --desktop-shell-pane-bg: linear-gradient(180deg, rgba(29, 36, 47, 0.98), rgba(22, 28, 36, 0.98));
-  --desktop-shell-ai-pane-bg: linear-gradient(180deg, rgba(26, 32, 42, 0.99), rgba(19, 24, 33, 0.99));
+  --desktop-shell-rail-bg: var(--wb-sidebar-background);
+  --desktop-shell-topbar-bg: var(--wb-toolbar-background);
+  --desktop-shell-pane-bg: var(--wb-pane-background);
+  --desktop-shell-ai-pane-bg: var(--wb-inspector-background);
   --desktop-shell-toolbar-bg: rgba(255, 255, 255, 0.03);
   --desktop-shell-toolbar-bg-subtle: rgba(255, 255, 255, 0.02);
   --desktop-shell-toolbar-border: rgba(255, 255, 255, 0.05);
@@ -12238,10 +12248,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
     var(--workbench-role-accent, var(--role-knowledge-accent)) 18%,
     rgba(255, 255, 255, 0.04)
   );
-  background:
-    radial-gradient(circle at top left, rgba(92, 120, 255, 0.12), transparent 28%),
-    radial-gradient(circle at top right, rgba(35, 188, 158, 0.08), transparent 22%),
-    linear-gradient(180deg, #161b23 0%, #0f1319 100%);
+  background: var(--wb-app-background, #16181c);
 }
 
 :root[data-theme='light'] .desktop-shell-codex {
@@ -12258,14 +12265,14 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   --desktop-titlebar-fg: rgba(31, 41, 55, 0.84);
   --desktop-titlebar-fg-strong: #0f172a;
   --desktop-titlebar-hover-bg: rgba(15, 23, 42, 0.05);
-  --desktop-titlebar-menu-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 251, 0.98));
+  --desktop-titlebar-menu-bg: rgba(255, 255, 255, 0.96);
   --desktop-titlebar-menu-border: rgba(100, 116, 139, 0.14);
   --desktop-titlebar-menu-shadow: 0 24px 48px rgba(71, 85, 105, 0.16);
   --desktop-titlebar-divider: rgba(100, 116, 139, 0.14);
-  --desktop-shell-rail-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 251, 0.98));
-  --desktop-shell-topbar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 252, 0.98));
-  --desktop-shell-pane-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 252, 0.98));
-  --desktop-shell-ai-pane-bg: linear-gradient(180deg, rgba(251, 253, 255, 0.99), rgba(242, 246, 251, 0.99));
+  --desktop-shell-rail-bg: var(--wb-sidebar-background);
+  --desktop-shell-topbar-bg: var(--wb-toolbar-background);
+  --desktop-shell-pane-bg: var(--wb-pane-background);
+  --desktop-shell-ai-pane-bg: var(--wb-inspector-background);
   --desktop-shell-toolbar-bg: rgba(15, 23, 42, 0.035);
   --desktop-shell-toolbar-bg-subtle: rgba(15, 23, 42, 0.02);
   --desktop-shell-toolbar-border: rgba(100, 116, 139, 0.10);
@@ -12280,10 +12287,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
     var(--workbench-role-accent, var(--role-knowledge-accent)) 14%,
     rgba(255, 255, 255, 0.92)
   );
-  background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.10), transparent 26%),
-    radial-gradient(circle at top right, rgba(20, 184, 166, 0.09), transparent 22%),
-    linear-gradient(180deg, #f3f7fb 0%, #e9eff6 100%);
+  background: var(--wb-app-background, #e9eef5);
 }
 
 .desktop-shell-frame {

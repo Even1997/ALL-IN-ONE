@@ -6,6 +6,7 @@ import type {
   StoredChatRuntimeEvent,
 } from '../../modules/ai/store/aiChatStore';
 import type { ApprovalRecord } from '../../modules/ai/runtime/approval/approvalTypes';
+import { MacButton, MacInput, StateCard } from '../ui';
 
 const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   const oldLines = oldStr.split('\n');
@@ -60,7 +61,7 @@ const RuntimeQuestionBlock: React.FC<{
   const effectiveValue = answeredValue || freeText || selectedOption;
 
   return (
-    <div className="chat-runtime-question-item">
+    <div className="chat-runtime-question-item wb-runtime-question-item">
       {item.header ? <div className="chat-runtime-question-header">{item.header}</div> : null}
       <div className="chat-runtime-question-prompt">{item.question}</div>
       {item.options && item.options.length > 0 ? (
@@ -86,7 +87,7 @@ const RuntimeQuestionBlock: React.FC<{
         <div className="chat-runtime-question-answer">{answeredValue}</div>
       ) : (
         <div className="chat-runtime-question-actions">
-          <input
+          <MacInput
             className="chat-runtime-question-input"
             type="text"
             value={freeText}
@@ -98,14 +99,16 @@ const RuntimeQuestionBlock: React.FC<{
               }
             }}
           />
-          <button
+          <MacButton
             type="button"
+            variant="primary"
+            size="sm"
             className="chat-runtime-question-submit"
             disabled={!effectiveValue.trim()}
             onClick={() => onSubmit(effectiveValue.trim())}
           >
             提交
-          </button>
+          </MacButton>
         </div>
       )}
     </div>
@@ -188,32 +191,42 @@ export const AIChatRuntimeTimelineInteractionEvent: React.FC<{
   approvalActionLabelMap,
 }) => {
   if (event.kind === 'approval') {
+    const tone = event.riskLevel === 'high' ? 'danger' : event.riskLevel === 'medium' ? 'warning' : 'info';
+    const state = event.status === 'denied' ? 'error' : 'default';
+
     return (
-      <section key={event.id} className={`chat-runtime-approval-card ${event.riskLevel}`}>
-        <div className="chat-runtime-approval-head">
-          <strong>继续前我想和你确认一下</strong>
-          <span>{approvalStatusLabelMap[event.status]}</span>
-        </div>
-        <div className="chat-runtime-approval-summary">{event.summary}</div>
-        <div className="chat-runtime-approval-meta">
-          <span>{approvalActionLabelMap[event.actionType] || event.actionType}</span>
-          <span>{approvalRiskLabelMap[event.riskLevel]}</span>
-        </div>
+      <StateCard
+        title="执行前需要你确认"
+        description={event.summary}
+        meta={
+          <>
+            <span>{approvalStatusLabelMap[event.status]}</span>
+            <span>{approvalActionLabelMap[event.actionType] || event.actionType}</span>
+            <span>{approvalRiskLabelMap[event.riskLevel]}</span>
+          </>
+        }
+        icon={event.status === 'denied' ? 'alertTriangle' : event.riskLevel === 'high' ? 'alertTriangle' : 'spark'}
+        tone={tone}
+        state={state}
+        className={`chat-runtime-approval-card ${event.riskLevel}`}
+        footer={
+          event.status === 'pending' ? (
+            <div className="chat-runtime-approval-actions">
+              <MacButton type="button" variant="primary" size="sm" onClick={() => onApprove(event.approvalId)}>
+                批准执行
+              </MacButton>
+              <MacButton type="button" variant="secondary" size="sm" onClick={() => onDeny(event.approvalId)}>
+                拒绝
+              </MacButton>
+            </div>
+          ) : null
+        }
+      >
         <ApprovalDisplayPreview
           display={event.display}
           summarizeProjectFilePath={summarizeProjectFilePath}
         />
-        {event.status === 'pending' ? (
-          <div className="chat-runtime-approval-actions">
-            <button type="button" onClick={() => onApprove(event.approvalId)}>
-              批准执行
-            </button>
-            <button type="button" onClick={() => onDeny(event.approvalId)}>
-              拒绝
-            </button>
-          </div>
-        ) : null}
-      </section>
+      </StateCard>
     );
   }
 
@@ -222,11 +235,15 @@ export const AIChatRuntimeTimelineInteractionEvent: React.FC<{
   const answers = question.answers || {};
 
   return (
-    <section key={event.id} className={`chat-runtime-question-card ${isAnswered ? 'answered' : 'pending'}`}>
-      <div className="chat-runtime-question-head">
-        <strong>还需要你补充一点信息</strong>
-        <span>{isAnswered ? '已回答' : '等待输入'}</span>
-      </div>
+    <StateCard
+      title="还需要你补充一点信息"
+      description={isAnswered ? '问题已经回答，下面保留本次回复记录。' : '这些信息会继续沿用当前运行上下文。'}
+      meta={<span>{isAnswered ? '已回答' : '等待输入'}</span>}
+      icon={isAnswered ? 'checkCircle' : 'note'}
+      tone="info"
+      state={isAnswered ? 'selected' : 'default'}
+      className={`chat-runtime-question-card ${isAnswered ? 'answered' : 'pending'}`}
+    >
       <div className="chat-runtime-question-list">
         {question.questions.map((item, questionIndex) => {
           const answerKey = item.question;
@@ -247,6 +264,6 @@ export const AIChatRuntimeTimelineInteractionEvent: React.FC<{
           );
         })}
       </div>
-    </section>
+    </StateCard>
   );
 };

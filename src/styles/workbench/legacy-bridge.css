@@ -1,0 +1,550 @@
+:root {
+  --mode-surface: var(--wb-window-background);
+  --mode-panel: var(--wb-pane-background);
+  --mode-panel-strong: var(--wb-pane-background-strong);
+  --mode-border: var(--wb-divider);
+  --mode-text-primary: var(--wb-text-primary);
+  --mode-text-secondary: var(--wb-text-secondary);
+  --mode-text-tertiary: var(--wb-text-tertiary);
+  --mode-shadow: var(--wb-shadow-panel);
+  --mode-accent: var(--workbench-role-accent, var(--wb-accent));
+}
+
+.desktop-active .product-workbench-shell,
+.desktop-active .workspace-shell,
+.desktop-active .agent-workbench-shell,
+.desktop-active .design-workbench-shell,
+.desktop-active .design-workbench-shell-full,
+.desktop-active .test-view,
+.desktop-active .operations-view {
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+}
+
+.desktop-active.app-shell-desktop {
+  display: flex !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border-radius: 0 !important;
+  filter: none !important;
+}
+
+.desktop-active .desktop-native-window {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border-radius: 18px;
+  border: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-window-background) 98%, transparent);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.desktop-active .desktop-native-body {
+  display: grid !important;
+  grid-template-columns: 56px minmax(0, 1fr) !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  background: var(--wb-window-background);
+}
+
+.desktop-active .desktop-primary-rail.mac-sidebar-panel,
+.desktop-active .desktop-workbench-topbar.mac-toolbar.mac-panel {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.desktop-active .desktop-primary-rail.mac-sidebar-panel {
+  border-right: 1px solid var(--wb-divider) !important;
+}
+
+.desktop-active .desktop-workbench-topbar.mac-toolbar.mac-panel {
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  padding: 6px 10px !important;
+  border-bottom: 1px solid var(--wb-divider) !important;
+}
+
+.desktop-active .desktop-workbench-menubar {
+  min-height: var(--desktop-topbar-height) !important;
+  padding: 0 !important;
+}
+
+.desktop-active .desktop-workbench-leading {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.desktop-active .desktop-workbench-title-shell {
+  flex: 1 1 320px !important;
+  min-width: 0 !important;
+}
+
+.desktop-active .desktop-workbench-tools {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: 0 1 auto !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.desktop-active .desktop-workbench-drag-spacer {
+  flex: 1 1 auto !important;
+  min-width: 24px !important;
+}
+
+.desktop-active .desktop-window-controls {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-self: stretch !important;
+}
+
+.desktop-active .desktop-workbench-toolbar-group {
+  min-width: 0 !important;
+}
+
+.desktop-active .desktop-workbench-toolbar-group.is-context {
+  flex: 0 1 auto !important;
+  overflow: hidden !important;
+}
+
+.desktop-active .desktop-workbench-toolbar-group.is-actions {
+  flex: 0 0 auto !important;
+}
+
+.desktop-active .app-workbench-main-shell,
+.desktop-active .app-workbench-ai-shell {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.desktop-active .app-workbench-ai-shell {
+  border-left: 1px solid var(--wb-divider) !important;
+}
+
+.desktop-active .desktop-workbench-panels {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  gap: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  align-items: stretch !important;
+}
+
+.desktop-active .app-workbench-main-shell > .app-main-desktop,
+.desktop-active .app-workbench-ai-shell > .app-ai-activity-pane {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+.desktop-active .app-main-desktop > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.desktop-active .product-workbench-shell,
+.desktop-active .workspace-shell,
+.desktop-active .agent-workbench-shell,
+.desktop-active .design-workbench-shell,
+.desktop-active .design-workbench-shell-full,
+.desktop-active .test-view,
+.desktop-active .operations-view,
+.desktop-active .platform-review-workbench,
+.desktop-active .gn-note-workspace,
+.desktop-active .pm-page-workspace-shell {
+  padding: 0 !important;
+  gap: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.desktop-active .doc-action-btn,
+.desktop-active .product-input,
+.desktop-active .design-workbench-prompt-input {
+  min-height: 32px;
+  border-radius: var(--wb-radius-sm);
+  border: 1px solid var(--wb-divider);
+  box-shadow: none;
+}
+
+.desktop-active .doc-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--wb-pane-background);
+  color: var(--wb-text-primary);
+}
+
+.desktop-active .doc-action-btn.secondary {
+  background: transparent;
+  color: var(--wb-text-secondary);
+}
+
+.desktop-active .doc-action-btn:hover,
+.desktop-active .doc-action-btn.secondary:hover {
+  background: var(--wb-hover-background);
+  color: var(--wb-text-primary);
+}
+
+.desktop-active .product-input,
+.desktop-active .design-workbench-prompt-input {
+  background: var(--wb-input-background);
+  color: var(--wb-text-primary);
+}
+
+.desktop-active .product-input::placeholder,
+.desktop-active .design-workbench-prompt-input::placeholder {
+  color: var(--wb-text-quaternary);
+}
+
+.desktop-active .product-input:focus,
+.desktop-active .design-workbench-prompt-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--wb-accent) 26%, var(--wb-divider));
+  box-shadow: var(--wb-focus-ring);
+}
+
+.desktop-active .delivery-summary-bar,
+.desktop-active .delivery-card-grid,
+.desktop-active .graph-metrics {
+  gap: 10px;
+}
+
+.desktop-active .delivery-card,
+.desktop-active .graph-metric {
+  border: 1px solid var(--wb-divider);
+  border-radius: var(--wb-radius-lg);
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+  box-shadow: none;
+}
+
+.desktop-active .graph-metric span,
+.desktop-active .delivery-card span,
+.desktop-active .delivery-card p {
+  color: var(--wb-text-secondary);
+}
+
+.desktop-active .gn-note-workspace {
+  gap: 10px;
+  padding: 0;
+  background: transparent;
+}
+
+.desktop-active .gn-note-rail {
+  padding: 12px;
+  border-radius: 0;
+  border: 0;
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-sidebar-background) 90%, transparent);
+  box-shadow: none;
+}
+
+.desktop-active .gn-note-search-row,
+.desktop-active .gn-note-rail-actions,
+.desktop-active .gn-note-stats {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.desktop-active .gn-note-stats {
+  color: var(--wb-text-tertiary);
+}
+
+.desktop-active .gn-note-tree-item,
+.desktop-active .pm-page-tree-node,
+.desktop-active .pm-page-tree-label {
+  min-height: 30px;
+  border-radius: var(--wb-radius-sm);
+  background: transparent;
+  color: var(--wb-text-primary);
+  box-shadow: none;
+}
+
+.desktop-active .gn-note-tree-item:hover,
+.desktop-active .pm-page-tree-node:hover,
+.desktop-active .pm-page-tree-label:hover {
+  background: var(--wb-hover-background);
+}
+
+.desktop-active .gn-note-tree-item.active,
+.desktop-active .pm-page-tree-node.active,
+.desktop-active .pm-page-tree-label.active {
+  background: var(--wb-selected-background);
+  color: var(--wb-accent);
+}
+
+.desktop-active .gn-note-tree-badge,
+.desktop-active .gn-note-tree-group-chip,
+.desktop-active .pm-page-tree-node span,
+.desktop-active .pm-page-tree-label span {
+  color: var(--wb-text-tertiary);
+}
+
+.desktop-active .gn-note-tree-match {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wb-accent) 10%, transparent);
+  color: var(--wb-accent);
+}
+
+.desktop-active .gn-note-editor-surface,
+.desktop-active .gn-note-reading-surface,
+.desktop-active .gn-note-code-surface,
+.desktop-active .pm-page-panel-surface,
+.desktop-active .pm-wireframe-main,
+.desktop-active .pm-page-structure-panel {
+  border-radius: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 98%, transparent);
+  box-shadow: none;
+}
+
+.desktop-active .gn-note-editor-title-row,
+.desktop-active .pm-wireframe-canvas-header {
+  border-bottom: 1px solid var(--wb-divider);
+  background: transparent;
+}
+
+.desktop-active .gn-note-reading-surface,
+.desktop-active .gn-note-reading-editor-surface {
+  padding-inline: clamp(20px, 4vw, 56px);
+}
+
+.desktop-active .gn-note-empty-main {
+  border-radius: var(--wb-radius-xl);
+  border: 1px dashed color-mix(in srgb, var(--wb-divider) 88%, transparent);
+  background: color-mix(in srgb, var(--wb-pane-background) 88%, transparent);
+}
+
+.desktop-active .pm-page-tree,
+.desktop-active .gn-note-list,
+.desktop-active .design-sketch-library-tree {
+  padding: 0;
+  background: transparent;
+}
+
+.desktop-active .pm-page-hub-grid {
+  grid-template-columns: minmax(248px, 292px) minmax(0, 1fr);
+  gap: 0;
+  background: transparent;
+}
+
+.desktop-active .pm-page-hub-canvas {
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+}
+
+.desktop-active .pm-page-structure-panel {
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-sidebar-background) 90%, transparent);
+}
+
+.desktop-active .pm-wireframe-main {
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+}
+
+.desktop-active .pm-wireframe-canvas-header {
+  position: static;
+  top: auto;
+  margin: 0 0 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--wb-pane-background) 94%, transparent);
+  border: 1px solid var(--wb-divider);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.desktop-active .pm-page-props-float.is-compact {
+  border-radius: 10px;
+  border: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-pane-background) 96%, transparent);
+  box-shadow: none;
+}
+
+.desktop-active .pm-page-tree-action,
+.desktop-active .gn-note-icon-btn {
+  border-radius: var(--wb-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.desktop-active .pm-page-tree-action:hover,
+.desktop-active .gn-note-icon-btn:hover {
+  background: var(--wb-hover-background);
+}
+
+.desktop-active .pm-canvas-shell,
+.desktop-active .pm-page-hub-canvas,
+.desktop-active .page-canvas-board {
+  border-radius: 0;
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+  box-shadow: none;
+}
+
+.desktop-active .pm-canvas-toolbar,
+.desktop-active .design-canvas-toolbar,
+.desktop-active .design-workbench-topbar-floating,
+.desktop-active .design-workbench-note,
+.desktop-active .design-workbench-prompt {
+  border: 1px solid var(--wb-divider);
+  border-radius: var(--wb-radius-xl);
+  background: color-mix(in srgb, var(--wb-pane-background) 96%, transparent);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.desktop-active .design-workbench-shell,
+.desktop-active .design-workbench-shell-full {
+  padding: 0;
+  gap: 0;
+}
+
+.desktop-active .design-free-canvas-shell,
+.desktop-active .design-workbench-canvas,
+.desktop-active .design-workbench-canvas-full {
+  background: transparent;
+}
+
+.desktop-active .design-workbench-note-dot,
+.desktop-active .design-workbench-note-dot::before,
+.desktop-active .design-workbench-note-dot::after {
+  background: var(--wb-accent);
+  box-shadow: none;
+}
+
+.desktop-active .design-inspector-panel,
+.desktop-active .design-context-menu,
+.desktop-active .design-sketch-library,
+.desktop-active .pm-canvas-frame-editor-popover {
+  border: 1px solid var(--wb-divider);
+  border-radius: var(--wb-radius-lg);
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 98%, transparent);
+  box-shadow: var(--wb-shadow-floating);
+}
+
+.desktop-active .agent-workbench-shell {
+  grid-template-columns: auto minmax(0, 1fr) minmax(280px, 320px);
+}
+
+.desktop-active .agent-workbench-left-rail,
+.desktop-active .agent-workbench-left-panel {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.desktop-active .agent-workbench-left-rail {
+  border: 0;
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-sidebar-background) 88%, transparent);
+}
+
+.desktop-active .agent-workbench-left-panel {
+  border: 0;
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-pane-background) 92%, transparent);
+}
+
+.desktop-active .agent-workbench-companion {
+  border-left: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-pane-background) 94%, transparent);
+}
+
+.desktop-active .agent-chat-stage {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+}
+
+.desktop-active .gn-note-workspace {
+  gap: 0;
+}
+
+.desktop-active .gn-note-search-row,
+.desktop-active .gn-note-rail-actions,
+.desktop-active .gn-note-stats {
+  padding-inline: 12px;
+}
+
+.desktop-active .gn-note-reading-surface,
+.desktop-active .gn-note-editor-surface,
+.desktop-active .gn-note-code-surface {
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 97%, transparent);
+}
+
+.desktop-active .platform-review-workbench {
+  gap: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.desktop-active .platform-review-sidebar {
+  border: 0;
+  border-right: 1px solid var(--wb-divider);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--wb-sidebar-background) 90%, transparent);
+}
+
+.desktop-active .platform-review-stage {
+  gap: 12px;
+  padding: 16px 18px;
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+}
+
+.desktop-active .design-sketch-library,
+.desktop-active .design-inspector-panel {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.desktop-active .design-sketch-library {
+  border: 0;
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-sidebar-background) 90%, transparent);
+}
+
+.desktop-active .design-inspector-panel {
+  border: 0;
+  border-left: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-pane-background) 94%, transparent);
+}
+
+.desktop-active .design-workbench-topbar-floating,
+.desktop-active .design-canvas-toolbar {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.desktop-active .gn-graph-canvas {
+  border-radius: var(--wb-radius-xl);
+  background: transparent;
+}
+
+.desktop-active .gn-graph-edge {
+  stroke: color-mix(in srgb, var(--wb-text-tertiary) 42%, transparent);
+}
+
+.desktop-active .gn-graph-node circle {
+  fill: color-mix(in srgb, var(--wb-pane-background-strong) 98%, transparent);
+  stroke: color-mix(in srgb, var(--wb-divider-strong) 92%, transparent);
+}
