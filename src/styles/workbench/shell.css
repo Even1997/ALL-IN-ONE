@@ -50,10 +50,10 @@ body.desktop-workbench-mode {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-radius: calc(var(--desktop-window-radius) + 2px);
+  border-radius: var(--desktop-window-radius);
   border: 1px solid var(--desktop-shell-border);
   background: color-mix(in srgb, var(--wb-window-background) 96%, transparent);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
 }
 
 .desktop-native-body {
@@ -255,10 +255,14 @@ body.desktop-workbench-mode {
 
 .pm-workbench-body {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.pm-workbench-body.has-sidebar {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .pm-workbench-shell,
@@ -285,9 +289,17 @@ body.desktop-workbench-mode {
 
 .pm-workbench-main-with-ai {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+}
+
+.pm-workbench-main-with-ai.has-companion {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.pm-workbench-main-with-ai.has-companion.has-resize-handle {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .pm-workbench-main {

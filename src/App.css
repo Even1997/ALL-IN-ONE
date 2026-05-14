@@ -10543,7 +10543,7 @@ body.ai-chat-sidebar-collapsed .app-main {
 }
 
 .app-shell-desktop.desktop-active {
-  border-radius: var(--desktop-window-radius);
+  border-radius: var(--desktop-workbench-radius);
   background: var(--mode-surface, #0f1115);
   filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.25));
 }
@@ -12789,6 +12789,35 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 @media (max-width: 1280px) {
+  .desktop-workbench-panels {
+    position: relative;
+  }
+
+  .desktop-workbench-panels > .app-workbench-main-shell {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .desktop-workbench-panels > .desktop-ai-resize-handle {
+    display: none;
+  }
+
+  .desktop-workbench-panels > .app-workbench-ai-shell {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 12;
+    width: min(340px, calc(100vw - 112px)) !important;
+    min-width: min(340px, calc(100vw - 112px)) !important;
+    max-width: min(340px, calc(100vw - 112px)) !important;
+  }
+
+  .desktop-workbench-panels > .app-workbench-ai-shell.is-hidden {
+    margin-left: 0;
+    transform: translateX(calc(100% + 20px));
+  }
+
   .desktop-workbench-title-shell {
     flex-basis: 220px;
     padding: 0 8px;
@@ -12807,6 +12836,14 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 
   .desktop-project-switcher.mac-field {
     min-width: 148px;
+  }
+}
+
+@media (max-width: 900px) {
+  .desktop-workbench-panels > .app-workbench-ai-shell {
+    width: min(312px, calc(100vw - 88px)) !important;
+    min-width: min(312px, calc(100vw - 88px)) !important;
+    max-width: min(312px, calc(100vw - 88px)) !important;
   }
 }
 
@@ -13043,4 +13080,399 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
   border-radius: 0;
   box-shadow: none;
   backdrop-filter: none;
+}
+
+/* ========== 2026-05-14 Workbench Responsive Cleanup ========== */
+
+.pm-knowledge-workspace,
+.pm-page-workspace-shell,
+.design-system-view,
+.design-workbench-shell,
+.design-workbench-shell-full {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.pm-workbench-shell.design-workbench-shell {
+  display: flex;
+  width: 100%;
+  padding: 0;
+  gap: 0;
+  grid-template-columns: none;
+}
+
+.design-system-view {
+  display: flex;
+  width: 100%;
+  overflow: hidden;
+}
+
+.design-system-view > .design-workbench-shell,
+.design-system-view > .design-workbench-shell-full,
+.design-system-view > .design-workbench-shell.design-workbench-shell-full {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  grid-template-columns: none;
+}
+
+.desktop-active .pm-knowledge-workspace,
+.desktop-active .pm-page-workspace-shell {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.gn-note-workspace {
+  container-type: inline-size;
+  grid-template-columns: minmax(216px, var(--gn-note-rail-width, 280px)) 8px minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.gn-note-workspace.side-expanded {
+  grid-template-columns: minmax(216px, var(--gn-note-rail-width, 280px)) 8px minmax(0, 1fr);
+}
+
+.gn-note-rail,
+.gn-note-editor-column {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.gn-note-rail {
+  padding: 12px 12px 14px;
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-sidebar-background) 92%, transparent);
+}
+
+.gn-note-editor-column {
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+}
+
+.gn-note-list {
+  padding-right: 0;
+}
+
+.gn-note-search-row .product-input {
+  width: 100%;
+}
+
+.pm-page-workspace-shell,
+.pm-page-workspace-frame,
+.pm-page-hub-canvas,
+.pm-page-workspace {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.pm-page-hub-grid {
+  grid-template-columns: clamp(220px, 22vw, 280px) minmax(0, 1fr);
+  gap: 0;
+  height: 100%;
+  border: 1px solid var(--wb-divider);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 98%, transparent);
+  overflow: hidden;
+}
+
+.pm-page-structure-panel {
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-sidebar-background) 92%, transparent);
+}
+
+.pm-page-panel-surface,
+.pm-wireframe-main {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.pm-page-hub-canvas {
+  background: color-mix(in srgb, var(--wb-pane-background-strong) 96%, transparent);
+}
+
+.pm-canvas-shell {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  padding-top: 0;
+  overflow: auto;
+}
+
+.pm-canvas-frame-editor {
+  top: 12px;
+  left: 12px;
+}
+
+.design-workbench-shell-full {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.design-workbench-topbar-floating {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  width: auto;
+  transform: none;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-content: stretch;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-window-background) 96%, transparent);
+}
+
+.design-workbench-topbar-floating > div:first-child {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.design-workbench-topbar-floating .design-workbench-actions {
+  justify-content: space-between;
+}
+
+.design-free-canvas-shell {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) clamp(280px, 24vw, 340px);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.design-free-canvas-shell:has(.design-sketch-library) {
+  grid-template-columns: clamp(220px, 22vw, 272px) minmax(0, 1fr) clamp(280px, 24vw, 340px);
+}
+
+.design-canvas-toolbar {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  justify-self: start;
+  z-index: 4;
+  margin: 14px;
+  flex-direction: row;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--wb-pane-background) 96%, transparent);
+  border: 1px solid var(--wb-divider);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.design-canvas-toolbar-meta {
+  min-width: 56px;
+  padding: 0 10px;
+  border-top: 0;
+  border-left: 1px solid var(--wb-divider);
+  color: var(--wb-text-secondary);
+  line-height: 40px;
+}
+
+.design-workbench-note,
+.design-status-card {
+  display: none;
+}
+
+.design-sketch-library,
+.design-sketch-library-toggle,
+.design-inspector-panel {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  max-height: none;
+  min-height: 0;
+  z-index: 1;
+}
+
+.design-sketch-library {
+  grid-column: 1;
+  grid-row: 2;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 0;
+  border: 0;
+  border-right: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-sidebar-background) 92%, transparent);
+  box-shadow: none;
+}
+
+.design-sketch-library-toggle {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  justify-self: center;
+  width: 36px;
+  min-height: 92px;
+  margin-top: 12px;
+  padding: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-pane-background) 96%, transparent);
+  color: var(--wb-text-secondary);
+  box-shadow: none;
+  writing-mode: vertical-rl;
+}
+
+.design-sketch-library-list,
+.design-inspector-card,
+.design-inspector-form {
+  min-height: 0;
+}
+
+.design-sketch-library-list,
+.design-inspector-card {
+  overflow: auto;
+}
+
+.design-board-scroll {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.design-inspector-panel {
+  grid-column: 3;
+  grid-row: 2;
+  border-left: 1px solid var(--wb-divider);
+  background: color-mix(in srgb, var(--wb-pane-background) 96%, transparent);
+}
+
+.design-inspector-card {
+  height: 100%;
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+@media (max-width: 1280px) {
+  .gn-note-workspace {
+    grid-template-columns: minmax(200px, 236px) 8px minmax(0, 1fr);
+  }
+
+  .pm-page-hub-grid {
+    grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+  }
+
+  .design-free-canvas-shell,
+  .design-free-canvas-shell:has(.design-sketch-library) {
+    grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) minmax(220px, 34vh);
+  }
+
+  .design-inspector-panel {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    border-left: 0;
+    border-top: 1px solid var(--wb-divider);
+  }
+}
+
+@media (max-width: 980px) {
+  .pm-page-hub-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pm-page-structure-panel {
+    max-height: clamp(220px, 30vh, 300px);
+    border-right: 0;
+    border-bottom: 1px solid var(--wb-divider);
+  }
+}
+
+@media (max-width: 840px) {
+  .gn-note-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+    overflow: auto;
+  }
+
+  .gn-note-rail {
+    max-height: clamp(220px, 32vh, 300px);
+    border-right: 0;
+    border-bottom: 1px solid var(--wb-divider);
+  }
+
+  .gn-note-rail-resize-handle {
+    display: none;
+  }
+
+  .design-free-canvas-shell,
+  .design-free-canvas-shell:has(.design-sketch-library) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(180px, 1fr) auto minmax(220px, 34vh);
+  }
+
+  .design-workbench-topbar-floating {
+    padding: 10px 12px;
+  }
+
+  .design-sketch-library,
+  .design-sketch-library-toggle {
+    grid-column: 1;
+    grid-row: 3;
+    max-height: clamp(148px, 22vh, 188px);
+    margin-top: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--wb-divider);
+  }
+
+  .design-sketch-library-toggle {
+    width: auto;
+    min-height: 40px;
+    padding: 0 12px;
+    justify-self: start;
+    writing-mode: horizontal-tb;
+  }
+
+  .design-board-scroll,
+  .design-canvas-toolbar {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .design-inspector-panel {
+    grid-column: 1;
+    grid-row: 4;
+  }
 }

@@ -39,10 +39,10 @@
   height: 100% !important;
   min-width: 0 !important;
   min-height: 0 !important;
-  border-radius: 18px;
+  border-radius: var(--desktop-window-radius);
   border: 1px solid var(--wb-divider);
   background: color-mix(in srgb, var(--wb-window-background) 98%, transparent);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
 }
 
 .desktop-active .desktop-native-body {

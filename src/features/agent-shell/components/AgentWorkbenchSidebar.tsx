@@ -34,76 +34,83 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
   onOpenSearch,
   collapsed,
   onToggleCollapsed,
-}) => (
-  <div
-    className={`agent-workbench-sidebar${collapsed ? ' is-collapsed' : ''}${sessions.length === 0 ? ' is-empty' : ''}`}
-  >
-    <div className="agent-workbench-left-rail">
-      <nav className="agent-workbench-rail-nav" aria-label="Agent workbench actions">
-        {SIDEBAR_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="agent-workbench-rail-item"
-            onClick={() => {
-              if (item.id === 'newThread') {
-                onNewThread();
-                if (collapsed) {
-                  onToggleCollapsed();
+}) => {
+  const sessionMeta =
+    sessions.length > 0
+      ? `${sessions.length} 条会话${projectName ? ` · ${projectName}` : ''}`
+      : projectName || '等待第一条对话';
+
+  return (
+    <div
+      className={`agent-workbench-sidebar${collapsed ? ' is-collapsed' : ''}${sessions.length === 0 ? ' is-empty' : ''}`}
+    >
+      <div className="agent-workbench-left-rail">
+        <nav className="agent-workbench-rail-nav" aria-label="Agent workbench actions">
+          {SIDEBAR_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="agent-workbench-rail-item"
+              onClick={() => {
+                if (item.id === 'newThread') {
+                  onNewThread();
+                  if (collapsed) {
+                    onToggleCollapsed();
+                  }
+                  return;
                 }
-                return;
-              }
 
-              if (item.id === 'search') {
-                onOpenSearch();
-              }
-            }}
-            title={item.label}
-            aria-label={item.label}
+                if (item.id === 'search') {
+                  onOpenSearch();
+                }
+              }}
+              title={item.label}
+              aria-label={item.label}
+            >
+              <WorkbenchIcon name={item.icon} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="agent-workbench-rail-foot">
+          <button
+            type="button"
+            className="agent-workbench-rail-item agent-workbench-rail-collapse"
+            onClick={onToggleCollapsed}
+            title={collapsed ? '展开左侧面板' : '收起左侧面板'}
+            aria-label={collapsed ? '展开左侧面板' : '收起左侧面板'}
           >
-            <WorkbenchIcon name={item.icon} />
-            <span>{item.label}</span>
+            <WorkbenchIcon name="chevronRight" />
+            <span>{collapsed ? '展开' : '收起'}</span>
           </button>
-        ))}
-      </nav>
-
-      <div className="agent-workbench-rail-foot">
-        <button
-          type="button"
-          className="agent-workbench-rail-item agent-workbench-rail-collapse"
-          onClick={onToggleCollapsed}
-          title={collapsed ? '展开左侧面板' : '收起左侧面板'}
-          aria-label={collapsed ? '展开左侧面板' : '收起左侧面板'}
-        >
-          <WorkbenchIcon name="chevronRight" />
-          <span>{collapsed ? '展开' : '收起'}</span>
-        </button>
+        </div>
       </div>
-    </div>
 
-    {!collapsed ? (
-      <div className="agent-workbench-left-panel">
-        <header className="agent-sidebar-panel-head">
-          <div className="agent-sidebar-panel-head-copy">
-            <span className="agent-sidebar-panel-head-icon">
-              <WorkbenchIcon name="page" />
-            </span>
-            <div>
-              <strong>对话历史</strong>
-              <span>{projectName || '当前项目会话'}</span>
+      {!collapsed ? (
+        <div className="agent-workbench-left-panel">
+          <header className="agent-sidebar-panel-head">
+            <div className="agent-sidebar-panel-head-copy">
+              <span className="agent-sidebar-panel-head-icon">
+                <WorkbenchIcon name="note" />
+              </span>
+              <div>
+                <strong>对话历史</strong>
+                <span>{sessionMeta}</span>
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <section className="agent-sidebar-panel-body agent-sidebar-panel-body-threads">
-          <GNAgentThreadList
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            onSelectThread={onSelectThread}
-            onDeleteSession={onDeleteSession}
-          />
-        </section>
-      </div>
-    ) : null}
-  </div>
-);
+          <section className="agent-sidebar-panel-body agent-sidebar-panel-body-threads">
+            <GNAgentThreadList
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onSelectThread={onSelectThread}
+              onDeleteSession={onDeleteSession}
+            />
+          </section>
+        </div>
+      ) : null}
+    </div>
+  );
+};

@@ -1,11 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppType, PageStructureNode } from '../../types';
-import {
-  FloatingRunCompanion,
-  StateCard,
-  StatusBanner,
-  UtilitySidebar,
-} from '../ui';
 import { WorkbenchShell } from '../product/WorkbenchShell';
 import { writeSketchPageFile } from '../../utils/projectPersistence';
 import {
@@ -95,7 +89,6 @@ export const DesignWorkbenchScreen: React.FC<DesignWorkbenchScreenProps> = ({
   const lastPersistedSketchSnapshotRef = useRef('');
   const [isSketchLibraryOpen, setIsSketchLibraryOpen] = useState(true);
   const [sketchLibrarySearch, setSketchLibrarySearch] = useState('');
-  const [isUtilitySidebarCollapsed, setIsUtilitySidebarCollapsed] = useState(true);
   const [expandedSketchLibraryNodeIds, setExpandedSketchLibraryNodeIds] = useState<Set<string>>(() => new Set());
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
   const sketchLibraryTree = useMemo(() => buildSketchLibraryTree(pageStructure), [pageStructure]);
@@ -800,8 +793,7 @@ export const DesignWorkbenchScreen: React.FC<DesignWorkbenchScreenProps> = ({
     handleAddStyleNode(preset, getCanvasContextPosition());
     setDesignCanvasContextMenu(null);
   }, [getCanvasContextPosition, handleAddStyleNode]);
-  const selectedPageModuleCount = selectedWireframe?.elements?.length || 0;
-  const designUtilitySidebar = (
+  /* const designUtilitySidebar = (
     <UtilitySidebar
       className="design-utility-sidebar"
       title="设计概览"
@@ -870,7 +862,8 @@ export const DesignWorkbenchScreen: React.FC<DesignWorkbenchScreenProps> = ({
       </>
     </UtilitySidebar>
   );
-  const designFloatingCompanion =
+  ); */
+  /* const designFloatingCompanion =
     selectedDesignPage || designSelectionIds.length > 0 ? (
       <FloatingRunCompanion
         className="design-floating-run-companion"
@@ -906,7 +899,7 @@ export const DesignWorkbenchScreen: React.FC<DesignWorkbenchScreenProps> = ({
           meta={selectedDesignPage?.metadata.route || `${designZoom.toFixed(2)}x`}
         />
       </FloatingRunCompanion>
-    ) : null;
+    ) : null; */
 
   return (
     <WorkbenchShell
@@ -1000,9 +993,6 @@ export const DesignWorkbenchScreen: React.FC<DesignWorkbenchScreenProps> = ({
           wireframes={wireframes}
         />
       )}
-      utilitySidebar={designUtilitySidebar}
-      floatingCompanion={designFloatingCompanion}
-      companionWidth={isUtilitySidebarCollapsed ? 52 : 312}
     />
   );
 };

@@ -46,6 +46,9 @@ export const WorkbenchShell = ({
   const resolvedCompanion = utilitySidebar ?? companion ?? rightPane ?? null;
   const resolvedSidebarWidth = sidebarWidth ?? leftSize;
   const resolvedCompanionWidth = companionWidth ?? rightSize;
+  const hasSidebar = Boolean(resolvedSidebar);
+  const hasCompanion = Boolean(resolvedCompanion);
+  const hasResizeHandle = Boolean(resizeHandle);
 
   const sidebarStyle: CSSProperties | undefined =
     typeof resolvedSidebarWidth === 'number'
@@ -59,13 +62,19 @@ export const WorkbenchShell = ({
   return (
     <section className={joinClasses('pm-workbench-shell wb-module-shell', className)} style={style}>
       {header ? <div className="pm-workbench-header-slot">{header}</div> : null}
-      <div className="pm-workbench-body">
+      <div className={joinClasses('pm-workbench-body', hasSidebar && 'has-sidebar')}>
         {resolvedSidebar ? (
           <aside className="pm-workbench-sidebar wb-module-sidebar" style={sidebarStyle}>
             {resolvedSidebar}
           </aside>
         ) : null}
-        <div className="pm-workbench-main-with-ai">
+        <div
+          className={joinClasses(
+            'pm-workbench-main-with-ai',
+            hasCompanion && 'has-companion',
+            hasResizeHandle && 'has-resize-handle'
+          )}
+        >
           <main className="pm-workbench-main wb-module-main">
             <div className="pm-workbench-main-stage">
               {resolvedMain}

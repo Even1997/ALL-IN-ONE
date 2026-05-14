@@ -5,9 +5,9 @@ import { useKnowledgeStore } from '../../../features/knowledge/store/knowledgeSt
 import { buildKnowledgeSearchIndex, searchKnowledgeEntries } from '../../../modules/knowledge/knowledgeSearch';
 import { useProjectStore } from '../../../store/projectStore';
 import { AgentChatStage } from '../components/AgentChatStage';
+import { AgentUtilitySidebar, hasAgentReviewContent } from '../components/AgentUtilitySidebar';
 import { AgentWorkbenchLayout } from '../components/AgentWorkbenchLayout';
 import { AgentWorkbenchSidebar } from '../components/AgentWorkbenchSidebar';
-import { AgentUtilitySidebar } from '../components/AgentUtilitySidebar';
 import './AgentShellPage.css';
 
 export const AgentShellPage: React.FC = () => {
@@ -52,6 +52,8 @@ export const AgentShellPage: React.FC = () => {
       .slice(0, 16);
   }, [knowledgeSearchState, notes, searchQuery]);
 
+  const showUtilitySidebar = hasAgentReviewContent(session);
+
   return (
     <section className="agent-workspace-page">
       <AgentWorkbenchLayout
@@ -77,13 +79,15 @@ export const AgentShellPage: React.FC = () => {
           />
         }
         companion={
-          <AgentUtilitySidebar
-            session={session}
-            collapsed={utilitySidebarCollapsed}
-            onToggleCollapsed={() => setUtilitySidebarCollapsed((value) => !value)}
-          />
+          showUtilitySidebar ? (
+            <AgentUtilitySidebar
+              session={session}
+              collapsed={utilitySidebarCollapsed}
+              onToggleCollapsed={() => setUtilitySidebarCollapsed((value) => !value)}
+            />
+          ) : undefined
         }
-        companionCollapsed={utilitySidebarCollapsed}
+        companionCollapsed={showUtilitySidebar ? utilitySidebarCollapsed : false}
       />
 
       <MacDialog

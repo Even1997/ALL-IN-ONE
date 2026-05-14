@@ -7,7 +7,6 @@ import { useGlobalAIStore } from '../../../modules/ai/store/globalAIStore';
 import type { GNAgentWorkbenchSession } from '../../../components/ai/gn-agent-shell/useGNAgentWorkbenchSession';
 import { WorkbenchIcon } from '../../../components/ui/WorkbenchIcon';
 import { AIChat } from '../../../components/workspace/AIChat';
-import { AgentFloatingRunCompanion } from './AgentFloatingRunCompanion';
 import './agentWorkbench.css';
 
 const claudeRuntime = new ClaudeRuntime();
@@ -66,15 +65,15 @@ export const AgentChatStage: React.FC<AgentChatStageProps> = ({
           variant={providerId === 'classic' ? 'gn-agent-embedded' : 'provider-embedded'}
           runtimeConfigIdOverride={runtimeConfigIdOverride}
           providerExecutionMode={providerId === 'classic' ? null : providerId}
+          showHeaderChrome={false}
         />
-        <AgentFloatingRunCompanion session={session} />
         {showEmptyState ? (
           <div className="agent-chat-stage-empty" aria-hidden="true">
             <span className="agent-chat-stage-empty-icon">
               <WorkbenchIcon name="spark" />
             </span>
-            <strong>打开一个新对话</strong>
-            <p>配置模型后，把任务、文件和上下文交给 Agent；需要时可以暂停、审查，再继续执行。</p>
+            <strong>开始一段新对话</strong>
+            <p>配置模型后，把任务、文件和上下文交给 Agent；需要时你可以暂停、审查，再继续执行。</p>
             <div className="agent-chat-stage-empty-steps">
               <span>配置模型</span>
               <span>描述任务</span>

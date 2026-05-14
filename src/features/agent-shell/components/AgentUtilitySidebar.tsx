@@ -15,6 +15,26 @@ const compactLabel = (value: string) =>
 
 const clampText = (value: string, fallback: string) => (value.trim() ? value.trim() : fallback);
 
+export const hasAgentReviewContent = (session: GNAgentWorkbenchSession) => {
+  const latestTurn = session.latestTurnSession;
+  const plan = latestTurn?.plan || null;
+  const pathSet = new Set<string>(plan?.affectedPaths || []);
+
+  for (const toolCall of session.toolCalls) {
+    for (const fileChange of toolCall.fileChanges || []) {
+      pathSet.add(fileChange.path);
+    }
+  }
+
+  return Boolean(
+    pathSet.size
+      || session.pendingApprovalCount
+      || latestTurn?.resumeSnapshot
+      || latestTurn?.status === 'failed'
+      || latestTurn?.status === 'blocked',
+  );
+};
+
 export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
   session,
   collapsed,
@@ -22,6 +42,7 @@ export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
 }) => {
   const latestTurn = session.latestTurnSession;
   const plan = latestTurn?.plan || null;
+  const latestStatusLabel = latestTurn ? compactLabel(latestTurn.status) : 'Ready';
 
   const affectedPaths = useMemo(() => {
     const pathSet = new Set<string>(plan?.affectedPaths || []);
@@ -35,13 +56,7 @@ export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
     return [...pathSet].slice(0, 8);
   }, [plan?.affectedPaths, session.toolCalls]);
 
-  const hasReviewContent = Boolean(
-    affectedPaths.length
-      || session.pendingApprovalCount
-      || latestTurn?.resumeSnapshot
-      || latestTurn?.status === 'failed'
-      || latestTurn?.status === 'blocked',
-  );
+  const hasReviewContent = hasAgentReviewContent(session);
 
   if (!hasReviewContent) {
     return null;
@@ -52,7 +67,7 @@ export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
       className="agent-utility-sidebar"
       bodyClassName="agent-utility-sidebar-body"
       title="审查"
-      subtitle="Review current run"
+      subtitle="检查当前运行"
       icon="eye"
       railLabel="审查侧栏"
       panelLabel="审查面板"
@@ -74,6 +89,46 @@ export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
       ]}
     >
       <>
+        <article className="agent-utility-card agent-utility-card-hero">
+          <div className="agent-utility-card-head">
+            <strong>当前回合</strong>
+            <span
+              className={`agent-utility-status-pill ${
+                latestTurn?.status === 'failed'
+                  ? 'is-danger'
+                  : latestTurn?.status === 'blocked' || latestTurn?.status === 'waiting_approval'
+                    ? 'is-warning'
+                    : 'is-neutral'
+              }`}
+            >
+              {latestStatusLabel}
+            </span>
+          </div>
+          <p className="agent-utility-copy-block agent-utility-summary-lead">
+            {session.pendingApprovalCount > 0
+              ? '当前回合正在等待确认，处理完确认项后才能继续执行。'
+              : affectedPaths.length > 0
+                ? '这一轮已经产生了可审查的文件和上下文变化。'
+                : latestTurn?.resumeSnapshot
+                  ? '当前存在恢复点，可以在处理完上下文后继续这一轮执行。'
+                  : '当前回合没有额外的审查项。'}
+          </p>
+          <div className="agent-utility-mini-stats">
+            <div>
+              <span>变更文件</span>
+              <strong>{affectedPaths.length}</strong>
+            </div>
+            <div>
+              <span>待确认</span>
+              <strong>{session.pendingApprovalCount}</strong>
+            </div>
+            <div>
+              <span>恢复点</span>
+              <strong>{latestTurn?.resumeSnapshot ? '1' : '0'}</strong>
+            </div>
+          </div>
+        </article>
+
         {affectedPaths.length > 0 ? (
           <article className="agent-utility-card">
             <div className="agent-utility-section-head">
@@ -102,9 +157,15 @@ export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
               <strong>待确认</strong>
               <span>{session.pendingApprovalCount}</span>
             </div>
-            <p className="agent-utility-copy-block">
-              当前回合还在等待确认，确认后才能继续执行。
-            </p>
+            <div className="agent-utility-row">
+              <span className="agent-utility-row-icon is-warning">
+                <WorkbenchIcon name="clock" />
+              </span>
+              <div className="agent-utility-row-copy">
+                <strong>等待你的确认</strong>
+                <span>确认完成后，Agent 会继续当前回合的后续步骤。</span>
+              </div>
+            </div>
           </article>
         ) : null}
 
@@ -114,7 +175,15 @@ export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
               <strong>恢复点</strong>
               <span>{clampText(latestTurn.resumeSnapshot.resumeActionLabel || '', 'Resume')}</span>
             </div>
-            <p className="agent-utility-copy-block">{latestTurn.resumeSnapshot.resumeReason}</p>
+            <div className="agent-utility-row">
+              <span className="agent-utility-row-icon">
+                <WorkbenchIcon name="refresh" />
+              </span>
+              <div className="agent-utility-row-copy">
+                <strong>继续当前执行</strong>
+                <span>{latestTurn.resumeSnapshot.resumeReason}</span>
+              </div>
+            </div>
           </article>
         ) : null}
 
@@ -124,9 +193,15 @@ export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
               <strong>阻塞问题</strong>
               <span>{compactLabel(latestTurn.status)}</span>
             </div>
-            <p className="agent-utility-copy-block">
-              先从主舞台处理当前阻塞，再继续这一轮执行。
-            </p>
+            <div className="agent-utility-row">
+              <span className="agent-utility-row-icon is-danger">
+                <WorkbenchIcon name="alertTriangle" />
+              </span>
+              <div className="agent-utility-row-copy">
+                <strong>需要先处理当前阻塞</strong>
+                <span>先回到主舞台处理问题，再继续这一轮执行。</span>
+              </div>
+            </div>
           </article>
         ) : null}
       </>

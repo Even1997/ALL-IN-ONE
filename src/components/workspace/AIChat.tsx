@@ -174,6 +174,7 @@ type AIChatProps = {
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   headerActionSlot?: ReactNode;
+  showHeaderChrome?: boolean;
 };
 
 type SettingsTabId =
@@ -968,6 +969,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   collapsed,
   onCollapsedChange,
   headerActionSlot = null,
+  showHeaderChrome = true,
 }) => {
   const isProviderEmbedded = variant === 'provider-embedded';
   const isGNAgentEmbedded = variant === 'gn-agent-embedded';
@@ -1162,7 +1164,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const activeSessionTitle = isConversationEmptyState
     ? '暂无对话'
     : activeSession?.title || '新对话';
-  const emptyConversationLeadingContent = isConversationEmptyState ? (
+  const emptyConversationLeadingContent = isConversationEmptyState && !isGNAgentEmbedded ? (
     <div className="chat-empty-conversation-state">
       <strong>暂无历史对话</strong>
       <span>点击“新对话”开始，或直接发送消息创建新会话。</span>
@@ -3077,67 +3079,69 @@ export const AIChat: React.FC<AIChatProps> = ({
       <section
         className={`${getChatShellLayoutClassName(lockExpandedForEmbedded ? false : isCollapsed)}${isEmbedded ? ' chat-shell-embedded' : ''}`}
       >
-        <header className={`chat-shell-header chat-shell-gn-header${isEmbedded ? ' embedded' : ''}`}>
-          <div className="chat-shell-header-main">
-            <div className="chat-shell-title">
-              {!isEmbedded ? <span className="chat-shell-kicker">GN Agent</span> : null}
-              <strong>{isCollapsed && !lockExpandedForEmbedded ? 'GN' : activeSessionTitle}</strong>
-              {showExpandedShell && !isEmbedded ? <span>{currentProject?.name || '未打开项目'}</span> : null}
-            </div>
+        {showHeaderChrome ? (
+          <header className={`chat-shell-header chat-shell-gn-header${isEmbedded ? ' embedded' : ''}`}>
+            <div className="chat-shell-header-main">
+              <div className="chat-shell-title">
+                {!isEmbedded ? <span className="chat-shell-kicker">GN Agent</span> : null}
+                <strong>{isCollapsed && !lockExpandedForEmbedded ? 'GN' : activeSessionTitle}</strong>
+                {showExpandedShell && !isEmbedded ? <span>{currentProject?.name || '未打开项目'}</span> : null}
+              </div>
 
-            <div className="chat-shell-header-actions">
-              {showExpandedShell ? (
-                <>
-                  <div className="chat-header-menu">
+              <div className="chat-shell-header-actions">
+                {showExpandedShell ? (
+                  <>
+                    <div className="chat-header-menu">
+                      <button
+                        className="chat-shell-icon-btn"
+                        type="button"
+                        aria-label="历史会话"
+                        title="历史会话"
+                        onClick={() => {
+                          setShowHistoryMenu((current) => !current);
+                        }}
+                      >
+                        <HistoryIcon />
+                      </button>
+                      {historyMenu}
+                    </div>
                     <button
                       className="chat-shell-icon-btn"
                       type="button"
-                      aria-label="历史会话"
-                      title="历史会话"
-                      onClick={() => {
-                        setShowHistoryMenu((current) => !current);
-                      }}
+                      aria-label="新对话"
+                      title="新对话"
+                      onClick={handleCreateSession}
                     >
-                      <HistoryIcon />
+                      <ComposeIcon />
                     </button>
-                    {historyMenu}
-                  </div>
-                  <button
-                    className="chat-shell-icon-btn"
-                    type="button"
-                    aria-label="新对话"
-                    title="新对话"
-                    onClick={handleCreateSession}
-                  >
-                    <ComposeIcon />
-                  </button>
-                  <button
-                    className="chat-shell-icon-btn"
-                    type="button"
-                    aria-label="设置"
-                    title="设置"
-                    onClick={() => setIsSettingsOpen(true)}
-                  >
-                    <SettingsIcon />
-                  </button>
-                  {headerActionSlot}
-                </>
-              ) : null}
+                    <button
+                      className="chat-shell-icon-btn"
+                      type="button"
+                      aria-label="设置"
+                      title="设置"
+                      onClick={() => setIsSettingsOpen(true)}
+                    >
+                      <SettingsIcon />
+                    </button>
+                    {headerActionSlot}
+                  </>
+                ) : null}
 
-              {!isEmbedded ? (
-                <button
-                  className="chat-shell-icon-btn"
-                  type="button"
-                  aria-label={isCollapsed ? '展开聊天栏' : '收起聊天栏'}
-                  title={isCollapsed ? '展开聊天栏' : '收起聊天栏'}
-                  onClick={() => setCollapsedState(!isCollapsed)}
-                >
-                  <CollapseIcon collapsed={isCollapsed} />
-                </button>
-              ) : null}
+                {!isEmbedded ? (
+                  <button
+                    className="chat-shell-icon-btn"
+                    type="button"
+                    aria-label={isCollapsed ? '展开聊天栏' : '收起聊天栏'}
+                    title={isCollapsed ? '展开聊天栏' : '收起聊天栏'}
+                    onClick={() => setCollapsedState(!isCollapsed)}
+                  >
+                    <CollapseIcon collapsed={isCollapsed} />
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
+        ) : null}
 
           {showExpandedShell ? (
             isEmbedded ? (
