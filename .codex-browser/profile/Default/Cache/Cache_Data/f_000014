@@ -1,0 +1,191 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/workspace/TestWorkbench.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=0a8d881b"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+import { EmptyStateView, MacButton, NoteSurface, StateCard, WorkbenchIcon } from "/src/components/ui/index.ts?t=1778730115826";
+const sections = [
+  { id: "plan", label: "测试计划", icon: "note", active: true },
+  { id: "bugs", label: "缺陷跟踪", icon: "bug", active: false },
+  { id: "report", label: "测试报告", icon: "checkCircle", active: false }
+];
+export const TestWorkbench = ({
+  requirementCount,
+  featureCount,
+  caseCount,
+  testCases,
+  onGeneratePlan
+}) => /* @__PURE__ */ jsxDEV("div", { className: "platform-review-workbench", children: [
+  /* @__PURE__ */ jsxDEV("aside", { className: "platform-review-sidebar", children: sections.map(
+    (section) => /* @__PURE__ */ jsxDEV(
+      "button",
+      {
+        type: "button",
+        className: `platform-review-nav-item${section.active ? " active" : ""}`,
+        children: [
+          /* @__PURE__ */ jsxDEV(WorkbenchIcon, { name: section.icon }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+            lineNumber: 52,
+            columnNumber: 11
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: section.label }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+            lineNumber: 53,
+            columnNumber: 11
+          }, this)
+        ]
+      },
+      section.id,
+      true,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+        lineNumber: 47,
+        columnNumber: 5
+      },
+      this
+    )
+  ) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+    lineNumber: 45,
+    columnNumber: 5
+  }, this),
+  /* @__PURE__ */ jsxDEV("div", { className: "platform-review-stage", children: [
+    /* @__PURE__ */ jsxDEV("div", { className: "platform-review-summary", children: [
+      /* @__PURE__ */ jsxDEV(StateCard, { title: "知识笔记", description: `${requirementCount} 条`, icon: "knowledge", tone: "info" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+        lineNumber: 60,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV(StateCard, { title: "功能节点", description: `${featureCount} 个`, icon: "spark", tone: "warning" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+        lineNumber: 61,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV(StateCard, { title: "测试用例", description: `${caseCount} 条`, icon: "checkCircle", tone: "success" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+        lineNumber: 62,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+      lineNumber: 59,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV(
+      NoteSurface,
+      {
+        eyebrow: "QA Workspace",
+        title: "测试工作台",
+        subtitle: "把计划、用例和结果统一收敛到同一套桌面级文档面里。",
+        actions: /* @__PURE__ */ jsxDEV(MacButton, { type: "button", variant: "primary", onClick: onGeneratePlan, children: "生成测试计划" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+          lineNumber: 70,
+          columnNumber: 7
+        }, this),
+        children: /* @__PURE__ */ jsxDEV("div", { className: "platform-review-list", children: testCases.length > 0 ? testCases.map(
+          (testCase) => /* @__PURE__ */ jsxDEV("div", { className: "platform-review-row", children: [
+            /* @__PURE__ */ jsxDEV("span", { className: `platform-review-dot is-${testCase.priority === "high" ? "warning" : "success"}` }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+              lineNumber: 79,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { className: "platform-review-copy", children: [
+              /* @__PURE__ */ jsxDEV("strong", { children: testCase.title }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+                lineNumber: 81,
+                columnNumber: 19
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { children: [
+                testCase.module,
+                " / ",
+                testCase.type
+              ] }, void 0, true, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+                lineNumber: 82,
+                columnNumber: 19
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+              lineNumber: 80,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { className: "platform-review-badge", children: testCase.status }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+              lineNumber: 86,
+              columnNumber: 17
+            }, this)
+          ] }, testCase.id, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+            lineNumber: 78,
+            columnNumber: 9
+          }, this)
+        ) : /* @__PURE__ */ jsxDEV(
+          EmptyStateView,
+          {
+            icon: "checkCircle",
+            title: "还没有测试用例",
+            description: "生成测试计划后，这里会按照统一卡片规范展示用例、状态和摘要。"
+          },
+          void 0,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+            lineNumber: 90,
+            columnNumber: 9
+          },
+          this
+        ) }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+          lineNumber: 75,
+          columnNumber: 9
+        }, this)
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+        lineNumber: 65,
+        columnNumber: 7
+      },
+      this
+    )
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+    lineNumber: 58,
+    columnNumber: 5
+  }, this)
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx",
+  lineNumber: 44,
+  columnNumber: 1
+}, this);
+_c = TestWorkbench;
+var _c;
+$RefreshReg$(_c, "TestWorkbench");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/TestWorkbench.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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eUJBQXlCSixtQkFBU0ssVUFBbEQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBeUQ7QUFBQSxlQVJqREwsU0FBU2IsSUFBbkI7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFTQTtBQUFBLFFBQ0QsSUFFRDtBQUFBLFVBQUM7QUFBQTtBQUFBLFlBQ0MsTUFBSztBQUFBLFlBQ0wsT0FBTTtBQUFBLFlBQ04sYUFBWTtBQUFBO0FBQUEsVUFIZDtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsUUFHOEMsS0FsQmxEO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFxQkE7QUFBQTtBQUFBLE1BL0JGO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxJQWdDQTtBQUFBLE9BdkNGO0FBQUE7QUFBQTtBQUFBO0FBQUEsU0F3Q0E7QUFBQSxLQXRERjtBQUFBO0FBQUE7QUFBQTtBQUFBLE9BdURBO0FBQ0FtQixLQS9EV2Y7QUFBYSxJQUFBZTtBQUFBLGFBQUFBLElBQUEiLCJuYW1lcyI6WyJFbXB0eVN0YXRlVmlldyIsIk1hY0J1dHRvbiIsIk5vdGVTdXJmYWNlIiwiU3RhdGVDYXJkIiwiV29ya2JlbmNoSWNvbiIsInNlY3Rpb25zIiwiaWQiLCJsYWJlbCIsImljb24iLCJhY3RpdmUiLCJUZXN0V29ya2JlbmNoIiwicmVxdWlyZW1lbnRDb3VudCIsImZlYXR1cmVDb3VudCIsImNhc2VDb3VudCIsInRlc3RDYXNlcyIsIm9uR2VuZXJhdGVQbGFuIiwibWFwIiwic2VjdGlvbiIsImxlbmd0aCIsInRlc3RDYXNlIiwicHJpb3JpdHkiLCJ0aXRsZSIsIm1vZHVsZSIsInR5cGUiLCJzdGF0dXMiLCJfYyJdLCJpZ25vcmVMaXN0IjpbXSwic291cmNlcyI6WyJUZXN0V29ya2JlbmNoLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgdHlwZSB7IFRlc3RQbGFuQ2FzZSB9IGZyb20gJy4uLy4uL3R5cGVzJztcbmltcG9ydCB7IEVtcHR5U3RhdGVWaWV3LCBNYWNCdXR0b24sIE5vdGVTdXJmYWNlLCBTdGF0ZUNhcmQsIFdvcmtiZW5jaEljb24gfSBmcm9tICcuLi91aSc7XG5cbnR5cGUgVGVzdFdvcmtiZW5jaFByb3BzID0ge1xuICByZXF1aXJlbWVudENvdW50OiBudW1iZXI7XG4gIGZlYXR1cmVDb3VudDogbnVtYmVyO1xuICBjYXNlQ291bnQ6IG51bWJlcjtcbiAgdGVzdENhc2VzOiBUZXN0UGxhbkNhc2VbXTtcbiAgb25HZW5lcmF0ZVBsYW46ICgpID0+IHZvaWQ7XG59O1xuXG5jb25zdCBzZWN0aW9ucyA9IFtcbiAgeyBpZDogJ3BsYW4nLCBsYWJlbDogJ+a1i+ivleiuoeWIkicsIGljb246ICdub3RlJyBhcyBjb25zdCwgYWN0aXZlOiB0cnVlIH0sXG4gIHsgaWQ6ICdidWdzJywgbGFiZWw6ICfnvLrpmbfot5/ouKonLCBpY29uOiAnYnVnJyBhcyBjb25zdCwgYWN0aXZlOiBmYWxzZSB9LFxuICB7IGlkOiAncmVwb3J0JywgbGFiZWw6ICfmtYvor5XmiqXlkYonLCBpY29uOiAnY2hlY2tDaXJjbGUnIGFzIGNvbnN0LCBhY3RpdmU6IGZhbHNlIH0sXG5dO1xuXG5leHBvcnQgY29uc3QgVGVzdFdvcmtiZW5jaCA9ICh7XG4gIHJlcXVpcmVtZW50Q291bnQsXG4gIGZlYXR1cmVDb3VudCxcbiAgY2FzZUNvdW50LFxuICB0ZXN0Q2FzZXMsXG4gIG9uR2VuZXJhdGVQbGFuLFxufTogVGVzdFdvcmtiZW5jaFByb3BzKSA9PiAoXG4gIDxkaXYgY2xhc3NOYW1lPVwicGxhdGZvcm0tcmV2aWV3LXdvcmtiZW5jaFwiPlxuICAgIDxhc2lkZSBjbGFzc05hbWU9XCJwbGF0Zm9ybS1yZXZpZXctc2lkZWJhclwiPlxuICAgICAge3NlY3Rpb25zLm1hcCgoc2VjdGlvbikgPT4gKFxuICAgICAgICA8YnV0dG9uXG4gICAgICAgICAga2V5PXtzZWN0aW9uLmlkfVxuICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxuICAgICAgICAgIGNsYXNzTmFtZT17YHBsYXRmb3JtLXJldmlldy1uYXYtaXRlbSR7c2VjdGlvbi5hY3RpdmUgPyAnIGFjdGl2ZScgOiAnJ31gfVxuICAgICAgICA+XG4gICAgICAgICAgPFdvcmtiZW5jaEljb24gbmFtZT17c2VjdGlvbi5pY29ufSAvPlxuICAgICAgICAgIDxzcGFuPntzZWN0aW9uLmxhYmVsfTwvc3Bhbj5cbiAgICAgICAgPC9idXR0b24+XG4gICAgICApKX1cbiAgICA8L2FzaWRlPlxuXG4gICAgPGRpdiBjbGFzc05hbWU9XCJwbGF0Zm9ybS1yZXZpZXctc3RhZ2VcIj5cbiAgICAgIDxkaXYgY2xhc3NOYW1lPVwicGxhdGZvcm0tcmV2aWV3LXN1bW1hcnlcIj5cbiAgICAgICAgPFN0YXRlQ2FyZCB0aXRsZT1cIuefpeivhueslOiusFwiIGRlc2NyaXB0aW9uPXtgJHtyZXF1aXJlbWVudENvdW50fSDmnaFgfSBpY29uPVwia25vd2xlZGdlXCIgdG9uZT1cImluZm9cIiAvPlxuICAgICAgICA8U3RhdGVDYXJkIHRpdGxlPVwi5Yqf6IO96IqC54K5XCIgZGVzY3JpcHRpb249e2Ake2ZlYXR1cmVDb3VudH0g5LiqYH0gaWNvbj1cInNwYXJrXCIgdG9uZT1cIndhcm5pbmdcIiAvPlxuICAgICAgICA8U3RhdGVDYXJkIHRpdGxlPVwi5rWL6K+V55So5L6LXCIgZGVzY3JpcHRpb249e2Ake2Nhc2VDb3VudH0g5p2hYH0gaWNvbj1cImNoZWNrQ2lyY2xlXCIgdG9uZT1cInN1Y2Nlc3NcIiAvPlxuICAgICAgPC9kaXY+XG5cbiAgICAgIDxOb3RlU3VyZmFjZVxuICAgICAgICBleWVicm93PVwiUUEgV29ya3NwYWNlXCJcbiAgICAgICAgdGl0bGU9XCLmtYvor5Xlt6XkvZzlj7BcIlxuICAgICAgICBzdWJ0aXRsZT1cIuaKiuiuoeWIkuOAgeeUqOS+i+WSjOe7k+aenOe7n+S4gOaUtuaVm+WIsOWQjOS4gOWll+ahjOmdoue6p+aWh+aho+mdoumHjOOAglwiXG4gICAgICAgIGFjdGlvbnM9e1xuICAgICAgICAgIDxNYWNCdXR0b24gdHlwZT1cImJ1dHRvblwiIHZhcmlhbnQ9XCJwcmltYXJ5XCIgb25DbGljaz17b25HZW5lcmF0ZVBsYW59PlxuICAgICAgICAgICAg55Sf5oiQ5rWL6K+V6K6h5YiSXG4gICAgICAgICAgPC9NYWNCdXR0b24+XG4gICAgICAgIH1cbiAgICAgID5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJwbGF0Zm9ybS1yZXZpZXctbGlzdFwiPlxuICAgICAgICAgIHt0ZXN0Q2FzZXMubGVuZ3RoID4gMCA/IChcbiAgICAgICAgICAgIHRlc3RDYXNlcy5tYXAoKHRlc3RDYXNlKSA9PiAoXG4gICAgICAgICAgICAgIDxkaXYga2V5PXt0ZXN0Q2FzZS5pZH0gY2xhc3NOYW1lPVwicGxhdGZvcm0tcmV2aWV3LXJvd1wiPlxuICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT17YHBsYXRmb3JtLXJldmlldy1kb3QgaXMtJHt0ZXN0Q2FzZS5wcmlvcml0eSA9PT0gJ2hpZ2gnID8gJ3dhcm5pbmcnIDogJ3N1Y2Nlc3MnfWB9IC8+XG4gICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJwbGF0Zm9ybS1yZXZpZXctY29weVwiPlxuICAgICAgICAgICAgICAgICAgPHN0cm9uZz57dGVzdENhc2UudGl0bGV9PC9zdHJvbmc+XG4gICAgICAgICAgICAgICAgICA8c3Bhbj5cbiAgICAgICAgICAgICAgICAgICAge3Rlc3RDYXNlLm1vZHVsZX0gLyB7dGVzdENhc2UudHlwZX1cbiAgICAgICAgICAgICAgICAgIDwvc3Bhbj5cbiAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJwbGF0Zm9ybS1yZXZpZXctYmFkZ2VcIj57dGVzdENhc2Uuc3RhdHVzfTwvc3Bhbj5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICApKVxuICAgICAgICAgICkgOiAoXG4gICAgICAgICAgICA8RW1wdHlTdGF0ZVZpZXdcbiAgICAgICAgICAgICAgaWNvbj1cImNoZWNrQ2lyY2xlXCJcbiAgICAgICAgICAgICAgdGl0bGU9XCLov5jmsqHmnInmtYvor5XnlKjkvotcIlxuICAgICAgICAgICAgICBkZXNjcmlwdGlvbj1cIueUn+aIkOa1i+ivleiuoeWIkuWQju+8jOi/memHjOS8muaMieeFp+e7n+S4gOWNoeeJh+inhOiMg+WxleekuueUqOS+i+OAgeeKtuaAgeWSjOaRmOimgeOAglwiXG4gICAgICAgICAgICAvPlxuICAgICAgICAgICl9XG4gICAgICAgIDwvZGl2PlxuICAgICAgPC9Ob3RlU3VyZmFjZT5cbiAgICA8L2Rpdj5cbiAgPC9kaXY+XG4pO1xuIl0sImZpbGUiOiJDOi9Vc2Vycy9FdmVuL0RvY3VtZW50cy9BTEwtSU4tT05FL3NyYy9jb21wb25lbnRzL3dvcmtzcGFjZS9UZXN0V29ya2JlbmNoLnRzeCJ9

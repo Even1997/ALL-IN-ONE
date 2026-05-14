@@ -1,0 +1,217 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/workspace/OperationsWorkbench.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=0a8d881b"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+import { EmptyStateView, MacButton, NoteSurface, StateCard, WorkbenchIcon } from "/src/components/ui/index.ts?t=1778730115826";
+export const OperationsWorkbench = ({
+  projectName,
+  memoryCount,
+  deployTarget,
+  deploySteps,
+  generatedFiles,
+  onGenerateDeployScript
+}) => /* @__PURE__ */ jsxDEV("div", { className: "platform-review-workbench", children: [
+  /* @__PURE__ */ jsxDEV("aside", { className: "platform-review-sidebar", children: [
+    { id: "deploy", label: "发布", icon: "rocket", active: true },
+    { id: "monitor", label: "监控", icon: "monitor", active: false },
+    { id: "config", label: "配置", icon: "settings", active: false }
+  ].map(
+    (section) => /* @__PURE__ */ jsxDEV(
+      "button",
+      {
+        type: "button",
+        className: `platform-review-nav-item${section.active ? " active" : ""}`,
+        children: [
+          /* @__PURE__ */ jsxDEV(WorkbenchIcon, { name: section.icon }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+            lineNumber: 52,
+            columnNumber: 11
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: section.label }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+            lineNumber: 53,
+            columnNumber: 11
+          }, this)
+        ]
+      },
+      section.id,
+      true,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+        lineNumber: 47,
+        columnNumber: 5
+      },
+      this
+    )
+  ) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+    lineNumber: 41,
+    columnNumber: 5
+  }, this),
+  /* @__PURE__ */ jsxDEV("div", { className: "platform-review-stage", children: [
+    /* @__PURE__ */ jsxDEV("div", { className: "platform-review-summary", children: [
+      /* @__PURE__ */ jsxDEV(StateCard, { title: "当前项目", description: projectName, icon: "product", tone: "info" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+        lineNumber: 60,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV(StateCard, { title: "项目记忆", description: `${memoryCount} 项`, icon: "knowledge", tone: "warning" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+        lineNumber: 61,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV(StateCard, { title: "部署目标", description: deployTarget, icon: "server", tone: "success" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+        lineNumber: 62,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+      lineNumber: 59,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV(
+      NoteSurface,
+      {
+        eyebrow: "Operations",
+        title: "发布与运维工作台",
+        subtitle: "把部署步骤、交付物和状态信息压到更像 Finder / Notes 的一层。",
+        actions: /* @__PURE__ */ jsxDEV(MacButton, { type: "button", variant: "primary", onClick: onGenerateDeployScript, children: "生成部署脚本" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+          lineNumber: 70,
+          columnNumber: 7
+        }, this),
+        children: [
+          deploySteps.length > 0 ? /* @__PURE__ */ jsxDEV("div", { className: "platform-review-list", children: deploySteps.map(
+            (step, index) => /* @__PURE__ */ jsxDEV("div", { className: "platform-review-row", children: [
+              /* @__PURE__ */ jsxDEV("span", { className: "platform-review-step", children: index + 1 }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+                lineNumber: 79,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV("div", { className: "platform-review-copy", children: [
+                /* @__PURE__ */ jsxDEV("strong", { children: step }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+                  lineNumber: 81,
+                  columnNumber: 19
+                }, this),
+                /* @__PURE__ */ jsxDEV("span", { children: deployTarget }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+                  lineNumber: 82,
+                  columnNumber: 19
+                }, this)
+              ] }, void 0, true, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+                lineNumber: 80,
+                columnNumber: 17
+              }, this)
+            ] }, `${step}:${index}`, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+              lineNumber: 78,
+              columnNumber: 9
+            }, this)
+          ) }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+            lineNumber: 76,
+            columnNumber: 7
+          }, this) : /* @__PURE__ */ jsxDEV(
+            EmptyStateView,
+            {
+              icon: "rocket",
+              title: "还没有部署步骤",
+              description: "生成部署脚本后，这里会按标准卡片展示阶段、摘要和交付物。"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+              lineNumber: 88,
+              columnNumber: 7
+            },
+            this
+          ),
+          generatedFiles.length > 0 ? /* @__PURE__ */ jsxDEV("div", { className: "platform-review-deliverables", children: generatedFiles.slice(0, 8).map(
+            (file) => /* @__PURE__ */ jsxDEV("div", { className: "platform-review-deliverable", children: [
+              /* @__PURE__ */ jsxDEV(WorkbenchIcon, { name: "document" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+                lineNumber: 99,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV("div", { children: [
+                /* @__PURE__ */ jsxDEV("strong", { children: file.path.split("/").pop() || file.path }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+                  lineNumber: 101,
+                  columnNumber: 19
+                }, this),
+                /* @__PURE__ */ jsxDEV("span", { children: file.summary }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+                  lineNumber: 102,
+                  columnNumber: 19
+                }, this)
+              ] }, void 0, true, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+                lineNumber: 100,
+                columnNumber: 17
+              }, this)
+            ] }, file.path, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+              lineNumber: 98,
+              columnNumber: 9
+            }, this)
+          ) }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+            lineNumber: 96,
+            columnNumber: 7
+          }, this) : null
+        ]
+      },
+      void 0,
+      true,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+        lineNumber: 65,
+        columnNumber: 7
+      },
+      this
+    )
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+    lineNumber: 58,
+    columnNumber: 5
+  }, this)
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx",
+  lineNumber: 40,
+  columnNumber: 1
+}, this);
+_c = OperationsWorkbench;
+var _c;
+$RefreshReg$(_c, "OperationsWorkbench");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/OperationsWorkbench.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBZ0NVOzs7Ozs7Ozs7Ozs7Ozs7O0FBL0JWLFNBQVNBLGdCQUFnQkMsV0FBV0MsYUFBYUMsV0FBV0MscUJBQXFCO0FBVzFFLGFBQU1DLHNCQUFzQkEsQ0FBQztBQUFBLEVBQ2xDQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUFBQSxFQUNBQztBQUN3QixNQUN4Qix1QkFBQyxTQUFJLFdBQVUsNkJBQ2I7QUFBQSx5QkFBQyxXQUFNLFdBQVUsMkJBQ2Q7QUFBQSxJQUNDLEVBQUVDLElBQUksVUFBVUMsT0FBTyxNQUFNQyxNQUFNLFVBQW1CQyxRQUFRLEtBQUs7QUFBQSxJQUNuRSxFQUFFSCxJQUFJLFdBQVdDLE9BQU8sTUFBTUMsTUFBTSxXQUFvQkMsUUFBUSxNQUFNO0FBQUEsSUFDdEUsRUFBRUgsSUFBSSxVQUFVQyxPQUFPLE1BQU1DLE1BQU0sWUFBcUJDLFFBQVEsTUFBTTtBQUFBLEVBQUMsRUFDdkVDO0FBQUFBLElBQUksQ0FBQ0MsWUFDTDtBQUFBLE1BQUM7QUFBQTtBQUFBLFFBRUMsTUFBSztBQUFBLFFBQ0wsV0FBVywyQkFBMkJBLFFBQVFGLFNBQVMsWUFBWSxFQUFFO0FBQUEsUUFFckU7QUFBQSxpQ0FBQyxpQkFBYyxNQUFNRSxRQUFRSCxRQUE3QjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUFrQztBQUFBLFVBQ2xDLHVCQUFDLFVBQU1HLGtCQUFRSixTQUFmO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBQXFCO0FBQUE7QUFBQTtBQUFBLE1BTGhCSSxRQUFRTDtBQUFBQSxNQURmO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsSUFPQTtBQUFBLEVBQ0QsS0FkSDtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBZUE7QUFBQSxFQUVBLHVCQUFDLFNBQUksV0FBVSx5QkFDYjtBQUFBLDJCQUFDLFNBQUksV0FBVSwyQkFDYjtBQUFBLDZCQUFDLGFBQVUsT0FBTSxRQUFPLGFBQWFOLGFBQWEsTUFBSyxXQUFVLE1BQUssVUFBdEU7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUE0RTtBQUFBLE1BQzVFLHVCQUFDLGFBQVUsT0FBTSxRQUFPLGFBQWEsR0FBR0MsV0FBVyxNQUFNLE1BQUssYUFBWSxNQUFLLGFBQS9FO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFBd0Y7QUFBQSxNQUN4Rix1QkFBQyxhQUFVLE9BQU0sUUFBTyxhQUFhQyxjQUFjLE1BQUssVUFBUyxNQUFLLGFBQXRFO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFBK0U7QUFBQSxTQUhqRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBSUE7QUFBQSxJQUVBO0FBQUEsTUFBQztBQUFBO0FBQUEsUUFDQyxTQUFRO0FBQUEsUUFDUixPQUFNO0FBQUEsUUFDTixVQUFTO0FBQUEsUUFDVCxTQUNFLHVCQUFDLGFBQVUsTUFBSyxVQUFTLFNBQVEsV0FBVSxTQUFTRyx3QkFBdUIsc0JBQTNFO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFFQTtBQUFBLFFBR0RGO0FBQUFBLHNCQUFZUyxTQUFTLElBQ3BCLHVCQUFDLFNBQUksV0FBVSx3QkFDWlQsc0JBQVlPO0FBQUFBLFlBQUksQ0FBQ0csTUFBTUMsVUFDdEIsdUJBQUMsU0FBNkIsV0FBVSx1QkFDdEM7QUFBQSxxQ0FBQyxVQUFLLFdBQVUsd0JBQXdCQSxrQkFBUSxLQUFoRDtBQUFBO0FBQUE7QUFBQTtBQUFBLHFCQUFrRDtBQUFBLGNBQ2xELHVCQUFDLFNBQUksV0FBVSx3QkFDYjtBQUFBLHVDQUFDLFlBQVFELGtCQUFUO0FBQUE7QUFBQTtBQUFBO0FBQUEsdUJBQWM7QUFBQSxnQkFDZCx1QkFBQyxVQUFNWCwwQkFBUDtBQUFBO0FBQUE7QUFBQTtBQUFBLHVCQUFvQjtBQUFBLG1CQUZ0QjtBQUFBO0FBQUE7QUFBQTtBQUFBLHFCQUdBO0FBQUEsaUJBTFEsR0FBR1csSUFBSSxJQUFJQyxLQUFLLElBQTFCO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBTUE7QUFBQSxVQUNELEtBVEg7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFVQSxJQUVBO0FBQUEsWUFBQztBQUFBO0FBQUEsY0FDQyxNQUFLO0FBQUEsY0FDTCxPQUFNO0FBQUEsY0FDTixhQUFZO0FBQUE7QUFBQSxZQUhkO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxVQUc0QztBQUFBLFVBSTdDVixlQUFlUSxTQUFTLElBQ3ZCLHVCQUFDLFNBQUksV0FBVSxnQ0FDWlIseUJBQWVXLE1BQU0sR0FBRyxDQUFDLEVBQUVMO0FBQUFBLFlBQUksQ0FBQ00sU0FDL0IsdUJBQUMsU0FBb0IsV0FBVSwrQkFDN0I7QUFBQSxxQ0FBQyxpQkFBYyxNQUFLLGNBQXBCO0FBQUE7QUFBQTtBQUFBO0FBQUEscUJBQThCO0FBQUEsY0FDOUIsdUJBQUMsU0FDQztBQUFBLHVDQUFDLFlBQVFBLGVBQUtDLEtBQUtDLE1BQU0sR0FBRyxFQUFFQyxJQUFJLEtBQUtILEtBQUtDLFFBQTVDO0FBQUE7QUFBQTtBQUFBO0FBQUEsdUJBQWlEO0FBQUEsZ0JBQ2pELHVCQUFDLFVBQU1ELGVBQUtJLFdBQVo7QUFBQTtBQUFBO0FBQUE7QUFBQSx1QkFBb0I7QUFBQSxtQkFGdEI7QUFBQTtBQUFBO0FBQUE7QUFBQSxxQkFHQTtBQUFBLGlCQUxRSixLQUFLQyxNQUFmO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBTUE7QUFBQSxVQUNELEtBVEg7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFVQSxJQUNFO0FBQUE7QUFBQTtBQUFBLE1BMUNOO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxJQTJDQTtBQUFBLE9BbERGO0FBQUE7QUFBQTtBQUFBO0FBQUEsU0FtREE7QUFBQSxLQXJFRjtBQUFBO0FBQUE7QUFBQTtBQUFBLE9Bc0VBO0FBQ0FJLEtBL0VXdEI7QUFBbUIsSUFBQXNCO0FBQUEsYUFBQUEsSUFBQSIsIm5hbWVzIjpbIkVtcHR5U3RhdGVWaWV3IiwiTWFjQnV0dG9uIiwiTm90ZVN1cmZhY2UiLCJTdGF0ZUNhcmQiLCJXb3JrYmVuY2hJY29uIiwiT3BlcmF0aW9uc1dvcmtiZW5jaCIsInByb2plY3ROYW1lIiwibWVtb3J5Q291bnQiLCJkZXBsb3lUYXJnZXQiLCJkZXBsb3lTdGVwcyIsImdlbmVyYXRlZEZpbGVzIiwib25HZW5lcmF0ZURlcGxveVNjcmlwdCIsImlkIiwibGFiZWwiLCJpY29uIiwiYWN0aXZlIiwibWFwIiwic2VjdGlvbiIsImxlbmd0aCIsInN0ZXAiLCJpbmRleCIsInNsaWNlIiwiZmlsZSIsInBhdGgiLCJzcGxpdCIsInBvcCIsInN1bW1hcnkiLCJfYyJdLCJpZ25vcmVMaXN0IjpbXSwic291cmNlcyI6WyJPcGVyYXRpb25zV29ya2JlbmNoLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgdHlwZSB7IEdlbmVyYXRlZEZpbGUgfSBmcm9tICcuLi8uLi90eXBlcyc7XG5pbXBvcnQgeyBFbXB0eVN0YXRlVmlldywgTWFjQnV0dG9uLCBOb3RlU3VyZmFjZSwgU3RhdGVDYXJkLCBXb3JrYmVuY2hJY29uIH0gZnJvbSAnLi4vdWknO1xuXG50eXBlIE9wZXJhdGlvbnNXb3JrYmVuY2hQcm9wcyA9IHtcbiAgcHJvamVjdE5hbWU6IHN0cmluZztcbiAgbWVtb3J5Q291bnQ6IG51bWJlcjtcbiAgZGVwbG95VGFyZ2V0OiBzdHJpbmc7XG4gIGRlcGxveVN0ZXBzOiBzdHJpbmdbXTtcbiAgZ2VuZXJhdGVkRmlsZXM6IEdlbmVyYXRlZEZpbGVbXTtcbiAgb25HZW5lcmF0ZURlcGxveVNjcmlwdDogKCkgPT4gdm9pZDtcbn07XG5cbmV4cG9ydCBjb25zdCBPcGVyYXRpb25zV29ya2JlbmNoID0gKHtcbiAgcHJvamVjdE5hbWUsXG4gIG1lbW9yeUNvdW50LFxuICBkZXBsb3lUYXJnZXQsXG4gIGRlcGxveVN0ZXBzLFxuICBnZW5lcmF0ZWRGaWxlcyxcbiAgb25HZW5lcmF0ZURlcGxveVNjcmlwdCxcbn06IE9wZXJhdGlvbnNXb3JrYmVuY2hQcm9wcykgPT4gKFxuICA8ZGl2IGNsYXNzTmFtZT1cInBsYXRmb3JtLXJldmlldy13b3JrYmVuY2hcIj5cbiAgICA8YXNpZGUgY2xhc3NOYW1lPVwicGxhdGZvcm0tcmV2aWV3LXNpZGViYXJcIj5cbiAgICAgIHtbXG4gICAgICAgIHsgaWQ6ICdkZXBsb3knLCBsYWJlbDogJ+WPkeW4gycsIGljb246ICdyb2NrZXQnIGFzIGNvbnN0LCBhY3RpdmU6IHRydWUgfSxcbiAgICAgICAgeyBpZDogJ21vbml0b3InLCBsYWJlbDogJ+ebkeaOpycsIGljb246ICdtb25pdG9yJyBhcyBjb25zdCwgYWN0aXZlOiBmYWxzZSB9LFxuICAgICAgICB7IGlkOiAnY29uZmlnJywgbGFiZWw6ICfphY3nva4nLCBpY29uOiAnc2V0dGluZ3MnIGFzIGNvbnN0LCBhY3RpdmU6IGZhbHNlIH0sXG4gICAgICBdLm1hcCgoc2VjdGlvbikgPT4gKFxuICAgICAgICA8YnV0dG9uXG4gICAgICAgICAga2V5PXtzZWN0aW9uLmlkfVxuICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxuICAgICAgICAgIGNsYXNzTmFtZT17YHBsYXRmb3JtLXJldmlldy1uYXYtaXRlbSR7c2VjdGlvbi5hY3RpdmUgPyAnIGFjdGl2ZScgOiAnJ31gfVxuICAgICAgICA+XG4gICAgICAgICAgPFdvcmtiZW5jaEljb24gbmFtZT17c2VjdGlvbi5pY29ufSAvPlxuICAgICAgICAgIDxzcGFuPntzZWN0aW9uLmxhYmVsfTwvc3Bhbj5cbiAgICAgICAgPC9idXR0b24+XG4gICAgICApKX1cbiAgICA8L2FzaWRlPlxuXG4gICAgPGRpdiBjbGFzc05hbWU9XCJwbGF0Zm9ybS1yZXZpZXctc3RhZ2VcIj5cbiAgICAgIDxkaXYgY2xhc3NOYW1lPVwicGxhdGZvcm0tcmV2aWV3LXN1bW1hcnlcIj5cbiAgICAgICAgPFN0YXRlQ2FyZCB0aXRsZT1cIuW9k+WJjemhueebrlwiIGRlc2NyaXB0aW9uPXtwcm9qZWN0TmFtZX0gaWNvbj1cInByb2R1Y3RcIiB0b25lPVwiaW5mb1wiIC8+XG4gICAgICAgIDxTdGF0ZUNhcmQgdGl0bGU9XCLpobnnm67orrDlv4ZcIiBkZXNjcmlwdGlvbj17YCR7bWVtb3J5Q291bnR9IOmhuWB9IGljb249XCJrbm93bGVkZ2VcIiB0b25lPVwid2FybmluZ1wiIC8+XG4gICAgICAgIDxTdGF0ZUNhcmQgdGl0bGU9XCLpg6jnvbLnm67moIdcIiBkZXNjcmlwdGlvbj17ZGVwbG95VGFyZ2V0fSBpY29uPVwic2VydmVyXCIgdG9uZT1cInN1Y2Nlc3NcIiAvPlxuICAgICAgPC9kaXY+XG5cbiAgICAgIDxOb3RlU3VyZmFjZVxuICAgICAgICBleWVicm93PVwiT3BlcmF0aW9uc1wiXG4gICAgICAgIHRpdGxlPVwi5Y+R5biD5LiO6L+Q57u05bel5L2c5Y+wXCJcbiAgICAgICAgc3VidGl0bGU9XCLmiorpg6jnvbLmraXpqqTjgIHkuqTku5jnianlkoznirbmgIHkv6Hmga/ljovliLDmm7Tlg48gRmluZGVyIC8gTm90ZXMg55qE5LiA5bGC44CCXCJcbiAgICAgICAgYWN0aW9ucz17XG4gICAgICAgICAgPE1hY0J1dHRvbiB0eXBlPVwiYnV0dG9uXCIgdmFyaWFudD1cInByaW1hcnlcIiBvbkNsaWNrPXtvbkdlbmVyYXRlRGVwbG95U2NyaXB0fT5cbiAgICAgICAgICAgIOeUn+aIkOmDqOe9suiEmuacrFxuICAgICAgICAgIDwvTWFjQnV0dG9uPlxuICAgICAgICB9XG4gICAgICA+XG4gICAgICAgIHtkZXBsb3lTdGVwcy5sZW5ndGggPiAwID8gKFxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwicGxhdGZvcm0tcmV2aWV3LWxpc3RcIj5cbiAgICAgICAgICAgIHtkZXBsb3lTdGVwcy5tYXAoKHN0ZXAsIGluZGV4KSA9PiAoXG4gICAgICAgICAgICAgIDxkaXYga2V5PXtgJHtzdGVwfToke2luZGV4fWB9IGNsYXNzTmFtZT1cInBsYXRmb3JtLXJldmlldy1yb3dcIj5cbiAgICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJwbGF0Zm9ybS1yZXZpZXctc3RlcFwiPntpbmRleCArIDF9PC9zcGFuPlxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwicGxhdGZvcm0tcmV2aWV3LWNvcHlcIj5cbiAgICAgICAgICAgICAgICAgIDxzdHJvbmc+e3N0ZXB9PC9zdHJvbmc+XG4gICAgICAgICAgICAgICAgICA8c3Bhbj57ZGVwbG95VGFyZ2V0fTwvc3Bhbj5cbiAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICApKX1cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgKSA6IChcbiAgICAgICAgICA8RW1wdHlTdGF0ZVZpZXdcbiAgICAgICAgICAgIGljb249XCJyb2NrZXRcIlxuICAgICAgICAgICAgdGl0bGU9XCLov5jmsqHmnInpg6jnvbLmraXpqqRcIlxuICAgICAgICAgICAgZGVzY3JpcHRpb249XCLnlJ/miJDpg6jnvbLohJrmnKzlkI7vvIzov5nph4zkvJrmjInmoIflh4bljaHniYflsZXnpLrpmLbmrrXjgIHmkZjopoHlkozkuqTku5jnianjgIJcIlxuICAgICAgICAgIC8+XG4gICAgICAgICl9XG5cbiAgICAgICAge2dlbmVyYXRlZEZpbGVzLmxlbmd0aCA+IDAgPyAoXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJwbGF0Zm9ybS1yZXZpZXctZGVsaXZlcmFibGVzXCI+XG4gICAgICAgICAgICB7Z2VuZXJhdGVkRmlsZXMuc2xpY2UoMCwgOCkubWFwKChmaWxlKSA9PiAoXG4gICAgICAgICAgICAgIDxkaXYga2V5PXtmaWxlLnBhdGh9IGNsYXNzTmFtZT1cInBsYXRmb3JtLXJldmlldy1kZWxpdmVyYWJsZVwiPlxuICAgICAgICAgICAgICAgIDxXb3JrYmVuY2hJY29uIG5hbWU9XCJkb2N1bWVudFwiIC8+XG4gICAgICAgICAgICAgICAgPGRpdj5cbiAgICAgICAgICAgICAgICAgIDxzdHJvbmc+e2ZpbGUucGF0aC5zcGxpdCgnLycpLnBvcCgpIHx8IGZpbGUucGF0aH08L3N0cm9uZz5cbiAgICAgICAgICAgICAgICAgIDxzcGFuPntmaWxlLnN1bW1hcnl9PC9zcGFuPlxuICAgICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICkpfVxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICApIDogbnVsbH1cbiAgICAgIDwvTm90ZVN1cmZhY2U+XG4gICAgPC9kaXY+XG4gIDwvZGl2PlxuKTtcbiJdLCJmaWxlIjoiQzovVXNlcnMvRXZlbi9Eb2N1bWVudHMvQUxMLUlOLU9ORS9zcmMvY29tcG9uZW50cy93b3Jrc3BhY2UvT3BlcmF0aW9uc1dvcmtiZW5jaC50c3gifQ==

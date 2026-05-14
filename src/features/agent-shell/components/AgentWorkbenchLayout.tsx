@@ -13,7 +13,9 @@ export const AgentWorkbenchLayout: React.FC<AgentWorkbenchLayoutProps> = ({
   companion,
   companionCollapsed = false,
 }) => (
-  <section className={`agent-workbench-shell${companionCollapsed ? ' has-collapsed-companion' : ''}`}>
+  <section
+    className={`agent-workbench-shell${companionCollapsed ? ' has-collapsed-companion' : ''}${companion ? '' : ' has-no-companion'}`}
+  >
     <aside className="agent-workbench-sidebar-shell">{sidebar}</aside>
     <main className="agent-workbench-center">
       <div className="agent-workbench-center-body">{centerStage}</div>

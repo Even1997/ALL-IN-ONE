@@ -314,3 +314,27 @@ body.desktop-workbench-mode {
   border-left: 1px solid var(--wb-divider);
   background: color-mix(in srgb, var(--wb-inspector-background) 94%, transparent);
 }
+
+.product-floating-run-companion,
+.design-floating-run-companion {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: min(360px, calc(100% - 36px));
+  max-height: calc(100% - 36px);
+  z-index: 3;
+  background: color-mix(in srgb, var(--wb-pane-background) 96%, transparent);
+  box-shadow: var(--wb-shadow-floating);
+}
+
+.product-floating-run-companion .wb-floating-run-companion-head,
+.design-floating-run-companion .wb-floating-run-companion-head {
+  padding: 12px 14px;
+}
+
+.product-floating-run-companion .wb-floating-run-companion-body,
+.design-floating-run-companion .wb-floating-run-companion-body {
+  gap: 10px;
+  padding: 0 14px 14px;
+  overflow: auto;
+}

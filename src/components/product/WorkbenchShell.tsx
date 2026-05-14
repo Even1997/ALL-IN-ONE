@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 
 type WorkbenchShellProps = {
   className?: string;
+  style?: CSSProperties;
   header?: ReactNode;
   sidebar?: ReactNode;
   main?: ReactNode;
@@ -23,6 +24,7 @@ const joinClasses = (...values: Array<string | false | null | undefined>) => val
 
 export const WorkbenchShell = ({
   className,
+  style,
   header,
   sidebar,
   main,
@@ -55,7 +57,7 @@ export const WorkbenchShell = ({
       : undefined;
 
   return (
-    <section className={joinClasses('pm-workbench-shell wb-module-shell', className)}>
+    <section className={joinClasses('pm-workbench-shell wb-module-shell', className)} style={style}>
       {header ? <div className="pm-workbench-header-slot">{header}</div> : null}
       <div className="pm-workbench-body">
         {resolvedSidebar ? (

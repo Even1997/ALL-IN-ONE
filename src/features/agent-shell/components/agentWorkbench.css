@@ -25,6 +25,10 @@
   grid-template-columns: auto minmax(0, 1fr) 52px;
 }
 
+.agent-workbench-shell.has-no-companion {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
 :root[data-theme='dark'] .agent-workbench-shell {
   --agent-shadow: var(--wb-shadow-panel);
 }
@@ -58,6 +62,10 @@
 
 .agent-workbench-sidebar.is-collapsed {
   grid-template-columns: 68px;
+}
+
+.agent-workbench-sidebar.is-empty {
+  grid-template-columns: 60px 260px;
 }
 
 .agent-workbench-left-rail {
@@ -244,6 +252,11 @@
   padding: 0;
 }
 
+.agent-sidebar-panel-body-threads .gn-agent-runtime-panel-empty {
+  padding: 10px 2px 0;
+  line-height: 1.7;
+}
+
 .agent-sidebar-panel-body-threads .gn-agent-runtime-panel-head {
   display: none;
 }
@@ -379,6 +392,10 @@
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+}
+
+.agent-chat-stage.is-empty-thread .chat-empty-conversation-state {
+  display: none;
 }
 
 .agent-floating-run-companion {
@@ -526,6 +543,10 @@
   -webkit-backdrop-filter: none;
   color: var(--agent-text);
   overflow: hidden;
+}
+
+.agent-workbench-sidebar.is-empty .agent-workbench-left-panel {
+  min-width: 260px;
 }
 
 .agent-floating-plan-card header {

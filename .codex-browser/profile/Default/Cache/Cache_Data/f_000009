@@ -1,0 +1,609 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/ui/WorkbenchIcon.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=0a8d881b"; const Fragment = __vite__cjsImport0_react_jsxDevRuntime["Fragment"]; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+const ICON_PATHS = {
+  product: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("rect", { x: "3.5", y: "4.5", width: "7", height: "7", rx: "1.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 65,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("rect", { x: "13.5", y: "4.5", width: "7", height: "7", rx: "1.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 66,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("rect", { x: "3.5", y: "14.5", width: "7", height: "6", rx: "1.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 67,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M15 14.5h4.5m-2.25-2.25v4.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 68,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 64,
+    columnNumber: 3
+  }, this),
+  design: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M4 19.5h4.25l9.5-9.5a2.12 2.12 0 1 0-3-3l-9.5 9.5V19.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 73,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "m13.5 8.5 3 3" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 74,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M4 19.5h5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 75,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 72,
+    columnNumber: 3
+  }, this),
+  search: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("circle", { cx: "11", cy: "11", r: "5.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 80,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "m16 16 3.5 3.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 81,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 79,
+    columnNumber: 3
+  }, this),
+  sun: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("circle", { cx: "12", cy: "12", r: "4" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 86,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M12 2.5v2.25M12 19.25v2.25M21.5 12h-2.25M4.75 12H2.5M18.72 5.28l-1.6 1.6M6.88 17.12l-1.6 1.6M18.72 18.72l-1.6-1.6M6.88 6.88l-1.6-1.6" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 87,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 85,
+    columnNumber: 3
+  }, this),
+  moon: /* @__PURE__ */ jsxDEV(Fragment, { children: /* @__PURE__ */ jsxDEV("path", { d: "M20 14.2A7.8 7.8 0 1 1 9.8 4a6.4 6.4 0 1 0 10.2 10.2Z" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 92,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 91,
+    columnNumber: 3
+  }, this),
+  knowledge: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M5 5.5A2.5 2.5 0 0 1 7.5 3H19v17H7.5A2.5 2.5 0 0 0 5 22V5.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 97,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M5 19.5A2.5 2.5 0 0 1 7.5 17H19" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 98,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 96,
+    columnNumber: 3
+  }, this),
+  page: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M7 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20V5A1.5 1.5 0 0 1 7.5 3.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 103,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M14 3.5V8h4.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 104,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M9 12h6M9 16h4" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 105,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 102,
+    columnNumber: 3
+  }, this),
+  spark: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 110,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M19 15.5 19.8 18l2.5.8-2.5.8-.8 2.4-.8-2.4-2.5-.8 2.5-.8.8-2.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 111,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 109,
+    columnNumber: 3
+  }, this),
+  plus: /* @__PURE__ */ jsxDEV(Fragment, { children: /* @__PURE__ */ jsxDEV("path", { d: "M12 5v14M5 12h14" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 116,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 115,
+    columnNumber: 3
+  }, this),
+  trash: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M4.5 6.5h15" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 121,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M9.5 3.5h5l.75 2.5h-6.5l.75-2.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 122,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M7 6.5V19a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 19V6.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 123,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M10 10v6M14 10v6" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 124,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 120,
+    columnNumber: 3
+  }, this),
+  chevronRight: /* @__PURE__ */ jsxDEV(Fragment, { children: /* @__PURE__ */ jsxDEV("path", { d: "m9 6 6 6-6 6" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 129,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 128,
+    columnNumber: 3
+  }, this),
+  files: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M9 4.5h9a1.5 1.5 0 0 1 1.5 1.5v10A1.5 1.5 0 0 1 18 17.5H9A1.5 1.5 0 0 1 7.5 16V6A1.5 1.5 0 0 1 9 4.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 134,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M4.5 8.5V18A1.5 1.5 0 0 0 6 19.5h9.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 135,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 133,
+    columnNumber: 3
+  }, this),
+  terminal: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("rect", { x: "3.5", y: "5", width: "17", height: "14", rx: "2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 140,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "m7.5 10 2.5 2-2.5 2M12.5 15H16" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 141,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 139,
+    columnNumber: 3
+  }, this),
+  folder: /* @__PURE__ */ jsxDEV(Fragment, { children: /* @__PURE__ */ jsxDEV("path", { d: "M3.5 7.5A2.5 2.5 0 0 1 6 5h3l1.5 2H18A2.5 2.5 0 0 1 20.5 9.5v7A2.5 2.5 0 0 1 18 19H6A2.5 2.5 0 0 1 3.5 16.5v-9Z" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 146,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 145,
+    columnNumber: 3
+  }, this),
+  gitBranch: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("circle", { cx: "7", cy: "6", r: "2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 151,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("circle", { cx: "17", cy: "18", r: "2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 152,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("circle", { cx: "17", cy: "6", r: "2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 153,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M9 6h6M7 8v6a4 4 0 0 0 4 4h4" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 154,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 150,
+    columnNumber: 3
+  }, this),
+  bug: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M9 9.5a3 3 0 1 1 6 0v5a3 3 0 1 1-6 0v-5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 159,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M12 6V3.5M7 10H4.5M19.5 10H17M7 14H4.5M19.5 14H17M8 6.5 6.5 5M16 6.5 17.5 5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 160,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 158,
+    columnNumber: 3
+  }, this),
+  puzzle: /* @__PURE__ */ jsxDEV(Fragment, { children: /* @__PURE__ */ jsxDEV("path", { d: "M9 4.5h3a2.5 2.5 0 1 1 5 0h2.5V10a2.5 2.5 0 1 1 0 5v4.5H14a2.5 2.5 0 1 1-5 0H4.5V14a2.5 2.5 0 1 1 0-5V4.5H9Z" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 165,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 164,
+    columnNumber: 3
+  }, this),
+  settings: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("circle", { cx: "12", cy: "12", r: "3" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 170,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M12 3.5v2.25M12 18.25v2.25M20.5 12h-2.25M5.75 12H3.5M18.01 5.99l-1.6 1.6M7.59 16.41l-1.6 1.6M18.01 18.01l-1.6-1.6M7.59 7.59l-1.6-1.6" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 171,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 169,
+    columnNumber: 3
+  }, this),
+  document: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M8 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 7 20V5A1.5 1.5 0 0 1 8.5 3.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 176,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M15 3.5V8h4" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 177,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 175,
+    columnNumber: 3
+  }, this),
+  note: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 17 20.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 182,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M9 8.25h6M9 12h6M9 15.75h4" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 183,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 181,
+    columnNumber: 3
+  }, this),
+  code: /* @__PURE__ */ jsxDEV(Fragment, { children: /* @__PURE__ */ jsxDEV("path", { d: "m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13 5l-2 14" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 188,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 187,
+    columnNumber: 3
+  }, this),
+  refresh: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M20 6v5h-5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 193,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M19 11a7 7 0 1 1-2.05-4.95L20 6" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 194,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 192,
+    columnNumber: 3
+  }, this),
+  eye: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 199,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("circle", { cx: "12", cy: "12", r: "3" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 200,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 198,
+    columnNumber: 3
+  }, this),
+  pencil: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M4 19.5h4l9.25-9.25a2 2 0 1 0-2.83-2.83L5.17 16.67 4 19.5Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 205,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "m13.5 6.5 4 4" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 206,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 204,
+    columnNumber: 3
+  }, this),
+  checkCircle: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("circle", { cx: "12", cy: "12", r: "8.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 211,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "m8.5 12 2.25 2.25L15.5 9.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 212,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 210,
+    columnNumber: 3
+  }, this),
+  alertTriangle: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M12 4 20 18H4L12 4Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 217,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M12 9v4.5M12 16h.01" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 218,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 216,
+    columnNumber: 3
+  }, this),
+  loader: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M12 4.5a7.5 7.5 0 1 1-5.3 2.2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 223,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M12 2.5v3" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 224,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 222,
+    columnNumber: 3
+  }, this),
+  chevronDown: /* @__PURE__ */ jsxDEV(Fragment, { children: /* @__PURE__ */ jsxDEV("path", { d: "m6 9 6 6 6-6" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 229,
+    columnNumber: 7
+  }, this) }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 228,
+    columnNumber: 3
+  }, this),
+  clock: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("circle", { cx: "12", cy: "12", r: "8.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 234,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M12 7.5v5l3 2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 235,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 233,
+    columnNumber: 3
+  }, this),
+  rocket: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("path", { d: "M14.5 4.5c2.8.2 5 2.4 5 5-2.1 1.6-4.6 2.5-7.2 2.7L9.8 14.7l-2.5 2.5-2-2 2.5-2.5 2.5-2.5c.2-2.6 1.1-5.1 2.7-7.2 0 0 .7-.1 1.5 0Z" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 240,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M7 17 4.5 19.5M14 10l3 3" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 241,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 239,
+    columnNumber: 3
+  }, this),
+  server: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("rect", { x: "4", y: "4.5", width: "16", height: "5.5", rx: "1.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 246,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("rect", { x: "4", y: "13.5", width: "16", height: "5.5", rx: "1.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 247,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M7.5 7.25h.01M7.5 16.25h.01M11 7.25h5M11 16.25h5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 248,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 245,
+    columnNumber: 3
+  }, this),
+  monitor: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("rect", { x: "3.5", y: "4.5", width: "17", height: "11.5", rx: "2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 253,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M9.5 19.5h5M12 16v3.5" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 254,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 252,
+    columnNumber: 3
+  }, this),
+  panelRightOpen: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("rect", { x: "4", y: "4.5", width: "16", height: "15", rx: "2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 259,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M15.5 4.5v15" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 260,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "m12.5 8.25-3.5 3.75 3.5 3.75" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 261,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 258,
+    columnNumber: 3
+  }, this),
+  panelRightClose: /* @__PURE__ */ jsxDEV(Fragment, { children: [
+    /* @__PURE__ */ jsxDEV("rect", { x: "4", y: "4.5", width: "16", height: "15", rx: "2" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 266,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "M15.5 4.5v15" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 267,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("path", { d: "m9.5 8.25 3.5 3.75-3.5 3.75" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+      lineNumber: 268,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 265,
+    columnNumber: 3
+  }, this)
+};
+export const WorkbenchIcon = ({ name, ...props }) => /* @__PURE__ */ jsxDEV(
+  "svg",
+  {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.7",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": "true",
+    ...props,
+    children: ICON_PATHS[name]
+  },
+  void 0,
+  false,
+  {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx",
+    lineNumber: 274,
+    columnNumber: 1
+  },
+  this
+);
+_c = WorkbenchIcon;
+var _c;
+$RefreshReg$(_c, "WorkbenchIcon");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Users/Even/Documents/ALL-IN-ONE/src/components/ui/WorkbenchIcon.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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QyxpQkFDRSxtQ0FDRTtBQUFBLDJCQUFDLFVBQUssR0FBRSxLQUFJLEdBQUUsT0FBTSxPQUFNLE1BQUssUUFBTyxNQUFLLElBQUcsT0FBOUM7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQUFpRDtBQUFBLElBQ2pELHVCQUFDLFVBQUssR0FBRSxrQkFBUjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBQXNCO0FBQUEsSUFDdEIsdUJBQUMsVUFBSyxHQUFFLGlDQUFSO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FBcUM7QUFBQSxPQUh2QztBQUFBO0FBQUE7QUFBQTtBQUFBLFNBSUE7QUFFSjtBQUVPLGFBQU1DLGdCQUFnQkEsQ0FBQyxFQUFFQyxNQUFNLEdBQUdDLE1BQTBCLE1BQ2pFO0FBQUEsRUFBQztBQUFBO0FBQUEsSUFDQyxTQUFRO0FBQUEsSUFDUixNQUFLO0FBQUEsSUFDTCxRQUFPO0FBQUEsSUFDUCxhQUFZO0FBQUEsSUFDWixlQUFjO0FBQUEsSUFDZCxnQkFBZTtBQUFBLElBQ2YsZUFBWTtBQUFBLElBQ1osR0FBSUE7QUFBQUEsSUFFSHJDLHFCQUFXb0MsSUFBSTtBQUFBO0FBQUEsRUFWbEI7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQVdBO0FBQ0FFLEtBYldIO0FBQWEsSUFBQUc7QUFBQSxhQUFBQSxJQUFBIiwibmFtZXMiOlsiSUNPTl9QQVRIUyIsInByb2R1Y3QiLCJkZXNpZ24iLCJzZWFyY2giLCJzdW4iLCJtb29uIiwia25vd2xlZGdlIiwicGFnZSIsInNwYXJrIiwicGx1cyIsInRyYXNoIiwiY2hldnJvblJpZ2h0IiwiZmlsZXMiLCJ0ZXJtaW5hbCIsImZvbGRlciIsImdpdEJyYW5jaCIsImJ1ZyIsInB1enpsZSIsInNldHRpbmdzIiwiZG9jdW1lbnQiLCJub3RlIiwiY29kZSIsInJlZnJlc2giLCJleWUiLCJwZW5jaWwiLCJjaGVja0NpcmNsZSIsImFsZXJ0VHJpYW5nbGUiLCJsb2FkZXIiLCJjaGV2cm9uRG93biIsImNsb2NrIiwicm9ja2V0Iiwic2VydmVyIiwibW9uaXRvciIsInBhbmVsUmlnaHRPcGVuIiwicGFuZWxSaWdodENsb3NlIiwiV29ya2JlbmNoSWNvbiIsIm5hbWUiLCJwcm9wcyIsIl9jIl0sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbIldvcmtiZW5jaEljb24udHN4Il0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB0eXBlIHsgUmVhY3ROb2RlLCBTVkdQcm9wcyB9IGZyb20gJ3JlYWN0JztcclxuXHJcbmV4cG9ydCB0eXBlIFdvcmtiZW5jaEljb25OYW1lID1cbiAgfCAncHJvZHVjdCdcbiAgfCAnZGVzaWduJ1xuICB8ICdzZWFyY2gnXG4gIHwgJ3N1bidcbiAgfCAnbW9vbidcclxuICB8ICdrbm93bGVkZ2UnXHJcbiAgfCAncGFnZSdcclxuICB8ICdzcGFyaydcclxuICB8ICdwbHVzJ1xyXG4gIHwgJ3RyYXNoJ1xyXG4gIHwgJ2NoZXZyb25SaWdodCdcclxuICB8ICdmaWxlcydcclxuICB8ICd0ZXJtaW5hbCdcclxuICB8ICdmb2xkZXInXHJcbiAgfCAnZ2l0QnJhbmNoJ1xyXG4gIHwgJ2J1ZydcclxuICB8ICdwdXp6bGUnXHJcbiAgfCAnc2V0dGluZ3MnXHJcbiAgfCAnZG9jdW1lbnQnXG4gIHwgJ25vdGUnXG4gIHwgJ2NvZGUnXG4gIHwgJ3JlZnJlc2gnXG4gIHwgJ2V5ZSdcbiAgfCAncGVuY2lsJ1xuICB8ICdjaGVja0NpcmNsZSdcbiAgfCAnYWxlcnRUcmlhbmdsZSdcbiAgfCAnbG9hZGVyJ1xuICB8ICdjaGV2cm9uRG93bidcbiAgfCAnY2xvY2snXG4gIHwgJ3JvY2tldCdcbiAgfCAnc2VydmVyJ1xuICB8ICdtb25pdG9yJ1xuICB8ICdwYW5lbFJpZ2h0T3BlbidcbiAgfCAncGFuZWxSaWdodENsb3NlJztcblxyXG50eXBlIFdvcmtiZW5jaEljb25Qcm9wcyA9IFNWR1Byb3BzPFNWR1NWR0VsZW1lbnQ+ICYge1xyXG4gIG5hbWU6IFdvcmtiZW5jaEljb25OYW1lO1xyXG59O1xyXG5cclxuY29uc3QgSUNPTl9QQVRIUzogUmVjb3JkPFdvcmtiZW5jaEljb25OYW1lLCBSZWFjdE5vZGU+ID0ge1xyXG4gIHByb2R1Y3Q6IChcclxuICAgIDw+XHJcbiAgICAgIDxyZWN0IHg9XCIzLjVcIiB5PVwiNC41XCIgd2lkdGg9XCI3XCIgaGVpZ2h0PVwiN1wiIHJ4PVwiMS41XCIgLz5cclxuICAgICAgPHJlY3QgeD1cIjEzLjVcIiB5PVwiNC41XCIgd2lkdGg9XCI3XCIgaGVpZ2h0PVwiN1wiIHJ4PVwiMS41XCIgLz5cclxuICAgICAgPHJlY3QgeD1cIjMuNVwiIHk9XCIxNC41XCIgd2lkdGg9XCI3XCIgaGVpZ2h0PVwiNlwiIHJ4PVwiMS41XCIgLz5cclxuICAgICAgPHBhdGggZD1cIk0xNSAxNC41aDQuNW0tMi4yNS0yLjI1djQuNVwiIC8+XHJcbiAgICA8Lz5cclxuICApLFxyXG4gIGRlc2lnbjogKFxyXG4gICAgPD5cclxuICAgICAgPHBhdGggZD1cIk00IDE5LjVoNC4yNWw5LjUtOS41YTIuMTIgMi4xMiAwIDEgMC0zLTNsLTkuNSA5LjVWMTkuNVpcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwibTEzLjUgOC41IDMgM1wiIC8+XHJcbiAgICAgIDxwYXRoIGQ9XCJNNCAxOS41aDVcIiAvPlxyXG4gICAgPC8+XHJcbiAgKSxcclxuICBzZWFyY2g6IChcclxuICAgIDw+XHJcbiAgICAgIDxjaXJjbGUgY3g9XCIxMVwiIGN5PVwiMTFcIiByPVwiNS41XCIgLz5cclxuICAgICAgPHBhdGggZD1cIm0xNiAxNiAzLjUgMy41XCIgLz5cclxuICAgIDwvPlxyXG4gICksXHJcbiAgc3VuOiAoXHJcbiAgICA8PlxyXG4gICAgICA8Y2lyY2xlIGN4PVwiMTJcIiBjeT1cIjEyXCIgcj1cIjRcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwiTTEyIDIuNXYyLjI1TTEyIDE5LjI1djIuMjVNMjEuNSAxMmgtMi4yNU00Ljc1IDEySDIuNU0xOC43MiA1LjI4bC0xLjYgMS42TTYuODggMTcuMTJsLTEuNiAxLjZNMTguNzIgMTguNzJsLTEuNi0xLjZNNi44OCA2Ljg4bC0xLjYtMS42XCIgLz5cclxuICAgIDwvPlxyXG4gICksXHJcbiAgbW9vbjogKFxyXG4gICAgPD5cclxuICAgICAgPHBhdGggZD1cIk0yMCAxNC4yQTcuOCA3LjggMCAxIDEgOS44IDRhNi40IDYuNCAwIDEgMCAxMC4yIDEwLjJaXCIgLz5cclxuICAgIDwvPlxyXG4gICksXHJcbiAga25vd2xlZGdlOiAoXHJcbiAgICA8PlxyXG4gICAgICA8cGF0aCBkPVwiTTUgNS41QTIuNSAyLjUgMCAwIDEgNy41IDNIMTl2MTdINy41QTIuNSAyLjUgMCAwIDAgNSAyMlY1LjVaXCIgLz5cclxuICAgICAgPHBhdGggZD1cIk01IDE5LjVBMi41IDIuNSAwIDAgMSA3LjUgMTdIMTlcIiAvPlxyXG4gICAgPC8+XHJcbiAgKSxcclxuICBwYWdlOiAoXHJcbiAgICA8PlxyXG4gICAgICA8cGF0aCBkPVwiTTcgMy41aDdsNCA0VjIwYTEuNSAxLjUgMCAwIDEtMS41IDEuNWgtOUExLjUgMS41IDAgMCAxIDYgMjBWNUExLjUgMS41IDAgMCAxIDcuNSAzLjVaXCIgLz5cclxuICAgICAgPHBhdGggZD1cIk0xNCAzLjVWOGg0LjVcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwiTTkgMTJoNk05IDE2aDRcIiAvPlxyXG4gICAgPC8+XHJcbiAgKSxcclxuICBzcGFyazogKFxyXG4gICAgPD5cclxuICAgICAgPHBhdGggZD1cIm0xMiAzIDEuNSA0LjVMMTggOWwtNC41IDEuNUwxMiAxNWwtMS41LTQuNUw2IDlsNC41LTEuNUwxMiAzWlwiIC8+XHJcbiAgICAgIDxwYXRoIGQ9XCJNMTkgMTUuNSAxOS44IDE4bDIuNS44LTIuNS44LS44IDIuNC0uOC0yLjQtMi41LS44IDIuNS0uOC44LTIuNVpcIiAvPlxyXG4gICAgPC8+XHJcbiAgKSxcclxuICBwbHVzOiAoXHJcbiAgICA8PlxyXG4gICAgICA8cGF0aCBkPVwiTTEyIDV2MTRNNSAxMmgxNFwiIC8+XHJcbiAgICA8Lz5cclxuICApLFxyXG4gIHRyYXNoOiAoXHJcbiAgICA8PlxyXG4gICAgICA8cGF0aCBkPVwiTTQuNSA2LjVoMTVcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwiTTkuNSAzLjVoNWwuNzUgMi41aC02LjVsLjc1LTIuNVpcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwiTTcgNi41VjE5YTEuNSAxLjUgMCAwIDAgMS41IDEuNWg3QTEuNSAxLjUgMCAwIDAgMTcgMTlWNi41XCIgLz5cclxuICAgICAgPHBhdGggZD1cIk0xMCAxMHY2TTE0IDEwdjZcIiAvPlxyXG4gICAgPC8+XHJcbiAgKSxcclxuICBjaGV2cm9uUmlnaHQ6IChcclxuICAgIDw+XHJcbiAgICAgIDxwYXRoIGQ9XCJtOSA2IDYgNi02IDZcIiAvPlxyXG4gICAgPC8+XHJcbiAgKSxcclxuICBmaWxlczogKFxyXG4gICAgPD5cclxuICAgICAgPHBhdGggZD1cIk05IDQuNWg5YTEuNSAxLjUgMCAwIDEgMS41IDEuNXYxMEExLjUgMS41IDAgMCAxIDE4IDE3LjVIOUExLjUgMS41IDAgMCAxIDcuNSAxNlY2QTEuNSAxLjUgMCAwIDEgOSA0LjVaXCIgLz5cclxuICAgICAgPHBhdGggZD1cIk00LjUgOC41VjE4QTEuNSAxLjUgMCAwIDAgNiAxOS41aDkuNVwiIC8+XHJcbiAgICA8Lz5cclxuICApLFxyXG4gIHRlcm1pbmFsOiAoXHJcbiAgICA8PlxyXG4gICAgICA8cmVjdCB4PVwiMy41XCIgeT1cIjVcIiB3aWR0aD1cIjE3XCIgaGVpZ2h0PVwiMTRcIiByeD1cIjJcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwibTcuNSAxMCAyLjUgMi0yLjUgMk0xMi41IDE1SDE2XCIgLz5cclxuICAgIDwvPlxyXG4gICksXHJcbiAgZm9sZGVyOiAoXHJcbiAgICA8PlxyXG4gICAgICA8cGF0aCBkPVwiTTMuNSA3LjVBMi41IDIuNSAwIDAgMSA2IDVoM2wxLjUgMkgxOEEyLjUgMi41IDAgMCAxIDIwLjUgOS41djdBMi41IDIuNSAwIDAgMSAxOCAxOUg2QTIuNSAyLjUgMCAwIDEgMy41IDE2LjV2LTlaXCIgLz5cclxuICAgIDwvPlxyXG4gICksXHJcbiAgZ2l0QnJhbmNoOiAoXHJcbiAgICA8PlxyXG4gICAgICA8Y2lyY2xlIGN4PVwiN1wiIGN5PVwiNlwiIHI9XCIyXCIgLz5cclxuICAgICAgPGNpcmNsZSBjeD1cIjE3XCIgY3k9XCIxOFwiIHI9XCIyXCIgLz5cclxuICAgICAgPGNpcmNsZSBjeD1cIjE3XCIgY3k9XCI2XCIgcj1cIjJcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwiTTkgNmg2TTcgOHY2YTQgNCAwIDAgMCA0IDRoNFwiIC8+XHJcbiAgICA8Lz5cclxuICApLFxyXG4gIGJ1ZzogKFxyXG4gICAgPD5cclxuICAgICAgPHBhdGggZD1cIk05IDkuNWEzIDMgMCAxIDEgNiAwdjVhMyAzIDAgMSAxLTYgMHYtNVpcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwiTTEyIDZWMy41TTcgMTBINC41TTE5LjUgMTBIMTdNNyAxNEg0LjVNMTkuNSAxNEgxN004IDYuNSA2LjUgNU0xNiA2LjUgMTcuNSA1XCIgLz5cclxuICAgIDwvPlxyXG4gICksXHJcbiAgcHV6emxlOiAoXHJcbiAgICA8PlxyXG4gICAgICA8cGF0aCBkPVwiTTkgNC41aDNhMi41IDIuNSAwIDEgMSA1IDBoMi41VjEwYTIuNSAyLjUgMCAxIDEgMCA1djQuNUgxNGEyLjUgMi41IDAgMSAxLTUgMEg0LjVWMTRhMi41IDIuNSAwIDEgMSAwLTVWNC41SDlaXCIgLz5cclxuICAgIDwvPlxyXG4gICksXHJcbiAgc2V0dGluZ3M6IChcclxuICAgIDw+XHJcbiAgICAgIDxjaXJjbGUgY3g9XCIxMlwiIGN5PVwiMTJcIiByPVwiM1wiIC8+XHJcbiAgICAgIDxwYXRoIGQ9XCJNMTIgMy41djIuMjVNMTIgMTguMjV2Mi4yNU0yMC41IDEyaC0yLjI1TTUuNzUgMTJIMy41TTE4LjAxIDUuOTlsLTEuNiAxLjZNNy41OSAxNi40MWwtMS42IDEuNk0xOC4wMSAxOC4wMWwtMS42LTEuNk03LjU5IDcuNTlsLTEuNi0xLjZcIiAvPlxyXG4gICAgPC8+XHJcbiAgKSxcclxuICBkb2N1bWVudDogKFxuICAgIDw+XG4gICAgICA8cGF0aCBkPVwiTTggMy41aDdsNCA0VjIwYTEuNSAxLjUgMCAwIDEtMS41IDEuNWgtOUExLjUgMS41IDAgMCAxIDcgMjBWNUExLjUgMS41IDAgMCAxIDguNSAzLjVaXCIgLz5cbiAgICAgIDxwYXRoIGQ9XCJNMTUgMy41VjhoNFwiIC8+XG4gICAgPC8+XG4gICksXG4gIG5vdGU6IChcbiAgICA8PlxuICAgICAgPHBhdGggZD1cIk03IDMuNWgxMGExLjUgMS41IDAgMCAxIDEuNSAxLjV2MTRBMS41IDEuNSAwIDAgMSAxNyAyMC41SDdBMS41IDEuNSAwIDAgMSA1LjUgMTlWNUExLjUgMS41IDAgMCAxIDcgMy41WlwiIC8+XG4gICAgICA8cGF0aCBkPVwiTTkgOC4yNWg2TTkgMTJoNk05IDE1Ljc1aDRcIiAvPlxuICAgIDwvPlxuICApLFxuICBjb2RlOiAoXG4gICAgPD5cbiAgICAgIDxwYXRoIGQ9XCJtOC41IDgtNCA0IDQgNE0xNS41IDhsNCA0LTQgNE0xMyA1bC0yIDE0XCIgLz5cbiAgICA8Lz5cbiAgKSxcbiAgcmVmcmVzaDogKFxuICAgIDw+XG4gICAgICA8cGF0aCBkPVwiTTIwIDZ2NWgtNVwiIC8+XG4gICAgICA8cGF0aCBkPVwiTTE5IDExYTcgNyAwIDEgMS0yLjA1LTQuOTVMMjAgNlwiIC8+XG4gICAgPC8+XG4gICksXG4gIGV5ZTogKFxuICAgIDw+XG4gICAgICA8cGF0aCBkPVwiTTIuNSAxMnMzLjUtNiA5LjUtNiA5LjUgNiA5LjUgNi0zLjUgNi05LjUgNi05LjUtNi05LjUtNlpcIiAvPlxuICAgICAgPGNpcmNsZSBjeD1cIjEyXCIgY3k9XCIxMlwiIHI9XCIzXCIgLz5cbiAgICA8Lz5cbiAgKSxcbiAgcGVuY2lsOiAoXG4gICAgPD5cbiAgICAgIDxwYXRoIGQ9XCJNNCAxOS41aDRsOS4yNS05LjI1YTIgMiAwIDEgMC0yLjgzLTIuODNMNS4xNyAxNi42NyA0IDE5LjVaXCIgLz5cbiAgICAgIDxwYXRoIGQ9XCJtMTMuNSA2LjUgNCA0XCIgLz5cbiAgICA8Lz5cbiAgKSxcbiAgY2hlY2tDaXJjbGU6IChcbiAgICA8PlxuICAgICAgPGNpcmNsZSBjeD1cIjEyXCIgY3k9XCIxMlwiIHI9XCI4LjVcIiAvPlxuICAgICAgPHBhdGggZD1cIm04LjUgMTIgMi4yNSAyLjI1TDE1LjUgOS41XCIgLz5cbiAgICA8Lz5cbiAgKSxcbiAgYWxlcnRUcmlhbmdsZTogKFxuICAgIDw+XG4gICAgICA8cGF0aCBkPVwiTTEyIDQgMjAgMThINEwxMiA0WlwiIC8+XG4gICAgICA8cGF0aCBkPVwiTTEyIDl2NC41TTEyIDE2aC4wMVwiIC8+XG4gICAgPC8+XG4gICksXG4gIGxvYWRlcjogKFxuICAgIDw+XG4gICAgICA8cGF0aCBkPVwiTTEyIDQuNWE3LjUgNy41IDAgMSAxLTUuMyAyLjJcIiAvPlxuICAgICAgPHBhdGggZD1cIk0xMiAyLjV2M1wiIC8+XG4gICAgPC8+XG4gICksXG4gIGNoZXZyb25Eb3duOiAoXG4gICAgPD5cbiAgICAgIDxwYXRoIGQ9XCJtNiA5IDYgNiA2LTZcIiAvPlxuICAgIDwvPlxuICApLFxuICBjbG9jazogKFxuICAgIDw+XG4gICAgICA8Y2lyY2xlIGN4PVwiMTJcIiBjeT1cIjEyXCIgcj1cIjguNVwiIC8+XG4gICAgICA8cGF0aCBkPVwiTTEyIDcuNXY1bDMgMlwiIC8+XG4gICAgPC8+XG4gICksXG4gIHJvY2tldDogKFxuICAgIDw+XG4gICAgICA8cGF0aCBkPVwiTTE0LjUgNC41YzIuOC4yIDUgMi40IDUgNS0yLjEgMS42LTQuNiAyLjUtNy4yIDIuN0w5LjggMTQuN2wtMi41IDIuNS0yLTIgMi41LTIuNSAyLjUtMi41Yy4yLTIuNiAxLjEtNS4xIDIuNy03LjIgMCAwIC43LS4xIDEuNSAwWlwiIC8+XG4gICAgICA8cGF0aCBkPVwiTTcgMTcgNC41IDE5LjVNMTQgMTBsMyAzXCIgLz5cbiAgICA8Lz5cbiAgKSxcbiAgc2VydmVyOiAoXG4gICAgPD5cbiAgICAgIDxyZWN0IHg9XCI0XCIgeT1cIjQuNVwiIHdpZHRoPVwiMTZcIiBoZWlnaHQ9XCI1LjVcIiByeD1cIjEuNVwiIC8+XG4gICAgICA8cmVjdCB4PVwiNFwiIHk9XCIxMy41XCIgd2lkdGg9XCIxNlwiIGhlaWdodD1cIjUuNVwiIHJ4PVwiMS41XCIgLz5cbiAgICAgIDxwYXRoIGQ9XCJNNy41IDcuMjVoLjAxTTcuNSAxNi4yNWguMDFNMTEgNy4yNWg1TTExIDE2LjI1aDVcIiAvPlxuICAgIDwvPlxuICApLFxuICBtb25pdG9yOiAoXG4gICAgPD5cbiAgICAgIDxyZWN0IHg9XCIzLjVcIiB5PVwiNC41XCIgd2lkdGg9XCIxN1wiIGhlaWdodD1cIjExLjVcIiByeD1cIjJcIiAvPlxuICAgICAgPHBhdGggZD1cIk05LjUgMTkuNWg1TTEyIDE2djMuNVwiIC8+XG4gICAgPC8+XG4gICksXG4gIHBhbmVsUmlnaHRPcGVuOiAoXG4gICAgPD5cbiAgICAgIDxyZWN0IHg9XCI0XCIgeT1cIjQuNVwiIHdpZHRoPVwiMTZcIiBoZWlnaHQ9XCIxNVwiIHJ4PVwiMlwiIC8+XG4gICAgICA8cGF0aCBkPVwiTTE1LjUgNC41djE1XCIgLz5cclxuICAgICAgPHBhdGggZD1cIm0xMi41IDguMjUtMy41IDMuNzUgMy41IDMuNzVcIiAvPlxyXG4gICAgPC8+XHJcbiAgKSxcclxuICBwYW5lbFJpZ2h0Q2xvc2U6IChcclxuICAgIDw+XHJcbiAgICAgIDxyZWN0IHg9XCI0XCIgeT1cIjQuNVwiIHdpZHRoPVwiMTZcIiBoZWlnaHQ9XCIxNVwiIHJ4PVwiMlwiIC8+XHJcbiAgICAgIDxwYXRoIGQ9XCJNMTUuNSA0LjV2MTVcIiAvPlxyXG4gICAgICA8cGF0aCBkPVwibTkuNSA4LjI1IDMuNSAzLjc1LTMuNSAzLjc1XCIgLz5cclxuICAgIDwvPlxyXG4gICksXHJcbn07XHJcblxyXG5leHBvcnQgY29uc3QgV29ya2JlbmNoSWNvbiA9ICh7IG5hbWUsIC4uLnByb3BzIH06IFdvcmtiZW5jaEljb25Qcm9wcykgPT4gKFxyXG4gIDxzdmdcclxuICAgIHZpZXdCb3g9XCIwIDAgMjQgMjRcIlxyXG4gICAgZmlsbD1cIm5vbmVcIlxyXG4gICAgc3Ryb2tlPVwiY3VycmVudENvbG9yXCJcclxuICAgIHN0cm9rZVdpZHRoPVwiMS43XCJcbiAgICBzdHJva2VMaW5lY2FwPVwicm91bmRcIlxyXG4gICAgc3Ryb2tlTGluZWpvaW49XCJyb3VuZFwiXHJcbiAgICBhcmlhLWhpZGRlbj1cInRydWVcIlxyXG4gICAgey4uLnByb3BzfVxyXG4gID5cclxuICAgIHtJQ09OX1BBVEhTW25hbWVdfVxyXG4gIDwvc3ZnPlxyXG4pO1xyXG4iXSwiZmlsZSI6IkM6L1VzZXJzL0V2ZW4vRG9jdW1lbnRzL0FMTC1JTi1PTkUvc3JjL2NvbXBvbmVudHMvdWkvV29ya2JlbmNoSWNvbi50c3gifQ==

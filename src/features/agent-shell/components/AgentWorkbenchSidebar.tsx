@@ -35,7 +35,9 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
   collapsed,
   onToggleCollapsed,
 }) => (
-  <div className={`agent-workbench-sidebar${collapsed ? ' is-collapsed' : ''}`}>
+  <div
+    className={`agent-workbench-sidebar${collapsed ? ' is-collapsed' : ''}${sessions.length === 0 ? ' is-empty' : ''}`}
+  >
     <div className="agent-workbench-left-rail">
       <nav className="agent-workbench-rail-nav" aria-label="Agent workbench actions">
         {SIDEBAR_ITEMS.map((item) => (
@@ -54,7 +56,6 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
 
               if (item.id === 'search') {
                 onOpenSearch();
-                return;
               }
             }}
             title={item.label}
@@ -92,15 +93,6 @@ export const AgentWorkbenchSidebar: React.FC<AgentWorkbenchSidebarProps> = ({
               <span>{projectName || '当前项目会话'}</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="agent-sidebar-collapse-btn"
-            onClick={onToggleCollapsed}
-            aria-label="收起左侧面板"
-            title="收起左侧面板"
-          >
-            <WorkbenchIcon name="chevronRight" />
-          </button>
         </header>
 
         <section className="agent-sidebar-panel-body agent-sidebar-panel-body-threads">

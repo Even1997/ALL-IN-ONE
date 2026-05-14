@@ -19,6 +19,13 @@ import type { KnowledgeNote } from '../../features/knowledge/model/knowledge';
 import { projectKnowledgeNotesToRequirementDocs } from '../../features/knowledge/adapters/knowledgeRequirementAdapter';
 import { MacDialog } from '../ui/MacDialog';
 import {
+  FloatingRunCompanion,
+  StateCard,
+  StatusBanner,
+  UtilitySidebar,
+} from '../ui';
+import { WorkbenchShell } from './WorkbenchShell';
+import {
   createWireframeModule,
   formatCanvasPreset,
   getCanvasPreset,
@@ -271,6 +278,15 @@ const filterKnowledgeNotes = (notes: KnowledgeNote[], keyword: string) => {
   );
 };
 
+const summarizeWorkbenchText = (value: string, maxLength = 120) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.length > maxLength ? `${normalized.slice(0, Math.max(1, maxLength - 3))}...` : normalized;
+};
+
 interface ProductWorkbenchProps {
   onFeatureSelect?: (node: FeatureNode) => void;
   layoutFocus: WorkbenchLayoutFocus;
@@ -307,6 +323,7 @@ export const ProductWorkbench = ({
   const [isFrameEditorOpen, setIsFrameEditorOpen] = useState(false);
   const [frameEditorDraft, setFrameEditorDraft] = useState('');
   const [isModulePanelOpen, setIsModulePanelOpen] = useState(false);
+  const [isUtilitySidebarCollapsed, setIsUtilitySidebarCollapsed] = useState(true);
   const knowledgeRefreshRequestIdRef = useRef(0);
   const hydratedKnowledgeNoteSignatureRef = useRef('');
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1599,13 +1616,216 @@ export const ProductWorkbench = ({
         ? '创建文件夹'
         : '创建笔记'
     : '确认';
+  const selectedPageModuleCount = selectedPageWireframe?.elements?.length || 0;
+  const hasKnowledgeReviewDot = Boolean(
+    activeTemporaryArtifact
+      || canSaveRequirement
+      || requirementSaveMessage
+      || knowledgeSidecarError
+      || isSavingRequirement
+  );
+  const hasPageReviewDot = Boolean(selectedPage || isModulePanelOpen || selectedPageModuleCount > 0);
+  const productUtilitySidebar =
+    sidebarTab === 'knowledge' ? (
+      <UtilitySidebar
+        className="product-utility-sidebar"
+        title="知识概览"
+        subtitle="Review current note"
+        icon="knowledge"
+        railLabel="知识工作台侧栏"
+        panelLabel="知识工作台检查面板"
+        collapsed={isUtilitySidebarCollapsed}
+        panelVisible={Boolean(selectedServerNote || activeTemporaryArtifact || requirementSaveMessage || knowledgeSidecarError || serverNotes.length)}
+        onToggleCollapsed={() => setIsUtilitySidebarCollapsed((current) => !current)}
+        tabs={[
+          {
+            icon: 'knowledge',
+            label: '知识概览',
+            active: true,
+            hasDot: hasKnowledgeReviewDot,
+            onClick: () => {
+              if (isUtilitySidebarCollapsed) {
+                setIsUtilitySidebarCollapsed(false);
+              }
+            },
+          },
+        ]}
+      >
+        <>
+          {selectedServerNote ? (
+            <StateCard
+              icon="note"
+              tone="info"
+              title={selectedServerNote.title}
+              description={
+                summarizeWorkbenchText(
+                  extractKnowledgeNoteEditorBody(selectedServerNote.title, selectedServerNote.bodyMarkdown)
+                ) || '当前笔记已经接入统一的 note-first 阅读与编辑工作流。'
+              }
+              meta={selectedServerNote.sourceUrl ? 'Linked file' : 'Knowledge note'}
+            />
+          ) : null}
+
+          {activeTemporaryArtifact ? (
+            <StateCard
+              icon="spark"
+              tone="warning"
+              title={activeTemporaryArtifact.title}
+              description={summarizeWorkbenchText(activeTemporaryArtifact.summary || activeTemporaryArtifact.body)}
+              meta={activeTemporaryArtifact.artifactType}
+            />
+          ) : null}
+
+          <StateCard
+            icon="search"
+            tone="neutral"
+            title={knowledgeSearch.trim() ? '当前筛选范围' : '知识库范围'}
+            description={
+              knowledgeSearch.trim()
+                ? `正在筛选 ${filteredServerNotes.length} / ${serverNotes.length} 条笔记。`
+                : `当前项目共有 ${serverNotes.length} 条知识笔记。`
+            }
+            meta={projectRootDir ? 'Project vault' : 'Workspace'}
+          />
+
+          {requirementSaveMessage ? (
+            <StatusBanner
+              tone={requirementSaveMessage.includes('失败') ? 'danger' : isSavingRequirement ? 'warning' : 'success'}
+              icon={requirementSaveMessage.includes('失败') ? 'alertTriangle' : isSavingRequirement ? 'clock' : 'checkCircle'}
+              title={isSavingRequirement ? '正在保存笔记' : '最近一次保存状态'}
+              message={requirementSaveMessage}
+            />
+          ) : null}
+
+          {knowledgeSidecarError ? (
+            <StatusBanner tone="danger" icon="alertTriangle" title="知识区状态异常" message={knowledgeSidecarError} />
+          ) : null}
+        </>
+      </UtilitySidebar>
+    ) : (
+      <UtilitySidebar
+        className="product-utility-sidebar"
+        title="页面概览"
+        subtitle="Review page and module state"
+        icon="page"
+        railLabel="页面工作台侧栏"
+        panelLabel="页面工作台检查面板"
+        collapsed={isUtilitySidebarCollapsed}
+        panelVisible={Boolean(selectedPage || designPages.length)}
+        onToggleCollapsed={() => setIsUtilitySidebarCollapsed((current) => !current)}
+        tabs={[
+          {
+            icon: 'page',
+            label: '页面概览',
+            active: true,
+            hasDot: hasPageReviewDot,
+            onClick: () => {
+              if (isUtilitySidebarCollapsed) {
+                setIsUtilitySidebarCollapsed(false);
+              }
+            },
+          },
+        ]}
+      >
+        <>
+          {selectedPage ? (
+            <StateCard
+              icon="page"
+              tone="info"
+              title={selectedPage.name}
+              description={summarizeWorkbenchText(selectedPage.description || selectedPage.metadata.goal || '') || '当前页面已接入统一的页面树与画布工作流。'}
+              meta={selectedPage.metadata.route || canvasPreset.label}
+            />
+          ) : null}
+
+          <StateCard
+            icon="files"
+            tone="neutral"
+            title="页面集合"
+            description={`共 ${designPages.length} 个页面，当前筛选后 ${filteredDesignPages.length} 个可见。`}
+            meta={pageSearch.trim() ? 'Filtered' : 'All pages'}
+          />
+
+          {selectedPage ? (
+            <StateCard
+              icon="design"
+              tone="warning"
+              title="模块与画布"
+              description={`当前页面有 ${selectedPageModuleCount} 个模块，画布尺寸 ${canvasPreset.width} × ${canvasPreset.height}。`}
+              meta={isModulePanelOpen ? 'Module list open' : 'Canvas ready'}
+            />
+          ) : null}
+        </>
+      </UtilitySidebar>
+    );
+  const productFloatingCompanion =
+    sidebarTab === 'knowledge' ? (
+      activeTemporaryArtifact || selectedServerNote || canSaveRequirement || requirementSaveMessage ? (
+        <FloatingRunCompanion
+          className="product-floating-run-companion"
+          title={activeTemporaryArtifact ? 'Current draft' : 'Current note'}
+          subtitle={activeTemporaryArtifact?.title || selectedServerNote?.title || 'Knowledge workspace'}
+          icon={activeTemporaryArtifact ? 'spark' : 'note'}
+          meta={
+            <span>
+              {isSavingRequirement
+                ? 'Saving'
+                : canSaveRequirement
+                  ? 'Unsaved changes'
+                  : requirementSaveMessage
+                    ? 'Synced'
+                    : 'Ready'}
+            </span>
+          }
+        >
+          <StateCard
+            icon={activeTemporaryArtifact ? 'spark' : 'document'}
+            tone={activeTemporaryArtifact ? 'warning' : canSaveRequirement ? 'info' : 'success'}
+            state={isSavingRequirement ? 'syncing' : canSaveRequirement ? 'selected' : 'default'}
+            title={activeTemporaryArtifact?.artifactType || 'Knowledge note'}
+            description={
+              summarizeWorkbenchText(
+                activeTemporaryArtifact?.summary
+                  || activeTemporaryArtifact?.body
+                  || requirementDraftContent
+                  || selectedServerNote?.bodyMarkdown
+                  || ''
+              ) || '当前知识内容会在这里用统一的 companion 形式显示。'
+            }
+            meta={selectedServerNote?.sourceUrl || 'Knowledge workspace'}
+          />
+        </FloatingRunCompanion>
+      ) : null
+    ) : selectedPage ? (
+      <FloatingRunCompanion
+        className="product-floating-run-companion"
+        title="Current page"
+        subtitle={selectedPage.name}
+        icon="page"
+        meta={<span>{selectedPage.metadata.route || canvasPreset.label}</span>}
+      >
+        <StateCard
+          icon="design"
+          tone="info"
+          title={selectedPage.metadata.goal || 'Page canvas'}
+          description={
+            summarizeWorkbenchText(selectedPage.description || '') || '页面树、画布和模块面板已经开始共用统一工作台语义。'
+          }
+          meta={`${selectedPageModuleCount} modules`}
+        />
+      </FloatingRunCompanion>
+    ) : null;
 
   return (
     <>
-      <div className="product-workbench-shell" style={layoutStyle}>
-        {sidebarTab === 'knowledge' && renderRequirementMain()}
-        {sidebarTab === 'page' && renderPageLibraryMain()}
-      </div>
+      <WorkbenchShell
+        className="product-workbench-shell"
+        style={layoutStyle}
+        main={sidebarTab === 'knowledge' ? renderRequirementMain() : renderPageLibraryMain()}
+        utilitySidebar={productUtilitySidebar}
+        floatingCompanion={productFloatingCompanion}
+        companionWidth={isUtilitySidebarCollapsed ? 52 : 312}
+      />
       <MacDialog
         open={Boolean(knowledgePathDialog)}
         onOpenChange={(open) => {

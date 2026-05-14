@@ -1,0 +1,232 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=0a8d881b"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+import { GNAgentThreadList } from "/src/components/ai/gn-agent-shell/GNAgentThreadList.tsx";
+import { WorkbenchIcon } from "/src/components/ui/WorkbenchIcon.tsx";
+const SIDEBAR_ITEMS = [
+  { id: "newThread", label: "新对话", icon: "plus" },
+  { id: "search", label: "搜索", icon: "search" }
+];
+export const AgentWorkbenchSidebar = ({
+  projectName = null,
+  sessions,
+  activeSessionId,
+  onSelectThread,
+  onDeleteSession,
+  onNewThread,
+  onOpenSearch,
+  collapsed,
+  onToggleCollapsed
+}) => /* @__PURE__ */ jsxDEV("div", { className: `agent-workbench-sidebar${collapsed ? " is-collapsed" : ""}`, children: [
+  /* @__PURE__ */ jsxDEV("div", { className: "agent-workbench-left-rail", children: [
+    /* @__PURE__ */ jsxDEV("nav", { className: "agent-workbench-rail-nav", "aria-label": "Agent workbench actions", children: SIDEBAR_ITEMS.map(
+      (item) => /* @__PURE__ */ jsxDEV(
+        "button",
+        {
+          type: "button",
+          className: "agent-workbench-rail-item",
+          onClick: () => {
+            if (item.id === "newThread") {
+              onNewThread();
+              if (collapsed) {
+                onToggleCollapsed();
+              }
+              return;
+            }
+            if (item.id === "search") {
+              onOpenSearch();
+              return;
+            }
+          },
+          title: item.label,
+          "aria-label": item.label,
+          children: [
+            /* @__PURE__ */ jsxDEV(WorkbenchIcon, { name: item.icon }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+              lineNumber: 82,
+              columnNumber: 13
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: item.label }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+              lineNumber: 83,
+              columnNumber: 13
+            }, this)
+          ]
+        },
+        item.id,
+        true,
+        {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+          lineNumber: 61,
+          columnNumber: 7
+        },
+        this
+      )
+    ) }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+      lineNumber: 59,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "agent-workbench-rail-foot", children: /* @__PURE__ */ jsxDEV(
+      "button",
+      {
+        type: "button",
+        className: "agent-workbench-rail-item agent-workbench-rail-collapse",
+        onClick: onToggleCollapsed,
+        title: collapsed ? "展开左侧面板" : "收起左侧面板",
+        "aria-label": collapsed ? "展开左侧面板" : "收起左侧面板",
+        children: [
+          /* @__PURE__ */ jsxDEV(WorkbenchIcon, { name: "chevronRight" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+            lineNumber: 96,
+            columnNumber: 11
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: collapsed ? "展开" : "收起" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+            lineNumber: 97,
+            columnNumber: 11
+          }, this)
+        ]
+      },
+      void 0,
+      true,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+        lineNumber: 89,
+        columnNumber: 9
+      },
+      this
+    ) }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+      lineNumber: 88,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+    lineNumber: 58,
+    columnNumber: 5
+  }, this),
+  !collapsed ? /* @__PURE__ */ jsxDEV("div", { className: "agent-workbench-left-panel", children: [
+    /* @__PURE__ */ jsxDEV("header", { className: "agent-sidebar-panel-head", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "agent-sidebar-panel-head-copy", children: [
+        /* @__PURE__ */ jsxDEV("span", { className: "agent-sidebar-panel-head-icon", children: /* @__PURE__ */ jsxDEV(WorkbenchIcon, { name: "page" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+          lineNumber: 107,
+          columnNumber: 15
+        }, this) }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+          lineNumber: 106,
+          columnNumber: 13
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("strong", { children: "对话历史" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+            lineNumber: 110,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: projectName || "当前项目会话" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+            lineNumber: 111,
+            columnNumber: 15
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+          lineNumber: 109,
+          columnNumber: 13
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+        lineNumber: 105,
+        columnNumber: 11
+      }, this),
+      /* @__PURE__ */ jsxDEV(
+        "button",
+        {
+          type: "button",
+          className: "agent-sidebar-collapse-btn",
+          onClick: onToggleCollapsed,
+          "aria-label": "收起左侧面板",
+          title: "收起左侧面板",
+          children: /* @__PURE__ */ jsxDEV(WorkbenchIcon, { name: "chevronRight" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+            lineNumber: 121,
+            columnNumber: 13
+          }, this)
+        },
+        void 0,
+        false,
+        {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+          lineNumber: 114,
+          columnNumber: 11
+        },
+        this
+      )
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+      lineNumber: 104,
+      columnNumber: 9
+    }, this),
+    /* @__PURE__ */ jsxDEV("section", { className: "agent-sidebar-panel-body agent-sidebar-panel-body-threads", children: /* @__PURE__ */ jsxDEV(
+      GNAgentThreadList,
+      {
+        sessions,
+        activeSessionId,
+        onSelectThread,
+        onDeleteSession
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+        lineNumber: 126,
+        columnNumber: 11
+      },
+      this
+    ) }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+      lineNumber: 125,
+      columnNumber: 9
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+    lineNumber: 103,
+    columnNumber: 3
+  }, this) : null
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx",
+  lineNumber: 57,
+  columnNumber: 1
+}, this);
+_c = AgentWorkbenchSidebar;
+var _c;
+$RefreshReg$(_c, "AgentWorkbenchSidebar");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Users/Even/Documents/ALL-IN-ONE/src/features/agent-shell/components/AgentWorkbenchSidebar.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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O0FBQUEsZUFHQTtBQUFBLFdBUEY7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQVFBO0FBQUEsTUFDQTtBQUFBLFFBQUM7QUFBQTtBQUFBLFVBQ0MsTUFBSztBQUFBLFVBQ0wsV0FBVTtBQUFBLFVBQ1YsU0FBU1E7QUFBQUEsVUFDVCxjQUFXO0FBQUEsVUFDWCxPQUFNO0FBQUEsVUFFTixpQ0FBQyxpQkFBYyxNQUFLLGtCQUFwQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUFrQztBQUFBO0FBQUEsUUFQcEM7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLE1BUUE7QUFBQSxTQWxCRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBbUJBO0FBQUEsSUFFQSx1QkFBQyxhQUFRLFdBQVUsNkRBQ2pCO0FBQUEsTUFBQztBQUFBO0FBQUEsUUFDQztBQUFBLFFBQ0E7QUFBQSxRQUNBO0FBQUEsUUFDQTtBQUFBO0FBQUEsTUFKRjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsSUFJbUMsS0FMckM7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQU9BO0FBQUEsT0E3QkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQThCQSxJQUNFO0FBQUEsS0E3RU47QUFBQTtBQUFBO0FBQUE7QUFBQSxPQThFQTtBQUNBRyxLQTFGV1o7QUFBMkQsSUFBQVk7QUFBQSxhQUFBQSxJQUFBIiwibmFtZXMiOlsiR05BZ2VudFRocmVhZExpc3QiLCJXb3JrYmVuY2hJY29uIiwiU0lERUJBUl9JVEVNUyIsImlkIiwibGFiZWwiLCJpY29uIiwiQWdlbnRXb3JrYmVuY2hTaWRlYmFyIiwicHJvamVjdE5hbWUiLCJzZXNzaW9ucyIsImFjdGl2ZVNlc3Npb25JZCIsIm9uU2VsZWN0VGhyZWFkIiwib25EZWxldGVTZXNzaW9uIiwib25OZXdUaHJlYWQiLCJvbk9wZW5TZWFyY2giLCJjb2xsYXBzZWQiLCJvblRvZ2dsZUNvbGxhcHNlZCIsIm1hcCIsIml0ZW0iLCJfYyJdLCJpZ25vcmVMaXN0IjpbXSwic291cmNlcyI6WyJBZ2VudFdvcmtiZW5jaFNpZGViYXIudHN4Il0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCBSZWFjdCBmcm9tICdyZWFjdCc7XHJcbmltcG9ydCB7IEdOQWdlbnRUaHJlYWRMaXN0IH0gZnJvbSAnLi4vLi4vLi4vY29tcG9uZW50cy9haS9nbi1hZ2VudC1zaGVsbC9HTkFnZW50VGhyZWFkTGlzdCc7XHJcbmltcG9ydCB7IFdvcmtiZW5jaEljb24gfSBmcm9tICcuLi8uLi8uLi9jb21wb25lbnRzL3VpL1dvcmtiZW5jaEljb24nO1xyXG5pbXBvcnQgdHlwZSB7IENoYXRTZXNzaW9uIH0gZnJvbSAnLi4vLi4vLi4vbW9kdWxlcy9haS9zdG9yZS9haUNoYXRTdG9yZSc7XHJcblxyXG50eXBlIEFnZW50V29ya2JlbmNoU2lkZWJhclByb3BzID0ge1xyXG4gIHByb2plY3ROYW1lPzogc3RyaW5nIHwgbnVsbDtcclxuICBzZXNzaW9uczogQ2hhdFNlc3Npb25bXTtcclxuICBhY3RpdmVTZXNzaW9uSWQ6IHN0cmluZyB8IG51bGw7XHJcbiAgb25TZWxlY3RUaHJlYWQ6ICh0aHJlYWRJZDogc3RyaW5nKSA9PiB2b2lkO1xyXG4gIG9uRGVsZXRlU2Vzc2lvbjogKHRocmVhZElkOiBzdHJpbmcpID0+IHZvaWQ7XHJcbiAgb25OZXdUaHJlYWQ6ICgpID0+IHZvaWQ7XHJcbiAgb25PcGVuU2VhcmNoOiAoKSA9PiB2b2lkO1xyXG4gIGNvbGxhcHNlZDogYm9vbGVhbjtcclxuICBvblRvZ2dsZUNvbGxhcHNlZDogKCkgPT4gdm9pZDtcclxufTtcclxuXHJcbmNvbnN0IFNJREVCQVJfSVRFTVM6IEFycmF5PHtcclxuICBpZDogJ25ld1RocmVhZCcgfCAnc2VhcmNoJztcclxuICBsYWJlbDogc3RyaW5nO1xyXG4gIGljb246IFJlYWN0LkNvbXBvbmVudFByb3BzPHR5cGVvZiBXb3JrYmVuY2hJY29uPlsnbmFtZSddO1xyXG59PiA9IFtcclxuICB7IGlkOiAnbmV3VGhyZWFkJywgbGFiZWw6ICfmlrDlr7nor50nLCBpY29uOiAncGx1cycgfSxcclxuICB7IGlkOiAnc2VhcmNoJywgbGFiZWw6ICfmkJzntKInLCBpY29uOiAnc2VhcmNoJyB9LFxyXG5dO1xyXG5cclxuZXhwb3J0IGNvbnN0IEFnZW50V29ya2JlbmNoU2lkZWJhcjogUmVhY3QuRkM8QWdlbnRXb3JrYmVuY2hTaWRlYmFyUHJvcHM+ID0gKHtcclxuICBwcm9qZWN0TmFtZSA9IG51bGwsXHJcbiAgc2Vzc2lvbnMsXHJcbiAgYWN0aXZlU2Vzc2lvbklkLFxyXG4gIG9uU2VsZWN0VGhyZWFkLFxyXG4gIG9uRGVsZXRlU2Vzc2lvbixcclxuICBvbk5ld1RocmVhZCxcclxuICBvbk9wZW5TZWFyY2gsXHJcbiAgY29sbGFwc2VkLFxyXG4gIG9uVG9nZ2xlQ29sbGFwc2VkLFxyXG59KSA9PiAoXG4gIDxkaXYgY2xhc3NOYW1lPXtgYWdlbnQtd29ya2JlbmNoLXNpZGViYXIke2NvbGxhcHNlZCA/ICcgaXMtY29sbGFwc2VkJyA6ICcnfWB9PlxuICAgIDxkaXYgY2xhc3NOYW1lPVwiYWdlbnQtd29ya2JlbmNoLWxlZnQtcmFpbFwiPlxuICAgICAgPG5hdiBjbGFzc05hbWU9XCJhZ2VudC13b3JrYmVuY2gtcmFpbC1uYXZcIiBhcmlhLWxhYmVsPVwiQWdlbnQgd29ya2JlbmNoIGFjdGlvbnNcIj5cbiAgICAgICAge1NJREVCQVJfSVRFTVMubWFwKChpdGVtKSA9PiAoXG4gICAgICAgICAgPGJ1dHRvblxuICAgICAgICAgICAga2V5PXtpdGVtLmlkfVxyXG4gICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgY2xhc3NOYW1lPVwiYWdlbnQtd29ya2JlbmNoLXJhaWwtaXRlbVwiXHJcbiAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHtcclxuICAgICAgICAgICAgICBpZiAoaXRlbS5pZCA9PT0gJ25ld1RocmVhZCcpIHtcclxuICAgICAgICAgICAgICAgIG9uTmV3VGhyZWFkKCk7XHJcbiAgICAgICAgICAgICAgICBpZiAoY29sbGFwc2VkKSB7XHJcbiAgICAgICAgICAgICAgICAgIG9uVG9nZ2xlQ29sbGFwc2VkKCk7XHJcbiAgICAgICAgICAgICAgICB9XHJcbiAgICAgICAgICAgICAgICByZXR1cm47XHJcbiAgICAgICAgICAgICAgfVxyXG5cclxuICAgICAgICAgICAgICBpZiAoaXRlbS5pZCA9PT0gJ3NlYXJjaCcpIHtcclxuICAgICAgICAgICAgICAgIG9uT3BlblNlYXJjaCgpO1xyXG4gICAgICAgICAgICAgICAgcmV0dXJuO1xyXG4gICAgICAgICAgICAgIH1cclxuICAgICAgICAgICAgfX1cclxuICAgICAgICAgICAgdGl0bGU9e2l0ZW0ubGFiZWx9XHJcbiAgICAgICAgICAgIGFyaWEtbGFiZWw9e2l0ZW0ubGFiZWx9XHJcbiAgICAgICAgICA+XHJcbiAgICAgICAgICAgIDxXb3JrYmVuY2hJY29uIG5hbWU9e2l0ZW0uaWNvbn0gLz5cclxuICAgICAgICAgICAgPHNwYW4+e2l0ZW0ubGFiZWx9PC9zcGFuPlxyXG4gICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgKSl9XHJcbiAgICAgIDwvbmF2PlxyXG5cclxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJhZ2VudC13b3JrYmVuY2gtcmFpbC1mb290XCI+XHJcbiAgICAgICAgPGJ1dHRvblxyXG4gICAgICAgICAgdHlwZT1cImJ1dHRvblwiXHJcbiAgICAgICAgICBjbGFzc05hbWU9XCJhZ2VudC13b3JrYmVuY2gtcmFpbC1pdGVtIGFnZW50LXdvcmtiZW5jaC1yYWlsLWNvbGxhcHNlXCJcclxuICAgICAgICAgIG9uQ2xpY2s9e29uVG9nZ2xlQ29sbGFwc2VkfVxyXG4gICAgICAgICAgdGl0bGU9e2NvbGxhcHNlZCA/ICflsZXlvIDlt6bkvqfpnaLmnb8nIDogJ+aUtui1t+W3puS+p+mdouadvyd9XHJcbiAgICAgICAgICBhcmlhLWxhYmVsPXtjb2xsYXBzZWQgPyAn5bGV5byA5bem5L6n6Z2i5p2/JyA6ICfmlLbotbflt6bkvqfpnaLmnb8nfVxyXG4gICAgICAgID5cclxuICAgICAgICAgIDxXb3JrYmVuY2hJY29uIG5hbWU9XCJjaGV2cm9uUmlnaHRcIiAvPlxyXG4gICAgICAgICAgPHNwYW4+e2NvbGxhcHNlZCA/ICflsZXlvIAnIDogJ+aUtui1tyd9PC9zcGFuPlxyXG4gICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICA8L2Rpdj5cclxuICAgIDwvZGl2PlxyXG5cclxuICAgIHshY29sbGFwc2VkID8gKFxyXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cImFnZW50LXdvcmtiZW5jaC1sZWZ0LXBhbmVsXCI+XHJcbiAgICAgICAgPGhlYWRlciBjbGFzc05hbWU9XCJhZ2VudC1zaWRlYmFyLXBhbmVsLWhlYWRcIj5cclxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiYWdlbnQtc2lkZWJhci1wYW5lbC1oZWFkLWNvcHlcIj5cclxuICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwiYWdlbnQtc2lkZWJhci1wYW5lbC1oZWFkLWljb25cIj5cclxuICAgICAgICAgICAgICA8V29ya2JlbmNoSWNvbiBuYW1lPVwicGFnZVwiIC8+XHJcbiAgICAgICAgICAgIDwvc3Bhbj5cclxuICAgICAgICAgICAgPGRpdj5cclxuICAgICAgICAgICAgICA8c3Ryb25nPuWvueivneWOhuWPsjwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgIDxzcGFuPntwcm9qZWN0TmFtZSB8fCAn5b2T5YmN6aG555uu5Lya6K+dJ308L3NwYW4+XHJcbiAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgICBjbGFzc05hbWU9XCJhZ2VudC1zaWRlYmFyLWNvbGxhcHNlLWJ0blwiXHJcbiAgICAgICAgICAgIG9uQ2xpY2s9e29uVG9nZ2xlQ29sbGFwc2VkfVxyXG4gICAgICAgICAgICBhcmlhLWxhYmVsPVwi5pS26LW35bem5L6n6Z2i5p2/XCJcclxuICAgICAgICAgICAgdGl0bGU9XCLmlLbotbflt6bkvqfpnaLmnb9cIlxyXG4gICAgICAgICAgPlxyXG4gICAgICAgICAgICA8V29ya2JlbmNoSWNvbiBuYW1lPVwiY2hldnJvblJpZ2h0XCIgLz5cclxuICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgIDwvaGVhZGVyPlxyXG5cclxuICAgICAgICA8c2VjdGlvbiBjbGFzc05hbWU9XCJhZ2VudC1zaWRlYmFyLXBhbmVsLWJvZHkgYWdlbnQtc2lkZWJhci1wYW5lbC1ib2R5LXRocmVhZHNcIj5cclxuICAgICAgICAgIDxHTkFnZW50VGhyZWFkTGlzdFxyXG4gICAgICAgICAgICBzZXNzaW9ucz17c2Vzc2lvbnN9XHJcbiAgICAgICAgICAgIGFjdGl2ZVNlc3Npb25JZD17YWN0aXZlU2Vzc2lvbklkfVxyXG4gICAgICAgICAgICBvblNlbGVjdFRocmVhZD17b25TZWxlY3RUaHJlYWR9XHJcbiAgICAgICAgICAgIG9uRGVsZXRlU2Vzc2lvbj17b25EZWxldGVTZXNzaW9ufVxyXG4gICAgICAgICAgLz5cclxuICAgICAgICA8L3NlY3Rpb24+XHJcbiAgICAgIDwvZGl2PlxyXG4gICAgKSA6IG51bGx9XHJcbiAgPC9kaXY+XHJcbik7XHJcbiJdLCJmaWxlIjoiQzovVXNlcnMvRXZlbi9Eb2N1bWVudHMvQUxMLUlOLU9ORS9zcmMvZmVhdHVyZXMvYWdlbnQtc2hlbGwvY29tcG9uZW50cy9BZ2VudFdvcmtiZW5jaFNpZGViYXIudHN4In0=

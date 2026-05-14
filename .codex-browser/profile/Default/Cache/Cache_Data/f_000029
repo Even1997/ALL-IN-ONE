@@ -1,0 +1,1156 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=0a8d881b"; const Fragment = __vite__cjsImport0_react_jsxDevRuntime["Fragment"]; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+var _s = $RefreshSig$();
+import __vite__cjsImport3_react from "/node_modules/.vite/deps/react.js?v=0a8d881b"; const useEffect = __vite__cjsImport3_react["useEffect"]; const useMemo = __vite__cjsImport3_react["useMemo"]; const useState = __vite__cjsImport3_react["useState"];
+import {
+  deleteLibrarySkill,
+  discoverLocalSkills,
+  importGitHubSkill,
+  importLocalSkill,
+  readSkillFile
+} from "/src/modules/ai/skills/skillLibrary.ts";
+import { AI_CHAT_COMMAND_EVENT } from "/src/modules/ai/chat/chatCommands.ts";
+import { MacDialog } from "/src/components/ui/MacDialog.tsx";
+import "/src/components/ai/gn-agent-shell/GNAgentSkillsPage.css";
+const SKILL_LIBRARY_FILTERS = [
+  { value: "all", label: "全部" },
+  { value: "recommended", label: "推荐" },
+  { value: "system", label: "系统" },
+  { value: "personal", label: "个人" }
+];
+const SKILL_SECTION_META = {
+  recommended: {
+    label: "推荐",
+    description: "适合先装上的能力入口"
+  },
+  system: {
+    label: "系统",
+    description: "GoodNight 自带的基础能力"
+  },
+  personal: {
+    label: "个人",
+    description: "已经进入 .goodnight 的全局技能"
+  }
+};
+const getSkillSection = (skill) => {
+  if (skill.category === "system") {
+    return "system";
+  }
+  if (skill.source === "GoodNight recommended") {
+    return "recommended";
+  }
+  return "personal";
+};
+const buildSkillKey = (skill) => `${skill.source}:${skill.id}:${skill.path}`;
+const getSkillPromptPath = (skill) => skill.manifestPath.replace(/skill\.json$/i, "SKILL.md");
+const isSkillInstalled = (skill) => skill.category === "system" || skill.imported;
+const formatSourceBadge = (skill) => {
+  if (skill.category === "system") {
+    return "系统";
+  }
+  if (skill.source === "GoodNight recommended") {
+    return skill.imported ? "已安装推荐" : "官方推荐";
+  }
+  if (skill.imported) {
+    return "已安装";
+  }
+  return "可导入";
+};
+const buildSkillSummary = (skill) => {
+  if (skill.category === "system") {
+    return "GoodNight 自带的基础系统技能，默认可用。";
+  }
+  if (skill.source === "GoodNight recommended") {
+    return skill.imported ? "官方推荐技能，已经安装到 GoodNight 全局技能库；卸载后仍然可以重新安装。" : "GoodNight 官方推荐技能，按需安装；如果以后不需要，也可以卸载后再装回来。";
+  }
+  if (skill.imported) {
+    return "已经纳入 GoodNight 全局技能库，可直接在聊天中用 /skill 调用。";
+  }
+  return "来自外部来源，还没有进入 .goodnight，全局可见后可一键导入。";
+};
+const matchesSkillQuery = (skill, query) => {
+  if (!query) {
+    return true;
+  }
+  const haystack = [skill.name, skill.id, skill.source, skill.path].join(" ").toLowerCase();
+  return haystack.includes(query);
+};
+const renderSectionEmptyState = (title) => /* @__PURE__ */ jsxDEV("article", { className: "gn-agent-skills-list-empty", children: [
+  /* @__PURE__ */ jsxDEV("strong", { children: [
+    title,
+    "里还没有内容"
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+    lineNumber: 123,
+    columnNumber: 5
+  }, this),
+  /* @__PURE__ */ jsxDEV("span", { children: "换个筛选条件，或者先导入一些技能到 GoodNight 全局库。" }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+    lineNumber: 124,
+    columnNumber: 5
+  }, this)
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+  lineNumber: 122,
+  columnNumber: 1
+}, this);
+const buildPromptPreview = (content) => {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.length > 2200 ? `${trimmed.slice(0, 2200)}
+
+...` : trimmed;
+};
+const SkillListItem = ({ skill, active, isWorking, onSelect, onImport }) => {
+  const installed = isSkillInstalled(skill);
+  return /* @__PURE__ */ jsxDEV("article", { className: `gn-agent-skills-list-item${active ? " active" : ""}`, children: [
+    /* @__PURE__ */ jsxDEV(
+      "button",
+      {
+        type: "button",
+        className: "gn-agent-skills-list-item-main",
+        onClick: () => onSelect(skill),
+        children: [
+          /* @__PURE__ */ jsxDEV(
+            "div",
+            {
+              className: `gn-agent-skills-list-item-icon${skill.builtin ? " system" : skill.imported ? " personal" : ""}`,
+              "aria-hidden": "true",
+              children: skill.name.slice(0, 1).toUpperCase()
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 153,
+              columnNumber: 9
+            },
+            this
+          ),
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-list-item-copy", children: [
+            /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-list-item-title-row", children: [
+              /* @__PURE__ */ jsxDEV("strong", { children: skill.name }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 161,
+                columnNumber: 13
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { className: `gn-agent-skills-source-badge${skill.builtin ? " builtin" : ""}`, children: formatSourceBadge(skill) }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 162,
+                columnNumber: 13
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 160,
+              columnNumber: 11
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-list-item-meta", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: [
+                "/",
+                skill.id
+              ] }, void 0, true, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 167,
+                columnNumber: 13
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { children: skill.source }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 168,
+                columnNumber: 13
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 166,
+              columnNumber: 11
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: buildSkillSummary(skill) }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 170,
+              columnNumber: 11
+            }, this),
+            /* @__PURE__ */ jsxDEV("code", { children: skill.path }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 171,
+              columnNumber: 11
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 159,
+            columnNumber: 9
+          }, this)
+        ]
+      },
+      void 0,
+      true,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 148,
+        columnNumber: 7
+      },
+      this
+    ),
+    !installed ? /* @__PURE__ */ jsxDEV(
+      "button",
+      {
+        type: "button",
+        className: "gn-agent-skills-list-item-quick-action",
+        disabled: isWorking,
+        onClick: () => void onImport(skill),
+        children: "导入"
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 175,
+        columnNumber: 7
+      },
+      this
+    ) : /* @__PURE__ */ jsxDEV("span", { className: "gn-agent-skills-list-item-status", children: "已安装" }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+      lineNumber: 184,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+    lineNumber: 147,
+    columnNumber: 5
+  }, this);
+};
+_c = SkillListItem;
+export const GNAgentSkillsPage = () => {
+  _s();
+  const [skills, setSkills] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isWorking, setIsWorking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [statusMessage, setStatusMessage] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [selectedSkillKey, setSelectedSkillKey] = useState(null);
+  const [selectedPromptContent, setSelectedPromptContent] = useState("");
+  const [selectedPromptError, setSelectedPromptError] = useState(null);
+  const [isSelectedPromptLoading, setIsSelectedPromptLoading] = useState(false);
+  const [previewSkill, setPreviewSkill] = useState(null);
+  const [previewContent, setPreviewContent] = useState("");
+  const [previewError, setPreviewError] = useState(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const loadSkills = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const entries = await discoverLocalSkills();
+      setSkills(entries);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  useEffect(() => {
+    void loadSkills();
+  }, []);
+  const runAction = async (action, successMessage) => {
+    setIsWorking(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      await action();
+      setStatusMessage(successMessage);
+      await loadSkills();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+  const handleImportLocal = async () => {
+    const sourcePath = window.prompt("导入本地技能：输入技能文件或文件夹路径。")?.trim();
+    if (!sourcePath) {
+      return;
+    }
+    await runAction(() => importLocalSkill(sourcePath), "本地技能已经导入到 GoodNight 全局库。");
+  };
+  const handleImportGitHub = async () => {
+    const repo = window.prompt("GitHub 下载：输入 owner/repo。")?.trim();
+    if (!repo) {
+      return;
+    }
+    const path = window.prompt("GitHub 下载：输入仓库里的技能路径。")?.trim();
+    if (!path) {
+      return;
+    }
+    const gitRef = window.prompt("可选 git ref（branch、tag 或 commit）。留空默认 main。")?.trim() || void 0;
+    await runAction(
+      () => importGitHubSkill({ repo, path, gitRef }),
+      "GitHub 技能已经导入到 GoodNight 全局库。"
+    );
+  };
+  const handleDeleteSkill = async (skill) => {
+    if (!skill.deletable) {
+      return;
+    }
+    if (!window.confirm(`确定要从 GoodNight 全局库移除 ${skill.name} 吗？`)) {
+      return;
+    }
+    await runAction(() => deleteLibrarySkill(skill.id), "技能已经从 GoodNight 全局库移除。");
+  };
+  const handleQuickImport = async (skill) => {
+    if (isSkillInstalled(skill)) {
+      return;
+    }
+    await runAction(() => importLocalSkill(skill.path), `${skill.name} 已经导入到 GoodNight 全局库。`);
+  };
+  const handleUseSkill = (skill) => {
+    window.dispatchEvent(
+      new CustomEvent(AI_CHAT_COMMAND_EVENT, {
+        detail: {
+          prompt: `/${skill.id} `,
+          autoSubmit: false
+        }
+      })
+    );
+    setStatusMessage(`已写入聊天框：/${skill.id}`);
+    setErrorMessage(null);
+  };
+  const openPreview = async (skill) => {
+    setPreviewSkill(skill);
+    setPreviewError(null);
+    setPreviewContent("");
+    setIsPreviewLoading(true);
+    try {
+      const content = await readSkillFile(getSkillPromptPath(skill));
+      setPreviewContent(content);
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+  const handlePreviewOpenChange = (open) => {
+    if (open) {
+      return;
+    }
+    setPreviewSkill(null);
+    setPreviewContent("");
+    setPreviewError(null);
+    setIsPreviewLoading(false);
+  };
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const visibleSkills = useMemo(
+    () => skills.filter((skill) => {
+      const matchesFilter = activeFilter === "all" ? true : getSkillSection(skill) === activeFilter;
+      return matchesFilter && matchesSkillQuery(skill, normalizedQuery);
+    }),
+    [activeFilter, normalizedQuery, skills]
+  );
+  useEffect(() => {
+    if (visibleSkills.length === 0) {
+      setSelectedSkillKey(null);
+      return;
+    }
+    if (!selectedSkillKey || !visibleSkills.some((skill) => buildSkillKey(skill) === selectedSkillKey)) {
+      setSelectedSkillKey(buildSkillKey(visibleSkills[0]));
+    }
+  }, [selectedSkillKey, visibleSkills]);
+  const selectedSkill = useMemo(
+    () => visibleSkills.find((skill) => buildSkillKey(skill) === selectedSkillKey) || null,
+    [selectedSkillKey, visibleSkills]
+  );
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedSkill) {
+      setSelectedPromptContent("");
+      setSelectedPromptError(null);
+      setIsSelectedPromptLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setIsSelectedPromptLoading(true);
+    setSelectedPromptError(null);
+    readSkillFile(getSkillPromptPath(selectedSkill)).then((content) => {
+      if (!cancelled) {
+        setSelectedPromptContent(content);
+      }
+    }).catch((error) => {
+      if (!cancelled) {
+        setSelectedPromptContent("");
+        setSelectedPromptError(error instanceof Error ? error.message : String(error));
+      }
+    }).finally(() => {
+      if (!cancelled) {
+        setIsSelectedPromptLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSkill]);
+  const groupedSkills = useMemo(() => {
+    return {
+      recommended: visibleSkills.filter((skill) => getSkillSection(skill) === "recommended"),
+      system: visibleSkills.filter((skill) => getSkillSection(skill) === "system"),
+      personal: visibleSkills.filter((skill) => getSkillSection(skill) === "personal")
+    };
+  }, [visibleSkills]);
+  const installedCount = skills.filter((skill) => isSkillInstalled(skill)).length;
+  const importableCount = skills.filter((skill) => !isSkillInstalled(skill)).length;
+  const visibleCount = visibleSkills.length;
+  const promptPreview = buildPromptPreview(selectedPromptContent);
+  return /* @__PURE__ */ jsxDEV("section", { className: "gn-agent-shell-page gn-agent-skills-page", children: [
+    /* @__PURE__ */ jsxDEV("header", { className: "gn-agent-shell-page-header gn-agent-shell-page-header-stack gn-agent-skills-page-header", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-toolbar-bar", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-toolbar-copy", children: [
+          /* @__PURE__ */ jsxDEV("span", { className: "gn-agent-context-badge", children: "GN Agent" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 411,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "Skills Library" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 413,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "管理保存在 `.goodnight` 里的 GoodNight 技能资源。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 414,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 412,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 410,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-toolbar", children: [
+          /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              type: "button",
+              className: "gn-agent-skills-action-btn secondary",
+              onClick: () => void loadSkills(),
+              disabled: isWorking || isLoading,
+              children: "刷新列表"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 419,
+              columnNumber: 13
+            },
+            this
+          ),
+          /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              type: "button",
+              className: "gn-agent-skills-action-btn",
+              onClick: () => void handleImportLocal(),
+              disabled: isWorking,
+              children: "导入本地技能"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 427,
+              columnNumber: 13
+            },
+            this
+          ),
+          /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              type: "button",
+              className: "gn-agent-skills-action-btn",
+              onClick: () => void handleImportGitHub(),
+              disabled: isWorking,
+              children: "GitHub 下载"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 435,
+              columnNumber: 13
+            },
+            this
+          )
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 418,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 409,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-toolbar-filters", children: [
+        /* @__PURE__ */ jsxDEV("label", { className: "gn-agent-skills-search", children: [
+          /* @__PURE__ */ jsxDEV("span", { className: "gn-agent-skills-search-icon", "aria-hidden": "true", children: "⌕" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 448,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV(
+            "input",
+            {
+              type: "search",
+              value: searchQuery,
+              onChange: (event) => setSearchQuery(event.target.value),
+              placeholder: "搜索技能",
+              "aria-label": "搜索技能"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 451,
+              columnNumber: 13
+            },
+            this
+          )
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 447,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("label", { className: "gn-agent-skills-filter", children: [
+          /* @__PURE__ */ jsxDEV("span", { className: "sr-only", children: "筛选技能分组" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 461,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV(
+            "select",
+            {
+              value: activeFilter,
+              onChange: (event) => setActiveFilter(event.target.value),
+              "aria-label": "技能筛选",
+              children: SKILL_LIBRARY_FILTERS.map(
+                (filter) => /* @__PURE__ */ jsxDEV("option", { value: filter.value, children: filter.label }, filter.value, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                  lineNumber: 468,
+                  columnNumber: 15
+                }, this)
+              )
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 462,
+              columnNumber: 13
+            },
+            this
+          )
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 460,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 446,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+      lineNumber: 408,
+      columnNumber: 7
+    }, this),
+    statusMessage ? /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-banner success", children: statusMessage }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+      lineNumber: 477,
+      columnNumber: 24
+    }, this) : null,
+    errorMessage ? /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-banner error", children: errorMessage }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+      lineNumber: 478,
+      columnNumber: 23
+    }, this) : null,
+    isLoading ? /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-shell", children: /* @__PURE__ */ jsxDEV("article", { className: "gn-agent-skills-list-empty", children: [
+      /* @__PURE__ */ jsxDEV("strong", { children: "正在加载技能…" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 483,
+        columnNumber: 13
+      }, this),
+      /* @__PURE__ */ jsxDEV("span", { children: "正在扫描 GoodNight 全局技能库和可导入来源。" }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 484,
+        columnNumber: 13
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+      lineNumber: 482,
+      columnNumber: 11
+    }, this) }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+      lineNumber: 481,
+      columnNumber: 7
+    }, this) : null,
+    !isLoading ? /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-shell", children: [
+      /* @__PURE__ */ jsxDEV("section", { className: "gn-agent-skills-list-panel", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-panel-header", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "技能列表" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 494,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "按资源列表浏览、筛选并选中技能。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 495,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 493,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-list-meta", children: [
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              skills.length,
+              " 全部"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 498,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              visibleCount,
+              " 可见"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 499,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              installedCount,
+              " 已安装"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 500,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              importableCount,
+              " 待导入"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 501,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 497,
+            columnNumber: 15
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 492,
+          columnNumber: 13
+        }, this),
+        visibleSkills.length === 0 ? /* @__PURE__ */ jsxDEV("article", { className: "gn-agent-skills-list-empty", children: [
+          /* @__PURE__ */ jsxDEV("strong", { children: "还没有技能" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 506,
+            columnNumber: 17
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: "导入本地技能或从 GitHub 下载后，这里会开始长出你的全局技能库。" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 507,
+            columnNumber: 17
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 505,
+          columnNumber: 11
+        }, this) : Object.entries(SKILL_SECTION_META).map(([section, meta]) => {
+          const sectionSkills = groupedSkills[section];
+          return /* @__PURE__ */ jsxDEV("section", { className: "gn-agent-skills-section", children: [
+            /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-section-header", children: [
+              /* @__PURE__ */ jsxDEV("div", { children: [
+                /* @__PURE__ */ jsxDEV("h4", { children: meta.label }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                  lineNumber: 517,
+                  columnNumber: 25
+                }, this),
+                /* @__PURE__ */ jsxDEV("span", { children: meta.description }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                  lineNumber: 518,
+                  columnNumber: 25
+                }, this)
+              ] }, void 0, true, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 516,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("strong", { children: sectionSkills.length }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 520,
+                columnNumber: 23
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 515,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-list", children: sectionSkills.length > 0 ? sectionSkills.map(
+              (skill) => /* @__PURE__ */ jsxDEV(
+                SkillListItem,
+                {
+                  skill,
+                  active: selectedSkillKey === buildSkillKey(skill),
+                  isWorking,
+                  onSelect: (nextSkill) => setSelectedSkillKey(buildSkillKey(nextSkill)),
+                  onImport: handleQuickImport
+                },
+                buildSkillKey(skill),
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                  lineNumber: 526,
+                  columnNumber: 19
+                },
+                this
+              )
+            ) : renderSectionEmptyState(meta.label) }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 523,
+              columnNumber: 21
+            }, this)
+          ] }, section, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 514,
+            columnNumber: 15
+          }, this);
+        })
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 491,
+        columnNumber: 11
+      }, this),
+      /* @__PURE__ */ jsxDEV("aside", { className: "gn-agent-skills-detail-panel", children: selectedSkill ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-panel-header", children: /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("strong", { children: "技能详情" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 548,
+            columnNumber: 21
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: "当前选中资源的说明、操作和内容预览。" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 549,
+            columnNumber: 21
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 547,
+          columnNumber: 19
+        }, this) }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 546,
+          columnNumber: 17
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-detail-header", children: [
+          /* @__PURE__ */ jsxDEV("span", { className: "gn-agent-skills-detail-eyebrow", children: "当前选中" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 554,
+            columnNumber: 19
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-detail-title-row", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: selectedSkill.name }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 556,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { className: `gn-agent-skills-source-badge${selectedSkill.builtin ? " builtin" : ""}`, children: formatSourceBadge(selectedSkill) }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 557,
+              columnNumber: 21
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 555,
+            columnNumber: 19
+          }, this),
+          /* @__PURE__ */ jsxDEV("p", { children: buildSkillSummary(selectedSkill) }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 561,
+            columnNumber: 19
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-detail-meta", children: [
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              "命令：/",
+              selectedSkill.id
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 563,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              "来源：",
+              selectedSkill.source
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 564,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: isSkillInstalled(selectedSkill) ? "状态：已安装" : "状态：可导入" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 565,
+              columnNumber: 21
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 562,
+            columnNumber: 19
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 553,
+          columnNumber: 17
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-detail-actions", children: [
+          isSkillInstalled(selectedSkill) ? /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              type: "button",
+              className: "gn-agent-skills-card-btn",
+              disabled: isWorking,
+              onClick: () => void handleUseSkill(selectedSkill),
+              children: "使用"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 571,
+              columnNumber: 15
+            },
+            this
+          ) : /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              type: "button",
+              className: "gn-agent-skills-card-btn",
+              disabled: isWorking,
+              onClick: () => void handleQuickImport(selectedSkill),
+              children: "导入"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 580,
+              columnNumber: 15
+            },
+            this
+          ),
+          /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              type: "button",
+              className: "gn-agent-skills-card-btn",
+              disabled: isWorking,
+              onClick: () => void openPreview(selectedSkill),
+              children: "查看全文"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 589,
+              columnNumber: 19
+            },
+            this
+          ),
+          selectedSkill.deletable ? /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              type: "button",
+              className: "gn-agent-skills-card-btn danger",
+              disabled: isWorking,
+              onClick: () => void handleDeleteSkill(selectedSkill),
+              children: "移除"
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 598,
+              columnNumber: 15
+            },
+            this
+          ) : null
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 569,
+          columnNumber: 17
+        }, this),
+        /* @__PURE__ */ jsxDEV("section", { className: "gn-agent-skills-detail-section", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-detail-section-header", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "基本信息" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 611,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "用于确认调用方式、来源和文件位置。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 612,
+              columnNumber: 21
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 610,
+            columnNumber: 19
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-detail-kv", children: [
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "调用方式" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 616,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("code", { children: [
+                "/",
+                selectedSkill.id
+              ] }, void 0, true, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 617,
+                columnNumber: 23
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 615,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "安装状态" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 620,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("strong", { children: isSkillInstalled(selectedSkill) ? "已安装" : "可导入" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 621,
+                columnNumber: 23
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 619,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "库内位置" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 624,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("code", { children: selectedSkill.path }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 625,
+                columnNumber: 23
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 623,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "提示词入口" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 628,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("code", { children: getSkillPromptPath(selectedSkill) }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 629,
+                columnNumber: 23
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 627,
+              columnNumber: 21
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 614,
+            columnNumber: 19
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 609,
+          columnNumber: 17
+        }, this),
+        /* @__PURE__ */ jsxDEV("section", { className: "gn-agent-skills-detail-section gn-agent-skills-detail-preview-card", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-detail-preview-header", children: [
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { className: "gn-agent-skills-detail-eyebrow", children: "技能内容" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 637,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("h5", { children: "SKILL.md 预览" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+                lineNumber: 638,
+                columnNumber: 23
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 636,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("code", { children: getSkillPromptPath(selectedSkill) }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+              lineNumber: 640,
+              columnNumber: 21
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 635,
+            columnNumber: 19
+          }, this),
+          isSelectedPromptLoading ? /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-preview-state", children: "正在加载技能内容…" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 644,
+            columnNumber: 15
+          }, this) : null,
+          selectedPromptError ? /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-preview-state error", children: selectedPromptError }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 647,
+            columnNumber: 15
+          }, this) : null,
+          !isSelectedPromptLoading && !selectedPromptError ? promptPreview ? /* @__PURE__ */ jsxDEV("pre", { className: "gn-agent-skills-preview-body", children: promptPreview }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 651,
+            columnNumber: 15
+          }, this) : /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-preview-state", children: "这个技能还没有可预览的 SKILL.md 内容。" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 653,
+            columnNumber: 15
+          }, this) : null
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 634,
+          columnNumber: 17
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 545,
+        columnNumber: 11
+      }, this) : /* @__PURE__ */ jsxDEV("article", { className: "gn-agent-skills-list-empty", children: [
+        /* @__PURE__ */ jsxDEV("strong", { children: "先选一个技能" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 660,
+          columnNumber: 17
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { children: "左侧列表会把推荐、系统和个人技能都集中到这里。" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 661,
+          columnNumber: 17
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 659,
+        columnNumber: 11
+      }, this) }, void 0, false, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 543,
+        columnNumber: 11
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+      lineNumber: 490,
+      columnNumber: 7
+    }, this) : null,
+    /* @__PURE__ */ jsxDEV(
+      MacDialog,
+      {
+        open: Boolean(previewSkill),
+        onOpenChange: handlePreviewOpenChange,
+        title: previewSkill ? `${previewSkill.name} · 技能内容` : "技能内容",
+        description: previewSkill ? getSkillPromptPath(previewSkill) : void 0,
+        contentClassName: "gn-agent-skills-preview-dialog",
+        children: /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-preview", children: [
+          isPreviewLoading ? /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-preview-state", children: "正在加载技能内容…" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 676,
+            columnNumber: 31
+          }, this) : null,
+          previewError ? /* @__PURE__ */ jsxDEV("div", { className: "gn-agent-skills-preview-state error", children: previewError }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 677,
+            columnNumber: 27
+          }, this) : null,
+          !isPreviewLoading && !previewError && previewContent ? /* @__PURE__ */ jsxDEV("pre", { className: "gn-agent-skills-preview-body", children: previewContent }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+            lineNumber: 679,
+            columnNumber: 11
+          }, this) : null
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+          lineNumber: 675,
+          columnNumber: 9
+        }, this)
+      },
+      void 0,
+      false,
+      {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+        lineNumber: 668,
+        columnNumber: 7
+      },
+      this
+    )
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx",
+    lineNumber: 407,
+    columnNumber: 5
+  }, this);
+};
+_s(GNAgentSkillsPage, "aI49lB+cVqERJVB+5AiOoZSIcvg=");
+_c2 = GNAgentSkillsPage;
+var _c, _c2;
+$RefreshReg$(_c, "SkillListItem");
+$RefreshReg$(_c2, "GNAgentSkillsPage");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Users/Even/Documents/ALL-IN-ONE/src/components/ai/gn-agent-shell/GNAgentSkillsPage.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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QyxNQUFNUyxRQUFRN0QsWUFBWTtBQUFBLFFBQzFCLGNBQWNtQztBQUFBQSxRQUNkLE9BQU9uQyxlQUFlLEdBQUdBLGFBQWE1QyxJQUFJLFlBQVk7QUFBQSxRQUN0RCxhQUFhNEMsZUFBZXRELG1CQUFtQnNELFlBQVksSUFBSXdCO0FBQUFBLFFBQy9ELGtCQUFpQjtBQUFBLFFBRWpCLGlDQUFDLFNBQUksV0FBVSwyQkFDWmxCO0FBQUFBLDZCQUFtQix1QkFBQyxTQUFJLFdBQVUsaUNBQWdDLHlCQUEvQztBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUF3RCxJQUFTO0FBQUEsVUFDcEZGLGVBQWUsdUJBQUMsU0FBSSxXQUFVLHVDQUF1Q0EsMEJBQXREO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBQW1FLElBQVM7QUFBQSxVQUMzRixDQUFDRSxvQkFBb0IsQ0FBQ0YsZ0JBQWdCRixpQkFDckMsdUJBQUMsU0FBSSxXQUFVLGdDQUFnQ0EsNEJBQS9DO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBQThELElBQzVEO0FBQUEsYUFMTjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBTUE7QUFBQTtBQUFBLE1BYkY7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLElBY0E7QUFBQSxPQW5SRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBb1JBO0FBRUo7QUFBRXhCLEdBL2VXRCxtQkFBMkI7QUFBQSxNQUEzQkE7QUFBMkIsSUFBQUQsSUFBQXNGO0FBQUEsYUFBQXRGLElBQUE7QUFBQSxhQUFBc0YsS0FBQSIsIm5hbWVzIjpbInVzZUVmZmVjdCIsInVzZU1lbW8iLCJ1c2VTdGF0ZSIsImRlbGV0ZUxpYnJhcnlTa2lsbCIsImRpc2NvdmVyTG9jYWxTa2lsbHMiLCJpbXBvcnRHaXRIdWJTa2lsbCIsImltcG9ydExvY2FsU2tpbGwiLCJyZWFkU2tpbGxGaWxlIiwiQUlfQ0hBVF9DT01NQU5EX0VWRU5UIiwiTWFjRGlhbG9nIiwiU0tJTExfTElCUkFSWV9GSUxURVJTIiwidmFsdWUiLCJsYWJlbCIsIlNLSUxMX1NFQ1RJT05fTUVUQSIsInJlY29tbWVuZGVkIiwiZGVzY3JpcHRpb24iLCJzeXN0ZW0iLCJwZXJzb25hbCIsImdldFNraWxsU2VjdGlvbiIsInNraWxsIiwiY2F0ZWdvcnkiLCJzb3VyY2UiLCJidWlsZFNraWxsS2V5IiwiaWQiLCJwYXRoIiwiZ2V0U2tpbGxQcm9tcHRQYXRoIiwibWFuaWZlc3RQYXRoIiwicmVwbGFjZSIsImlzU2tpbGxJbnN0YWxsZWQiLCJpbXBvcnRlZCIsImZvcm1hdFNvdXJjZUJhZGdlIiwiYnVpbGRTa2lsbFN1bW1hcnkiLCJtYXRjaGVzU2tpbGxRdWVyeSIsInF1ZXJ5IiwiaGF5c3RhY2siLCJuYW1lIiwiam9pbiIsInRvTG93ZXJDYXNlIiwiaW5jbHVkZXMiLCJyZW5kZXJTZWN0aW9uRW1wdHlTdGF0ZSIsInRpdGxlIiwiYnVpbGRQcm9tcHRQcmV2aWV3IiwiY29udGVudCIsInRyaW1tZWQiLCJ0cmltIiwibGVuZ3RoIiwic2xpY2UiLCJTa2lsbExpc3RJdGVtIiwiYWN0aXZlIiwiaXNXb3JraW5nIiwib25TZWxlY3QiLCJvbkltcG9ydCIsImluc3RhbGxlZCIsImJ1aWx0aW4iLCJ0b1VwcGVyQ2FzZSIsIl9jIiwiR05BZ2VudFNraWxsc1BhZ2UiLCJfcyIsInNraWxscyIsInNldFNraWxscyIsImlzTG9hZGluZyIsInNldElzTG9hZGluZyIsInNldElzV29ya2luZyIsImVycm9yTWVzc2FnZSIsInNldEVycm9yTWVzc2FnZSIsInN0YXR1c01lc3NhZ2UiLCJzZXRTdGF0dXNNZXNzYWdlIiwic2VhcmNoUXVlcnkiLCJzZXRTZWFyY2hRdWVyeSIsImFjdGl2ZUZpbHRlciIsInNldEFjdGl2ZUZpbHRlciIsInNlbGVjdGVkU2tpbGxLZXkiLCJzZXRTZWxlY3RlZFNraWxsS2V5Iiwic2VsZWN0ZWRQcm9tcHRDb250ZW50Iiwic2V0U2VsZWN0ZWRQcm9tcHRDb250ZW50Iiwic2VsZWN0ZWRQcm9tcHRFcnJvciIsInNldFNlbGVjdGVkUHJvbXB0RXJyb3IiLCJpc1NlbGVjdGVkUHJvbXB0TG9hZGluZyIsInNldElzU2VsZWN0ZWRQcm9tcHRMb2FkaW5nIiwicHJldmlld1NraWxsIiwic2V0UHJldmlld1NraWxsIiwicHJldmlld0NvbnRlbnQiLCJzZXRQcmV2aWV3Q29udGVudCIsInByZXZpZXdFcnJvciIsInNldFByZXZpZXdFcnJvciIsImlzUHJldmlld0xvYWRpbmciLCJzZXRJc1ByZXZpZXdMb2FkaW5nIiwibG9hZFNraWxscyIsImVudHJpZXMiLCJlcnJvciIsIkVycm9yIiwibWVzc2FnZSIsIlN0cmluZyIsInJ1bkFjdGlvbiIsImFjdGlvbiIsInN1Y2Nlc3NNZXNzYWdlIiwiaGFuZGxlSW1wb3J0TG9jYWwiLCJzb3VyY2VQYXRoIiwid2luZG93IiwicHJvbXB0IiwiaGFuZGxlSW1wb3J0R2l0SHViIiwicmVwbyIsImdpdFJlZiIsInVuZGVmaW5lZCIsImhhbmRsZURlbGV0ZVNraWxsIiwiZGVsZXRhYmxlIiwiY29uZmlybSIsImhhbmRsZVF1aWNrSW1wb3J0IiwiaGFuZGxlVXNlU2tpbGwiLCJkaXNwYXRjaEV2ZW50IiwiQ3VzdG9tRXZlbnQiLCJkZXRhaWwiLCJhdXRvU3VibWl0Iiwib3BlblByZXZpZXciLCJoYW5kbGVQcmV2aWV3T3BlbkNoYW5nZSIsIm9wZW4iLCJub3JtYWxpemVkUXVlcnkiLCJ2aXNpYmxlU2tpbGxzIiwiZmlsdGVyIiwibWF0Y2hlc0ZpbHRlciIsInNvbWUiLCJzZWxlY3RlZFNraWxsIiwiZmluZCIsImNhbmNlbGxlZCIsInRoZW4iLCJjYXRjaCIsImZpbmFsbHkiLCJncm91cGVkU2tpbGxzIiwiaW5zdGFsbGVkQ291bnQiLCJpbXBvcnRhYmxlQ291bnQiLCJ2aXNpYmxlQ291bnQiLCJwcm9tcHRQcmV2aWV3IiwiZXZlbnQiLCJ0YXJnZXQiLCJtYXAiLCJPYmplY3QiLCJzZWN0aW9uIiwibWV0YSIsInNlY3Rpb25Ta2lsbHMiLCJuZXh0U2tpbGwiLCJCb29sZWFuIiwiX2MyIl0sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbIkdOQWdlbnRTa2lsbHNQYWdlLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgUmVhY3QsIHsgdXNlRWZmZWN0LCB1c2VNZW1vLCB1c2VTdGF0ZSB9IGZyb20gJ3JlYWN0JztcclxuaW1wb3J0IHtcclxuICBkZWxldGVMaWJyYXJ5U2tpbGwsXHJcbiAgZGlzY292ZXJMb2NhbFNraWxscyxcclxuICBpbXBvcnRHaXRIdWJTa2lsbCxcclxuICBpbXBvcnRMb2NhbFNraWxsLFxyXG4gIHJlYWRTa2lsbEZpbGUsXHJcbiAgdHlwZSBTa2lsbERpc2NvdmVyeUVudHJ5LFxyXG59IGZyb20gJy4uLy4uLy4uL21vZHVsZXMvYWkvc2tpbGxzL3NraWxsTGlicmFyeSc7XHJcbmltcG9ydCB7IEFJX0NIQVRfQ09NTUFORF9FVkVOVCB9IGZyb20gJy4uLy4uLy4uL21vZHVsZXMvYWkvY2hhdC9jaGF0Q29tbWFuZHMnO1xyXG5pbXBvcnQgeyBNYWNEaWFsb2cgfSBmcm9tICcuLi8uLi91aS9NYWNEaWFsb2cnO1xyXG5pbXBvcnQgJy4vR05BZ2VudFNraWxsc1BhZ2UuY3NzJztcclxuXHJcbnR5cGUgU2tpbGxMaWJyYXJ5RmlsdGVyID0gJ2FsbCcgfCAncmVjb21tZW5kZWQnIHwgJ3N5c3RlbScgfCAncGVyc29uYWwnO1xyXG50eXBlIFNraWxsU2VjdGlvbiA9IEV4Y2x1ZGU8U2tpbGxMaWJyYXJ5RmlsdGVyLCAnYWxsJz47XHJcblxyXG5jb25zdCBTS0lMTF9MSUJSQVJZX0ZJTFRFUlM6IEFycmF5PHsgdmFsdWU6IFNraWxsTGlicmFyeUZpbHRlcjsgbGFiZWw6IHN0cmluZyB9PiA9IFtcclxuICB7IHZhbHVlOiAnYWxsJywgbGFiZWw6ICflhajpg6gnIH0sXHJcbiAgeyB2YWx1ZTogJ3JlY29tbWVuZGVkJywgbGFiZWw6ICfmjqjojZAnIH0sXHJcbiAgeyB2YWx1ZTogJ3N5c3RlbScsIGxhYmVsOiAn57O757ufJyB9LFxyXG4gIHsgdmFsdWU6ICdwZXJzb25hbCcsIGxhYmVsOiAn5Liq5Lq6JyB9LFxyXG5dO1xyXG5cclxuY29uc3QgU0tJTExfU0VDVElPTl9NRVRBOiBSZWNvcmQ8U2tpbGxTZWN0aW9uLCB7IGxhYmVsOiBzdHJpbmc7IGRlc2NyaXB0aW9uOiBzdHJpbmcgfT4gPSB7XHJcbiAgcmVjb21tZW5kZWQ6IHtcclxuICAgIGxhYmVsOiAn5o6o6I2QJyxcclxuICAgIGRlc2NyaXB0aW9uOiAn6YCC5ZCI5YWI6KOF5LiK55qE6IO95Yqb5YWl5Y+jJyxcclxuICB9LFxyXG4gIHN5c3RlbToge1xyXG4gICAgbGFiZWw6ICfns7vnu58nLFxyXG4gICAgZGVzY3JpcHRpb246ICdHb29kTmlnaHQg6Ieq5bim55qE5Z+656GA6IO95YqbJyxcclxuICB9LFxyXG4gIHBlcnNvbmFsOiB7XHJcbiAgICBsYWJlbDogJ+S4quS6uicsXHJcbiAgICBkZXNjcmlwdGlvbjogJ+W3sue7j+i/m+WFpSAuZ29vZG5pZ2h0IOeahOWFqOWxgOaKgOiDvScsXHJcbiAgfSxcclxufTtcclxuXHJcbmNvbnN0IGdldFNraWxsU2VjdGlvbiA9IChza2lsbDogU2tpbGxEaXNjb3ZlcnlFbnRyeSk6IFNraWxsU2VjdGlvbiA9PiB7XHJcbiAgaWYgKHNraWxsLmNhdGVnb3J5ID09PSAnc3lzdGVtJykge1xyXG4gICAgcmV0dXJuICdzeXN0ZW0nO1xyXG4gIH1cclxuXHJcbiAgaWYgKHNraWxsLnNvdXJjZSA9PT0gJ0dvb2ROaWdodCByZWNvbW1lbmRlZCcpIHtcclxuICAgIHJldHVybiAncmVjb21tZW5kZWQnO1xyXG4gIH1cclxuXHJcbiAgcmV0dXJuICdwZXJzb25hbCc7XHJcbn07XHJcblxyXG5jb25zdCBidWlsZFNraWxsS2V5ID0gKHNraWxsOiBTa2lsbERpc2NvdmVyeUVudHJ5KSA9PiBgJHtza2lsbC5zb3VyY2V9OiR7c2tpbGwuaWR9OiR7c2tpbGwucGF0aH1gO1xyXG5cclxuY29uc3QgZ2V0U2tpbGxQcm9tcHRQYXRoID0gKHNraWxsOiBTa2lsbERpc2NvdmVyeUVudHJ5KSA9PlxyXG4gIHNraWxsLm1hbmlmZXN0UGF0aC5yZXBsYWNlKC9za2lsbFxcLmpzb24kL2ksICdTS0lMTC5tZCcpO1xyXG5cclxuY29uc3QgaXNTa2lsbEluc3RhbGxlZCA9IChza2lsbDogU2tpbGxEaXNjb3ZlcnlFbnRyeSkgPT5cclxuICBza2lsbC5jYXRlZ29yeSA9PT0gJ3N5c3RlbScgfHwgc2tpbGwuaW1wb3J0ZWQ7XHJcblxyXG5jb25zdCBmb3JtYXRTb3VyY2VCYWRnZSA9IChza2lsbDogU2tpbGxEaXNjb3ZlcnlFbnRyeSkgPT4ge1xyXG4gIGlmIChza2lsbC5jYXRlZ29yeSA9PT0gJ3N5c3RlbScpIHtcclxuICAgIHJldHVybiAn57O757ufJztcclxuICB9XHJcblxyXG4gIGlmIChza2lsbC5zb3VyY2UgPT09ICdHb29kTmlnaHQgcmVjb21tZW5kZWQnKSB7XHJcbiAgICByZXR1cm4gc2tpbGwuaW1wb3J0ZWQgPyAn5bey5a6J6KOF5o6o6I2QJyA6ICflrpjmlrnmjqjojZAnO1xyXG4gIH1cclxuXHJcbiAgaWYgKHNraWxsLmltcG9ydGVkKSB7XHJcbiAgICByZXR1cm4gJ+W3suWuieijhSc7XHJcbiAgfVxyXG5cclxuICByZXR1cm4gJ+WPr+WvvOWFpSc7XHJcbn07XHJcblxyXG5jb25zdCBidWlsZFNraWxsU3VtbWFyeSA9IChza2lsbDogU2tpbGxEaXNjb3ZlcnlFbnRyeSkgPT4ge1xyXG4gIGlmIChza2lsbC5jYXRlZ29yeSA9PT0gJ3N5c3RlbScpIHtcclxuICAgIHJldHVybiAnR29vZE5pZ2h0IOiHquW4pueahOWfuuehgOezu+e7n+aKgOiDve+8jOm7mOiupOWPr+eUqOOAgic7XHJcbiAgfVxyXG5cclxuICBpZiAoc2tpbGwuc291cmNlID09PSAnR29vZE5pZ2h0IHJlY29tbWVuZGVkJykge1xyXG4gICAgcmV0dXJuIHNraWxsLmltcG9ydGVkXHJcbiAgICAgID8gJ+WumOaWueaOqOiNkOaKgOiDve+8jOW3sue7j+WuieijheWIsCBHb29kTmlnaHQg5YWo5bGA5oqA6IO95bqT77yb5Y246L295ZCO5LuN54S25Y+v5Lul6YeN5paw5a6J6KOF44CCJ1xyXG4gICAgICA6ICdHb29kTmlnaHQg5a6Y5pa55o6o6I2Q5oqA6IO977yM5oyJ6ZyA5a6J6KOF77yb5aaC5p6c5Lul5ZCO5LiN6ZyA6KaB77yM5Lmf5Y+v5Lul5Y246L295ZCO5YaN6KOF5Zue5p2l44CCJztcclxuICB9XHJcblxyXG4gIGlmIChza2lsbC5pbXBvcnRlZCkge1xyXG4gICAgcmV0dXJuICflt7Lnu4/nurPlhaUgR29vZE5pZ2h0IOWFqOWxgOaKgOiDveW6k++8jOWPr+ebtOaOpeWcqOiBiuWkqeS4reeUqCAvc2tpbGwg6LCD55So44CCJztcclxuICB9XHJcblxyXG4gIHJldHVybiAn5p2l6Ieq5aSW6YOo5p2l5rqQ77yM6L+Y5rKh5pyJ6L+b5YWlIC5nb29kbmlnaHTvvIzlhajlsYDlj6/op4HlkI7lj6/kuIDplK7lr7zlhaXjgIInO1xyXG59O1xyXG5cclxuY29uc3QgbWF0Y2hlc1NraWxsUXVlcnkgPSAoc2tpbGw6IFNraWxsRGlzY292ZXJ5RW50cnksIHF1ZXJ5OiBzdHJpbmcpID0+IHtcclxuICBpZiAoIXF1ZXJ5KSB7XHJcbiAgICByZXR1cm4gdHJ1ZTtcclxuICB9XHJcblxyXG4gIGNvbnN0IGhheXN0YWNrID0gW3NraWxsLm5hbWUsIHNraWxsLmlkLCBza2lsbC5zb3VyY2UsIHNraWxsLnBhdGhdLmpvaW4oJyAnKS50b0xvd2VyQ2FzZSgpO1xyXG4gIHJldHVybiBoYXlzdGFjay5pbmNsdWRlcyhxdWVyeSk7XHJcbn07XHJcblxyXG5jb25zdCByZW5kZXJTZWN0aW9uRW1wdHlTdGF0ZSA9ICh0aXRsZTogc3RyaW5nKSA9PiAoXHJcbiAgPGFydGljbGUgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWxpc3QtZW1wdHlcIj5cclxuICAgIDxzdHJvbmc+e3RpdGxlfemHjOi/mOayoeacieWGheWuuTwvc3Ryb25nPlxyXG4gICAgPHNwYW4+5o2i5Liq562b6YCJ5p2h5Lu277yM5oiW6ICF5YWI5a+85YWl5LiA5Lqb5oqA6IO95YiwIEdvb2ROaWdodCDlhajlsYDlupPjgII8L3NwYW4+XHJcbiAgPC9hcnRpY2xlPlxyXG4pO1xyXG5cclxuY29uc3QgYnVpbGRQcm9tcHRQcmV2aWV3ID0gKGNvbnRlbnQ6IHN0cmluZykgPT4ge1xyXG4gIGNvbnN0IHRyaW1tZWQgPSBjb250ZW50LnRyaW0oKTtcclxuICBpZiAoIXRyaW1tZWQpIHtcclxuICAgIHJldHVybiAnJztcclxuICB9XHJcblxyXG4gIHJldHVybiB0cmltbWVkLmxlbmd0aCA+IDIyMDAgPyBgJHt0cmltbWVkLnNsaWNlKDAsIDIyMDApfVxcblxcbi4uLmAgOiB0cmltbWVkO1xyXG59O1xyXG5cclxuY29uc3QgU2tpbGxMaXN0SXRlbTogUmVhY3QuRkM8e1xyXG4gIHNraWxsOiBTa2lsbERpc2NvdmVyeUVudHJ5O1xyXG4gIGFjdGl2ZTogYm9vbGVhbjtcclxuICBpc1dvcmtpbmc6IGJvb2xlYW47XHJcbiAgb25TZWxlY3Q6IChza2lsbDogU2tpbGxEaXNjb3ZlcnlFbnRyeSkgPT4gdm9pZDtcclxuICBvbkltcG9ydDogKHNraWxsOiBTa2lsbERpc2NvdmVyeUVudHJ5KSA9PiB2b2lkO1xyXG59PiA9ICh7IHNraWxsLCBhY3RpdmUsIGlzV29ya2luZywgb25TZWxlY3QsIG9uSW1wb3J0IH0pID0+IHtcclxuICBjb25zdCBpbnN0YWxsZWQgPSBpc1NraWxsSW5zdGFsbGVkKHNraWxsKTtcclxuXHJcbiAgcmV0dXJuIChcclxuICAgIDxhcnRpY2xlIGNsYXNzTmFtZT17YGduLWFnZW50LXNraWxscy1saXN0LWl0ZW0ke2FjdGl2ZSA/ICcgYWN0aXZlJyA6ICcnfWB9PlxyXG4gICAgICA8YnV0dG9uXHJcbiAgICAgICAgdHlwZT1cImJ1dHRvblwiXHJcbiAgICAgICAgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWxpc3QtaXRlbS1tYWluXCJcclxuICAgICAgICBvbkNsaWNrPXsoKSA9PiBvblNlbGVjdChza2lsbCl9XHJcbiAgICAgID5cclxuICAgICAgICA8ZGl2XHJcbiAgICAgICAgICBjbGFzc05hbWU9e2Bnbi1hZ2VudC1za2lsbHMtbGlzdC1pdGVtLWljb24ke3NraWxsLmJ1aWx0aW4gPyAnIHN5c3RlbScgOiBza2lsbC5pbXBvcnRlZCA/ICcgcGVyc29uYWwnIDogJyd9YH1cclxuICAgICAgICAgIGFyaWEtaGlkZGVuPVwidHJ1ZVwiXHJcbiAgICAgICAgPlxyXG4gICAgICAgICAge3NraWxsLm5hbWUuc2xpY2UoMCwgMSkudG9VcHBlckNhc2UoKX1cclxuICAgICAgICA8L2Rpdj5cclxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1saXN0LWl0ZW0tY29weVwiPlxyXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtbGlzdC1pdGVtLXRpdGxlLXJvd1wiPlxyXG4gICAgICAgICAgICA8c3Ryb25nPntza2lsbC5uYW1lfTwvc3Ryb25nPlxyXG4gICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9e2Bnbi1hZ2VudC1za2lsbHMtc291cmNlLWJhZGdlJHtza2lsbC5idWlsdGluID8gJyBidWlsdGluJyA6ICcnfWB9PlxyXG4gICAgICAgICAgICAgIHtmb3JtYXRTb3VyY2VCYWRnZShza2lsbCl9XHJcbiAgICAgICAgICAgIDwvc3Bhbj5cclxuICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtbGlzdC1pdGVtLW1ldGFcIj5cclxuICAgICAgICAgICAgPHNwYW4+L3tza2lsbC5pZH08L3NwYW4+XHJcbiAgICAgICAgICAgIDxzcGFuPntza2lsbC5zb3VyY2V9PC9zcGFuPlxyXG4gICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICA8c3Bhbj57YnVpbGRTa2lsbFN1bW1hcnkoc2tpbGwpfTwvc3Bhbj5cclxuICAgICAgICAgIDxjb2RlPntza2lsbC5wYXRofTwvY29kZT5cclxuICAgICAgICA8L2Rpdj5cclxuICAgICAgPC9idXR0b24+XHJcbiAgICAgIHshaW5zdGFsbGVkID8gKFxyXG4gICAgICAgIDxidXR0b25cclxuICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWxpc3QtaXRlbS1xdWljay1hY3Rpb25cIlxyXG4gICAgICAgICAgZGlzYWJsZWQ9e2lzV29ya2luZ31cclxuICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHZvaWQgb25JbXBvcnQoc2tpbGwpfVxyXG4gICAgICAgID5cclxuICAgICAgICAgIOWvvOWFpVxyXG4gICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICApIDogKFxyXG4gICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1saXN0LWl0ZW0tc3RhdHVzXCI+5bey5a6J6KOFPC9zcGFuPlxyXG4gICAgICApfVxyXG4gICAgPC9hcnRpY2xlPlxyXG4gICk7XHJcbn07XHJcblxyXG5leHBvcnQgY29uc3QgR05BZ2VudFNraWxsc1BhZ2U6IFJlYWN0LkZDID0gKCkgPT4ge1xyXG4gIGNvbnN0IFtza2lsbHMsIHNldFNraWxsc10gPSB1c2VTdGF0ZTxTa2lsbERpc2NvdmVyeUVudHJ5W10+KFtdKTtcclxuICBjb25zdCBbaXNMb2FkaW5nLCBzZXRJc0xvYWRpbmddID0gdXNlU3RhdGUodHJ1ZSk7XHJcbiAgY29uc3QgW2lzV29ya2luZywgc2V0SXNXb3JraW5nXSA9IHVzZVN0YXRlKGZhbHNlKTtcclxuICBjb25zdCBbZXJyb3JNZXNzYWdlLCBzZXRFcnJvck1lc3NhZ2VdID0gdXNlU3RhdGU8c3RyaW5nIHwgbnVsbD4obnVsbCk7XHJcbiAgY29uc3QgW3N0YXR1c01lc3NhZ2UsIHNldFN0YXR1c01lc3NhZ2VdID0gdXNlU3RhdGU8c3RyaW5nIHwgbnVsbD4obnVsbCk7XHJcbiAgY29uc3QgW3NlYXJjaFF1ZXJ5LCBzZXRTZWFyY2hRdWVyeV0gPSB1c2VTdGF0ZSgnJyk7XHJcbiAgY29uc3QgW2FjdGl2ZUZpbHRlciwgc2V0QWN0aXZlRmlsdGVyXSA9IHVzZVN0YXRlPFNraWxsTGlicmFyeUZpbHRlcj4oJ2FsbCcpO1xyXG4gIGNvbnN0IFtzZWxlY3RlZFNraWxsS2V5LCBzZXRTZWxlY3RlZFNraWxsS2V5XSA9IHVzZVN0YXRlPHN0cmluZyB8IG51bGw+KG51bGwpO1xyXG4gIGNvbnN0IFtzZWxlY3RlZFByb21wdENvbnRlbnQsIHNldFNlbGVjdGVkUHJvbXB0Q29udGVudF0gPSB1c2VTdGF0ZSgnJyk7XHJcbiAgY29uc3QgW3NlbGVjdGVkUHJvbXB0RXJyb3IsIHNldFNlbGVjdGVkUHJvbXB0RXJyb3JdID0gdXNlU3RhdGU8c3RyaW5nIHwgbnVsbD4obnVsbCk7XHJcbiAgY29uc3QgW2lzU2VsZWN0ZWRQcm9tcHRMb2FkaW5nLCBzZXRJc1NlbGVjdGVkUHJvbXB0TG9hZGluZ10gPSB1c2VTdGF0ZShmYWxzZSk7XHJcbiAgY29uc3QgW3ByZXZpZXdTa2lsbCwgc2V0UHJldmlld1NraWxsXSA9IHVzZVN0YXRlPFNraWxsRGlzY292ZXJ5RW50cnkgfCBudWxsPihudWxsKTtcclxuICBjb25zdCBbcHJldmlld0NvbnRlbnQsIHNldFByZXZpZXdDb250ZW50XSA9IHVzZVN0YXRlKCcnKTtcclxuICBjb25zdCBbcHJldmlld0Vycm9yLCBzZXRQcmV2aWV3RXJyb3JdID0gdXNlU3RhdGU8c3RyaW5nIHwgbnVsbD4obnVsbCk7XHJcbiAgY29uc3QgW2lzUHJldmlld0xvYWRpbmcsIHNldElzUHJldmlld0xvYWRpbmddID0gdXNlU3RhdGUoZmFsc2UpO1xyXG5cclxuICBjb25zdCBsb2FkU2tpbGxzID0gYXN5bmMgKCkgPT4ge1xyXG4gICAgc2V0SXNMb2FkaW5nKHRydWUpO1xyXG4gICAgc2V0RXJyb3JNZXNzYWdlKG51bGwpO1xyXG5cclxuICAgIHRyeSB7XHJcbiAgICAgIGNvbnN0IGVudHJpZXMgPSBhd2FpdCBkaXNjb3ZlckxvY2FsU2tpbGxzKCk7XHJcbiAgICAgIHNldFNraWxscyhlbnRyaWVzKTtcclxuICAgIH0gY2F0Y2ggKGVycm9yKSB7XHJcbiAgICAgIHNldEVycm9yTWVzc2FnZShlcnJvciBpbnN0YW5jZW9mIEVycm9yID8gZXJyb3IubWVzc2FnZSA6IFN0cmluZyhlcnJvcikpO1xyXG4gICAgfSBmaW5hbGx5IHtcclxuICAgICAgc2V0SXNMb2FkaW5nKGZhbHNlKTtcclxuICAgIH1cclxuICB9O1xyXG5cclxuICB1c2VFZmZlY3QoKCkgPT4ge1xyXG4gICAgdm9pZCBsb2FkU2tpbGxzKCk7XHJcbiAgfSwgW10pO1xyXG5cclxuICBjb25zdCBydW5BY3Rpb24gPSBhc3luYyAoYWN0aW9uOiAoKSA9PiBQcm9taXNlPHVua25vd24+LCBzdWNjZXNzTWVzc2FnZTogc3RyaW5nKSA9PiB7XHJcbiAgICBzZXRJc1dvcmtpbmcodHJ1ZSk7XHJcbiAgICBzZXRFcnJvck1lc3NhZ2UobnVsbCk7XHJcbiAgICBzZXRTdGF0dXNNZXNzYWdlKG51bGwpO1xyXG5cclxuICAgIHRyeSB7XHJcbiAgICAgIGF3YWl0IGFjdGlvbigpO1xyXG4gICAgICBzZXRTdGF0dXNNZXNzYWdlKHN1Y2Nlc3NNZXNzYWdlKTtcclxuICAgICAgYXdhaXQgbG9hZFNraWxscygpO1xyXG4gICAgfSBjYXRjaCAoZXJyb3IpIHtcclxuICAgICAgc2V0RXJyb3JNZXNzYWdlKGVycm9yIGluc3RhbmNlb2YgRXJyb3IgPyBlcnJvci5tZXNzYWdlIDogU3RyaW5nKGVycm9yKSk7XHJcbiAgICB9IGZpbmFsbHkge1xyXG4gICAgICBzZXRJc1dvcmtpbmcoZmFsc2UpO1xyXG4gICAgfVxyXG4gIH07XHJcblxyXG4gIGNvbnN0IGhhbmRsZUltcG9ydExvY2FsID0gYXN5bmMgKCkgPT4ge1xyXG4gICAgY29uc3Qgc291cmNlUGF0aCA9IHdpbmRvdy5wcm9tcHQoJ+WvvOWFpeacrOWcsOaKgOiDve+8mui+k+WFpeaKgOiDveaWh+S7tuaIluaWh+S7tuWkuei3r+W+hOOAgicpPy50cmltKCk7XHJcbiAgICBpZiAoIXNvdXJjZVBhdGgpIHtcclxuICAgICAgcmV0dXJuO1xyXG4gICAgfVxyXG5cclxuICAgIGF3YWl0IHJ1bkFjdGlvbigoKSA9PiBpbXBvcnRMb2NhbFNraWxsKHNvdXJjZVBhdGgpLCAn5pys5Zyw5oqA6IO95bey57uP5a+85YWl5YiwIEdvb2ROaWdodCDlhajlsYDlupPjgIInKTtcclxuICB9O1xyXG5cclxuICBjb25zdCBoYW5kbGVJbXBvcnRHaXRIdWIgPSBhc3luYyAoKSA9PiB7XHJcbiAgICBjb25zdCByZXBvID0gd2luZG93LnByb21wdCgnR2l0SHViIOS4i+i9ve+8mui+k+WFpSBvd25lci9yZXBv44CCJyk/LnRyaW0oKTtcclxuICAgIGlmICghcmVwbykge1xyXG4gICAgICByZXR1cm47XHJcbiAgICB9XHJcblxyXG4gICAgY29uc3QgcGF0aCA9IHdpbmRvdy5wcm9tcHQoJ0dpdEh1YiDkuIvovb3vvJrovpPlhaXku5PlupPph4znmoTmioDog73ot6/lvoTjgIInKT8udHJpbSgpO1xyXG4gICAgaWYgKCFwYXRoKSB7XHJcbiAgICAgIHJldHVybjtcclxuICAgIH1cclxuXHJcbiAgICBjb25zdCBnaXRSZWYgPVxyXG4gICAgICB3aW5kb3cucHJvbXB0KCflj6/pgIkgZ2l0IHJlZu+8iGJyYW5jaOOAgXRhZyDmiJYgY29tbWl077yJ44CC55WZ56m66buY6K6kIG1haW7jgIInKT8udHJpbSgpIHx8IHVuZGVmaW5lZDtcclxuICAgIGF3YWl0IHJ1bkFjdGlvbihcclxuICAgICAgKCkgPT4gaW1wb3J0R2l0SHViU2tpbGwoeyByZXBvLCBwYXRoLCBnaXRSZWYgfSksXHJcbiAgICAgICdHaXRIdWIg5oqA6IO95bey57uP5a+85YWl5YiwIEdvb2ROaWdodCDlhajlsYDlupPjgIInXHJcbiAgICApO1xyXG4gIH07XHJcblxyXG4gIGNvbnN0IGhhbmRsZURlbGV0ZVNraWxsID0gYXN5bmMgKHNraWxsOiBTa2lsbERpc2NvdmVyeUVudHJ5KSA9PiB7XHJcbiAgICBpZiAoIXNraWxsLmRlbGV0YWJsZSkge1xyXG4gICAgICByZXR1cm47XHJcbiAgICB9XHJcblxyXG4gICAgaWYgKCF3aW5kb3cuY29uZmlybShg56Gu5a6a6KaB5LuOIEdvb2ROaWdodCDlhajlsYDlupPnp7vpmaQgJHtza2lsbC5uYW1lfSDlkJfvvJ9gKSkge1xyXG4gICAgICByZXR1cm47XHJcbiAgICB9XHJcblxyXG4gICAgYXdhaXQgcnVuQWN0aW9uKCgpID0+IGRlbGV0ZUxpYnJhcnlTa2lsbChza2lsbC5pZCksICfmioDog73lt7Lnu4/ku44gR29vZE5pZ2h0IOWFqOWxgOW6k+enu+mZpOOAgicpO1xyXG4gIH07XHJcblxyXG4gIGNvbnN0IGhhbmRsZVF1aWNrSW1wb3J0ID0gYXN5bmMgKHNraWxsOiBTa2lsbERpc2NvdmVyeUVudHJ5KSA9PiB7XHJcbiAgICBpZiAoaXNTa2lsbEluc3RhbGxlZChza2lsbCkpIHtcclxuICAgICAgcmV0dXJuO1xyXG4gICAgfVxyXG5cclxuICAgIGF3YWl0IHJ1bkFjdGlvbigoKSA9PiBpbXBvcnRMb2NhbFNraWxsKHNraWxsLnBhdGgpLCBgJHtza2lsbC5uYW1lfSDlt7Lnu4/lr7zlhaXliLAgR29vZE5pZ2h0IOWFqOWxgOW6k+OAgmApO1xyXG4gIH07XHJcblxyXG4gIGNvbnN0IGhhbmRsZVVzZVNraWxsID0gKHNraWxsOiBTa2lsbERpc2NvdmVyeUVudHJ5KSA9PiB7XHJcbiAgICB3aW5kb3cuZGlzcGF0Y2hFdmVudChcclxuICAgICAgbmV3IEN1c3RvbUV2ZW50KEFJX0NIQVRfQ09NTUFORF9FVkVOVCwge1xyXG4gICAgICAgIGRldGFpbDoge1xyXG4gICAgICAgICAgcHJvbXB0OiBgLyR7c2tpbGwuaWR9IGAsXHJcbiAgICAgICAgICBhdXRvU3VibWl0OiBmYWxzZSxcclxuICAgICAgICB9LFxyXG4gICAgICB9KVxyXG4gICAgKTtcclxuICAgIHNldFN0YXR1c01lc3NhZ2UoYOW3suWGmeWFpeiBiuWkqeahhu+8mi8ke3NraWxsLmlkfWApO1xyXG4gICAgc2V0RXJyb3JNZXNzYWdlKG51bGwpO1xyXG4gIH07XHJcblxyXG4gIGNvbnN0IG9wZW5QcmV2aWV3ID0gYXN5bmMgKHNraWxsOiBTa2lsbERpc2NvdmVyeUVudHJ5KSA9PiB7XHJcbiAgICBzZXRQcmV2aWV3U2tpbGwoc2tpbGwpO1xyXG4gICAgc2V0UHJldmlld0Vycm9yKG51bGwpO1xyXG4gICAgc2V0UHJldmlld0NvbnRlbnQoJycpO1xyXG4gICAgc2V0SXNQcmV2aWV3TG9hZGluZyh0cnVlKTtcclxuXHJcbiAgICB0cnkge1xyXG4gICAgICBjb25zdCBjb250ZW50ID0gYXdhaXQgcmVhZFNraWxsRmlsZShnZXRTa2lsbFByb21wdFBhdGgoc2tpbGwpKTtcclxuICAgICAgc2V0UHJldmlld0NvbnRlbnQoY29udGVudCk7XHJcbiAgICB9IGNhdGNoIChlcnJvcikge1xyXG4gICAgICBzZXRQcmV2aWV3RXJyb3IoZXJyb3IgaW5zdGFuY2VvZiBFcnJvciA/IGVycm9yLm1lc3NhZ2UgOiBTdHJpbmcoZXJyb3IpKTtcclxuICAgIH0gZmluYWxseSB7XHJcbiAgICAgIHNldElzUHJldmlld0xvYWRpbmcoZmFsc2UpO1xyXG4gICAgfVxyXG4gIH07XHJcblxyXG4gIGNvbnN0IGhhbmRsZVByZXZpZXdPcGVuQ2hhbmdlID0gKG9wZW46IGJvb2xlYW4pID0+IHtcclxuICAgIGlmIChvcGVuKSB7XHJcbiAgICAgIHJldHVybjtcclxuICAgIH1cclxuXHJcbiAgICBzZXRQcmV2aWV3U2tpbGwobnVsbCk7XHJcbiAgICBzZXRQcmV2aWV3Q29udGVudCgnJyk7XHJcbiAgICBzZXRQcmV2aWV3RXJyb3IobnVsbCk7XHJcbiAgICBzZXRJc1ByZXZpZXdMb2FkaW5nKGZhbHNlKTtcclxuICB9O1xyXG5cclxuICBjb25zdCBub3JtYWxpemVkUXVlcnkgPSBzZWFyY2hRdWVyeS50cmltKCkudG9Mb3dlckNhc2UoKTtcclxuICBjb25zdCB2aXNpYmxlU2tpbGxzID0gdXNlTWVtbyhcclxuICAgICgpID0+XHJcbiAgICAgIHNraWxscy5maWx0ZXIoKHNraWxsKSA9PiB7XHJcbiAgICAgICAgY29uc3QgbWF0Y2hlc0ZpbHRlciA9IGFjdGl2ZUZpbHRlciA9PT0gJ2FsbCcgPyB0cnVlIDogZ2V0U2tpbGxTZWN0aW9uKHNraWxsKSA9PT0gYWN0aXZlRmlsdGVyO1xyXG4gICAgICAgIHJldHVybiBtYXRjaGVzRmlsdGVyICYmIG1hdGNoZXNTa2lsbFF1ZXJ5KHNraWxsLCBub3JtYWxpemVkUXVlcnkpO1xyXG4gICAgICB9KSxcclxuICAgIFthY3RpdmVGaWx0ZXIsIG5vcm1hbGl6ZWRRdWVyeSwgc2tpbGxzXVxyXG4gICk7XHJcblxyXG4gIHVzZUVmZmVjdCgoKSA9PiB7XHJcbiAgICBpZiAodmlzaWJsZVNraWxscy5sZW5ndGggPT09IDApIHtcclxuICAgICAgc2V0U2VsZWN0ZWRTa2lsbEtleShudWxsKTtcclxuICAgICAgcmV0dXJuO1xyXG4gICAgfVxyXG5cclxuICAgIGlmICghc2VsZWN0ZWRTa2lsbEtleSB8fCAhdmlzaWJsZVNraWxscy5zb21lKChza2lsbCkgPT4gYnVpbGRTa2lsbEtleShza2lsbCkgPT09IHNlbGVjdGVkU2tpbGxLZXkpKSB7XHJcbiAgICAgIHNldFNlbGVjdGVkU2tpbGxLZXkoYnVpbGRTa2lsbEtleSh2aXNpYmxlU2tpbGxzWzBdKSk7XHJcbiAgICB9XHJcbiAgfSwgW3NlbGVjdGVkU2tpbGxLZXksIHZpc2libGVTa2lsbHNdKTtcclxuXHJcbiAgY29uc3Qgc2VsZWN0ZWRTa2lsbCA9IHVzZU1lbW8oXHJcbiAgICAoKSA9PiB2aXNpYmxlU2tpbGxzLmZpbmQoKHNraWxsKSA9PiBidWlsZFNraWxsS2V5KHNraWxsKSA9PT0gc2VsZWN0ZWRTa2lsbEtleSkgfHwgbnVsbCxcclxuICAgIFtzZWxlY3RlZFNraWxsS2V5LCB2aXNpYmxlU2tpbGxzXVxyXG4gICk7XHJcblxyXG4gIHVzZUVmZmVjdCgoKSA9PiB7XHJcbiAgICBsZXQgY2FuY2VsbGVkID0gZmFsc2U7XHJcblxyXG4gICAgaWYgKCFzZWxlY3RlZFNraWxsKSB7XHJcbiAgICAgIHNldFNlbGVjdGVkUHJvbXB0Q29udGVudCgnJyk7XHJcbiAgICAgIHNldFNlbGVjdGVkUHJvbXB0RXJyb3IobnVsbCk7XHJcbiAgICAgIHNldElzU2VsZWN0ZWRQcm9tcHRMb2FkaW5nKGZhbHNlKTtcclxuICAgICAgcmV0dXJuICgpID0+IHtcclxuICAgICAgICBjYW5jZWxsZWQgPSB0cnVlO1xyXG4gICAgICB9O1xyXG4gICAgfVxyXG5cclxuICAgIHNldElzU2VsZWN0ZWRQcm9tcHRMb2FkaW5nKHRydWUpO1xyXG4gICAgc2V0U2VsZWN0ZWRQcm9tcHRFcnJvcihudWxsKTtcclxuXHJcbiAgICByZWFkU2tpbGxGaWxlKGdldFNraWxsUHJvbXB0UGF0aChzZWxlY3RlZFNraWxsKSlcclxuICAgICAgLnRoZW4oKGNvbnRlbnQpID0+IHtcclxuICAgICAgICBpZiAoIWNhbmNlbGxlZCkge1xyXG4gICAgICAgICAgc2V0U2VsZWN0ZWRQcm9tcHRDb250ZW50KGNvbnRlbnQpO1xyXG4gICAgICAgIH1cclxuICAgICAgfSlcclxuICAgICAgLmNhdGNoKChlcnJvcikgPT4ge1xyXG4gICAgICAgIGlmICghY2FuY2VsbGVkKSB7XHJcbiAgICAgICAgICBzZXRTZWxlY3RlZFByb21wdENvbnRlbnQoJycpO1xyXG4gICAgICAgICAgc2V0U2VsZWN0ZWRQcm9tcHRFcnJvcihlcnJvciBpbnN0YW5jZW9mIEVycm9yID8gZXJyb3IubWVzc2FnZSA6IFN0cmluZyhlcnJvcikpO1xyXG4gICAgICAgIH1cclxuICAgICAgfSlcclxuICAgICAgLmZpbmFsbHkoKCkgPT4ge1xyXG4gICAgICAgIGlmICghY2FuY2VsbGVkKSB7XHJcbiAgICAgICAgICBzZXRJc1NlbGVjdGVkUHJvbXB0TG9hZGluZyhmYWxzZSk7XHJcbiAgICAgICAgfVxyXG4gICAgICB9KTtcclxuXHJcbiAgICByZXR1cm4gKCkgPT4ge1xyXG4gICAgICBjYW5jZWxsZWQgPSB0cnVlO1xyXG4gICAgfTtcclxuICB9LCBbc2VsZWN0ZWRTa2lsbF0pO1xyXG5cclxuICBjb25zdCBncm91cGVkU2tpbGxzID0gdXNlTWVtbygoKSA9PiB7XHJcbiAgICByZXR1cm4ge1xyXG4gICAgICByZWNvbW1lbmRlZDogdmlzaWJsZVNraWxscy5maWx0ZXIoKHNraWxsKSA9PiBnZXRTa2lsbFNlY3Rpb24oc2tpbGwpID09PSAncmVjb21tZW5kZWQnKSxcclxuICAgICAgc3lzdGVtOiB2aXNpYmxlU2tpbGxzLmZpbHRlcigoc2tpbGwpID0+IGdldFNraWxsU2VjdGlvbihza2lsbCkgPT09ICdzeXN0ZW0nKSxcclxuICAgICAgcGVyc29uYWw6IHZpc2libGVTa2lsbHMuZmlsdGVyKChza2lsbCkgPT4gZ2V0U2tpbGxTZWN0aW9uKHNraWxsKSA9PT0gJ3BlcnNvbmFsJyksXHJcbiAgICB9O1xyXG4gIH0sIFt2aXNpYmxlU2tpbGxzXSk7XHJcblxyXG4gIGNvbnN0IGluc3RhbGxlZENvdW50ID0gc2tpbGxzLmZpbHRlcigoc2tpbGwpID0+IGlzU2tpbGxJbnN0YWxsZWQoc2tpbGwpKS5sZW5ndGg7XHJcbiAgY29uc3QgaW1wb3J0YWJsZUNvdW50ID0gc2tpbGxzLmZpbHRlcigoc2tpbGwpID0+ICFpc1NraWxsSW5zdGFsbGVkKHNraWxsKSkubGVuZ3RoO1xyXG4gIGNvbnN0IHZpc2libGVDb3VudCA9IHZpc2libGVTa2lsbHMubGVuZ3RoO1xyXG4gIGNvbnN0IHByb21wdFByZXZpZXcgPSBidWlsZFByb21wdFByZXZpZXcoc2VsZWN0ZWRQcm9tcHRDb250ZW50KTtcclxuXHJcbiAgcmV0dXJuIChcclxuICAgIDxzZWN0aW9uIGNsYXNzTmFtZT1cImduLWFnZW50LXNoZWxsLXBhZ2UgZ24tYWdlbnQtc2tpbGxzLXBhZ2VcIj5cclxuICAgICAgPGhlYWRlciBjbGFzc05hbWU9XCJnbi1hZ2VudC1zaGVsbC1wYWdlLWhlYWRlciBnbi1hZ2VudC1zaGVsbC1wYWdlLWhlYWRlci1zdGFjayBnbi1hZ2VudC1za2lsbHMtcGFnZS1oZWFkZXJcIj5cclxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy10b29sYmFyLWJhclwiPlxyXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtdG9vbGJhci1jb3B5XCI+XHJcbiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImduLWFnZW50LWNvbnRleHQtYmFkZ2VcIj5HTiBBZ2VudDwvc3Bhbj5cclxuICAgICAgICAgICAgPGRpdj5cclxuICAgICAgICAgICAgICA8c3Ryb25nPlNraWxscyBMaWJyYXJ5PC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgPHNwYW4+566h55CG5L+d5a2Y5ZyoIGAuZ29vZG5pZ2h0YCDph4znmoQgR29vZE5pZ2h0IOaKgOiDvei1hOa6kOOAgjwvc3Bhbj5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICA8L2Rpdj5cclxuXHJcbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy10b29sYmFyXCI+XHJcbiAgICAgICAgICAgIDxidXR0b25cclxuICAgICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgICBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtYWN0aW9uLWJ0biBzZWNvbmRhcnlcIlxyXG4gICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHZvaWQgbG9hZFNraWxscygpfVxyXG4gICAgICAgICAgICAgIGRpc2FibGVkPXtpc1dvcmtpbmcgfHwgaXNMb2FkaW5nfVxyXG4gICAgICAgICAgICA+XHJcbiAgICAgICAgICAgICAg5Yi35paw5YiX6KGoXHJcbiAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXHJcbiAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWFjdGlvbi1idG5cIlxyXG4gICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHZvaWQgaGFuZGxlSW1wb3J0TG9jYWwoKX1cclxuICAgICAgICAgICAgICBkaXNhYmxlZD17aXNXb3JraW5nfVxyXG4gICAgICAgICAgICA+XHJcbiAgICAgICAgICAgICAg5a+85YWl5pys5Zyw5oqA6IO9XHJcbiAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXHJcbiAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWFjdGlvbi1idG5cIlxyXG4gICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHZvaWQgaGFuZGxlSW1wb3J0R2l0SHViKCl9XHJcbiAgICAgICAgICAgICAgZGlzYWJsZWQ9e2lzV29ya2luZ31cclxuICAgICAgICAgICAgPlxyXG4gICAgICAgICAgICAgIEdpdEh1YiDkuIvovb1cclxuICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICA8L2Rpdj5cclxuXHJcbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtdG9vbGJhci1maWx0ZXJzXCI+XHJcbiAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLXNlYXJjaFwiPlxyXG4gICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtc2VhcmNoLWljb25cIiBhcmlhLWhpZGRlbj1cInRydWVcIj5cclxuICAgICAgICAgICAgICDijJVcclxuICAgICAgICAgICAgPC9zcGFuPlxyXG4gICAgICAgICAgICA8aW5wdXRcclxuICAgICAgICAgICAgICB0eXBlPVwic2VhcmNoXCJcclxuICAgICAgICAgICAgICB2YWx1ZT17c2VhcmNoUXVlcnl9XHJcbiAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT4gc2V0U2VhcmNoUXVlcnkoZXZlbnQudGFyZ2V0LnZhbHVlKX1cclxuICAgICAgICAgICAgICBwbGFjZWhvbGRlcj1cIuaQnOe0ouaKgOiDvVwiXHJcbiAgICAgICAgICAgICAgYXJpYS1sYWJlbD1cIuaQnOe0ouaKgOiDvVwiXHJcbiAgICAgICAgICAgIC8+XHJcbiAgICAgICAgICA8L2xhYmVsPlxyXG5cclxuICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtZmlsdGVyXCI+XHJcbiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cInNyLW9ubHlcIj7nrZvpgInmioDog73liIbnu4Q8L3NwYW4+XHJcbiAgICAgICAgICAgIDxzZWxlY3RcclxuICAgICAgICAgICAgICB2YWx1ZT17YWN0aXZlRmlsdGVyfVxyXG4gICAgICAgICAgICAgIG9uQ2hhbmdlPXsoZXZlbnQpID0+IHNldEFjdGl2ZUZpbHRlcihldmVudC50YXJnZXQudmFsdWUgYXMgU2tpbGxMaWJyYXJ5RmlsdGVyKX1cclxuICAgICAgICAgICAgICBhcmlhLWxhYmVsPVwi5oqA6IO9562b6YCJXCJcclxuICAgICAgICAgICAgPlxyXG4gICAgICAgICAgICAgIHtTS0lMTF9MSUJSQVJZX0ZJTFRFUlMubWFwKChmaWx0ZXIpID0+IChcclxuICAgICAgICAgICAgICAgIDxvcHRpb24ga2V5PXtmaWx0ZXIudmFsdWV9IHZhbHVlPXtmaWx0ZXIudmFsdWV9PlxyXG4gICAgICAgICAgICAgICAgICB7ZmlsdGVyLmxhYmVsfVxyXG4gICAgICAgICAgICAgICAgPC9vcHRpb24+XHJcbiAgICAgICAgICAgICAgKSl9XHJcbiAgICAgICAgICAgIDwvc2VsZWN0PlxyXG4gICAgICAgICAgPC9sYWJlbD5cclxuICAgICAgICA8L2Rpdj5cclxuICAgICAgPC9oZWFkZXI+XHJcblxyXG4gICAgICB7c3RhdHVzTWVzc2FnZSA/IDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWJhbm5lciBzdWNjZXNzXCI+e3N0YXR1c01lc3NhZ2V9PC9kaXY+IDogbnVsbH1cclxuICAgICAge2Vycm9yTWVzc2FnZSA/IDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWJhbm5lciBlcnJvclwiPntlcnJvck1lc3NhZ2V9PC9kaXY+IDogbnVsbH1cclxuXHJcbiAgICAgIHtpc0xvYWRpbmcgPyAoXHJcbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtc2hlbGxcIj5cclxuICAgICAgICAgIDxhcnRpY2xlIGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1saXN0LWVtcHR5XCI+XHJcbiAgICAgICAgICAgIDxzdHJvbmc+5q2j5Zyo5Yqg6L295oqA6IO94oCmPC9zdHJvbmc+XHJcbiAgICAgICAgICAgIDxzcGFuPuato+WcqOaJq+aPjyBHb29kTmlnaHQg5YWo5bGA5oqA6IO95bqT5ZKM5Y+v5a+85YWl5p2l5rqQ44CCPC9zcGFuPlxyXG4gICAgICAgICAgPC9hcnRpY2xlPlxyXG4gICAgICAgIDwvZGl2PlxyXG4gICAgICApIDogbnVsbH1cclxuXHJcbiAgICAgIHshaXNMb2FkaW5nID8gKFxyXG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLXNoZWxsXCI+XHJcbiAgICAgICAgICA8c2VjdGlvbiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtbGlzdC1wYW5lbFwiPlxyXG4gICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1wYW5lbC1oZWFkZXJcIj5cclxuICAgICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgICAgPHN0cm9uZz7mioDog73liJfooag8L3N0cm9uZz5cclxuICAgICAgICAgICAgICAgIDxzcGFuPuaMiei1hOa6kOWIl+ihqOa1j+iniOOAgeetm+mAieW5tumAieS4reaKgOiDveOAgjwvc3Bhbj5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1saXN0LW1ldGFcIj5cclxuICAgICAgICAgICAgICAgIDxzcGFuPntza2lsbHMubGVuZ3RofSDlhajpg6g8L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj57dmlzaWJsZUNvdW50fSDlj6/op4E8L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj57aW5zdGFsbGVkQ291bnR9IOW3suWuieijhTwvc3Bhbj5cclxuICAgICAgICAgICAgICAgIDxzcGFuPntpbXBvcnRhYmxlQ291bnR9IOW+heWvvOWFpTwvc3Bhbj5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgIHt2aXNpYmxlU2tpbGxzLmxlbmd0aCA9PT0gMCA/IChcclxuICAgICAgICAgICAgICA8YXJ0aWNsZSBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtbGlzdC1lbXB0eVwiPlxyXG4gICAgICAgICAgICAgICAgPHN0cm9uZz7ov5jmsqHmnInmioDog708L3N0cm9uZz5cclxuICAgICAgICAgICAgICAgIDxzcGFuPuWvvOWFpeacrOWcsOaKgOiDveaIluS7jiBHaXRIdWIg5LiL6L295ZCO77yM6L+Z6YeM5Lya5byA5aeL6ZW/5Ye65L2g55qE5YWo5bGA5oqA6IO95bqT44CCPC9zcGFuPlxyXG4gICAgICAgICAgICAgIDwvYXJ0aWNsZT5cclxuICAgICAgICAgICAgKSA6IChcclxuICAgICAgICAgICAgICBPYmplY3QuZW50cmllcyhTS0lMTF9TRUNUSU9OX01FVEEpLm1hcCgoW3NlY3Rpb24sIG1ldGFdKSA9PiB7XHJcbiAgICAgICAgICAgICAgICBjb25zdCBzZWN0aW9uU2tpbGxzID0gZ3JvdXBlZFNraWxsc1tzZWN0aW9uIGFzIFNraWxsU2VjdGlvbl07XHJcblxyXG4gICAgICAgICAgICAgICAgcmV0dXJuIChcclxuICAgICAgICAgICAgICAgICAgPHNlY3Rpb24ga2V5PXtzZWN0aW9ufSBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtc2VjdGlvblwiPlxyXG4gICAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLXNlY3Rpb24taGVhZGVyXCI+XHJcbiAgICAgICAgICAgICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgICAgICAgICAgICA8aDQ+e21ldGEubGFiZWx9PC9oND5cclxuICAgICAgICAgICAgICAgICAgICAgICAgPHNwYW4+e21ldGEuZGVzY3JpcHRpb259PC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgICAgICAgICA8c3Ryb25nPntzZWN0aW9uU2tpbGxzLmxlbmd0aH08L3N0cm9uZz5cclxuICAgICAgICAgICAgICAgICAgICA8L2Rpdj5cclxuXHJcbiAgICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtbGlzdFwiPlxyXG4gICAgICAgICAgICAgICAgICAgICAge3NlY3Rpb25Ta2lsbHMubGVuZ3RoID4gMFxyXG4gICAgICAgICAgICAgICAgICAgICAgICA/IHNlY3Rpb25Ta2lsbHMubWFwKChza2lsbCkgPT4gKFxyXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNraWxsTGlzdEl0ZW1cclxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAga2V5PXtidWlsZFNraWxsS2V5KHNraWxsKX1cclxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2tpbGw9e3NraWxsfVxyXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICBhY3RpdmU9e3NlbGVjdGVkU2tpbGxLZXkgPT09IGJ1aWxkU2tpbGxLZXkoc2tpbGwpfVxyXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICBpc1dvcmtpbmc9e2lzV29ya2luZ31cclxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgb25TZWxlY3Q9eyhuZXh0U2tpbGwpID0+IHNldFNlbGVjdGVkU2tpbGxLZXkoYnVpbGRTa2lsbEtleShuZXh0U2tpbGwpKX1cclxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgb25JbXBvcnQ9e2hhbmRsZVF1aWNrSW1wb3J0fVxyXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgLz5cclxuICAgICAgICAgICAgICAgICAgICAgICAgICApKVxyXG4gICAgICAgICAgICAgICAgICAgICAgICA6IHJlbmRlclNlY3Rpb25FbXB0eVN0YXRlKG1ldGEubGFiZWwpfVxyXG4gICAgICAgICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgICAgICA8L3NlY3Rpb24+XHJcbiAgICAgICAgICAgICAgICApO1xyXG4gICAgICAgICAgICAgIH0pXHJcbiAgICAgICAgICAgICl9XHJcbiAgICAgICAgICA8L3NlY3Rpb24+XHJcblxyXG4gICAgICAgICAgPGFzaWRlIGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1kZXRhaWwtcGFuZWxcIj5cclxuICAgICAgICAgICAge3NlbGVjdGVkU2tpbGwgPyAoXHJcbiAgICAgICAgICAgICAgPD5cclxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLXBhbmVsLWhlYWRlclwiPlxyXG4gICAgICAgICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgICAgICAgIDxzdHJvbmc+5oqA6IO96K+m5oOFPC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgICAgICAgPHNwYW4+5b2T5YmN6YCJ5Lit6LWE5rqQ55qE6K+05piO44CB5pON5L2c5ZKM5YaF5a656aKE6KeI44CCPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICAgIDwvZGl2PlxyXG5cclxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWRldGFpbC1oZWFkZXJcIj5cclxuICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWRldGFpbC1leWVicm93XCI+5b2T5YmN6YCJ5LitPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1kZXRhaWwtdGl0bGUtcm93XCI+XHJcbiAgICAgICAgICAgICAgICAgICAgPHN0cm9uZz57c2VsZWN0ZWRTa2lsbC5uYW1lfTwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT17YGduLWFnZW50LXNraWxscy1zb3VyY2UtYmFkZ2Uke3NlbGVjdGVkU2tpbGwuYnVpbHRpbiA/ICcgYnVpbHRpbicgOiAnJ31gfT5cclxuICAgICAgICAgICAgICAgICAgICAgIHtmb3JtYXRTb3VyY2VCYWRnZShzZWxlY3RlZFNraWxsKX1cclxuICAgICAgICAgICAgICAgICAgICA8L3NwYW4+XHJcbiAgICAgICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgICAgICA8cD57YnVpbGRTa2lsbFN1bW1hcnkoc2VsZWN0ZWRTa2lsbCl9PC9wPlxyXG4gICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1kZXRhaWwtbWV0YVwiPlxyXG4gICAgICAgICAgICAgICAgICAgIDxzcGFuPuWRveS7pO+8mi97c2VsZWN0ZWRTa2lsbC5pZH08L3NwYW4+XHJcbiAgICAgICAgICAgICAgICAgICAgPHNwYW4+5p2l5rqQ77yae3NlbGVjdGVkU2tpbGwuc291cmNlfTwvc3Bhbj5cclxuICAgICAgICAgICAgICAgICAgICA8c3Bhbj57aXNTa2lsbEluc3RhbGxlZChzZWxlY3RlZFNraWxsKSA/ICfnirbmgIHvvJrlt7Llronoo4UnIDogJ+eKtuaAge+8muWPr+WvvOWFpSd9PC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICAgIDwvZGl2PlxyXG5cclxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWRldGFpbC1hY3Rpb25zXCI+XHJcbiAgICAgICAgICAgICAgICAgIHtpc1NraWxsSW5zdGFsbGVkKHNlbGVjdGVkU2tpbGwpID8gKFxyXG4gICAgICAgICAgICAgICAgICAgIDxidXR0b25cclxuICAgICAgICAgICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWNhcmQtYnRuXCJcclxuICAgICAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtpc1dvcmtpbmd9XHJcbiAgICAgICAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB2b2lkIGhhbmRsZVVzZVNraWxsKHNlbGVjdGVkU2tpbGwpfVxyXG4gICAgICAgICAgICAgICAgICAgID5cclxuICAgICAgICAgICAgICAgICAgICAgIOS9v+eUqFxyXG4gICAgICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgICAgICApIDogKFxyXG4gICAgICAgICAgICAgICAgICAgIDxidXR0b25cclxuICAgICAgICAgICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWNhcmQtYnRuXCJcclxuICAgICAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtpc1dvcmtpbmd9XHJcbiAgICAgICAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB2b2lkIGhhbmRsZVF1aWNrSW1wb3J0KHNlbGVjdGVkU2tpbGwpfVxyXG4gICAgICAgICAgICAgICAgICAgID5cclxuICAgICAgICAgICAgICAgICAgICAgIOWvvOWFpVxyXG4gICAgICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgICAgICApfVxyXG4gICAgICAgICAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXHJcbiAgICAgICAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWNhcmQtYnRuXCJcclxuICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZD17aXNXb3JraW5nfVxyXG4gICAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHZvaWQgb3BlblByZXZpZXcoc2VsZWN0ZWRTa2lsbCl9XHJcbiAgICAgICAgICAgICAgICAgID5cclxuICAgICAgICAgICAgICAgICAgICDmn6XnnIvlhajmlodcclxuICAgICAgICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICAgICAgICAgIHtzZWxlY3RlZFNraWxsLmRlbGV0YWJsZSA/IChcclxuICAgICAgICAgICAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1jYXJkLWJ0biBkYW5nZXJcIlxyXG4gICAgICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e2lzV29ya2luZ31cclxuICAgICAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHZvaWQgaGFuZGxlRGVsZXRlU2tpbGwoc2VsZWN0ZWRTa2lsbCl9XHJcbiAgICAgICAgICAgICAgICAgICAgPlxyXG4gICAgICAgICAgICAgICAgICAgICAg56e76ZmkXHJcbiAgICAgICAgICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICAgICAgICAgICkgOiBudWxsfVxyXG4gICAgICAgICAgICAgICAgPC9kaXY+XHJcblxyXG4gICAgICAgICAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWRldGFpbC1zZWN0aW9uXCI+XHJcbiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWRldGFpbC1zZWN0aW9uLWhlYWRlclwiPlxyXG4gICAgICAgICAgICAgICAgICAgIDxzdHJvbmc+5Z+65pys5L+h5oGvPC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgICAgICAgPHNwYW4+55So5LqO56Gu6K6k6LCD55So5pa55byP44CB5p2l5rqQ5ZKM5paH5Lu25L2N572u44CCPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtZGV0YWlsLWt2XCI+XHJcbiAgICAgICAgICAgICAgICAgICAgPGRpdj5cclxuICAgICAgICAgICAgICAgICAgICAgIDxzcGFuPuiwg+eUqOaWueW8jzwvc3Bhbj5cclxuICAgICAgICAgICAgICAgICAgICAgIDxjb2RlPi97c2VsZWN0ZWRTa2lsbC5pZH08L2NvZGU+XHJcbiAgICAgICAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgICAgICAgPGRpdj5cclxuICAgICAgICAgICAgICAgICAgICAgIDxzcGFuPuWuieijheeKtuaAgTwvc3Bhbj5cclxuICAgICAgICAgICAgICAgICAgICAgIDxzdHJvbmc+e2lzU2tpbGxJbnN0YWxsZWQoc2VsZWN0ZWRTa2lsbCkgPyAn5bey5a6J6KOFJyA6ICflj6/lr7zlhaUnfTwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgICAgICAgIDxkaXY+XHJcbiAgICAgICAgICAgICAgICAgICAgICA8c3Bhbj7lupPlhoXkvY3nva48L3NwYW4+XHJcbiAgICAgICAgICAgICAgICAgICAgICA8Y29kZT57c2VsZWN0ZWRTa2lsbC5wYXRofTwvY29kZT5cclxuICAgICAgICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgICAgICAgICAgPHNwYW4+5o+Q56S66K+N5YWl5Y+jPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICAgICAgPGNvZGU+e2dldFNraWxsUHJvbXB0UGF0aChzZWxlY3RlZFNraWxsKX08L2NvZGU+XHJcbiAgICAgICAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgICAgPC9zZWN0aW9uPlxyXG5cclxuICAgICAgICAgICAgICAgIDxzZWN0aW9uIGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1kZXRhaWwtc2VjdGlvbiBnbi1hZ2VudC1za2lsbHMtZGV0YWlsLXByZXZpZXctY2FyZFwiPlxyXG4gICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1kZXRhaWwtcHJldmlldy1oZWFkZXJcIj5cclxuICAgICAgICAgICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWRldGFpbC1leWVicm93XCI+5oqA6IO95YaF5a65PC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICAgICAgPGg1PlNLSUxMLm1kIOmihOiniDwvaDU+XHJcbiAgICAgICAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgICAgICAgPGNvZGU+e2dldFNraWxsUHJvbXB0UGF0aChzZWxlY3RlZFNraWxsKX08L2NvZGU+XHJcbiAgICAgICAgICAgICAgICAgIDwvZGl2PlxyXG5cclxuICAgICAgICAgICAgICAgICAge2lzU2VsZWN0ZWRQcm9tcHRMb2FkaW5nID8gKFxyXG4gICAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLXByZXZpZXctc3RhdGVcIj7mraPlnKjliqDovb3mioDog73lhoXlrrnigKY8L2Rpdj5cclxuICAgICAgICAgICAgICAgICAgKSA6IG51bGx9XHJcbiAgICAgICAgICAgICAgICAgIHtzZWxlY3RlZFByb21wdEVycm9yID8gKFxyXG4gICAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLXByZXZpZXctc3RhdGUgZXJyb3JcIj57c2VsZWN0ZWRQcm9tcHRFcnJvcn08L2Rpdj5cclxuICAgICAgICAgICAgICAgICAgKSA6IG51bGx9XHJcbiAgICAgICAgICAgICAgICAgIHshaXNTZWxlY3RlZFByb21wdExvYWRpbmcgJiYgIXNlbGVjdGVkUHJvbXB0RXJyb3IgPyAoXHJcbiAgICAgICAgICAgICAgICAgICAgcHJvbXB0UHJldmlldyA/IChcclxuICAgICAgICAgICAgICAgICAgICAgIDxwcmUgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLXByZXZpZXctYm9keVwiPntwcm9tcHRQcmV2aWV3fTwvcHJlPlxyXG4gICAgICAgICAgICAgICAgICAgICkgOiAoXHJcbiAgICAgICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1wcmV2aWV3LXN0YXRlXCI+6L+Z5Liq5oqA6IO96L+Y5rKh5pyJ5Y+v6aKE6KeI55qEIFNLSUxMLm1kIOWGheWuueOAgjwvZGl2PlxyXG4gICAgICAgICAgICAgICAgICAgIClcclxuICAgICAgICAgICAgICAgICAgKSA6IG51bGx9XHJcbiAgICAgICAgICAgICAgICA8L3NlY3Rpb24+XHJcbiAgICAgICAgICAgICAgPC8+XHJcbiAgICAgICAgICAgICkgOiAoXHJcbiAgICAgICAgICAgICAgPGFydGljbGUgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLWxpc3QtZW1wdHlcIj5cclxuICAgICAgICAgICAgICAgIDxzdHJvbmc+5YWI6YCJ5LiA5Liq5oqA6IO9PC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj7lt6bkvqfliJfooajkvJrmiormjqjojZDjgIHns7vnu5/lkozkuKrkurrmioDog73pg73pm4bkuK3liLDov5nph4zjgII8L3NwYW4+XHJcbiAgICAgICAgICAgICAgPC9hcnRpY2xlPlxyXG4gICAgICAgICAgICApfVxyXG4gICAgICAgICAgPC9hc2lkZT5cclxuICAgICAgICA8L2Rpdj5cclxuICAgICAgKSA6IG51bGx9XHJcblxyXG4gICAgICA8TWFjRGlhbG9nXHJcbiAgICAgICAgb3Blbj17Qm9vbGVhbihwcmV2aWV3U2tpbGwpfVxyXG4gICAgICAgIG9uT3BlbkNoYW5nZT17aGFuZGxlUHJldmlld09wZW5DaGFuZ2V9XHJcbiAgICAgICAgdGl0bGU9e3ByZXZpZXdTa2lsbCA/IGAke3ByZXZpZXdTa2lsbC5uYW1lfSDCtyDmioDog73lhoXlrrlgIDogJ+aKgOiDveWGheWuuSd9XHJcbiAgICAgICAgZGVzY3JpcHRpb249e3ByZXZpZXdTa2lsbCA/IGdldFNraWxsUHJvbXB0UGF0aChwcmV2aWV3U2tpbGwpIDogdW5kZWZpbmVkfVxyXG4gICAgICAgIGNvbnRlbnRDbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtcHJldmlldy1kaWFsb2dcIlxyXG4gICAgICA+XHJcbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJnbi1hZ2VudC1za2lsbHMtcHJldmlld1wiPlxyXG4gICAgICAgICAge2lzUHJldmlld0xvYWRpbmcgPyA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1wcmV2aWV3LXN0YXRlXCI+5q2j5Zyo5Yqg6L295oqA6IO95YaF5a654oCmPC9kaXY+IDogbnVsbH1cclxuICAgICAgICAgIHtwcmV2aWV3RXJyb3IgPyA8ZGl2IGNsYXNzTmFtZT1cImduLWFnZW50LXNraWxscy1wcmV2aWV3LXN0YXRlIGVycm9yXCI+e3ByZXZpZXdFcnJvcn08L2Rpdj4gOiBudWxsfVxyXG4gICAgICAgICAgeyFpc1ByZXZpZXdMb2FkaW5nICYmICFwcmV2aWV3RXJyb3IgJiYgcHJldmlld0NvbnRlbnQgPyAoXHJcbiAgICAgICAgICAgIDxwcmUgY2xhc3NOYW1lPVwiZ24tYWdlbnQtc2tpbGxzLXByZXZpZXctYm9keVwiPntwcmV2aWV3Q29udGVudH08L3ByZT5cclxuICAgICAgICAgICkgOiBudWxsfVxyXG4gICAgICAgIDwvZGl2PlxyXG4gICAgICA8L01hY0RpYWxvZz5cclxuICAgIDwvc2VjdGlvbj5cclxuICApO1xyXG59O1xyXG4iXSwiZmlsZSI6IkM6L1VzZXJzL0V2ZW4vRG9jdW1lbnRzL0FMTC1JTi1PTkUvc3JjL2NvbXBvbmVudHMvYWkvZ24tYWdlbnQtc2hlbGwvR05BZ2VudFNraWxsc1BhZ2UudHN4In0=

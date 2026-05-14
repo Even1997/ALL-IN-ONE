@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppType, PageStructureNode } from '../../types';
+import {
+  FloatingRunCompanion,
+  StateCard,
+  StatusBanner,
+  UtilitySidebar,
+} from '../ui';
+import { WorkbenchShell } from '../product/WorkbenchShell';
 import { writeSketchPageFile } from '../../utils/projectPersistence';
 import {
   getFallbackDesignStylePreset,
@@ -88,6 +95,7 @@ export const DesignWorkbenchScreen: React.FC<DesignWorkbenchScreenProps> = ({
   const lastPersistedSketchSnapshotRef = useRef('');
   const [isSketchLibraryOpen, setIsSketchLibraryOpen] = useState(true);
   const [sketchLibrarySearch, setSketchLibrarySearch] = useState('');
+  const [isUtilitySidebarCollapsed, setIsUtilitySidebarCollapsed] = useState(true);
   const [expandedSketchLibraryNodeIds, setExpandedSketchLibraryNodeIds] = useState<Set<string>>(() => new Set());
   const designPages = useMemo(() => collectDesignPages(pageStructure), [pageStructure]);
   const sketchLibraryTree = useMemo(() => buildSketchLibraryTree(pageStructure), [pageStructure]);
@@ -792,94 +800,209 @@ export const DesignWorkbenchScreen: React.FC<DesignWorkbenchScreenProps> = ({
     handleAddStyleNode(preset, getCanvasContextPosition());
     setDesignCanvasContextMenu(null);
   }, [getCanvasContextPosition, handleAddStyleNode]);
+  const selectedPageModuleCount = selectedWireframe?.elements?.length || 0;
+  const designUtilitySidebar = (
+    <UtilitySidebar
+      className="design-utility-sidebar"
+      title="设计概览"
+      subtitle="Review current board"
+      icon="design"
+      railLabel="设计工作台侧栏"
+      panelLabel="设计工作台检查面板"
+      collapsed={isUtilitySidebarCollapsed}
+      panelVisible={Boolean(selectedDesignPage || designSelectionIds.length || designPages.length)}
+      onToggleCollapsed={() => setIsUtilitySidebarCollapsed((current) => !current)}
+      tabs={[
+        {
+          icon: 'design',
+          label: '设计概览',
+          active: true,
+          hasDot: Boolean(designSelectionIds.length || linkedStyleNodesForSelectedPage.length || selectedDesignPage),
+          onClick: () => {
+            if (isUtilitySidebarCollapsed) {
+              setIsUtilitySidebarCollapsed(false);
+            }
+          },
+        },
+      ]}
+    >
+      <>
+        {selectedDesignPage ? (
+          <StateCard
+            icon="page"
+            tone="info"
+            title={selectedDesignPage.name}
+            description={
+              summarizeDesignSelectionText(
+                selectedDesignPage.description || selectedDesignPage.metadata.goal || ''
+              ) || '当前页面已进入统一的设计工作台壳层。'
+            }
+            meta={selectedDesignPage.metadata.route || 'Page'}
+          />
+        ) : null}
+
+        <StateCard
+          icon="files"
+          tone="neutral"
+          title="设计画布"
+          description={`共 ${designPages.length} 个页面节点，${designFlowNodes.length} 个 flow，${designStyleNodes.length} 个 style。`}
+          meta={`${designZoom.toFixed(2)}x`}
+        />
+
+        {designSelectionIds.length > 0 ? (
+          <StateCard
+            icon="spark"
+            tone="warning"
+            title="当前选择"
+            description={selectedDesignContextItems.map((item) => item.title).slice(0, 3).join(' / ')}
+            meta={`${designSelectionIds.length} selected`}
+          />
+        ) : null}
+
+        {linkedStyleNodesForSelectedPage.length > 0 ? (
+          <StatusBanner
+            tone="info"
+            icon="design"
+            title="关联视觉方向"
+            message={linkedStyleNodesForSelectedPage.map((node) => node.title).slice(0, 3).join(' / ')}
+          />
+        ) : null}
+      </>
+    </UtilitySidebar>
+  );
+  const designFloatingCompanion =
+    selectedDesignPage || designSelectionIds.length > 0 ? (
+      <FloatingRunCompanion
+        className="design-floating-run-companion"
+        title={designSelectionIds.length > 0 ? 'Current selection' : 'Current board'}
+        subtitle={
+          designSelectionIds.length > 0
+            ? selectedDesignContextItems.map((item) => item.title).slice(0, 2).join(' / ')
+            : selectedDesignPage?.name || 'Design workspace'
+        }
+        icon={designSelectionIds.length > 0 ? 'spark' : 'design'}
+        meta={
+          <span>
+            {selectedDesignPage ? `${selectedPageModuleCount} modules` : `${designPages.length} pages`}
+          </span>
+        }
+      >
+        <StateCard
+          icon={designSelectionIds.length > 0 ? 'document' : 'page'}
+          tone={designSelectionIds.length > 0 ? 'warning' : 'info'}
+          title={
+            designSelectionIds.length > 0
+              ? `${designSelectionIds.length} 个对象已选中`
+              : selectedDesignPage?.metadata.goal || 'Design board'
+          }
+          description={
+            summarizeDesignSelectionText(
+              selectedDesignContextItems[0]?.summary
+                || selectedDesignPage?.description
+                || selectedDesignPage?.metadata.goal
+                || ''
+            ) || '当前设计上下文会以统一 companion 的形式悬浮在主舞台内。'
+          }
+          meta={selectedDesignPage?.metadata.route || `${designZoom.toFixed(2)}x`}
+        />
+      </FloatingRunCompanion>
+    ) : null;
 
   return (
-    <DesignWorkbenchView
-      builtinStylePackPaths={builtinStylePackPaths}
-      connectionDraftPath={connectionDraftPath}
-      defaultStylePresets={defaultStylePresets}
-      designAINodes={designAINodes}
-      designBoardBounds={designBoardBounds}
-      designBoardScrollRef={designBoardScrollRef}
-      designCamera={designCamera}
-      designCanvasContextMenu={designCanvasContextMenu}
-      designCanvasMode={designCanvasMode}
-      designCanvasPreset={designCanvasPreset}
-      designCanvasSelection={designCanvasSelection}
-      designContextMenuRef={designContextMenuRef}
-      designFlowNodes={designFlowNodes}
-      designFlowPaths={designFlowPaths}
-      designGridMetrics={designGridMetrics}
-      designNodeLayers={designNodeLayers}
-      designPageNodes={designPageNodes}
-      designPages={designPages}
-      designSelectionIds={designSelectionIds}
-      designSelectionRect={designSelectionRect}
-      designStyleNodes={designStyleNodes}
-      designTextNodes={designTextNodes}
-      designZoom={designZoom}
-      expandedSketchLibraryNodeIds={expandedSketchLibraryNodeIds}
-      handleAddDesignPage={handleAddDesignPage}
-      handleAddFlowNode={handleAddFlowNodeFromCanvas}
-      handleAddPageReferenceNode={handleAddPageReferenceNodeFromCanvas}
-      handleAddStyleNode={handleAddStyleNodeFromCanvas}
-      handleAddTextNode={handleAddTextNodeFromCanvas}
-      handleApplyStyleMarkdown={handleApplyStyleMarkdown}
-      handleCanvasNodeClick={handleCanvasNodeClick}
-      handleConnectorPointerDown={handleConnectorPointerDown}
-      handleDeleteSelectedAINode={handleDeleteSelectedAINode}
-      handleDeleteSelectedFlowNode={handleDeleteSelectedFlowNode}
-      handleDeleteSelectedPageNode={handleDeleteSelectedPageNode}
-      handleDeleteSelectedStyleNode={handleDeleteSelectedStyleNode}
-      handleDeleteSelectedTextNode={handleDeleteSelectedTextNode}
-      handleDesignBoardContextMenu={handleDesignBoardContextMenu}
-      handleDesignBoardPointerDown={handleDesignBoardPointerDown}
-      handleDesignBoardWheel={handleDesignBoardWheel}
-      handleDesignNodeContextMenu={handleDesignNodeContextMenu}
-      handleDesignNodePointerDown={handleDesignNodePointerDown}
-      handleFlowNodeUpdate={handleFlowNodeUpdate}
-      handleGenerateDelivery={handleGenerateDelivery}
-      handleGenerateDesignDraft={handleGenerateDesignDraft}
-      handleOpenPageModules={handleOpenPageModules}
-      handlePageNodeUpdate={handlePageNodeUpdate}
-      handleResetStyleMarkdown={handleResetStyleMarkdown}
-      handleScrollableAreaWheel={handleScrollableAreaWheel}
-      handleStyleNodeUpdate={handleStyleNodeUpdate}
-      handleStylePaletteColorChange={handleStylePaletteColorChange}
-      handleTextNodeUpdate={handleTextNodeUpdate}
-      isCanvasPanning={isCanvasPanning}
-      isConnectorMode={isConnectorMode}
-      isPageSelected={isPageSelected}
-      isSketchLibraryOpen={isSketchLibraryOpen}
-      isSpacePressed={isSpacePressed}
-      pendingConnectionStartId={pendingConnectionStartId}
-      renderDesignResizeHandles={renderDesignResizeHandles}
-      sketchLibraryTree={sketchLibraryTree}
-      selectedDesignPage={selectedDesignPage}
-      selectedDesignPageId={selectedDesignPageId}
-      selectedFlowNode={selectedFlowNode}
-      selectedStyleNode={selectedStyleNode}
-      selectedTextNode={selectedTextNode}
-      selectedWireframe={selectedWireframe}
-      setDesignAINodes={setDesignAINodes}
-      setDesignCanvasContextMenu={setDesignCanvasContextMenu}
-      setDesignCanvasMode={setDesignCanvasMode}
-      setDesignFlowNodes={setDesignFlowNodes}
-      setDesignTextNodes={setDesignTextNodes}
-      setExpandedSketchLibraryNodeIds={setExpandedSketchLibraryNodeIds}
-      setIsConnectorMode={setIsConnectorMode}
-      setIsSketchLibraryOpen={setIsSketchLibraryOpen}
-      setPendingConnectionStartId={setPendingConnectionStartId}
-      setSketchLibrarySearch={setSketchLibrarySearch}
-      setStyleInspectorMode={setStyleInspectorMode}
-      setStyleMarkdownDraft={setStyleMarkdownDraft}
-      sketchLibrarySearch={sketchLibrarySearch}
-      selectTextNode={selectTextNode}
-      styleInspectorMode={styleInspectorMode}
-      styleMarkdownDraft={styleMarkdownDraft}
-      stylePresets={stylePresets}
-      uiSpecs={uiSpecs}
-      wireframes={wireframes}
+    <WorkbenchShell
+      className="design-workbench-shell"
+      main={(
+        <DesignWorkbenchView
+          builtinStylePackPaths={builtinStylePackPaths}
+          connectionDraftPath={connectionDraftPath}
+          defaultStylePresets={defaultStylePresets}
+          designAINodes={designAINodes}
+          designBoardBounds={designBoardBounds}
+          designBoardScrollRef={designBoardScrollRef}
+          designCamera={designCamera}
+          designCanvasContextMenu={designCanvasContextMenu}
+          designCanvasMode={designCanvasMode}
+          designCanvasPreset={designCanvasPreset}
+          designCanvasSelection={designCanvasSelection}
+          designContextMenuRef={designContextMenuRef}
+          designFlowNodes={designFlowNodes}
+          designFlowPaths={designFlowPaths}
+          designGridMetrics={designGridMetrics}
+          designNodeLayers={designNodeLayers}
+          designPageNodes={designPageNodes}
+          designPages={designPages}
+          designSelectionIds={designSelectionIds}
+          designSelectionRect={designSelectionRect}
+          designStyleNodes={designStyleNodes}
+          designTextNodes={designTextNodes}
+          designZoom={designZoom}
+          expandedSketchLibraryNodeIds={expandedSketchLibraryNodeIds}
+          handleAddDesignPage={handleAddDesignPage}
+          handleAddFlowNode={handleAddFlowNodeFromCanvas}
+          handleAddPageReferenceNode={handleAddPageReferenceNodeFromCanvas}
+          handleAddStyleNode={handleAddStyleNodeFromCanvas}
+          handleAddTextNode={handleAddTextNodeFromCanvas}
+          handleApplyStyleMarkdown={handleApplyStyleMarkdown}
+          handleCanvasNodeClick={handleCanvasNodeClick}
+          handleConnectorPointerDown={handleConnectorPointerDown}
+          handleDeleteSelectedAINode={handleDeleteSelectedAINode}
+          handleDeleteSelectedFlowNode={handleDeleteSelectedFlowNode}
+          handleDeleteSelectedPageNode={handleDeleteSelectedPageNode}
+          handleDeleteSelectedStyleNode={handleDeleteSelectedStyleNode}
+          handleDeleteSelectedTextNode={handleDeleteSelectedTextNode}
+          handleDesignBoardContextMenu={handleDesignBoardContextMenu}
+          handleDesignBoardPointerDown={handleDesignBoardPointerDown}
+          handleDesignBoardWheel={handleDesignBoardWheel}
+          handleDesignNodeContextMenu={handleDesignNodeContextMenu}
+          handleDesignNodePointerDown={handleDesignNodePointerDown}
+          handleFlowNodeUpdate={handleFlowNodeUpdate}
+          handleGenerateDelivery={handleGenerateDelivery}
+          handleGenerateDesignDraft={handleGenerateDesignDraft}
+          handleOpenPageModules={handleOpenPageModules}
+          handlePageNodeUpdate={handlePageNodeUpdate}
+          handleResetStyleMarkdown={handleResetStyleMarkdown}
+          handleScrollableAreaWheel={handleScrollableAreaWheel}
+          handleStyleNodeUpdate={handleStyleNodeUpdate}
+          handleStylePaletteColorChange={handleStylePaletteColorChange}
+          handleTextNodeUpdate={handleTextNodeUpdate}
+          isCanvasPanning={isCanvasPanning}
+          isConnectorMode={isConnectorMode}
+          isPageSelected={isPageSelected}
+          isSketchLibraryOpen={isSketchLibraryOpen}
+          isSpacePressed={isSpacePressed}
+          pendingConnectionStartId={pendingConnectionStartId}
+          renderDesignResizeHandles={renderDesignResizeHandles}
+          sketchLibraryTree={sketchLibraryTree}
+          selectedDesignPage={selectedDesignPage}
+          selectedDesignPageId={selectedDesignPageId}
+          selectedFlowNode={selectedFlowNode}
+          selectedStyleNode={selectedStyleNode}
+          selectedTextNode={selectedTextNode}
+          selectedWireframe={selectedWireframe}
+          setDesignAINodes={setDesignAINodes}
+          setDesignCanvasContextMenu={setDesignCanvasContextMenu}
+          setDesignCanvasMode={setDesignCanvasMode}
+          setDesignFlowNodes={setDesignFlowNodes}
+          setDesignTextNodes={setDesignTextNodes}
+          setExpandedSketchLibraryNodeIds={setExpandedSketchLibraryNodeIds}
+          setIsConnectorMode={setIsConnectorMode}
+          setIsSketchLibraryOpen={setIsSketchLibraryOpen}
+          setPendingConnectionStartId={setPendingConnectionStartId}
+          setSketchLibrarySearch={setSketchLibrarySearch}
+          setStyleInspectorMode={setStyleInspectorMode}
+          setStyleMarkdownDraft={setStyleMarkdownDraft}
+          sketchLibrarySearch={sketchLibrarySearch}
+          selectTextNode={selectTextNode}
+          styleInspectorMode={styleInspectorMode}
+          styleMarkdownDraft={styleMarkdownDraft}
+          stylePresets={stylePresets}
+          uiSpecs={uiSpecs}
+          wireframes={wireframes}
+        />
+      )}
+      utilitySidebar={designUtilitySidebar}
+      floatingCompanion={designFloatingCompanion}
+      companionWidth={isUtilitySidebarCollapsed ? 52 : 312}
     />
   );
 };

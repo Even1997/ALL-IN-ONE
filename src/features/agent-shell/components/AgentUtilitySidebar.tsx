@@ -43,6 +43,10 @@ export const AgentUtilitySidebar: React.FC<AgentUtilitySidebarProps> = ({
       || latestTurn?.status === 'blocked',
   );
 
+  if (!hasReviewContent) {
+    return null;
+  }
+
   return (
     <UtilitySidebar
       className="agent-utility-sidebar"

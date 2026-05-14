@@ -1,0 +1,1581 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/workspace/RuntimeMcpSettingsPage.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=0a8d881b"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+var _s = $RefreshSig$();
+import __vite__cjsImport3_react from "/node_modules/.vite/deps/react.js?v=0a8d881b"; const useEffect = __vite__cjsImport3_react["useEffect"]; const useMemo = __vite__cjsImport3_react["useMemo"]; const useState = __vite__cjsImport3_react["useState"];
+import { useShallow } from "/node_modules/.vite/deps/zustand_react_shallow.js?v=0a8d881b";
+import {
+  deleteRuntimeSidecarMcpServer,
+  initializeRuntimeSidecarMcpServers,
+  invokeRuntimeSidecarMcpTool,
+  upsertRuntimeSidecarMcpServer
+} from "/src/modules/runtime-sidecar/runtimeSidecarSessionBridge.ts";
+import { useRuntimeMcpStore } from "/src/modules/ai/runtime/mcp/runtimeMcpStore.ts";
+const BUILTIN_SERVER_ID = "goodnight-skills";
+const NEW_SERVER_ID = "__new__";
+const createId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+const createStringRow = (value = "") => ({ id: createId(), value });
+const createKeyValueRow = (key = "", value = "") => ({ id: createId(), key, value });
+const EMPTY_DRAFT = {
+  id: "",
+  name: "",
+  transport: "stdio",
+  description: "",
+  enabled: true,
+  toolNamesText: "",
+  command: "",
+  args: [createStringRow("")],
+  env: [createKeyValueRow()],
+  url: "",
+  headers: [createKeyValueRow()],
+  headersHelper: "",
+  oauthClientId: "",
+  oauthCallbackPort: ""
+};
+const parseLineList = (value) => value.split(/\r?\n|,/).map((entry) => entry.trim()).filter(Boolean);
+const rowsToList = (rows) => rows.map((row) => row.value.trim()).filter(Boolean);
+const rowsToRecord = (rows) => Object.fromEntries(
+  rows.map((row) => [row.key.trim(), row.value]).filter(([key]) => key)
+);
+const buildRowsFromList = (values) => values && values.length > 0 ? values.map((value) => createStringRow(value)) : [createStringRow("")];
+const buildRowsFromRecord = (record) => {
+  const entries = Object.entries(record || {});
+  return entries.length > 0 ? entries.map(([key, value]) => createKeyValueRow(key, value)) : [createKeyValueRow()];
+};
+const createDraftFromServer = (server) => ({
+  id: server.id,
+  name: server.name,
+  transport: server.transport,
+  description: server.description,
+  enabled: server.enabled,
+  toolNamesText: server.toolNames.join("\n"),
+  command: server.command || "",
+  args: buildRowsFromList(server.args),
+  env: buildRowsFromRecord(server.env),
+  url: server.url || "",
+  headers: buildRowsFromRecord(server.headers),
+  headersHelper: server.headersHelper || "",
+  oauthClientId: server.oauth?.clientId || "",
+  oauthCallbackPort: typeof server.oauth?.callbackPort === "number" ? String(server.oauth.callbackPort) : ""
+});
+const buildServerTools = (toolNames, currentServer) => toolNames.map((name) => {
+  const existingTool = currentServer?.tools?.find((tool) => tool.name === name);
+  return existingTool || {
+    name,
+    description: `${name} tool`,
+    requiresApproval: false
+  };
+});
+const buildServerFromDraft = (draft, currentServer) => {
+  const toolNames = parseLineList(draft.toolNamesText);
+  const oauthCallbackPort = Number.parseInt(draft.oauthCallbackPort.trim(), 10);
+  const shouldUseRemoteConfig = draft.transport === "http" || draft.transport === "sse";
+  const oauth = shouldUseRemoteConfig && (draft.oauthClientId.trim() || Number.isFinite(oauthCallbackPort)) ? {
+    clientId: draft.oauthClientId.trim() || null,
+    callbackPort: Number.isFinite(oauthCallbackPort) ? oauthCallbackPort : null
+  } : null;
+  return {
+    id: draft.id.trim(),
+    name: draft.name.trim(),
+    status: currentServer?.status || (draft.enabled ? "disconnected" : "error"),
+    transport: draft.transport,
+    description: draft.description.trim(),
+    enabled: draft.enabled,
+    toolNames,
+    command: draft.transport === "stdio" ? draft.command.trim() || null : null,
+    args: draft.transport === "stdio" ? rowsToList(draft.args) : [],
+    env: draft.transport === "stdio" ? rowsToRecord(draft.env) : {},
+    url: shouldUseRemoteConfig ? draft.url.trim() || null : null,
+    headers: shouldUseRemoteConfig ? rowsToRecord(draft.headers) : {},
+    headersHelper: shouldUseRemoteConfig ? draft.headersHelper.trim() || null : null,
+    oauth,
+    tools: buildServerTools(toolNames, currentServer)
+  };
+};
+const transportLabel = (transport) => {
+  switch (transport) {
+    case "stdio":
+      return "STDIO";
+    case "http":
+      return "HTTP";
+    case "sse":
+      return "SSE";
+    default:
+      return "Built-in";
+  }
+};
+export const RuntimeMcpSettingsPage = ({
+  threadId = null
+}) => {
+  _s();
+  const { servers, toolCallsByThread } = useRuntimeMcpStore(
+    useShallow((state) => ({
+      servers: state.servers,
+      toolCallsByThread: state.toolCallsByThread
+    }))
+  );
+  const [selectedServerId, setSelectedServerId] = useState(null);
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isWorking, setIsWorking] = useState(false);
+  const loadServers = async (preferredServerId) => {
+    await initializeRuntimeSidecarMcpServers();
+    const nextServers = useRuntimeMcpStore.getState().servers;
+    const nextSelectedServerId = preferredServerId === NEW_SERVER_ID ? NEW_SERVER_ID : preferredServerId && nextServers.some((server) => server.id === preferredServerId) ? preferredServerId : nextServers[0]?.id || null;
+    setSelectedServerId(nextSelectedServerId);
+    if (nextSelectedServerId === NEW_SERVER_ID) {
+      setDraft(EMPTY_DRAFT);
+      return;
+    }
+    const nextServer = nextServers.find((server) => server.id === nextSelectedServerId) || null;
+    setDraft(nextServer ? createDraftFromServer(nextServer) : EMPTY_DRAFT);
+  };
+  useEffect(() => {
+    void loadServers(selectedServerId);
+  }, []);
+  const selectedServer = useMemo(
+    () => servers.find((server) => server.id === selectedServerId) || null,
+    [selectedServerId, servers]
+  );
+  const isCreating = selectedServerId === NEW_SERVER_ID;
+  const isBuiltinServer = selectedServer?.id === BUILTIN_SERVER_ID;
+  const isRemoteTransport = draft.transport === "http" || draft.transport === "sse";
+  const activeToolCalls = useMemo(() => {
+    if (!threadId || !selectedServer) {
+      return [];
+    }
+    return (toolCallsByThread[threadId] || []).filter((toolCall) => toolCall.serverId === selectedServer.id).slice(-6).reverse();
+  }, [selectedServer, threadId, toolCallsByThread]);
+  const enabledServerCount = useMemo(
+    () => servers.filter((server) => server.enabled).length,
+    [servers]
+  );
+  const customServerCount = useMemo(
+    () => servers.filter((server) => server.id !== BUILTIN_SERVER_ID).length,
+    [servers]
+  );
+  const remoteServerCount = useMemo(
+    () => servers.filter((server) => server.transport === "http" || server.transport === "sse").length,
+    [servers]
+  );
+  const handleSelectServer = (server) => {
+    setSelectedServerId(server.id);
+    setDraft(createDraftFromServer(server));
+    setStatusMessage("");
+    setErrorMessage("");
+  };
+  const handleCreateServer = () => {
+    setSelectedServerId(NEW_SERVER_ID);
+    setDraft(EMPTY_DRAFT);
+    setStatusMessage("");
+    setErrorMessage("");
+  };
+  const handleRefresh = async () => {
+    setIsWorking(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      await loadServers(selectedServerId);
+      setStatusMessage("刷新列表完成。");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+  const handleSave = async () => {
+    if (!draft.id.trim() || !draft.name.trim()) {
+      setErrorMessage("请先填写 MCP server 的 ID 和名称。");
+      return;
+    }
+    if (draft.transport === "stdio" && !draft.command.trim()) {
+      setErrorMessage("STDIO server 需要 command。");
+      return;
+    }
+    if ((draft.transport === "http" || draft.transport === "sse") && !draft.url.trim()) {
+      setErrorMessage(`${transportLabel(draft.transport)} server 需要 URL。`);
+      return;
+    }
+    setIsWorking(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      const savedServer = await upsertRuntimeSidecarMcpServer(
+        buildServerFromDraft(draft, isCreating ? null : selectedServer)
+      );
+      if (!savedServer) {
+        throw new Error("Node runtime sidecar 未启动，无法保存 MCP server。");
+      }
+      await loadServers(savedServer.id);
+      setStatusMessage(isCreating ? "MCP server 已创建。" : "MCP server 已更新。");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+  const handleToggleEnabled = async () => {
+    if (!selectedServer || isBuiltinServer) {
+      return;
+    }
+    setIsWorking(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      const updatedServer = await upsertRuntimeSidecarMcpServer({
+        ...selectedServer,
+        enabled: !selectedServer.enabled
+      });
+      if (!updatedServer) {
+        throw new Error("Node runtime sidecar 未启动，无法更新 MCP server。");
+      }
+      await loadServers(updatedServer.id);
+      setStatusMessage(updatedServer.enabled ? "MCP server 已启用。" : "MCP server 已停用。");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+  const handleDelete = async () => {
+    if (!selectedServer || isBuiltinServer) {
+      return;
+    }
+    if (!window.confirm(`删除 MCP server「${selectedServer.name}」？`)) {
+      return;
+    }
+    setIsWorking(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      const result = await deleteRuntimeSidecarMcpServer(selectedServer.id);
+      if (!result) {
+        throw new Error("Node runtime sidecar 未启动，无法删除 MCP server。");
+      }
+      await loadServers(null);
+      setStatusMessage("MCP server 已删除。");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+  const handleRunTool = async () => {
+    if (!threadId || !selectedServer || selectedServer.toolNames.length === 0) {
+      return;
+    }
+    setIsWorking(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      const toolCall = await invokeRuntimeSidecarMcpTool({
+        threadId,
+        serverId: selectedServer.id,
+        toolName: selectedServer.toolNames[0]
+      });
+      if (!toolCall) {
+        throw new Error("Node runtime sidecar 未启动，无法执行 MCP 工具。");
+      }
+      setStatusMessage(`已运行 ${selectedServer.toolNames[0]}。`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+  const updateArgs = (id, value) => {
+    setDraft((current) => ({
+      ...current,
+      args: current.args.map((row) => row.id === id ? { ...row, value } : row)
+    }));
+  };
+  const updateKeyValueRows = (key, id, field, value) => {
+    setDraft((current) => ({
+      ...current,
+      [key]: current[key].map((row) => row.id === id ? { ...row, [field]: value } : row)
+    }));
+  };
+  const addRow = (key) => {
+    setDraft((current) => ({
+      ...current,
+      [key]: [
+        ...current[key],
+        key === "args" ? createStringRow() : createKeyValueRow()
+      ]
+    }));
+  };
+  const removeRow = (key, id) => {
+    setDraft((current) => {
+      const nextRows = current[key].filter((row) => row.id !== id);
+      return {
+        ...current,
+        [key]: nextRows.length > 0 ? nextRows : [key === "args" ? createStringRow() : createKeyValueRow()]
+      };
+    });
+  };
+  const toolCount = parseLineList(draft.toolNamesText).length;
+  return /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-page", children: [
+    /* @__PURE__ */ jsxDEV("section", { className: "chat-settings-surface chat-settings-mcp-toolbar-bar", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-toolbar-copy", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-eyebrow", children: "Runtime MCP" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 458,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("strong", { children: "MCP Library" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 459,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("p", { children: "把 MCP server 的查看、创建、编辑、启停和关键连接参数统一收进一个运行时资源面板。" }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 460,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+        lineNumber: 457,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-toolbar-actions", children: [
+        /* @__PURE__ */ jsxDEV(
+          "button",
+          {
+            className: "chat-settings-apply-btn secondary",
+            type: "button",
+            onClick: () => void handleRefresh(),
+            disabled: isWorking,
+            children: "刷新列表"
+          },
+          void 0,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 463,
+            columnNumber: 11
+          },
+          this
+        ),
+        /* @__PURE__ */ jsxDEV(
+          "button",
+          {
+            className: "chat-settings-apply-btn",
+            type: "button",
+            onClick: handleCreateServer,
+            disabled: isWorking,
+            children: "新建服务器"
+          },
+          void 0,
+          false,
+          {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 471,
+            columnNumber: 11
+          },
+          this
+        )
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+        lineNumber: 462,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+      lineNumber: 456,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-layout", children: [
+      /* @__PURE__ */ jsxDEV("aside", { className: "chat-settings-mcp-list", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-panel-header chat-settings-mcp-list-head", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "服务器列表" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 486,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "内置能力保留只读，自定义 server 在这里统一维护。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 487,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 485,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-list-meta", children: [
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              servers.length,
+              " 总数"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 490,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              enabledServerCount,
+              " 已启用"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 491,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              remoteServerCount,
+              " 远程"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 492,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              customServerCount,
+              " 自定义"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 493,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 489,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 484,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-server-items", children: servers.map((server) => {
+          const isActive = selectedServerId === server.id;
+          return /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              type: "button",
+              className: `chat-settings-mcp-server-item${isActive ? " active" : ""}`,
+              onClick: () => handleSelectServer(server),
+              children: [
+                /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-server-item-top", children: [
+                  /* @__PURE__ */ jsxDEV("strong", { children: server.name }, void 0, false, {
+                    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                    lineNumber: 508,
+                    columnNumber: 21
+                  }, this),
+                  /* @__PURE__ */ jsxDEV("span", { className: `chat-settings-mcp-status ${server.enabled ? "enabled" : "disabled"}`, children: server.enabled ? "启用中" : "已停用" }, void 0, false, {
+                    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                    lineNumber: 509,
+                    columnNumber: 21
+                  }, this)
+                ] }, void 0, true, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 507,
+                  columnNumber: 19
+                }, this),
+                /* @__PURE__ */ jsxDEV("span", { children: server.id }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 513,
+                  columnNumber: 19
+                }, this),
+                /* @__PURE__ */ jsxDEV("span", { children: [
+                  transportLabel(server.transport),
+                  " · ",
+                  server.toolNames.length,
+                  " 个工具"
+                ] }, void 0, true, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 514,
+                  columnNumber: 19
+                }, this),
+                server.description ? /* @__PURE__ */ jsxDEV("span", { children: server.description }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 517,
+                  columnNumber: 41
+                }, this) : null
+              ]
+            },
+            server.id,
+            true,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 501,
+              columnNumber: 17
+            },
+            this
+          );
+        }) }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 497,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+        lineNumber: 483,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("section", { className: "chat-settings-surface chat-settings-mcp-editor", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-panel-header chat-settings-detail-header", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: isCreating ? "新建 MCP server" : draft.name || "选择一个 MCP server" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 527,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: isBuiltinServer ? "内置 server 仅展示能力，不允许直接修改。" : isCreating ? "尽量按 haha 的字段习惯填写，保存后立即成为运行时配置。" : "在这里维护 transport、工具、环境变量、请求头和 OAuth 参数。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 528,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 526,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-actions", children: [
+            threadId && selectedServer?.toolNames.length ? /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: "chat-settings-apply-btn secondary",
+                type: "button",
+                onClick: () => void handleRunTool(),
+                disabled: isWorking,
+                children: "运行首个工具"
+              },
+              void 0,
+              false,
+              {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 538,
+                columnNumber: 15
+              },
+              this
+            ) : null,
+            !isBuiltinServer && !isCreating ? /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: "chat-settings-apply-btn secondary",
+                type: "button",
+                onClick: () => void handleToggleEnabled(),
+                disabled: isWorking,
+                children: selectedServer?.enabled ? "停用" : "启用"
+              },
+              void 0,
+              false,
+              {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 548,
+                columnNumber: 15
+              },
+              this
+            ) : null,
+            !isBuiltinServer ? /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: "chat-settings-apply-btn secondary",
+                type: "button",
+                onClick: () => void handleSave(),
+                disabled: isWorking,
+                children: "保存"
+              },
+              void 0,
+              false,
+              {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 558,
+                columnNumber: 15
+              },
+              this
+            ) : null,
+            !isBuiltinServer && !isCreating ? /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: "chat-settings-apply-btn danger",
+                type: "button",
+                onClick: () => void handleDelete(),
+                disabled: isWorking,
+                children: "删除"
+              },
+              void 0,
+              false,
+              {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 568,
+                columnNumber: 15
+              },
+              this
+            ) : null
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 536,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 525,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("section", { className: "chat-settings-mcp-detail-section", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-section-header", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "基本信息" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 582,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "先确认 transport、启用状态和当前工具数量。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 583,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 581,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-chip-row", children: [
+            /* @__PURE__ */ jsxDEV("span", { className: "chat-settings-mcp-chip", children: transportLabel(draft.transport) }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 586,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { className: "chat-settings-mcp-chip", children: [
+              toolCount,
+              " 个工具"
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 587,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { className: "chat-settings-mcp-chip", children: draft.enabled ? "已启用" : "已停用" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 588,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { className: "chat-settings-mcp-chip", children: selectedServer?.status || "disconnected" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 589,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 585,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-kv", children: [
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "Server ID" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 593,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV("code", { children: draft.id || "未填写" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 594,
+                columnNumber: 17
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 592,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "名称" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 597,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV("strong", { children: draft.name || "未命名 MCP server" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 598,
+                columnNumber: 17
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 596,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "Transport" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 601,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV("strong", { children: transportLabel(draft.transport) }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 602,
+                columnNumber: 17
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 600,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "启用状态" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 605,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV("strong", { children: draft.enabled ? "启用" : "停用" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 606,
+                columnNumber: 17
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 604,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 591,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 580,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("section", { className: "chat-settings-mcp-detail-section", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-section-header", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "连接配置" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 613,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "编辑 server 标识、描述、transport 和工具清单。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 614,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 612,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-grid", children: [
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "Server ID" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 618,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "input",
+                {
+                  value: draft.id,
+                  onChange: (event) => setDraft((current) => ({ ...current, id: event.target.value })),
+                  placeholder: "例如：design-inspect",
+                  disabled: Boolean(isBuiltinServer)
+                },
+                void 0,
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 619,
+                  columnNumber: 17
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 617,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "名称" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 628,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "input",
+                {
+                  value: draft.name,
+                  onChange: (event) => setDraft((current) => ({ ...current, name: event.target.value })),
+                  placeholder: "例如：Design Inspect",
+                  disabled: Boolean(isBuiltinServer)
+                },
+                void 0,
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 629,
+                  columnNumber: 17
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 627,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "Transport" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 638,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "select",
+                {
+                  className: "chat-settings-select",
+                  value: draft.transport,
+                  onChange: (event) => setDraft((current) => ({
+                    ...current,
+                    transport: event.target.value
+                  })),
+                  disabled: Boolean(isBuiltinServer),
+                  children: [
+                    isBuiltinServer ? /* @__PURE__ */ jsxDEV("option", { value: "builtin", children: "Built-in" }, void 0, false, {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 650,
+                      columnNumber: 38
+                    }, this) : null,
+                    /* @__PURE__ */ jsxDEV("option", { value: "stdio", children: "STDIO" }, void 0, false, {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 651,
+                      columnNumber: 19
+                    }, this),
+                    /* @__PURE__ */ jsxDEV("option", { value: "http", children: "HTTP" }, void 0, false, {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 652,
+                      columnNumber: 19
+                    }, this),
+                    /* @__PURE__ */ jsxDEV("option", { value: "sse", children: "SSE" }, void 0, false, {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 653,
+                      columnNumber: 19
+                    }, this)
+                  ]
+                },
+                void 0,
+                true,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 639,
+                  columnNumber: 17
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 637,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "状态" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 658,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV("input", { value: selectedServer?.status || "disconnected", disabled: true }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 659,
+                columnNumber: 17
+              }, this)
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 657,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "启用状态" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 663,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "select",
+                {
+                  className: "chat-settings-select",
+                  value: draft.enabled ? "enabled" : "disabled",
+                  onChange: (event) => setDraft((current) => ({
+                    ...current,
+                    enabled: event.target.value === "enabled"
+                  })),
+                  disabled: Boolean(isBuiltinServer),
+                  children: [
+                    /* @__PURE__ */ jsxDEV("option", { value: "enabled", children: "启用" }, void 0, false, {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 675,
+                      columnNumber: 19
+                    }, this),
+                    /* @__PURE__ */ jsxDEV("option", { value: "disabled", children: "停用" }, void 0, false, {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 676,
+                      columnNumber: 19
+                    }, this)
+                  ]
+                },
+                void 0,
+                true,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 664,
+                  columnNumber: 17
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 662,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field chat-settings-field-full", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "描述" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 681,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "textarea",
+                {
+                  value: draft.description,
+                  onChange: (event) => setDraft((current) => ({ ...current, description: event.target.value })),
+                  rows: 3,
+                  placeholder: "说明这个 MCP server 暴露什么能力。",
+                  disabled: Boolean(isBuiltinServer)
+                },
+                void 0,
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 682,
+                  columnNumber: 17
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 680,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field chat-settings-field-full", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "Tools" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 694,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "textarea",
+                {
+                  value: draft.toolNamesText,
+                  onChange: (event) => setDraft((current) => ({ ...current, toolNamesText: event.target.value })),
+                  rows: 4,
+                  placeholder: "一行一个 tool，例如：\ninspect\nsearch\nlist",
+                  disabled: Boolean(isBuiltinServer)
+                },
+                void 0,
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 695,
+                  columnNumber: 17
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 693,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 616,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 611,
+          columnNumber: 11
+        }, this),
+        draft.transport === "stdio" ? /* @__PURE__ */ jsxDEV("section", { className: "chat-settings-mcp-detail-section chat-settings-mcp-stack", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-section-header", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "STDIO 参数" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 711,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "维护 command、启动参数和环境变量。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 712,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 710,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field", children: [
+            /* @__PURE__ */ jsxDEV("span", { children: "Command" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 715,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV(
+              "input",
+              {
+                value: draft.command,
+                onChange: (event) => setDraft((current) => ({ ...current, command: event.target.value })),
+                placeholder: "例如：npx",
+                disabled: Boolean(isBuiltinServer)
+              },
+              void 0,
+              false,
+              {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 716,
+                columnNumber: 17
+              },
+              this
+            )
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 714,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV(
+            ArraySection,
+            {
+              title: "Args",
+              addLabel: "添加参数",
+              disabled: Boolean(isBuiltinServer),
+              rows: draft.args,
+              onAdd: () => addRow("args"),
+              onRemove: (id) => removeRow("args", id),
+              children: draft.args.map(
+                (row) => /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-array-row single", children: [
+                  /* @__PURE__ */ jsxDEV(
+                    "input",
+                    {
+                      value: row.value,
+                      onChange: (event) => updateArgs(row.id, event.target.value),
+                      placeholder: "例如：-y 或 @modelcontextprotocol/server",
+                      disabled: Boolean(isBuiltinServer)
+                    },
+                    void 0,
+                    false,
+                    {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 736,
+                      columnNumber: 21
+                    },
+                    this
+                  ),
+                  /* @__PURE__ */ jsxDEV(
+                    "button",
+                    {
+                      type: "button",
+                      className: "chat-settings-inline-btn",
+                      onClick: () => removeRow("args", row.id),
+                      disabled: Boolean(isBuiltinServer),
+                      children: "删除"
+                    },
+                    void 0,
+                    false,
+                    {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 742,
+                      columnNumber: 21
+                    },
+                    this
+                  )
+                ] }, row.id, true, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 735,
+                  columnNumber: 15
+                }, this)
+              )
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 726,
+              columnNumber: 15
+            },
+            this
+          ),
+          /* @__PURE__ */ jsxDEV(
+            ArraySection,
+            {
+              title: "环境变量",
+              addLabel: "添加环境变量",
+              disabled: Boolean(isBuiltinServer),
+              rows: draft.env,
+              onAdd: () => addRow("env"),
+              onRemove: (id) => removeRow("env", id),
+              children: draft.env.map(
+                (row) => /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-array-row", children: [
+                  /* @__PURE__ */ jsxDEV(
+                    "input",
+                    {
+                      value: row.key,
+                      onChange: (event) => updateKeyValueRows("env", row.id, "key", event.target.value),
+                      placeholder: "KEY",
+                      disabled: Boolean(isBuiltinServer)
+                    },
+                    void 0,
+                    false,
+                    {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 764,
+                      columnNumber: 21
+                    },
+                    this
+                  ),
+                  /* @__PURE__ */ jsxDEV(
+                    "input",
+                    {
+                      value: row.value,
+                      onChange: (event) => updateKeyValueRows("env", row.id, "value", event.target.value),
+                      placeholder: "VALUE",
+                      disabled: Boolean(isBuiltinServer)
+                    },
+                    void 0,
+                    false,
+                    {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 770,
+                      columnNumber: 21
+                    },
+                    this
+                  ),
+                  /* @__PURE__ */ jsxDEV(
+                    "button",
+                    {
+                      type: "button",
+                      className: "chat-settings-inline-btn",
+                      onClick: () => removeRow("env", row.id),
+                      disabled: Boolean(isBuiltinServer),
+                      children: "删除"
+                    },
+                    void 0,
+                    false,
+                    {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 776,
+                      columnNumber: 21
+                    },
+                    this
+                  )
+                ] }, row.id, true, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 763,
+                  columnNumber: 15
+                }, this)
+              )
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 754,
+              columnNumber: 15
+            },
+            this
+          )
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 709,
+          columnNumber: 11
+        }, this) : null,
+        isRemoteTransport ? /* @__PURE__ */ jsxDEV("section", { className: "chat-settings-mcp-detail-section chat-settings-mcp-stack", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-section-header", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "远程连接参数" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 793,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "维护 URL、OAuth 和请求头来源。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 794,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 792,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-grid", children: [
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field chat-settings-field-full", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: draft.transport === "http" ? "URL" : "SSE URL" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 798,
+                columnNumber: 19
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "input",
+                {
+                  value: draft.url,
+                  onChange: (event) => setDraft((current) => ({ ...current, url: event.target.value })),
+                  placeholder: draft.transport === "http" ? "https://example.com/mcp" : "https://example.com/sse",
+                  disabled: Boolean(isBuiltinServer)
+                },
+                void 0,
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 799,
+                  columnNumber: 19
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 797,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "OAuth Client ID" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 814,
+                columnNumber: 19
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "input",
+                {
+                  value: draft.oauthClientId,
+                  onChange: (event) => setDraft((current) => ({ ...current, oauthClientId: event.target.value })),
+                  placeholder: "可选",
+                  disabled: Boolean(isBuiltinServer)
+                },
+                void 0,
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 815,
+                  columnNumber: 19
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 813,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "OAuth Callback Port" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 826,
+                columnNumber: 19
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "input",
+                {
+                  value: draft.oauthCallbackPort,
+                  onChange: (event) => setDraft((current) => ({ ...current, oauthCallbackPort: event.target.value })),
+                  placeholder: "例如：8788",
+                  disabled: Boolean(isBuiltinServer)
+                },
+                void 0,
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 827,
+                  columnNumber: 19
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 825,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("label", { className: "chat-settings-field chat-settings-field-full", children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "Headers Helper" }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 838,
+                columnNumber: 19
+              }, this),
+              /* @__PURE__ */ jsxDEV(
+                "input",
+                {
+                  value: draft.headersHelper,
+                  onChange: (event) => setDraft((current) => ({ ...current, headersHelper: event.target.value })),
+                  placeholder: "用于说明请求头来源或拼装方式",
+                  disabled: Boolean(isBuiltinServer)
+                },
+                void 0,
+                false,
+                {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 839,
+                  columnNumber: 19
+                },
+                this
+              )
+            ] }, void 0, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 837,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 796,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV(
+            ArraySection,
+            {
+              title: "请求头",
+              addLabel: "添加请求头",
+              disabled: Boolean(isBuiltinServer),
+              rows: draft.headers,
+              onAdd: () => addRow("headers"),
+              onRemove: (id) => removeRow("headers", id),
+              children: draft.headers.map(
+                (row) => /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-array-row", children: [
+                  /* @__PURE__ */ jsxDEV(
+                    "input",
+                    {
+                      value: row.key,
+                      onChange: (event) => updateKeyValueRows("headers", row.id, "key", event.target.value),
+                      placeholder: "Authorization",
+                      disabled: Boolean(isBuiltinServer)
+                    },
+                    void 0,
+                    false,
+                    {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 860,
+                      columnNumber: 21
+                    },
+                    this
+                  ),
+                  /* @__PURE__ */ jsxDEV(
+                    "input",
+                    {
+                      value: row.value,
+                      onChange: (event) => updateKeyValueRows("headers", row.id, "value", event.target.value),
+                      placeholder: "Bearer ...",
+                      disabled: Boolean(isBuiltinServer)
+                    },
+                    void 0,
+                    false,
+                    {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 866,
+                      columnNumber: 21
+                    },
+                    this
+                  ),
+                  /* @__PURE__ */ jsxDEV(
+                    "button",
+                    {
+                      type: "button",
+                      className: "chat-settings-inline-btn",
+                      onClick: () => removeRow("headers", row.id),
+                      disabled: Boolean(isBuiltinServer),
+                      children: "删除"
+                    },
+                    void 0,
+                    false,
+                    {
+                      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                      lineNumber: 872,
+                      columnNumber: 21
+                    },
+                    this
+                  )
+                ] }, row.id, true, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 859,
+                  columnNumber: 15
+                }, this)
+              )
+            },
+            void 0,
+            false,
+            {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 850,
+              columnNumber: 15
+            },
+            this
+          )
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 791,
+          columnNumber: 11
+        }, this) : null,
+        statusMessage ? /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-test-note success", children: statusMessage }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 886,
+          columnNumber: 28
+        }, this) : null,
+        errorMessage ? /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-test-note error", children: errorMessage }, void 0, false, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 887,
+          columnNumber: 27
+        }, this) : null,
+        selectedServer ? /* @__PURE__ */ jsxDEV("section", { className: "chat-settings-mcp-tool-history chat-settings-mcp-detail-section", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-section-header", children: [
+            /* @__PURE__ */ jsxDEV("strong", { children: "最近工具调用" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 892,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: threadId ? "展示当前会话里这个 server 的最近结果。" : "当前没有活跃会话。" }, void 0, false, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 893,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 891,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-tool-call-list", children: activeToolCalls.length > 0 ? activeToolCalls.map(
+            (toolCall) => /* @__PURE__ */ jsxDEV("article", { className: "chat-settings-mcp-tool-call", children: [
+              /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-tool-call-top", children: [
+                /* @__PURE__ */ jsxDEV("strong", { children: toolCall.toolName }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 900,
+                  columnNumber: 25
+                }, this),
+                /* @__PURE__ */ jsxDEV("span", { children: toolCall.status }, void 0, false, {
+                  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                  lineNumber: 901,
+                  columnNumber: 25
+                }, this)
+              ] }, void 0, true, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 899,
+                columnNumber: 23
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { children: toolCall.summary }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 903,
+                columnNumber: 23
+              }, this),
+              toolCall.resultPreview ? /* @__PURE__ */ jsxDEV("pre", { children: toolCall.resultPreview }, void 0, false, {
+                fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+                lineNumber: 904,
+                columnNumber: 49
+              }, this) : null
+            ] }, toolCall.id, true, {
+              fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+              lineNumber: 898,
+              columnNumber: 15
+            }, this)
+          ) : /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-empty", children: "还没有工具调用记录。" }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 908,
+            columnNumber: 15
+          }, this) }, void 0, false, {
+            fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+            lineNumber: 895,
+            columnNumber: 15
+          }, this)
+        ] }, void 0, true, {
+          fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+          lineNumber: 890,
+          columnNumber: 11
+        }, this) : null
+      ] }, void 0, true, {
+        fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+        lineNumber: 524,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+      lineNumber: 482,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+    lineNumber: 455,
+    columnNumber: 5
+  }, this);
+};
+_s(RuntimeMcpSettingsPage, "/+qo9jZw/G939qmdphfpuLUeFHQ=", false, function() {
+  return [useRuntimeMcpStore, useShallow];
+});
+_c = RuntimeMcpSettingsPage;
+const ArraySection = ({ title, addLabel, disabled = false, rows, onAdd, onRemove: _onRemove, children }) => /* @__PURE__ */ jsxDEV("section", { className: "chat-settings-mcp-array-section", children: [
+  /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-section-header", children: [
+    /* @__PURE__ */ jsxDEV("strong", { children: title }, void 0, false, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+      lineNumber: 930,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("span", { children: [
+      rows.length,
+      " 项"
+    ] }, void 0, true, {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+      lineNumber: 931,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+    lineNumber: 929,
+    columnNumber: 5
+  }, this),
+  /* @__PURE__ */ jsxDEV("div", { className: "chat-settings-mcp-array-list", children }, void 0, false, {
+    fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+    lineNumber: 933,
+    columnNumber: 5
+  }, this),
+  /* @__PURE__ */ jsxDEV(
+    "button",
+    {
+      type: "button",
+      className: "chat-settings-apply-btn secondary",
+      onClick: onAdd,
+      disabled,
+      children: addLabel
+    },
+    void 0,
+    false,
+    {
+      fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+      lineNumber: 934,
+      columnNumber: 5
+    },
+    this
+  )
+] }, void 0, true, {
+  fileName: "C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx",
+  lineNumber: 928,
+  columnNumber: 1
+}, this);
+_c2 = ArraySection;
+var _c, _c2;
+$RefreshReg$(_c, "RuntimeMcpSettingsPage");
+$RefreshReg$(_c2, "ArraySection");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("C:/Users/Even/Documents/ALL-IN-ONE/src/components/workspace/RuntimeMcpSettingsPage.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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TUFDcEYsdUJBQUMsYUFBUSxXQUFVLG1DQUNqQjtBQUFBLHlCQUFDLFNBQUksV0FBVSxnQ0FDYjtBQUFBLDJCQUFDLFlBQVFOLG1CQUFUO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FBZTtBQUFBLElBQ2YsdUJBQUMsVUFBTWpHO0FBQUFBLFdBQUtPO0FBQUFBLE1BQU87QUFBQSxTQUFuQjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBQXFCO0FBQUEsT0FGdkI7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQUdBO0FBQUEsRUFDQSx1QkFBQyxTQUFJLFdBQVUsZ0NBQWdDZ0csWUFBL0M7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQUF3RDtBQUFBLEVBQ3hEO0FBQUEsSUFBQztBQUFBO0FBQUEsTUFDQyxNQUFLO0FBQUEsTUFDTCxXQUFVO0FBQUEsTUFDVixTQUFTSDtBQUFBQSxNQUNUO0FBQUEsTUFFQ0Y7QUFBQUE7QUFBQUEsSUFOSDtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsRUFPQTtBQUFBLEtBYkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxPQWNBO0FBQ0FNLE1BeEJJUjtBQVFKLElBQUFTLElBQUFEO0FBQUEsYUFBQUMsSUFBQTtBQUFBLGFBQUFELEtBQUEiLCJuYW1lcyI6WyJ1c2VFZmZlY3QiLCJ1c2VNZW1vIiwidXNlU3RhdGUiLCJ1c2VTaGFsbG93IiwiZGVsZXRlUnVudGltZVNpZGVjYXJNY3BTZXJ2ZXIiLCJpbml0aWFsaXplUnVudGltZVNpZGVjYXJNY3BTZXJ2ZXJzIiwiaW52b2tlUnVudGltZVNpZGVjYXJNY3BUb29sIiwidXBzZXJ0UnVudGltZVNpZGVjYXJNY3BTZXJ2ZXIiLCJ1c2VSdW50aW1lTWNwU3RvcmUiLCJCVUlMVElOX1NFUlZFUl9JRCIsIk5FV19TRVJWRVJfSUQiLCJjcmVhdGVJZCIsImNyeXB0byIsInJhbmRvbVVVSUQiLCJEYXRlIiwibm93IiwiTWF0aCIsInJhbmRvbSIsInRvU3RyaW5nIiwic2xpY2UiLCJjcmVhdGVTdHJpbmdSb3ciLCJ2YWx1ZSIsImlkIiwiY3JlYXRlS2V5VmFsdWVSb3ciLCJrZXkiLCJFTVBUWV9EUkFGVCIsIm5hbWUiLCJ0cmFuc3BvcnQiLCJkZXNjcmlwdGlvbiIsImVuYWJsZWQiLCJ0b29sTmFtZXNUZXh0IiwiY29tbWFuZCIsImFyZ3MiLCJlbnYiLCJ1cmwiLCJoZWFkZXJzIiwiaGVhZGVyc0hlbHBlciIsIm9hdXRoQ2xpZW50SWQiLCJvYXV0aENhbGxiYWNrUG9ydCIsInBhcnNlTGluZUxpc3QiLCJzcGxpdCIsIm1hcCIsImVudHJ5IiwidHJpbSIsImZpbHRlciIsIkJvb2xlYW4iLCJyb3dzVG9MaXN0Iiwicm93cyIsInJvdyIsInJvd3NUb1JlY29yZCIsIk9iamVjdCIsImZyb21FbnRyaWVzIiwiYnVpbGRSb3dzRnJvbUxpc3QiLCJ2YWx1ZXMiLCJsZW5ndGgiLCJidWlsZFJvd3NGcm9tUmVjb3JkIiwicmVjb3JkIiwiZW50cmllcyIsImNyZWF0ZURyYWZ0RnJvbVNlcnZlciIsInNlcnZlciIsInRvb2xOYW1lcyIsImpvaW4iLCJvYXV0aCIsImNsaWVudElkIiwiY2FsbGJhY2tQb3J0IiwiU3RyaW5nIiwiYnVpbGRTZXJ2ZXJUb29scyIsImN1cnJlbnRTZXJ2ZXIiLCJleGlzdGluZ1Rvb2wiLCJ0b29scyIsImZpbmQiLCJ0b29sIiwicmVxdWlyZXNBcHByb3ZhbCIsImJ1aWxkU2VydmVyRnJvbURyYWZ0IiwiZHJhZnQiLCJOdW1iZXIiLCJwYXJzZUludCIsInNob3VsZFVzZVJlbW90ZUNvbmZpZyIsImlzRmluaXRlIiwic3RhdHVzIiwidHJhbnNwb3J0TGFiZWwiLCJSdW50aW1lTWNwU2V0dGluZ3NQYWdlIiwidGhyZWFkSWQiLCJfcyIsInNlcnZlcnMiLCJ0b29sQ2FsbHNCeVRocmVhZCIsInN0YXRlIiwic2VsZWN0ZWRTZXJ2ZXJJZCIsInNldFNlbGVjdGVkU2VydmVySWQiLCJzZXREcmFmdCIsInN0YXR1c01lc3NhZ2UiLCJzZXRTdGF0dXNNZXNzYWdlIiwiZXJyb3JNZXNzYWdlIiwic2V0RXJyb3JNZXNzYWdlIiwiaXNXb3JraW5nIiwic2V0SXNXb3JraW5nIiwibG9hZFNlcnZlcnMiLCJwcmVmZXJyZWRTZXJ2ZXJJZCIsIm5leHRTZXJ2ZXJzIiwiZ2V0U3RhdGUiLCJuZXh0U2VsZWN0ZWRTZXJ2ZXJJZCIsInNvbWUiLCJuZXh0U2VydmVyIiwic2VsZWN0ZWRTZXJ2ZXIiLCJpc0NyZWF0aW5nIiwiaXNCdWlsdGluU2VydmVyIiwiaXNSZW1vdGVUcmFuc3BvcnQiLCJhY3RpdmVUb29sQ2FsbHMiLCJ0b29sQ2FsbCIsInNlcnZlcklkIiwicmV2ZXJzZSIsImVuYWJsZWRTZXJ2ZXJDb3VudCIsImN1c3RvbVNlcnZlckNvdW50IiwicmVtb3RlU2VydmVyQ291bnQiLCJoYW5kbGVTZWxlY3RTZXJ2ZXIiLCJoYW5kbGVDcmVhdGVTZXJ2ZXIiLCJoYW5kbGVSZWZyZXNoIiwiZXJyb3IiLCJFcnJvciIsIm1lc3NhZ2UiLCJoYW5kbGVTYXZlIiwic2F2ZWRTZXJ2ZXIiLCJoYW5kbGVUb2dnbGVFbmFibGVkIiwidXBkYXRlZFNlcnZlciIsImhhbmRsZURlbGV0ZSIsIndpbmRvdyIsImNvbmZpcm0iLCJyZXN1bHQiLCJoYW5kbGVSdW5Ub29sIiwidG9vbE5hbWUiLCJ1cGRhdGVBcmdzIiwiY3VycmVudCIsInVwZGF0ZUtleVZhbHVlUm93cyIsImZpZWxkIiwiYWRkUm93IiwicmVtb3ZlUm93IiwibmV4dFJvd3MiLCJ0b29sQ291bnQiLCJpc0FjdGl2ZSIsImV2ZW50IiwidGFyZ2V0Iiwic3VtbWFyeSIsInJlc3VsdFByZXZpZXciLCJBcnJheVNlY3Rpb24iLCJ0aXRsZSIsImFkZExhYmVsIiwiZGlzYWJsZWQiLCJvbkFkZCIsIm9uUmVtb3ZlIiwiX29uUmVtb3ZlIiwiY2hpbGRyZW4iLCJfYzIiLCJfYyJdLCJpZ25vcmVMaXN0IjpbXSwic291cmNlcyI6WyJSdW50aW1lTWNwU2V0dGluZ3NQYWdlLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgUmVhY3QsIHsgdXNlRWZmZWN0LCB1c2VNZW1vLCB1c2VTdGF0ZSB9IGZyb20gJ3JlYWN0JztcclxuaW1wb3J0IHsgdXNlU2hhbGxvdyB9IGZyb20gJ3p1c3RhbmQvcmVhY3Qvc2hhbGxvdyc7XHJcbmltcG9ydCB7XHJcbiAgZGVsZXRlUnVudGltZVNpZGVjYXJNY3BTZXJ2ZXIsXHJcbiAgaW5pdGlhbGl6ZVJ1bnRpbWVTaWRlY2FyTWNwU2VydmVycyxcclxuICBpbnZva2VSdW50aW1lU2lkZWNhck1jcFRvb2wsXHJcbiAgdXBzZXJ0UnVudGltZVNpZGVjYXJNY3BTZXJ2ZXIsXHJcbn0gZnJvbSAnLi4vLi4vbW9kdWxlcy9ydW50aW1lLXNpZGVjYXIvcnVudGltZVNpZGVjYXJTZXNzaW9uQnJpZGdlLnRzJztcclxuaW1wb3J0IHsgdXNlUnVudGltZU1jcFN0b3JlIH0gZnJvbSAnLi4vLi4vbW9kdWxlcy9haS9ydW50aW1lL21jcC9ydW50aW1lTWNwU3RvcmUnO1xyXG5pbXBvcnQgdHlwZSB7XHJcbiAgUnVudGltZU1jcFNlcnZlcixcclxuICBSdW50aW1lTWNwVG9vbERlZmluaXRpb24sXHJcbiAgUnVudGltZU1jcFRyYW5zcG9ydCxcclxufSBmcm9tICcuLi8uLi9tb2R1bGVzL2FpL3J1bnRpbWUvbWNwL3J1bnRpbWVNY3BUeXBlcyc7XHJcblxyXG5jb25zdCBCVUlMVElOX1NFUlZFUl9JRCA9ICdnb29kbmlnaHQtc2tpbGxzJztcclxuY29uc3QgTkVXX1NFUlZFUl9JRCA9ICdfX25ld19fJztcclxuXHJcbnR5cGUgUnVudGltZU1jcFNldHRpbmdzUGFnZVByb3BzID0ge1xyXG4gIHRocmVhZElkPzogc3RyaW5nIHwgbnVsbDtcclxufTtcclxuXHJcbnR5cGUgU3RyaW5nUm93ID0ge1xyXG4gIGlkOiBzdHJpbmc7XHJcbiAgdmFsdWU6IHN0cmluZztcclxufTtcclxuXHJcbnR5cGUgS2V5VmFsdWVSb3cgPSB7XHJcbiAgaWQ6IHN0cmluZztcclxuICBrZXk6IHN0cmluZztcclxuICB2YWx1ZTogc3RyaW5nO1xyXG59O1xyXG5cclxudHlwZSBNY3BEcmFmdCA9IHtcclxuICBpZDogc3RyaW5nO1xyXG4gIG5hbWU6IHN0cmluZztcclxuICB0cmFuc3BvcnQ6IFJ1bnRpbWVNY3BUcmFuc3BvcnQ7XHJcbiAgZGVzY3JpcHRpb246IHN0cmluZztcclxuICBlbmFibGVkOiBib29sZWFuO1xyXG4gIHRvb2xOYW1lc1RleHQ6IHN0cmluZztcclxuICBjb21tYW5kOiBzdHJpbmc7XHJcbiAgYXJnczogU3RyaW5nUm93W107XHJcbiAgZW52OiBLZXlWYWx1ZVJvd1tdO1xyXG4gIHVybDogc3RyaW5nO1xyXG4gIGhlYWRlcnM6IEtleVZhbHVlUm93W107XHJcbiAgaGVhZGVyc0hlbHBlcjogc3RyaW5nO1xyXG4gIG9hdXRoQ2xpZW50SWQ6IHN0cmluZztcclxuICBvYXV0aENhbGxiYWNrUG9ydDogc3RyaW5nO1xyXG59O1xyXG5cclxuY29uc3QgY3JlYXRlSWQgPSAoKSA9PiB7XHJcbiAgaWYgKHR5cGVvZiBjcnlwdG8gIT09ICd1bmRlZmluZWQnICYmICdyYW5kb21VVUlEJyBpbiBjcnlwdG8pIHtcclxuICAgIHJldHVybiBjcnlwdG8ucmFuZG9tVVVJRCgpO1xyXG4gIH1cclxuICByZXR1cm4gYCR7RGF0ZS5ub3coKX0tJHtNYXRoLnJhbmRvbSgpLnRvU3RyaW5nKDE2KS5zbGljZSgyKX1gO1xyXG59O1xyXG5cclxuY29uc3QgY3JlYXRlU3RyaW5nUm93ID0gKHZhbHVlID0gJycpOiBTdHJpbmdSb3cgPT4gKHsgaWQ6IGNyZWF0ZUlkKCksIHZhbHVlIH0pO1xyXG5jb25zdCBjcmVhdGVLZXlWYWx1ZVJvdyA9IChrZXkgPSAnJywgdmFsdWUgPSAnJyk6IEtleVZhbHVlUm93ID0+ICh7IGlkOiBjcmVhdGVJZCgpLCBrZXksIHZhbHVlIH0pO1xyXG5cclxuY29uc3QgRU1QVFlfRFJBRlQ6IE1jcERyYWZ0ID0ge1xyXG4gIGlkOiAnJyxcclxuICBuYW1lOiAnJyxcclxuICB0cmFuc3BvcnQ6ICdzdGRpbycsXHJcbiAgZGVzY3JpcHRpb246ICcnLFxyXG4gIGVuYWJsZWQ6IHRydWUsXHJcbiAgdG9vbE5hbWVzVGV4dDogJycsXHJcbiAgY29tbWFuZDogJycsXHJcbiAgYXJnczogW2NyZWF0ZVN0cmluZ1JvdygnJyldLFxyXG4gIGVudjogW2NyZWF0ZUtleVZhbHVlUm93KCldLFxyXG4gIHVybDogJycsXHJcbiAgaGVhZGVyczogW2NyZWF0ZUtleVZhbHVlUm93KCldLFxyXG4gIGhlYWRlcnNIZWxwZXI6ICcnLFxyXG4gIG9hdXRoQ2xpZW50SWQ6ICcnLFxyXG4gIG9hdXRoQ2FsbGJhY2tQb3J0OiAnJyxcclxufTtcclxuXHJcbmNvbnN0IHBhcnNlTGluZUxpc3QgPSAodmFsdWU6IHN0cmluZykgPT5cclxuICB2YWx1ZVxyXG4gICAgLnNwbGl0KC9cXHI/XFxufCwvKVxyXG4gICAgLm1hcCgoZW50cnkpID0+IGVudHJ5LnRyaW0oKSlcclxuICAgIC5maWx0ZXIoQm9vbGVhbik7XHJcblxyXG5jb25zdCByb3dzVG9MaXN0ID0gKHJvd3M6IFN0cmluZ1Jvd1tdKSA9PiByb3dzLm1hcCgocm93KSA9PiByb3cudmFsdWUudHJpbSgpKS5maWx0ZXIoQm9vbGVhbik7XHJcblxyXG5jb25zdCByb3dzVG9SZWNvcmQgPSAocm93czogS2V5VmFsdWVSb3dbXSkgPT5cclxuICBPYmplY3QuZnJvbUVudHJpZXMoXHJcbiAgICByb3dzXHJcbiAgICAgIC5tYXAoKHJvdykgPT4gW3Jvdy5rZXkudHJpbSgpLCByb3cudmFsdWVdIGFzIGNvbnN0KVxyXG4gICAgICAuZmlsdGVyKChba2V5XSkgPT4ga2V5KSxcclxuICApO1xyXG5cclxuY29uc3QgYnVpbGRSb3dzRnJvbUxpc3QgPSAodmFsdWVzPzogc3RyaW5nW10pID0+XHJcbiAgdmFsdWVzICYmIHZhbHVlcy5sZW5ndGggPiAwID8gdmFsdWVzLm1hcCgodmFsdWUpID0+IGNyZWF0ZVN0cmluZ1Jvdyh2YWx1ZSkpIDogW2NyZWF0ZVN0cmluZ1JvdygnJyldO1xyXG5cclxuY29uc3QgYnVpbGRSb3dzRnJvbVJlY29yZCA9IChyZWNvcmQ/OiBSZWNvcmQ8c3RyaW5nLCBzdHJpbmc+KSA9PiB7XHJcbiAgY29uc3QgZW50cmllcyA9IE9iamVjdC5lbnRyaWVzKHJlY29yZCB8fCB7fSk7XHJcbiAgcmV0dXJuIGVudHJpZXMubGVuZ3RoID4gMCA/IGVudHJpZXMubWFwKChba2V5LCB2YWx1ZV0pID0+IGNyZWF0ZUtleVZhbHVlUm93KGtleSwgdmFsdWUpKSA6IFtjcmVhdGVLZXlWYWx1ZVJvdygpXTtcclxufTtcclxuXHJcbmNvbnN0IGNyZWF0ZURyYWZ0RnJvbVNlcnZlciA9IChzZXJ2ZXI6IFJ1bnRpbWVNY3BTZXJ2ZXIpOiBNY3BEcmFmdCA9PiAoe1xyXG4gIGlkOiBzZXJ2ZXIuaWQsXHJcbiAgbmFtZTogc2VydmVyLm5hbWUsXHJcbiAgdHJhbnNwb3J0OiBzZXJ2ZXIudHJhbnNwb3J0LFxyXG4gIGRlc2NyaXB0aW9uOiBzZXJ2ZXIuZGVzY3JpcHRpb24sXHJcbiAgZW5hYmxlZDogc2VydmVyLmVuYWJsZWQsXHJcbiAgdG9vbE5hbWVzVGV4dDogc2VydmVyLnRvb2xOYW1lcy5qb2luKCdcXG4nKSxcclxuICBjb21tYW5kOiBzZXJ2ZXIuY29tbWFuZCB8fCAnJyxcclxuICBhcmdzOiBidWlsZFJvd3NGcm9tTGlzdChzZXJ2ZXIuYXJncyksXHJcbiAgZW52OiBidWlsZFJvd3NGcm9tUmVjb3JkKHNlcnZlci5lbnYpLFxyXG4gIHVybDogc2VydmVyLnVybCB8fCAnJyxcclxuICBoZWFkZXJzOiBidWlsZFJvd3NGcm9tUmVjb3JkKHNlcnZlci5oZWFkZXJzKSxcclxuICBoZWFkZXJzSGVscGVyOiBzZXJ2ZXIuaGVhZGVyc0hlbHBlciB8fCAnJyxcclxuICBvYXV0aENsaWVudElkOiBzZXJ2ZXIub2F1dGg/LmNsaWVudElkIHx8ICcnLFxyXG4gIG9hdXRoQ2FsbGJhY2tQb3J0OlxyXG4gICAgdHlwZW9mIHNlcnZlci5vYXV0aD8uY2FsbGJhY2tQb3J0ID09PSAnbnVtYmVyJyA/IFN0cmluZyhzZXJ2ZXIub2F1dGguY2FsbGJhY2tQb3J0KSA6ICcnLFxyXG59KTtcclxuXHJcbmNvbnN0IGJ1aWxkU2VydmVyVG9vbHMgPSAoXHJcbiAgdG9vbE5hbWVzOiBzdHJpbmdbXSxcclxuICBjdXJyZW50U2VydmVyOiBSdW50aW1lTWNwU2VydmVyIHwgbnVsbCxcclxuKTogUnVudGltZU1jcFRvb2xEZWZpbml0aW9uW10gPT5cclxuICB0b29sTmFtZXMubWFwKChuYW1lKSA9PiB7XHJcbiAgICBjb25zdCBleGlzdGluZ1Rvb2wgPSBjdXJyZW50U2VydmVyPy50b29scz8uZmluZCgodG9vbCkgPT4gdG9vbC5uYW1lID09PSBuYW1lKTtcclxuICAgIHJldHVybiAoXHJcbiAgICAgIGV4aXN0aW5nVG9vbCB8fCB7XHJcbiAgICAgICAgbmFtZSxcclxuICAgICAgICBkZXNjcmlwdGlvbjogYCR7bmFtZX0gdG9vbGAsXHJcbiAgICAgICAgcmVxdWlyZXNBcHByb3ZhbDogZmFsc2UsXHJcbiAgICAgIH1cclxuICAgICk7XHJcbiAgfSk7XHJcblxyXG5jb25zdCBidWlsZFNlcnZlckZyb21EcmFmdCA9IChcclxuICBkcmFmdDogTWNwRHJhZnQsXHJcbiAgY3VycmVudFNlcnZlcjogUnVudGltZU1jcFNlcnZlciB8IG51bGwsXHJcbik6IFJ1bnRpbWVNY3BTZXJ2ZXIgPT4ge1xyXG4gIGNvbnN0IHRvb2xOYW1lcyA9IHBhcnNlTGluZUxpc3QoZHJhZnQudG9vbE5hbWVzVGV4dCk7XHJcbiAgY29uc3Qgb2F1dGhDYWxsYmFja1BvcnQgPSBOdW1iZXIucGFyc2VJbnQoZHJhZnQub2F1dGhDYWxsYmFja1BvcnQudHJpbSgpLCAxMCk7XHJcbiAgY29uc3Qgc2hvdWxkVXNlUmVtb3RlQ29uZmlnID0gZHJhZnQudHJhbnNwb3J0ID09PSAnaHR0cCcgfHwgZHJhZnQudHJhbnNwb3J0ID09PSAnc3NlJztcclxuICBjb25zdCBvYXV0aCA9XHJcbiAgICBzaG91bGRVc2VSZW1vdGVDb25maWcgJiYgKGRyYWZ0Lm9hdXRoQ2xpZW50SWQudHJpbSgpIHx8IE51bWJlci5pc0Zpbml0ZShvYXV0aENhbGxiYWNrUG9ydCkpXHJcbiAgICAgID8ge1xyXG4gICAgICAgICAgY2xpZW50SWQ6IGRyYWZ0Lm9hdXRoQ2xpZW50SWQudHJpbSgpIHx8IG51bGwsXHJcbiAgICAgICAgICBjYWxsYmFja1BvcnQ6IE51bWJlci5pc0Zpbml0ZShvYXV0aENhbGxiYWNrUG9ydCkgPyBvYXV0aENhbGxiYWNrUG9ydCA6IG51bGwsXHJcbiAgICAgICAgfVxyXG4gICAgICA6IG51bGw7XHJcblxyXG4gIHJldHVybiB7XHJcbiAgICBpZDogZHJhZnQuaWQudHJpbSgpLFxyXG4gICAgbmFtZTogZHJhZnQubmFtZS50cmltKCksXHJcbiAgICBzdGF0dXM6IGN1cnJlbnRTZXJ2ZXI/LnN0YXR1cyB8fCAoZHJhZnQuZW5hYmxlZCA/ICdkaXNjb25uZWN0ZWQnIDogJ2Vycm9yJyksXHJcbiAgICB0cmFuc3BvcnQ6IGRyYWZ0LnRyYW5zcG9ydCxcclxuICAgIGRlc2NyaXB0aW9uOiBkcmFmdC5kZXNjcmlwdGlvbi50cmltKCksXHJcbiAgICBlbmFibGVkOiBkcmFmdC5lbmFibGVkLFxyXG4gICAgdG9vbE5hbWVzLFxyXG4gICAgY29tbWFuZDogZHJhZnQudHJhbnNwb3J0ID09PSAnc3RkaW8nID8gZHJhZnQuY29tbWFuZC50cmltKCkgfHwgbnVsbCA6IG51bGwsXHJcbiAgICBhcmdzOiBkcmFmdC50cmFuc3BvcnQgPT09ICdzdGRpbycgPyByb3dzVG9MaXN0KGRyYWZ0LmFyZ3MpIDogW10sXHJcbiAgICBlbnY6IGRyYWZ0LnRyYW5zcG9ydCA9PT0gJ3N0ZGlvJyA/IHJvd3NUb1JlY29yZChkcmFmdC5lbnYpIDoge30sXHJcbiAgICB1cmw6IHNob3VsZFVzZVJlbW90ZUNvbmZpZyA/IGRyYWZ0LnVybC50cmltKCkgfHwgbnVsbCA6IG51bGwsXHJcbiAgICBoZWFkZXJzOiBzaG91bGRVc2VSZW1vdGVDb25maWcgPyByb3dzVG9SZWNvcmQoZHJhZnQuaGVhZGVycykgOiB7fSxcclxuICAgIGhlYWRlcnNIZWxwZXI6IHNob3VsZFVzZVJlbW90ZUNvbmZpZyA/IGRyYWZ0LmhlYWRlcnNIZWxwZXIudHJpbSgpIHx8IG51bGwgOiBudWxsLFxyXG4gICAgb2F1dGgsXHJcbiAgICB0b29sczogYnVpbGRTZXJ2ZXJUb29scyh0b29sTmFtZXMsIGN1cnJlbnRTZXJ2ZXIpLFxyXG4gIH07XHJcbn07XHJcblxyXG5jb25zdCB0cmFuc3BvcnRMYWJlbCA9ICh0cmFuc3BvcnQ6IFJ1bnRpbWVNY3BUcmFuc3BvcnQpID0+IHtcclxuICBzd2l0Y2ggKHRyYW5zcG9ydCkge1xyXG4gICAgY2FzZSAnc3RkaW8nOlxyXG4gICAgICByZXR1cm4gJ1NURElPJztcclxuICAgIGNhc2UgJ2h0dHAnOlxyXG4gICAgICByZXR1cm4gJ0hUVFAnO1xyXG4gICAgY2FzZSAnc3NlJzpcclxuICAgICAgcmV0dXJuICdTU0UnO1xyXG4gICAgZGVmYXVsdDpcclxuICAgICAgcmV0dXJuICdCdWlsdC1pbic7XHJcbiAgfVxyXG59O1xyXG5cclxuZXhwb3J0IGNvbnN0IFJ1bnRpbWVNY3BTZXR0aW5nc1BhZ2U6IFJlYWN0LkZDPFJ1bnRpbWVNY3BTZXR0aW5nc1BhZ2VQcm9wcz4gPSAoe1xyXG4gIHRocmVhZElkID0gbnVsbCxcclxufSkgPT4ge1xyXG4gIGNvbnN0IHsgc2VydmVycywgdG9vbENhbGxzQnlUaHJlYWQgfSA9IHVzZVJ1bnRpbWVNY3BTdG9yZShcclxuICAgIHVzZVNoYWxsb3coKHN0YXRlKSA9PiAoe1xyXG4gICAgICBzZXJ2ZXJzOiBzdGF0ZS5zZXJ2ZXJzLFxyXG4gICAgICB0b29sQ2FsbHNCeVRocmVhZDogc3RhdGUudG9vbENhbGxzQnlUaHJlYWQsXHJcbiAgICB9KSksXHJcbiAgKTtcclxuICBjb25zdCBbc2VsZWN0ZWRTZXJ2ZXJJZCwgc2V0U2VsZWN0ZWRTZXJ2ZXJJZF0gPSB1c2VTdGF0ZTxzdHJpbmcgfCBudWxsPihudWxsKTtcclxuICBjb25zdCBbZHJhZnQsIHNldERyYWZ0XSA9IHVzZVN0YXRlPE1jcERyYWZ0PihFTVBUWV9EUkFGVCk7XHJcbiAgY29uc3QgW3N0YXR1c01lc3NhZ2UsIHNldFN0YXR1c01lc3NhZ2VdID0gdXNlU3RhdGUoJycpO1xyXG4gIGNvbnN0IFtlcnJvck1lc3NhZ2UsIHNldEVycm9yTWVzc2FnZV0gPSB1c2VTdGF0ZSgnJyk7XHJcbiAgY29uc3QgW2lzV29ya2luZywgc2V0SXNXb3JraW5nXSA9IHVzZVN0YXRlKGZhbHNlKTtcclxuXHJcbiAgY29uc3QgbG9hZFNlcnZlcnMgPSBhc3luYyAocHJlZmVycmVkU2VydmVySWQ/OiBzdHJpbmcgfCBudWxsKSA9PiB7XHJcbiAgICBhd2FpdCBpbml0aWFsaXplUnVudGltZVNpZGVjYXJNY3BTZXJ2ZXJzKCk7XHJcbiAgICBjb25zdCBuZXh0U2VydmVycyA9IHVzZVJ1bnRpbWVNY3BTdG9yZS5nZXRTdGF0ZSgpLnNlcnZlcnM7XHJcbiAgICBjb25zdCBuZXh0U2VsZWN0ZWRTZXJ2ZXJJZCA9XHJcbiAgICAgIHByZWZlcnJlZFNlcnZlcklkID09PSBORVdfU0VSVkVSX0lEXHJcbiAgICAgICAgPyBORVdfU0VSVkVSX0lEXHJcbiAgICAgICAgOiBwcmVmZXJyZWRTZXJ2ZXJJZCAmJiBuZXh0U2VydmVycy5zb21lKChzZXJ2ZXIpID0+IHNlcnZlci5pZCA9PT0gcHJlZmVycmVkU2VydmVySWQpXHJcbiAgICAgICAgICA/IHByZWZlcnJlZFNlcnZlcklkXHJcbiAgICAgICAgICA6IG5leHRTZXJ2ZXJzWzBdPy5pZCB8fCBudWxsO1xyXG5cclxuICAgIHNldFNlbGVjdGVkU2VydmVySWQobmV4dFNlbGVjdGVkU2VydmVySWQpO1xyXG5cclxuICAgIGlmIChuZXh0U2VsZWN0ZWRTZXJ2ZXJJZCA9PT0gTkVXX1NFUlZFUl9JRCkge1xyXG4gICAgICBzZXREcmFmdChFTVBUWV9EUkFGVCk7XHJcbiAgICAgIHJldHVybjtcclxuICAgIH1cclxuXHJcbiAgICBjb25zdCBuZXh0U2VydmVyID1cclxuICAgICAgbmV4dFNlcnZlcnMuZmluZCgoc2VydmVyKSA9PiBzZXJ2ZXIuaWQgPT09IG5leHRTZWxlY3RlZFNlcnZlcklkKSB8fCBudWxsO1xyXG4gICAgc2V0RHJhZnQobmV4dFNlcnZlciA/IGNyZWF0ZURyYWZ0RnJvbVNlcnZlcihuZXh0U2VydmVyKSA6IEVNUFRZX0RSQUZUKTtcclxuICB9O1xyXG5cclxuICB1c2VFZmZlY3QoKCkgPT4ge1xyXG4gICAgdm9pZCBsb2FkU2VydmVycyhzZWxlY3RlZFNlcnZlcklkKTtcclxuICAgIC8vIHNlbGVjdGVkU2VydmVySWQgaXMgaW50ZW50aW9uYWxseSBleGNsdWRlZCBzbyBpbml0aWFsIGxvYWQgZG9lcyBub3QgbG9vcC5cclxuICAgIC8vIGVzbGludC1kaXNhYmxlLW5leHQtbGluZSByZWFjdC1ob29rcy9leGhhdXN0aXZlLWRlcHNcclxuICB9LCBbXSk7XHJcblxyXG4gIGNvbnN0IHNlbGVjdGVkU2VydmVyID0gdXNlTWVtbyhcclxuICAgICgpID0+IHNlcnZlcnMuZmluZCgoc2VydmVyKSA9PiBzZXJ2ZXIuaWQgPT09IHNlbGVjdGVkU2VydmVySWQpIHx8IG51bGwsXHJcbiAgICBbc2VsZWN0ZWRTZXJ2ZXJJZCwgc2VydmVyc10sXHJcbiAgKTtcclxuICBjb25zdCBpc0NyZWF0aW5nID0gc2VsZWN0ZWRTZXJ2ZXJJZCA9PT0gTkVXX1NFUlZFUl9JRDtcclxuICBjb25zdCBpc0J1aWx0aW5TZXJ2ZXIgPSBzZWxlY3RlZFNlcnZlcj8uaWQgPT09IEJVSUxUSU5fU0VSVkVSX0lEO1xyXG4gIGNvbnN0IGlzUmVtb3RlVHJhbnNwb3J0ID0gZHJhZnQudHJhbnNwb3J0ID09PSAnaHR0cCcgfHwgZHJhZnQudHJhbnNwb3J0ID09PSAnc3NlJztcclxuICBjb25zdCBhY3RpdmVUb29sQ2FsbHMgPSB1c2VNZW1vKCgpID0+IHtcclxuICAgIGlmICghdGhyZWFkSWQgfHwgIXNlbGVjdGVkU2VydmVyKSB7XHJcbiAgICAgIHJldHVybiBbXTtcclxuICAgIH1cclxuXHJcbiAgICByZXR1cm4gKHRvb2xDYWxsc0J5VGhyZWFkW3RocmVhZElkXSB8fCBbXSlcclxuICAgICAgLmZpbHRlcigodG9vbENhbGwpID0+IHRvb2xDYWxsLnNlcnZlcklkID09PSBzZWxlY3RlZFNlcnZlci5pZClcclxuICAgICAgLnNsaWNlKC02KVxyXG4gICAgICAucmV2ZXJzZSgpO1xyXG4gIH0sIFtzZWxlY3RlZFNlcnZlciwgdGhyZWFkSWQsIHRvb2xDYWxsc0J5VGhyZWFkXSk7XHJcbiAgY29uc3QgZW5hYmxlZFNlcnZlckNvdW50ID0gdXNlTWVtbyhcclxuICAgICgpID0+IHNlcnZlcnMuZmlsdGVyKChzZXJ2ZXIpID0+IHNlcnZlci5lbmFibGVkKS5sZW5ndGgsXHJcbiAgICBbc2VydmVyc10sXHJcbiAgKTtcclxuICBjb25zdCBjdXN0b21TZXJ2ZXJDb3VudCA9IHVzZU1lbW8oXHJcbiAgICAoKSA9PiBzZXJ2ZXJzLmZpbHRlcigoc2VydmVyKSA9PiBzZXJ2ZXIuaWQgIT09IEJVSUxUSU5fU0VSVkVSX0lEKS5sZW5ndGgsXHJcbiAgICBbc2VydmVyc10sXHJcbiAgKTtcclxuICBjb25zdCByZW1vdGVTZXJ2ZXJDb3VudCA9IHVzZU1lbW8oXHJcbiAgICAoKSA9PiBzZXJ2ZXJzLmZpbHRlcigoc2VydmVyKSA9PiBzZXJ2ZXIudHJhbnNwb3J0ID09PSAnaHR0cCcgfHwgc2VydmVyLnRyYW5zcG9ydCA9PT0gJ3NzZScpLmxlbmd0aCxcclxuICAgIFtzZXJ2ZXJzXSxcclxuICApO1xyXG5cclxuICBjb25zdCBoYW5kbGVTZWxlY3RTZXJ2ZXIgPSAoc2VydmVyOiBSdW50aW1lTWNwU2VydmVyKSA9PiB7XHJcbiAgICBzZXRTZWxlY3RlZFNlcnZlcklkKHNlcnZlci5pZCk7XHJcbiAgICBzZXREcmFmdChjcmVhdGVEcmFmdEZyb21TZXJ2ZXIoc2VydmVyKSk7XHJcbiAgICBzZXRTdGF0dXNNZXNzYWdlKCcnKTtcclxuICAgIHNldEVycm9yTWVzc2FnZSgnJyk7XHJcbiAgfTtcclxuXHJcbiAgY29uc3QgaGFuZGxlQ3JlYXRlU2VydmVyID0gKCkgPT4ge1xyXG4gICAgc2V0U2VsZWN0ZWRTZXJ2ZXJJZChORVdfU0VSVkVSX0lEKTtcclxuICAgIHNldERyYWZ0KEVNUFRZX0RSQUZUKTtcclxuICAgIHNldFN0YXR1c01lc3NhZ2UoJycpO1xyXG4gICAgc2V0RXJyb3JNZXNzYWdlKCcnKTtcclxuICB9O1xyXG5cclxuICBjb25zdCBoYW5kbGVSZWZyZXNoID0gYXN5bmMgKCkgPT4ge1xyXG4gICAgc2V0SXNXb3JraW5nKHRydWUpO1xyXG4gICAgc2V0RXJyb3JNZXNzYWdlKCcnKTtcclxuICAgIHNldFN0YXR1c01lc3NhZ2UoJycpO1xyXG4gICAgdHJ5IHtcclxuICAgICAgYXdhaXQgbG9hZFNlcnZlcnMoc2VsZWN0ZWRTZXJ2ZXJJZCk7XHJcbiAgICAgIHNldFN0YXR1c01lc3NhZ2UoJ+WIt+aWsOWIl+ihqOWujOaIkOOAgicpO1xyXG4gICAgfSBjYXRjaCAoZXJyb3IpIHtcclxuICAgICAgc2V0RXJyb3JNZXNzYWdlKGVycm9yIGluc3RhbmNlb2YgRXJyb3IgPyBlcnJvci5tZXNzYWdlIDogU3RyaW5nKGVycm9yKSk7XHJcbiAgICB9IGZpbmFsbHkge1xyXG4gICAgICBzZXRJc1dvcmtpbmcoZmFsc2UpO1xyXG4gICAgfVxyXG4gIH07XHJcblxyXG4gIGNvbnN0IGhhbmRsZVNhdmUgPSBhc3luYyAoKSA9PiB7XHJcbiAgICBpZiAoIWRyYWZ0LmlkLnRyaW0oKSB8fCAhZHJhZnQubmFtZS50cmltKCkpIHtcclxuICAgICAgc2V0RXJyb3JNZXNzYWdlKCfor7flhYjloavlhpkgTUNQIHNlcnZlciDnmoQgSUQg5ZKM5ZCN56ew44CCJyk7XHJcbiAgICAgIHJldHVybjtcclxuICAgIH1cclxuXHJcbiAgICBpZiAoZHJhZnQudHJhbnNwb3J0ID09PSAnc3RkaW8nICYmICFkcmFmdC5jb21tYW5kLnRyaW0oKSkge1xyXG4gICAgICBzZXRFcnJvck1lc3NhZ2UoJ1NURElPIHNlcnZlciDpnIDopoEgY29tbWFuZOOAgicpO1xyXG4gICAgICByZXR1cm47XHJcbiAgICB9XHJcblxyXG4gICAgaWYgKChkcmFmdC50cmFuc3BvcnQgPT09ICdodHRwJyB8fCBkcmFmdC50cmFuc3BvcnQgPT09ICdzc2UnKSAmJiAhZHJhZnQudXJsLnRyaW0oKSkge1xyXG4gICAgICBzZXRFcnJvck1lc3NhZ2UoYCR7dHJhbnNwb3J0TGFiZWwoZHJhZnQudHJhbnNwb3J0KX0gc2VydmVyIOmcgOimgSBVUkzjgIJgKTtcclxuICAgICAgcmV0dXJuO1xyXG4gICAgfVxyXG5cclxuICAgIHNldElzV29ya2luZyh0cnVlKTtcclxuICAgIHNldEVycm9yTWVzc2FnZSgnJyk7XHJcbiAgICBzZXRTdGF0dXNNZXNzYWdlKCcnKTtcclxuICAgIHRyeSB7XHJcbiAgICAgIGNvbnN0IHNhdmVkU2VydmVyID0gYXdhaXQgdXBzZXJ0UnVudGltZVNpZGVjYXJNY3BTZXJ2ZXIoXHJcbiAgICAgICAgYnVpbGRTZXJ2ZXJGcm9tRHJhZnQoZHJhZnQsIGlzQ3JlYXRpbmcgPyBudWxsIDogc2VsZWN0ZWRTZXJ2ZXIpLFxyXG4gICAgICApO1xyXG4gICAgICBpZiAoIXNhdmVkU2VydmVyKSB7XHJcbiAgICAgICAgdGhyb3cgbmV3IEVycm9yKCdOb2RlIHJ1bnRpbWUgc2lkZWNhciDmnKrlkK/liqjvvIzml6Dms5Xkv53lrZggTUNQIHNlcnZlcuOAgicpO1xyXG4gICAgICB9XHJcbiAgICAgIGF3YWl0IGxvYWRTZXJ2ZXJzKHNhdmVkU2VydmVyLmlkKTtcclxuICAgICAgc2V0U3RhdHVzTWVzc2FnZShpc0NyZWF0aW5nID8gJ01DUCBzZXJ2ZXIg5bey5Yib5bu644CCJyA6ICdNQ1Agc2VydmVyIOW3suabtOaWsOOAgicpO1xyXG4gICAgfSBjYXRjaCAoZXJyb3IpIHtcclxuICAgICAgc2V0RXJyb3JNZXNzYWdlKGVycm9yIGluc3RhbmNlb2YgRXJyb3IgPyBlcnJvci5tZXNzYWdlIDogU3RyaW5nKGVycm9yKSk7XHJcbiAgICB9IGZpbmFsbHkge1xyXG4gICAgICBzZXRJc1dvcmtpbmcoZmFsc2UpO1xyXG4gICAgfVxyXG4gIH07XHJcblxyXG4gIGNvbnN0IGhhbmRsZVRvZ2dsZUVuYWJsZWQgPSBhc3luYyAoKSA9PiB7XHJcbiAgICBpZiAoIXNlbGVjdGVkU2VydmVyIHx8IGlzQnVpbHRpblNlcnZlcikge1xyXG4gICAgICByZXR1cm47XHJcbiAgICB9XHJcblxyXG4gICAgc2V0SXNXb3JraW5nKHRydWUpO1xyXG4gICAgc2V0RXJyb3JNZXNzYWdlKCcnKTtcclxuICAgIHNldFN0YXR1c01lc3NhZ2UoJycpO1xyXG4gICAgdHJ5IHtcclxuICAgICAgY29uc3QgdXBkYXRlZFNlcnZlciA9IGF3YWl0IHVwc2VydFJ1bnRpbWVTaWRlY2FyTWNwU2VydmVyKHtcclxuICAgICAgICAuLi5zZWxlY3RlZFNlcnZlcixcclxuICAgICAgICBlbmFibGVkOiAhc2VsZWN0ZWRTZXJ2ZXIuZW5hYmxlZCxcclxuICAgICAgfSk7XHJcbiAgICAgIGlmICghdXBkYXRlZFNlcnZlcikge1xyXG4gICAgICAgIHRocm93IG5ldyBFcnJvcignTm9kZSBydW50aW1lIHNpZGVjYXIg5pyq5ZCv5Yqo77yM5peg5rOV5pu05pawIE1DUCBzZXJ2ZXLjgIInKTtcclxuICAgICAgfVxyXG4gICAgICBhd2FpdCBsb2FkU2VydmVycyh1cGRhdGVkU2VydmVyLmlkKTtcclxuICAgICAgc2V0U3RhdHVzTWVzc2FnZSh1cGRhdGVkU2VydmVyLmVuYWJsZWQgPyAnTUNQIHNlcnZlciDlt7LlkK/nlKjjgIInIDogJ01DUCBzZXJ2ZXIg5bey5YGc55So44CCJyk7XHJcbiAgICB9IGNhdGNoIChlcnJvcikge1xyXG4gICAgICBzZXRFcnJvck1lc3NhZ2UoZXJyb3IgaW5zdGFuY2VvZiBFcnJvciA/IGVycm9yLm1lc3NhZ2UgOiBTdHJpbmcoZXJyb3IpKTtcclxuICAgIH0gZmluYWxseSB7XHJcbiAgICAgIHNldElzV29ya2luZyhmYWxzZSk7XHJcbiAgICB9XHJcbiAgfTtcclxuXHJcbiAgY29uc3QgaGFuZGxlRGVsZXRlID0gYXN5bmMgKCkgPT4ge1xyXG4gICAgaWYgKCFzZWxlY3RlZFNlcnZlciB8fCBpc0J1aWx0aW5TZXJ2ZXIpIHtcclxuICAgICAgcmV0dXJuO1xyXG4gICAgfVxyXG5cclxuICAgIGlmICghd2luZG93LmNvbmZpcm0oYOWIoOmZpCBNQ1Agc2VydmVy44CMJHtzZWxlY3RlZFNlcnZlci5uYW1lfeOAje+8n2ApKSB7XHJcbiAgICAgIHJldHVybjtcclxuICAgIH1cclxuXHJcbiAgICBzZXRJc1dvcmtpbmcodHJ1ZSk7XHJcbiAgICBzZXRFcnJvck1lc3NhZ2UoJycpO1xyXG4gICAgc2V0U3RhdHVzTWVzc2FnZSgnJyk7XHJcbiAgICB0cnkge1xyXG4gICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBkZWxldGVSdW50aW1lU2lkZWNhck1jcFNlcnZlcihzZWxlY3RlZFNlcnZlci5pZCk7XHJcbiAgICAgIGlmICghcmVzdWx0KSB7XHJcbiAgICAgICAgdGhyb3cgbmV3IEVycm9yKCdOb2RlIHJ1bnRpbWUgc2lkZWNhciDmnKrlkK/liqjvvIzml6Dms5XliKDpmaQgTUNQIHNlcnZlcuOAgicpO1xyXG4gICAgICB9XHJcbiAgICAgIGF3YWl0IGxvYWRTZXJ2ZXJzKG51bGwpO1xyXG4gICAgICBzZXRTdGF0dXNNZXNzYWdlKCdNQ1Agc2VydmVyIOW3suWIoOmZpOOAgicpO1xyXG4gICAgfSBjYXRjaCAoZXJyb3IpIHtcclxuICAgICAgc2V0RXJyb3JNZXNzYWdlKGVycm9yIGluc3RhbmNlb2YgRXJyb3IgPyBlcnJvci5tZXNzYWdlIDogU3RyaW5nKGVycm9yKSk7XHJcbiAgICB9IGZpbmFsbHkge1xyXG4gICAgICBzZXRJc1dvcmtpbmcoZmFsc2UpO1xyXG4gICAgfVxyXG4gIH07XHJcblxyXG4gIGNvbnN0IGhhbmRsZVJ1blRvb2wgPSBhc3luYyAoKSA9PiB7XHJcbiAgICBpZiAoIXRocmVhZElkIHx8ICFzZWxlY3RlZFNlcnZlciB8fCBzZWxlY3RlZFNlcnZlci50b29sTmFtZXMubGVuZ3RoID09PSAwKSB7XHJcbiAgICAgIHJldHVybjtcclxuICAgIH1cclxuXHJcbiAgICBzZXRJc1dvcmtpbmcodHJ1ZSk7XHJcbiAgICBzZXRFcnJvck1lc3NhZ2UoJycpO1xyXG4gICAgc2V0U3RhdHVzTWVzc2FnZSgnJyk7XHJcbiAgICB0cnkge1xyXG4gICAgICBjb25zdCB0b29sQ2FsbCA9IGF3YWl0IGludm9rZVJ1bnRpbWVTaWRlY2FyTWNwVG9vbCh7XHJcbiAgICAgICAgdGhyZWFkSWQsXHJcbiAgICAgICAgc2VydmVySWQ6IHNlbGVjdGVkU2VydmVyLmlkLFxyXG4gICAgICAgIHRvb2xOYW1lOiBzZWxlY3RlZFNlcnZlci50b29sTmFtZXNbMF0sXHJcbiAgICAgIH0pO1xyXG4gICAgICBpZiAoIXRvb2xDYWxsKSB7XHJcbiAgICAgICAgdGhyb3cgbmV3IEVycm9yKCdOb2RlIHJ1bnRpbWUgc2lkZWNhciDmnKrlkK/liqjvvIzml6Dms5XmiafooYwgTUNQIOW3peWFt+OAgicpO1xyXG4gICAgICB9XHJcbiAgICAgIHNldFN0YXR1c01lc3NhZ2UoYOW3sui/kOihjCAke3NlbGVjdGVkU2VydmVyLnRvb2xOYW1lc1swXX3jgIJgKTtcclxuICAgIH0gY2F0Y2ggKGVycm9yKSB7XHJcbiAgICAgIHNldEVycm9yTWVzc2FnZShlcnJvciBpbnN0YW5jZW9mIEVycm9yID8gZXJyb3IubWVzc2FnZSA6IFN0cmluZyhlcnJvcikpO1xyXG4gICAgfSBmaW5hbGx5IHtcclxuICAgICAgc2V0SXNXb3JraW5nKGZhbHNlKTtcclxuICAgIH1cclxuICB9O1xyXG5cclxuICBjb25zdCB1cGRhdGVBcmdzID0gKGlkOiBzdHJpbmcsIHZhbHVlOiBzdHJpbmcpID0+IHtcclxuICAgIHNldERyYWZ0KChjdXJyZW50KSA9PiAoe1xyXG4gICAgICAuLi5jdXJyZW50LFxyXG4gICAgICBhcmdzOiBjdXJyZW50LmFyZ3MubWFwKChyb3cpID0+IChyb3cuaWQgPT09IGlkID8geyAuLi5yb3csIHZhbHVlIH0gOiByb3cpKSxcclxuICAgIH0pKTtcclxuICB9O1xyXG5cclxuICBjb25zdCB1cGRhdGVLZXlWYWx1ZVJvd3MgPSAoXHJcbiAgICBrZXk6ICdlbnYnIHwgJ2hlYWRlcnMnLFxyXG4gICAgaWQ6IHN0cmluZyxcclxuICAgIGZpZWxkOiAna2V5JyB8ICd2YWx1ZScsXHJcbiAgICB2YWx1ZTogc3RyaW5nLFxyXG4gICkgPT4ge1xyXG4gICAgc2V0RHJhZnQoKGN1cnJlbnQpID0+ICh7XHJcbiAgICAgIC4uLmN1cnJlbnQsXHJcbiAgICAgIFtrZXldOiBjdXJyZW50W2tleV0ubWFwKChyb3cpID0+IChyb3cuaWQgPT09IGlkID8geyAuLi5yb3csIFtmaWVsZF06IHZhbHVlIH0gOiByb3cpKSxcclxuICAgIH0pKTtcclxuICB9O1xyXG5cclxuICBjb25zdCBhZGRSb3cgPSAoa2V5OiAnYXJncycgfCAnZW52JyB8ICdoZWFkZXJzJykgPT4ge1xyXG4gICAgc2V0RHJhZnQoKGN1cnJlbnQpID0+ICh7XHJcbiAgICAgIC4uLmN1cnJlbnQsXHJcbiAgICAgIFtrZXldOiBbXHJcbiAgICAgICAgLi4uY3VycmVudFtrZXldLFxyXG4gICAgICAgIGtleSA9PT0gJ2FyZ3MnID8gY3JlYXRlU3RyaW5nUm93KCkgOiBjcmVhdGVLZXlWYWx1ZVJvdygpLFxyXG4gICAgICBdLFxyXG4gICAgfSkpO1xyXG4gIH07XHJcblxyXG4gIGNvbnN0IHJlbW92ZVJvdyA9IChrZXk6ICdhcmdzJyB8ICdlbnYnIHwgJ2hlYWRlcnMnLCBpZDogc3RyaW5nKSA9PiB7XHJcbiAgICBzZXREcmFmdCgoY3VycmVudCkgPT4ge1xyXG4gICAgICBjb25zdCBuZXh0Um93cyA9IGN1cnJlbnRba2V5XS5maWx0ZXIoKHJvdykgPT4gcm93LmlkICE9PSBpZCk7XHJcbiAgICAgIHJldHVybiB7XHJcbiAgICAgICAgLi4uY3VycmVudCxcclxuICAgICAgICBba2V5XTpcclxuICAgICAgICAgIG5leHRSb3dzLmxlbmd0aCA+IDAgPyBuZXh0Um93cyA6IFtrZXkgPT09ICdhcmdzJyA/IGNyZWF0ZVN0cmluZ1JvdygpIDogY3JlYXRlS2V5VmFsdWVSb3coKV0sXHJcbiAgICAgIH07XHJcbiAgICB9KTtcclxuICB9O1xyXG5cclxuICBjb25zdCB0b29sQ291bnQgPSBwYXJzZUxpbmVMaXN0KGRyYWZ0LnRvb2xOYW1lc1RleHQpLmxlbmd0aDtcclxuXHJcbiAgcmV0dXJuIChcclxuICAgIDxkaXYgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtcGFnZVwiPlxyXG4gICAgICA8c2VjdGlvbiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLXN1cmZhY2UgY2hhdC1zZXR0aW5ncy1tY3AtdG9vbGJhci1iYXJcIj5cclxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLXRvb2xiYXItY29weVwiPlxyXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWV5ZWJyb3dcIj5SdW50aW1lIE1DUDwvZGl2PlxyXG4gICAgICAgICAgPHN0cm9uZz5NQ1AgTGlicmFyeTwvc3Ryb25nPlxyXG4gICAgICAgICAgPHA+5oqKIE1DUCBzZXJ2ZXIg55qE5p+l55yL44CB5Yib5bu644CB57yW6L6R44CB5ZCv5YGc5ZKM5YWz6ZSu6L+e5o6l5Y+C5pWw57uf5LiA5pS26L+b5LiA5Liq6L+Q6KGM5pe26LWE5rqQ6Z2i5p2/44CCPC9wPlxyXG4gICAgICAgIDwvZGl2PlxyXG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtdG9vbGJhci1hY3Rpb25zXCI+XHJcbiAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtYXBwbHktYnRuIHNlY29uZGFyeVwiXHJcbiAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB2b2lkIGhhbmRsZVJlZnJlc2goKX1cclxuICAgICAgICAgICAgZGlzYWJsZWQ9e2lzV29ya2luZ31cclxuICAgICAgICAgID5cclxuICAgICAgICAgICAg5Yi35paw5YiX6KGoXHJcbiAgICAgICAgICA8L2J1dHRvbj5cclxuICAgICAgICAgIDxidXR0b25cclxuICAgICAgICAgICAgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1hcHBseS1idG5cIlxyXG4gICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgb25DbGljaz17aGFuZGxlQ3JlYXRlU2VydmVyfVxyXG4gICAgICAgICAgICBkaXNhYmxlZD17aXNXb3JraW5nfVxyXG4gICAgICAgICAgPlxyXG4gICAgICAgICAgICDmlrDlu7rmnI3liqHlmahcclxuICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgIDwvZGl2PlxyXG4gICAgICA8L3NlY3Rpb24+XHJcblxyXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLWxheW91dFwiPlxyXG4gICAgICAgIDxhc2lkZSBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLW1jcC1saXN0XCI+XHJcbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLXBhbmVsLWhlYWRlciBjaGF0LXNldHRpbmdzLW1jcC1saXN0LWhlYWRcIj5cclxuICAgICAgICAgICAgPGRpdj5cclxuICAgICAgICAgICAgICA8c3Ryb25nPuacjeWKoeWZqOWIl+ihqDwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgIDxzcGFuPuWGhee9ruiDveWKm+S/neeVmeWPquivu++8jOiHquWumuS5iSBzZXJ2ZXIg5Zyo6L+Z6YeM57uf5LiA57u05oqk44CCPC9zcGFuPlxyXG4gICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLW1jcC1saXN0LW1ldGFcIj5cclxuICAgICAgICAgICAgICA8c3Bhbj57c2VydmVycy5sZW5ndGh9IOaAu+aVsDwvc3Bhbj5cclxuICAgICAgICAgICAgICA8c3Bhbj57ZW5hYmxlZFNlcnZlckNvdW50fSDlt7LlkK/nlKg8L3NwYW4+XHJcbiAgICAgICAgICAgICAgPHNwYW4+e3JlbW90ZVNlcnZlckNvdW50fSDov5znqIs8L3NwYW4+XHJcbiAgICAgICAgICAgICAgPHNwYW4+e2N1c3RvbVNlcnZlckNvdW50fSDoh6rlrprkuYk8L3NwYW4+XHJcbiAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgPC9kaXY+XHJcblxyXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLW1jcC1zZXJ2ZXItaXRlbXNcIj5cclxuICAgICAgICAgICAge3NlcnZlcnMubWFwKChzZXJ2ZXIpID0+IHtcclxuICAgICAgICAgICAgICBjb25zdCBpc0FjdGl2ZSA9IHNlbGVjdGVkU2VydmVySWQgPT09IHNlcnZlci5pZDtcclxuICAgICAgICAgICAgICByZXR1cm4gKFxyXG4gICAgICAgICAgICAgICAgPGJ1dHRvblxyXG4gICAgICAgICAgICAgICAgICBrZXk9e3NlcnZlci5pZH1cclxuICAgICAgICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXHJcbiAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT17YGNoYXQtc2V0dGluZ3MtbWNwLXNlcnZlci1pdGVtJHtpc0FjdGl2ZSA/ICcgYWN0aXZlJyA6ICcnfWB9XHJcbiAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IGhhbmRsZVNlbGVjdFNlcnZlcihzZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgPlxyXG4gICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLXNlcnZlci1pdGVtLXRvcFwiPlxyXG4gICAgICAgICAgICAgICAgICAgIDxzdHJvbmc+e3NlcnZlci5uYW1lfTwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT17YGNoYXQtc2V0dGluZ3MtbWNwLXN0YXR1cyAke3NlcnZlci5lbmFibGVkID8gJ2VuYWJsZWQnIDogJ2Rpc2FibGVkJ31gfT5cclxuICAgICAgICAgICAgICAgICAgICAgIHtzZXJ2ZXIuZW5hYmxlZCA/ICflkK/nlKjkuK0nIDogJ+W3suWBnOeUqCd9XHJcbiAgICAgICAgICAgICAgICAgICAgPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICAgICAgPHNwYW4+e3NlcnZlci5pZH08L3NwYW4+XHJcbiAgICAgICAgICAgICAgICAgIDxzcGFuPlxyXG4gICAgICAgICAgICAgICAgICAgIHt0cmFuc3BvcnRMYWJlbChzZXJ2ZXIudHJhbnNwb3J0KX0gwrcge3NlcnZlci50b29sTmFtZXMubGVuZ3RofSDkuKrlt6XlhbdcclxuICAgICAgICAgICAgICAgICAgPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICB7c2VydmVyLmRlc2NyaXB0aW9uID8gPHNwYW4+e3NlcnZlci5kZXNjcmlwdGlvbn08L3NwYW4+IDogbnVsbH1cclxuICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgICk7XHJcbiAgICAgICAgICAgIH0pfVxyXG4gICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgPC9hc2lkZT5cclxuXHJcbiAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1zdXJmYWNlIGNoYXQtc2V0dGluZ3MtbWNwLWVkaXRvclwiPlxyXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLW1jcC1wYW5lbC1oZWFkZXIgY2hhdC1zZXR0aW5ncy1kZXRhaWwtaGVhZGVyXCI+XHJcbiAgICAgICAgICAgIDxkaXY+XHJcbiAgICAgICAgICAgICAgPHN0cm9uZz57aXNDcmVhdGluZyA/ICfmlrDlu7ogTUNQIHNlcnZlcicgOiBkcmFmdC5uYW1lIHx8ICfpgInmi6nkuIDkuKogTUNQIHNlcnZlcid9PC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgPHNwYW4+XHJcbiAgICAgICAgICAgICAgICB7aXNCdWlsdGluU2VydmVyXHJcbiAgICAgICAgICAgICAgICAgID8gJ+WGhee9riBzZXJ2ZXIg5LuF5bGV56S66IO95Yqb77yM5LiN5YWB6K6455u05o6l5L+u5pS544CCJ1xyXG4gICAgICAgICAgICAgICAgICA6IGlzQ3JlYXRpbmdcclxuICAgICAgICAgICAgICAgICAgICA/ICflsL3ph4/mjIkgaGFoYSDnmoTlrZfmrrXkuaDmg6/loavlhpnvvIzkv53lrZjlkI7nq4vljbPmiJDkuLrov5DooYzml7bphY3nva7jgIInXHJcbiAgICAgICAgICAgICAgICAgICAgOiAn5Zyo6L+Z6YeM57u05oqkIHRyYW5zcG9ydOOAgeW3peWFt+OAgeeOr+Wig+WPmOmHj+OAgeivt+axguWktOWSjCBPQXV0aCDlj4LmlbDjgIInfVxyXG4gICAgICAgICAgICAgIDwvc3Bhbj5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1hY3Rpb25zXCI+XHJcbiAgICAgICAgICAgICAge3RocmVhZElkICYmIHNlbGVjdGVkU2VydmVyPy50b29sTmFtZXMubGVuZ3RoID8gKFxyXG4gICAgICAgICAgICAgICAgPGJ1dHRvblxyXG4gICAgICAgICAgICAgICAgICBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWFwcGx5LWJ0biBzZWNvbmRhcnlcIlxyXG4gICAgICAgICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgICAgICAgb25DbGljaz17KCkgPT4gdm9pZCBoYW5kbGVSdW5Ub29sKCl9XHJcbiAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtpc1dvcmtpbmd9XHJcbiAgICAgICAgICAgICAgICA+XHJcbiAgICAgICAgICAgICAgICAgIOi/kOihjOmmluS4quW3peWFt1xyXG4gICAgICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICAgICAgKSA6IG51bGx9XHJcbiAgICAgICAgICAgICAgeyFpc0J1aWx0aW5TZXJ2ZXIgJiYgIWlzQ3JlYXRpbmcgPyAoXHJcbiAgICAgICAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtYXBwbHktYnRuIHNlY29uZGFyeVwiXHJcbiAgICAgICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB2b2lkIGhhbmRsZVRvZ2dsZUVuYWJsZWQoKX1cclxuICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e2lzV29ya2luZ31cclxuICAgICAgICAgICAgICAgID5cclxuICAgICAgICAgICAgICAgICAge3NlbGVjdGVkU2VydmVyPy5lbmFibGVkID8gJ+WBnOeUqCcgOiAn5ZCv55SoJ31cclxuICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgICkgOiBudWxsfVxyXG4gICAgICAgICAgICAgIHshaXNCdWlsdGluU2VydmVyID8gKFxyXG4gICAgICAgICAgICAgICAgPGJ1dHRvblxyXG4gICAgICAgICAgICAgICAgICBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWFwcGx5LWJ0biBzZWNvbmRhcnlcIlxyXG4gICAgICAgICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgICAgICAgb25DbGljaz17KCkgPT4gdm9pZCBoYW5kbGVTYXZlKCl9XHJcbiAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtpc1dvcmtpbmd9XHJcbiAgICAgICAgICAgICAgICA+XHJcbiAgICAgICAgICAgICAgICAgIOS/neWtmFxyXG4gICAgICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICAgICAgKSA6IG51bGx9XHJcbiAgICAgICAgICAgICAgeyFpc0J1aWx0aW5TZXJ2ZXIgJiYgIWlzQ3JlYXRpbmcgPyAoXHJcbiAgICAgICAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtYXBwbHktYnRuIGRhbmdlclwiXHJcbiAgICAgICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB2b2lkIGhhbmRsZURlbGV0ZSgpfVxyXG4gICAgICAgICAgICAgICAgICBkaXNhYmxlZD17aXNXb3JraW5nfVxyXG4gICAgICAgICAgICAgICAgPlxyXG4gICAgICAgICAgICAgICAgICDliKDpmaRcclxuICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgICkgOiBudWxsfVxyXG4gICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgIDwvZGl2PlxyXG5cclxuICAgICAgICAgIDxzZWN0aW9uIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLWRldGFpbC1zZWN0aW9uXCI+XHJcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1zZWN0aW9uLWhlYWRlclwiPlxyXG4gICAgICAgICAgICAgIDxzdHJvbmc+5Z+65pys5L+h5oGvPC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgPHNwYW4+5YWI56Gu6K6kIHRyYW5zcG9ydOOAgeWQr+eUqOeKtuaAgeWSjOW9k+WJjeW3peWFt+aVsOmHj+OAgjwvc3Bhbj5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtY2hpcC1yb3dcIj5cclxuICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLW1jcC1jaGlwXCI+e3RyYW5zcG9ydExhYmVsKGRyYWZ0LnRyYW5zcG9ydCl9PC9zcGFuPlxyXG4gICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLWNoaXBcIj57dG9vbENvdW50fSDkuKrlt6Xlhbc8L3NwYW4+XHJcbiAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtY2hpcFwiPntkcmFmdC5lbmFibGVkID8gJ+W3suWQr+eUqCcgOiAn5bey5YGc55SoJ308L3NwYW4+XHJcbiAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtY2hpcFwiPntzZWxlY3RlZFNlcnZlcj8uc3RhdHVzIHx8ICdkaXNjb25uZWN0ZWQnfTwvc3Bhbj5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3Ata3ZcIj5cclxuICAgICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgICAgPHNwYW4+U2VydmVyIElEPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgPGNvZGU+e2RyYWZ0LmlkIHx8ICfmnKrloavlhpknfTwvY29kZT5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICA8ZGl2PlxyXG4gICAgICAgICAgICAgICAgPHNwYW4+5ZCN56ewPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgPHN0cm9uZz57ZHJhZnQubmFtZSB8fCAn5pyq5ZG95ZCNIE1DUCBzZXJ2ZXInfTwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgIDxkaXY+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj5UcmFuc3BvcnQ8L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8c3Ryb25nPnt0cmFuc3BvcnRMYWJlbChkcmFmdC50cmFuc3BvcnQpfTwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgIDxkaXY+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj7lkK/nlKjnirbmgIE8L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8c3Ryb25nPntkcmFmdC5lbmFibGVkID8gJ+WQr+eUqCcgOiAn5YGc55SoJ308L3N0cm9uZz5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICA8L3NlY3Rpb24+XHJcblxyXG4gICAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtZGV0YWlsLXNlY3Rpb25cIj5cclxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLXNlY3Rpb24taGVhZGVyXCI+XHJcbiAgICAgICAgICAgICAgPHN0cm9uZz7ov57mjqXphY3nva48L3N0cm9uZz5cclxuICAgICAgICAgICAgICA8c3Bhbj7nvJbovpEgc2VydmVyIOagh+ivhuOAgeaPj+i/sOOAgXRyYW5zcG9ydCDlkozlt6XlhbfmuIXljZXjgII8L3NwYW4+XHJcbiAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtZ3JpZFwiPlxyXG4gICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWZpZWxkXCI+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj5TZXJ2ZXIgSUQ8L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8aW5wdXRcclxuICAgICAgICAgICAgICAgICAgdmFsdWU9e2RyYWZ0LmlkfVxyXG4gICAgICAgICAgICAgICAgICBvbkNoYW5nZT17KGV2ZW50KSA9PiBzZXREcmFmdCgoY3VycmVudCkgPT4gKHsgLi4uY3VycmVudCwgaWQ6IGV2ZW50LnRhcmdldC52YWx1ZSB9KSl9XHJcbiAgICAgICAgICAgICAgICAgIHBsYWNlaG9sZGVyPVwi5L6L5aaC77yaZGVzaWduLWluc3BlY3RcIlxyXG4gICAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgLz5cclxuICAgICAgICAgICAgICA8L2xhYmVsPlxyXG5cclxuICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1maWVsZFwiPlxyXG4gICAgICAgICAgICAgICAgPHNwYW4+5ZCN56ewPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgPGlucHV0XHJcbiAgICAgICAgICAgICAgICAgIHZhbHVlPXtkcmFmdC5uYW1lfVxyXG4gICAgICAgICAgICAgICAgICBvbkNoYW5nZT17KGV2ZW50KSA9PiBzZXREcmFmdCgoY3VycmVudCkgPT4gKHsgLi4uY3VycmVudCwgbmFtZTogZXZlbnQudGFyZ2V0LnZhbHVlIH0pKX1cclxuICAgICAgICAgICAgICAgICAgcGxhY2Vob2xkZXI9XCLkvovlpoLvvJpEZXNpZ24gSW5zcGVjdFwiXHJcbiAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtCb29sZWFuKGlzQnVpbHRpblNlcnZlcil9XHJcbiAgICAgICAgICAgICAgICAvPlxyXG4gICAgICAgICAgICAgIDwvbGFiZWw+XHJcblxyXG4gICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWZpZWxkXCI+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj5UcmFuc3BvcnQ8L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8c2VsZWN0XHJcbiAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3Mtc2VsZWN0XCJcclxuICAgICAgICAgICAgICAgICAgdmFsdWU9e2RyYWZ0LnRyYW5zcG9ydH1cclxuICAgICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT5cclxuICAgICAgICAgICAgICAgICAgICBzZXREcmFmdCgoY3VycmVudCkgPT4gKHtcclxuICAgICAgICAgICAgICAgICAgICAgIC4uLmN1cnJlbnQsXHJcbiAgICAgICAgICAgICAgICAgICAgICB0cmFuc3BvcnQ6IGV2ZW50LnRhcmdldC52YWx1ZSBhcyBSdW50aW1lTWNwVHJhbnNwb3J0LFxyXG4gICAgICAgICAgICAgICAgICAgIH0pKVxyXG4gICAgICAgICAgICAgICAgICB9XHJcbiAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtCb29sZWFuKGlzQnVpbHRpblNlcnZlcil9XHJcbiAgICAgICAgICAgICAgICA+XHJcbiAgICAgICAgICAgICAgICAgIHtpc0J1aWx0aW5TZXJ2ZXIgPyA8b3B0aW9uIHZhbHVlPVwiYnVpbHRpblwiPkJ1aWx0LWluPC9vcHRpb24+IDogbnVsbH1cclxuICAgICAgICAgICAgICAgICAgPG9wdGlvbiB2YWx1ZT1cInN0ZGlvXCI+U1RESU88L29wdGlvbj5cclxuICAgICAgICAgICAgICAgICAgPG9wdGlvbiB2YWx1ZT1cImh0dHBcIj5IVFRQPC9vcHRpb24+XHJcbiAgICAgICAgICAgICAgICAgIDxvcHRpb24gdmFsdWU9XCJzc2VcIj5TU0U8L29wdGlvbj5cclxuICAgICAgICAgICAgICAgIDwvc2VsZWN0PlxyXG4gICAgICAgICAgICAgIDwvbGFiZWw+XHJcblxyXG4gICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWZpZWxkXCI+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj7nirbmgIE8L3NwYW4+XHJcbiAgICAgICAgICAgICAgICA8aW5wdXQgdmFsdWU9e3NlbGVjdGVkU2VydmVyPy5zdGF0dXMgfHwgJ2Rpc2Nvbm5lY3RlZCd9IGRpc2FibGVkIC8+XHJcbiAgICAgICAgICAgICAgPC9sYWJlbD5cclxuXHJcbiAgICAgICAgICAgICAgPGxhYmVsIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtZmllbGRcIj5cclxuICAgICAgICAgICAgICAgIDxzcGFuPuWQr+eUqOeKtuaAgTwvc3Bhbj5cclxuICAgICAgICAgICAgICAgIDxzZWxlY3RcclxuICAgICAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1zZWxlY3RcIlxyXG4gICAgICAgICAgICAgICAgICB2YWx1ZT17ZHJhZnQuZW5hYmxlZCA/ICdlbmFibGVkJyA6ICdkaXNhYmxlZCd9XHJcbiAgICAgICAgICAgICAgICAgIG9uQ2hhbmdlPXsoZXZlbnQpID0+XHJcbiAgICAgICAgICAgICAgICAgICAgc2V0RHJhZnQoKGN1cnJlbnQpID0+ICh7XHJcbiAgICAgICAgICAgICAgICAgICAgICAuLi5jdXJyZW50LFxyXG4gICAgICAgICAgICAgICAgICAgICAgZW5hYmxlZDogZXZlbnQudGFyZ2V0LnZhbHVlID09PSAnZW5hYmxlZCcsXHJcbiAgICAgICAgICAgICAgICAgICAgfSkpXHJcbiAgICAgICAgICAgICAgICAgIH1cclxuICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e0Jvb2xlYW4oaXNCdWlsdGluU2VydmVyKX1cclxuICAgICAgICAgICAgICAgID5cclxuICAgICAgICAgICAgICAgICAgPG9wdGlvbiB2YWx1ZT1cImVuYWJsZWRcIj7lkK/nlKg8L29wdGlvbj5cclxuICAgICAgICAgICAgICAgICAgPG9wdGlvbiB2YWx1ZT1cImRpc2FibGVkXCI+5YGc55SoPC9vcHRpb24+XHJcbiAgICAgICAgICAgICAgICA8L3NlbGVjdD5cclxuICAgICAgICAgICAgICA8L2xhYmVsPlxyXG5cclxuICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1maWVsZCBjaGF0LXNldHRpbmdzLWZpZWxkLWZ1bGxcIj5cclxuICAgICAgICAgICAgICAgIDxzcGFuPuaPj+i/sDwvc3Bhbj5cclxuICAgICAgICAgICAgICAgIDx0ZXh0YXJlYVxyXG4gICAgICAgICAgICAgICAgICB2YWx1ZT17ZHJhZnQuZGVzY3JpcHRpb259XHJcbiAgICAgICAgICAgICAgICAgIG9uQ2hhbmdlPXsoZXZlbnQpID0+XHJcbiAgICAgICAgICAgICAgICAgICAgc2V0RHJhZnQoKGN1cnJlbnQpID0+ICh7IC4uLmN1cnJlbnQsIGRlc2NyaXB0aW9uOiBldmVudC50YXJnZXQudmFsdWUgfSkpXHJcbiAgICAgICAgICAgICAgICAgIH1cclxuICAgICAgICAgICAgICAgICAgcm93cz17M31cclxuICAgICAgICAgICAgICAgICAgcGxhY2Vob2xkZXI9XCLor7TmmI7ov5nkuKogTUNQIHNlcnZlciDmmrTpnLLku4DkuYjog73lipvjgIJcIlxyXG4gICAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgLz5cclxuICAgICAgICAgICAgICA8L2xhYmVsPlxyXG5cclxuICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1maWVsZCBjaGF0LXNldHRpbmdzLWZpZWxkLWZ1bGxcIj5cclxuICAgICAgICAgICAgICAgIDxzcGFuPlRvb2xzPC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgPHRleHRhcmVhXHJcbiAgICAgICAgICAgICAgICAgIHZhbHVlPXtkcmFmdC50b29sTmFtZXNUZXh0fVxyXG4gICAgICAgICAgICAgICAgICBvbkNoYW5nZT17KGV2ZW50KSA9PlxyXG4gICAgICAgICAgICAgICAgICAgIHNldERyYWZ0KChjdXJyZW50KSA9PiAoeyAuLi5jdXJyZW50LCB0b29sTmFtZXNUZXh0OiBldmVudC50YXJnZXQudmFsdWUgfSkpXHJcbiAgICAgICAgICAgICAgICAgIH1cclxuICAgICAgICAgICAgICAgICAgcm93cz17NH1cclxuICAgICAgICAgICAgICAgICAgcGxhY2Vob2xkZXI9eyfkuIDooYzkuIDkuKogdG9vbO+8jOS+i+Wmgu+8mlxcbmluc3BlY3RcXG5zZWFyY2hcXG5saXN0J31cclxuICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e0Jvb2xlYW4oaXNCdWlsdGluU2VydmVyKX1cclxuICAgICAgICAgICAgICAgIC8+XHJcbiAgICAgICAgICAgICAgPC9sYWJlbD5cclxuICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICA8L3NlY3Rpb24+XHJcblxyXG4gICAgICAgICAge2RyYWZ0LnRyYW5zcG9ydCA9PT0gJ3N0ZGlvJyA/IChcclxuICAgICAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtZGV0YWlsLXNlY3Rpb24gY2hhdC1zZXR0aW5ncy1tY3Atc3RhY2tcIj5cclxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3Mtc2VjdGlvbi1oZWFkZXJcIj5cclxuICAgICAgICAgICAgICAgIDxzdHJvbmc+U1RESU8g5Y+C5pWwPC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgICA8c3Bhbj7nu7TmiqQgY29tbWFuZOOAgeWQr+WKqOWPguaVsOWSjOeOr+Wig+WPmOmHj+OAgjwvc3Bhbj5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1maWVsZFwiPlxyXG4gICAgICAgICAgICAgICAgPHNwYW4+Q29tbWFuZDwvc3Bhbj5cclxuICAgICAgICAgICAgICAgIDxpbnB1dFxyXG4gICAgICAgICAgICAgICAgICB2YWx1ZT17ZHJhZnQuY29tbWFuZH1cclxuICAgICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT5cclxuICAgICAgICAgICAgICAgICAgICBzZXREcmFmdCgoY3VycmVudCkgPT4gKHsgLi4uY3VycmVudCwgY29tbWFuZDogZXZlbnQudGFyZ2V0LnZhbHVlIH0pKVxyXG4gICAgICAgICAgICAgICAgICB9XHJcbiAgICAgICAgICAgICAgICAgIHBsYWNlaG9sZGVyPVwi5L6L5aaC77yabnB4XCJcclxuICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e0Jvb2xlYW4oaXNCdWlsdGluU2VydmVyKX1cclxuICAgICAgICAgICAgICAgIC8+XHJcbiAgICAgICAgICAgICAgPC9sYWJlbD5cclxuXHJcbiAgICAgICAgICAgICAgPEFycmF5U2VjdGlvblxyXG4gICAgICAgICAgICAgICAgdGl0bGU9XCJBcmdzXCJcclxuICAgICAgICAgICAgICAgIGFkZExhYmVsPVwi5re75Yqg5Y+C5pWwXCJcclxuICAgICAgICAgICAgICAgIGRpc2FibGVkPXtCb29sZWFuKGlzQnVpbHRpblNlcnZlcil9XHJcbiAgICAgICAgICAgICAgICByb3dzPXtkcmFmdC5hcmdzfVxyXG4gICAgICAgICAgICAgICAgb25BZGQ9eygpID0+IGFkZFJvdygnYXJncycpfVxyXG4gICAgICAgICAgICAgICAgb25SZW1vdmU9eyhpZCkgPT4gcmVtb3ZlUm93KCdhcmdzJywgaWQpfVxyXG4gICAgICAgICAgICAgID5cclxuICAgICAgICAgICAgICAgIHtkcmFmdC5hcmdzLm1hcCgocm93KSA9PiAoXHJcbiAgICAgICAgICAgICAgICAgIDxkaXYga2V5PXtyb3cuaWR9IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLWFycmF5LXJvdyBzaW5nbGVcIj5cclxuICAgICAgICAgICAgICAgICAgICA8aW5wdXRcclxuICAgICAgICAgICAgICAgICAgICAgIHZhbHVlPXtyb3cudmFsdWV9XHJcbiAgICAgICAgICAgICAgICAgICAgICBvbkNoYW5nZT17KGV2ZW50KSA9PiB1cGRhdGVBcmdzKHJvdy5pZCwgZXZlbnQudGFyZ2V0LnZhbHVlKX1cclxuICAgICAgICAgICAgICAgICAgICAgIHBsYWNlaG9sZGVyPVwi5L6L5aaC77yaLXkg5oiWIEBtb2RlbGNvbnRleHRwcm90b2NvbC9zZXJ2ZXJcIlxyXG4gICAgICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e0Jvb2xlYW4oaXNCdWlsdGluU2VydmVyKX1cclxuICAgICAgICAgICAgICAgICAgICAvPlxyXG4gICAgICAgICAgICAgICAgICAgIDxidXR0b25cclxuICAgICAgICAgICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICAgICAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1pbmxpbmUtYnRuXCJcclxuICAgICAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHJlbW92ZVJvdygnYXJncycsIHJvdy5pZCl9XHJcbiAgICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgICAgID5cclxuICAgICAgICAgICAgICAgICAgICAgIOWIoOmZpFxyXG4gICAgICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICAgICkpfVxyXG4gICAgICAgICAgICAgIDwvQXJyYXlTZWN0aW9uPlxyXG5cclxuICAgICAgICAgICAgICA8QXJyYXlTZWN0aW9uXHJcbiAgICAgICAgICAgICAgICB0aXRsZT1cIueOr+Wig+WPmOmHj1wiXHJcbiAgICAgICAgICAgICAgICBhZGRMYWJlbD1cIua3u+WKoOeOr+Wig+WPmOmHj1wiXHJcbiAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgcm93cz17ZHJhZnQuZW52fVxyXG4gICAgICAgICAgICAgICAgb25BZGQ9eygpID0+IGFkZFJvdygnZW52Jyl9XHJcbiAgICAgICAgICAgICAgICBvblJlbW92ZT17KGlkKSA9PiByZW1vdmVSb3coJ2VudicsIGlkKX1cclxuICAgICAgICAgICAgICA+XHJcbiAgICAgICAgICAgICAgICB7ZHJhZnQuZW52Lm1hcCgocm93KSA9PiAoXHJcbiAgICAgICAgICAgICAgICAgIDxkaXYga2V5PXtyb3cuaWR9IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLWFycmF5LXJvd1wiPlxyXG4gICAgICAgICAgICAgICAgICAgIDxpbnB1dFxyXG4gICAgICAgICAgICAgICAgICAgICAgdmFsdWU9e3Jvdy5rZXl9XHJcbiAgICAgICAgICAgICAgICAgICAgICBvbkNoYW5nZT17KGV2ZW50KSA9PiB1cGRhdGVLZXlWYWx1ZVJvd3MoJ2VudicsIHJvdy5pZCwgJ2tleScsIGV2ZW50LnRhcmdldC52YWx1ZSl9XHJcbiAgICAgICAgICAgICAgICAgICAgICBwbGFjZWhvbGRlcj1cIktFWVwiXHJcbiAgICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgICAgIC8+XHJcbiAgICAgICAgICAgICAgICAgICAgPGlucHV0XHJcbiAgICAgICAgICAgICAgICAgICAgICB2YWx1ZT17cm93LnZhbHVlfVxyXG4gICAgICAgICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT4gdXBkYXRlS2V5VmFsdWVSb3dzKCdlbnYnLCByb3cuaWQsICd2YWx1ZScsIGV2ZW50LnRhcmdldC52YWx1ZSl9XHJcbiAgICAgICAgICAgICAgICAgICAgICBwbGFjZWhvbGRlcj1cIlZBTFVFXCJcclxuICAgICAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtCb29sZWFuKGlzQnVpbHRpblNlcnZlcil9XHJcbiAgICAgICAgICAgICAgICAgICAgLz5cclxuICAgICAgICAgICAgICAgICAgICA8YnV0dG9uXHJcbiAgICAgICAgICAgICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcclxuICAgICAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtaW5saW5lLWJ0blwiXHJcbiAgICAgICAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiByZW1vdmVSb3coJ2VudicsIHJvdy5pZCl9XHJcbiAgICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgICAgID5cclxuICAgICAgICAgICAgICAgICAgICAgIOWIoOmZpFxyXG4gICAgICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxyXG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICAgICkpfVxyXG4gICAgICAgICAgICAgIDwvQXJyYXlTZWN0aW9uPlxyXG4gICAgICAgICAgICA8L3NlY3Rpb24+XHJcbiAgICAgICAgICApIDogbnVsbH1cclxuXHJcbiAgICAgICAgICB7aXNSZW1vdGVUcmFuc3BvcnQgPyAoXHJcbiAgICAgICAgICAgIDxzZWN0aW9uIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLWRldGFpbC1zZWN0aW9uIGNoYXQtc2V0dGluZ3MtbWNwLXN0YWNrXCI+XHJcbiAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLXNlY3Rpb24taGVhZGVyXCI+XHJcbiAgICAgICAgICAgICAgICA8c3Ryb25nPui/nOeoi+i/nuaOpeWPguaVsDwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgICAgPHNwYW4+57u05oqkIFVSTOOAgU9BdXRoIOWSjOivt+axguWktOadpea6kOOAgjwvc3Bhbj5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtZ3JpZFwiPlxyXG4gICAgICAgICAgICAgICAgPGxhYmVsIGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtZmllbGQgY2hhdC1zZXR0aW5ncy1maWVsZC1mdWxsXCI+XHJcbiAgICAgICAgICAgICAgICAgIDxzcGFuPntkcmFmdC50cmFuc3BvcnQgPT09ICdodHRwJyA/ICdVUkwnIDogJ1NTRSBVUkwnfTwvc3Bhbj5cclxuICAgICAgICAgICAgICAgICAgPGlucHV0XHJcbiAgICAgICAgICAgICAgICAgICAgdmFsdWU9e2RyYWZ0LnVybH1cclxuICAgICAgICAgICAgICAgICAgICBvbkNoYW5nZT17KGV2ZW50KSA9PlxyXG4gICAgICAgICAgICAgICAgICAgICAgc2V0RHJhZnQoKGN1cnJlbnQpID0+ICh7IC4uLmN1cnJlbnQsIHVybDogZXZlbnQudGFyZ2V0LnZhbHVlIH0pKVxyXG4gICAgICAgICAgICAgICAgICAgIH1cclxuICAgICAgICAgICAgICAgICAgICBwbGFjZWhvbGRlcj17XHJcbiAgICAgICAgICAgICAgICAgICAgICBkcmFmdC50cmFuc3BvcnQgPT09ICdodHRwJ1xyXG4gICAgICAgICAgICAgICAgICAgICAgICA/ICdodHRwczovL2V4YW1wbGUuY29tL21jcCdcclxuICAgICAgICAgICAgICAgICAgICAgICAgOiAnaHR0cHM6Ly9leGFtcGxlLmNvbS9zc2UnXHJcbiAgICAgICAgICAgICAgICAgICAgfVxyXG4gICAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtCb29sZWFuKGlzQnVpbHRpblNlcnZlcil9XHJcbiAgICAgICAgICAgICAgICAgIC8+XHJcbiAgICAgICAgICAgICAgICA8L2xhYmVsPlxyXG5cclxuICAgICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWZpZWxkXCI+XHJcbiAgICAgICAgICAgICAgICAgIDxzcGFuPk9BdXRoIENsaWVudCBJRDwvc3Bhbj5cclxuICAgICAgICAgICAgICAgICAgPGlucHV0XHJcbiAgICAgICAgICAgICAgICAgICAgdmFsdWU9e2RyYWZ0Lm9hdXRoQ2xpZW50SWR9XHJcbiAgICAgICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT5cclxuICAgICAgICAgICAgICAgICAgICAgIHNldERyYWZ0KChjdXJyZW50KSA9PiAoeyAuLi5jdXJyZW50LCBvYXV0aENsaWVudElkOiBldmVudC50YXJnZXQudmFsdWUgfSkpXHJcbiAgICAgICAgICAgICAgICAgICAgfVxyXG4gICAgICAgICAgICAgICAgICAgIHBsYWNlaG9sZGVyPVwi5Y+v6YCJXCJcclxuICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgICAvPlxyXG4gICAgICAgICAgICAgICAgPC9sYWJlbD5cclxuXHJcbiAgICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1maWVsZFwiPlxyXG4gICAgICAgICAgICAgICAgICA8c3Bhbj5PQXV0aCBDYWxsYmFjayBQb3J0PC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICA8aW5wdXRcclxuICAgICAgICAgICAgICAgICAgICB2YWx1ZT17ZHJhZnQub2F1dGhDYWxsYmFja1BvcnR9XHJcbiAgICAgICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT5cclxuICAgICAgICAgICAgICAgICAgICAgIHNldERyYWZ0KChjdXJyZW50KSA9PiAoeyAuLi5jdXJyZW50LCBvYXV0aENhbGxiYWNrUG9ydDogZXZlbnQudGFyZ2V0LnZhbHVlIH0pKVxyXG4gICAgICAgICAgICAgICAgICAgIH1cclxuICAgICAgICAgICAgICAgICAgICBwbGFjZWhvbGRlcj1cIuS+i+Wmgu+8mjg3ODhcIlxyXG4gICAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtCb29sZWFuKGlzQnVpbHRpblNlcnZlcil9XHJcbiAgICAgICAgICAgICAgICAgIC8+XHJcbiAgICAgICAgICAgICAgICA8L2xhYmVsPlxyXG5cclxuICAgICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWZpZWxkIGNoYXQtc2V0dGluZ3MtZmllbGQtZnVsbFwiPlxyXG4gICAgICAgICAgICAgICAgICA8c3Bhbj5IZWFkZXJzIEhlbHBlcjwvc3Bhbj5cclxuICAgICAgICAgICAgICAgICAgPGlucHV0XHJcbiAgICAgICAgICAgICAgICAgICAgdmFsdWU9e2RyYWZ0LmhlYWRlcnNIZWxwZXJ9XHJcbiAgICAgICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT5cclxuICAgICAgICAgICAgICAgICAgICAgIHNldERyYWZ0KChjdXJyZW50KSA9PiAoeyAuLi5jdXJyZW50LCBoZWFkZXJzSGVscGVyOiBldmVudC50YXJnZXQudmFsdWUgfSkpXHJcbiAgICAgICAgICAgICAgICAgICAgfVxyXG4gICAgICAgICAgICAgICAgICAgIHBsYWNlaG9sZGVyPVwi55So5LqO6K+05piO6K+35rGC5aS05p2l5rqQ5oiW5ou86KOF5pa55byPXCJcclxuICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgICAvPlxyXG4gICAgICAgICAgICAgICAgPC9sYWJlbD5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuXHJcbiAgICAgICAgICAgICAgPEFycmF5U2VjdGlvblxyXG4gICAgICAgICAgICAgICAgdGl0bGU9XCLor7fmsYLlpLRcIlxyXG4gICAgICAgICAgICAgICAgYWRkTGFiZWw9XCLmt7vliqDor7fmsYLlpLRcIlxyXG4gICAgICAgICAgICAgICAgZGlzYWJsZWQ9e0Jvb2xlYW4oaXNCdWlsdGluU2VydmVyKX1cclxuICAgICAgICAgICAgICAgIHJvd3M9e2RyYWZ0LmhlYWRlcnN9XHJcbiAgICAgICAgICAgICAgICBvbkFkZD17KCkgPT4gYWRkUm93KCdoZWFkZXJzJyl9XHJcbiAgICAgICAgICAgICAgICBvblJlbW92ZT17KGlkKSA9PiByZW1vdmVSb3coJ2hlYWRlcnMnLCBpZCl9XHJcbiAgICAgICAgICAgICAgPlxyXG4gICAgICAgICAgICAgICAge2RyYWZ0LmhlYWRlcnMubWFwKChyb3cpID0+IChcclxuICAgICAgICAgICAgICAgICAgPGRpdiBrZXk9e3Jvdy5pZH0gY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtYXJyYXktcm93XCI+XHJcbiAgICAgICAgICAgICAgICAgICAgPGlucHV0XHJcbiAgICAgICAgICAgICAgICAgICAgICB2YWx1ZT17cm93LmtleX1cclxuICAgICAgICAgICAgICAgICAgICAgIG9uQ2hhbmdlPXsoZXZlbnQpID0+IHVwZGF0ZUtleVZhbHVlUm93cygnaGVhZGVycycsIHJvdy5pZCwgJ2tleScsIGV2ZW50LnRhcmdldC52YWx1ZSl9XHJcbiAgICAgICAgICAgICAgICAgICAgICBwbGFjZWhvbGRlcj1cIkF1dGhvcml6YXRpb25cIlxyXG4gICAgICAgICAgICAgICAgICAgICAgZGlzYWJsZWQ9e0Jvb2xlYW4oaXNCdWlsdGluU2VydmVyKX1cclxuICAgICAgICAgICAgICAgICAgICAvPlxyXG4gICAgICAgICAgICAgICAgICAgIDxpbnB1dFxyXG4gICAgICAgICAgICAgICAgICAgICAgdmFsdWU9e3Jvdy52YWx1ZX1cclxuICAgICAgICAgICAgICAgICAgICAgIG9uQ2hhbmdlPXsoZXZlbnQpID0+IHVwZGF0ZUtleVZhbHVlUm93cygnaGVhZGVycycsIHJvdy5pZCwgJ3ZhbHVlJywgZXZlbnQudGFyZ2V0LnZhbHVlKX1cclxuICAgICAgICAgICAgICAgICAgICAgIHBsYWNlaG9sZGVyPVwiQmVhcmVyIC4uLlwiXHJcbiAgICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZD17Qm9vbGVhbihpc0J1aWx0aW5TZXJ2ZXIpfVxyXG4gICAgICAgICAgICAgICAgICAgIC8+XHJcbiAgICAgICAgICAgICAgICAgICAgPGJ1dHRvblxyXG4gICAgICAgICAgICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXHJcbiAgICAgICAgICAgICAgICAgICAgICBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWlubGluZS1idG5cIlxyXG4gICAgICAgICAgICAgICAgICAgICAgb25DbGljaz17KCkgPT4gcmVtb3ZlUm93KCdoZWFkZXJzJywgcm93LmlkKX1cclxuICAgICAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtCb29sZWFuKGlzQnVpbHRpblNlcnZlcil9XHJcbiAgICAgICAgICAgICAgICAgICAgPlxyXG4gICAgICAgICAgICAgICAgICAgICAg5Yig6ZmkXHJcbiAgICAgICAgICAgICAgICAgICAgPC9idXR0b24+XHJcbiAgICAgICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICAgICAgKSl9XHJcbiAgICAgICAgICAgICAgPC9BcnJheVNlY3Rpb24+XHJcbiAgICAgICAgICAgIDwvc2VjdGlvbj5cclxuICAgICAgICAgICkgOiBudWxsfVxyXG5cclxuICAgICAgICAgIHtzdGF0dXNNZXNzYWdlID8gPGRpdiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLXRlc3Qtbm90ZSBzdWNjZXNzXCI+e3N0YXR1c01lc3NhZ2V9PC9kaXY+IDogbnVsbH1cclxuICAgICAgICAgIHtlcnJvck1lc3NhZ2UgPyA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtdGVzdC1ub3RlIGVycm9yXCI+e2Vycm9yTWVzc2FnZX08L2Rpdj4gOiBudWxsfVxyXG5cclxuICAgICAgICAgIHtzZWxlY3RlZFNlcnZlciA/IChcclxuICAgICAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtdG9vbC1oaXN0b3J5IGNoYXQtc2V0dGluZ3MtbWNwLWRldGFpbC1zZWN0aW9uXCI+XHJcbiAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLXNlY3Rpb24taGVhZGVyXCI+XHJcbiAgICAgICAgICAgICAgICA8c3Ryb25nPuacgOi/keW3peWFt+iwg+eUqDwvc3Ryb25nPlxyXG4gICAgICAgICAgICAgICAgPHNwYW4+e3RocmVhZElkID8gJ+WxleekuuW9k+WJjeS8muivnemHjOi/meS4qiBzZXJ2ZXIg55qE5pyA6L+R57uT5p6c44CCJyA6ICflvZPliY3msqHmnInmtLvot4PkvJror53jgIInfTwvc3Bhbj5cclxuICAgICAgICAgICAgICA8L2Rpdj5cclxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLXRvb2wtY2FsbC1saXN0XCI+XHJcbiAgICAgICAgICAgICAgICB7YWN0aXZlVG9vbENhbGxzLmxlbmd0aCA+IDAgPyAoXHJcbiAgICAgICAgICAgICAgICAgIGFjdGl2ZVRvb2xDYWxscy5tYXAoKHRvb2xDYWxsKSA9PiAoXHJcbiAgICAgICAgICAgICAgICAgICAgPGFydGljbGUga2V5PXt0b29sQ2FsbC5pZH0gY2xhc3NOYW1lPVwiY2hhdC1zZXR0aW5ncy1tY3AtdG9vbC1jYWxsXCI+XHJcbiAgICAgICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLXRvb2wtY2FsbC10b3BcIj5cclxuICAgICAgICAgICAgICAgICAgICAgICAgPHN0cm9uZz57dG9vbENhbGwudG9vbE5hbWV9PC9zdHJvbmc+XHJcbiAgICAgICAgICAgICAgICAgICAgICAgIDxzcGFuPnt0b29sQ2FsbC5zdGF0dXN9PC9zcGFuPlxyXG4gICAgICAgICAgICAgICAgICAgICAgPC9kaXY+XHJcbiAgICAgICAgICAgICAgICAgICAgICA8c3Bhbj57dG9vbENhbGwuc3VtbWFyeX08L3NwYW4+XHJcbiAgICAgICAgICAgICAgICAgICAgICB7dG9vbENhbGwucmVzdWx0UHJldmlldyA/IDxwcmU+e3Rvb2xDYWxsLnJlc3VsdFByZXZpZXd9PC9wcmU+IDogbnVsbH1cclxuICAgICAgICAgICAgICAgICAgICA8L2FydGljbGU+XHJcbiAgICAgICAgICAgICAgICAgICkpXHJcbiAgICAgICAgICAgICAgICApIDogKFxyXG4gICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLWVtcHR5XCI+6L+Y5rKh5pyJ5bel5YW36LCD55So6K6w5b2V44CCPC9kaXY+XHJcbiAgICAgICAgICAgICAgICApfVxyXG4gICAgICAgICAgICAgIDwvZGl2PlxyXG4gICAgICAgICAgICA8L3NlY3Rpb24+XHJcbiAgICAgICAgICApIDogbnVsbH1cclxuICAgICAgICA8L3NlY3Rpb24+XHJcbiAgICAgIDwvZGl2PlxyXG4gICAgPC9kaXY+XHJcbiAgKTtcclxufTtcclxuXHJcbmNvbnN0IEFycmF5U2VjdGlvbjogUmVhY3QuRkM8e1xyXG4gIHRpdGxlOiBzdHJpbmc7XHJcbiAgYWRkTGFiZWw6IHN0cmluZztcclxuICBkaXNhYmxlZD86IGJvb2xlYW47XHJcbiAgcm93czogQXJyYXk8U3RyaW5nUm93IHwgS2V5VmFsdWVSb3c+O1xyXG4gIG9uQWRkOiAoKSA9PiB2b2lkO1xyXG4gIG9uUmVtb3ZlOiAoaWQ6IHN0cmluZykgPT4gdm9pZDtcclxuICBjaGlsZHJlbjogUmVhY3QuUmVhY3ROb2RlO1xyXG59PiA9ICh7IHRpdGxlLCBhZGRMYWJlbCwgZGlzYWJsZWQgPSBmYWxzZSwgcm93cywgb25BZGQsIG9uUmVtb3ZlOiBfb25SZW1vdmUsIGNoaWxkcmVuIH0pID0+IChcclxuICA8c2VjdGlvbiBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLW1jcC1hcnJheS1zZWN0aW9uXCI+XHJcbiAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3Mtc2VjdGlvbi1oZWFkZXJcIj5cclxuICAgICAgPHN0cm9uZz57dGl0bGV9PC9zdHJvbmc+XHJcbiAgICAgIDxzcGFuPntyb3dzLmxlbmd0aH0g6aG5PC9zcGFuPlxyXG4gICAgPC9kaXY+XHJcbiAgICA8ZGl2IGNsYXNzTmFtZT1cImNoYXQtc2V0dGluZ3MtbWNwLWFycmF5LWxpc3RcIj57Y2hpbGRyZW59PC9kaXY+XHJcbiAgICA8YnV0dG9uXHJcbiAgICAgIHR5cGU9XCJidXR0b25cIlxyXG4gICAgICBjbGFzc05hbWU9XCJjaGF0LXNldHRpbmdzLWFwcGx5LWJ0biBzZWNvbmRhcnlcIlxyXG4gICAgICBvbkNsaWNrPXtvbkFkZH1cclxuICAgICAgZGlzYWJsZWQ9e2Rpc2FibGVkfVxyXG4gICAgPlxyXG4gICAgICB7YWRkTGFiZWx9XHJcbiAgICA8L2J1dHRvbj5cclxuICA8L3NlY3Rpb24+XHJcbik7XHJcbiJdLCJmaWxlIjoiQzovVXNlcnMvRXZlbi9Eb2N1bWVudHMvQUxMLUlOLU9ORS9zcmMvY29tcG9uZW50cy93b3Jrc3BhY2UvUnVudGltZU1jcFNldHRpbmdzUGFnZS50c3gifQ==
