@@ -4,6 +4,7 @@ import { useGNAgentWorkbenchSession } from '../../../components/ai/gn-agent-shel
 import { MacDialog } from '../../../components/ui/MacDialog';
 import { useKnowledgeStore } from '../../../features/knowledge/store/knowledgeStore';
 import { buildKnowledgeSearchIndex, searchKnowledgeEntries } from '../../../modules/knowledge/knowledgeSearch';
+import { useGNAgentShellStore } from '../../../modules/ai/gn-agent/gnAgentShellStore';
 import { useProjectStore } from '../../../store/projectStore';
 import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from '../../../utils/layoutPreferences';
 import { AgentChatStage } from '../components/AgentChatStage';
@@ -20,6 +21,7 @@ const clampAgentSidebarPanelWidth = (value: number) =>
 
 export const AgentShellPage: React.FC = () => {
   const session = useGNAgentWorkbenchSession();
+  const providerMode = useGNAgentShellStore((state) => state.providerMode);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarPanelWidth, setSidebarPanelWidth] = useState(() =>
     readLayoutSize(
@@ -158,7 +160,7 @@ export const AgentShellPage: React.FC = () => {
         }
         centerStage={
           <AgentChatStage
-            providerId="classic"
+            providerId={providerMode}
             mode="full"
             session={session}
             projectName={session.currentProjectName}

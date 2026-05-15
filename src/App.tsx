@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm, open } from '@tauri-apps/plugin-dialog';
+import { useShallow } from 'zustand/react/shallow';
 import { ProjectSetup } from './components/project/ProjectSetup';
 import { OperationsWorkbench, TestWorkbench } from './components/workspace';
 import { WorkbenchIcon } from './components/ui/WorkbenchIcon';
@@ -21,8 +22,14 @@ import { UiFeedbackMode } from './components/ui/UiFeedbackMode';
 import { usePreviewStore } from './store/previewStore';
 import { useFeatureTreeStore } from './store/featureTreeStore';
 import { ensureDesktopRuntimeSidecar } from './modules/runtime-sidecar/desktopRuntimeSidecar';
+import { getAgentShellSettings } from './modules/ai/gn-agent/gnAgentShellClient';
+import { useGNAgentShellStore } from './modules/ai/gn-agent/gnAgentShellStore';
+import {
+  DESKTOP_AI_PANE_WIDTH_BOUNDS,
+  useAppearanceSettingsStore,
+} from './modules/settings/appearanceSettingsStore';
+import { useGeneralSettingsStore, type StartupPage } from './modules/settings/generalSettingsStore';
 import { useProjectStore } from './store/projectStore';
-import { APP_STYLE_STORAGE_KEY, getInitialAppStyle, type AppStyle } from './appTheme';
 import {
   DESKTOP_PRIMARY_ROLES,
   DESKTOP_WORKBENCH_ROLES,
@@ -31,6 +38,7 @@ import {
   type RoleView,
 } from './appNavigation';
 import { AI_CHAT_SETTINGS_EVENT } from './modules/ai/chat/chatCommands';
+import { aiService } from './modules/ai/core/AIService';
 import { resolveSettingsTabId, type SettingsTabId } from './components/workspace/globalSettingsPageShared';
 import type { ProjectWorkspaceSnapshot } from './store/projectStore';
 import type {
@@ -43,13 +51,13 @@ import {
   getDesktopAiPaneWidthFromPointer,
   isDesktopTopbarInteractiveTarget,
 } from './features/desktopShell/desktopShell';
-import { LAYOUT_PREFERENCE_KEYS, readLayoutSize, writeLayoutSize } from './utils/layoutPreferences';
 import { getCanvasPreset } from './utils/wireframe';
 import {
   getProjectDir,
   ensureProjectVaultDirectory,
   ensureProjectFilesystemStructure,
   getProjectStorageSettings,
+  PROJECT_STORAGE_SETTINGS_CHANGED_EVENT,
   isTauriRuntimeAvailable,
   loadProjectIndexFromDisk,
   loadSketchPageArtifactsFromProjectDir,
@@ -105,11 +113,7 @@ const LazyGlobalSettingsPage = lazy(async () => {
 });
 
 const WORKBENCH_LAZY_FALLBACK = <div className="app-surface-loading">正在载入工作台…</div>;
-let aiServiceModulePromise: Promise<typeof import('./modules/ai/core/AIService')> | null = null;
 
-const loadAIServiceModule = () => (aiServiceModulePromise ??= import('./modules/ai/core/AIService'));
-
-type ThemeMode = 'dark' | 'light';
 type ProjectStorageState = 'idle' | 'loading' | 'saving' | 'saved' | 'error';
 type PersistedProjectSnapshot = {
   workspace: ProjectWorkspaceSnapshot;
@@ -283,14 +287,52 @@ const resolveProjectVaultPathForProjectDir = (
   return stripWindowsExtendedLengthPathPrefix(vaultPath.trim());
 };
 
-const THEME_STORAGE_KEY = 'goodnight-theme-mode';
-const DESKTOP_AI_PANE_WIDTH_BOUNDS = { min: 280, max: 560 };
-const DEFAULT_DESKTOP_AI_PANE_WIDTH = 360;
-const LEGACY_DESKTOP_AI_PANE_WIDTH = 450;
 const DESKTOP_AI_PANE_TRANSITION_MS = 240;
 const DESIGN_BOARD_STORAGE_PREFIX = 'goodnight-design-board';
 const PROJECT_INDEX_STORAGE_KEY = 'goodnight-project-index';
 const PROJECT_SNAPSHOT_STORAGE_PREFIX = 'goodnight-project-snapshot';
+const LAST_DESKTOP_ROLE_STORAGE_KEY = 'goodnight-desktop.lastRole';
+
+const ROLE_STARTUP_PAGES = new Set<RoleView>([
+  'agent',
+  'knowledge',
+  'page',
+  'design',
+  'develop',
+  'test',
+  'operations',
+]);
+
+const isRoleView = (value: string | null): value is RoleView =>
+  value === 'agent' ||
+  value === 'knowledge' ||
+  value === 'page' ||
+  value === 'design' ||
+  value === 'develop' ||
+  value === 'test' ||
+  value === 'operations' ||
+  value === 'product';
+
+const readStoredDesktopRole = (): RoleView | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(LAST_DESKTOP_ROLE_STORAGE_KEY);
+    return isRoleView(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+};
+
+const resolveStartupRole = (startupPage: StartupPage): RoleView => {
+  if (startupPage === 'last-opened') {
+    return readStoredDesktopRole() || 'agent';
+  }
+
+  return ROLE_STARTUP_PAGES.has(startupPage as RoleView) ? (startupPage as RoleView) : 'agent';
+};
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
   nodes.flatMap((node) => [...(node.kind === 'page' ? [node] : []), ...collectDesignPages(node.children)]);
@@ -298,51 +340,47 @@ const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
 const getDesignBoardStorageKey = (projectId: string) => `${DESIGN_BOARD_STORAGE_PREFIX}:${projectId}`;
 
 const App: React.FC = () => {
-  const [currentRole, setCurrentRole] = useState<RoleView>('agent');
+  const hydrateProviderSettings = useGNAgentShellStore((state) => state.hydrateProviderSettings);
+  const {
+    themeMode,
+    appStyle,
+    desktopAiPaneWidth,
+    desktopAiPaneCollapsedByDefault,
+    setThemeMode,
+    setDesktopAiPaneWidth,
+  } = useAppearanceSettingsStore(useShallow((state) => ({
+    themeMode: state.themeMode,
+    appStyle: state.appStyle,
+    desktopAiPaneWidth: state.desktopAiPaneWidth,
+    desktopAiPaneCollapsedByDefault: state.desktopAiPaneCollapsedByDefault,
+    setThemeMode: state.setThemeMode,
+    setDesktopAiPaneWidth: state.setDesktopAiPaneWidth,
+  })));
+  const {
+    startupPage,
+    restoreLastSessionOnLaunch,
+    openRecentWorkspaceOnLaunch,
+  } = useGeneralSettingsStore(useShallow((state) => ({
+    startupPage: state.startupPage,
+    restoreLastSessionOnLaunch: state.restoreLastSessionOnLaunch,
+    openRecentWorkspaceOnLaunch: state.openRecentWorkspaceOnLaunch,
+  })));
+  const [currentRole, setCurrentRole] = useState<RoleView>(() => resolveStartupRole(useGeneralSettingsStore.getState().startupPage));
   const isDesignWorkbenchActive = currentRole === 'design';
-  const [desktopAiPaneWidth, setDesktopAiPaneWidth] = useState(() => {
-    const nextWidth = readLayoutSize(
-      LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
-      DEFAULT_DESKTOP_AI_PANE_WIDTH,
-      DESKTOP_AI_PANE_WIDTH_BOUNDS
-    );
-
-    if (nextWidth === LEGACY_DESKTOP_AI_PANE_WIDTH) {
-      return writeLayoutSize(
-        LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
-        DEFAULT_DESKTOP_AI_PANE_WIDTH,
-        DESKTOP_AI_PANE_WIDTH_BOUNDS
-      );
-    }
-
-    return nextWidth;
-  });
-  const [isDesktopAiCollapsed, setIsDesktopAiCollapsed] = useState(false);
+  const [isDesktopAiCollapsed, setIsDesktopAiCollapsed] = useState(() =>
+    useAppearanceSettingsStore.getState().desktopAiPaneCollapsedByDefault,
+  );
   const [isDesktopAiPaneMounted, setIsDesktopAiPaneMounted] = useState(true);
   const [isDesktopAiPaneVisible, setIsDesktopAiPaneVisible] = useState(true);
   const [isDesktopAiPaneResizing, setIsDesktopAiPaneResizing] = useState(false);
   const [projects, setProjects] = useState<ProjectConfig[]>(() => readProjectIndex());
   const [currentProjectDir, setCurrentProjectDir] = useState<string | null>(null);
-  const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
+  const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(() => useGeneralSettingsStore.getState().startupPage === 'project-picker');
   const [projectStorageSettings, setProjectStorageSettings] = useState<ProjectStorageSettings | null>(null);
   const [projectStorageDraftOverride, setProjectStorageDraftOverride] = useState<string | null>(null);
   const [projectVaultDraftOverride, setProjectVaultDraftOverride] = useState<string | null>(null);
   const [projectStorageState, setProjectStorageState] = useState<ProjectStorageState>('idle');
   const [projectStorageMessage, setProjectStorageMessage] = useState<string | null>(null);
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    if (typeof window === 'undefined') {
-      return 'light';
-    }
-
-    return window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
-  });
-  const [appStyle] = useState<AppStyle>(() => {
-    if (typeof window === 'undefined') {
-      return 'workbench';
-    }
-
-    return getInitialAppStyle(() => window.localStorage.getItem(APP_STYLE_STORAGE_KEY));
-  });
   const [selectedFeature, setSelectedFeature] = useState<FeatureNode | null>(null);
   const [pageWorkbenchTargetPageId, setPageWorkbenchTargetPageId] = useState<string | null>(null);
   const [openDesktopMenuId, setOpenDesktopMenuId] = useState<string | null>(null);
@@ -360,6 +398,32 @@ const App: React.FC = () => {
   useEffect(() => {
     void ensureDesktopRuntimeSidecar();
   }, []);
+
+  useEffect(() => {
+    if (!isTauriRuntimeAvailable()) {
+      return;
+    }
+
+    let isMounted = true;
+
+    void getAgentShellSettings()
+      .then((settings) => {
+        if (!isMounted) {
+          return;
+        }
+
+        hydrateProviderSettings({
+          providerMode: settings.mode,
+          claudeConfigId: settings.claudeConfigId,
+          codexConfigId: settings.codexConfigId,
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hydrateProviderSettings]);
 
   const hasRestoredPersistedProjectRef = useRef(false);
 
@@ -524,11 +588,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     desktopAiPaneWidthRef.current = desktopAiPaneWidth;
-    writeLayoutSize(
-      LAYOUT_PREFERENCE_KEYS.desktopAiPaneWidth,
-      desktopAiPaneWidth,
-      DESKTOP_AI_PANE_WIDTH_BOUNDS
-    );
   }, [desktopAiPaneWidth]);
 
   const syncDesktopAiPaneWidthStyles = useCallback((nextWidth: number) => {
@@ -626,8 +685,8 @@ const App: React.FC = () => {
   }, [syncDesktopAiPaneWidthStyles]);
 
   const toggleThemeMode = useCallback((): void => {
-    setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'));
-  }, []);
+    setThemeMode(themeMode === 'dark' ? 'light' : 'dark');
+  }, [setThemeMode, themeMode]);
 
   const refreshSketchArtifactsFromDisk = useCallback(async () => {
     if (!canUseProjectFilesystem || !currentProject) {
@@ -703,14 +762,86 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !isTauriRuntimeAvailable()) {
+      return;
+    }
+
+    let isDisposed = false;
+
+    const refreshProjectStorageContext = async () => {
+      try {
+        const nextSettings = await getProjectStorageSettings();
+        if (isDisposed) {
+          return;
+        }
+
+        setProjectStorageSettings(nextSettings);
+        setProjectStorageState('idle');
+        setProjectStorageMessage(null);
+      } catch {
+        if (!isDisposed) {
+          setProjectStorageState('error');
+          setProjectStorageMessage('Project storage path could not be loaded.');
+        }
+      }
+
+      if (!currentProject) {
+        return;
+      }
+
+      try {
+        const projectDir = await getProjectDir(currentProject.id);
+        if (!isDisposed) {
+          setCurrentProjectDir(projectDir);
+        }
+      } catch {
+        if (!isDisposed) {
+          setCurrentProjectDir(null);
+        }
+      }
+    };
+
+    const handleProjectStorageSettingsChanged = () => {
+      void refreshProjectStorageContext();
+    };
+
+    window.addEventListener(
+      PROJECT_STORAGE_SETTINGS_CHANGED_EVENT,
+      handleProjectStorageSettingsChanged as EventListener,
+    );
+
+    return () => {
+      isDisposed = true;
+      window.removeEventListener(
+        PROJECT_STORAGE_SETTINGS_CHANGED_EVENT,
+        handleProjectStorageSettingsChanged as EventListener,
+      );
+    };
+  }, [currentProject]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
-    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
 
   useEffect(() => {
     document.documentElement.dataset.style = appStyle;
-    window.localStorage.setItem(APP_STYLE_STORAGE_KEY, appStyle);
   }, [appStyle]);
+
+  useEffect(() => {
+    setIsDesktopAiCollapsed(desktopAiPaneCollapsedByDefault);
+  }, [desktopAiPaneCollapsedByDefault]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isGlobalSettingsOpen || isProjectManagerOpen) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(LAST_DESKTOP_ROLE_STORAGE_KEY, currentRole);
+    } catch {
+      // Ignore persistence failures for non-critical role memory.
+    }
+  }, [currentRole, isGlobalSettingsOpen, isProjectManagerOpen]);
 
   const persistActiveProjectSnapshot = useCallback(
     (projectOverride?: ProjectConfig | null, featureTreeOverride = featureTree) => {
@@ -859,11 +990,7 @@ const App: React.FC = () => {
       return;
     }
 
-    void loadAIServiceModule()
-      .then(({ aiService }) => {
-        aiService.setConfig({ projectRoot: runtimeProjectRoot });
-      })
-      .catch(() => undefined);
+    aiService.setConfig({ projectRoot: runtimeProjectRoot });
   }, [currentProject, currentProjectDir]);
 
   useEffect(() => {
@@ -1008,7 +1135,10 @@ const App: React.FC = () => {
       .catch(() => undefined);
   };
 
-  const handleOpenProject = useCallback(async (projectId: string) => {
+  const handleOpenProject = useCallback(async (
+    projectId: string,
+    options?: { restoreSnapshot?: boolean; preferredRole?: RoleView | null },
+  ) => {
     const targetProject = projects.find((item) => item.id === projectId);
     if (!targetProject) {
       return;
@@ -1019,7 +1149,10 @@ const App: React.FC = () => {
     }
 
     switchProject(targetProject);
-    const snapshot = (await loadProjectSnapshotFromDisk(projectId)) || readProjectSnapshot(projectId);
+    const shouldRestoreSnapshot = options?.restoreSnapshot !== false;
+    const snapshot = shouldRestoreSnapshot
+      ? ((await loadProjectSnapshotFromDisk(projectId)) || readProjectSnapshot(projectId))
+      : null;
     if (snapshot?.workspace) {
       loadProjectWorkspace(snapshot.workspace);
     }
@@ -1033,7 +1166,7 @@ const App: React.FC = () => {
     }
 
     clearCanvas();
-    setCurrentRole('agent');
+    setCurrentRole(options?.preferredRole || 'agent');
     setIsProjectManagerOpen(false);
     void ensureProjectFilesystemStructure(targetProject.id).catch(() => undefined);
     if (targetProject.vaultPath) {
@@ -1042,18 +1175,48 @@ const App: React.FC = () => {
   }, [clearCanvas, clearTree, currentProject?.id, loadProjectWorkspace, persistActiveProjectSnapshot, projects, setTree, switchProject]);
 
   useEffect(() => {
-    if (hasRestoredPersistedProjectRef.current || !currentProjectId) {
+    if (hasRestoredPersistedProjectRef.current) {
+      return;
+    }
+
+    if (startupPage === 'project-picker') {
+      hasRestoredPersistedProjectRef.current = true;
+      setIsProjectManagerOpen(true);
+      return;
+    }
+
+    if (!currentProjectId) {
+      hasRestoredPersistedProjectRef.current = true;
+      setIsProjectManagerOpen(true);
+      return;
+    }
+
+    if (!openRecentWorkspaceOnLaunch) {
+      hasRestoredPersistedProjectRef.current = true;
       return;
     }
 
     const persistedProject = projects.find((project) => project.id === currentProjectId) || currentProject;
     if (!persistedProject) {
+      hasRestoredPersistedProjectRef.current = true;
+      setIsProjectManagerOpen(true);
       return;
     }
 
     hasRestoredPersistedProjectRef.current = true;
-    void handleOpenProject(persistedProject.id);
-  }, [currentProject, currentProjectId, handleOpenProject, projects]);
+    void handleOpenProject(persistedProject.id, {
+      restoreSnapshot: restoreLastSessionOnLaunch,
+      preferredRole: resolveStartupRole(startupPage),
+    });
+  }, [
+    currentProject,
+    currentProjectId,
+    handleOpenProject,
+    openRecentWorkspaceOnLaunch,
+    projects,
+    restoreLastSessionOnLaunch,
+    startupPage,
+  ]);
 
   const handleDeleteProject = useCallback(async (projectId: string) => {
     const targetProject = projects.find((item) => item.id === projectId);

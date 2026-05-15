@@ -104,6 +104,14 @@ export const deleteLibrarySkill = (skillId: string) => {
   return invoke<SkillDeleteResult>('delete_library_skill', { params: { skillId } });
 };
 
+export const uninstallLibrarySkill = (skillId: string) => {
+  if (!isTauriRuntimeAvailable()) {
+    return Promise.reject(new Error('GoodNight desktop runtime is required to uninstall skills.'));
+  }
+
+  return invoke<SkillDeleteResult>('uninstall_library_skill', { params: { skillId } });
+};
+
 export const getSystemRuntimeSkillDefinitions = (): RuntimeSkillDefinition[] => getSystemSkillDefinitions();
 
 export const getRouteableSystemSkillDefinitions = (): RuntimeSystemSkillDefinition[] =>

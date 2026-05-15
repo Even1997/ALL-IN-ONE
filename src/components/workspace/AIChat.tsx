@@ -1,7 +1,7 @@
 ﻿import React, { lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
-import type { AIProviderType } from '../../modules/ai/core/AIService';
+import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import type { ChatStructuredCard } from '../../modules/ai/chat/chatCards';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
@@ -136,9 +136,6 @@ import { useAIChatSidecarSessionActions } from './useAIChatSidecarSessionActions
 import { getRuntimeQuestionRenderEntries } from './runtimeInteractionRenderModel.ts';
 import './AIChat.css';
 
-let aiServiceModulePromise: Promise<typeof import('../../modules/ai/core/AIService')> | null = null;
-
-const loadAIServiceModule = () => (aiServiceModulePromise ??= import('../../modules/ai/core/AIService'));
 void lazy;
 
 type AISettingsDraft = {
@@ -1679,7 +1676,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     mergeModelCandidates,
     buildProviderEndpointPreview,
     getSuggestedBaseURL,
-    loadAIServiceModule,
+    aiServiceClient: aiService,
   });
 
   const {
@@ -2875,7 +2872,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   return (
     <>
       <section
-        className={`${getChatShellLayoutClassName(lockExpandedForEmbedded ? false : isCollapsed)}${isEmbedded ? ' chat-shell-embedded' : ''}`}
+        className={`${getChatShellLayoutClassName(lockExpandedForEmbedded ? false : isCollapsed)}${isEmbedded ? ' chat-shell-embedded' : ''}${showHeaderChrome ? '' : ' chat-shell-no-header'}`}
       >
         {showHeaderChrome ? (
           <header className={`chat-shell-header chat-shell-gn-header${isEmbedded ? ' embedded' : ''}`}>

@@ -56,6 +56,149 @@ test('testConnection reports configuration errors when the model is missing', as
   assert.match(result.message, /configure|配置/i);
 });
 
+test('testConnection falls back to a lightweight chat probe when model listing is unavailable', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    apiKey: 'sk-test',
+    baseURL: 'http://localhost:8080',
+    model: 'gpt-5.4',
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith('/models')) {
+      return new Response('not found', { status: 404 });
+    }
+
+    if (url.endsWith('/chat/completions')) {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: 'OK',
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  try {
+    const result = await aiService.testConnection();
+    assert.equal(result.ok, true);
+    assert.match(result.message, /gpt-5\.4/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('listModels falls back to /v1 when the root endpoint returns the site shell', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    apiKey: 'sk-test',
+    baseURL: 'http://localhost:8080',
+    model: 'gpt-5.4',
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url === 'http://localhost:8080/models') {
+      return new Response('<!doctype html><html><body>site shell</body></html>', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+        },
+      });
+    }
+
+    if (url === 'http://localhost:8080/v1/models') {
+      return new Response(
+        JSON.stringify({
+          data: [{ id: 'gpt-5.4' }],
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  try {
+    const models = await aiService.listModels();
+    assert.deepEqual(models, ['gpt-5.4']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('chat falls back to /v1 chat completions when the root endpoint returns the site shell', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    apiKey: 'sk-test',
+    baseURL: 'http://localhost:8080',
+    model: 'gpt-5.4',
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url === 'http://localhost:8080/chat/completions') {
+      return new Response('<!doctype html><html><body>site shell</body></html>', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+        },
+      });
+    }
+
+    if (url === 'http://localhost:8080/v1/chat/completions') {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: 'OK from /v1',
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  try {
+    const result = await aiService.chat('hello');
+    assert.equal(result, 'OK from /v1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('completeText streams openai-compatible thinking and answer deltas separately', async () => {
   aiService.setConfig({
     provider: 'openai-compatible',
@@ -91,6 +234,152 @@ test('completeText streams openai-compatible thinking and answer deltas separate
         ['text', 'answer'],
       ]
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('completeText sends OpenAI-compatible tool declarations with auto tool choice', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    apiKey: 'sk-test',
+    baseURL: 'https://example.com/v1',
+    model: 'test-model',
+  });
+
+  const originalFetch = globalThis.fetch;
+  let lastBody = null;
+  let lastHeaders = null;
+
+  globalThis.fetch = async (_input, init) => {
+    lastBody = JSON.parse(String(init?.body));
+    lastHeaders = init?.headers || {};
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: 'Ready',
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  };
+
+  try {
+    const result = await aiService.completeText({
+      systemPrompt: 'system',
+      prompt: 'prompt',
+    });
+
+    assert.equal(result, 'Ready');
+    assert.equal(Array.isArray(lastBody?.tools), true);
+    assert.equal(lastBody.tools.some((tool) => tool?.function?.name === 'view'), true);
+    assert.equal(lastBody.tool_choice, 'auto');
+    assert.equal(lastHeaders['Content-Type'], 'application/json');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('completeText returns parseable OpenAI-compatible tool calls for non-streaming responses', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    apiKey: 'sk-test',
+    baseURL: 'https://example.com/v1',
+    model: 'test-model',
+  });
+
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: {
+                    name: 'view',
+                    arguments: '{"file_path":"src/app.ts"}',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+  try {
+    const result = await aiService.completeText({
+      systemPrompt: 'system',
+      prompt: 'prompt',
+    });
+
+    const parsed = JSON.parse(result);
+    const toolCall = parsed.tool_calls[0];
+    assert.equal(toolCall.function.name, 'view');
+    assert.deepEqual(JSON.parse(toolCall.function.arguments), { file_path: 'src/app.ts' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('completeText streams OpenAI-compatible native tool calls as structured events', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    apiKey: 'sk-test',
+    baseURL: 'https://example.com/v1',
+    model: 'test-model',
+  });
+
+  const originalFetch = globalThis.fetch;
+  const events = [];
+
+  globalThis.fetch = async () =>
+    createStreamResponse([
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"view","arguments":"{\\"file_path\\":\\"src/"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"app.ts\\"}"}}]}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+
+  try {
+    const result = await aiService.completeText({
+      systemPrompt: 'system',
+      prompt: 'prompt',
+      onEvent: (event) => events.push(event),
+    });
+
+    assert.equal(result, '');
+    assert.deepEqual(events, [
+      {
+        kind: 'tool_call',
+        delta: '',
+        toolCall: {
+          id: 'call_1',
+          name: 'view',
+          input: { file_path: 'src/app.ts' },
+        },
+      },
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }

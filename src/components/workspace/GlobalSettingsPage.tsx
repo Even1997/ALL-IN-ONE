@@ -1,6 +1,7 @@
-import React, { Suspense, lazy, useCallback, useMemo } from 'react';
+import React, { Suspense, lazy, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { GNAgentSkillsPage } from '../ai/gn-agent-shell/GNAgentSkillsPage';
+import { aiService } from '../../modules/ai/core/AIService';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 import { RuntimeMcpSettingsPage } from './RuntimeMcpSettingsPage';
 import { useAIChatSettingsState } from './useAIChatSettingsState';
@@ -16,7 +17,16 @@ import {
   mergeModelCandidates,
   providerTypeLabel,
   type SettingsTabId,
+  type SettingsTabMeta,
 } from './globalSettingsPageShared';
+import { AppearanceSettingsPanel } from './settings/AppearanceSettingsPanel';
+import { AdvancedSettingsPanel } from './settings/AdvancedSettingsPanel';
+import { GeneralSettingsPanel } from './settings/GeneralSettingsPanel';
+import { PermissionsSettingsPanel } from './settings/PermissionsSettingsPanel';
+import { SettingsPlaceholderPanel } from './settings/SettingsPlaceholderPanel';
+import { SettingsSection } from './settings/SettingsSection';
+import { SettingsSidebar } from './settings/SettingsSidebar';
+import { StorageSettingsPanel } from './settings/StorageSettingsPanel';
 import './AIChat.css';
 
 const LazyAIChatAISettingsTab = lazy(async () => {
@@ -24,14 +34,18 @@ const LazyAIChatAISettingsTab = lazy(async () => {
   return { default: module.AIChatAISettingsTab };
 });
 
-let aiServiceModulePromise: Promise<typeof import('../../modules/ai/core/AIService')> | null = null;
-
-const loadAIServiceModule = () => (aiServiceModulePromise ??= import('../../modules/ai/core/AIService'));
-
 type GlobalSettingsPageProps = {
   activeSettingsTab: SettingsTabId;
   onSelectTab: (tab: SettingsTabId) => void;
   onExit: () => void;
+};
+
+const PLACEHOLDER_CONTENT: Record<Exclude<SettingsTabId, 'ai' | 'mcp' | 'skills'>, string[]> = {
+  general: ['语言设置', '启动行为', '版本信息'],
+  permissions: ['审批模式', '沙箱边界', '恢复策略'],
+  appearance: ['主题模式', '阅读宽度', '界面密度'],
+  storage: ['项目根目录', '索引文件', '路径诊断'],
+  advanced: ['Shell 模式', 'Provider 绑定', '运行诊断'],
 };
 
 export const GlobalSettingsPage: React.FC<GlobalSettingsPageProps> = ({
@@ -66,6 +80,10 @@ export const GlobalSettingsPage: React.FC<GlobalSettingsPageProps> = ({
     isSettingsDraftSelected,
     showApiKey,
     setShowApiKey,
+    jsonImportText,
+    setJsonImportText,
+    showJsonImport,
+    setShowJsonImport,
     providerSearch,
     setProviderSearch,
     testState,
@@ -87,6 +105,8 @@ export const GlobalSettingsPage: React.FC<GlobalSettingsPageProps> = ({
     handleCreateConfig,
     handleDeleteConfig,
     handleSelectConfig,
+    handleExportConfigs,
+    handleImportConfigs,
   } = useAIChatSettingsState({
     aiConfigs,
     runtimeConfigIdOverride: null,
@@ -104,35 +124,118 @@ export const GlobalSettingsPage: React.FC<GlobalSettingsPageProps> = ({
     mergeModelCandidates,
     buildProviderEndpointPreview,
     getSuggestedBaseURL,
-    loadAIServiceModule,
+    aiServiceClient: aiService,
   });
 
-  const selectedSettingsTabMeta = useMemo(
+  const selectedSettingsTabMeta = useMemo<SettingsTabMeta>(
     () => SETTINGS_TABS.find((tab) => tab.id === activeSettingsTab) || SETTINGS_TABS[0],
     [activeSettingsTab],
   );
 
-  const renderSettingsPlaceholder = useCallback(
-    (tab: typeof SETTINGS_TABS[number]) => (
-      <div className="chat-settings-placeholder-page">
-        <section className="chat-settings-placeholder-note">
-          <div className="chat-settings-eyebrow">{tab.eyebrow}</div>
-          <strong>{tab.title}</strong>
-          <span>Coming soon</span>
-        </section>
-      </div>
-    ),
-    [],
-  );
+  const renderStageContent = () => {
+    switch (activeSettingsTab) {
+      case 'general':
+        return <GeneralSettingsPanel />;
+      case 'appearance':
+        return <AppearanceSettingsPanel />;
+      case 'permissions':
+        return <PermissionsSettingsPanel />;
+      case 'storage':
+        return <StorageSettingsPanel />;
+      case 'advanced':
+        return <AdvancedSettingsPanel />;
+      case 'ai':
+        return (
+          <Suspense
+            fallback={(
+              <div className="chat-settings-panel-surface">
+                <SettingsSection
+                  className="chat-settings-placeholder-note muted"
+                  eyebrow="AI"
+                  title="正在加载 AI 设置"
+                  description="准备模型配置与连接测试。"
+                />
+              </div>
+            )}
+          >
+            <LazyAIChatAISettingsTab
+              providerSearch={providerSearch}
+              setProviderSearch={setProviderSearch}
+              handleCreateConfig={handleCreateConfig}
+              filteredConfigs={filteredConfigs}
+              selectedSettingsConfig={selectedSettingsConfig}
+              getConfigPreset={(config) => findPresetByConfig(config.provider, config.baseURL) || CUSTOM_PROVIDER_PRESET}
+              providerTypeLabel={providerTypeLabel}
+              setSelectedSettingsConfigId={setSelectedSettingsConfigId}
+              setTestState={setTestState}
+              setTestMessage={setTestMessage}
+              settingsDraft={settingsDraft}
+              selectedSettingsPreset={selectedSettingsPreset}
+              isSettingsDraftComplete={isSettingsDraftComplete}
+              isSettingsDraftSelected={isSettingsDraftSelected}
+              providerTypeOptions={AI_PROVIDER_TYPE_OPTIONS}
+              setSettingsDraft={setSettingsDraft}
+              customProviderPresetId={CUSTOM_PROVIDER_PRESET.id}
+              getSuggestedBaseURL={getSuggestedBaseURL}
+              handleLoadModels={handleLoadModels}
+              isLoadingModels={isLoadingModels}
+              settingsModelOptions={settingsModelOptions}
+              handleAddSavedModel={handleAddSavedModel}
+              handleUpdateSavedModel={handleUpdateSavedModel}
+              handleRemoveSavedModel={handleRemoveSavedModel}
+              handleSelectActiveModel={handleSelectActiveModel}
+              handleApplySettings={handleApplySettings}
+              handleToggleEnabled={handleToggleEnabled}
+              handleTestConnection={handleTestConnection}
+              selectedConfigId={selectedConfigId}
+              handleSelectConfig={handleSelectConfig}
+              aiConfigs={aiConfigs}
+              handleDeleteConfig={handleDeleteConfig}
+              showApiKey={showApiKey}
+              setShowApiKey={setShowApiKey}
+              jsonImportText={jsonImportText}
+              setJsonImportText={setJsonImportText}
+              showJsonImport={showJsonImport}
+              setShowJsonImport={setShowJsonImport}
+              handleExportConfigs={handleExportConfigs}
+              handleImportConfigs={handleImportConfigs}
+              testMessage={testMessage}
+              testState={testState}
+            />
+          </Suspense>
+        );
+      case 'skills':
+        return (
+          <div className="chat-settings-surface chat-settings-panel-surface chat-settings-panel-surface-skills">
+            <GNAgentSkillsPage />
+          </div>
+        );
+      case 'mcp':
+        return (
+          <div className="chat-settings-panel-surface">
+            <RuntimeMcpSettingsPage threadId={null} />
+          </div>
+        );
+      default:
+        return (
+          <div className="chat-settings-panel-surface">
+            <SettingsPlaceholderPanel
+              meta={selectedSettingsTabMeta}
+              highlights={PLACEHOLDER_CONTENT[activeSettingsTab]}
+            />
+          </div>
+        );
+    }
+  };
 
   return (
     <section className="global-settings-page" aria-label={selectedSettingsTabMeta.title}>
       <div className="chat-settings-drawer-header global-settings-page-header">
         <div className="chat-settings-header-main">
           <button className="chat-settings-back" type="button" aria-label="退出设置" onClick={onExit}>
-            ←
+            {'<'}
           </button>
-          <div>
+          <div className="chat-settings-header-copy">
             <div className="chat-settings-eyebrow">{selectedSettingsTabMeta.eyebrow}</div>
             <strong>{selectedSettingsTabMeta.title}</strong>
             <div className="chat-settings-header-description">{selectedSettingsTabMeta.description}</div>
@@ -142,92 +245,8 @@ export const GlobalSettingsPage: React.FC<GlobalSettingsPageProps> = ({
 
       <div className="global-settings-page-body">
         <div className="chat-settings-workbench-shell">
-          <aside className="chat-settings-workbench-sidebar">
-            <div className="chat-settings-source-list">
-              {SETTINGS_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`chat-settings-source-row${activeSettingsTab === tab.id ? ' active' : ''}`}
-                  onClick={() => onSelectTab(tab.id)}
-                >
-                  <strong>{tab.label}</strong>
-                  <span>{tab.description}</span>
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <div className="chat-settings-workbench-stage">
-            {activeSettingsTab === 'ai' ? (
-              <Suspense
-                fallback={(
-                  <div className="chat-settings-panel-surface">
-                    <div className="chat-settings-placeholder-note muted">
-                      <strong>加载 AI 设置中...</strong>
-                    </div>
-                  </div>
-                )}
-              >
-                <LazyAIChatAISettingsTab
-                  providerSearch={providerSearch}
-                  setProviderSearch={setProviderSearch}
-                  handleCreateConfig={handleCreateConfig}
-                  filteredConfigs={filteredConfigs}
-                  selectedSettingsConfig={selectedSettingsConfig}
-                  getConfigPreset={(config) => findPresetByConfig(config.provider, config.baseURL) || CUSTOM_PROVIDER_PRESET}
-                  providerTypeLabel={providerTypeLabel}
-                  setSelectedSettingsConfigId={setSelectedSettingsConfigId}
-                  setTestState={setTestState}
-                  setTestMessage={setTestMessage}
-                  settingsDraft={settingsDraft}
-                  selectedSettingsPreset={selectedSettingsPreset}
-                  isSettingsDraftComplete={isSettingsDraftComplete}
-                  isSettingsDraftSelected={isSettingsDraftSelected}
-                  providerTypeOptions={AI_PROVIDER_TYPE_OPTIONS}
-                  setSettingsDraft={setSettingsDraft}
-                  customProviderPresetId={CUSTOM_PROVIDER_PRESET.id}
-                  getSuggestedBaseURL={getSuggestedBaseURL}
-                  handleLoadModels={handleLoadModels}
-                  isLoadingModels={isLoadingModels}
-                  settingsModelOptions={settingsModelOptions}
-                  handleAddSavedModel={handleAddSavedModel}
-                  handleUpdateSavedModel={handleUpdateSavedModel}
-                  handleRemoveSavedModel={handleRemoveSavedModel}
-                  handleSelectActiveModel={handleSelectActiveModel}
-                  handleApplySettings={handleApplySettings}
-                  handleToggleEnabled={handleToggleEnabled}
-                  handleTestConnection={handleTestConnection}
-                  selectedConfigId={selectedConfigId}
-                  handleSelectConfig={handleSelectConfig}
-                  aiConfigs={aiConfigs}
-                  handleDeleteConfig={handleDeleteConfig}
-                  showApiKey={showApiKey}
-                  setShowApiKey={setShowApiKey}
-                  testMessage={testMessage}
-                  testState={testState}
-                />
-              </Suspense>
-            ) : null}
-
-            {activeSettingsTab === 'skills' ? (
-              <div className="chat-settings-surface chat-settings-panel-surface chat-settings-panel-surface-skills">
-                <GNAgentSkillsPage />
-              </div>
-            ) : null}
-
-            {activeSettingsTab === 'mcp' ? (
-              <div className="chat-settings-panel-surface">
-                <RuntimeMcpSettingsPage threadId={null} />
-              </div>
-            ) : null}
-
-            {!['ai', 'skills', 'mcp'].includes(activeSettingsTab) ? (
-              <div className="chat-settings-panel-surface">
-                {renderSettingsPlaceholder(selectedSettingsTabMeta)}
-              </div>
-            ) : null}
-          </div>
+          <SettingsSidebar tabs={SETTINGS_TABS} activeTab={activeSettingsTab} onSelectTab={onSelectTab} />
+          <div className="chat-settings-workbench-stage">{renderStageContent()}</div>
         </div>
       </div>
     </section>

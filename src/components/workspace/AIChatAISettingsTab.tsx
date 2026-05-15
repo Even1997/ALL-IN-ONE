@@ -59,6 +59,12 @@ type AIChatAISettingsTabProps = {
   handleDeleteConfig: () => void;
   showApiKey: boolean;
   setShowApiKey: Dispatch<SetStateAction<boolean>>;
+  jsonImportText: string;
+  setJsonImportText: Dispatch<SetStateAction<string>>;
+  showJsonImport: boolean;
+  setShowJsonImport: Dispatch<SetStateAction<boolean>>;
+  handleExportConfigs: () => Promise<void>;
+  handleImportConfigs: () => void;
   testMessage: string;
   testState: TestState;
 };
@@ -98,24 +104,45 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
   handleDeleteConfig,
   showApiKey,
   setShowApiKey,
+  jsonImportText,
+  setJsonImportText,
+  showJsonImport,
+  setShowJsonImport,
+  handleExportConfigs,
+  handleImportConfigs,
   testMessage,
   testState,
 }) => {
-  const providerSummary = `${providerTypeLabel(settingsDraft.provider)}${settingsDraft.enabled && isSettingsDraftComplete ? ' · enabled' : ' · disabled'}`;
+  const enabledConfigCount = aiConfigs.filter((config) => hasUsableAIConfigEntry(config) && config.enabled).length;
+  const readyConfigCount = aiConfigs.filter((config) => hasUsableAIConfigEntry(config)).length;
+  const savedModelCount = settingsDraft.savedModels.filter((item) => item.trim()).length;
+  const configStatusLabel = isSettingsDraftComplete ? '已就绪' : '待完善';
 
   return (
     <div className="chat-settings-ai-layout">
       <aside className="chat-settings-provider-list">
+        <div className="chat-settings-list-header">
+          <div>
+            <div className="chat-settings-eyebrow">AI</div>
+            <strong>配置列表</strong>
+          </div>
+          <div className="chat-settings-list-meta">
+            <span>{filteredConfigs.length} 项</span>
+            <span>{enabledConfigCount} 已启用</span>
+            <span>{readyConfigCount} 已就绪</span>
+          </div>
+        </div>
+
         <div className="chat-settings-provider-search">
           <input
             value={providerSearch}
             onChange={(event) => setProviderSearch(event.target.value)}
-            placeholder="Search AI configs"
+            placeholder="搜索配置"
           />
         </div>
 
         <button className="chat-settings-apply-btn" type="button" onClick={handleCreateConfig}>
-          New AI Config
+          新建配置
         </button>
 
         <div className="chat-settings-provider-items">
@@ -139,7 +166,7 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                   <strong>{config.name}</strong>
                   <span>
                     {providerTypeLabel(config.provider)}
-                    {hasUsableAIConfigEntry(config) && config.enabled ? ' / enabled' : ' / disabled'}
+                    {hasUsableAIConfigEntry(config) && config.enabled ? ' / 已启用' : ' / 未启用'}
                   </span>
                 </span>
               </button>
@@ -152,19 +179,20 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
         <article className="chat-settings-note-surface">
           <header className="chat-settings-note-header">
             <div>
-              <div className="chat-settings-eyebrow">AI Settings</div>
-              <strong>{settingsDraft.name || 'Untitled AI'}</strong>
+              <div className="chat-settings-eyebrow">当前配置</div>
+              <strong>{settingsDraft.name || '未命名配置'}</strong>
             </div>
             <div className="chat-settings-status-pills">
-              <span>{providerSummary}</span>
-              <span>{isSettingsDraftSelected ? 'selected in chat' : 'not selected'}</span>
+              <span>{providerTypeLabel(settingsDraft.provider)}</span>
+              <span>{configStatusLabel}</span>
+              {isSettingsDraftSelected ? <span>当前对话默认</span> : null}
             </div>
           </header>
 
           <div className="chat-settings-note-sections">
             <section className="chat-settings-section-block">
               <div className="chat-settings-section-header">
-                <strong>API Type</strong>
+                <strong>接口类型</strong>
               </div>
               <div className="chat-settings-type-grid">
                 {providerTypeOptions.map((option) => (
@@ -196,7 +224,7 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
             <section className="chat-settings-section-block">
               <div className="chat-settings-grid">
                 <label className="chat-settings-field chat-settings-field-full">
-                  <span>Config Name</span>
+                  <span>配置名称</span>
                   <input
                     value={settingsDraft.name}
                     onChange={(event) =>
@@ -205,12 +233,12 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                         name: event.target.value,
                       }))
                     }
-                    placeholder="OpenRouter Primary / Claude Backup"
+                    placeholder="OpenRouter 主用 / Claude 备用"
                   />
                 </label>
 
                 <label className="chat-settings-field">
-                  <span>API Key</span>
+                  <span>接口密钥</span>
                   <div className="chat-settings-inline">
                     <input
                       type={showApiKey ? 'text' : 'password'}
@@ -224,13 +252,13 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                       placeholder={selectedSettingsPreset.keyHint}
                     />
                     <button className="chat-settings-inline-btn" type="button" onClick={() => setShowApiKey((current) => !current)}>
-                      {showApiKey ? 'Hide' : 'Show'}
+                      {showApiKey ? '隐藏' : '显示'}
                     </button>
                   </div>
                 </label>
 
                 <label className="chat-settings-field">
-                  <span>Base URL</span>
+                  <span>接口地址</span>
                   <div className="chat-settings-inline">
                     <input
                       value={settingsDraft.baseURL}
@@ -252,27 +280,27 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                         }))
                       }
                     >
-                      Reset
+                      重置
                     </button>
                   </div>
                 </label>
 
                 <label className="chat-settings-field">
-                  <span>Model</span>
+                  <span>模型</span>
                   <div className="chat-settings-inline">
                     <input
                       value={settingsDraft.model}
                       onChange={(event) => handleSelectActiveModel(event.target.value)}
-                      placeholder={selectedSettingsPreset.models[0] || 'Enter model id'}
+                      placeholder={selectedSettingsPreset.models[0] || '输入模型 ID'}
                     />
                     <button className="chat-settings-inline-btn" type="button" onClick={() => void handleLoadModels()}>
-                      {isLoadingModels ? 'Loading...' : 'Fetch Models'}
+                      {isLoadingModels ? '加载中…' : '获取模型'}
                     </button>
                   </div>
                 </label>
 
                 <div className="chat-settings-field chat-settings-field-full">
-                  <span>Saved Models</span>
+                  <span>候选模型</span>
                   <div className="chat-settings-model-rows">
                     {settingsDraft.savedModels.map((savedModel, index) => {
                       const trimmedModel = savedModel.trim();
@@ -285,25 +313,25 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                           <input
                             value={savedModel}
                             onChange={(event) => handleUpdateSavedModel(index, event.target.value)}
-                            placeholder="Enter model id"
+                            placeholder="输入模型 ID"
                           />
                           <button type="button" className="chat-settings-inline-btn" onClick={() => handleSelectActiveModel(savedModel)}>
-                            {isActiveModel ? 'Active' : 'Set active'}
+                            {isActiveModel ? '当前使用' : '设为当前'}
                           </button>
                           <button type="button" className="chat-settings-inline-btn" onClick={() => handleRemoveSavedModel(index)} disabled={disableRemove}>
-                            Remove
+                            移除
                           </button>
                         </div>
                       );
                     })}
                     <button type="button" className="chat-settings-inline-btn chat-settings-model-add-btn" onClick={handleAddSavedModel}>
-                      Add model
+                      添加模型
                     </button>
                   </div>
                 </div>
 
                 <label className="chat-settings-field">
-                  <span>Context Window</span>
+                  <span>上下文窗口</span>
                   <div className="chat-settings-input-unit">
                     <input
                       type="number"
@@ -324,13 +352,23 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                   </div>
                 </label>
 
+                <div className="chat-settings-static-grid">
+                  <article className="chat-settings-static-card">
+                    <span>启用配置</span>
+                    <strong>{enabledConfigCount} 项</strong>
+                  </article>
+                  <article className="chat-settings-static-card">
+                    <span>候选模型</span>
+                    <strong>{savedModelCount} 项</strong>
+                  </article>
+                </div>
               </div>
             </section>
 
             {settingsModelOptions.length > 0 ? (
               <section className="chat-settings-section-block">
                 <div className="chat-settings-section-header">
-                  <strong>Model Candidates</strong>
+                  <strong>可选模型</strong>
                 </div>
                 <div className="chat-settings-model-grid">
                   {settingsModelOptions.map((candidate) => (
@@ -347,6 +385,60 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
               </section>
             ) : null}
 
+            <section className="chat-settings-section-block">
+              <div className="chat-settings-section-header">
+                <strong>导入与导出</strong>
+                <span>导出或导入 JSON 配置包。</span>
+              </div>
+              <div className="chat-settings-import-actions">
+                <button
+                  className="chat-settings-apply-btn secondary"
+                  type="button"
+                  onClick={() => void handleExportConfigs()}
+                >
+                  导出 JSON
+                </button>
+                <button
+                  className="chat-settings-apply-btn"
+                  type="button"
+                  onClick={() =>
+                    setShowJsonImport((current) => {
+                      if (current) {
+                        setJsonImportText('');
+                      }
+                      return !current;
+                    })
+                  }
+                >
+                  {showJsonImport ? '收起导入' : '导入 JSON'}
+                </button>
+              </div>
+              {showJsonImport ? (
+                <div className="chat-settings-import-json">
+                  <textarea
+                    value={jsonImportText}
+                    onChange={(event) => setJsonImportText(event.target.value)}
+                    rows={8}
+                    placeholder='{"version":2,"configs":[...]}'
+                  />
+                  <div className="chat-settings-import-actions">
+                    <button className="chat-settings-apply-btn" type="button" onClick={handleImportConfigs}>
+                      导入配置
+                    </button>
+                    <button
+                      className="chat-settings-apply-btn secondary"
+                      type="button"
+                      onClick={() => {
+                        setShowJsonImport(false);
+                        setJsonImportText('');
+                      }}
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
           </div>
 
           {testMessage ? (
@@ -357,13 +449,13 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
 
           <footer className="chat-settings-note-actions">
             <button className="chat-settings-apply-btn secondary" type="button" onClick={handleApplySettings}>
-              Save
+              保存
             </button>
             <button className="chat-settings-apply-btn" type="button" onClick={handleToggleEnabled}>
-              {settingsDraft.enabled ? 'Disable' : 'Enable'}
+              {settingsDraft.enabled ? '停用' : '启用'}
             </button>
             <button className="chat-settings-apply-btn" type="button" onClick={() => void handleTestConnection()}>
-              {testState === 'testing' ? 'Testing...' : 'Test Connection'}
+              {testState === 'testing' ? '测试中…' : '测试连接'}
             </button>
             {settingsDraft.id ? (
               <button
@@ -371,12 +463,12 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                 type="button"
                 onClick={handleSelectConfig}
               >
-                {settingsDraft.id === selectedConfigId ? 'Selected In Chat' : 'Use In Chat'}
+                {settingsDraft.id === selectedConfigId ? '当前对话已使用' : '设为当前对话'}
               </button>
             ) : null}
             {aiConfigs.length > 1 ? (
               <button className="chat-settings-apply-btn danger" type="button" onClick={handleDeleteConfig}>
-                Delete
+                删除
               </button>
             ) : null}
           </footer>

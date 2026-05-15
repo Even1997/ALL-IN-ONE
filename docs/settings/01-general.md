@@ -36,8 +36,7 @@
 
 | 字段 | 名称 | 类型 | 作用域 | 默认值 / 候选 | 当前状态 | 来源 | 控件 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `uiLanguage` | 应用语言 | `string` enum | 全局 | `zh-CN` / `en-US` / `system` | 新增 | 新设置模型，前端 i18n 层 | Select | 用户显式选择的 UI 语言；若选 `system`，按系统语言解析。 |
-| `followSystemLanguage` | 跟随系统语言 | `boolean` | 全局 | 建议默认 `true` | 新增 | 新设置模型 | Switch | 与 `uiLanguage` 配套；开启时 `uiLanguage` 只保留最近显式选择值，不直接生效。 |
+| `uiLanguage` | 应用语言 | `string` enum | 全局 | `system` / `zh-CN` / `en-US` | 新增 | 新设置模型，前端 i18n 层 | Select | 单一语言入口；选择 `system` 时自动跟随系统语言，选择显式值时立即使用该语言。 |
 | `startupPage` | 启动页 | `string` enum | 全局 | 建议默认 `last-opened` | 部分存在 | `src/App.tsx` 的角色页切换能力 | Select | 启动后优先进入的一级工作区。 |
 | `restoreLastSessionOnLaunch` | 启动时恢复上次会话 | `boolean` | 全局 | 建议默认 `true` | 新增 | 新设置模型 | Switch | 恢复最近项目、最近视图、最近上下文；和 `权限` 模块的 runtime 自动恢复不同层。 |
 | `openRecentWorkspaceOnLaunch` | 优先打开最近工作区 | `boolean` | 全局 | 建议默认 `true` | 新增 | 新设置模型 | Switch | 与 `startupPage` 联动；最近工作区缺失时回退到安全页。 |
@@ -50,7 +49,7 @@
 
 ## 关键行为补充
 
-- `uiLanguage` 和 `followSystemLanguage` 要共同决定最终生效语言，避免两个开关互相打架。
+- `uiLanguage` 是唯一的语言入口，不再额外拆出“跟随系统语言”开关，避免同一意图出现双重控制。
 - `restoreLastSessionOnLaunch` 属于产品层恢复；`autoResumeOnLaunch` 属于 agent runtime 恢复，后者仍放在 `权限`。
 - `startupPage` 若指向不存在或无权限页面，必须安全回退，不能卡启动。
 - `updateChannel` 需要配套清晰文案，避免用户误以为只是“速度更快”。
@@ -71,6 +70,6 @@
 
 ## 当前建议优先级
 
-- P0：`uiLanguage`、`followSystemLanguage`、`startupPage`、`restoreLastSessionOnLaunch`
+- P0：`uiLanguage`、`startupPage`、`restoreLastSessionOnLaunch`
 - P1：`openRecentWorkspaceOnLaunch`、`autoUpdateEnabled`、`updateChannel`、`newWindowBehavior`
 - P2：`appVersion`、`buildChannel`、`runtimeInfo`

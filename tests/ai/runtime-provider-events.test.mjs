@@ -158,6 +158,100 @@ test('openai-compatible JSON fallback emits tool calls when message content is e
   }
 });
 
+test('openai-compatible requests include tool declarations and auto tool choice', { concurrency: false }, async () => {
+  const previousFetch = globalThis.fetch;
+  let lastBody = null;
+
+  globalThis.fetch = async (_input, init) => {
+    lastBody = JSON.parse(String(init?.body));
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: 'Ready',
+            },
+          },
+        ],
+      }),
+      {
+        headers: {
+          'content-type': 'application/json',
+        },
+      },
+    );
+  };
+
+  try {
+    const finalText = await streamRuntimeProviderTurn({
+      runtimeConfig,
+      prompt: 'Inspect the project.',
+      systemPrompt: 'You can use tools.',
+    });
+
+    assert.equal(finalText, 'Ready');
+    assert.equal(Array.isArray(lastBody?.tools), true);
+    assert.equal(lastBody.tools.some((tool) => tool?.function?.name === 'view'), true);
+    assert.equal(lastBody.tool_choice, 'auto');
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('openai-compatible retries /v1 chat completions when root endpoint returns HTML', { concurrency: false }, async () => {
+  const previousFetch = globalThis.fetch;
+  const requestedUrls = [];
+
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    requestedUrls.push(url);
+
+    if (url === 'http://localhost:8080/chat/completions') {
+      return new Response('<!doctype html><html><body>site shell</body></html>', {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+        },
+      });
+    }
+
+    if (url === 'http://localhost:8080/v1/chat/completions') {
+      return createSseResponse([
+        toSseFrame({
+          choices: [
+            {
+              delta: {
+                content: 'Fallback works',
+              },
+            },
+          ],
+        }),
+        toSseFrame('[DONE]'),
+      ]);
+    }
+
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  try {
+    const finalText = await streamRuntimeProviderTurn({
+      runtimeConfig: {
+        ...runtimeConfig,
+        baseURL: 'http://localhost:8080',
+      },
+      prompt: 'Use fallback.',
+      systemPrompt: 'system',
+    });
+
+    assert.equal(finalText, 'Fallback works');
+    assert.deepEqual(requestedUrls, [
+      'http://localhost:8080/chat/completions',
+      'http://localhost:8080/v1/chat/completions',
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test('openai-compatible SSE still returns parseable tool protocol when no event handler is attached', { concurrency: false }, async () => {
   const previousFetch = globalThis.fetch;
 

@@ -291,6 +291,29 @@ const buildAnthropicTools = () =>
     },
   }));
 
+const buildOpenAICompatibleTools = () =>
+  TOOLS.map((tool) => ({
+    type: 'function' as const,
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: {
+        type: 'object',
+        properties: Object.fromEntries(
+          Object.entries(tool.parameters).map(([name, parameter]) => [
+            name,
+            {
+              type: parameter.type,
+              description: parameter.description,
+              ...(parameter.items ? { items: parameter.items } : {}),
+            },
+          ]),
+        ),
+        required: tool.required,
+      },
+    },
+  }));
+
 const readEventStream = async (
   body: ReadableStream<Uint8Array>,
   onEvent: RuntimeProviderStreamInput['onEvent'],
@@ -355,11 +378,54 @@ const readEventStream = async (
 const isEventStreamResponse = (response: Response) =>
   (response.headers.get('content-type') || '').toLowerCase().includes('text/event-stream');
 
+const joinOpenAICompatibleUrl = (baseURL: string, path: string) =>
+  `${baseURL.replace(/\/+$/, '')}${path}`;
+
+const buildOpenAICompatibleV1FallbackUrl = (baseURL: string, path: string) => {
+  const normalized = baseURL.replace(/\/+$/, '');
+  if (/(^|\/)v\d+$/i.test(normalized)) {
+    return joinOpenAICompatibleUrl(normalized, path);
+  }
+
+  return joinOpenAICompatibleUrl(`${normalized}/v1`, path);
+};
+
+const shouldRetryOpenAICompatibleWithV1 = (
+  baseURL: string,
+  attemptedUrl: string,
+  response: Response,
+  path: string,
+) => {
+  if (buildOpenAICompatibleV1FallbackUrl(baseURL, path) === attemptedUrl) {
+    return false;
+  }
+
+  if (response.status === 404) {
+    return true;
+  }
+
+  return (response.headers.get('content-type') || '').toLowerCase().includes('text/html');
+};
+
+const fetchOpenAICompatibleWithV1Fallback = async (
+  baseURL: string,
+  path: string,
+  init: RequestInit,
+) => {
+  const primaryUrl = joinOpenAICompatibleUrl(baseURL, path);
+  const response = await fetch(primaryUrl, init);
+  if (shouldRetryOpenAICompatibleWithV1(baseURL, primaryUrl, response, path)) {
+    return fetch(buildOpenAICompatibleV1FallbackUrl(baseURL, path), init);
+  }
+
+  return response;
+};
+
 const streamOpenAICompatibleTurn = async (
   input: RuntimeProviderStreamInput,
 ): Promise<string> => {
   const doFetch = async () => {
-    const response = await fetch(`${input.runtimeConfig.baseURL.replace(/\/$/, '')}/chat/completions`, {
+    const response = await fetchOpenAICompatibleWithV1Fallback(input.runtimeConfig.baseURL, '/chat/completions', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -374,6 +440,8 @@ const streamOpenAICompatibleTurn = async (
         stream_options: {
           include_usage: true,
         },
+        tools: buildOpenAICompatibleTools(),
+        tool_choice: 'auto',
         messages: [
           {
             role: 'system',

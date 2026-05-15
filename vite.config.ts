@@ -39,4 +39,9 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    // The desktop workbench already lazy-loads major pages; the remaining
+    // initial chunk is expected to sit above Vite's web-default 500 kB limit.
+    chunkSizeWarningLimit: 900,
+  },
 }));

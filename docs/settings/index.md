@@ -32,6 +32,7 @@
 - [设置字段矩阵](./09-field-matrix.md)
 - [设置页开发计划](./10-development-plan.md)
 - [阶段 1 执行任务清单](./11-phase-1-task-list.md)
+- [阶段 6 交付状态](./12-phase-6-delivery-status.md)
 
 ## 文档阅读方式
 

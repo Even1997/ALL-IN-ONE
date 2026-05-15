@@ -40,6 +40,20 @@ export interface ProjectStorageSettings {
   isDefault: boolean;
 }
 
+export const PROJECT_STORAGE_SETTINGS_CHANGED_EVENT = 'goodnight-project-storage-settings-changed';
+
+export const emitProjectStorageSettingsChanged = (settings: ProjectStorageSettings) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(PROJECT_STORAGE_SETTINGS_CHANGED_EVENT, {
+      detail: settings,
+    }),
+  );
+};
+
 export const isTauriRuntimeAvailable = () =>
   typeof window !== 'undefined' &&
   typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === 'function';
@@ -182,6 +196,9 @@ const listDirectory = async (directoryPath: string) => {
 export const getProjectDir = async (projectId: string) =>
   stripWindowsExtendedLengthPathPrefix(await invokeTauri<string>('get_project_dir', { projectId }));
 
+export const getRequirementsDir = async (projectId: string) =>
+  stripWindowsExtendedLengthPathPrefix(await invokeTauri<string>('get_requirements_dir', { projectId }));
+
 export const getProjectsIndexPath = async () =>
   stripWindowsExtendedLengthPathPrefix(await invokeTauri<string>('get_projects_index_path'));
 
@@ -194,11 +211,23 @@ export const getProjectStorageSettings = async () => {
   };
 };
 
+const normalizeProjectStorageSettingsRecord = (settings: ProjectStorageSettings): ProjectStorageSettings => ({
+  ...settings,
+  rootPath: stripWindowsExtendedLengthPathPrefix(settings.rootPath),
+  defaultPath: stripWindowsExtendedLengthPathPrefix(settings.defaultPath),
+});
+
 export const setProjectStorageRoot = async (rootPath: string) =>
-  invokeTauri<ProjectStorageSettings>('set_project_storage_root', { rootPath });
+  normalizeProjectStorageSettingsRecord(
+    await invokeTauri<ProjectStorageSettings>('set_project_storage_root', { rootPath }),
+  );
 
 export const resetProjectStorageRoot = async () =>
-  invokeTauri<ProjectStorageSettings>('set_project_storage_root', { rootPath: null });
+  normalizeProjectStorageSettingsRecord(
+    await invokeTauri<ProjectStorageSettings>('set_project_storage_root', { rootPath: null }),
+  );
+
+export const openPathInShell = async (path: string) => invokeTauri<void>('open_path_in_shell', { path });
 
 export const loadProjectIndexFromDisk = async () => {
   if (!isTauriRuntimeAvailable()) {

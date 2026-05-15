@@ -120,6 +120,12 @@ type AITextStreamTextEventKind = Extract<AITextStreamEvent['kind'], 'thinking' |
 const DEFAULT_PROJECT_ROOT = '.';
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
+type OpenAICompatiblePartialToolCall = {
+  id?: string;
+  name?: string;
+  partialArguments: string;
+};
+
 class AIService {
   private config: AIConfig = {
     provider: 'openai-compatible',
@@ -294,8 +300,14 @@ class AIService {
         throw buildAIConfigurationError();
       }
 
-      const models = await this.listModels();
-      const activeModel = models[0] || this.config.model;
+      let activeModel = this.config.model;
+      try {
+        const models = await this.listModels();
+        activeModel = models[0] || activeModel;
+      } catch {
+        await this.probeChatConnection();
+      }
+
       return {
         ok: true,
         message: `连接成功，当前可用模型示例：${activeModel}`,
@@ -309,6 +321,17 @@ class AIService {
       if (override) {
         this.setConfig(previous);
       }
+    }
+  }
+
+  private async probeChatConnection(): Promise<void> {
+    const probe = await this.callProvider(
+      [{ role: 'user', content: 'Reply with OK.' }],
+      'This is a connection test. Reply with OK only.'
+    );
+
+    if (!probe.trim()) {
+      throw new Error('AI provider returned empty content during connection test');
     }
   }
 
@@ -331,18 +354,7 @@ class AIService {
         return [this.config.model];
       }
 
-      const url = this.joinUrl(this.config.baseURL || DEFAULT_BASE_URL, '/models');
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${this.config.apiKey}`,
-          ...this.parseCustomHeaders(),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`获取模型列表失败 (${response.status})`);
-      }
-
+      const response = await this.fetchOpenAICompatibleJson('/models');
       const json = await response.json();
       const models = Array.isArray(json?.data)
         ? json.data.map((item: { id?: string }) => item.id).filter(Boolean)
@@ -560,55 +572,136 @@ ${this.buildToolInstructions()}
     signal?: AbortSignal,
     onEvent?: (event: AITextStreamEvent) => void
   ): Promise<string> {
-    const url = this.joinUrl(this.config.baseURL || DEFAULT_BASE_URL, '/chat/completions');
     const payload = {
       model: this.config.model,
       temperature: this.config.temperature,
       max_tokens: this.config.maxTokens,
       stream: Boolean(onEvent),
+      tools: this.buildOpenAICompatibleTools(),
+      tool_choice: 'auto',
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
     };
 
     const doFetch = async () => {
-      const response = await fetch(url, {
+      const response = await this.fetchOpenAICompatibleJson('/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
-          ...this.parseCustomHeaders(),
         },
         body: JSON.stringify(payload),
         signal,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`OpenAI-compatible API error (${response.status}): ${errorText}`);
-      }
 
       if (onEvent && response.body) {
         return this.readOpenAICompatibleStream(response.body, onEvent);
       }
 
       const json = await response.json();
-      const content = json?.choices?.[0]?.message?.content;
+      const message = json?.choices?.[0]?.message;
+      const content = message?.content;
       const finishReason = json?.choices?.[0]?.finish_reason;
+      const toolCalls = this.parseOpenAICompatibleMessageToolCalls(message?.tool_calls);
       if (finishReason) {
         onEvent?.({ kind: 'text', delta: '', finishReason });
       }
 
       if (typeof content === 'string') {
-        return content;
+        return this.buildOpenAICompatibleToolCallsFallbackContent(content, toolCalls);
       }
 
       if (Array.isArray(content)) {
-        return content.map((item) => item?.text || '').join('\n');
+        return this.buildOpenAICompatibleToolCallsFallbackContent(
+          content.map((item) => item?.text || '').join('\n'),
+          toolCalls
+        );
+      }
+
+      if (toolCalls.length > 0) {
+        return this.buildOpenAICompatibleToolCallsFallbackContent('', toolCalls);
       }
 
       throw new Error('OpenAI-compatible API returned empty content');
     };
 
     return withRetry(doFetch, { signal });
+  }
+
+  private async fetchOpenAICompatibleJson(path: string, init: RequestInit = {}) {
+    const headers = {
+      Authorization: `Bearer ${this.config.apiKey}`,
+      ...this.parseCustomHeaders(),
+      ...(init.headers || {}),
+    };
+    const requestInit: RequestInit = {
+      ...init,
+      headers,
+    };
+
+    const response = await this.fetchWithV1Fallback(path, requestInit);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI-compatible API error (${response.status}): ${errorText}`);
+    }
+
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('text/html')) {
+      const fallbackResponse = await this.fetchWithV1Fallback(path, requestInit, true);
+      if (!fallbackResponse.ok) {
+        const errorText = await fallbackResponse.text();
+        throw new Error(`OpenAI-compatible API error (${fallbackResponse.status}): ${errorText}`);
+      }
+      return fallbackResponse;
+    }
+
+    return response;
+  }
+
+  private async fetchWithV1Fallback(path: string, init: RequestInit, forceV1 = false) {
+    const baseURL = this.config.baseURL || DEFAULT_BASE_URL;
+    const primaryUrl = this.joinUrl(baseURL, path);
+    if (forceV1) {
+      return fetch(this.buildV1FallbackUrl(baseURL, path), init);
+    }
+
+    try {
+      const response = await fetch(primaryUrl, init);
+      if (this.shouldRetryWithV1(baseURL, primaryUrl, response, path)) {
+        return fetch(this.buildV1FallbackUrl(baseURL, path), init);
+      }
+      return response;
+    } catch (error) {
+      if (this.canRetryWithV1(baseURL, primaryUrl, path)) {
+        return fetch(this.buildV1FallbackUrl(baseURL, path), init);
+      }
+      throw error;
+    }
+  }
+
+  private shouldRetryWithV1(baseURL: string, attemptedUrl: string, response: Response, path: string) {
+    if (!this.canRetryWithV1(baseURL, attemptedUrl, path)) {
+      return false;
+    }
+
+    if (response.status === 404) {
+      return true;
+    }
+
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    return contentType.includes('text/html');
+  }
+
+  private canRetryWithV1(baseURL: string, attemptedUrl: string, path: string) {
+    const fallbackUrl = this.buildV1FallbackUrl(baseURL, path);
+    return fallbackUrl !== attemptedUrl;
+  }
+
+  private buildV1FallbackUrl(baseURL: string, path: string) {
+    const normalized = baseURL.replace(/\/+$/, '');
+    if (/(^|\/)v\d+$/i.test(normalized)) {
+      return this.joinUrl(normalized, path);
+    }
+
+    return this.joinUrl(`${normalized}/v1`, path);
   }
 
   private async callAnthropic(
@@ -713,6 +806,37 @@ ${this.buildToolInstructions()}
     }));
   }
 
+  private buildOpenAICompatibleTools(): Array<{
+    type: 'function';
+    function: {
+      name: string;
+      description: string;
+      parameters: Record<string, unknown>;
+    };
+  }> {
+    return TOOLS.map((tool) => ({
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: {
+          type: 'object',
+          properties: Object.fromEntries(
+            Object.entries(tool.parameters).map(([name, parameter]) => [
+              name,
+              {
+                type: parameter.type,
+                description: parameter.description,
+                ...(parameter.items ? { items: parameter.items } : {}),
+              },
+            ])
+          ),
+          required: tool.required,
+        },
+      },
+    }));
+  }
+
   private joinUrl(baseURL: string, path: string) {
     if (baseURL.endsWith(path)) {
       return baseURL;
@@ -742,6 +866,7 @@ ${this.buildToolInstructions()}
     body: ReadableStream<Uint8Array>,
     onEvent: (event: AITextStreamEvent) => void
   ): Promise<string> {
+    const toolBlocks = new Map<number, OpenAICompatiblePartialToolCall>();
     const text = await this.readEventStream(body, onEvent, (data) => {
       if (data === '[DONE]') {
         return [];
@@ -760,6 +885,11 @@ ${this.buildToolInstructions()}
         return [];
       }
 
+      const toolCalls = this.accumulateOpenAICompatibleToolCalls(delta, toolBlocks);
+      if (toolCalls.length > 0) {
+        return toolCalls;
+      }
+
       return [
         ...this.collectOpenAIReasoningEvents(delta),
         ...this.buildEventList('text', this.collectOpenAITextDelta(delta)),
@@ -767,6 +897,116 @@ ${this.buildToolInstructions()}
     });
 
     return text.answer;
+  }
+
+  private accumulateOpenAICompatibleToolCalls(
+    delta: Record<string, unknown>,
+    toolBlocks: Map<number, OpenAICompatiblePartialToolCall>
+  ): AITextStreamEvent[] {
+    const toolCalls = (delta as { tool_calls?: unknown }).tool_calls;
+    if (!Array.isArray(toolCalls)) {
+      return [];
+    }
+
+    const completed: AITextStreamEvent[] = [];
+    toolCalls.forEach((entry: any, index: number) => {
+      const blockIndex = typeof entry?.index === 'number' ? entry.index : index;
+      const block = toolBlocks.get(blockIndex) || { partialArguments: '' };
+
+      if (typeof entry?.id === 'string' && entry.id.trim()) {
+        block.id = entry.id.trim();
+      }
+      if (typeof entry?.function?.name === 'string' && entry.function.name.trim()) {
+        block.name = entry.function.name.trim();
+      }
+      if (typeof entry?.function?.arguments === 'string') {
+        block.partialArguments += entry.function.arguments;
+      }
+
+      toolBlocks.set(blockIndex, block);
+      const parsed = this.buildOpenAICompatibleToolCall(block, `call_${blockIndex}`);
+      if (!parsed) {
+        return;
+      }
+
+      completed.push({
+        kind: 'tool_call',
+        delta: '',
+        toolCall: parsed,
+      });
+      toolBlocks.delete(blockIndex);
+    });
+
+    return completed;
+  }
+
+  private buildOpenAICompatibleToolCall(
+    block: OpenAICompatiblePartialToolCall,
+    fallbackId: string
+  ): Extract<AITextStreamEvent, { kind: 'tool_call' }>['toolCall'] | null {
+    const name = typeof block.name === 'string' ? block.name.trim() : '';
+    if (!name) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(block.partialArguments);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+      }
+
+      return {
+        id: typeof block.id === 'string' && block.id.trim() ? block.id.trim() : fallbackId,
+        name,
+        input: parsed as Record<string, unknown>,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private parseOpenAICompatibleMessageToolCalls(
+    value: unknown
+  ): Array<Extract<AITextStreamEvent, { kind: 'tool_call' }>['toolCall']> {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value.flatMap((entry: any, index: number) => {
+      const rawArguments = entry?.function?.arguments;
+      const partialArguments =
+        typeof rawArguments === 'string' ? rawArguments : JSON.stringify(rawArguments ?? {});
+      const parsed = this.buildOpenAICompatibleToolCall(
+        {
+          id: typeof entry?.id === 'string' ? entry.id : undefined,
+          name: typeof entry?.function?.name === 'string' ? entry.function.name : undefined,
+          partialArguments,
+        },
+        `call_${index}`
+      );
+      return parsed ? [parsed] : [];
+    });
+  }
+
+  private buildOpenAICompatibleToolCallsFallbackContent(
+    content: string,
+    toolCalls: Array<Extract<AITextStreamEvent, { kind: 'tool_call' }>['toolCall']>
+  ) {
+    if (toolCalls.length === 0) {
+      return content;
+    }
+
+    const serializedToolCalls = JSON.stringify({
+      tool_calls: toolCalls.map((toolCall) => ({
+        id: toolCall.id,
+        function: {
+          name: toolCall.name,
+          arguments: JSON.stringify(toolCall.input),
+        },
+      })),
+    });
+    const trimmedContent = content.trim();
+    return trimmedContent ? `${trimmedContent}\n${serializedToolCalls}` : serializedToolCalls;
   }
 
   private collectOpenAIReasoningEvents(delta: Record<string, unknown>): AITextStreamEvent[] {
@@ -898,13 +1138,17 @@ ${this.buildToolInstructions()}
     let answer = '';
     let thinking = '';
     let lastEventTime = Date.now();
+    let idleTimer: ReturnType<typeof setInterval> | null = null;
 
     const createIdleTimer = () =>
       new Promise<never>((_, reject) => {
-        const interval = setInterval(() => {
+        idleTimer = setInterval(() => {
           const elapsed = Date.now() - lastEventTime;
           if (elapsed >= IDLE_TIMEOUT_MS) {
-            clearInterval(interval);
+            if (idleTimer) {
+              clearInterval(idleTimer);
+              idleTimer = null;
+            }
             reject(new Error(`SSE stream idle timeout after ${Math.round(elapsed / 1000)}s`));
           }
         }, 5000);
@@ -961,6 +1205,11 @@ ${this.buildToolInstructions()}
         throw error;
       }
       throw error;
+    } finally {
+      if (idleTimer) {
+        clearInterval(idleTimer);
+        idleTimer = null;
+      }
     }
 
     if (!timedOut) {

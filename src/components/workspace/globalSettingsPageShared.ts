@@ -22,116 +22,105 @@ export type AIProviderTypeOption = {
 };
 
 export type SettingsTabId =
+  | 'general'
   | 'ai'
   | 'permissions'
-  | 'general'
-  | 'adapters'
-  | 'terminal'
-  | 'skills'
   | 'mcp'
-  | 'agents'
-  | 'plugins'
-  | 'computerUse'
-  | 'diagnostics'
-  | 'about';
+  | 'skills'
+  | 'appearance'
+  | 'storage'
+  | 'advanced';
 
-export const SETTINGS_TABS: Array<{
+export type SettingsTabMeta = {
   id: SettingsTabId;
   label: string;
   eyebrow: string;
   title: string;
   description: string;
-}> = [
+};
+
+export const SETTINGS_TABS: SettingsTabMeta[] = [
+  {
+    id: 'general',
+    label: '常规',
+    eyebrow: '基础',
+    title: '常规设置',
+    description: '语言、启动与版本信息。',
+  },
   {
     id: 'ai',
     label: 'AI',
-    eyebrow: 'Model Settings',
+    eyebrow: '模型与服务',
     title: 'AI 设置',
-    description: '管理当前聊天使用的模型配置与 Provider。',
+    description: '管理模型配置、服务商与连接测试。',
   },
   {
     id: 'permissions',
     label: '权限',
-    eyebrow: 'Permissions',
+    eyebrow: '运行边界',
     title: '权限设置',
-    description: '管理审批、sandbox 和自动执行边界。',
-  },
-  {
-    id: 'general',
-    label: '通用',
-    eyebrow: 'General',
-    title: '通用设置',
-    description: '管理 Agent 工作台的默认行为与显示偏好。',
-  },
-  {
-    id: 'adapters',
-    label: '适配器',
-    eyebrow: 'Adapters',
-    title: '适配器设置',
-    description: '管理本地模型、外部 CLI 与运行时桥接能力。',
-  },
-  {
-    id: 'terminal',
-    label: '终端',
-    eyebrow: 'Terminal',
-    title: '终端设置',
-    description: '管理 shell、工作目录和命令执行偏好。',
-  },
-  {
-    id: 'skills',
-    label: '技能',
-    eyebrow: 'Skills Library',
-    title: '技能设置',
-    description: '统一管理技能导入、查看与删除，不再放在 Agent 里单独维护。',
+    description: '审批模式、沙箱与恢复策略。',
   },
   {
     id: 'mcp',
     label: 'MCP',
-    eyebrow: 'Runtime MCP',
+    eyebrow: '工具接入',
     title: 'MCP 设置',
-    description: '统一管理 MCP server 的查看、编辑、启停与运行记录。',
+    description: '管理 MCP 服务与最近调用。',
   },
   {
-    id: 'agents',
-    label: 'Agents',
-    eyebrow: 'Agents',
-    title: 'Agents 设置',
-    description: '管理本地 Agent、团队执行与默认分工。',
+    id: 'skills',
+    label: '技能',
+    eyebrow: '技能库',
+    title: '技能设置',
+    description: '管理系统技能、个人技能和导入来源。',
   },
   {
-    id: 'plugins',
-    label: '插件',
-    eyebrow: 'Plugins',
-    title: '插件设置',
-    description: '管理扩展入口与未来插件能力。',
+    id: 'appearance',
+    label: '外观',
+    eyebrow: '显示与阅读',
+    title: '外观设置',
+    description: '主题、密度和过程显示。',
   },
   {
-    id: 'computerUse',
-    label: 'Computer Use',
-    eyebrow: 'Computer Use',
-    title: 'Computer Use 设置',
-    description: '管理桌面自动化与可视操作能力。',
+    id: 'storage',
+    label: '存储',
+    eyebrow: '项目目录',
+    title: '存储设置',
+    description: '项目根目录、索引与路径诊断。',
   },
   {
-    id: 'diagnostics',
-    label: '诊断',
-    eyebrow: 'Diagnostics',
-    title: '诊断信息',
-    description: '查看运行时状态、连接情况与故障排查信息。',
-  },
-  {
-    id: 'about',
-    label: '关于',
-    eyebrow: 'About',
-    title: '关于 GoodNight Agent',
-    description: '查看版本、能力边界与本地运行说明。',
+    id: 'advanced',
+    label: '高级',
+    eyebrow: '运行与绑定',
+    title: '高级设置',
+    description: '运行模式、服务绑定与诊断。',
   },
 ];
 
 const SETTINGS_TAB_IDS = new Set<SettingsTabId>(SETTINGS_TABS.map((tab) => tab.id));
 
-export const resolveSettingsTabId = (tab: string | null | undefined): SettingsTabId =>
-  tab && SETTINGS_TAB_IDS.has(tab as SettingsTabId) ? (tab as SettingsTabId) : SETTINGS_TABS[0].id;
+const LEGACY_SETTINGS_TAB_ID_MAP: Record<string, SettingsTabId> = {
+  about: 'general',
+  adapters: 'advanced',
+  terminal: 'advanced',
+  agents: 'advanced',
+  plugins: 'advanced',
+  computerUse: 'advanced',
+  diagnostics: 'advanced',
+};
+
+export const resolveSettingsTabId = (tab: string | null | undefined): SettingsTabId => {
+  if (tab && SETTINGS_TAB_IDS.has(tab as SettingsTabId)) {
+    return tab as SettingsTabId;
+  }
+
+  if (tab && LEGACY_SETTINGS_TAB_ID_MAP[tab]) {
+    return LEGACY_SETTINGS_TAB_ID_MAP[tab];
+  }
+
+  return SETTINGS_TABS[0].id;
+};
 
 export const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
   id: 'custom',
@@ -144,7 +133,7 @@ export const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
   enabled: true,
   models: [],
   keyHint: '填写你的平台 API Key',
-  note: '用于接入未内置的平台。你可以自行切换 API 类型、Base URL、模型和自定义请求头。',
+  note: '用于接入未内置的平台，可自行配置接口类型、Base URL、模型和请求头。',
 };
 
 const SETTINGS_PROVIDER_PRESETS = [...PROVIDER_PRESETS, CUSTOM_PROVIDER_PRESET];
@@ -152,7 +141,7 @@ const SETTINGS_PROVIDER_PRESETS = [...PROVIDER_PRESETS, CUSTOM_PROVIDER_PRESET];
 export const AI_PROVIDER_TYPE_OPTIONS: AIProviderTypeOption[] = [
   {
     value: 'openai-compatible',
-    label: 'OpenAI Compatible',
+    label: 'OpenAI 兼容',
     description: '适用于 OpenAI、OpenRouter、DeepSeek、Ollama 等兼容 chat/completions 的平台。',
   },
   {
@@ -168,7 +157,7 @@ export const findPresetByConfig = (provider: AIProviderType, baseURL: string) =>
   ) || null;
 
 export const providerTypeLabel = (provider: AIProviderType) =>
-  provider === 'anthropic' ? 'Anthropic' : 'OpenAI Compatible';
+  provider === 'anthropic' ? 'Anthropic' : 'OpenAI 兼容';
 
 export const buildProviderEndpointPreview = (provider: AIProviderType, baseURL: string) =>
   `${baseURL.replace(/\/+$/, '')}/${provider === 'anthropic' ? 'messages' : 'chat/completions'}`;
@@ -201,7 +190,9 @@ export const buildSettingsDraft = (config: AIConfigEntry | null): AISettingsDraf
   apiKey: config?.apiKey || '',
   baseURL: config?.baseURL || PROVIDER_PRESETS[0]?.baseURL || '',
   model: config?.model || PROVIDER_PRESETS[0]?.models[0] || '',
-  savedModels: config?.savedModels || (config?.model ? [config.model] : (PROVIDER_PRESETS[0]?.models[0] ? [PROVIDER_PRESETS[0].models[0]] : [])),
+  savedModels: config?.savedModels || (config?.model
+    ? [config.model]
+    : (PROVIDER_PRESETS[0]?.models[0] ? [PROVIDER_PRESETS[0].models[0]] : [])),
   contextWindowTokens: config?.contextWindowTokens || 258000,
   customHeaders: config?.customHeaders || '',
   enabled: config?.enabled || false,

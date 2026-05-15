@@ -21,17 +21,21 @@ test('global settings page uses the workbench shell vocabulary as a top-level su
   assert.match(appSource, /GlobalSettingsPage/);
   assert.match(pageSource, /global-settings-page/);
   assert.match(pageSource, /chat-settings-workbench-shell/);
-  assert.match(pageSource, /chat-settings-workbench-sidebar/);
   assert.match(pageSource, /chat-settings-workbench-stage/);
+  assert.match(pageSource, /SettingsSidebar/);
+  assert.match(pageSource, /SettingsSection/);
+  assert.match(pageSource, /SettingsPlaceholderPanel/);
   assert.match(pageSource, /chat-settings-back/);
+  assert.match(pageSource, /chat-settings-header-copy/);
   assert.match(css, /\.chat-settings-workbench-shell\s*\{/);
   assert.match(css, /\.chat-settings-workbench-sidebar\s*\{/);
   assert.match(css, /\.chat-settings-workbench-stage\s*\{/);
   assert.match(css, /\.global-settings-page\s*\{/);
   assert.match(css, /\.global-settings-page-body\s*\{/);
+  assert.match(css, /\.chat-settings-eyebrow,\s*\.chat-settings-summary-label\s*\{[^}]*display:\s*block;/s);
   assert.doesNotMatch(pageSource, /chat-settings-drawer-embedded/);
   assert.doesNotMatch(css, /\.chat-settings-workbench-companion\s*\{/);
-  assert.match(css, /\.chat-settings-workbench-shell\s*\{[^}]*grid-template-columns:\s*220px minmax\(0, 1fr\);/s);
+  assert.match(css, /\.chat-settings-workbench-shell\s*\{[^}]*grid-template-columns:\s*168px minmax\(0, 1fr\);/s);
 });
 
 test('desktop settings state is routed through App as a global page instead of an ai pane overlay', async () => {

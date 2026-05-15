@@ -24,8 +24,7 @@
 
 | 字段 | 所属模块 | 层级 | 作用域 | 当前状态 | 真实来源 / 目标来源 | 是否应持久化 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `uiLanguage` | 常规 | 规划字段 | 全局 | 新增 | 新全局设置模型 + i18n 层 | 是 | 与 `followSystemLanguage` 配对。 |
-| `followSystemLanguage` | 常规 | 规划字段 | 全局 | 新增 | 新全局设置模型 | 是 | 决定 `uiLanguage` 是否显式生效。 |
+| `uiLanguage` | 常规 | 规划字段 | 全局 | 新增 | 新全局设置模型 + i18n 层 | 是 | 单字段承载语言策略；`system` 表示跟随系统，显式值表示固定语言。 |
 | `startupPage` | 常规 | 规划字段 | 全局 | 部分存在 | `App.tsx` 角色页能力上提 | 是 | 需要和当前 role / page 路由模型对齐。 |
 | `restoreLastSessionOnLaunch` | 常规 | 规划字段 | 全局 | 新增 | 新全局设置模型 | 是 | 产品层恢复，不是 runtime 恢复。 |
 | `openRecentWorkspaceOnLaunch` | 常规 | 规划字段 | 全局 | 新增 | 新全局设置模型 | 是 | 和 `startupPage` 联动。 |

@@ -307,7 +307,7 @@ export const getAgentRuntimeSettings = async (): Promise<AgentRuntimeSettings> =
   return invoke<AgentRuntimeSettings>('get_agent_runtime_settings');
 };
 
-const updateAgentRuntimeSettings = async (
+export const updateAgentRuntimeSettings = async (
   input: Partial<AgentRuntimeSettings>
 ): Promise<AgentRuntimeSettings> => {
   if (!isTauriRuntimeAvailable()) {

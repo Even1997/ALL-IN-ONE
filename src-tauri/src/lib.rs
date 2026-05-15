@@ -40,8 +40,10 @@ use tauri_plugin_shell::ShellExt;
 const GOODNIGHT_SKILLS_DIR_NAME: &str = "goodnight-skills";
 const GOODNIGHT_BUILTIN_SKILLS_DIR_NAME: &str = "built-in";
 const GOODNIGHT_IMPORTED_SKILLS_DIR_NAME: &str = "imported";
+const GOODNIGHT_REMEMBERED_SKILLS_DIR_NAME: &str = "remembered";
 const GOODNIGHT_SKILL_MARKDOWN_FILE_NAME: &str = "SKILL.md";
 const GOODNIGHT_SKILL_MANIFEST_FILE_NAME: &str = "skill.json";
+const GOODNIGHT_SKILL_SOURCE_REGISTRY_FILE_NAME: &str = "sources.json";
 const GOODNIGHT_BUILTIN_SKILL_IDS: &[&str] = &[
     "goodnight-boundary",
     "goodnight-workspace-context",
@@ -427,6 +429,16 @@ struct DeleteLibrarySkillParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SkillSourceRegistryEntry {
+    skill_id: String,
+    name: String,
+    source: String,
+    source_path: String,
+    manifest_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct SkillDiscoveryEntry {
     pub(crate) id: String,
     pub(crate) name: String,
@@ -687,6 +699,15 @@ fn get_goodnight_imported_skill_root_from_data_dir(app_data_dir: &Path) -> PathB
     get_goodnight_skill_root_from_data_dir(app_data_dir).join(GOODNIGHT_IMPORTED_SKILLS_DIR_NAME)
 }
 
+fn get_goodnight_remembered_skill_root_from_data_dir(app_data_dir: &Path) -> PathBuf {
+    get_goodnight_skill_root_from_data_dir(app_data_dir).join(GOODNIGHT_REMEMBERED_SKILLS_DIR_NAME)
+}
+
+fn get_skill_source_registry_path(app_data_dir: &Path) -> PathBuf {
+    get_goodnight_skill_root_from_data_dir(app_data_dir)
+        .join(GOODNIGHT_SKILL_SOURCE_REGISTRY_FILE_NAME)
+}
+
 fn get_project_skill_root(project_root: &Path) -> PathBuf {
     project_root.join(".agents").join("skills")
 }
@@ -703,6 +724,7 @@ fn ensure_goodnight_skill_library_dirs(app_data_dir: &Path) -> Result<(), String
         get_goodnight_skill_root_from_data_dir(app_data_dir),
         get_goodnight_builtin_skill_root_from_data_dir(app_data_dir),
         get_goodnight_imported_skill_root_from_data_dir(app_data_dir),
+        get_goodnight_remembered_skill_root_from_data_dir(app_data_dir),
     ] {
         fs::create_dir_all(&dir).map_err(|error| {
             format!(
@@ -714,6 +736,103 @@ fn ensure_goodnight_skill_library_dirs(app_data_dir: &Path) -> Result<(), String
     }
 
     Ok(())
+}
+
+fn read_skill_source_registry(app_data_dir: &Path) -> Result<Vec<SkillSourceRegistryEntry>, String> {
+    let registry_path = get_skill_source_registry_path(app_data_dir);
+    if !registry_path.is_file() {
+        return Ok(Vec::new());
+    }
+
+    let source = read_file_as_string(&registry_path).map_err(|error| {
+        format!(
+            "Failed to read skill source registry {}: {}",
+            registry_path.display(),
+            error
+        )
+    })?;
+
+    serde_json::from_str(&source).map_err(|error| {
+        format!(
+            "Failed to parse skill source registry {}: {}",
+            registry_path.display(),
+            error
+        )
+    })
+}
+
+fn write_skill_source_registry(
+    app_data_dir: &Path,
+    entries: &[SkillSourceRegistryEntry],
+) -> Result<(), String> {
+    let registry_path = get_skill_source_registry_path(app_data_dir);
+    let source = serde_json::to_string_pretty(entries)
+        .map_err(|error| format!("Failed to serialize skill source registry: {}", error))?;
+
+    fs::write(&registry_path, source).map_err(|error| {
+        format!(
+            "Failed to write skill source registry {}: {}",
+            registry_path.display(),
+            error
+        )
+    })
+}
+
+fn upsert_skill_source_registry_entry(
+    app_data_dir: &Path,
+    entry: SkillSourceRegistryEntry,
+) -> Result<(), String> {
+    let mut entries = read_skill_source_registry(app_data_dir)?;
+    if let Some(existing) = entries
+        .iter_mut()
+        .find(|existing| existing.skill_id == entry.skill_id)
+    {
+        *existing = entry;
+    } else {
+        entries.push(entry);
+    }
+    entries.sort_by(|left, right| left.skill_id.cmp(&right.skill_id));
+    write_skill_source_registry(app_data_dir, &entries)
+}
+
+fn remove_skill_source_registry_entry(app_data_dir: &Path, skill_id: &str) -> Result<(), String> {
+    let mut entries = read_skill_source_registry(app_data_dir)?;
+    entries.retain(|entry| entry.skill_id != skill_id);
+    write_skill_source_registry(app_data_dir, &entries)
+}
+
+fn remember_personal_skill_snapshot(
+    app_data_dir: &Path,
+    skill_dir: &Path,
+    source: &str,
+    source_path: &str,
+) -> Result<SkillSourceRegistryEntry, String> {
+    let descriptor = load_skill_descriptor(skill_dir, true)?;
+    let remembered_dir =
+        get_goodnight_remembered_skill_root_from_data_dir(app_data_dir).join(&descriptor.id);
+    if remembered_dir.is_dir() {
+        fs::remove_dir_all(&remembered_dir).map_err(|error| {
+            format!(
+                "Failed to replace remembered skill snapshot {}: {}",
+                remembered_dir.display(),
+                error
+            )
+        })?;
+    }
+
+    copy_directory_contents(skill_dir, &remembered_dir)?;
+
+    let registry_entry = SkillSourceRegistryEntry {
+        skill_id: descriptor.id.clone(),
+        name: descriptor.name.clone(),
+        source: source.to_string(),
+        source_path: source_path.to_string(),
+        manifest_path: display_project_storage_path(
+            remembered_dir.join(GOODNIGHT_SKILL_MANIFEST_FILE_NAME),
+        ),
+    };
+    upsert_skill_source_registry_entry(app_data_dir, registry_entry.clone())?;
+    Ok(registry_entry)
 }
 
 fn copy_directory_contents(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
@@ -1250,6 +1369,8 @@ pub(crate) fn collect_skill_discovery_entries(
     let home_dir = resolve_home_dir()?;
     let builtin_root = get_goodnight_builtin_skill_root_from_data_dir(app_data_dir);
     let imported_root = get_goodnight_imported_skill_root_from_data_dir(app_data_dir);
+    let remembered_root = get_goodnight_remembered_skill_root_from_data_dir(app_data_dir);
+    let source_registry_entries = read_skill_source_registry(app_data_dir)?;
     let mut seen_skill_ids = HashSet::new();
     let mut entries = Vec::new();
 
@@ -1291,11 +1412,17 @@ pub(crate) fn collect_skill_discovery_entries(
             continue;
         }
 
+        let registry_source = source_registry_entries
+            .iter()
+            .find(|entry| entry.skill_id == descriptor.id)
+            .map(|entry| entry.source.as_str())
+            .unwrap_or("GoodNight imported");
+
         let entry = build_skill_entry(
             app_data_dir,
             &home_dir,
             &skill_dir,
-            "GoodNight imported",
+            registry_source,
             true,
             false,
             true,
@@ -1326,6 +1453,29 @@ pub(crate) fn collect_skill_discovery_entries(
                 entries.push(entry);
             }
         }
+    }
+
+    for remembered in source_registry_entries {
+        if !seen_skill_ids.insert(remembered.skill_id.clone()) {
+            continue;
+        }
+
+        let remembered_dir = remembered_root.join(&remembered.skill_id);
+        if !remembered_dir.is_dir() {
+            continue;
+        }
+
+        let entry = build_skill_entry(
+            app_data_dir,
+            &home_dir,
+            &remembered_dir,
+            &remembered.source,
+            false,
+            false,
+            true,
+            true,
+        )?;
+        entries.push(entry);
     }
 
     entries.sort_by(|left, right| {
@@ -1602,6 +1752,8 @@ fn import_local_skill(
     }
 
     let imported_root = get_goodnight_imported_skill_root_from_data_dir(&app_data_dir);
+    let builtin_root = get_goodnight_builtin_skill_root_from_data_dir(&app_data_dir);
+    let remembered_root = get_goodnight_remembered_skill_root_from_data_dir(&app_data_dir);
     fs::create_dir_all(&imported_root)
         .map_err(|error| format!("Failed to create imported skills directory: {}", error))?;
 
@@ -1670,7 +1822,7 @@ fn import_local_skill(
     };
 
     let home_dir = resolve_home_dir()?;
-    build_skill_entry(
+    let entry = build_skill_entry(
         &app_data_dir,
         &home_dir,
         &target_dir,
@@ -1679,7 +1831,36 @@ fn import_local_skill(
         false,
         true,
         true,
-    )
+    )?;
+
+    let source_is_builtin_seed = path_stays_under_root(&source_path, &builtin_root);
+    if !source_is_builtin_seed {
+        let existing_registry_entry = read_skill_source_registry(&app_data_dir)?
+            .into_iter()
+            .find(|registry_entry| registry_entry.skill_id == entry.id);
+        let source_label = existing_registry_entry
+            .as_ref()
+            .map(|registry_entry| registry_entry.source.as_str())
+            .unwrap_or("GoodNight imported");
+        let source_reference = if path_stays_under_root(&source_path, &remembered_root) {
+            existing_registry_entry
+                .as_ref()
+                .map(|registry_entry| registry_entry.source_path.as_str())
+                .unwrap_or("remembered://skill-library")
+                .to_string()
+        } else {
+            display_project_storage_path(source_path.clone())
+        };
+
+        remember_personal_skill_snapshot(
+            &app_data_dir,
+            &target_dir,
+            source_label,
+            source_reference.as_str(),
+        )?;
+    }
+
+    Ok(entry)
 }
 
 #[tauri::command]
@@ -1735,7 +1916,7 @@ fn import_github_skill(
     let _ = fs::remove_dir_all(&temp_dir);
 
     let home_dir = resolve_home_dir()?;
-    build_skill_entry(
+    let entry = build_skill_entry(
         &app_data_dir,
         &home_dir,
         &target_dir,
@@ -1744,7 +1925,16 @@ fn import_github_skill(
         false,
         true,
         true,
-    )
+    )?;
+
+    remember_personal_skill_snapshot(
+        &app_data_dir,
+        &target_dir,
+        format!("GitHub {}", repo).as_str(),
+        format!("github:{}/{}?ref={}", repo, skill_path, git_ref).as_str(),
+    )?;
+
+    Ok(entry)
 }
 
 #[tauri::command]
@@ -1811,6 +2001,72 @@ fn sync_skill_to_runtime(
 }
 
 #[tauri::command]
+fn uninstall_library_skill(
+    app_handle: tauri::AppHandle,
+    params: DeleteLibrarySkillParams,
+) -> Result<SkillDeleteResult, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
+    ensure_builtin_skills_installed(&app_data_dir)?;
+
+    let skill_id = sanitize_skill_id(params.skill_id.trim());
+    if skill_id.is_empty() {
+        return Err("Skill id cannot be empty.".to_string());
+    }
+
+    let builtin_dir = get_goodnight_builtin_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
+    if builtin_dir.is_dir() {
+        let descriptor = load_skill_descriptor(&builtin_dir, false)?;
+        if is_system_skill(&descriptor.category) {
+            return Err("Built-in skills cannot be uninstalled.".to_string());
+        }
+    }
+
+    let imported_dir =
+        get_goodnight_imported_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
+    if !imported_dir.is_dir() {
+        return Err("Only installed GoodNight skills can be uninstalled.".to_string());
+    }
+
+    if !builtin_dir.is_dir() {
+        let existing_registry_entry = read_skill_source_registry(&app_data_dir)?
+            .into_iter()
+            .find(|registry_entry| registry_entry.skill_id == skill_id);
+        let source_label = existing_registry_entry
+            .as_ref()
+            .map(|registry_entry| registry_entry.source.as_str())
+            .unwrap_or("GoodNight imported");
+        let source_reference = existing_registry_entry
+            .as_ref()
+            .map(|registry_entry| registry_entry.source_path.as_str())
+            .unwrap_or("remembered://skill-library");
+
+        remember_personal_skill_snapshot(
+            &app_data_dir,
+            &imported_dir,
+            source_label,
+            source_reference,
+        )?;
+    }
+
+    fs::remove_dir_all(&imported_dir).map_err(|error| {
+        format!(
+            "Failed to uninstall skill {}: {}",
+            imported_dir.display(),
+            error
+        )
+    })?;
+
+    Ok(SkillDeleteResult {
+        skill_id,
+        deleted_path: display_project_storage_path(imported_dir),
+        deleted: true,
+    })
+}
+
+#[tauri::command]
 fn delete_library_skill(
     app_handle: tauri::AppHandle,
     params: DeleteLibrarySkillParams,
@@ -1832,25 +2088,49 @@ fn delete_library_skill(
         if is_system_skill(&descriptor.category) {
             return Err("Built-in skills cannot be deleted.".to_string());
         }
+
+        return Err("Recommended system skills can only be uninstalled.".to_string());
     }
 
+    let remembered_dir =
+        get_goodnight_remembered_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
     let imported_dir =
         get_goodnight_imported_skill_root_from_data_dir(&app_data_dir).join(&skill_id);
-    if !imported_dir.is_dir() {
+    if !imported_dir.is_dir() && !remembered_dir.is_dir() {
         return Err("Only imported GoodNight skills can be deleted.".to_string());
     }
 
-    fs::remove_dir_all(&imported_dir).map_err(|error| {
-        format!(
-            "Failed to delete skill {}: {}",
-            imported_dir.display(),
-            error
-        )
-    })?;
+    if imported_dir.is_dir() {
+        fs::remove_dir_all(&imported_dir).map_err(|error| {
+            format!(
+                "Failed to delete skill {}: {}",
+                imported_dir.display(),
+                error
+            )
+        })?;
+    }
+
+    if remembered_dir.is_dir() {
+        fs::remove_dir_all(&remembered_dir).map_err(|error| {
+            format!(
+                "Failed to delete remembered skill snapshot {}: {}",
+                remembered_dir.display(),
+                error
+            )
+        })?;
+    }
+
+    remove_skill_source_registry_entry(&app_data_dir, &skill_id)?;
+
+    let deleted_path = if remembered_dir.exists() {
+        display_project_storage_path(remembered_dir)
+    } else {
+        display_project_storage_path(imported_dir)
+    };
 
     Ok(SkillDeleteResult {
         skill_id,
-        deleted_path: display_project_storage_path(imported_dir),
+        deleted_path,
         deleted: true,
     })
 }
@@ -2737,6 +3017,7 @@ pub fn run() {
             import_local_skill,
             import_github_skill,
             sync_skill_to_runtime,
+            uninstall_library_skill,
             delete_library_skill,
             create_agent_shell_session,
             list_agent_shell_sessions,

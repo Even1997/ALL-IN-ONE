@@ -17,6 +17,7 @@ test('global settings page lazy-loads the heavy AI settings tab instead of inlin
   assert.match(pageSource, /const LazyAIChatAISettingsTab = lazy\(async \(\) =>/);
   assert.match(pageSource, /import\('\.\/AIChatAISettingsTab'\)/);
   assert.match(pageSource, /<LazyAIChatAISettingsTab/);
+  assert.doesNotMatch(pageSource, /import\('\.\.\/\.\.\/modules\/ai\/core\/AIService'\)/);
   assert.doesNotMatch(pageSource, /className="chat-settings-ai-layout"/);
 
   assert.match(tabSource, /export const AIChatAISettingsTab/);
@@ -26,8 +27,6 @@ test('global settings page lazy-loads the heavy AI settings tab instead of inlin
   assert.doesNotMatch(tabSource, /chat-settings-ai-companion/);
   assert.doesNotMatch(tabSource, /Current config/);
   assert.doesNotMatch(tabSource, /Custom Headers/);
-  assert.doesNotMatch(tabSource, /Export JSON/);
-  assert.doesNotMatch(tabSource, /Import JSON/);
   assert.doesNotMatch(tabSource, /Import AI Config JSON/);
   assert.doesNotMatch(tabSource, /View Docs/);
   assert.doesNotMatch(tabSource, /Provider details/);

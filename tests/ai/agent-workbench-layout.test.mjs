@@ -103,6 +103,23 @@ test('embedded GN agent hosts provide the gn-agent-workspace ancestor required b
   assert.match(messageListSource, /className="chat-message-list-frame"/);
 });
 
+test('embedded AI chat collapses the outer shell grid when header chrome is hidden so the composer stays pinned to the stage bottom', async () => {
+  const [source, css] = await Promise.all([
+    readFile(aiChatPath, 'utf8'),
+    readFile(aiChatCssPath, 'utf8'),
+  ]);
+
+  assert.match(source, /chat-shell-no-header/);
+  assert.match(
+    css,
+    /\.chat-shell\.chat-shell-embedded\.chat-shell-no-header\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\);/,
+  );
+  assert.match(
+    css,
+    /\.chat-shell\.chat-shell-embedded\.chat-shell-no-header\s*>\s*\.chat-embedded-content-frame\s*\{[\s\S]*?height:\s*100%;[\s\S]*?overflow:\s*hidden;/,
+  );
+});
+
 test('Agent workbench has low-height responsive rules for the floating plan and stage spacing', async () => {
   const css = await readFile(agentWorkbenchCssPath, 'utf8');
 

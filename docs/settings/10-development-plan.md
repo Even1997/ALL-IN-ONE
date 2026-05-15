@@ -217,7 +217,6 @@
 
 - 首批推荐实现：
   - `uiLanguage`
-  - `followSystemLanguage`
   - `startupPage`
   - `restoreLastSessionOnLaunch`
   - `openRecentWorkspaceOnLaunch`

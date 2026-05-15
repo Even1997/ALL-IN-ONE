@@ -5,90 +5,29 @@ import {
   importGitHubSkill,
   importLocalSkill,
   readSkillFile,
+  uninstallLibrarySkill,
   type SkillDiscoveryEntry,
 } from '../../../modules/ai/skills/skillLibrary';
+import {
+  buildSkillSummary,
+  canDeleteSkill,
+  canUninstallSkill,
+  formatSourceBadge,
+  getSkillPrimaryAction,
+  getSkillTab,
+  getSystemSkillBucket,
+  isBuiltinSystemSkill,
+} from '../../../modules/ai/skills/skillLibraryPresentation';
 import { AI_CHAT_COMMAND_EVENT } from '../../../modules/ai/chat/chatCommands';
 import { MacDialog } from '../../ui/MacDialog';
 import './GNAgentSkillsPage.css';
 
-type SkillLibraryFilter = 'all' | 'recommended' | 'system' | 'personal';
-type SkillSection = Exclude<SkillLibraryFilter, 'all'>;
+type SkillLibraryTab = 'system' | 'personal';
 
-const SKILL_LIBRARY_FILTERS: Array<{ value: SkillLibraryFilter; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'recommended', label: '推荐' },
-  { value: 'system', label: '系统' },
-  { value: 'personal', label: '个人' },
-];
-
-const SKILL_SECTION_META: Record<SkillSection, { label: string; description: string }> = {
-  recommended: {
-    label: '推荐',
-    description: '适合先装上的能力入口',
-  },
-  system: {
-    label: '系统',
-    description: 'GoodNight 自带的基础能力',
-  },
-  personal: {
-    label: '个人',
-    description: '已经进入 .goodnight 的全局技能',
-  },
-};
-
-const getSkillSection = (skill: SkillDiscoveryEntry): SkillSection => {
-  if (skill.category === 'system') {
-    return 'system';
-  }
-
-  if (skill.source === 'GoodNight recommended') {
-    return 'recommended';
-  }
-
-  return 'personal';
-};
-
-const buildSkillKey = (skill: SkillDiscoveryEntry) => `${skill.source}:${skill.id}:${skill.path}`;
+const buildSkillKey = (skill: SkillDiscoveryEntry) => `${skill.id}:${skill.path}`;
 
 const getSkillPromptPath = (skill: SkillDiscoveryEntry) =>
   skill.manifestPath.replace(/skill\.json$/i, 'SKILL.md');
-
-const isSkillInstalled = (skill: SkillDiscoveryEntry) =>
-  skill.category === 'system' || skill.imported;
-
-const formatSourceBadge = (skill: SkillDiscoveryEntry) => {
-  if (skill.category === 'system') {
-    return '系统';
-  }
-
-  if (skill.source === 'GoodNight recommended') {
-    return skill.imported ? '已安装推荐' : '官方推荐';
-  }
-
-  if (skill.imported) {
-    return '已安装';
-  }
-
-  return '可导入';
-};
-
-const buildSkillSummary = (skill: SkillDiscoveryEntry) => {
-  if (skill.category === 'system') {
-    return 'GoodNight 自带的基础系统技能，默认可用。';
-  }
-
-  if (skill.source === 'GoodNight recommended') {
-    return skill.imported
-      ? '官方推荐技能，已经安装到 GoodNight 全局技能库；卸载后仍然可以重新安装。'
-      : 'GoodNight 官方推荐技能，按需安装；如果以后不需要，也可以卸载后再装回来。';
-  }
-
-  if (skill.imported) {
-    return '已经纳入 GoodNight 全局技能库，可直接在聊天中用 /skill 调用。';
-  }
-
-  return '来自外部来源，还没有进入 .goodnight，全局可见后可一键导入。';
-};
 
 const matchesSkillQuery = (skill: SkillDiscoveryEntry, query: string) => {
   if (!query) {
@@ -99,71 +38,115 @@ const matchesSkillQuery = (skill: SkillDiscoveryEntry, query: string) => {
   return haystack.includes(query);
 };
 
-const renderSectionEmptyState = (title: string) => (
-  <article className="gn-agent-skills-list-empty">
-    <strong>{title}里还没有内容</strong>
-    <span>换个筛选条件，或者先导入一些技能到 GoodNight 全局库。</span>
-  </article>
-);
-
 const buildPromptPreview = (content: string) => {
   const trimmed = content.trim();
   if (!trimmed) {
     return '';
   }
 
-  return trimmed.length > 2200 ? `${trimmed.slice(0, 2200)}\n\n...` : trimmed;
+  return trimmed.length > 900 ? `${trimmed.slice(0, 900)}\n\n...` : trimmed;
 };
 
-const SkillListItem: React.FC<{
+const getSkillStateLabel = (skill: SkillDiscoveryEntry) => {
+  if (isBuiltinSystemSkill(skill)) {
+    return '内置';
+  }
+
+  return skill.imported ? '已安装' : '未安装';
+};
+
+const renderEmptyState = (title: string, description: string) => (
+  <article className="gn-agent-skills-empty-state">
+    <strong>{title}</strong>
+    <span>{description}</span>
+  </article>
+);
+
+const SkillRow: React.FC<{
   skill: SkillDiscoveryEntry;
-  active: boolean;
   isWorking: boolean;
-  onSelect: (skill: SkillDiscoveryEntry) => void;
-  onImport: (skill: SkillDiscoveryEntry) => void;
-}> = ({ skill, active, isWorking, onSelect, onImport }) => {
-  const installed = isSkillInstalled(skill);
+  onOpenDetail: (skill: SkillDiscoveryEntry) => void;
+  onInstall: (skill: SkillDiscoveryEntry) => Promise<void>;
+  onUninstall: (skill: SkillDiscoveryEntry) => Promise<void>;
+  onDelete: (skill: SkillDiscoveryEntry) => Promise<void>;
+  onUse: (skill: SkillDiscoveryEntry) => void;
+}> = ({ skill, isWorking, onOpenDetail, onInstall, onUninstall, onDelete, onUse }) => {
+  const primaryAction = getSkillPrimaryAction(skill);
 
   return (
-    <article className={`gn-agent-skills-list-item${active ? ' active' : ''}`}>
+    <article className="gn-agent-skills-row">
       <button
         type="button"
-        className="gn-agent-skills-list-item-main"
-        onClick={() => onSelect(skill)}
+        className="gn-agent-skills-row-main"
+        onClick={() => onOpenDetail(skill)}
       >
-        <div
-          className={`gn-agent-skills-list-item-icon${skill.builtin ? ' system' : skill.imported ? ' personal' : ''}`}
-          aria-hidden="true"
-        >
+        <div className="gn-agent-skills-row-icon" aria-hidden="true">
           {skill.name.slice(0, 1).toUpperCase()}
         </div>
-        <div className="gn-agent-skills-list-item-copy">
-          <div className="gn-agent-skills-list-item-title-row">
+        <div className="gn-agent-skills-row-copy">
+          <div className="gn-agent-skills-row-title">
             <strong>{skill.name}</strong>
             <span className={`gn-agent-skills-source-badge${skill.builtin ? ' builtin' : ''}`}>
               {formatSourceBadge(skill)}
             </span>
           </div>
-          <div className="gn-agent-skills-list-item-meta">
+          <span className="gn-agent-skills-row-summary">{buildSkillSummary(skill)}</span>
+          <div className="gn-agent-skills-row-meta">
             <span>/{skill.id}</span>
             <span>{skill.source}</span>
+            <span>{getSkillStateLabel(skill)}</span>
           </div>
-          <span>{buildSkillSummary(skill)}</span>
-          <code>{skill.path}</code>
         </div>
       </button>
-      {!installed ? (
+
+      <div className="gn-agent-skills-row-actions">
         <button
           type="button"
-          className="gn-agent-skills-list-item-quick-action"
-          disabled={isWorking}
-          onClick={() => void onImport(skill)}
+          className="gn-agent-skills-row-btn secondary"
+          onClick={() => onOpenDetail(skill)}
         >
-          导入
+          查看详情
         </button>
-      ) : (
-        <span className="gn-agent-skills-list-item-status">已安装</span>
-      )}
+        {primaryAction === 'install' ? (
+          <button
+            type="button"
+            className="gn-agent-skills-row-btn"
+            disabled={isWorking}
+            onClick={() => void onInstall(skill)}
+          >
+            安装
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="gn-agent-skills-row-btn"
+            disabled={isWorking}
+            onClick={() => onUse(skill)}
+          >
+            使用
+          </button>
+        )}
+        {canUninstallSkill(skill) ? (
+          <button
+            type="button"
+            className="gn-agent-skills-row-btn secondary"
+            disabled={isWorking}
+            onClick={() => void onUninstall(skill)}
+          >
+            卸载
+          </button>
+        ) : null}
+        {canDeleteSkill(skill) ? (
+          <button
+            type="button"
+            className="gn-agent-skills-row-btn danger"
+            disabled={isWorking}
+            onClick={() => void onDelete(skill)}
+          >
+            删除
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 };
@@ -175,11 +158,11 @@ export const GNAgentSkillsPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<SkillLibraryFilter>('all');
-  const [selectedSkillKey, setSelectedSkillKey] = useState<string | null>(null);
-  const [selectedPromptContent, setSelectedPromptContent] = useState('');
-  const [selectedPromptError, setSelectedPromptError] = useState<string | null>(null);
-  const [isSelectedPromptLoading, setIsSelectedPromptLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<SkillLibraryTab>('system');
+  const [detailSkill, setDetailSkill] = useState<SkillDiscoveryEntry | null>(null);
+  const [detailContent, setDetailContent] = useState('');
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [previewSkill, setPreviewSkill] = useState<SkillDiscoveryEntry | null>(null);
   const [previewContent, setPreviewContent] = useState('');
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -202,6 +185,45 @@ export const GNAgentSkillsPage: React.FC = () => {
   useEffect(() => {
     void loadSkills();
   }, []);
+
+  useEffect(() => {
+    if (!detailSkill) {
+      return;
+    }
+
+    const nextSkill = skills.find((skill) => buildSkillKey(skill) === buildSkillKey(detailSkill));
+    if (nextSkill) {
+      setDetailSkill(nextSkill);
+      return;
+    }
+
+    const fallbackById = skills.find((skill) => skill.id === detailSkill.id);
+    if (fallbackById) {
+      setDetailSkill(fallbackById);
+      return;
+    }
+
+    setDetailSkill(null);
+    setDetailContent('');
+    setDetailError(null);
+    setIsDetailLoading(false);
+  }, [detailSkill, skills]);
+
+  const loadDetailContent = async (skill: SkillDiscoveryEntry) => {
+    setDetailSkill(skill);
+    setDetailContent('');
+    setDetailError(null);
+    setIsDetailLoading(true);
+
+    try {
+      const content = await readSkillFile(getSkillPromptPath(skill));
+      setDetailContent(content);
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
 
   const runAction = async (action: () => Promise<unknown>, successMessage: string) => {
     setIsWorking(true);
@@ -241,30 +263,36 @@ export const GNAgentSkillsPage: React.FC = () => {
 
     const gitRef =
       window.prompt('可选 git ref（branch、tag 或 commit）。留空默认 main。')?.trim() || undefined;
+
     await runAction(
       () => importGitHubSkill({ repo, path, gitRef }),
       'GitHub 技能已经导入到 GoodNight 全局库。'
     );
   };
 
-  const handleDeleteSkill = async (skill: SkillDiscoveryEntry) => {
-    if (!skill.deletable) {
-      return;
-    }
-
-    if (!window.confirm(`确定要从 GoodNight 全局库移除 ${skill.name} 吗？`)) {
-      return;
-    }
-
-    await runAction(() => deleteLibrarySkill(skill.id), '技能已经从 GoodNight 全局库移除。');
+  const handleInstallSkill = async (skill: SkillDiscoveryEntry) => {
+    await runAction(() => importLocalSkill(skill.path), `${skill.name} 已安装到技能库。`);
   };
 
-  const handleQuickImport = async (skill: SkillDiscoveryEntry) => {
-    if (isSkillInstalled(skill)) {
+  const handleUninstallSkill = async (skill: SkillDiscoveryEntry) => {
+    const successMessage =
+      getSkillTab(skill) === 'system'
+        ? `${skill.name} 已卸载，并返回系统推荐列表。`
+        : `${skill.name} 已卸载，个人条目仍保留在列表中。`;
+
+    await runAction(() => uninstallLibrarySkill(skill.id), successMessage);
+  };
+
+  const handleDeleteSkill = async (skill: SkillDiscoveryEntry) => {
+    if (!canDeleteSkill(skill)) {
       return;
     }
 
-    await runAction(() => importLocalSkill(skill.path), `${skill.name} 已经导入到 GoodNight 全局库。`);
+    if (!window.confirm(`确定删除 ${skill.name} 吗？删除后会同时移除安装副本和保留条目。`)) {
+      return;
+    }
+
+    await runAction(() => deleteLibrarySkill(skill.id), `${skill.name} 已从个人技能库删除。`);
   };
 
   const handleUseSkill = (skill: SkillDiscoveryEntry) => {
@@ -287,6 +315,11 @@ export const GNAgentSkillsPage: React.FC = () => {
     setIsPreviewLoading(true);
 
     try {
+      if (detailSkill && buildSkillKey(detailSkill) === buildSkillKey(skill) && detailContent) {
+        setPreviewContent(detailContent);
+        return;
+      }
+
       const content = await readSkillFile(getSkillPromptPath(skill));
       setPreviewContent(content);
     } catch (error) {
@@ -294,6 +327,17 @@ export const GNAgentSkillsPage: React.FC = () => {
     } finally {
       setIsPreviewLoading(false);
     }
+  };
+
+  const handleDetailDialogChange = (open: boolean) => {
+    if (open) {
+      return;
+    }
+
+    setDetailSkill(null);
+    setDetailContent('');
+    setDetailError(null);
+    setIsDetailLoading(false);
   };
 
   const handlePreviewOpenChange = (open: boolean) => {
@@ -309,97 +353,50 @@ export const GNAgentSkillsPage: React.FC = () => {
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const visibleSkills = useMemo(
+    () => skills.filter((skill) => matchesSkillQuery(skill, normalizedQuery)),
+    [normalizedQuery, skills]
+  );
+
+  const systemRecommendedSkills = useMemo(
     () =>
-      skills.filter((skill) => {
-        const matchesFilter = activeFilter === 'all' ? true : getSkillSection(skill) === activeFilter;
-        return matchesFilter && matchesSkillQuery(skill, normalizedQuery);
-      }),
-    [activeFilter, normalizedQuery, skills]
+      visibleSkills.filter(
+        (skill) => getSkillTab(skill) === 'system' && getSystemSkillBucket(skill) === 'recommended'
+      ),
+    [visibleSkills]
+  );
+  const systemInstalledSkills = useMemo(
+    () =>
+      visibleSkills.filter(
+        (skill) => getSkillTab(skill) === 'system' && getSystemSkillBucket(skill) === 'installed'
+      ),
+    [visibleSkills]
+  );
+  const personalSkills = useMemo(
+    () => visibleSkills.filter((skill) => getSkillTab(skill) === 'personal'),
+    [visibleSkills]
   );
 
-  useEffect(() => {
-    if (visibleSkills.length === 0) {
-      setSelectedSkillKey(null);
-      return;
-    }
-
-    if (!selectedSkillKey || !visibleSkills.some((skill) => buildSkillKey(skill) === selectedSkillKey)) {
-      setSelectedSkillKey(buildSkillKey(visibleSkills[0]));
-    }
-  }, [selectedSkillKey, visibleSkills]);
-
-  const selectedSkill = useMemo(
-    () => visibleSkills.find((skill) => buildSkillKey(skill) === selectedSkillKey) || null,
-    [selectedSkillKey, visibleSkills]
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!selectedSkill) {
-      setSelectedPromptContent('');
-      setSelectedPromptError(null);
-      setIsSelectedPromptLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setIsSelectedPromptLoading(true);
-    setSelectedPromptError(null);
-
-    readSkillFile(getSkillPromptPath(selectedSkill))
-      .then((content) => {
-        if (!cancelled) {
-          setSelectedPromptContent(content);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setSelectedPromptContent('');
-          setSelectedPromptError(error instanceof Error ? error.message : String(error));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsSelectedPromptLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedSkill]);
-
-  const groupedSkills = useMemo(() => {
-    return {
-      recommended: visibleSkills.filter((skill) => getSkillSection(skill) === 'recommended'),
-      system: visibleSkills.filter((skill) => getSkillSection(skill) === 'system'),
-      personal: visibleSkills.filter((skill) => getSkillSection(skill) === 'personal'),
-    };
-  }, [visibleSkills]);
-
-  const installedCount = skills.filter((skill) => isSkillInstalled(skill)).length;
-  const importableCount = skills.filter((skill) => !isSkillInstalled(skill)).length;
-  const visibleCount = visibleSkills.length;
-  const promptPreview = buildPromptPreview(selectedPromptContent);
+  const systemCount = systemRecommendedSkills.length + systemInstalledSkills.length;
+  const personalCount = personalSkills.length;
+  const installedCount = skills.filter((skill) => skill.imported || isBuiltinSystemSkill(skill)).length;
+  const detailPreview = buildPromptPreview(detailContent);
 
   return (
     <section className="gn-agent-shell-page gn-agent-skills-page">
       <header className="gn-agent-shell-page-header gn-agent-shell-page-header-stack gn-agent-skills-page-header">
         <div className="gn-agent-skills-toolbar-bar">
           <div className="gn-agent-skills-toolbar-copy">
-            <span className="gn-agent-context-badge">GN Agent</span>
+            <span className="gn-agent-context-badge">技能</span>
             <div>
-              <strong>Skills Library</strong>
-              <span>管理保存在 `.goodnight` 里的 GoodNight 技能资源。</span>
+              <strong>技能库</strong>
+              <span>统一管理系统技能、个人技能和导入来源。</span>
             </div>
           </div>
 
-          <div className="gn-agent-skills-toolbar">
+          <div className="gn-agent-skills-toolbar-actions">
             <button
               type="button"
-              className="gn-agent-skills-action-btn secondary"
+              className="gn-agent-skills-toolbar-btn secondary"
               onClick={() => void loadSkills()}
               disabled={isWorking || isLoading}
             >
@@ -407,7 +404,7 @@ export const GNAgentSkillsPage: React.FC = () => {
             </button>
             <button
               type="button"
-              className="gn-agent-skills-action-btn"
+              className="gn-agent-skills-toolbar-btn"
               onClick={() => void handleImportLocal()}
               disabled={isWorking}
             >
@@ -415,7 +412,7 @@ export const GNAgentSkillsPage: React.FC = () => {
             </button>
             <button
               type="button"
-              className="gn-agent-skills-action-btn"
+              className="gn-agent-skills-toolbar-btn"
               onClick={() => void handleImportGitHub()}
               disabled={isWorking}
             >
@@ -424,7 +421,7 @@ export const GNAgentSkillsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="gn-agent-skills-toolbar-filters">
+        <div className="gn-agent-skills-toolbar-strip">
           <label className="gn-agent-skills-search">
             <span className="gn-agent-skills-search-icon" aria-hidden="true">
               ⌕
@@ -438,213 +435,248 @@ export const GNAgentSkillsPage: React.FC = () => {
             />
           </label>
 
-          <label className="gn-agent-skills-filter">
-            <span className="sr-only">筛选技能分组</span>
-            <select
-              value={activeFilter}
-              onChange={(event) => setActiveFilter(event.target.value as SkillLibraryFilter)}
-              aria-label="技能筛选"
+          <div className="gn-agent-skills-tab-list" role="tablist" aria-label="技能分组">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'system'}
+              className={`gn-agent-skills-tab${activeTab === 'system' ? ' active' : ''}`}
+              onClick={() => setActiveTab('system')}
             >
-              {SKILL_LIBRARY_FILTERS.map((filter) => (
-                <option key={filter.value} value={filter.value}>
-                  {filter.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              系统
+              <span>{systemCount}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'personal'}
+              className={`gn-agent-skills-tab${activeTab === 'personal' ? ' active' : ''}`}
+              onClick={() => setActiveTab('personal')}
+            >
+              个人
+              <span>{personalCount}</span>
+            </button>
+          </div>
         </div>
       </header>
 
       {statusMessage ? <div className="gn-agent-skills-banner success">{statusMessage}</div> : null}
       {errorMessage ? <div className="gn-agent-skills-banner error">{errorMessage}</div> : null}
 
+      <div className="gn-agent-skills-overview-bar">
+        <span>{skills.length} 个技能条目</span>
+        <span>{installedCount} 个已装</span>
+        <span>{visibleSkills.length} 个当前可见</span>
+      </div>
+
       {isLoading ? (
-        <div className="gn-agent-skills-shell">
-          <article className="gn-agent-skills-list-empty">
-            <strong>正在加载技能…</strong>
-            <span>正在扫描 GoodNight 全局技能库和可导入来源。</span>
-          </article>
+        <div className="gn-agent-skills-section-block">
+          {renderEmptyState('正在加载技能库', '正在扫描本地技能、系统推荐和个人技能来源。')}
         </div>
       ) : null}
 
       {!isLoading ? (
-        <div className="gn-agent-skills-shell">
-          <section className="gn-agent-skills-list-panel">
-            <div className="gn-agent-skills-panel-header">
-              <div>
-                <strong>技能列表</strong>
-                <span>按资源列表浏览、筛选并选中技能。</span>
-              </div>
-              <div className="gn-agent-skills-list-meta">
-                <span>{skills.length} 全部</span>
-                <span>{visibleCount} 可见</span>
-                <span>{installedCount} 已安装</span>
-                <span>{importableCount} 待导入</span>
-              </div>
-            </div>
-            {visibleSkills.length === 0 ? (
-              <article className="gn-agent-skills-list-empty">
-                <strong>还没有技能</strong>
-                <span>导入本地技能或从 GitHub 下载后，这里会开始长出你的全局技能库。</span>
-              </article>
-            ) : (
-              Object.entries(SKILL_SECTION_META).map(([section, meta]) => {
-                const sectionSkills = groupedSkills[section as SkillSection];
-
-                return (
-                  <section key={section} className="gn-agent-skills-section">
-                    <div className="gn-agent-skills-section-header">
-                      <div>
-                        <h4>{meta.label}</h4>
-                        <span>{meta.description}</span>
-                      </div>
-                      <strong>{sectionSkills.length}</strong>
-                    </div>
-
-                    <div className="gn-agent-skills-list">
-                      {sectionSkills.length > 0
-                        ? sectionSkills.map((skill) => (
-                            <SkillListItem
-                              key={buildSkillKey(skill)}
-                              skill={skill}
-                              active={selectedSkillKey === buildSkillKey(skill)}
-                              isWorking={isWorking}
-                              onSelect={(nextSkill) => setSelectedSkillKey(buildSkillKey(nextSkill))}
-                              onImport={handleQuickImport}
-                            />
-                          ))
-                        : renderSectionEmptyState(meta.label)}
-                    </div>
-                  </section>
-                );
-              })
-            )}
-          </section>
-
-          <aside className="gn-agent-skills-detail-panel">
-            {selectedSkill ? (
-              <>
-                <div className="gn-agent-skills-panel-header">
+        <div className="gn-agent-skills-stack">
+          {activeTab === 'system' ? (
+            <>
+              <section className="gn-agent-skills-section-block">
+                <div className="gn-agent-skills-section-head">
                   <div>
-                    <strong>技能详情</strong>
-                    <span>当前选中资源的说明、操作和内容预览。</span>
+                    <strong>推荐</strong>
+                    <span>官方推荐，安装后会移动到已装。</span>
                   </div>
+                  <span>{systemRecommendedSkills.length}</span>
                 </div>
-
-                <div className="gn-agent-skills-detail-header">
-                  <span className="gn-agent-skills-detail-eyebrow">当前选中</span>
-                  <div className="gn-agent-skills-detail-title-row">
-                    <strong>{selectedSkill.name}</strong>
-                    <span className={`gn-agent-skills-source-badge${selectedSkill.builtin ? ' builtin' : ''}`}>
-                      {formatSourceBadge(selectedSkill)}
-                    </span>
-                  </div>
-                  <p>{buildSkillSummary(selectedSkill)}</p>
-                  <div className="gn-agent-skills-detail-meta">
-                    <span>命令：/{selectedSkill.id}</span>
-                    <span>来源：{selectedSkill.source}</span>
-                    <span>{isSkillInstalled(selectedSkill) ? '状态：已安装' : '状态：可导入'}</span>
-                  </div>
+                <div className="gn-agent-skills-compact-list">
+                  {systemRecommendedSkills.length > 0
+                    ? systemRecommendedSkills.map((skill) => (
+                        <SkillRow
+                          key={buildSkillKey(skill)}
+                          skill={skill}
+                          isWorking={isWorking}
+                          onOpenDetail={(nextSkill) => void loadDetailContent(nextSkill)}
+                          onInstall={handleInstallSkill}
+                          onUninstall={handleUninstallSkill}
+                          onDelete={handleDeleteSkill}
+                          onUse={handleUseSkill}
+                        />
+                      ))
+                    : renderEmptyState('没有待安装的推荐技能', '当前推荐技能已经安装完毕，或者被搜索条件过滤掉了。')}
                 </div>
+              </section>
 
-                <div className="gn-agent-skills-detail-actions">
-                  {isSkillInstalled(selectedSkill) ? (
-                    <button
-                      type="button"
-                      className="gn-agent-skills-card-btn"
-                      disabled={isWorking}
-                      onClick={() => void handleUseSkill(selectedSkill)}
-                    >
-                      使用
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="gn-agent-skills-card-btn"
-                      disabled={isWorking}
-                      onClick={() => void handleQuickImport(selectedSkill)}
-                    >
-                      导入
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="gn-agent-skills-card-btn"
-                    disabled={isWorking}
-                    onClick={() => void openPreview(selectedSkill)}
-                  >
-                    查看全文
-                  </button>
-                  {selectedSkill.deletable ? (
-                    <button
-                      type="button"
-                      className="gn-agent-skills-card-btn danger"
-                      disabled={isWorking}
-                      onClick={() => void handleDeleteSkill(selectedSkill)}
-                    >
-                      移除
-                    </button>
-                  ) : null}
+              <section className="gn-agent-skills-section-block">
+                <div className="gn-agent-skills-section-head">
+                  <div>
+                    <strong>已装</strong>
+                    <span>包含系统内置技能，以及已经安装的推荐技能。</span>
+                  </div>
+                  <span>{systemInstalledSkills.length}</span>
                 </div>
-
-                <section className="gn-agent-skills-detail-section">
-                  <div className="gn-agent-skills-detail-section-header">
-                    <strong>基本信息</strong>
-                    <span>用于确认调用方式、来源和文件位置。</span>
-                  </div>
-                  <div className="gn-agent-skills-detail-kv">
-                    <div>
-                      <span>调用方式</span>
-                      <code>/{selectedSkill.id}</code>
-                    </div>
-                    <div>
-                      <span>安装状态</span>
-                      <strong>{isSkillInstalled(selectedSkill) ? '已安装' : '可导入'}</strong>
-                    </div>
-                    <div>
-                      <span>库内位置</span>
-                      <code>{selectedSkill.path}</code>
-                    </div>
-                    <div>
-                      <span>提示词入口</span>
-                      <code>{getSkillPromptPath(selectedSkill)}</code>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="gn-agent-skills-detail-section gn-agent-skills-detail-preview-card">
-                  <div className="gn-agent-skills-detail-preview-header">
-                    <div>
-                      <span className="gn-agent-skills-detail-eyebrow">技能内容</span>
-                      <h5>SKILL.md 预览</h5>
-                    </div>
-                    <code>{getSkillPromptPath(selectedSkill)}</code>
-                  </div>
-
-                  {isSelectedPromptLoading ? (
-                    <div className="gn-agent-skills-preview-state">正在加载技能内容…</div>
-                  ) : null}
-                  {selectedPromptError ? (
-                    <div className="gn-agent-skills-preview-state error">{selectedPromptError}</div>
-                  ) : null}
-                  {!isSelectedPromptLoading && !selectedPromptError ? (
-                    promptPreview ? (
-                      <pre className="gn-agent-skills-preview-body">{promptPreview}</pre>
-                    ) : (
-                      <div className="gn-agent-skills-preview-state">这个技能还没有可预览的 SKILL.md 内容。</div>
-                    )
-                  ) : null}
-                </section>
-              </>
-            ) : (
-              <article className="gn-agent-skills-list-empty">
-                <strong>先选一个技能</strong>
-                <span>左侧列表会把推荐、系统和个人技能都集中到这里。</span>
-              </article>
-            )}
-          </aside>
+                <div className="gn-agent-skills-compact-list">
+                  {systemInstalledSkills.length > 0
+                    ? systemInstalledSkills.map((skill) => (
+                        <SkillRow
+                          key={buildSkillKey(skill)}
+                          skill={skill}
+                          isWorking={isWorking}
+                          onOpenDetail={(nextSkill) => void loadDetailContent(nextSkill)}
+                          onInstall={handleInstallSkill}
+                          onUninstall={handleUninstallSkill}
+                          onDelete={handleDeleteSkill}
+                          onUse={handleUseSkill}
+                        />
+                      ))
+                    : renderEmptyState('还没有系统已装技能', '这里会显示内置技能，以及已经安装的推荐技能。')}
+                </div>
+              </section>
+            </>
+          ) : (
+            <section className="gn-agent-skills-section-block">
+              <div className="gn-agent-skills-section-head">
+                <div>
+                  <strong>个人</strong>
+                  <span>支持本地导入和 GitHub 导入；卸载不删除，删除才会真正移除。</span>
+                </div>
+                <span>{personalSkills.length}</span>
+              </div>
+              <div className="gn-agent-skills-compact-list">
+                {personalSkills.length > 0
+                  ? personalSkills.map((skill) => (
+                      <SkillRow
+                        key={buildSkillKey(skill)}
+                        skill={skill}
+                        isWorking={isWorking}
+                        onOpenDetail={(nextSkill) => void loadDetailContent(nextSkill)}
+                        onInstall={handleInstallSkill}
+                        onUninstall={handleUninstallSkill}
+                        onDelete={handleDeleteSkill}
+                        onUse={handleUseSkill}
+                      />
+                    ))
+                  : renderEmptyState('还没有个人技能', '可以从本地目录导入，或者直接从 GitHub 下载技能。')}
+              </div>
+            </section>
+          )}
         </div>
       ) : null}
+
+      <MacDialog
+        open={Boolean(detailSkill)}
+        onOpenChange={handleDetailDialogChange}
+        title={detailSkill ? `${detailSkill.name} · 技能详情` : '技能详情'}
+        description={detailSkill ? `${detailSkill.source} · /${detailSkill.id}` : undefined}
+      >
+        {detailSkill ? (
+          <div className="gn-agent-skills-detail-dialog">
+            <div className="gn-agent-skills-detail-hero">
+              <div className="gn-agent-skills-detail-title">
+                <strong>{detailSkill.name}</strong>
+                <span className={`gn-agent-skills-source-badge${detailSkill.builtin ? ' builtin' : ''}`}>
+                  {formatSourceBadge(detailSkill)}
+                </span>
+              </div>
+              <p>{buildSkillSummary(detailSkill)}</p>
+            </div>
+
+            <div className="gn-agent-skills-detail-actions">
+              {getSkillPrimaryAction(detailSkill) === 'install' ? (
+                <button
+                  type="button"
+                  className="gn-agent-skills-toolbar-btn"
+                  disabled={isWorking}
+                  onClick={() => void handleInstallSkill(detailSkill)}
+                >
+                  安装
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="gn-agent-skills-toolbar-btn"
+                  disabled={isWorking}
+                  onClick={() => handleUseSkill(detailSkill)}
+                >
+                  使用
+                </button>
+              )}
+              {canUninstallSkill(detailSkill) ? (
+                <button
+                  type="button"
+                  className="gn-agent-skills-toolbar-btn secondary"
+                  disabled={isWorking}
+                  onClick={() => void handleUninstallSkill(detailSkill)}
+                >
+                  卸载
+                </button>
+              ) : null}
+              {canDeleteSkill(detailSkill) ? (
+                <button
+                  type="button"
+                  className="gn-agent-skills-toolbar-btn danger"
+                  disabled={isWorking}
+                  onClick={() => void handleDeleteSkill(detailSkill)}
+                >
+                  删除
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="gn-agent-skills-toolbar-btn secondary"
+                onClick={() => void openPreview(detailSkill)}
+              >
+                查看全文
+              </button>
+            </div>
+
+            <div className="gn-agent-skills-detail-facts">
+              <div>
+                <span>调用方式</span>
+                <code>/{detailSkill.id}</code>
+              </div>
+              <div>
+                <span>当前状态</span>
+                <strong>{getSkillStateLabel(detailSkill)}</strong>
+              </div>
+              <div>
+                <span>来源</span>
+                <strong>{detailSkill.source}</strong>
+              </div>
+              <div>
+                <span>分类</span>
+                <strong>{getSkillTab(detailSkill) === 'system' ? '系统' : '个人'}</strong>
+              </div>
+              <div>
+                <span>技能路径</span>
+                <code>{detailSkill.path}</code>
+              </div>
+              <div>
+                <span>提示词入口</span>
+                <code>{getSkillPromptPath(detailSkill)}</code>
+              </div>
+            </div>
+
+            <section className="gn-agent-skills-detail-preview">
+              <div className="gn-agent-skills-detail-preview-head">
+                <strong>内容预览</strong>
+                <span>详情弹窗里先展示简介，完整内容可继续点“查看全文”。</span>
+              </div>
+              {isDetailLoading ? (
+                <div className="gn-agent-skills-preview-state">正在加载技能内容…</div>
+              ) : null}
+              {detailError ? (
+                <div className="gn-agent-skills-preview-state error">{detailError}</div>
+              ) : null}
+              {!isDetailLoading && !detailError ? (
+                detailPreview ? (
+                  <pre className="gn-agent-skills-preview-body">{detailPreview}</pre>
+                ) : (
+                  <div className="gn-agent-skills-preview-state">这个技能暂时没有可预览的 SKILL.md 内容。</div>
+                )
+              ) : null}
+            </section>
+          </div>
+        ) : null}
+      </MacDialog>
 
       <MacDialog
         open={Boolean(previewSkill)}

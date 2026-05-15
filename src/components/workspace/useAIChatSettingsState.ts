@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listModelsSupportMode } from '../../modules/ai/core/configStatus';
-import type { AIProviderType } from '../../modules/ai/core/AIService';
+import type { AIProviderType, aiService as sharedAIService } from '../../modules/ai/core/AIService';
 import type { ProviderPreset } from '../../modules/ai/providerPresets';
 import {
   hasUsableAIConfigEntry,
@@ -49,7 +49,7 @@ type UseAIChatSettingsStateInput = {
   mergeModelCandidates: (...groups: string[][]) => string[];
   buildProviderEndpointPreview: (provider: AIProviderType, baseURL: string) => string;
   getSuggestedBaseURL: (provider: AIProviderType, preset: ProviderPreset) => string;
-  loadAIServiceModule: () => Promise<typeof import('../../modules/ai/core/AIService')>;
+  aiServiceClient: typeof sharedAIService;
 };
 
 export const useAIChatSettingsState = ({
@@ -69,7 +69,7 @@ export const useAIChatSettingsState = ({
   mergeModelCandidates,
   buildProviderEndpointPreview,
   getSuggestedBaseURL,
-  loadAIServiceModule,
+  aiServiceClient,
 }: UseAIChatSettingsStateInput) => {
   const buildDraftValidSavedModels = useCallback(
     (savedModels: string[], model: string) => normalizeSavedModels(savedModels, model),
@@ -224,11 +224,10 @@ export const useAIChatSettingsState = ({
     setTestState('testing');
     setTestMessage('');
 
-    const { aiService } = await loadAIServiceModule();
-    const result = await aiService.testConnection(settingsDraft);
+      const result = await aiServiceClient.testConnection(settingsDraft);
     setTestState(result.ok ? 'success' : 'error');
     setTestMessage(result.message);
-  }, [loadAIServiceModule, settingsDraft]);
+  }, [aiServiceClient, settingsDraft]);
 
   const handleLoadModels = useCallback(async () => {
     setIsLoadingModels(true);
@@ -248,8 +247,7 @@ export const useAIChatSettingsState = ({
         return;
       }
 
-      const { aiService } = await loadAIServiceModule();
-      const list = await aiService.listModels(settingsDraft);
+      const list = await aiServiceClient.listModels(settingsDraft);
       syncModelCatalog(settingsDraft.provider, settingsDraft.baseURL, list);
       setSettingsDraft((current) => ({
         ...current,
@@ -267,7 +265,7 @@ export const useAIChatSettingsState = ({
       setIsLoadingModels(false);
     }
   }, [
-    loadAIServiceModule,
+    aiServiceClient,
     mergeModelCandidates,
     resolveDraftActiveModel,
     selectedProviderListMode,
