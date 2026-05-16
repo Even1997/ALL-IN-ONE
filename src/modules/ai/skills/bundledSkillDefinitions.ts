@@ -1,4 +1,10 @@
+// 文件作用：内建技能定义装配层，位于技能库与发现层。
+// 所在链路：负责技能文件解析、目录发现和展示派生。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type { RuntimeSkillDefinition } from '../runtime/skills/runtimeSkillTypes.ts';
+// 这个文件负责把内建技能 markdown 预编译成系统技能定义。
+// 它是 bundled SKILL.md 文本进入 runtime skill 世界的入口。
+// 如果你在排查“某个内建技能默认为什么会存在”，先看这里。
 import { parseSkillMarkdown } from './parseSkillMarkdown.ts';
 import {
   sketchSkillMarkdown,
@@ -6,6 +12,7 @@ import {
   wikiSkillMarkdown,
 } from './bundledSkillMarkdown.ts';
 
+// 这份文件把仓库内建的几份技能 markdown 预编译成 runtime 可直接使用的系统技能定义。
 export type RuntimeSystemSkillId = 'wiki' | 'sketch' | 'ui-design';
 
 export type RuntimeSystemSkillDefinition = RuntimeSkillDefinition & {
@@ -13,6 +20,8 @@ export type RuntimeSystemSkillDefinition = RuntimeSkillDefinition & {
   token: string;
 };
 
+// 内建技能和外部发现技能最终都要落到同一份 RuntimeSkillDefinition 合同上，
+// 这样 runtime 后续就不必区分“这是不是 bundled skill”。
 const buildSystemSkillDefinition = (
   markdown: string,
   fallbackId: RuntimeSystemSkillId
@@ -49,6 +58,7 @@ const buildSystemSkillDefinition = (
   };
 };
 
+// 这里定义了当前默认随产品发行的系统技能集合。
 const SYSTEM_SKILLS: RuntimeSystemSkillDefinition[] = [
   buildSystemSkillDefinition(wikiSkillMarkdown, 'wiki'),
   buildSystemSkillDefinition(sketchSkillMarkdown, 'sketch'),

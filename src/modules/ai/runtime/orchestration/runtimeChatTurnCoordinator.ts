@@ -1,4 +1,10 @@
+// 文件作用：总协调入口，位于turn 编排层。
+// 所在链路：负责单轮执行的路由、流式控制、工具调用和收口。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type { ChatAgentId, LocalAgentCommandResult } from '../../chat/chatAgents.ts';
+// 这是 runtime chat turn 的总协调入口。
+// 一次用户提交会在这里完成会话建立、路由决策、流式输出、工具调用、审批交互和最终收束。
+// 如果你不知道某轮 turn 的问题该从哪里追，通常先从这个文件开始。
 import type { AIChatMessagePart } from '../../../../components/workspace/aiChatMessageParts.ts';
 import type { RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
 import type { AgentTurnSession } from '../session/agentSessionTypes.ts';
@@ -40,6 +46,10 @@ import { createRuntimeChatToolExecutor } from './runtimeChatTurnTools.ts';
 import { isWindowsHost } from '../../../../utils/hostPlatform.ts';
 export { createRuntimeChatToolExecutor };
 
+// 这是前端 runtime chat turn 的总协调入口。
+// 一次提交消息后的主要链路基本都从这里开始：
+// user input -> session/run 建立 -> skill / mcp / agent 路由 -> streaming / tool / approval -> final outcome
+// 如果你不确定某段 turn 逻辑该从哪里追，通常先从这个文件顶层入口往下看。
 export const runRuntimeChatBuiltInAgentTurn = (input: ExecuteRuntimeBuiltInAgentTurnInput) =>
   executeRuntimeBuiltInAgentTurn(input);
 
@@ -56,6 +66,8 @@ export type RuntimeChatTurnCoordinatorInput = {
 };
 
 export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInput): Promise<RuntimeChatTurnResult | void> => {
+  // 这里会同时编排 chat store、runtime store、approval store、MCP store 等多个状态面，
+  // 所以这个函数更像 orchestration 层，而不是单纯的“调用一次模型”。
   const { request, ports, interactionPort, legacy } = input;
   const {
     abortControllerRef,
@@ -219,6 +231,7 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
     return;
   }
 
+  // 如果当前还没有目标会话，这里会先补建 welcome session，确保本轮有稳定 session 容器可写入。
   let targetSessionId = request.targetSessionId || activeSession?.id || '';
   let targetSession = activeSession;
   if (!targetSessionId) {
@@ -235,6 +248,8 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
     pendingProjectFileAction &&
     (isShortPendingActionAffirmation(rawContent) || isShortPendingActionRejection(rawContent))
   ) {
+    // 这是一个特殊分支：用户短句确认/拒绝上一轮的待执行文件提案，
+    // 此时不走完整模型 turn，而是直接把 pending action 收尾。
     const runId = createRunId();
     appendMessage(request.projectId, targetSessionId, createStoredChatMessage('user', rawContent, 'default', { runId }));
 
@@ -264,6 +279,10 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
   const skillIntent: SkillIntent | null = resolveSkillIntent(rawContent, routeableSkills);
   const resolvedSkill = skillIntent?.skill || null;
   const mcpCommand = parseRuntimeMcpCommand(rawContent, runtimeMcpServers);
+  // 到这里，输入已经被切成三种候选模式：
+  // 1. skill invocation
+  // 2. @mcp command
+  // 3. 普通聊天 / agent turn
   const cleanedContent = skillIntent?.cleanedInput.trim()
     ? skillIntent.cleanedInput.trim()
     : rawContent;
@@ -305,6 +324,8 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
     canonicalAdapter.onProviderEvent(event, appendCanonicalEventToSession);
   const seenToolStatuses = new Map<string, RuntimeToolStep['status']>();
   const emitCanonicalToolLifecycle = (toolCalls: RuntimeToolStep[]) => {
+    // 工具调用的 started/completed 生命周期在这里被补到 canonical event 流里，
+    // 保证后面的 timeline composer / render model 有统一的工具事实可读。
     for (const toolCall of toolCalls) {
       const previousStatus = seenToolStatuses.get(toolCall.id);
 

@@ -1,4 +1,10 @@
-﻿import React, { lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// 文件作用：聊天页面总装配组件，位于聊天工作台前端展示层。
+// 所在链路：负责把 runtime 与 store 投影结果组织成聊天界面。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+import React, { lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// AIChat 是工作区里 AI 聊天面的总装配组件。
+// 它负责把会话状态、输入区、消息区、运行时交互区、设置与侧边动作拼成完整聊天工作台。
+// 如果你在排查“聊天页为什么没按预期联动”，通常先从这里看页面级状态和子组件接线。
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
@@ -140,6 +146,10 @@ import './AIChat.css';
 
 void lazy;
 
+// AIChat 是聊天工作台的主入口：
+// 1. 负责把项目上下文、知识库、runtime 会话和 UI 状态装配到一起。
+// 2. 这里适合找“发送消息”“切换会话”“流式渲染”“审批/回放/检查点”等主流程。
+// 3. 如果后续要排查聊天页行为，通常先从这个文件往下追。
 const EMPTY_PAG_REFERENCE_FILES: readonly ReferenceFile[] = [];
 
 type AISettingsDraft = {
@@ -843,6 +853,9 @@ const toConversationHistoryMessages = (messages: StoredChatMessage[] = []) =>
     content: getStoredMessageConversationContent(message),
   }));
 
+// 聊天页根组件：
+// - `variant` 控制它是完整聊天页，还是嵌入到 provider / GN agent 场景中。
+// - 这里集中声明页面级状态，后面再把状态分发给消息区、输入区、runtime 交互卡片等子模块。
 export const AIChat: React.FC<AIChatProps> = ({
   variant = 'default',
   runtimeConfigIdOverride = null,
@@ -883,6 +896,8 @@ export const AIChat: React.FC<AIChatProps> = ({
   const isCollapsed = isControlledCollapse ? Boolean(collapsed) : internalIsCollapsed;
   const showExpandedShell = !isCollapsed || lockExpandedForEmbedded;
 
+  // 这组 ref 主要服务于“流式输出中的瞬时状态”：
+  // 包括自动滚动、当前 live thread、流式草稿缓冲、正在执行的提交和中止控制器。
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -897,6 +912,8 @@ export const AIChat: React.FC<AIChatProps> = ({
   );
   const skillCatalogLifecycleSignatureRef = useRef('');
 
+  // 流式草稿先写入 ref 缓冲，再按节奏刷新到 React state，
+  // 这样可以兼顾首字可见延迟和渲染频率。
   const flushStreamingDraftContents = useCallback(() => {
     setStreamingDraftContents({ ...streamingDraftBufferRef.current });
     const nextLiveThreadId = liveThreadIdRef.current;

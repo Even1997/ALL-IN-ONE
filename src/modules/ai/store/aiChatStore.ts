@@ -1,4 +1,10 @@
+// 文件作用：状态仓库，位于聊天状态存储层。
+// 所在链路：负责聊天消息、时间线、活动与页面状态存储。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import { create } from 'zustand';
+// aiChatStore 是聊天展示层的主 store。
+// 它保存会话、消息、canonical events、活动记录和页面级聊天状态，是 UI 最常直接读取的状态源。
+// 如果你在排查“聊天页上看到的内容到底存在哪”，先看这里。
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { CanonicalEvent } from '@goodnight/runtime-protocol';
 import type { ActivityEntry } from '../skills/activityLog';
@@ -35,6 +41,10 @@ import {
   type ChatSessionEvent,
 } from './chatSessionEventLog.ts';
 
+// 这个 store 负责“聊天持久化真相”：
+// - 每个 project 下有哪些 sessions。
+// - session 内有哪些 messages / canonical events / replay 数据。
+// - 如果问题是“刷新后为什么还在/为什么丢了/为什么顺序不对”，优先看这里。
 export type {
   AssistantTimelineEvent,
   RuntimeQuestionItem,
@@ -153,6 +163,8 @@ const createProjectState = (): ChatProjectState => ({
   activityEntries: [],
 });
 
+// 持久化数据可能来自旧版本，因此进入内存前先做一层归一化：
+// 补 timeline、补 sessionId、重建 eventLog / projection，避免历史数据把 UI 弄乱。
 const normalizeAssistantMessage = (message: StoredChatMessage): StoredChatMessage => {
   if (message.role !== 'assistant') {
     return message;
@@ -310,6 +322,8 @@ export const createChatSession = (
   title = '新对话',
   providerId: AgentProviderId = 'built-in'
 ): ChatSession => {
+  // 新会话初始化时就写入第一条 session 事件，
+  // 后续 projection / replay 会基于这条事件链继续推导。
   const now = Date.now();
   const id = createSessionId();
   return {
@@ -342,6 +356,10 @@ export const useAIChatStore = create<AIChatStoreState>()(
   persist(
     (set) => ({
       projects: {},
+
+      // 这一段是聊天 store 的核心写接口集合。
+      // 以后你如果让我“找追加消息”“找绑定 runtime thread”“找切换会话”，
+      // 基本都可以从这里的 action 名字直接定位。
 
       ensureProjectState: (projectId) =>
         set((state) => ({

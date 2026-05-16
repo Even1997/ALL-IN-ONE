@@ -1,4 +1,10 @@
+// 文件作用：assistant 时间线构造层，位于聊天状态存储层。
+// 所在链路：负责聊天消息、时间线、活动与页面状态存储。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type { RuntimeToolStep } from '../runtime/agent-kernel/agentKernelTypes.ts';
+// 这个文件负责 assistant timeline 的结构、构造和更新规则。
+// 它把文本、thinking、工具、审批、问题等过程事实编排成 assistant message.timeline。
+// 如果你在排查“assistant 时间线为什么长这样”，先看这里。
 import type { AgentStoredRuntimeEvent } from '../runtime/dispatch/agentEvents.ts';
 import {
   mapRuntimeEvents,
@@ -13,6 +19,10 @@ import {
   type AIChatMessagePart,
 } from '../../../components/workspace/aiChatMessageParts.ts';
 
+// assistantTimeline 负责把“助手消息内容”变成可渲染、可持久化的时间线：
+// - narrative 部分包括 thinking / text / error。
+// - runtime 部分包括 tool_use / tool_result / approval / question。
+// - 如果问题是“为什么消息里会拆出多个 lane / 多个事件块”，优先从这里看。
 export type RuntimeQuestionOption = {
   label: string;
   description?: string;
@@ -176,6 +186,8 @@ const resolveElapsedSeconds = (startedAt: number, referenceTime: number) => {
   return Math.max(0.1, Math.round(elapsedMs / 100) / 10);
 };
 
+// 第一层转换：把 message parts 变成 timeline 事件。
+// 这里还保留“thinking”和“text”的语义边界，方便后面分 lane 渲染。
 export const buildAssistantTimelineFromParts = (
   parts: AIChatMessagePart[],
   options?: { createdAt?: number }
@@ -213,6 +225,8 @@ export const buildAssistantTimelineFromParts = (
   });
 };
 
+// 第二层转换：把原始字符串内容先解析成结构化 parts，再转成 timeline。
+// 也就是说，字符串消息进入聊天 UI 之前，通常都会经过这层标准化。
 export const buildAssistantTimelineFromContent = (
   content: string,
   options?: {
@@ -234,6 +248,10 @@ export const buildAssistantTimelineFromContent = (
   });
 };
 
+// 这个函数是“增量更新”入口：
+// - narrative 重新按最新内容生成。
+// - runtime 事件沿用已有 timeline 中的真相数据。
+// 这样可以保证流式文本更新时，不会把工具/审批这些 runtime 事件洗掉。
 export const buildAssistantTimelineUpdate = (
   content: string,
   currentTimeline: AssistantTimelineEvent[] = [],

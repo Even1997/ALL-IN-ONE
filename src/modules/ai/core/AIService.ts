@@ -1,4 +1,10 @@
+// 文件作用：AI 服务入口，位于AI 接入核心层。
+// 所在链路：负责模型调用、流式输出与底层 AI 协议接入。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type { ChangeScope, AIStreamChunk } from '../../../types/index.ts';
+// AIService 是旧有 AI 能力接入层的总入口之一。
+// 它负责组织 provider 请求、流式输出、工具协议识别与部分执行辅助，是聊天能力的底层服务面。
+// 如果你在排查“模型请求、流式返回、工具标记识别”为何异常，先看这里。
 import { v4 as uuidv4 } from 'uuid';
 import {
   ToolExecutor,
@@ -10,6 +16,10 @@ import {
 import { buildAIConfigurationError, hasUsableAIConfiguration, listModelsSupportMode } from './configStatus.ts';
 import { withRetry } from '../runtime/retry/withRetry.ts';
 
+// AIService 是旧版/通用 AI 调用入口：
+// - 上层把“请求 + handler”交给它。
+// - 它负责配置校验、system prompt、provider 调用、工具循环和流式回调。
+// - 如果要排查“为什么模型回答了什么/为什么触发工具/为什么停止”，优先从这里看。
 export type AIModule = 'feature-tree' | 'canvas' | 'code-editor' | 'backend' | 'bug-fix' | 'deploy';
 export type AIAction = 'generate' | 'modify' | 'review' | 'fix' | 'explain' | 'optimize';
 export type AIProviderType = 'openai-compatible' | 'anthropic';
@@ -126,6 +136,8 @@ type OpenAICompatiblePartialToolCall = {
   partialArguments: string;
 };
 
+// 这个类更偏“服务编排层”，不是单纯的 provider adapter。
+// 它把 provider 输出、工具协议和前端 handler 串成一个完整回合。
 class AIService {
   private config: AIConfig = {
     provider: 'openai-compatible',
@@ -157,6 +169,7 @@ class AIService {
     return hasUsableAIConfiguration(this.config);
   }
 
+  // `request` 是面向结构化业务请求的入口，常用于带 module/action/scope 的场景。
   async request(request: Omit<AIRequest, 'id'>, handler: AIStreamHandler): Promise<string> {
     const requestId = uuidv4();
     const fullRequest: AIRequest = { ...request, id: requestId };
@@ -201,6 +214,7 @@ class AIService {
     return requestId;
   }
 
+  // `chat` 是更轻量的纯对话入口，适合直接把 prompt 送进 agent loop。
   async chat(
     prompt: string,
     handlers?: {
@@ -488,6 +502,10 @@ ${this.buildToolInstructions()}
     handler?: AIStreamHandler,
     options?: RunAgentLoopOptions
   ): Promise<RunAgentLoopResult> {
+    // 核心回合循环：
+    // 1. 先向 provider 要一轮回答。
+    // 2. 如果回答里带工具调用，就执行工具并把结果回灌给模型。
+    // 3. 最多循环 4 轮，避免协议异常时无限递归。
     const messages = [...inputMessages];
     let transcript = '';
     let final = '';

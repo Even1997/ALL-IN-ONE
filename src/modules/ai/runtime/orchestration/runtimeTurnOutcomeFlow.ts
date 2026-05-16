@@ -1,8 +1,18 @@
+// 文件作用：流程适配层，位于turn 编排层。
+// 所在链路：负责单轮执行的路由、流式控制、工具调用和收口。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个文件负责把一轮 runtime 执行结果沉淀成活动记录，是“执行完成后置处理层”。
+// 它不参与 turn 如何执行，只负责在结束后提炼 changed paths、activity entry 和供 replay / timeline 使用的摘要。
+// 如果你在排查“本轮明明改了文件但活动流没显示”或“结果摘要里缺少改动文件”，通常先看这里。
 import type { ActivityEntry } from '../../skills/activityLog.ts';
 
+// 这一层负责把 turn 结果翻译成“活动记录 + replay/timeline 摘要”。
+// 它不决定如何执行 turn，只负责 turn 结束后如何沉淀结果。
 const extractRuntimeChangedPaths = (content: string) =>
   Array.from(content.matchAll(/`([^`]+\.(?:md|json|html|tsx|ts|css))`/g)).map((match) => match[1]);
 
+// 没有显式 changedPaths 时，会从结果正文里尝试提取被反引号包住的文件路径，
+// 让活动流至少能展示出本轮涉及了哪些文件。
 export const buildRuntimeChangedPathActivityEntry = (input: {
   createId: () => string;
   runId: string;
@@ -33,6 +43,8 @@ export const buildRuntimeChangedPathActivityEntry = (input: {
   };
 };
 
+// project file flow 和 local agent flow 都会在这里把成功/失败结果转成统一摘要，
+// 方便 activity log、timeline summary、replay 复用同一套结果描述。
 export const buildRuntimeProjectFileAutoExecuteSuccess = (input: {
   createId: () => string;
   runId: string;

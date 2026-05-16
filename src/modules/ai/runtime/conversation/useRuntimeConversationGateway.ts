@@ -1,3 +1,9 @@
+// 文件作用：界面侧行为封装 Hook，位于会话投影层。
+// 所在链路：负责聚合多路状态，生成页面可消费的会话视图。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个 hook 为 React 组件提供 runtimeConversationGateway 的订阅入口。
+// 它负责把 gateway 切成适合组件消费的片段，减少不必要重渲染。
+// 如果你在排查“组件为什么拿到的是这份会话投影数据”，先看这里。
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { ActivityEntry } from '../../skills/activityLog.ts';
@@ -27,6 +33,9 @@ import type { RuntimeSkillDefinition } from '../skills/runtimeSkillTypes.ts';
 import type { AgentTeamRunRecord } from '../teams/teamTypes.ts';
 import type { ChatSession, StoredChatMessage } from '../../store/aiChatStore.ts';
 
+// useRuntimeConversationGateway 是 React 侧读取“当前活动会话”的主要入口。
+// 它把 chat store、runtime store、approval store、mcp store 的多路数据拆成若干 slice，
+// 再按需组合，减少页面直接跨多个 store 取值的复杂度。
 const EMPTY_MESSAGES: StoredChatMessage[] = [];
 const EMPTY_ACTIVITY_ENTRIES: ActivityEntry[] = [];
 const EMPTY_SESSIONS: ChatSession[] = [];
@@ -48,6 +57,8 @@ const EMPTY_RUN_STATE_SIGNALS = {
 const useActiveConversationBase = (input?: {
   projectId?: string | null;
 }) => {
+  // base 层只解决“当前项目 / 当前活动 session / thread ids 是谁”，
+  // 后面的 slice 都建立在这个最小上下文之上。
   const currentProject = useProjectStore((state) => state.currentProject);
   const projectId = input?.projectId ?? currentProject?.id ?? null;
   const projectChatState = useAIChatStore(
@@ -82,6 +93,9 @@ const useActiveConversationSelectionSlice = (base: ActiveConversationBase) => ({
   ...base.threadIds,
 });
 
+// 这组 slice hook 的职责是把不同关注点拆开：
+// messages / liveState / approvals / tasks / recovery 各自单独订阅，
+// 这样组件不会因为无关状态变化而全部重渲染。
 const useActiveConversationMessagesSlice = (base: ActiveConversationBase) => ({
   messages: base.selection.activeSession?.messages || EMPTY_MESSAGES,
   activityEntries: base.activityEntries,
@@ -247,6 +261,8 @@ export const useRuntimeConversationGateway = (input?: {
   threads: AgentThreadRecord[];
   recoveryByThread: ReturnType<typeof useAgentRuntimeStore.getState>['recoveryByThread'];
 } => {
+  // 完整 gateway 在这里把各个 slice 重新组装回 projection，
+  // 供 AIChat 等上层页面一次性消费。
   const base = useActiveConversationBase(input);
   const threads = useAgentRuntimeStore((state) =>
     base.projectId ? state.threadsByProject[base.projectId] || EMPTY_THREADS : EMPTY_THREADS,

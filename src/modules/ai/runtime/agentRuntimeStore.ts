@@ -1,4 +1,10 @@
+// 文件作用：状态仓库，位于应用支持层。
+// 所在链路：负责承接当前模块在整体链路中的实现职责。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import { create } from 'zustand';
+// 这是 runtime 侧的主状态仓库，保存线程、运行、会话、任务、工具、记忆等执行态数据。
+// 它偏“运行事实存储”，和 aiChatStore 的聊天展示状态分工不同。
+// 如果你在排查“某轮执行在 runtime 里到底发生了什么”，通常先看这里的状态结构。
 import type {
   AgentBackgroundTaskRecord,
   AgentExecutionAgentRunRecord,
@@ -21,6 +27,10 @@ import type { AgentTeamRunRecord } from './teams/teamTypes.ts';
 import type { StreamingLatencyTrace } from './streamingLatencyTrace.ts';
 import { areStreamingLatencyTracesEqual } from './streamingLatencyTrace.ts';
 
+// agentRuntimeStore 保存 runtime 侧的运行真相：
+// - thread / turn / session / timeline / replay / liveState 都在这里。
+// - chat store 更偏“聊天持久化视角”，这里更偏“执行现场视角”。
+// - 如果问题是“线程当前正在跑什么、工具执行到哪、回放恢复状态是什么”，优先看这里。
 export type AgentRuntimeBinding = {
   providerId: AgentProviderId;
   configId: string | null;
@@ -208,6 +218,8 @@ const createIdleLiveState = (): AgentRuntimeLiveState => ({
   streamingLatencyTrace: null,
 });
 
+// liveState 更新频繁，所以这里专门做了结构比较。
+// 相同状态不重复写入，避免流式阶段把 React / Zustand 订阅刷爆。
 const areTokenUsageEqual = (
   left: AgentRuntimeTokenUsage,
   right: AgentRuntimeTokenUsage,
@@ -254,6 +266,8 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
   teamRunsByThread: {},
   isHydrating: false,
 
+  // createThread / appendTimelineEvent / submitTurn 这一组 action
+  // 是 runtime 线程从“创建 -> 记录过程 -> 累积执行历史”的主入口。
   createThread: (projectId, thread) =>
     set((state) => ({
       threadsByProject: {
@@ -716,6 +730,8 @@ export const useAgentRuntimeStore = create<AgentRuntimeState>((set) => ({
 
   patchLiveState: (threadId, updater) =>
     set((state) => {
+      // liveState 是最频繁变化的一层：
+      // 连接状态、流式文本、token 使用、审批摘要等都会从这里进入 UI。
       const current = state.liveStateByThread[threadId] || createIdleLiveState();
       const next =
         typeof updater === 'function'

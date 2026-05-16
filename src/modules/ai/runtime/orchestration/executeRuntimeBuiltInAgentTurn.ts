@@ -1,3 +1,9 @@
+// 文件作用：执行器，位于turn 编排层。
+// 所在链路：负责单轮执行的路由、流式控制、工具调用和收口。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个文件负责执行内建 agent 的完整单轮对话，是 runtime turn 编排里的“主执行器”之一。
+// 它位于 turn coordinator 之下、agent kernel / tool execution 之上，负责把上下文、技能、记忆、工具循环与最终回复串成一次完整执行。
+// 如果你在排查“内建 agent 为什么没调用工具 / 最终回复被兜底改写 / 技能没有进 prompt”，通常先从这里顺着主流程往下看。
 import type { ToolCall, ToolResult } from '../tools/toolExecutor.ts';
 import type { ReferenceFile } from '../../../knowledge/referenceFiles.ts';
 import type { AITextStreamEvent } from '../../core/AIService.ts';
@@ -30,6 +36,8 @@ const PROCESS_ONLY_REPLY_PATTERN =
 const NON_STANDALONE_FINAL_REPLY_PATTERN =
   /^(?:上面|以上|前面|刚才|如上|前文|前述|the above|as above|as summarized above|the summary above|previously)\b/i;
 
+// 这里专门识别“项目根目录访问失败”这一类工具错误，
+// 让上层可以在最终回复里给出更明确的失败原因，而不是只展示泛化的工具报错。
 const findProjectAccessFailure = (toolCalls: RuntimeToolStep[]) => {
   for (const toolCall of toolCalls) {
     if (toolCall.status !== 'failed' && toolCall.status !== 'blocked') {
@@ -50,6 +58,8 @@ const findProjectAccessFailure = (toolCalls: RuntimeToolStep[]) => {
   return null;
 };
 
+// 当模型把工具轮次耗尽却没给 final 时，这里会从最近几次工具结果里拼一个可读摘要，
+// 避免用户只看到“没有返回内容”这种信息量很低的兜底文案。
 const buildToolLoopFallbackSummary = (toolCalls: RuntimeToolStep[]) => {
   const summarizedCalls = toolCalls
     .filter((toolCall) => toolCall.resultPreview.trim().length > 0)

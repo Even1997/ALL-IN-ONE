@@ -1,7 +1,15 @@
+// 文件作用：标准事件定义与构造器，位于运行时事件分发层。
+// 所在链路：负责统一记录过程事件，并提供可回放的结构。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个文件负责定义和构造 agent/runtime 过程里的标准化事件结构。
+// 文本、工具、压缩、错误、团队运行等事实都会先被整理成这里的事件形态。
+// 如果你在排查“某个过程事件是怎么被记录和回放的”，先看这里。
 import type { CompactionReason } from '../compaction/compactionTypes.ts';
 import type { RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
 import type { AgentTeamRunRecord } from '../teams/teamTypes.ts';
 
+// agentEvents 负责把运行时过程中产生的“文本 / 工具 / 压缩 / 错误”事件，
+// 规整成可存储、可回放、可映射到 UI 的统一结构。
 export type AgentToolCallSnapshot = {
   id: string;
   parentToolCallId?: string | null;
@@ -167,6 +175,8 @@ const parseToolCallFromProtocolBuffer = (protocolContent: string): StreamToolCal
   return events;
 };
 
+// 流式输出里，普通文本和 <tool_use> 协议片段是混在一起到达的。
+// 这个 splitter 负责把它们拆开，避免 UI 把工具协议当普通正文显示。
 export const createStreamingTextSplitter = () => {
   let buffer = '';
   let mode: 'idle' | 'protocol' = 'idle';
@@ -270,6 +280,8 @@ export const createAgentEventState = (): AgentEventState => ({
   errors: [],
 });
 
+// reduceAgentEvent 是 runtime 事件的内存态归并器：
+// 它持续累积“当前可见文本、推理文本、工具调用状态、工具结果和错误集合”。
 export const reduceAgentEvent = (
   state: AgentEventState,
   event: AgentEvent

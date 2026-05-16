@@ -1,3 +1,11 @@
+// 文件作用：解析器，位于技能库与发现层。
+// 所在链路：负责技能文件解析、目录发现和展示派生。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个解析器负责把 SKILL.md 的 frontmatter 和正文拆开，
+// 输出给 skillLibrary / bundled skill definitions 继续组装 runtime skill。
+// 这个文件负责把 SKILL.md 拆成 frontmatter 和正文，是技能加载链路最前面的解析层。
+// 它只处理文本解析与结构提取，不决定技能是否启用、如何展示、如何注入 prompt。
+// 如果你在排查“某个 skill 文件写了但没被系统正确读出来”，先从这里确认 frontmatter 和正文是否被正确拆解。
 export type ParsedSkillFrontmatter = {
   name?: string;
   description?: string;
@@ -33,6 +41,8 @@ const stripWrappingQuotes = (value: string) =>
     ? value.slice(1, -1)
     : value;
 
+// frontmatter 里的值可能包含数组、对象或引号，不能直接按第一个冒号切。
+// 这里用一个轻量扫描器找“当前层级里真正的 key:value 分隔符”。
 const findYamlSeparatorIndex = (value: string) => {
   let quote: '"' | "'" | null = null;
   let squareDepth = 0;
@@ -80,6 +90,8 @@ const findYamlSeparatorIndex = (value: string) => {
   return -1;
 };
 
+// 这里只支持 skill frontmatter 需要的那部分 YAML 标量 / 简单数组能力，
+// 不追求完整 YAML 兼容，目标是稳定解析本项目的技能元数据。
 const parseScalarValue = (rawValue: string) => {
   const value = rawValue.trim();
   if (value === 'true') return true;
@@ -99,6 +111,8 @@ type ParsedYamlResult = {
   nextIndex: number;
 };
 
+// parseYamlBlock 是一个按缩进递归下降的小解析器，
+// 负责把 frontmatter 中的对象 / 数组块还原成 JS 结构。
 const parseYamlBlock = (lines: string[], startIndex: number, indent: number): ParsedYamlResult => {
   let index = startIndex;
   while (index < lines.length) {
@@ -219,6 +233,7 @@ const parseFrontmatterBlock = (frontmatterBlock: string) => {
   return (parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}) as Record<string, unknown>;
 };
 
+// 最终入口先拆 `--- frontmatter --- body`，再对常见列表字段做一次归一化。
 export const parseSkillMarkdown = (markdown: string) => {
   const normalized = markdown.replace(/\r\n/g, '\n');
   const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);

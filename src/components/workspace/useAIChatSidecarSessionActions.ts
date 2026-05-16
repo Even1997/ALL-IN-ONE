@@ -1,4 +1,10 @@
+// 文件作用：界面侧行为封装 Hook，位于聊天工作台前端展示层。
+// 所在链路：负责把 runtime 与 store 投影结果组织成聊天界面。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import { useCallback } from 'react';
+// 这个 hook 负责把聊天页常用的 sidecar session 动作封装成 UI 可直接调用的方法。
+// 典型动作包括创建会话、提交 turn、恢复历史、回答问题和处理审批。
+// 如果你在排查“聊天页按钮如何触发 sidecar 会话动作”，先看这里。
 import type { ChatAgentId } from '../../modules/ai/chat/chatAgents';
 import type { AIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { createStoredChatMessage, useAIChatStore } from '../../modules/ai/store/aiChatStore';
@@ -10,6 +16,10 @@ import {
 } from '../../modules/runtime-sidecar/runtimeSidecarSessionBridge.ts';
 import { getDesktopRuntimeSidecarStatus } from '../../modules/runtime-sidecar/desktopRuntimeSidecar.ts';
 
+// 这个 hook 负责聊天页和 node runtime sidecar 之间的“会话动作桥接”：
+// - 创建 sidecar session
+// - 提交 prompt 到 sidecar
+// - sidecar 不可用时，把失败信息回写到本地聊天会话里
 type UseAIChatSidecarSessionActionsInput = {
   currentProjectId: string | null;
   currentProjectName: string | null;
@@ -56,6 +66,8 @@ export const useAIChatSidecarSessionActions = ({
   setActiveSession,
 }: UseAIChatSidecarSessionActionsInput) => {
   const handleCreateSession = useCallback(() => {
+    // 优先创建 sidecar session；
+    // 如果 sidecar 不可用，再退回到纯本地欢迎会话，保证 UI 至少还能继续工作。
     if (!currentProjectId) {
       return;
     }
@@ -88,6 +100,9 @@ export const useAIChatSidecarSessionActions = ({
 
   const submitPrompt = useCallback(
     async (promptValue: string) => {
+      // 这里的本地兜底逻辑很关键：
+      // 即便 sidecar 没启动，也要把用户输入和错误消息写进聊天记录，
+      // 否则从用户视角会像“点击发送后什么都没发生”。
       const ensureLocalSubmissionSession = (promptValue: string) => {
         if (!currentProjectId) {
           return null;
@@ -127,6 +142,7 @@ export const useAIChatSidecarSessionActions = ({
       }
 
       try {
+        // 正常路径：把当前 prompt、历史消息、引用文件、上下文标签和 runtime 配置一并发给 sidecar。
         const submitted = await submitRuntimeSidecarTurn({
           projectId: currentProjectId || '',
           providerId: runtimeProviderId,
@@ -153,6 +169,7 @@ export const useAIChatSidecarSessionActions = ({
           );
         }
       } catch (error) {
+        // 异常路径同样写回会话，确保错误对用户可见，也方便后续排查。
         const fallbackSessionId = ensureLocalSubmissionSession(promptValue);
         appendSubmissionError(
           fallbackSessionId,

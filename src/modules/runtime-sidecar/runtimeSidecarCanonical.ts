@@ -1,3 +1,9 @@
+// 文件作用：canonical 映射层，位于runtime sidecar 桥接层。
+// 所在链路：负责把 sidecar 事件、快照与前端多个 store 接起来。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个文件负责把 sidecar snapshot 与 assistant timeline 统一映射成 canonical runtime events。
+// 它处在 provider / sidecar 原始输出 与 timeline composer 之间，是运行时事实标准化的关键桥接层。
+// 如果你在排查“后端事件明明到了，但前端 timeline / render model 没反应”，通常先看这里有没有把事实正确翻译出来。
 import type {
   CanonicalEvent,
   CanonicalEventPayloadMap,
@@ -11,6 +17,9 @@ import type {
   RuntimeToolCallRecord,
 } from '@goodnight/runtime-protocol';
 
+// 这一层负责把 sidecar snapshot / assistant timeline 统一翻译成 canonical runtime events。
+// 如果你在排查“后端明明有事件，但前端 timeline / render model 没显示出来”，
+// 一般先看这里是否把原始事实完整映射到了 canonical 事件层。
 const DEFAULT_PROVIDER = 'built-in';
 
 const summarizeText = (value: string | null | undefined, maxLength = 160) => {
@@ -49,6 +58,8 @@ const summarizeToolInput = (input: Record<string, unknown> | undefined) => {
   return serialized === '{}' ? '' : summarizeText(serialized, 320);
 };
 
+// canonical event 需要标记“这条事实来自谁”。
+// 这里给没有显式 source 的事件补一个稳定默认值，方便后续 projection / UI 按来源分组。
 const getDefaultSource = (
   type: CanonicalEventType,
   providerId: string,
@@ -86,6 +97,8 @@ type CreateRuntimeSidecarCanonicalEventInput<TType extends CanonicalEventType> =
   providerMeta?: Record<string, unknown>;
 };
 
+// 这是 sidecar -> canonical 的最小构造器。
+// 后面无论是 snapshot 全量重建，还是单个 tool 结果补事件，都会走这里保持字段一致。
 export const createRuntimeSidecarCanonicalEvent = <TType extends CanonicalEventType>(
   input: CreateRuntimeSidecarCanonicalEventInput<TType>,
 ): Extract<CanonicalEvent, { type: TType }> =>
@@ -107,6 +120,8 @@ export const createRuntimeSidecarCanonicalEvent = <TType extends CanonicalEventT
     ...(input.providerMeta ? { providerMeta: input.providerMeta } : {}),
   }) as Extract<CanonicalEvent, { type: TType }>;
 
+// tool_result 在 assistant timeline 里更偏“原始记录”，
+// 这里把它压成 canonical tool.completed 所需的摘要结构。
 const buildToolCompletedPayload = (
   event: Extract<RuntimeAssistantTimelineEvent, { kind: 'tool_result' }>,
 ) => ({
@@ -117,6 +132,8 @@ const buildToolCompletedPayload = (
   fileChanges: event.fileChanges,
 });
 
+// approval 在 runtime truth 里可能经历“请求 -> 解决”两个阶段，
+// 这里拆成两条 canonical 事件，后续 approval store 和 UI 可以按生命周期消费。
 const appendApprovalEvents = (
   events: CanonicalEvent[],
   state: {
@@ -168,6 +185,8 @@ const appendApprovalEvents = (
   }
 };
 
+// question 事件和 approval 类似，也是一个需要跨时刻闭环的交互事实。
+// 这里保证 sidecar 快照里的“已提问 / 已回答”都能重建成明确事件。
 const appendQuestionEvents = (
   events: CanonicalEvent[],
   state: {
@@ -221,12 +240,15 @@ const appendQuestionEvents = (
   }
 };
 
+// assistant message 的 run.started 时间要覆盖 timeline 里更早的 reasoning / tool 片段，
+// 否则重放时会出现“消息先开始还是工具先开始”顺序错乱。
 const getMessageStartTs = (message: RuntimeMessageRecord) =>
   Math.min(
     message.createdAt,
     ...((message.timeline || []).map((event) => event.createdAt)),
   );
 
+// 只要还有待批准或待回答的问题，这个 run 就不能被视为真正完成。
 const hasPendingUserInteraction = (timeline: RuntimeAssistantTimelineEvent[]) =>
   timeline.some(
     (event) =>
@@ -234,6 +256,8 @@ const hasPendingUserInteraction = (timeline: RuntimeAssistantTimelineEvent[]) =>
       (event.kind === 'question' && event.payload.status === 'pending'),
   );
 
+// run outcome 是给 replay / lifecycle / 已完成状态做归类用的粗粒度结论。
+// 这里不要掺杂 UI 展示偏好，只根据 runtime 事实判断 success / failed。
 const getRunOutcome = (message: RuntimeMessageRecord, snapshotStatus?: RuntimeSessionSnapshot['status']) => {
   if (snapshotStatus === 'failed') {
     return 'failed' as const;

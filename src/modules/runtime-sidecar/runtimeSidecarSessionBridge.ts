@@ -1,4 +1,10 @@
+// 文件作用：会话桥接层，位于runtime sidecar 桥接层。
+// 所在链路：负责把 sidecar 事件、快照与前端多个 store 接起来。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type {
+// 这个 bridge 是前端聊天状态与 runtime sidecar 之间的总接线层。
+// 它负责把 sidecar snapshot/event 映射到 chat store、runtime store、approval store，并暴露会话动作入口。
+// 如果你在排查“sidecar 数据是怎么落到前端各个 store 的”，先看这里。
   CanonicalEvent,
   RuntimeAssistantTimelineEvent,
   RuntimeMcpServerRecord,
@@ -68,6 +74,10 @@ import {
   resolveRuntimeSidecarSnapshotMessageDelta,
 } from './runtimeSidecarMessageDelta.ts';
 
+// runtimeSidecarSessionBridge 是前端和 node runtime sidecar 之间的总桥接层：
+// - 把 sidecar snapshot / event 映射成 chat store、runtime store、approval store 可消费的数据。
+// - 对外暴露“初始化会话、提交 turn、回答问题、处理审批、拉取检查点”等动作入口。
+// - 如果要追 AIChat 和 sidecar 的真实对接链路，这个文件通常是主干入口。
 const initializedProjects = new Set<string>();
 let runtimeEventsSubscribed = false;
 
@@ -113,6 +123,8 @@ const mapSnapshotToChatSession = (
   snapshot: RuntimeSessionSnapshot,
   existingSession?: ChatSession | null,
 ): ChatSession => {
+  // snapshot -> ChatSession 是最关键的一层映射：
+  // 这里把 sidecar 的会话快照翻译成前端聊天页能直接消费的 session 结构。
   const providerId = toProviderId(snapshot.session.providerId);
   const baseSession = existingSession || createChatSession(snapshot.session.projectId, snapshot.session.title, providerId);
   const canonicalEvents = buildCanonicalEventsFromRuntimeSnapshot(snapshot);
@@ -250,6 +262,8 @@ const mapRuntimeTeamRun = (
 const deriveToolCallsFromMessages = (
   messages: RuntimeMessageRecord[],
 ): RuntimeToolStep[] => {
+  // sidecar 返回的工具调用有时散落在 assistant timeline 里，
+  // 这里把 tool_use / tool_result 重新折叠成 runtime store 里的工具投影。
   const toolCalls = new Map<string, RuntimeToolStep>();
 
   messages.forEach((message) => {
@@ -312,6 +326,8 @@ const deriveApprovalsFromMessages = (
   );
 
 const deriveLiveState = (messages: RuntimeMessageRecord[]) => {
+  // liveState 是从“最新 assistant message 的 timeline”里推出来的瞬时前端状态：
+  // 当前是否在 thinking、是否有 pending approval/question、当前跑着哪个工具等都在这里归纳。
   const latestAssistantMessage = [...messages]
     .reverse()
     .find((message) => message.role === 'assistant');
@@ -1259,6 +1275,8 @@ const mapRuntimeConfig = (config?: AIConfigEntry | null) => {
   };
 };
 
+// apply snapshot 是 sidecar 同步到前端的主入口之一：
+// 它会同时更新聊天 session、runtime thread、工具投影、审批投影、liveState 等多个视图。
 export const applyRuntimeSidecarSnapshot = (snapshot: RuntimeSessionSnapshot) => {
   const chatStore = useAIChatStore.getState();
   const runtimeStore = useAgentRuntimeStore.getState();
@@ -1504,6 +1522,7 @@ const ensureRuntimeEventSubscription = () => {
   });
 };
 
+// 页面进入某个项目后，通常先调用这里把该项目的 sidecar sessions 整体拉回前端。
 export const initializeRuntimeSidecarProjectSessions = async (projectId: string) => {
   const client = await ensureDesktopRuntimeSidecar();
   if (!client) {
@@ -1621,6 +1640,7 @@ export const deleteRuntimeSidecarSession = async (input: {
   return result;
 };
 
+// 显式创建 sidecar session，成功后会立即同步成前端 chat session。
 export const createRuntimeSidecarSession = async (input: {
   projectId: string;
   providerId: AgentProviderId;
@@ -1644,6 +1664,8 @@ export const createRuntimeSidecarSession = async (input: {
   return snapshot.session.id;
 };
 
+// 提交 turn 时会把项目信息、权限模式、历史消息、引用文件、上下文标签和运行配置一起发给 sidecar。
+// 如果当前还没有 session，会先隐式创建一个 sidecar session。
 export const submitRuntimeSidecarTurn = async (input: {
   projectId: string;
   providerId: AgentProviderId;
@@ -1692,6 +1714,7 @@ export const submitRuntimeSidecarTurn = async (input: {
   return true;
 };
 
+// 运行中的追问回答会直接回传给 sidecar，再由 sidecar 推下一步执行。
 export const answerRuntimeSidecarQuestion = async (input: RuntimeQuestionAnswerInput) => {
   const client = await ensureDesktopRuntimeSidecar();
   if (!client) {
@@ -1702,6 +1725,7 @@ export const answerRuntimeSidecarQuestion = async (input: RuntimeQuestionAnswerI
   return true;
 };
 
+// 审批按钮点击后的最终结果会通过这里发回 sidecar。
 export const resolveRuntimeSidecarApproval = async (input: RuntimeApprovalResolveInput) => {
   const client = await ensureDesktopRuntimeSidecar();
   if (!client) {

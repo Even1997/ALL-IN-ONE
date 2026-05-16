@@ -1,4 +1,10 @@
+// 文件作用：runtime 交互卡片组件，位于聊天工作台前端展示层。
+// 所在链路：负责把 runtime 与 store 投影结果组织成聊天界面。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import React, { useState } from 'react';
+// 这个文件负责把 runtime approval / question / file diff 等交互事件渲染成可点击卡片。
+// 它只消费消息时间线里已经存在的 runtime 事实，不负责决定这些事实何时产生。
+// 如果你在排查“为什么审批卡片或提问卡片没显示/没法提交”，先看这里的展示分支。
 import { isCommandToolName } from '../../utils/hostPlatform.ts';
 import type {
   RuntimeQuestionItem,
@@ -8,6 +14,8 @@ import type {
 import type { ApprovalRecord } from '../../modules/ai/runtime/approval/approvalTypes';
 import { MacButton, MacInput, StateCard } from '../ui';
 
+// 这组组件负责把 runtime approval / question 事件渲染成可点击的聊天卡片。
+// 它们处在展示层，不负责决定事件真相，只消费 message timeline 里已经存在的数据。
 const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   const oldLines = oldStr.split('\n');
   const newLines = newStr.split('\n');
@@ -49,6 +57,8 @@ const buildInlineDiff = (oldStr: string, newStr: string): string[] => {
   return result;
 };
 
+// question 卡片支持“选项回答”和“自由输入”两种方式，
+// 最终统一回传成字符串答案。
 const RuntimeQuestionBlock: React.FC<{
   item: RuntimeQuestionItem;
   answered: boolean;
@@ -121,6 +131,8 @@ type ApprovalLabels = {
   approvalActionLabelMap: Record<string, string>;
 };
 
+// 审批卡片里的 diff / 文件预览 / 命令预览都集中在这里，
+// 上层只传 display 数据，不需要关心具体展示细节。
 const ApprovalDisplayPreview: React.FC<{
   display?: StoredChatRuntimeApprovalDisplay | null;
   summarizeProjectFilePath: (path: string) => string;
@@ -190,6 +202,9 @@ export const AIChatRuntimeTimelineInteractionEvent: React.FC<{
   approvalRiskLabelMap,
   approvalActionLabelMap,
 }) => {
+  // 这里按事件种类分两条渲染路径：
+  // approval -> 确认卡片
+  // question -> 追问/补充信息卡片
   if (event.kind === 'approval') {
     const tone = event.riskLevel === 'high' ? 'danger' : event.riskLevel === 'medium' ? 'warning' : 'info';
     const state = event.status === 'denied' ? 'error' : 'default';

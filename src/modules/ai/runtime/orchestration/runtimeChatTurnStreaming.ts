@@ -1,4 +1,10 @@
+// 文件作用：流式控制层，位于turn 编排层。
+// 所在链路：负责单轮执行的路由、流式控制、工具调用和收口。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type { AITextStreamEvent } from '../../core/AIService.ts';
+// 这个文件负责 turn 里的流式输出控制。
+// 它会把模型流事件同时写入 canonical events、assistant timeline draft 和 runtime live state。
+// 如果你在排查“thinking/text 流式显示为什么不对”，先看这里。
 import type { RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
 import { createBuiltinRuntimeAdapter } from '../adapters/builtinRuntimeAdapter.ts';
 import {
@@ -12,6 +18,11 @@ import {
 import { createRuntimeStreamingMessageAssembler } from './agentTurnRunner.ts';
 import type { RuntimeChatMessageBridge, RuntimeChatStateBridge } from './runtimeChatTurnStoreBridge.ts';
 
+// 这个 controller 负责把模型流式事件同时送进三条链：
+// 1. canonical events
+// 2. assistant timeline draft / final timeline
+// 3. runtime live state（连接态、token、streaming text）
+// 如果你在查“流式 thinking / text 为什么显示不对”，这 usually 是首个入口。
 export const createRuntimeChatStreamingController = (input: {
   assistantMessageId: string;
   runId: string;
@@ -35,6 +46,7 @@ export const createRuntimeChatStreamingController = (input: {
         return;
       }
 
+      // provider 流事件先落成 canonical truth，再同步更新临时渲染草稿和 live state。
       adapter.onProviderEvent(
         event.kind === 'thinking'
           ? { kind: 'thinking', delta: event.delta }
@@ -69,6 +81,8 @@ export const createRuntimeChatStreamingController = (input: {
       });
     },
     markToolBoundary(): void {
+      // 当模型切到工具执行边界时，提前把当前草稿固化一次，
+      // 避免 tool 阶段把上一段 thinking / text 的流式状态拖得太长。
       const boundaryDraft = streamingAssembler.markToolBoundary();
       input.pushStreamingDraft?.(input.assistantMessageId, {
         timeline: applyAssistantReasoningProgress(
@@ -84,6 +98,7 @@ export const createRuntimeChatStreamingController = (input: {
       });
     },
     finalize(finalContent: string, toolCalls: RuntimeToolStep[]): string {
+      // finalize 会关闭草稿态，并把最终文本 + 工具生命周期合并回正式 assistant timeline。
       const finalDraft = streamingAssembler.buildFinal(finalContent);
       adapter.onProviderEvent(
         { kind: 'done', finalText: finalContent },
@@ -109,6 +124,7 @@ export const createRuntimeChatStreamingController = (input: {
       return finalDraft.content;
     },
     clear(): void {
+      // 失败、中断或提前退出时清空 streaming draft，避免旧草稿残留在 UI。
       input.clearStreamingDraft?.(input.assistantMessageId);
     },
   };

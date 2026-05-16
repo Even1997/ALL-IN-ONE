@@ -1,10 +1,21 @@
+// 文件作用：assistant 渲染模型，位于聊天工作台前端展示层。
+// 所在链路：负责把 runtime 与 store 投影结果组织成聊天界面。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type { StoredChatMessage } from '../../modules/ai/store/aiChatStore.ts';
+// 这个 render model 负责把 assistant message 里的 timeline 和文本事实整理成最终可渲染结构。
+// 它位于 timeline / canonical truth 与 UI 组件之间，主要解决“前端该如何读这些事实”。
+// 如果你在排查“assistant 最终展示内容为什么和时间线不一致”，先看这里。
 import {
   type AssistantTimelineTextEvent,
   type AssistantTimelineEvent,
 } from '../../modules/ai/store/assistantTimeline.ts';
 import type { AIChatMessagePart } from './aiChatMessageParts.ts';
 
+// assistantRenderModel 负责把 assistant timeline 压成最终 UI lane：
+// - thinking -> thinking_lane
+// - 中间文本反馈 -> feedback_lane
+// - 最终答复 -> answer_lane
+// 如果问题是“为什么同一条消息会拆成过程区和最终答案区”，从这里看最直接。
 export type AssistantDraftState = {
   timeline: AssistantTimelineEvent[];
   isStreaming?: boolean;
@@ -41,6 +52,8 @@ type AssistantTextTimelineBlock = {
   timelineOrder: number;
 };
 
+// timeline 里的多个 text 事件不一定都代表最终答案。
+// 这里先把文本块抽出来，后面再决定哪些归 feedback，哪些归 final answer。
 const buildAssistantTextTimelineBlocks = (timeline: AssistantTimelineEvent[]) => {
   const blocks: AssistantTextTimelineBlock[] = [];
 
@@ -65,6 +78,10 @@ const buildAssistantTextTimelineBlocks = (timeline: AssistantTimelineEvent[]) =>
   return blocks;
 };
 
+// render model 的核心职责是“把时间线转成界面语义”：
+// - 最后一个文本块通常视为最终答案。
+// - 前面的文本块视为过程反馈。
+// - reasoning 单独保留到过程 lane，不并入最终答案。
 export const buildAssistantRenderModel = (
   message: StoredChatMessage,
   draftState?: AssistantDraftState,

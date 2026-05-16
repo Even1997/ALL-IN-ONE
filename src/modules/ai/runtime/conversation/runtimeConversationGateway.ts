@@ -1,3 +1,9 @@
+// 文件作用：会话投影网关，位于会话投影层。
+// 所在链路：负责聚合多路状态，生成页面可消费的会话视图。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个 gateway 负责把多个 runtime / chat / activity / approval 状态源整合成会话视图。
+// 它更像前端会话投影层，解决“页面到底该看到哪份综合状态”。
+// 如果你在排查“线程列表、消息、活动、审批之间为什么没对齐”，先看这里。
 import type { CanonicalEvent } from '@goodnight/runtime-protocol';
 import type { ActivityEntry } from '../../skills/activityLog.ts';
 import type { ApprovalRecord } from '../approval/approvalTypes.ts';
@@ -28,6 +34,10 @@ import {
 import { createTimelineComposer } from '../composer/timelineComposer.ts';
 import type { TimelineProjection } from '../composer/timelineComposerTypes.ts';
 
+// 这个文件属于“会话投影层”：
+// - 输入是 store / runtime / approval 等多路原始状态。
+// - 输出是聊天 UI 可直接消费的统一 projection。
+// - 如果问题是“数据有，但页面怎么组织显示”，通常先看这里而不是去改更底层 runtime。
 export type RuntimeConversationThreadIds = {
   approvalThreadId: string | null;
   checkpointThreadId: string | null;
@@ -114,6 +124,8 @@ const shouldKeepRuntimeThread = (
       session.runtimeThreadId === thread.id || matchesRuntimeThreadFallbackSession(session, thread),
   );
 
+// 一个 runtime thread 只应该对应一个有效 session。
+// 这里先清理旧草稿/占位 session，再做绑定去重，避免 UI 出现重复对话。
 const dedupeSessionsByRuntimeThreadId = (sessions: ChatSession[]) => {
   const sessionsByRuntimeThread = new Map<string, ChatSession>();
   const placeholderSessionsByProvider = new Map<string, ChatSession>();
@@ -191,6 +203,8 @@ const sortCanonicalEvents = (events: CanonicalEvent[]) =>
       : left.ts - right.ts,
   );
 
+// canonical events 是 runtime 真相来源；
+// 这里把事件按 runId 聚合成 timeline projection，供上层分 lane 渲染。
 const buildTimelineProjectionByRunId = (events: CanonicalEvent[]) => {
   const composers = new Map<string, ReturnType<typeof createTimelineComposer>>();
 
@@ -259,6 +273,10 @@ export const reconcileRuntimeThreadsWithSessions = (input: {
   sessions: ChatSession[];
   runtimeThreads: AgentThreadRecord[];
 }) => {
+  // 这一步负责“线程 - 会话”对齐：
+  // 1. 移除失效绑定。
+  // 2. 给现有 runtime thread 找到或创建对应 session。
+  // 3. 返回需要写回 store 的 sessions 和绑定结果。
   const runtimeThreads = input.runtimeThreads.filter((thread) =>
     shouldKeepRuntimeThread(thread, input.sessions || []),
   );
@@ -347,6 +365,9 @@ export const buildRuntimeConversationProjection = (input: {
   };
   pendingApprovals: ApprovalRecord[];
 }): RuntimeConversationProjection => {
+  // 这里是聊天页最常消费的总装配函数。
+  // 后续如果要找“当前消息列表 / timeline / approvals / live state / team runs”从哪里汇总，
+  // 直接搜索这个函数名即可。
   const selection = resolveActiveConversationSelection({
     sessions: input.sessions,
     activeSessionId: input.activeSessionId,

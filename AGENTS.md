@@ -129,3 +129,17 @@ Rules:
 - When implementing a new AI page or refactoring AI chat, preserve the semantic separation between thinking, tools, feedback, and final.
 - If a requested design conflicts with this standard, pause and call out the tradeoff explicitly before implementing.
 - If a page intentionally deviates from the standard, document the reason in the relevant code or PR notes.
+
+## Source code comments
+
+For all future work under `src/`, treat Chinese comments as a required maintenance standard rather than an optional polish step.
+
+Rules:
+- Any newly created or modified source file under `src/` must include a Chinese file header near the top.
+- The file header should explicitly cover at least: `文件作用`、`所在链路`、`排查入口`.
+- When a file participates in a larger pipeline, the header should say which layer it belongs to, such as UI composition, conversation projection, timeline composer, runtime orchestration, store, or sidecar bridge.
+- When adding or changing non-trivial logic under `src/`, add concise Chinese navigation comments around key branches, data transformations, lifecycle transitions, fallback paths, or coordination points.
+- Do not add comment spam. Trivial one-line assignments and obvious JSX / type fields do not need line-by-line commentary.
+- Prefer comments that help future navigation and debugging over comments that merely restate syntax.
+- If a `src/` file already has comments, keep them aligned with the current behavior when editing nearby logic.
+- If you touch an older `src/` file that lacks the required file header, add the header as part of the same change.

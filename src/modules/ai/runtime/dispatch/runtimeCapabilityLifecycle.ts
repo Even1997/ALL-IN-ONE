@@ -1,6 +1,14 @@
+// 文件作用：生命周期描述归一层，位于运行时事件分发层。
+// 所在链路：负责统一记录过程事件，并提供可回放的结构。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type { RuntimeSkillDefinition } from '../skills/runtimeSkillTypes.ts';
+// 这个文件负责把不同能力来源的执行事实统一整理成生命周期描述符。
+// 这些描述符会被 timeline、replay、消息输出等多个前端面复用。
+// 如果你在排查“为什么某个能力结果显示成这句文案”，先看这里。
 import type { RuntimeMcpToolCall } from '../mcp/runtimeMcpTypes.ts';
 
+// 这一层把不同能力来源的执行事实，统一压成 timeline / replay / 输出文案都能共用的 descriptor。
+// 如果你在查“为什么聊天里是这句提示”“为什么 replay 里显示成这个事件名”，通常从这里找。
 export type RuntimeLifecycleDescriptor = {
   toolCallId: string;
   toolName: string;
@@ -18,6 +26,8 @@ const MEMORY_ACTION_LABEL: Record<'save' | 'overwrite' | 'rename', string> = {
   rename: 'saved as renamed copy',
 };
 
+// skill 激活本身也被当作一个能力生命周期事件，
+// 这样 timeline / replay 可以记录“本轮为什么开始带着某个 skill 运行”。
 export const buildSkillActivationLifecycleDescriptor = (input: {
   sourceId: string;
   skill: Pick<RuntimeSkillDefinition, 'id' | 'name' | 'source' | 'executionContext'>;
@@ -48,6 +58,8 @@ export const buildSkillActivationLifecycleDescriptor = (input: {
   output: `Activated skill: ${input.skill.name}`,
 });
 
+// 发现技能和加载技能是两个不同阶段：
+// discover 解决“看见哪些技能”，load 解决“本轮实际把哪些技能装进 runtime 提示词”。
 export const buildSkillDiscoveryLifecycleDescriptor = (input: {
   toolCallId: string;
   discoveredSkills: Array<Pick<RuntimeSkillDefinition, 'id' | 'name' | 'source'>>;
@@ -114,6 +126,7 @@ export const buildSkillLoadLifecycleDescriptor = (input: {
     : 'Loaded skills: none',
 });
 
+// approval 也统一套用 descriptor，保证它能像普通 capability 一样进入 timeline / replay。
 export const buildCapabilityApprovalLifecycleDescriptor = (input: {
   approvalId: string;
   actionType: string;
@@ -160,6 +173,8 @@ export const buildCapabilityApprovalLifecycleDescriptor = (input: {
   };
 };
 
+// skill hook 是围绕工具调用前后执行的壳层动作；
+// 这里记录的不是真正工具输出，而是 hook 自己的生命周期结果。
 export const buildSkillHookLifecycleDescriptor = (input: {
   toolCallId: string;
   skillId: string;

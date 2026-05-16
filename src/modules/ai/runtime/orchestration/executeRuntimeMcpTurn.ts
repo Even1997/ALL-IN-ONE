@@ -1,3 +1,9 @@
+// 文件作用：执行器，位于turn 编排层。
+// 所在链路：负责单轮执行的路由、流式控制、工具调用和收口。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个文件负责把“MCP 命令执行”收口成聊天 runtime 可消费的一次 turn 结果，是 MCP 执行适配层。
+// 它位于 runtimeMcpFlow 之上，把底层 tool call 结果翻译成 content、timelineSummary、replayPayload 等聊天侧结构。
+// 如果你在排查“MCP 调用了但聊天时间线没写对 / replay 内容不完整”，一般先看这里的结果封装。
 import {
   buildRuntimeMcpReplayPayload,
   executeRuntimeMcpCommand,

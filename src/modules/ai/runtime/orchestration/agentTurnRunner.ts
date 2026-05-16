@@ -1,3 +1,9 @@
+// 文件作用：运行记录与装配辅助层，位于turn 编排层。
+// 所在链路：负责单轮执行的路由、流式控制、工具调用和收口。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个文件负责描述 runtime turn 记录从排队、运行到完成/失败的基础生命周期，是 turn 记录层的工厂与收口点。
+// 它不真正执行模型或工具，只负责生成和更新 AgentTurnRecord，给更上层的编排与 store 提供稳定状态对象。
+// 如果你在排查“某轮 turn 的状态为什么不对 / 完成时间没落上 / 空回复怎么兜底”，优先从这里看 turn 记录如何被创建和收束。
 import type { AgentProviderId, AgentTurnRecord } from '../agentRuntimeTypes';
 
 const createTurnId = () => `turn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

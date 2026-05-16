@@ -1,3 +1,9 @@
+// 文件作用：执行器，位于turn 编排层。
+// 所在链路：负责单轮执行的路由、流式控制、工具调用和收口。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 这个文件负责执行本地 agent（如本地命令型代理）的一次 turn，是 runtime turn 编排里的另一条执行分支。
+// 它主要把对话上下文、技能、记忆和允许工具整理成 prompt，再调用本地 agent runner，并把结果收口成统一结构。
+// 如果你在排查“本地 agent 输出为空 / 改动路径没被带回 / 技能对本地代理没生效”，先看这里的组装与调用。
 import type { ReferenceFile } from '../../../knowledge/referenceFiles.ts';
 import type { SkillIntent } from '../../workflow/skillRouting.ts';
 import type { AgentMemoryEntry } from '../agentRuntimeTypes.ts';
@@ -47,6 +53,8 @@ export type ExecuteRuntimeLocalAgentTurnResult = {
 export async function executeRuntimeLocalAgentTurn(
   input: ExecuteRuntimeLocalAgentTurnInput
 ): Promise<ExecuteRuntimeLocalAgentTurnResult> {
+  // 先按本轮显式 skill 与项目上下文准备运行时技能，
+  // 保证本地 agent 与内建 agent 一样走统一的技能预处理入口。
   const preparedSkills = await prepareRuntimeSkillsForTurn({
     skills: input.activeSkills,
     explicitSkillId: input.skillIntent?.skill || null,

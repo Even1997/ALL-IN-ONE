@@ -1,3 +1,9 @@
+// 文件作用：模块实现文件，位于runtime 时间线投影层。
+// 所在链路：负责把 canonical 事实重组为时间线视图。
+// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// timelineComposer 负责把 canonical runtime events 重新投影成前端更容易消费的时间线结构。
+// 它位于 canonical truth 和 render/UI 之间，是“事件如何串成过程”的核心层。
+// 如果你在排查“事件都有了但 timeline 不对”，先看这里。
 import type {
   CanonicalEvent,
   ProgressUpdatedPayload,
@@ -19,6 +25,8 @@ import {
   summarizeTimelineToolStarted,
 } from './timelinePresentation.ts';
 
+// timelineComposer 负责把 canonical runtime events 投影成 UI 时间线卡片。
+// 这是“runtime 真相 -> 可读过程卡片”的关键一层，属于展示投影，不应该反向修改底层事件语义。
 const createCard = (
   event: CanonicalEvent,
   phase: TimelinePhase,
@@ -113,6 +121,8 @@ const getRunOutcomeStatus = (
   return 'failed';
 };
 
+// 一个 composer 只服务一个 runId。
+// 追加事件时会持续更新 projection，供聊天页或 agent 页面读取。
 export const createTimelineComposer = (input: { runId: string }): TimelineComposer => {
   const projection: TimelineProjection = {
     runId: input.runId,
@@ -161,6 +171,8 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
   };
 
   const ensureResponseCard = (event: CanonicalEvent, summary?: string) => {
+    // response card 专门承载助手可见输出，
+    // 用来把 reasoning / progress / tooling 和最终答复分出不同阶段。
     const existing = getCardById(responseCardId);
     if (existing) {
       if (summary) {
@@ -194,6 +206,8 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
   };
 
   const finalizeRunningCards = (status: TimelineCardStatus, ts: number) => {
+    // run 结束或失败时，所有仍处于 running 的卡片都要被收口，
+    // 避免 UI 上出现永远不结束的过程态。
     projection.cards.forEach((card) => {
       if (card.status !== 'running') {
         return;
@@ -215,6 +229,8 @@ export const createTimelineComposer = (input: { runId: string }): TimelineCompos
 
   return {
     append(event) {
+      // append 是唯一入口：
+      // 外部不断喂 canonical events，composer 内部按事件类型更新不同阶段卡片。
       projection.events.push(event);
 
       switch (event.type) {
