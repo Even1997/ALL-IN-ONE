@@ -48,6 +48,7 @@ import {
   extractKnowledgeNoteEditorBody,
   serializeKnowledgeNoteMarkdown,
 } from '../../features/knowledge/workspace/knowledgeNoteMarkdown';
+import { createEmptyWordDocument } from '../../features/knowledge/workspace/wordDocumentInterop.ts';
 
 type SidebarTab = 'knowledge' | 'page';
 export type WorkbenchLayoutFocus = 'canvas' | 'balanced' | 'sidebar';
@@ -66,6 +67,7 @@ type KnowledgePathDialogState =
       relativePath: string | null;
       isFolder: boolean;
       inputValue: string;
+      selectedExtension?: string;
     }
   | null;
 
@@ -106,6 +108,10 @@ const normalizeKnowledgeTreeSegment = (value: string) =>
     .replace(/\s+/g, ' ')
     .replace(/[. ]+$/g, '')
     .replace(/-+/g, '-');
+
+const getFileExtension = (value: string) => value.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+const DEFAULT_KNOWLEDGE_FILE_EXTENSION = 'txt';
+const KNOWLEDGE_FILE_EXTENSION_OPTIONS = ['txt', 'md', 'doc', 'docx', 'json', 'html', 'css', 'js', 'ts'];
 
 const joinDiskPath = (basePath: string, fileName: string) => joinFileSystemPath(basePath, fileName);
 
@@ -309,7 +315,9 @@ export const ProductWorkbench = ({
   const [frameEditorDraft, setFrameEditorDraft] = useState('');
   const [isModulePanelOpen, setIsModulePanelOpen] = useState(false);
   const knowledgeRefreshRequestIdRef = useRef(0);
-  const hydratedKnowledgeNoteSignatureRef = useRef('');
+  const hydratedKnowledgeNoteIdRef = useRef<string | null>(null);
+  const hydratedKnowledgeNoteSnapshotRef = useRef('');
+  const latestKnowledgeDraftRef = useRef({ title: '', content: '' });
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastAutoSavedDraftRef = useRef('');
   const lastPersistedSketchSnapshotRef = useRef('');
@@ -402,8 +410,6 @@ export const ProductWorkbench = ({
         ? serverSearchResults
         : filterKnowledgeNotes(serverNotes, normalizedSearch);
   }, [knowledgeSearch, serverNotes, serverSearchQuery, serverSearchResults]);
-  const filteredPageStructure = useMemo(() => filterPageTree(pageStructure, pageSearch), [pageSearch, pageStructure]);
-  const filteredDesignPages = useMemo(() => collectDesignPages(filteredPageStructure), [filteredPageStructure]);
   const selectedServerNote = useMemo(
     () => serverNotes.find((note) => note.id === selectedKnowledgeNoteId) || null,
     [serverNotes, selectedKnowledgeNoteId]
@@ -622,20 +628,56 @@ export const ProductWorkbench = ({
     if (!selectedServerNote) {
       setRequirementDraftTitle('');
       setRequirementDraftContent('');
-      hydratedKnowledgeNoteSignatureRef.current = '';
+      hydratedKnowledgeNoteIdRef.current = null;
+      hydratedKnowledgeNoteSnapshotRef.current = '';
       return;
     }
 
-    const nextHydratedSignature = `${selectedServerNote.id}:${selectedServerNote.title}:${selectedServerNote.bodyMarkdown}`;
-    if (hydratedKnowledgeNoteSignatureRef.current === nextHydratedSignature) {
+    const nextServerSnapshot = serializeKnowledgeNoteMarkdown(
+      selectedServerNote.title,
+      extractKnowledgeNoteEditorBody(selectedServerNote.title, selectedServerNote.bodyMarkdown)
+    );
+    const currentDraftSnapshot = serializeKnowledgeNoteMarkdown(
+      requirementDraftTitle,
+      requirementDraftContent
+    );
+    const noteChanged = hydratedKnowledgeNoteIdRef.current !== selectedServerNote.id;
+
+    if (noteChanged) {
+      hydratedKnowledgeNoteIdRef.current = selectedServerNote.id;
+      hydratedKnowledgeNoteSnapshotRef.current = nextServerSnapshot;
+      setRequirementDraftTitle(selectedServerNote.title);
+      setRequirementDraftContent(
+        extractKnowledgeNoteEditorBody(selectedServerNote.title, selectedServerNote.bodyMarkdown)
+      );
+      setRequirementSaveMessage(null);
       return;
     }
 
-    hydratedKnowledgeNoteSignatureRef.current = nextHydratedSignature;
+    if (currentDraftSnapshot === nextServerSnapshot) {
+      hydratedKnowledgeNoteSnapshotRef.current = nextServerSnapshot;
+      return;
+    }
+
+    const hasLocalDraftChanges = currentDraftSnapshot !== hydratedKnowledgeNoteSnapshotRef.current;
+    if (hasLocalDraftChanges || hydratedKnowledgeNoteSnapshotRef.current === nextServerSnapshot) {
+      return;
+    }
+
+    hydratedKnowledgeNoteSnapshotRef.current = nextServerSnapshot;
     setRequirementDraftTitle(selectedServerNote.title);
-    setRequirementDraftContent(extractKnowledgeNoteEditorBody(selectedServerNote.title, selectedServerNote.bodyMarkdown));
+    setRequirementDraftContent(
+      extractKnowledgeNoteEditorBody(selectedServerNote.title, selectedServerNote.bodyMarkdown)
+    );
     setRequirementSaveMessage(null);
-  }, [selectedServerNote]);
+  }, [requirementDraftContent, requirementDraftTitle, selectedServerNote]);
+
+  useEffect(() => {
+    latestKnowledgeDraftRef.current = {
+      title: requirementDraftTitle,
+      content: requirementDraftContent,
+    };
+  }, [requirementDraftContent, requirementDraftTitle]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -672,6 +714,16 @@ export const ProductWorkbench = ({
       throw new Error(result.error || `写入文件失败：${filePath}`);
     }
   }, []);
+
+  const createKnowledgeFile = useCallback(async (filePath: string) => {
+    const extension = getFileExtension(filePath);
+    if (extension === 'doc' || extension === 'docx') {
+      await createEmptyWordDocument(filePath);
+      return;
+    }
+
+    await writeRequirementFile(filePath, '');
+  }, [writeRequirementFile]);
 
   const renameRequirementFile = useCallback(async (fromPath: string, toPath: string) => {
     const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_rename', {
@@ -807,6 +859,7 @@ export const ProductWorkbench = ({
       relativePath: null,
       isFolder: true,
       inputValue: '新建文件夹',
+      selectedExtension: undefined,
     });
   }, []);
 
@@ -816,7 +869,8 @@ export const ProductWorkbench = ({
       targetDirectory: normalizeRelativePath(relativeDirectory || ''),
       relativePath: null,
       isFolder: false,
-      inputValue: 'new-file.txt',
+      inputValue: 'new-file',
+      selectedExtension: DEFAULT_KNOWLEDGE_FILE_EXTENSION,
     });
   }, []);
 
@@ -828,6 +882,7 @@ export const ProductWorkbench = ({
       relativePath: normalizedPath,
       isFolder,
       inputValue: normalizedPath.split('/').pop() || normalizedPath,
+      selectedExtension: undefined,
     });
   }, []);
 
@@ -865,15 +920,20 @@ export const ProductWorkbench = ({
       return;
     }
 
-    const normalizedName =
+    const normalizedNameBase =
       knowledgePathDialog.mode === 'create-note'
         ? normalizeRequirementFilename(knowledgePathDialog.inputValue)
         : normalizeKnowledgeTreeSegment(knowledgePathDialog.inputValue);
 
-    if (!normalizedName) {
+    if (!normalizedNameBase) {
       setRequirementSaveMessage('请输入有效名称。');
       return;
     }
+
+    const normalizedName =
+      knowledgePathDialog.mode === 'create-file'
+        ? `${normalizedNameBase.replace(/\.[^.]+$/g, '')}.${knowledgePathDialog.selectedExtension || DEFAULT_KNOWLEDGE_FILE_EXTENSION}`
+        : normalizedNameBase;
 
     const baseRelativePath =
       knowledgePathDialog.mode === 'rename-path'
@@ -905,7 +965,7 @@ export const ProductWorkbench = ({
         setRequirementDraftContent('');
         setRequirementSaveMessage(`已创建 ${nextTitle}。`);
       } else if (knowledgePathDialog.mode === 'create-file') {
-        await writeRequirementFile(nextAbsolutePath, '');
+        await createKnowledgeFile(nextAbsolutePath);
         setRequirementSaveMessage(`已创建文件 ${normalizedName}。`);
       } else if (knowledgePathDialog.relativePath) {
         const previousRelativePath = normalizeRelativePath(knowledgePathDialog.relativePath);
@@ -951,6 +1011,7 @@ export const ProductWorkbench = ({
     refreshKnowledgeFilesystem,
     renameRequirementFile,
     updateServerNote,
+    createKnowledgeFile,
     writeRequirementFile,
   ]);
 
@@ -1096,8 +1157,12 @@ export const ProductWorkbench = ({
       return;
     }
 
+    const draftTitleAtSave = requirementDraftTitle;
+    const draftContentAtSave = requirementDraftContent;
     const nextTitle = normalizeKnowledgeNoteTitle(requirementDraftTitle);
     const nextContent = serializeKnowledgeNoteMarkdown(nextTitle, requirementDraftContent);
+    const savedSnapshot = serializeKnowledgeNoteMarkdown(draftTitleAtSave, draftContentAtSave);
+    const normalizedSnapshot = serializeKnowledgeNoteMarkdown(nextTitle, draftContentAtSave);
     const currentFilePath = selectedServerNote.sourceUrl || '';
     const currentRelativePath = getRelativePathWithinKnowledgeRoots(
       currentFilePath,
@@ -1155,7 +1220,14 @@ export const ProductWorkbench = ({
       }
 
       setSelectedKnowledgeNoteId(selectedServerNote.id);
-      setRequirementDraftTitle(nextTitle);
+      const latestDraftSnapshot = serializeKnowledgeNoteMarkdown(
+        latestKnowledgeDraftRef.current.title,
+        latestKnowledgeDraftRef.current.content
+      );
+      if (latestDraftSnapshot === savedSnapshot) {
+        hydratedKnowledgeNoteSnapshotRef.current = normalizedSnapshot;
+        setRequirementDraftTitle(nextTitle);
+      }
       setRequirementSaveMessage(
         shouldSyncMarkdownMirror
           ? `已保存到知识库，并同步 Markdown 镜像：${nextFilePath}`
@@ -1172,9 +1244,9 @@ export const ProductWorkbench = ({
     knowledgeGroupOverrides,
     projectRootDir,
     refreshKnowledgeFilesystem,
-    renameRequirementFile,
     requirementDraftContent,
     requirementDraftTitle,
+    renameRequirementFile,
     selectedServerNote,
     updateServerNote,
     writeRequirementFile,
@@ -1298,21 +1370,6 @@ export const ProductWorkbench = ({
 
     handleAddPageAfter(referencePageId);
   }, [designPages, handleAddPageAfter, handleAddRootPage, selectedPage]);
-
-
-  const handleDeletePageById = useCallback((pageId: string) => {
-    const page = designPages.find((item) => item.id === pageId);
-    if (!page || !currentProject) {
-      return;
-    }
-
-    setPendingDeleteRequest({
-      type: 'page',
-      id: pageId,
-      title: page.name,
-    });
-  }, [currentProject, designPages]);
-
   const handleRequestDeleteModule = useCallback((moduleId: string, moduleTitle: string) => {
     setPendingDeleteRequest({
       type: 'module',
@@ -1461,6 +1518,7 @@ export const ProductWorkbench = ({
     return (
       <Suspense fallback={PRODUCT_WORKBENCH_LAZY_FALLBACK}>
         <LazyProductKnowledgeWorkspacePane
+          projectId={currentProject.id}
           notes={serverNotes}
           filteredNotes={filteredServerNotes}
           diskItems={knowledgeDiskItems}
@@ -1512,15 +1570,15 @@ export const ProductWorkbench = ({
   const renderPageLibraryMain = () => (
     <Suspense fallback={PRODUCT_WORKBENCH_LAZY_FALLBACK}>
       <LazyProductPageWorkspacePane
+        projectId={currentProject?.id || null}
+        projectRootPath={projectRootDir}
+        diskItems={knowledgeDiskItems}
         designPages={designPages}
-        filteredPageStructure={filteredPageStructure}
-        filteredDesignPages={filteredDesignPages}
         selectedPage={selectedPage}
         pageSearch={pageSearch}
         onPageSearchChange={setPageSearch}
         onAddPage={handleAddPageFromSidebar}
         onSelectPage={(pageId) => setManualPageId(pageId)}
-        onDeletePage={handleDeletePageById}
         canvasPreset={canvasPreset}
         isFrameEditorOpen={isFrameEditorOpen}
         frameEditorDraft={frameEditorDraft}
@@ -1533,6 +1591,12 @@ export const ProductWorkbench = ({
         onClearCurrentWireframe={handleClearCurrentWireframe}
         isModulePanelOpen={isModulePanelOpen}
         onCloseModulePanel={() => setIsModulePanelOpen(false)}
+        onCreateNoteAtPath={handleCreateKnowledgeNoteAtPath}
+        onCreateFileAtPath={handleCreateKnowledgeFileAtPath}
+        onCreateFolderAtPath={handleCreateKnowledgeFolderAtPath}
+        onRenameTreePath={handleRenameKnowledgeTreePath}
+        onDeleteTreePaths={handleDeleteKnowledgeTreePaths}
+        onRefreshFilesystem={handleRefreshKnowledgeFilesystem}
         featureTree={tree}
         effectiveAppType={effectiveAppType}
         onRequestDeleteModule={handleRequestDeleteModule}
@@ -1637,6 +1701,23 @@ export const ProductWorkbench = ({
           placeholder={knowledgePathDialog?.isFolder ? '输入文件夹名称' : '输入文件名称'}
           autoFocus
         />
+        {knowledgePathDialog?.mode === 'create-file' ? (
+          <select
+            className="product-input"
+            value={knowledgePathDialog.selectedExtension || DEFAULT_KNOWLEDGE_FILE_EXTENSION}
+            onChange={(event) =>
+              setKnowledgePathDialog((current) =>
+                current ? { ...current, selectedExtension: event.target.value } : current
+              )
+            }
+          >
+            {KNOWLEDGE_FILE_EXTENSION_OPTIONS.map((extension) => (
+              <option key={extension} value={extension}>
+                .{extension}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </MacDialog>
       <MacDialog
         open={Boolean(pendingDeleteRequest)}

@@ -236,6 +236,55 @@ fn decode_command_output(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+#[cfg(target_os = "windows")]
+fn build_word_automation_temp_path(stem: &str, extension: &str) -> Result<PathBuf, String> {
+    let temp_root = env::temp_dir().join("goodnight-doc-projections");
+    fs::create_dir_all(&temp_root).map_err(|error| {
+        format!(
+            "Failed to prepare temporary Word automation directory {}: {}",
+            temp_root.display(),
+            error
+        )
+    })?;
+
+    let unique_suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    Ok(temp_root.join(format!("{}-{}.{}", stem, unique_suffix, extension)))
+}
+
+#[cfg(target_os = "windows")]
+fn quoted_powershell_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\'', "''")
+}
+
+#[cfg(target_os = "windows")]
+fn run_word_automation_command(command: &str, timeout_ms: u64, context: &str) -> Result<(), String> {
+    let output = run_windows_powershell_command(command, None, Some(timeout_ms)).map_err(|error| {
+        format!("{}: {}", context, error)
+    })?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = decode_command_output(&output.stderr).trim().to_string();
+    let stdout = decode_command_output(&output.stdout).trim().to_string();
+    let detail = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!(
+            "PowerShell exited with code {}",
+            output.status.code().unwrap_or(-1)
+        )
+    };
+
+    Err(format!("{}: {}", context, detail))
+}
+
 fn format_write_error(file_path: &str, error: &std::io::Error) -> String {
     if error.kind() == ErrorKind::PermissionDenied {
         #[cfg(target_os = "windows")]
@@ -2948,6 +2997,316 @@ fn read_text_file(file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn read_binary_file(file_path: String) -> Result<Vec<u8>, String> {
+    fs::read(Path::new(&file_path)).map_err(|e| format!("Error reading binary file: {}", e))
+}
+
+#[cfg(target_os = "windows")]
+fn convert_word_document_to_docx(source_path: &Path, target_path: &Path) -> Result<(), String> {
+    let escaped_source = quoted_powershell_path(source_path);
+    let escaped_target = quoted_powershell_path(target_path);
+    let command = format!(
+        "$ErrorActionPreference='Stop'; \
+         $conversionDone = $false; \
+         $word = $null; \
+         $document = $null; \
+         try {{ \
+           $word = New-Object -ComObject Word.Application; \
+           $word.Visible = $false; \
+           $word.DisplayAlerts = 0; \
+           $document = $word.Documents.Open('{source}', $false, $true); \
+           $document.SaveAs([ref]'{target}', [ref]16); \
+           $conversionDone = $true; \
+         }} finally {{ \
+           if ($document -ne $null) {{ try {{ $document.Close([ref]$false) }} catch {{ if (-not $conversionDone) {{ throw }} }} }}; \
+           if ($word -ne $null) {{ try {{ $word.Quit() }} catch {{ if (-not $conversionDone) {{ throw }} }} }}; \
+          }}",
+        source = escaped_source,
+        target = escaped_target
+    );
+
+    run_word_automation_command(
+        &command,
+        120_000,
+        &format!(
+            "Failed to convert Word document {} to DOCX",
+            source_path.display()
+        ),
+    )?;
+
+    if !target_path.exists() {
+        return Err(format!(
+            "Word conversion did not produce an output file for {}",
+            source_path.display()
+        ));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn convert_doc_to_docx_for_projection(file_path: String) -> Result<String, String> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = file_path;
+        return Err("Legacy .doc conversion is only available on Windows desktop.".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let source_path = PathBuf::from(file_path.trim());
+        if !source_path.exists() {
+            return Err(format!("File does not exist: {}", source_path.display()));
+        }
+
+        let extension = source_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if extension != "doc" {
+            return Err(format!(
+                "Only legacy .doc files can be converted, got: {}",
+                source_path.display()
+            ));
+        }
+
+        let stem = source_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("document");
+        let target_path = build_word_automation_temp_path(stem, "docx")?;
+        convert_word_document_to_docx(&source_path, &target_path)?;
+
+        Ok(target_path.to_string_lossy().to_string())
+    }
+}
+
+#[tauri::command]
+fn convert_doc_to_editable_docx(file_path: String) -> Result<String, String> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = file_path;
+        return Err("Legacy .doc conversion is only available on Windows desktop.".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let source_path = PathBuf::from(file_path.trim());
+        if !source_path.exists() {
+            return Err(format!("File does not exist: {}", source_path.display()));
+        }
+
+        let extension = source_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if extension != "doc" {
+            return Err(format!(
+                "Only legacy .doc files can be converted, got: {}",
+                source_path.display()
+            ));
+        }
+
+        let target_path = build_unique_destination_path(
+            source_path.parent().unwrap_or_else(|| Path::new(".")),
+            std::ffi::OsStr::new(
+                &format!(
+                    "{}.docx",
+                    source_path
+                        .file_stem()
+                        .and_then(|value| value.to_str())
+                        .filter(|value| !value.trim().is_empty())
+                        .unwrap_or("document")
+                )
+            ),
+        );
+
+        convert_word_document_to_docx(&source_path, &target_path)?;
+        Ok(target_path.to_string_lossy().to_string())
+    }
+}
+
+#[tauri::command]
+fn extract_word_document_text(file_path: String) -> Result<String, String> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = file_path;
+        return Err("Word document extraction is only available on Windows desktop.".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let source_path = PathBuf::from(file_path.trim());
+        if !source_path.exists() {
+            return Err(format!("File does not exist: {}", source_path.display()));
+        }
+
+        let stem = source_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("document");
+        let temp_path = build_word_automation_temp_path(stem, "txt")?;
+        let escaped_source = quoted_powershell_path(&source_path);
+        let escaped_target = quoted_powershell_path(&temp_path);
+        let command = format!(
+            "$ErrorActionPreference='Stop'; \
+             $word = $null; \
+             $document = $null; \
+             try {{ \
+               $word = New-Object -ComObject Word.Application; \
+               $word.Visible = $false; \
+               $word.DisplayAlerts = 0; \
+               $document = $word.Documents.Open('{source}', $false, $true); \
+               [System.IO.File]::WriteAllText('{target}', $document.Content.Text, [System.Text.Encoding]::UTF8); \
+             }} finally {{ \
+               if ($document -ne $null) {{ $document.Close([ref]$false) }}; \
+               if ($word -ne $null) {{ $word.Quit() }}; \
+             }}",
+            source = escaped_source,
+            target = escaped_target
+        );
+
+        run_word_automation_command(
+            &command,
+            120_000,
+            &format!("Failed to extract text from Word document {}", source_path.display()),
+        )?;
+
+        let text = fs::read_to_string(&temp_path)
+            .map_err(|error| format!("Failed to read extracted text {}: {}", temp_path.display(), error))?;
+        let _ = fs::remove_file(&temp_path);
+        Ok(text)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveWordDocumentTextParams {
+    file_path: String,
+    content: String,
+}
+
+#[tauri::command]
+fn save_word_document_text(params: SaveWordDocumentTextParams) -> Result<(), String> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = params;
+        return Err("Word document writing is only available on Windows desktop.".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let source_path = PathBuf::from(params.file_path.trim());
+        if let Some(parent) = source_path.parent() {
+            fs::create_dir_all(parent).map_err(|error| {
+                format!(
+                    "Failed to prepare parent directory {} for Word save: {}",
+                    parent.display(),
+                    error
+                )
+            })?;
+        }
+
+        let stem = source_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("document");
+        let temp_path = build_word_automation_temp_path(stem, "txt")?;
+        fs::write(&temp_path, params.content.as_bytes()).map_err(|error| {
+            format!(
+                "Failed to stage temporary text for Word save {}: {}",
+                temp_path.display(),
+                error
+            )
+        })?;
+
+        let escaped_source = quoted_powershell_path(&source_path);
+        let escaped_temp = quoted_powershell_path(&temp_path);
+        let format_code = match source_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "doc" => 0,
+            _ => 16,
+        };
+        let open_or_create_command = format!(
+            "if (Test-Path '{source}') {{ \
+               try {{ \
+                 $sourceDocument = $word.Documents.Open('{source}', $false, $false); \
+               }} catch {{ \
+                 $sourceDocument = $word.Documents.Add(); \
+               }} \
+             }} else {{ \
+               $sourceDocument = $word.Documents.Add(); \
+             }}",
+            source = escaped_source
+        );
+
+        let command = format!(
+            "$ErrorActionPreference='Stop'; \
+             $word = $null; \
+             $sourceDocument = $null; \
+             $tempDocument = $null; \
+             try {{ \
+               $word = New-Object -ComObject Word.Application; \
+               $word.Visible = $false; \
+               $word.DisplayAlerts = 0; \
+               {open_or_create}; \
+               $sourceDocument.Content.Text = [System.IO.File]::ReadAllText('{temp}', [System.Text.Encoding]::UTF8); \
+               $sourceDocument.SaveAs([ref]'{source}', [ref]{format_code}); \
+             }} finally {{ \
+               if ($sourceDocument -ne $null) {{ $sourceDocument.Close([ref]$true) }}; \
+               if ($word -ne $null) {{ $word.Quit() }}; \
+             }}",
+            temp = escaped_temp,
+            source = escaped_source,
+            format_code = format_code,
+            open_or_create = open_or_create_command
+        );
+
+        let result = run_word_automation_command(
+            &command,
+            120_000,
+            &format!("Failed to write Word document {}", source_path.display()),
+        );
+        let _ = fs::remove_file(&temp_path);
+        result
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WriteBinaryFileParams {
+    file_path: String,
+    bytes: Vec<u8>,
+}
+
+#[tauri::command]
+fn write_binary_file(params: WriteBinaryFileParams) -> Result<(), String> {
+    let target_path = PathBuf::from(params.file_path.trim());
+    if let Some(parent) = target_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Failed to create parent directory {}: {}",
+                parent.display(),
+                error
+            )
+        })?;
+    }
+
+    fs::write(&target_path, params.bytes)
+        .map_err(|error| format!("Failed to write binary file {}: {}", target_path.display(), error))
+}
+
+#[tauri::command]
 fn open_path_in_shell(app_handle: tauri::AppHandle, path: String) -> Result<(), String> {
     let target_path = PathBuf::from(path.trim());
     if !target_path.exists() {
@@ -3050,6 +3409,12 @@ pub fn run() {
             list_agent_background_tasks,
             import_knowledge_assets,
             read_text_file,
+            read_binary_file,
+            convert_doc_to_docx_for_projection,
+            convert_doc_to_editable_docx,
+            extract_word_document_text,
+            save_word_document_text,
+            write_binary_file,
             open_path_in_shell,
             start_runtime_sidecar,
             get_runtime_sidecar_status,

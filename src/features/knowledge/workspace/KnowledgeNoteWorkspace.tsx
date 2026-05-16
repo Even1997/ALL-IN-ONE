@@ -1,13 +1,24 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { GoodNightMarkdownEditor } from '../../../components/product/GoodNightMarkdownEditor';
 import { EmptyStateView, StateCard, StatusBanner } from '../../../components/ui';
+import { useAIContextStore } from '../../../modules/ai/store/aiContextStore';
 import { getRelativePathFromRoot, normalizeRelativeFileSystemPath } from '../../../utils/fileSystemPaths';
 import type { KnowledgeDiskItem } from '../../../modules/knowledge/knowledgeTree';
 import type { KnowledgeNote } from '../model/knowledge';
 import { serializeKnowledgeNoteMarkdown, splitKnowledgeNoteEditorDocument } from './knowledgeNoteMarkdown';
 import { KnowledgeMarkdownViewer, type KnowledgeInternalLinkTarget } from './KnowledgeMarkdownViewer';
+import {
+  buildProjectionArtifactRelativePaths,
+  buildProjectionReferenceFile,
+  buildTextProjection,
+  buildSelectionProjection,
+  buildSelectionReferenceFile,
+  loadWorkbenchFileModel,
+} from './documentProjection.ts';
+import { useDocumentProjectionStore } from './documentProjectionStore.ts';
+import type { DocumentProjection } from './documentWorkbenchTypes.ts';
 
 type KnowledgeViewMode = 'read' | 'code';
 type KnowledgeTreeSortMode =
@@ -19,6 +30,7 @@ type KnowledgeTreeSortMode =
   | 'created-asc';
 
 type KnowledgeNoteWorkspaceProps = {
+  projectId?: string | null;
   notes: KnowledgeNote[];
   filteredNotes: KnowledgeNote[];
   diskItems: KnowledgeDiskItem[];
@@ -54,6 +66,11 @@ type KnowledgeNoteWorkspaceProps = {
   onDeleteTreePaths: (relativePaths: string[] | string, isFolder: boolean | null) => void;
   onRefreshFilesystem: () => void;
   onOpenAttachment: (attachmentPath: string) => void;
+};
+
+type FilePreviewPersistResult = {
+  ok: boolean;
+  error?: string;
 };
 
 type KnowledgeTreeFileNode = {
@@ -106,12 +123,29 @@ type KnowledgeContextMenuState =
       x: number;
       y: number;
       targetPath: string | null;
+      targetAbsolutePath?: string | null;
+      targetTitle?: string | null;
+      targetNoteId?: string | null;
       isFolder: boolean | null;
       selectedPaths: string[];
+      allowReference?: boolean;
     }
   | null;
 
-type FilePreviewKind = 'markdown' | 'code';
+type DocumentSelectionState = {
+  text: string;
+  anchor: string;
+} | null;
+
+type DocumentContextMenuState =
+  | {
+      x: number;
+      y: number;
+      selection: DocumentSelectionState;
+    }
+  | null;
+
+type FilePreviewKind = 'markdown' | 'code' | 'text' | 'image' | 'pdf' | 'word' | 'sheet' | 'slide' | 'binary';
 
 type FilePreview = {
   path: string;
@@ -120,11 +154,27 @@ type FilePreview = {
   savedContent: string;
   kind: FilePreviewKind;
   state: 'loading' | 'ready' | 'error';
+  projection?: DocumentProjection | null;
+  previewUrl?: string;
+  errorMessage?: string;
+  imageMeta?: {
+    width: number;
+    height: number;
+    mimeType: string;
+  } | null;
+  pdfMeta?: {
+    pageCount: number | null;
+  } | null;
 };
 
 const NOTE_RAIL_WIDTH_BOUNDS = { min: 220, max: 420 };
 const NOTE_RAIL_DEFAULT_WIDTH = 280;
 const PREVIEWABLE_MARKDOWN_FILE_EXTENSIONS = new Set(['md', 'markdown']);
+const IMAGE_FILE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']);
+const PDF_FILE_EXTENSIONS = new Set(['pdf']);
+const WORD_FILE_EXTENSIONS = new Set(['doc', 'docx']);
+const SHEET_FILE_EXTENSIONS = new Set(['xlsx', 'csv']);
+const SLIDE_FILE_EXTENSIONS = new Set(['pptx']);
 const KNOWLEDGE_TREE_SORT_OPTIONS = [
   { value: 'name-asc', label: '文件名(A-Z)' },
   { value: 'name-desc', label: '文件名(Z-A)' },
@@ -185,6 +235,113 @@ const TEMPORARY_PREVIEW_STYLES = `
 }
 `;
 
+const DOCUMENT_WORKBENCH_STYLES = `
+.gn-note-document-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  width: min(100%, var(--atomic-editor-measure, 76ch));
+  margin: 0 auto;
+  padding: 14px 22px 10px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+}
+
+.gn-note-document-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gn-note-document-meta strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mode-text, #0f172a);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gn-note-document-subline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  color: var(--mode-muted, #64748b);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gn-note-document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.gn-note-document-actions .doc-action-btn {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+}
+
+.gn-note-doc-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, var(--atomic-editor-measure, 76ch));
+  margin: 0 auto;
+  padding: 10px 22px 0;
+  box-sizing: border-box;
+}
+
+.gn-note-doc-selection-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mode-panel-lite, #f8fafc) 78%, transparent);
+  color: var(--mode-muted, #64748b);
+  font-size: 12px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gn-note-doc-projection-summary {
+  display: grid;
+  gap: 10px;
+  width: min(100%, var(--atomic-editor-measure, 76ch));
+  margin: 0 auto 14px;
+}
+
+.gn-note-doc-block {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--mode-border, rgba(148, 163, 184, 0.18));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mode-panel-lite, #f8fafc) 82%, transparent);
+}
+
+.gn-note-doc-block strong,
+.gn-note-doc-block p {
+  margin: 0;
+}
+
+.gn-note-doc-block p {
+  color: var(--mode-muted, #64748b);
+  font-size: 13px;
+  line-height: 1.65;
+}
+`;
+
 const clampNoteRailWidth = (value: number) =>
   Math.min(NOTE_RAIL_WIDTH_BOUNDS.max, Math.max(NOTE_RAIL_WIDTH_BOUNDS.min, value));
 
@@ -194,8 +351,63 @@ const getKnowledgeFilePreviewKind = (extension: string): FilePreviewKind => {
     return 'markdown';
   }
 
+  if (IMAGE_FILE_EXTENSIONS.has(normalizedExtension)) {
+    return 'image';
+  }
+
+  if (PDF_FILE_EXTENSIONS.has(normalizedExtension)) {
+    return 'pdf';
+  }
+
+  if (WORD_FILE_EXTENSIONS.has(normalizedExtension)) {
+    return 'word';
+  }
+
+  if (SHEET_FILE_EXTENSIONS.has(normalizedExtension)) {
+    return 'sheet';
+  }
+
+  if (SLIDE_FILE_EXTENSIONS.has(normalizedExtension)) {
+    return 'slide';
+  }
+
+  if (['txt', 'json', 'yml', 'yaml'].includes(normalizedExtension)) {
+    return 'text';
+  }
+
   return 'code';
 };
+
+const isProjectionEditableKind = (kind: FilePreviewKind) => ['sheet', 'slide'].includes(kind);
+
+const getPreviewKindLabel = (preview: FilePreview) => {
+  if (preview.kind === 'markdown') {
+    return 'Markdown';
+  }
+  if (preview.kind === 'code') {
+    return 'Code';
+  }
+  if (preview.kind === 'text') {
+    return 'Text';
+  }
+  if (preview.kind === 'image') {
+    return 'Image';
+  }
+  if (preview.kind === 'pdf') {
+    return 'PDF';
+  }
+  if (preview.kind === 'word') {
+    return 'Word Projection';
+  }
+  if (preview.kind === 'sheet') {
+    return 'Sheet Projection';
+  }
+  if (preview.kind === 'slide') {
+    return 'Slide Projection';
+  }
+  return 'Binary';
+};
+void getPreviewKindLabel;
 
 const normalizeToolViewContent = (content: string) =>
   content
@@ -656,6 +868,7 @@ const collectAllFolderPaths = (folder: KnowledgeTreeFolderNode) => {
 };
 
 export const KnowledgeNoteWorkspace = ({
+  projectId = null,
   notes,
   filteredNotes,
   diskItems,
@@ -665,6 +878,7 @@ export const KnowledgeNoteWorkspace = ({
   titleValue,
   editorValue,
   editable,
+  isSaving,
   searchValue,
   isSearching,
   error,
@@ -681,6 +895,7 @@ export const KnowledgeNoteWorkspace = ({
   onRefreshFilesystem,
 }: KnowledgeNoteWorkspaceProps) => {
   const filePreviewRequestIdRef = useRef(0);
+  const filePreviewAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [railWidth, setRailWidth] = useState(NOTE_RAIL_DEFAULT_WIDTH);
   const [isRailResizing, setIsRailResizing] = useState(false);
   const [treeSortMode, setTreeSortMode] = useState<KnowledgeTreeSortMode>('name-asc');
@@ -692,8 +907,19 @@ export const KnowledgeNoteWorkspace = ({
   const [contextMenuState, setContextMenuState] = useState<KnowledgeContextMenuState>(null);
   const [viewMode, setViewMode] = useState<KnowledgeViewMode>('read');
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
+  const [isSavingFilePreview, setIsSavingFilePreview] = useState(false);
+  const [filePreviewSaveMessage, setFilePreviewSaveMessage] = useState<string | null>(null);
+  const [documentSelection, setDocumentSelection] = useState<DocumentSelectionState>(null);
+  const [documentContextMenuState, setDocumentContextMenuState] = useState<DocumentContextMenuState>(null);
+  const [treeDropTargetPath, setTreeDropTargetPath] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const documentContextMenuRef = useRef<HTMLDivElement | null>(null);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
+  const documentSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const setSelectedReferenceFileIds = useAIContextStore((state) => state.setSelectedReferenceFileIds);
+  const setSceneContext = useAIContextStore((state) => state.setSceneContext);
+  const upsertReferenceFile = useDocumentProjectionStore((state) => state.upsertReferenceFile);
   const searchActive = searchValue.trim().length > 0;
   const visibleNotes = filteredNotes;
   const visibleKnowledgeTree = useMemo(
@@ -717,6 +943,13 @@ export const KnowledgeNoteWorkspace = ({
     [selectedTreeFilePath]
   );
   const isFilePreviewDirty = Boolean(filePreview && filePreview.draftContent !== filePreview.savedContent);
+  const isFilePreviewEditable = Boolean(
+    filePreview &&
+      filePreview.state === 'ready' &&
+      (filePreview.kind === 'code' ||
+        filePreview.kind === 'text' ||
+        isProjectionEditableKind(filePreview.kind))
+  );
   const readingMarkdown = useMemo(
     () => (selectedNote ? serializeKnowledgeNoteMarkdown(titleValue, editorValue) : ''),
     [editorValue, selectedNote, titleValue]
@@ -752,6 +985,144 @@ export const KnowledgeNoteWorkspace = ({
 
     return entries;
   }, [notes]);
+  const currentNoteProjection = useMemo(
+    () =>
+      selectedNote
+        ? buildTextProjection(
+            selectedNote.sourceUrl || selectedNote.title,
+            selectedNote.title,
+            'md',
+            readingMarkdown,
+          )
+        : null,
+    [readingMarkdown, selectedNote],
+  );
+  const filePreviewStatusLabel = useMemo(() => {
+    if (!filePreview) {
+      return '';
+    }
+
+    if (filePreview.state === 'loading') {
+      return '读取中';
+    }
+
+    if (filePreview.state === 'error') {
+      return filePreviewSaveMessage || '读取失败';
+    }
+
+    if (!isFilePreviewEditable) {
+      return '只读预览';
+    }
+
+    if (isSavingFilePreview) {
+      return '自动保存中';
+    }
+
+    if (isFilePreviewDirty) {
+      return '编辑中';
+    }
+
+    return filePreviewSaveMessage || '已自动保存';
+  }, [filePreview, filePreviewSaveMessage, isFilePreviewDirty, isFilePreviewEditable, isSavingFilePreview]);
+  const noteSurfaceStatusLabel = editable ? (isSaving ? '自动保存中' : '自动保存') : '只读';
+
+  const saveProjectionArtifacts = useCallback(
+    async (projection: DocumentProjection) => {
+      if (!projectRootPath) {
+        return;
+      }
+
+      const artifactPaths = buildProjectionArtifactRelativePaths(projection.sourcePath);
+      const absoluteJsonPath = normalizeRelativeFileSystemPath(`${projectRootPath}/${artifactPaths.json}`);
+      const absoluteMarkdownPath = normalizeRelativeFileSystemPath(`${projectRootPath}/${artifactPaths.markdown}`);
+
+      await invoke<{ success: boolean; content: string; error: string | null }>('tool_write', {
+        params: {
+          file_path: absoluteJsonPath,
+          content: JSON.stringify(projection, null, 2),
+        },
+      });
+      await invoke<{ success: boolean; content: string; error: string | null }>('tool_write', {
+        params: {
+          file_path: absoluteMarkdownPath,
+          content: projection.markdown,
+        },
+      });
+    },
+    [projectRootPath],
+  );
+
+  const addReferenceFileToAI = useCallback(
+    (referenceFile: ReturnType<typeof buildProjectionReferenceFile>) => {
+      if (!projectId) {
+        return;
+      }
+
+      upsertReferenceFile(projectId, referenceFile);
+      const currentReferenceIds = useAIContextStore.getState().projects[projectId]?.selectedReferenceFileIds || [];
+      setSelectedReferenceFileIds(projectId, [...currentReferenceIds, referenceFile.id]);
+    },
+    [projectId, setSelectedReferenceFileIds, upsertReferenceFile],
+  );
+
+  const handleAddCurrentDocumentToAI = useCallback(() => {
+    if (selectedNote && projectId) {
+      const currentReferenceIds = useAIContextStore.getState().projects[projectId]?.selectedReferenceFileIds || [];
+      setSelectedReferenceFileIds(projectId, [...currentReferenceIds, selectedNote.id]);
+      return;
+    }
+
+    if (filePreview?.projection) {
+      addReferenceFileToAI(buildProjectionReferenceFile(filePreview.projection));
+    }
+  }, [addReferenceFileToAI, filePreview?.projection, projectId, selectedNote, setSelectedReferenceFileIds]);
+
+  const handleAddSelectionToAI = useCallback(() => {
+    const baseProjection = filePreview?.projection || currentNoteProjection;
+    if (!baseProjection || !documentSelection) {
+      return;
+    }
+
+    addReferenceFileToAI(
+      buildSelectionReferenceFile(
+        baseProjection,
+        buildSelectionProjection(baseProjection, documentSelection.text, documentSelection.anchor),
+      ),
+    );
+    setDocumentContextMenuState(null);
+  }, [addReferenceFileToAI, currentNoteProjection, documentSelection, filePreview?.projection]);
+
+  const refreshDocumentSelection = useCallback(() => {
+    if (!documentSurfaceRef.current) {
+      setDocumentSelection(null);
+      return;
+    }
+
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLTextAreaElement || activeElement instanceof HTMLInputElement) {
+      const selectionStart = activeElement.selectionStart || 0;
+      const selectionEnd = activeElement.selectionEnd || 0;
+      const selectedText = activeElement.value.slice(selectionStart, selectionEnd).trim();
+      setDocumentSelection(
+        selectedText
+          ? {
+              text: selectedText,
+              anchor: activeElement.getAttribute('data-selection-anchor') || 'selection',
+            }
+          : null,
+      );
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) {
+      setDocumentSelection(null);
+      return;
+    }
+
+    const selectedText = selection.toString().trim();
+    setDocumentSelection(selectedText ? { text: selectedText, anchor: 'selection' } : null);
+  }, []);
 
   const toggleFolderExpanded = useCallback((folderPath: string) => {
     setCollapsedFolderPaths((current) => {
@@ -887,10 +1258,11 @@ export const KnowledgeNoteWorkspace = ({
       });
     }
   }, []);
+  void handleOpenFilePreview;
 
-  const handleSaveFilePreview = useCallback(async () => {
+  const handleSaveFilePreview = useCallback(async (): Promise<FilePreviewPersistResult> => {
     if (!filePreview || filePreview.state !== 'ready' || !isFilePreviewDirty) {
-      return;
+      return { ok: true };
     }
 
     const result = await invoke<{ success: boolean; content: string; error: string | null }>('tool_write', {
@@ -910,7 +1282,10 @@ export const KnowledgeNoteWorkspace = ({
             }
           : current
       );
-      return;
+      return {
+        ok: false,
+        error: result.error || '保存失败。',
+      };
     }
 
     setFilePreview((current) =>
@@ -922,7 +1297,113 @@ export const KnowledgeNoteWorkspace = ({
         : current
     );
     onRefreshFilesystem();
+    return { ok: true };
   }, [filePreview, isFilePreviewDirty, onRefreshFilesystem]);
+
+  const handleOpenWorkbenchFilePreview = useCallback(async (file: KnowledgeTreeFileNode) => {
+    const requestId = filePreviewRequestIdRef.current + 1;
+    filePreviewRequestIdRef.current = requestId;
+    setViewMode('read');
+    setFilePreview({
+      path: file.absolutePath,
+      title: file.name,
+      draftContent: 'Loading document preview...',
+      savedContent: '',
+      kind: getKnowledgeFilePreviewKind(file.extension),
+      state: 'loading',
+      projection: null,
+    });
+
+    try {
+      const nextModel = await loadWorkbenchFileModel(file.absolutePath, file.name);
+      if (filePreviewRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      if (nextModel.projection) {
+        await saveProjectionArtifacts(nextModel.projection);
+        if (projectId) {
+          upsertReferenceFile(projectId, buildProjectionReferenceFile(nextModel.projection));
+          setSceneContext(projectId, {
+            scene: 'vault',
+            selectedKnowledgeEntryId: nextModel.projection.id,
+          });
+        }
+      }
+
+      setFilePreview(nextModel);
+    } catch (error) {
+      if (filePreviewRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setFilePreview({
+        path: file.absolutePath,
+        title: file.name,
+        draftContent: `Unable to read this file.\n\n${errorMessage}`,
+        savedContent: '',
+        kind: getKnowledgeFilePreviewKind(file.extension),
+        state: 'error',
+        projection: null,
+        errorMessage,
+      });
+    }
+  }, [projectId, saveProjectionArtifacts, setSceneContext, upsertReferenceFile]);
+
+  const handleSaveWorkbenchFilePreview = useCallback(async (): Promise<FilePreviewPersistResult> => {
+    if (!filePreview || filePreview.state !== 'ready' || !isFilePreviewDirty) {
+      return { ok: true };
+    }
+
+    setIsSavingFilePreview(true);
+    try {
+      if (isProjectionEditableKind(filePreview.kind) && filePreview.projection) {
+        const nextProjection = {
+          ...filePreview.projection,
+          markdown: filePreview.draftContent,
+          updatedAt: new Date().toISOString(),
+        };
+        await saveProjectionArtifacts(nextProjection);
+        setFilePreview((current) =>
+          current && current.path === filePreview.path
+            ? {
+                ...current,
+                projection: nextProjection,
+                savedContent: current.draftContent,
+              }
+            : current
+        );
+        if (projectId) {
+          upsertReferenceFile(projectId, buildProjectionReferenceFile(nextProjection));
+        }
+        setFilePreviewSaveMessage('Auto-saved');
+        return { ok: true };
+      }
+
+      const result = await handleSaveFilePreview();
+      setFilePreviewSaveMessage(result.ok ? 'Auto-saved' : result.error || 'Save failed');
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setFilePreviewSaveMessage(errorMessage);
+      setFilePreview((current) =>
+        current && current.path === filePreview.path
+          ? {
+              ...current,
+              state: 'error',
+              errorMessage,
+            }
+          : current
+      );
+      return {
+        ok: false,
+        error: errorMessage,
+      };
+    } finally {
+      setIsSavingFilePreview(false);
+    }
+  }, [filePreview, handleSaveFilePreview, isFilePreviewDirty, projectId, saveProjectionArtifacts, upsertReferenceFile]);
 
   const handleOpenInternalMarkdownLink = useCallback(
     (target: KnowledgeInternalLinkTarget) => {
@@ -974,7 +1455,44 @@ export const KnowledgeNoteWorkspace = ({
   useEffect(() => {
     setViewMode('read');
     setFilePreview(null);
+    setDocumentSelection(null);
   }, [selectedNote?.id]);
+
+  useEffect(() => {
+    setFilePreviewSaveMessage(null);
+    setIsSavingFilePreview(false);
+
+    if (filePreviewAutoSaveTimerRef.current) {
+      clearTimeout(filePreviewAutoSaveTimerRef.current);
+      filePreviewAutoSaveTimerRef.current = null;
+    }
+  }, [filePreview?.path]);
+
+  useEffect(() => {
+    if (!filePreview || !isFilePreviewEditable || !isFilePreviewDirty || filePreview.state !== 'ready') {
+      return;
+    }
+
+    if (filePreviewAutoSaveTimerRef.current) {
+      clearTimeout(filePreviewAutoSaveTimerRef.current);
+    }
+
+    filePreviewAutoSaveTimerRef.current = setTimeout(() => {
+      void handleSaveWorkbenchFilePreview();
+    }, 500);
+
+    return () => {
+      if (filePreviewAutoSaveTimerRef.current) {
+        clearTimeout(filePreviewAutoSaveTimerRef.current);
+        filePreviewAutoSaveTimerRef.current = null;
+      }
+    };
+  }, [
+    filePreview,
+    handleSaveWorkbenchFilePreview,
+    isFilePreviewDirty,
+    isFilePreviewEditable,
+  ]);
 
   useEffect(() => {
     if (!contextMenuState) {
@@ -994,6 +1512,26 @@ export const KnowledgeNoteWorkspace = ({
       window.removeEventListener('resize', closeMenu);
     };
   }, [contextMenuState]);
+
+  useEffect(() => {
+    if (!documentContextMenuState) {
+      return;
+    }
+
+    const closeMenu = (event: Event) => {
+      if (event.target instanceof Node && documentContextMenuRef.current?.contains(event.target)) {
+        return;
+      }
+      setDocumentContextMenuState(null);
+    };
+
+    window.addEventListener('pointerdown', closeMenu);
+    window.addEventListener('resize', closeMenu);
+    return () => {
+      window.removeEventListener('pointerdown', closeMenu);
+      window.removeEventListener('resize', closeMenu);
+    };
+  }, [documentContextMenuState]);
 
   useLayoutEffect(() => {
     const menu = contextMenuRef.current;
@@ -1041,13 +1579,13 @@ export const KnowledgeNoteWorkspace = ({
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
-        void handleSaveFilePreview();
+        void handleSaveWorkbenchFilePreview();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filePreview, handleSaveFilePreview]);
+  }, [filePreview, handleSaveWorkbenchFilePreview]);
 
   const handleRailResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1132,10 +1670,22 @@ export const KnowledgeNoteWorkspace = ({
                     x: event.clientX,
                     y: event.clientY,
                     targetPath: childFolder.path,
+                    targetAbsolutePath: childFolder.absolutePath,
+                    targetTitle: childFolder.name,
+                    targetNoteId: null,
                     isFolder: true,
                     selectedPaths: nextSelectedPaths,
+                    allowReference: false,
                   });
                 }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setTreeDropTargetPath(childFolder.path);
+                }}
+                onDragLeave={() => {
+                  setTreeDropTargetPath((current) => (current === childFolder.path ? null : current));
+                }}
+                onDrop={(event) => void handleImportDrop(event)}
               >
                 <span className={`gn-note-tree-caret ${isExpanded ? 'expanded' : ''}`} aria-hidden="true">
                   <TreeCaretIcon />
@@ -1180,7 +1730,7 @@ export const KnowledgeNoteWorkspace = ({
                   setFilePreview(null);
                   onSelectNote(file.note.id);
                 } else {
-                  void handleOpenFilePreview(file);
+                  void handleOpenWorkbenchFilePreview(file);
                 }
               }}
               onContextMenu={(event) => {
@@ -1194,8 +1744,12 @@ export const KnowledgeNoteWorkspace = ({
                   x: event.clientX,
                   y: event.clientY,
                   targetPath: file.path,
+                  targetAbsolutePath: file.absolutePath,
+                  targetTitle: file.name,
+                  targetNoteId: file.note?.id || null,
                   isFolder: false,
                   selectedPaths: nextSelectedPaths,
+                  allowReference: true,
                 });
               }}
             >
@@ -1215,7 +1769,7 @@ export const KnowledgeNoteWorkspace = ({
     [
       collapsedFolderPaths,
       handleTreeSelection,
-      handleOpenFilePreview,
+      handleOpenWorkbenchFilePreview,
       isMultiSelecting,
       onSelectNote,
       searchActive,
@@ -1226,6 +1780,367 @@ export const KnowledgeNoteWorkspace = ({
       toggleFolderExpanded,
     ]
   );
+
+  const currentDocumentPath = filePreview?.path || selectedNote?.sourceUrl || null;
+  const canOpenCurrentDocumentInSystem = Boolean(currentDocumentPath);
+  const canAddCurrentDocumentToAI = Boolean(selectedNote || filePreview?.projection);
+
+  const handleOpenCurrentDocumentInSystem = useCallback(async () => {
+    if (!currentDocumentPath) {
+      return;
+    }
+
+    await invoke('open_path_in_shell', { path: currentDocumentPath });
+  }, [currentDocumentPath]);
+
+  const handleAddTreeItemToAI = useCallback(async () => {
+    if (!projectId || !contextMenuState?.allowReference || contextMenuState.isFolder) {
+      return;
+    }
+
+    if (contextMenuState.targetNoteId) {
+      const currentReferenceIds = useAIContextStore.getState().projects[projectId]?.selectedReferenceFileIds || [];
+      setSelectedReferenceFileIds(projectId, [...currentReferenceIds, contextMenuState.targetNoteId]);
+      closeKnowledgeContextMenu();
+      return;
+    }
+
+    if (!contextMenuState.targetAbsolutePath || !contextMenuState.targetTitle) {
+      return;
+    }
+
+    const nextModel = await loadWorkbenchFileModel(
+      contextMenuState.targetAbsolutePath,
+      contextMenuState.targetTitle,
+    );
+    if (!nextModel.projection) {
+      return;
+    }
+
+    await saveProjectionArtifacts(nextModel.projection);
+    addReferenceFileToAI(buildProjectionReferenceFile(nextModel.projection));
+    closeKnowledgeContextMenu();
+  }, [
+    addReferenceFileToAI,
+    closeKnowledgeContextMenu,
+    contextMenuState,
+    projectId,
+    saveProjectionArtifacts,
+    setSelectedReferenceFileIds,
+  ]);
+
+  const renderProjectionBlocks = useCallback((projection: DocumentProjection) => {
+    return projection.blocks.map((block, blockIndex) => {
+      if (block.kind === 'table' && block.rows) {
+        return (
+          <div key={block.id} className="gn-note-doc-block" data-selection-anchor={block.anchor}>
+            <strong>{block.title || `Table ${blockIndex + 1}`}</strong>
+            <div className="chat-answer-table-scroll">
+              <table>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={`${block.id}:${rowIndex}`}>
+                      {row.map((cell, cellIndex) => (
+                        <td key={`${block.id}:${rowIndex}:${cellIndex}`}>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
+      if (block.kind === 'sheet' && block.rows) {
+        return (
+          <div key={block.id} className="gn-note-doc-block" data-selection-anchor={block.anchor}>
+            <strong>{block.title || block.sheetName || `Sheet ${blockIndex + 1}`}</strong>
+            <div className="chat-answer-table-scroll">
+              <table>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={`${block.id}:${rowIndex}`}>
+                      {row.map((cell, cellIndex) => (
+                        <td key={`${block.id}:${rowIndex}:${cellIndex}`}>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div key={block.id} className="gn-note-doc-block" data-selection-anchor={block.anchor}>
+          {block.title && block.kind !== 'heading' ? <strong>{block.title}</strong> : null}
+          <p>{block.text || block.title || ''}</p>
+          {block.notes ? <p>{block.notes}</p> : null}
+        </div>
+      );
+    });
+  }, []);
+
+  const renderFilePreviewContent = useCallback(() => {
+    if (!filePreview) {
+      return null;
+    }
+
+    if (filePreview.kind === 'image' && filePreview.previewUrl) {
+      return (
+        <div className="gn-note-reading-surface">
+          <img
+            src={filePreview.previewUrl}
+            alt={filePreview.title}
+            style={{ maxWidth: '100%', maxHeight: '72vh', objectFit: 'contain', borderRadius: 12 }}
+          />
+          {filePreview.imageMeta ? (
+            <p className="chat-reference-empty">
+              {filePreview.imageMeta.width} × {filePreview.imageMeta.height} · {filePreview.imageMeta.mimeType}
+            </p>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (filePreview.kind === 'pdf' && filePreview.previewUrl) {
+      return (
+        <div className="gn-note-reading-surface">
+          <iframe
+            src={filePreview.previewUrl}
+            title={filePreview.title}
+            style={{ width: '100%', minHeight: '72vh', border: 'none', borderRadius: 12, background: '#fff' }}
+          />
+        </div>
+      );
+    }
+
+    if (filePreview.kind === 'word') {
+      return (
+        <div className="gn-note-reading-surface">
+          <KnowledgeMarkdownViewer
+            markdown={filePreview.draftContent || '文档没有可提取的文字内容。请使用右上角系统打开查看或编辑。'}
+            onOpenInternalLink={handleOpenInternalMarkdownLink}
+          />
+        </div>
+      );
+    }
+
+    if (filePreview.projection && isProjectionEditableKind(filePreview.kind)) {
+      return (
+        <div className="gn-note-reading-surface">
+          <div className="gn-note-doc-projection-summary">{renderProjectionBlocks(filePreview.projection)}</div>
+          <textarea
+            className="gn-note-file-preview-code"
+            value={filePreview.draftContent}
+            data-selection-anchor="projection"
+            onChange={(event) =>
+              setFilePreview((current) =>
+                current && current.path === filePreview.path
+                  ? { ...current, draftContent: event.target.value }
+                  : current
+              )
+            }
+            onMouseUp={refreshDocumentSelection}
+            onKeyUp={refreshDocumentSelection}
+            spellCheck={false}
+            disabled={!isFilePreviewEditable}
+          />
+        </div>
+      );
+    }
+
+    if (filePreview.kind === 'markdown') {
+      return (
+        <div className="gn-note-reading-surface">
+          <KnowledgeMarkdownViewer
+            markdown={filePreview.draftContent}
+            onOpenInternalLink={handleOpenInternalMarkdownLink}
+          />
+        </div>
+      );
+    }
+
+    if (filePreview.kind === 'binary') {
+      return (
+        <div className="gn-note-empty-main">
+          <h2>{filePreview.title}</h2>
+          <p>This file is best opened in the system app.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="gn-note-code-surface">
+        <textarea
+          className="gn-note-file-preview-code"
+          value={filePreview.draftContent}
+          data-selection-anchor="preview"
+          onChange={(event) =>
+            setFilePreview((current) =>
+              current && current.path === filePreview.path
+                ? { ...current, draftContent: event.target.value }
+                : current
+            )
+          }
+          onMouseUp={refreshDocumentSelection}
+          onKeyUp={refreshDocumentSelection}
+          aria-label={`${filePreview.title} file preview`}
+          spellCheck={false}
+          disabled={filePreview.state !== 'ready' || !isFilePreviewEditable}
+        />
+      </div>
+    );
+  }, [filePreview, handleOpenInternalMarkdownLink, isFilePreviewEditable, refreshDocumentSelection, renderProjectionBlocks]);
+
+  const resolveImportTargetDirectory = useCallback(() => {
+    if (treeDropTargetPath) {
+      return treeDropTargetPath;
+    }
+
+    if (selectedTreePaths.length === 1) {
+      const selectedPath = selectedTreePaths[0];
+      const matchingFolder = diskItems.find((item) => item.type === 'folder' && item.relativePath === selectedPath);
+      if (matchingFolder) {
+        return selectedPath;
+      }
+
+      return selectedPath.replace(/\/[^/]+$/, '');
+    }
+
+    return '';
+  }, [diskItems, selectedTreePaths, treeDropTargetPath]);
+
+  const buildUniqueImportPath = useCallback((relativePath: string, policy: 'replace' | 'skip' | 'rename') => {
+    const normalizedPath = normalizeRelativeFileSystemPath(relativePath);
+    const existingPaths = new Set(diskItems.map((item) => normalizeRelativeFileSystemPath(item.relativePath)));
+    if (!existingPaths.has(normalizedPath)) {
+      return normalizedPath;
+    }
+
+    if (policy === 'replace') {
+      return normalizedPath;
+    }
+
+    if (policy === 'skip') {
+      return null;
+    }
+
+    const extensionMatch = normalizedPath.match(/(\.[^./]+)$/);
+    const extension = extensionMatch?.[1] || '';
+    const baseName = extension ? normalizedPath.slice(0, -extension.length) : normalizedPath;
+    let counter = 1;
+    while (existingPaths.has(`${baseName}-copy-${counter}${extension}`)) {
+      counter += 1;
+    }
+    return `${baseName}-copy-${counter}${extension}`;
+  }, [diskItems]);
+
+  const writeBinaryFile = useCallback(async (absolutePath: string, bytes: Uint8Array) => {
+    await invoke('write_binary_file', {
+      filePath: absolutePath,
+      bytes: Array.from(bytes),
+    });
+  }, []);
+
+  const collectEntryFiles = useCallback(async (entry: any, prefix = ''): Promise<Array<{ path: string; file: File }>> => {
+    if (!entry) {
+      return [];
+    }
+
+    if (entry.isFile) {
+      return new Promise((resolve, reject) => {
+        entry.file(
+          (file: File) => resolve([{ path: `${prefix}${file.name}`, file }]),
+          (error: Error) => reject(error),
+        );
+      });
+    }
+
+    if (!entry.isDirectory) {
+      return [];
+    }
+
+    const reader = entry.createReader();
+    const children = await new Promise<any[]>((resolve, reject) => {
+      reader.readEntries(resolve, reject);
+    });
+
+    const nestedResults = await Promise.all(
+      children.map((child) => collectEntryFiles(child, `${prefix}${entry.name}/`)),
+    );
+    return nestedResults.flat();
+  }, []);
+
+  const handleImportDrop = useCallback(async (event: ReactDragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setTreeDropTargetPath(null);
+
+    if (!projectRootPath) {
+      return;
+    }
+
+    const conflictInput = window.prompt('Duplicate handling: replace / skip / rename', 'rename');
+    const policy = conflictInput === 'replace' || conflictInput === 'skip' ? conflictInput : 'rename';
+    const targetDirectory = resolveImportTargetDirectory();
+    const targetBasePath = normalizeRelativeFileSystemPath(targetDirectory);
+    const importedPaths: string[] = [];
+    const filesToImport: Array<{ path: string; file: File }> = [];
+
+    if (event.dataTransfer.items.length > 0) {
+      for (const item of Array.from(event.dataTransfer.items)) {
+        const entry = (item as any).webkitGetAsEntry?.();
+        if (entry) {
+          filesToImport.push(...(await collectEntryFiles(entry)));
+          continue;
+        }
+
+        const file = item.getAsFile?.();
+        if (file) {
+          filesToImport.push({ path: file.name, file });
+        }
+      }
+    } else {
+      filesToImport.push(...Array.from(event.dataTransfer.files).map((file) => ({ path: file.name, file })));
+    }
+
+    for (const item of filesToImport) {
+      const nextRelativePath = normalizeRelativeFileSystemPath(
+        `${targetBasePath ? `${targetBasePath}/` : ''}${item.path.replace(/\\/g, '/')}`,
+      );
+      const resolvedRelativePath = buildUniqueImportPath(nextRelativePath, policy);
+      if (!resolvedRelativePath) {
+        continue;
+      }
+
+      const bytes = new Uint8Array(await item.file.arrayBuffer());
+      const absolutePath = normalizeRelativeFileSystemPath(`${projectRootPath}/${resolvedRelativePath}`);
+      await writeBinaryFile(absolutePath, bytes);
+      importedPaths.push(resolvedRelativePath);
+    }
+
+    if (importedPaths.length === 0) {
+      setImportMessage('No files were imported.');
+      return;
+    }
+
+    setImportMessage(
+      importedPaths.length === 1
+        ? `Imported ${importedPaths[0]}.`
+        : `Imported ${importedPaths.length} items into ${targetBasePath || 'root'}.`,
+    );
+    onRefreshFilesystem();
+  }, [
+    buildUniqueImportPath,
+    collectEntryFiles,
+    onRefreshFilesystem,
+    projectRootPath,
+    resolveImportTargetDirectory,
+    writeBinaryFile,
+  ]);
 
   return (
     <section
@@ -1349,17 +2264,39 @@ export const KnowledgeNoteWorkspace = ({
           />
         ) : null}
 
+        {importMessage ? (
+          <StatusBanner
+            tone="info"
+            icon="spark"
+            title="导入结果"
+            message={importMessage}
+            className="gn-note-error"
+          />
+        ) : null}
+
         <div
           className="gn-note-list"
           onClick={closeKnowledgeContextMenu}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setTreeDropTargetPath('');
+          }}
+          onDragLeave={() => {
+            setTreeDropTargetPath((current) => (current === '' ? null : current));
+          }}
+          onDrop={handleImportDrop}
           onContextMenu={(event) => {
             event.preventDefault();
             setContextMenuState({
               x: event.clientX,
               y: event.clientY,
               targetPath: null,
+              targetAbsolutePath: null,
+              targetTitle: null,
+              targetNoteId: null,
               isFolder: null,
               selectedPaths: selectedTreePaths,
+              allowReference: false,
             });
           }}
         >
@@ -1396,6 +2333,23 @@ export const KnowledgeNoteWorkspace = ({
             >
               新建笔记
             </button>
+            {contextMenuState.targetAbsolutePath ? (
+              <button
+                className="pm-knowledge-context-action"
+                type="button"
+                onClick={() => {
+                  const targetAbsolutePath = contextMenuState.targetAbsolutePath;
+                  if (!targetAbsolutePath) {
+                    return;
+                  }
+
+                  closeKnowledgeContextMenu();
+                  void invoke('open_path_in_shell', { path: targetAbsolutePath });
+                }}
+              >
+                系统打开
+              </button>
+            ) : null}
             <button
               className="pm-knowledge-context-action"
               type="button"
@@ -1424,6 +2378,15 @@ export const KnowledgeNoteWorkspace = ({
             >
               新建文件夹
             </button>
+            {contextMenuState.allowReference ? (
+              <button
+                className="pm-knowledge-context-action"
+                type="button"
+                onClick={() => void handleAddTreeItemToAI()}
+              >
+                加入 AI
+              </button>
+            ) : null}
             {contextMenuState.targetPath ? (
               <button
                 className="pm-knowledge-context-action"
@@ -1497,8 +2460,24 @@ export const KnowledgeNoteWorkspace = ({
         onKeyDown={handleRailResizeKeyDown}
       />
 
-      <main className="gn-note-editor-column">
-        <style>{TEMPORARY_PREVIEW_STYLES}</style>
+      <main
+        ref={documentSurfaceRef}
+        className="gn-note-editor-column"
+        onMouseUp={refreshDocumentSelection}
+        onKeyUp={refreshDocumentSelection}
+        onContextMenu={(event) => {
+          if (!documentSelection) {
+            return;
+          }
+          event.preventDefault();
+          setDocumentContextMenuState({
+            x: event.clientX,
+            y: event.clientY,
+            selection: documentSelection,
+          });
+        }}
+      >
+        <style>{`${TEMPORARY_PREVIEW_STYLES}\n${DOCUMENT_WORKBENCH_STYLES}`}</style>
         {temporaryContentPreview ? (
           <StateCard
             className="gn-note-temporary-preview"
@@ -1514,56 +2493,56 @@ export const KnowledgeNoteWorkspace = ({
         {filePreview ? (
           <>
             <div className="gn-note-editor-surface">
-              <div className="gn-note-editor-title-row gn-note-file-preview-title-row">
-                <div className="gn-note-file-preview-title">
+              <div className="gn-note-document-toolbar">
+                <div className="gn-note-document-meta">
                   <strong>{filePreview.title}</strong>
-                  <span>{isFilePreviewDirty ? '未保存' : filePreview.kind === 'markdown' ? 'Markdown' : 'Code'}</span>
+                  <div className="gn-note-document-subline">
+                    <span>{getPreviewKindLabel(filePreview)}</span>
+                    <span>{filePreviewStatusLabel}</span>
+                  </div>
                 </div>
-                {filePreview.kind === 'code' ? (
+                <div className="gn-note-document-actions">
                   <button
                     className="doc-action-btn"
                     type="button"
-                    onClick={() => void handleSaveFilePreview()}
-                    disabled={!isFilePreviewDirty || filePreview.state !== 'ready'}
+                    onClick={handleAddCurrentDocumentToAI}
+                    disabled={!canAddCurrentDocumentToAI}
                   >
-                    保存
+                    加入 AI
                   </button>
-                ) : null}
+                  <button
+                    className="doc-action-btn secondary"
+                    type="button"
+                    onClick={() => void handleOpenCurrentDocumentInSystem()}
+                    disabled={!canOpenCurrentDocumentInSystem}
+                  >
+                    系统打开
+                  </button>
+                </div>
               </div>
-              <div className="gn-note-editor-body">
-                {filePreview?.kind === 'markdown' ? (
-                  <div className="gn-note-reading-surface">
-                    <KnowledgeMarkdownViewer
-                      markdown={filePreview.draftContent}
-                      onOpenInternalLink={handleOpenInternalMarkdownLink}
-                    />
-                  </div>
-                ) : (
-                  <div className="gn-note-code-surface">
-                    <textarea
-                      className="gn-note-file-preview-code"
-                      value={filePreview.draftContent}
-                      onChange={(event) =>
-                        setFilePreview((current) =>
-                          current && current.path === filePreview.path
-                            ? { ...current, draftContent: event.target.value }
-                            : current
-                        )
-                      }
-                      aria-label={`${filePreview.title} 文件预览`}
-                      spellCheck={false}
-                      disabled={filePreview.state !== 'ready'}
-                    />
-                  </div>
-                )}
-              </div>
+              {documentSelection ? (
+                <div className="gn-note-doc-selection-bar">
+                  <span className="gn-note-doc-selection-text">{documentSelection.text.slice(0, 80)}</span>
+                  <button className="doc-action-btn" type="button" onClick={handleAddSelectionToAI}>
+                    加入 AI
+                  </button>
+                </div>
+              ) : null}
+              <div className="gn-note-editor-body">{renderFilePreviewContent()}</div>
             </div>
           </>
         ) : selectedNote ? (
           <>
             <div className="gn-note-editor-surface">
-              <div className="gn-note-editor-title-row">
-                <div className="gn-note-reading-chrome">
+              <div className="gn-note-document-toolbar">
+                <div className="gn-note-document-meta">
+                  <strong>Markdown 笔记</strong>
+                  <div className="gn-note-document-subline">
+                    <span>{viewMode === 'read' ? '阅读视图' : '源码视图'}</span>
+                    <span>{noteSurfaceStatusLabel}</span>
+                  </div>
+                </div>
+                <div className="gn-note-document-actions">
                   <div className="gn-note-mode-toggle" role="tablist" aria-label="Markdown 查看模式">
                     <button
                       className={viewMode === 'read' ? 'active' : ''}
@@ -1580,6 +2559,22 @@ export const KnowledgeNoteWorkspace = ({
                       代码
                     </button>
                   </div>
+                  <button
+                    className="doc-action-btn"
+                    type="button"
+                    onClick={handleAddCurrentDocumentToAI}
+                    disabled={!canAddCurrentDocumentToAI}
+                  >
+                    加入 AI
+                  </button>
+                  <button
+                    className="doc-action-btn secondary"
+                    type="button"
+                    onClick={() => void handleOpenCurrentDocumentInSystem()}
+                    disabled={!canOpenCurrentDocumentInSystem}
+                  >
+                    系统打开
+                  </button>
                 </div>
               </div>
               <div className="gn-note-editor-body">
@@ -1617,6 +2612,18 @@ export const KnowledgeNoteWorkspace = ({
             </div>
           </div>
         )}
+        {documentContextMenuState ? (
+          <div
+            className="pm-knowledge-context-menu"
+            ref={documentContextMenuRef}
+            style={{ left: `${documentContextMenuState.x}px`, top: `${documentContextMenuState.y}px`, position: 'fixed' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button className="pm-knowledge-context-action" type="button" onClick={handleAddSelectionToAI}>
+              加入 AI
+            </button>
+          </div>
+        ) : null}
       </main>
     </section>
   );

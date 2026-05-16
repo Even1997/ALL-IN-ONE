@@ -85,7 +85,9 @@ import {
   type ProjectFileOperation,
   type ProjectFileProposal,
 } from '../../modules/ai/chat/projectFileOperations';
+import type { ReferenceFile } from '../../modules/knowledge/referenceFiles.ts';
 import { useKnowledgeStore } from '../../features/knowledge/store/knowledgeStore';
+import { useDocumentProjectionStore } from '../../features/knowledge/workspace/documentProjectionStore.ts';
 import { emitKnowledgeFilesystemChanged } from '../../features/knowledge/workspace/knowledgeFilesystemEvents';
 import { useProjectStore } from '../../store/projectStore';
 import { usePreviewStore } from '../../store/previewStore';
@@ -137,6 +139,8 @@ import { getRuntimeQuestionRenderEntries } from './runtimeInteractionRenderModel
 import './AIChat.css';
 
 void lazy;
+
+const EMPTY_PAG_REFERENCE_FILES: readonly ReferenceFile[] = [];
 
 type AISettingsDraft = {
   id: string | null;
@@ -958,6 +962,11 @@ export const AIChat: React.FC<AIChatProps> = ({
   const previewElements = usePreviewStore((state) => state.elements);
   const selectedElementId = usePreviewStore((state) => state.selectedElementId);
   const serverNotes = useKnowledgeStore((state) => state.notes);
+  const pagDocumentReferenceFiles = useDocumentProjectionStore((state) =>
+    currentProject
+      ? (state.projects[currentProject.id]?.files ?? EMPTY_PAG_REFERENCE_FILES)
+      : EMPTY_PAG_REFERENCE_FILES
+  );
   const aiContextState = useAIContextStore((state) =>
     currentProject ? state.projects[currentProject.id] : undefined
   );
@@ -1809,10 +1818,10 @@ export const AIChat: React.FC<AIChatProps> = ({
         tags: (file.tags || []).slice(),
       }));
 
-    return [...vaultFiles, ...generatedContextFiles].filter(
+    return [...vaultFiles, ...generatedContextFiles, ...pagDocumentReferenceFiles].filter(
       (file) => !isInternalAssistantReferencePath(file.path)
     );
-  }, [generatedFiles, requirementDocs, serverNotes]);
+  }, [generatedFiles, pagDocumentReferenceFiles, requirementDocs, serverNotes]);
   const visibleContextFileId = aiContextState?.selectedKnowledgeEntryId || activeKnowledgeFileId || null;
   const displayContextFile = useMemo(
     () => visibleContextFiles.find((entry) => entry.id === visibleContextFileId) || null,
