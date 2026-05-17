@@ -137,6 +137,7 @@ pub fn enqueue_agent_approval(
         status: "pending".to_string(),
         created_at: current_time_millis(),
         message_id: input.message_id,
+        tool_call_id: input.tool_call_id,
     };
 
     approval_store::enqueue_approval(&app_data_dir, approval)

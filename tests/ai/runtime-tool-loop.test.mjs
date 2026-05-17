@@ -452,10 +452,12 @@ test('runtime tool loop preserves original streamed read-only tool order when pa
   });
 
   assert.equal(modelMessages.length, 2);
-  assert.equal(modelMessages[1][2].role, 'user');
-  assert.match(modelMessages[1][2].content, /console\.log/);
+  assert.equal(modelMessages[1][2].role, 'assistant');
+  assert.equal(modelMessages[1][2].content, '');
   assert.equal(modelMessages[1][3].role, 'user');
-  assert.match(modelMessages[1][3].content, /package\.json/);
+  assert.match(modelMessages[1][3].content, /console\.log/);
+  assert.equal(modelMessages[1][4].role, 'user');
+  assert.match(modelMessages[1][4].content, /package\.json/);
 });
 
 test('runtime tool loop checks allowed tools before approval hooks', async () => {
@@ -540,4 +542,34 @@ test('runtime tool loop proactively compacts large old tool results before the n
   );
   assert.ok(compactedToolResult, 'expected the old tool result to be summarized');
   assert.doesNotMatch(compactedToolResult.content, new RegExp(`x{2000}`));
+});
+
+test('runtime tool loop transcript keeps structured tool-call and tool-result entries', async () => {
+  const result = await runRuntimeToolLoop({
+    maxRounds: 2,
+    initialPrompt: 'Inspect the app file.',
+    systemPrompt: 'Use tools when useful.',
+    allowedTools: ['view'],
+    callModel: async (messages) =>
+      messages.length === 1
+        ? toolUse('view', { file_path: 'src/app.ts', limit: 20 })
+        : 'The file contains the app entry point.',
+    executeTool: async () => ({
+      type: 'text',
+      content: '1: console.log("app");',
+    }),
+  });
+
+  // 锁定后续结构化 transcript 合同，避免工具结果继续伪装成普通 user 文本。
+  assert.deepEqual(
+    result.transcript.map((message) => message.kind),
+    ['user', 'assistant_tool_call', 'tool_result', 'assistant_text'],
+  );
+  assert.equal(result.transcript[1].toolCallId, result.toolCalls[0].id);
+  assert.equal(result.transcript[1].toolName, 'view');
+  assert.deepEqual(result.transcript[1].input, { file_path: 'src/app.ts', limit: 20 });
+  assert.equal(result.transcript[2].toolCallId, result.toolCalls[0].id);
+  assert.equal(result.transcript[2].toolName, 'view');
+  assert.equal(result.transcript[2].content, '1: console.log("app");');
+  assert.equal(result.transcript[3].content, 'The file contains the app entry point.');
 });

@@ -25,4 +25,5 @@ export type ApprovalRecord = {
   createdAt: number;
   resolvedAt?: number;
   messageId?: string | null;
+  toolCallId?: string | null;
 };

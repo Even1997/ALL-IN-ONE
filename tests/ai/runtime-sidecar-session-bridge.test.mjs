@@ -25,6 +25,14 @@ test('runtime sidecar live bridge does not expose raw reasoning text in canonica
   assert.doesNotMatch(source, /detail:\s*reasoning\.content/);
 });
 
+test('runtime sidecar live bridge does not replay full reasoning snapshot text as a canonical reasoning delta payload', async () => {
+  const source = await readFile(bridgePath, 'utf8');
+
+  assert.match(source, /type:\s*'reasoning\.delta'/);
+  assert.match(source, /type:\s*'reasoning\.completed'/);
+  assert.match(source, /finalText:\s*reasoning\.content/);
+});
+
 test('runtime sidecar live bridge keeps message deltas out of persisted chat messages and feeds canonical response events instead', async () => {
   const source = await readFile(bridgePath, 'utf8');
 

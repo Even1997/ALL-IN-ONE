@@ -45,6 +45,7 @@ pub struct ApprovalRecord {
     pub status: String,
     pub created_at: u64,
     pub message_id: Option<String>,
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -82,6 +83,7 @@ pub struct EnqueueAgentApprovalInput {
     pub risk_level: String,
     pub summary: String,
     pub message_id: Option<String>,
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -89,6 +91,7 @@ pub struct EnqueueAgentApprovalInput {
 pub struct ResolveAgentApprovalInput {
     pub approval_id: String,
     pub status: String,
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

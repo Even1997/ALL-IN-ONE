@@ -57,3 +57,55 @@ test('runtime sidecar snapshot deltas skip rewritten snapshots instead of duplic
     '',
   );
 });
+
+test('runtime sidecar reasoning snapshot deltas append only the new suffix after prior canonical reasoning text', async () => {
+  const { resolveRuntimeSidecarSnapshotReasoningDelta } = await loadDeltaModule();
+
+  const canonicalEvents = [
+    {
+      type: 'reasoning.delta',
+      messageId: 'assistant_1',
+      runId: 'assistant_1',
+      ts: 1,
+      seq: 1,
+      payload: {
+        textChunk: '好的，让我先看看这个项目的结构。',
+      },
+    },
+  ];
+
+  assert.equal(
+    resolveRuntimeSidecarSnapshotReasoningDelta(
+      canonicalEvents,
+      'assistant_1',
+      '好的，让我先看看这个项目的结构。然后我会顺着运行链路继续排查。',
+    ),
+    '然后我会顺着运行链路继续排查。',
+  );
+});
+
+test('runtime sidecar reasoning snapshot deltas skip rewritten reasoning snapshots instead of duplicating visible output', async () => {
+  const { resolveRuntimeSidecarSnapshotReasoningDelta } = await loadDeltaModule();
+
+  const canonicalEvents = [
+    {
+      type: 'reasoning.delta',
+      messageId: 'assistant_1',
+      runId: 'assistant_1',
+      ts: 1,
+      seq: 1,
+      payload: {
+        textChunk: 'old reasoning text',
+      },
+    },
+  ];
+
+  assert.equal(
+    resolveRuntimeSidecarSnapshotReasoningDelta(
+      canonicalEvents,
+      'assistant_1',
+      'new reasoning text',
+    ),
+    '',
+  );
+});

@@ -139,6 +139,63 @@ test('runtime project file flow prepares proposal and approval decision from pla
   );
 });
 
+test('runtime project file approval keeps runtime context on the default approval path', async () => {
+  const { requestRuntimeProjectFileApproval } = await loadProjectFileFlow();
+
+  const requested = [];
+  const pendingApprovalActions = {};
+
+  await requestRuntimeProjectFileApproval({
+    threadId: 'thread-1',
+    runtimeStoreThreadId: 'runtime-thread-1',
+    replayThreadId: 'replay-thread-1',
+    providerId: 'anthropic',
+    actionType: 'tool_remove',
+    riskLevel: 'high',
+    summary: 'Delete notes/remove-me.txt',
+    messageId: 'message-1',
+    toolCallId: 'tool-call-1',
+    onApprove: async () => undefined,
+    onDeny: async () => undefined,
+    enqueueAgentApproval: async (payload) => {
+      requested.push(payload);
+      return {
+        id: 'approval-1',
+        threadId: payload.threadId,
+        actionType: payload.actionType,
+        riskLevel: payload.riskLevel,
+        summary: payload.summary,
+        status: 'pending',
+        createdAt: 1,
+        messageId: payload.messageId,
+        toolCallId: payload.toolCallId,
+      };
+    },
+    enqueueApproval: () => undefined,
+    pendingApprovalActions,
+  });
+
+  assert.deepEqual(requested, [
+    {
+      threadId: 'thread-1',
+      actionType: 'tool_remove',
+      riskLevel: 'high',
+      summary: 'Delete notes/remove-me.txt',
+      messageId: 'message-1',
+      toolCallId: 'tool-call-1',
+    },
+  ]);
+  assert.equal(pendingApprovalActions['approval-1']?.threadId, 'thread-1');
+  assert.equal(pendingApprovalActions['approval-1']?.runtimeStoreThreadId, 'runtime-thread-1');
+  assert.equal(pendingApprovalActions['approval-1']?.replayThreadId, 'replay-thread-1');
+  assert.equal(pendingApprovalActions['approval-1']?.providerId, 'anthropic');
+  assert.equal(pendingApprovalActions['approval-1']?.actionType, 'tool_remove');
+  assert.equal(pendingApprovalActions['approval-1']?.riskLevel, 'high');
+  assert.equal(pendingApprovalActions['approval-1']?.summary, 'Delete notes/remove-me.txt');
+  assert.equal(pendingApprovalActions['approval-1']?.toolCallId, 'tool-call-1');
+  assert.equal(pendingApprovalActions['approval-1']?.messageId, 'message-1');
+});
+
 test('runtime project file read carries conversation history into the prompt', async () => {
   const { executeRuntimeProjectFileRead } = await loadProjectFileFlow();
 

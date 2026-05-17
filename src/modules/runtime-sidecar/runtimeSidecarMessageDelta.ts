@@ -54,6 +54,30 @@ export const resolveRuntimeSidecarProjectedMessageText = (
   return projectedText;
 };
 
+export const resolveRuntimeSidecarProjectedReasoningText = (
+  canonicalEvents: CanonicalEvent[] = [],
+  messageId: string,
+) => {
+  let projectedText = '';
+
+  for (const event of sortCanonicalEvents(canonicalEvents)) {
+    if (!belongsToMessage(event, messageId)) {
+      continue;
+    }
+
+    if (event.type === 'reasoning.delta') {
+      projectedText += event.payload.textChunk;
+      continue;
+    }
+
+    if (event.type === 'reasoning.completed') {
+      projectedText = event.payload.finalText || event.payload.summary || projectedText;
+    }
+  }
+
+  return projectedText;
+};
+
 export const resolveRuntimeSidecarSnapshotMessageDelta = (
   canonicalEvents: CanonicalEvent[] = [],
   messageId: string,
@@ -66,6 +90,27 @@ export const resolveRuntimeSidecarSnapshotMessageDelta = (
   }
 
   const projectedText = resolveRuntimeSidecarProjectedMessageText(canonicalEvents, messageId);
+  if (!projectedText) {
+    return snapshotText;
+  }
+
+  if (snapshotText === projectedText) {
+    return '';
+  }
+
+  return snapshotText.startsWith(projectedText) ? snapshotText.slice(projectedText.length) : '';
+};
+
+export const resolveRuntimeSidecarSnapshotReasoningDelta = (
+  canonicalEvents: CanonicalEvent[] = [],
+  messageId: string,
+  snapshotText: string,
+) => {
+  if (!snapshotText) {
+    return '';
+  }
+
+  const projectedText = resolveRuntimeSidecarProjectedReasoningText(canonicalEvents, messageId);
   if (!projectedText) {
     return snapshotText;
   }

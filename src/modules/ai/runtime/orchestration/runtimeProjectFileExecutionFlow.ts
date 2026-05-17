@@ -304,7 +304,11 @@ export const cancelRuntimeProjectFileProposal = async (input: {
   ) => void;
   resolveStoredApproval: (approvalId: string, status: ApprovalStatus) => void;
   clearPendingApprovalAction: (approvalId: string) => void;
-  resolveAgentApproval: (payload: { approvalId: string; status: ApprovalStatus }) => Promise<unknown>;
+  resolveAgentApproval: (payload: {
+    approvalId: string;
+    status: ApprovalStatus;
+    toolCallId?: string | null;
+  }) => Promise<unknown>;
 }) => {
   const pendingApproval = findPendingApprovalByMessageId({
     activeApprovalThreadId: input.activeApprovalThreadId,
@@ -326,7 +330,12 @@ export const cancelRuntimeProjectFileProposal = async (input: {
   if (pendingApproval) {
     input.resolveStoredApproval(pendingApproval.id, 'denied');
     input.clearPendingApprovalAction(pendingApproval.id);
-    await input.resolveAgentApproval({ approvalId: pendingApproval.id, status: 'denied' });
+    // proposal 审批收口也要继续带上 toolCallId，避免项目文件流在回放/投影时丢链路。
+    await input.resolveAgentApproval({
+      approvalId: pendingApproval.id,
+      status: 'denied',
+      toolCallId: pendingApproval.toolCallId || null,
+    });
   }
 };
 
@@ -345,7 +354,11 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
   ) => void;
   resolveStoredApproval: (approvalId: string, status: ApprovalStatus) => void;
   clearPendingApprovalAction: (approvalId: string) => void;
-  resolveAgentApproval: (payload: { approvalId: string; status: ApprovalStatus }) => Promise<unknown>;
+  resolveAgentApproval: (payload: {
+    approvalId: string;
+    status: ApprovalStatus;
+    toolCallId?: string | null;
+  }) => Promise<unknown>;
   runId: string;
   createActivityEntryId: () => string;
   getProjectDir: (projectId: string) => Promise<string>;
@@ -388,7 +401,12 @@ export const executeRuntimeApprovedProjectFileProposal = async (input: {
   if (pendingApproval) {
     input.resolveStoredApproval(pendingApproval.id, 'approved');
     input.clearPendingApprovalAction(pendingApproval.id);
-    await input.resolveAgentApproval({ approvalId: pendingApproval.id, status: 'approved' });
+    // 批准恢复执行时同样保留 toolCallId，让审批卡、执行恢复和 timeline 共用同一事实键。
+    await input.resolveAgentApproval({
+      approvalId: pendingApproval.id,
+      status: 'approved',
+      toolCallId: pendingApproval.toolCallId || null,
+    });
   }
 
   try {

@@ -1,4 +1,5 @@
 import { withRetry } from '../../../src/modules/ai/runtime/retry/withRetry.ts';
+import type { RuntimeToolPromptMessage } from '../../../src/modules/ai/runtime/agent-kernel/agentKernelTypes.ts';
 import { TOOLS } from '../../../src/modules/ai/runtime/tools/toolExecutor.ts';
 import type {
   RuntimeProviderEvent,
@@ -19,7 +20,7 @@ type RuntimeProviderPartialToolCall = {
 
 type RuntimeProviderStreamInput = {
   runtimeConfig: RuntimeModelConfig;
-  prompt: string;
+  prompt: string | RuntimeToolPromptMessage[];
   systemPrompt: string;
   onEvent?: (event: RuntimeProviderEvent) => Promise<void> | void;
   signal?: AbortSignal;
@@ -110,6 +111,14 @@ const normalizeUsage = (
     ...(typeof usage.total_tokens === 'number' ? { totalTokens: usage.total_tokens } : {}),
   };
 };
+
+// provider 这一层继续接受旧的 string prompt，也兼容 runtime 内部新的结构化消息数组。
+const normalizePromptMessages = (
+  prompt: string | RuntimeToolPromptMessage[],
+): RuntimeToolPromptMessage[] =>
+  typeof prompt === 'string'
+    ? [{ role: 'user', content: prompt }]
+    : prompt.filter((message) => message.content.trim().length > 0);
 
 const parseToolArguments = (value: unknown): Record<string, unknown> | null => {
   if (typeof value !== 'string') {
@@ -424,6 +433,7 @@ const fetchOpenAICompatibleWithV1Fallback = async (
 const streamOpenAICompatibleTurn = async (
   input: RuntimeProviderStreamInput,
 ): Promise<string> => {
+  const messages = normalizePromptMessages(input.prompt);
   const doFetch = async () => {
     const response = await fetchOpenAICompatibleWithV1Fallback(input.runtimeConfig.baseURL, '/chat/completions', {
       method: 'POST',
@@ -447,10 +457,7 @@ const streamOpenAICompatibleTurn = async (
             role: 'system',
             content: input.systemPrompt,
           },
-          {
-            role: 'user',
-            content: input.prompt,
-          },
+          ...messages,
         ],
       }),
       signal: input.signal,
@@ -529,6 +536,10 @@ const streamAnthropicTurn = async (
   input: RuntimeProviderStreamInput,
 ): Promise<string> => {
   const baseUrl = input.runtimeConfig.baseURL.trim() || 'https://api.anthropic.com/v1';
+  const messages = normalizePromptMessages(input.prompt).map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
   const doFetch = async () => {
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/messages`, {
       method: 'POST',
@@ -545,12 +556,7 @@ const streamAnthropicTurn = async (
         system: input.systemPrompt,
         stream: true,
         tools: buildAnthropicTools(),
-        messages: [
-          {
-            role: 'user',
-            content: input.prompt,
-          },
-        ],
+        messages,
       }),
       signal: input.signal,
     });

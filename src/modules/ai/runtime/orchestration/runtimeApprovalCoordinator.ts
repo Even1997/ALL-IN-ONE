@@ -51,6 +51,7 @@ export const requestRuntimeApproval = async (input: {
     riskLevel: ApprovalRiskLevel;
     summary: string;
     messageId: string | null;
+    toolCallId?: string | null;
   }) => Promise<ApprovalRecord>;
   enqueueApproval: (approval: ApprovalRecord) => void;
   pendingApprovalActions: Record<string, RuntimePendingApprovalAction>;
@@ -64,6 +65,7 @@ export const requestRuntimeApproval = async (input: {
     riskLevel: input.riskLevel,
     summary: input.summary,
     messageId: input.messageId || null,
+    toolCallId: input.toolCallId || null,
   });
 
   input.enqueueApproval(approval);
@@ -90,7 +92,11 @@ export const resolveRuntimeApproval = async (input: {
   status: ApprovalStatus;
   pendingApprovalActions: Record<string, RuntimePendingApprovalAction>;
   resolveStoredApproval: (approvalId: string, status: ApprovalStatus) => void;
-  resolveAgentApproval: (payload: { approvalId: string; status: ApprovalStatus }) => Promise<unknown>;
+  resolveAgentApproval: (payload: {
+    approvalId: string;
+    status: ApprovalStatus;
+    toolCallId?: string | null;
+  }) => Promise<unknown>;
 }) => {
   // resolve 顺序很重要：
   // 1. 先从 pending map 里取出上下文。
@@ -100,10 +106,19 @@ export const resolveRuntimeApproval = async (input: {
 
   input.resolveStoredApproval(input.approvalId, input.status);
   delete input.pendingApprovalActions[input.approvalId];
-  await input.resolveAgentApproval({
+  const resolvePayload: {
+    approvalId: string;
+    status: ApprovalStatus;
+    toolCallId?: string | null;
+  } = {
     approvalId: input.approvalId,
     status: input.status,
-  });
+  };
+  if (pendingAction?.toolCallId) {
+    // 审批回执继续带上 toolCallId，后续执行和投影都用结构化关联，不再反推正文。
+    resolvePayload.toolCallId = pendingAction.toolCallId;
+  }
+  await input.resolveAgentApproval(resolvePayload);
 
   return pendingAction || null;
 };

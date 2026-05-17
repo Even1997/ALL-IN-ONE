@@ -104,8 +104,8 @@ export const buildAssistantMessageOutputModel = (input: {
     processItems: timelineRenderModel.processItems,
     finalAnswerItem: timelineRenderModel.finalAnswerItem,
     copyText: assistantRenderModel.copyText,
-    hasVisibleContent:
-      timelineRenderModel.processItems.length > 0 || Boolean(timelineRenderModel.finalAnswerItem),
+    // 可见性判断要覆盖 runtime truth 卡片；否则 approval-only / question-only 消息会整条不显示。
+    hasVisibleContent: timelineRenderModel.orderedItems.length > 0,
     isStreaming,
   };
 };

@@ -72,6 +72,7 @@ import {
 } from './runtimeSidecarStreamingCoalescer.ts';
 import {
   resolveRuntimeSidecarSnapshotMessageDelta,
+  resolveRuntimeSidecarSnapshotReasoningDelta,
 } from './runtimeSidecarMessageDelta.ts';
 
 // runtimeSidecarSessionBridge 是前端和 node runtime sidecar 之间的总桥接层：
@@ -707,7 +708,12 @@ const applyRuntimeSidecarReasoningEvent = (
     }),
     reasoning.createdAt,
   );
-  if (reasoning.content.trim()) {
+  const textChunk = resolveRuntimeSidecarSnapshotReasoningDelta(
+    located.session.canonicalEvents || [],
+    messageId,
+    reasoning.content,
+  );
+  if (textChunk) {
     appendRuntimeSidecarCanonicalEvent(
       sessionId,
       messageId,
@@ -718,7 +724,7 @@ const applyRuntimeSidecarReasoningEvent = (
         messageId,
         type: 'reasoning.delta',
         payload: {
-          textChunk: reasoning.content,
+          textChunk,
         },
         ts: reasoning.createdAt,
       }),

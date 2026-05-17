@@ -1,3 +1,6 @@
+/* 文件作用：定义 AI Chat 工作区与嵌入式 workbench 聊天界面的样式。
+   所在链路：UI composition 层，承接 runtime/projection/render model 产物的最终视觉呈现。
+   排查入口：优先检查 AIChat.tsx、assistantRenderModel.ts、timeline 相关组件，以及本文件中 .gn-agent-workspace .chat-shell-embedded 作用域。 */
 .chat-shell {
   position: fixed;
   top: 92px;
@@ -3822,8 +3825,8 @@ body.desktop-workbench-mode .chat-shell.is-collapsed {
 }
 
 .gn-agent-workspace .chat-shell-embedded {
-  --gn-agent-content-width: min(840px, 100%);
-  --gn-agent-content-gutter: clamp(16px, 3vw, 28px);
+  --gn-agent-content-width: min(880px, 100%);
+  --gn-agent-content-gutter: clamp(10px, 3vw, 24px);
   --gn-agent-linear-lane-width: var(--gn-agent-content-width);
   background: var(--wb-stage-background, var(--gn-agent-bg, #171819));
   color: var(--wb-text-primary, var(--gn-agent-text, #e9e9e6));

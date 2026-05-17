@@ -91,7 +91,7 @@
 - Modify: `tests/ai/runtime-provider-events.test.mjs`
 - Add: `tests/ai/runtime-structured-tool-messages.test.mjs`
 
-- [ ] **Step 1: Add a failing runtime tool-loop contract test**
+- [x] **Step 1: Add a failing runtime tool-loop contract test**
 
 Add a test that executes one tool-capable turn and asserts the runtime transcript contains distinct semantic entries:
 - one user message
@@ -101,19 +101,19 @@ Add a test that executes one tool-capable turn and asserts the runtime transcrip
 
 Expected failure: current transcript only exposes plain `{ role, content }` messages and collapses tool results into a fake user text message.
 
-- [ ] **Step 2: Add a failing provider request-shape regression test**
+- [x] **Step 2: Add a failing provider request-shape regression test**
 
 Add a test that asserts the structured runtime path can pass message arrays into the provider layer without flattening everything into a single user prompt string.
 
 Expected failure: `runAgentTurn()` still depends on `renderModelPrompt(messages)`.
 
-- [ ] **Step 3: Add a failing approval correlation test**
+- [x] **Step 3: Add a failing approval correlation test**
 
 Add a test that asserts a risky tool call keeps a stable `toolCallId` through approval request creation and approval resolution.
 
 Expected failure: tool approval and transcript shape are not yet formally locked together as a structured contract.
 
-- [ ] **Step 4: Run targeted tests and verify RED**
+- [x] **Step 4: Run targeted tests and verify RED**
 
 Run:
 
@@ -131,7 +131,7 @@ Expected:
 - Modify: `src/modules/ai/runtime/tools/runtimeToolLoop.ts`
 - Modify: `src/modules/ai/runtime/agent-kernel/runAgentTurn.ts`
 
-- [ ] **Step 1: Expand the runtime message model**
+- [x] **Step 1: Expand the runtime message model**
 
 Replace the single-shape `RuntimeToolMessage` with a discriminated union that can represent:
 - user input
@@ -145,14 +145,14 @@ Minimum required fields:
 - `toolCallId` on tool-related messages
 - raw content string for compatibility where useful
 
-- [ ] **Step 2: Keep the existing loop behavior but stop treating tool results as fake user text**
+- [x] **Step 2: Keep the existing loop behavior but stop treating tool results as fake user text**
 
 Inside `runRuntimeToolLoop()`:
 - stop using plain `createToolResultMessage()` as the primary semantic representation
 - append a structured tool result message instead
 - preserve any needed compatibility text only as a serialization detail, not as the source of truth
 
-- [ ] **Step 3: Remove the hard dependency on prompt flattening**
+- [x] **Step 3: Remove the hard dependency on prompt flattening**
 
 Refactor `runAgentTurn()` so it no longer requires `renderModelPrompt(messages)` as the only model input path.
 
@@ -160,7 +160,7 @@ Goal:
 - `runAgentTurn()` can pass structured runtime messages to the next layer
 - legacy string rendering may remain as temporary fallback only
 
-- [ ] **Step 4: Keep old XML/text parsing as fallback only**
+- [x] **Step 4: Keep old XML/text parsing as fallback only**
 
 Do not delete `parseToolCalls()` or text repair logic in this task.
 Keep them available for:
@@ -168,7 +168,7 @@ Keep them available for:
 - malformed outputs
 - partial migration periods
 
-- [ ] **Step 5: Run targeted tests and verify GREEN for the new runtime contract**
+- [x] **Step 5: Run targeted tests and verify GREEN for the new runtime contract**
 
 Run:
 
@@ -188,7 +188,7 @@ Expected:
 - Modify: `tests/ai/ai-service.test.mjs`
 - Modify: `tests/ai/runtime-provider-events.test.mjs`
 
-- [ ] **Step 1: Add a structured provider entrypoint**
+- [x] **Step 1: Add a structured provider entrypoint**
 
 Introduce a new `AIService` method for structured messages, such as `completeMessages()`.
 
@@ -198,7 +198,7 @@ Requirements:
 - preserves current `thinking`, `text`, and `tool_call` event semantics
 - does not break existing `completeText()` callers
 
-- [ ] **Step 2: Map structured runtime messages into OpenAI-compatible payloads**
+- [x] **Step 2: Map structured runtime messages into OpenAI-compatible payloads**
 
 For OpenAI-compatible requests:
 - assistant tool call messages map to native `tool_calls`
@@ -206,17 +206,17 @@ For OpenAI-compatible requests:
 
 Do not attempt to backfill Anthropic native tool-result return in this task.
 
-- [ ] **Step 3: Update `CodexRuntime` to use the structured path for runtime tool turns**
+- [x] **Step 3: Update `CodexRuntime` to use the structured path for runtime tool turns**
 
 Keep `completeText()` available for non-tool or legacy callers.
 
-- [ ] **Step 4: Keep fallback compatibility**
+- [x] **Step 4: Keep fallback compatibility**
 
 If the provider returns text-only output or the native tool path cannot be completed:
 - preserve the current fallback parsing lane
 - do not strand the runtime in an unusable half-migrated state
 
-- [ ] **Step 5: Run targeted provider tests**
+- [x] **Step 5: Run targeted provider tests**
 
 Run:
 
@@ -236,7 +236,7 @@ Expected:
 - Modify: `tests/ai/runtime-chat-turn-coordinator.test.mjs`
 - Add: `tests/ai/runtime-tool-approval-correlation.test.mjs`
 
-- [ ] **Step 1: Keep `beforeToolCall` as the single execution gate**
+- [x] **Step 1: Keep `beforeToolCall` as the single execution gate**
 
 Ensure both:
 - native structured tool calls
@@ -247,7 +247,7 @@ still pass through the same runtime gate before execution:
 - sandbox policy
 - approval wait
 
-- [ ] **Step 2: Bind approval records tightly to `toolCallId`**
+- [x] **Step 2: Bind approval records tightly to `toolCallId`**
 
 Approval request and resolution must carry enough context to correlate:
 - the runtime tool call
@@ -256,7 +256,7 @@ Approval request and resolution must carry enough context to correlate:
 
 Avoid any dependency on assistant prose for this correlation.
 
-- [ ] **Step 3: Add approval regression coverage**
+- [x] **Step 3: Add approval regression coverage**
 
 Add tests for:
 - risky tool denied by sandbox policy
@@ -264,7 +264,7 @@ Add tests for:
 - approval granted resumes the matching tool call only
 - approval denied blocks execution and final answer remains coherent
 
-- [ ] **Step 4: Run targeted approval tests**
+- [x] **Step 4: Run targeted approval tests**
 
 Run:
 
@@ -289,13 +289,13 @@ Expected:
 - Modify: `tests/ai/assistant-render-model.test.mjs`
 - Modify: `tests/ai/ai-chat-direct-streaming-display-source.test.mjs`
 
-- [ ] **Step 1: Keep canonical event semantics unchanged**
+- [x] **Step 1: Keep canonical event semantics unchanged**
 
 `tool.started`, tool result, approval, and final message completion should continue to come from runtime truth.
 
 Do not make the UI reconstruct tool execution from assistant prose.
 
-- [ ] **Step 2: Separate display lanes clearly**
+- [x] **Step 2: Separate display lanes clearly**
 
 UI must render distinct surfaces for:
 - thinking
@@ -305,14 +305,14 @@ UI must render distinct surfaces for:
 
 The final answer lane must not include `Tool xxx result` protocol text.
 
-- [ ] **Step 3: Ensure streaming draft logic respects the new truth model**
+- [x] **Step 3: Ensure streaming draft logic respects the new truth model**
 
 Streaming draft projection should:
 - show live tool/thinking progress from runtime events
 - show final answer as durable answer body
 - avoid regressing into one merged chat blob
 
-- [ ] **Step 4: Run targeted rendering tests**
+- [x] **Step 4: Run targeted rendering tests**
 
 Run:
 
@@ -332,19 +332,19 @@ Expected:
 - Modify: `src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts`
 - Modify: related tests as needed
 
-- [ ] **Step 1: Update compaction to understand structured tool-result messages**
+- [x] **Step 1: Update compaction to understand structured tool-result messages**
 
 Current compaction logic is text-oriented. Update it so it trims or summarizes tool-result payloads without destroying message semantics.
 
-- [ ] **Step 2: Shrink text-protocol sanitization to compatibility scope**
+- [x] **Step 2: Shrink text-protocol sanitization to compatibility scope**
 
 Keep XML / DSML / tool protocol sanitization for fallback lanes, but stop treating it as the primary runtime tool flow.
 
-- [ ] **Step 3: Add the Anthropic native return path**
+- [x] **Step 3: Add the Anthropic native return path**
 
 Once OpenAI-compatible is stable, extend the structured runtime path to return tool results using Anthropic-native semantics.
 
-- [ ] **Step 4: Full targeted verification**
+- [x] **Step 4: Full targeted verification**
 
 Run:
 
@@ -362,19 +362,19 @@ Expected:
 **Files:**
 - Verify only
 
-- [ ] **Step 1: Run the broader AI/runtime test slice**
+- [x] **Step 1: Run the broader AI/runtime test slice**
 
 ```bash
 node --test tests/ai/ai-service.test.mjs tests/ai/runtime-provider-events.test.mjs tests/ai/runtime-tool-loop.test.mjs tests/ai/runtime-chat-turn-coordinator.test.mjs tests/ai/assistant-render-model.test.mjs tests/ai/ai-chat-direct-streaming-display-source.test.mjs
 ```
 
-- [ ] **Step 2: Run build**
+- [x] **Step 2: Run build**
 
 ```bash
 npm run build
 ```
 
-- [ ] **Step 3: Manual verification**
+- [x] **Step 3: Manual verification**
 
 Manual checks:
 - a read-only tool turn still works
@@ -384,7 +384,7 @@ Manual checks:
 - final answer does not include protocol junk
 - tool execution still shows in timeline / right pane
 
-- [ ] **Step 4: Refresh graph**
+- [x] **Step 4: Refresh graph**
 
 ```bash
 graphify update .
@@ -410,16 +410,16 @@ Expected:
 
 ## 4. Verification Checklist
 
-- [ ] Runtime transcript distinguishes user input, assistant tool call, tool result, and final answer
-- [ ] `runAgentTurn()` no longer depends exclusively on flattening messages into a single prompt string
-- [ ] OpenAI-compatible provider supports structured tool call and tool result round-trips
-- [ ] High-risk tools still respect `deny / ask / allow / bypass`
-- [ ] Approval records correlate to `toolCallId`
-- [ ] Tool execution UI renders from runtime truth, not assistant prose parsing
-- [ ] Final answer surface does not contain `Tool xxx result` protocol text
-- [ ] Fallback XML/text tool path still works during migration
-- [ ] `npm run build`
-- [ ] `graphify update .`
+- [x] Runtime transcript distinguishes user input, assistant tool call, tool result, and final answer
+- [x] `runAgentTurn()` no longer depends exclusively on flattening messages into a single prompt string
+- [x] OpenAI-compatible provider supports structured tool call and tool result round-trips
+- [x] High-risk tools still respect `deny / ask / allow / bypass`
+- [x] Approval records correlate to `toolCallId`
+- [x] Tool execution UI renders from runtime truth, not assistant prose parsing
+- [x] Final answer surface does not contain `Tool xxx result` protocol text
+- [x] Fallback XML/text tool path still works during migration
+- [x] `npm run build`
+- [x] `graphify update .`
 
 ---
 

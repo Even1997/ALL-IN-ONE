@@ -7,10 +7,39 @@ import type { AITextStreamEvent } from '../../core/AIService.ts';
 import type { CompactionReason } from '../compaction/compactionTypes.ts';
 import type { AgentEvent } from '../dispatch/agentEvents.ts';
 
-export type RuntimeToolMessage = {
+export type RuntimeToolPromptMessage = {
   role: 'user' | 'assistant';
   content: string;
 };
+
+export type RuntimeToolMessage =
+  | {
+      kind: 'user';
+      role: 'user';
+      content: string;
+    }
+  | {
+      kind: 'assistant_text';
+      role: 'assistant';
+      content: string;
+    }
+  | {
+      // 结构化保留工具调用事实，避免后续只能从正文里反推。
+      kind: 'assistant_tool_call';
+      role: 'assistant';
+      content: string;
+      toolCallId: string;
+      toolName: string;
+      input: Record<string, unknown>;
+    }
+  | {
+      // 工具结果继续保留可序列化 content，兼容当前压缩和回退逻辑。
+      kind: 'tool_result';
+      role: 'tool';
+      content: string;
+      toolCallId: string;
+      toolName: string;
+    };
 
 export type RuntimeToolStep = {
   id: string;
@@ -48,7 +77,7 @@ export type RuntimeToolLoopOptions = {
   onModelEvent?: (event: AITextStreamEvent) => void;
   onContextCompaction?: (reason: CompactionReason) => void;
   callModel: (
-    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    messages: RuntimeToolPromptMessage[],
     systemPrompt: string,
     onEvent?: (event: AITextStreamEvent) => void
   ) => Promise<string>;

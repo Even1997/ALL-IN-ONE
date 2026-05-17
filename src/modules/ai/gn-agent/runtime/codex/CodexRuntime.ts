@@ -4,6 +4,7 @@
 
 import { aiService } from '../../../core/AIService';
 import type { AITextStreamEvent } from '../../../core/AIService';
+import type { RuntimeToolPromptMessage } from '../../../runtime/agent-kernel/agentKernelTypes.ts';
 import type { AIConfigEntry } from '../../../store/aiConfigState';
 import { toRuntimeAIConfig } from '../../../store/aiConfigState';
 import type { GNAgentRuntimeContext, GNAgentRuntimeStatus } from '../types';
@@ -26,7 +27,7 @@ export class CodexRuntime {
     sessionId: string;
     config: AIConfigEntry;
     systemPrompt?: string;
-    prompt: string;
+    prompt: string | RuntimeToolPromptMessage[];
     onChunk?: (text: string) => void;
     onEvent?: (event: AITextStreamEvent) => void;
     signal?: AbortSignal;
@@ -39,13 +40,21 @@ export class CodexRuntime {
     const previousConfig = aiService.getConfig();
     aiService.setConfig(toRuntimeAIConfig(config));
     try {
-      return await aiService.completeText({
-        systemPrompt,
-        prompt,
-        onChunk,
-        onEvent,
-        signal,
-      });
+      return Array.isArray(prompt)
+        ? await aiService.completeMessages({
+            systemPrompt,
+            messages: prompt,
+            onChunk,
+            onEvent,
+            signal,
+          })
+        : await aiService.completeText({
+            systemPrompt,
+            prompt,
+            onChunk,
+            onEvent,
+            signal,
+          });
     } finally {
       aiService.setConfig(previousConfig);
     }
@@ -111,4 +120,3 @@ export class CodexRuntime {
     };
   }
 }
-

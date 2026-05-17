@@ -242,6 +242,7 @@ test('runtime project file execution flow cancels pending proposals and resolves
           status: 'pending',
           createdAt: 1,
           messageId: 'message-1',
+          toolCallId: 'tool-call-1',
         },
       ],
     },
@@ -262,7 +263,9 @@ test('runtime project file execution flow cancels pending proposals and resolves
   assert.equal(currentMessage.projectFileProposal.status, 'cancelled');
   assert.deepEqual(resolved, [{ approvalId: 'approval-1', status: 'denied' }]);
   assert.deepEqual(cleared, ['approval-1']);
-  assert.deepEqual(backendResolved, [{ approvalId: 'approval-1', status: 'denied' }]);
+  assert.deepEqual(backendResolved, [
+    { approvalId: 'approval-1', status: 'denied', toolCallId: 'tool-call-1' },
+  ]);
 });
 
 test('runtime project file execution flow executes approved proposals and records activity outcome', async () => {
@@ -302,6 +305,7 @@ test('runtime project file execution flow executes approved proposals and record
           status: 'pending',
           createdAt: 1,
           messageId: 'message-1',
+          toolCallId: 'tool-call-1',
         },
       ],
     },
@@ -337,7 +341,9 @@ test('runtime project file execution flow executes approved proposals and record
   assert.equal(appendedEntries.length, 1);
   assert.deepEqual(resolved, [{ approvalId: 'approval-1', status: 'approved' }]);
   assert.deepEqual(cleared, ['approval-1']);
-  assert.deepEqual(backendResolved, [{ approvalId: 'approval-1', status: 'approved' }]);
+  assert.deepEqual(backendResolved, [
+    { approvalId: 'approval-1', status: 'approved', toolCallId: 'tool-call-1' },
+  ]);
 });
 
 test('runtime project file execution flow skips activity entries for approved no-op proposals', async () => {

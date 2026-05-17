@@ -15,6 +15,12 @@ const summarizeToolResult = (content: string, name: string, previewChars: number
   return `Tool "${name}" completed. Output (${totalChars} chars total):\n${preview}${totalChars > previewChars ? '\n...' : ''}`;
 };
 
+const isToolResultMessage = (message: RuntimeToolMessage) =>
+  message.kind === 'tool_result' || (message.role === 'user' && TOOL_RESULT_PREFIX.test(message.content));
+
+const isAssistantRoundMessage = (message: RuntimeToolMessage) =>
+  message.kind === 'assistant_text' || message.kind === 'assistant_tool_call' || message.role === 'tool';
+
 export const compactOldToolResults = (
   messages: RuntimeToolMessage[],
   options: CompactOptions = {}
@@ -23,7 +29,7 @@ export const compactOldToolResults = (
 
   const userIndices: number[] = [];
   for (let i = 0; i < messages.length; i += 1) {
-    if (messages[i]!.role === 'user' && TOOL_RESULT_PREFIX.test(messages[i]!.content)) {
+    if (isToolResultMessage(messages[i]!)) {
       userIndices.push(i);
     }
   }
@@ -43,7 +49,7 @@ export const compactOldToolResults = (
     if (msg.content.length <= maxResultChars) continue;
 
     const nameMatch = TOOL_RESULT_PREFIX.exec(msg.content);
-    const toolName = nameMatch?.[1] ?? 'unknown';
+    const toolName = msg.kind === 'tool_result' ? msg.toolName : nameMatch?.[1] ?? 'unknown';
     messages[idx] = {
       ...msg,
       content: summarizeToolResult(msg.content, toolName, previewChars),
@@ -59,17 +65,20 @@ export const removeOldestTurn = (messages: RuntimeToolMessage[]): CompactionResu
     return { compacted: false, reason: 'old_turns_removed', trimmedCount: 0 };
   }
 
-  // Remove first user message and the following assistant response
-  let removed = 0;
-  if (messages[0]?.role === 'user') {
-    messages.splice(0, 1);
-    removed += 1;
-  }
-  if (messages[0]?.role === 'assistant') {
-    messages.splice(0, 1);
-    removed += 1;
+  const firstUserIndex = messages.findIndex((message) => message.role === 'user');
+  if (firstUserIndex === -1) {
+    return { compacted: false, reason: 'old_turns_removed', trimmedCount: 0 };
   }
 
+  // 结构化 transcript 下，一轮 user 之后可能跟着 assistant_tool_call / tool_result / assistant_text。
+  // 这里按“整轮”裁剪，避免只删掉 user 文本后留下悬空 tool_result。
+  let endExclusive = firstUserIndex + 1;
+  while (endExclusive < messages.length && isAssistantRoundMessage(messages[endExclusive]!)) {
+    endExclusive += 1;
+  }
+
+  const removed = endExclusive - firstUserIndex;
+  messages.splice(firstUserIndex, removed);
   return { compacted: removed > 0, reason: 'old_turns_removed', trimmedCount: removed };
 };
 

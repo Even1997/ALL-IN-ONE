@@ -98,11 +98,9 @@ export const buildAssistantRenderModel = (
       : [];
   const processItems: AssistantProcessRenderItem[] = [];
   const textBlocks = buildAssistantTextTimelineBlocks(timeline);
-  const lastTimelineEvent = timeline.length > 0 ? timeline[timeline.length - 1] : null;
-  const finalTextBlock =
-    lastTimelineEvent?.kind === 'text' && textBlocks.length > 0
-      ? textBlocks[textBlocks.length - 1]!
-      : null;
+  // 最终正文应该来自“最后一个文本块”，而不是“最后一个 timeline 事件”。
+  // 否则正文后面只要插入 approval / tool_result 之类的 runtime 卡片，就会把最终答案错误吃掉。
+  const finalTextBlock = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1]! : null;
   const feedbackTextBlocks = finalTextBlock ? textBlocks.slice(0, -1) : textBlocks;
   const content = finalTextBlock?.content || '';
   const fallbackAnswerCreatedAt =
@@ -126,7 +124,7 @@ export const buildAssistantRenderModel = (
         elapsedSeconds: event.elapsedSeconds,
         createdAt: event.createdAt,
       };
-      if (part.content.trim().length === 0) {
+      if (part.content.trim().length === 0 && part.status !== 'streaming') {
         return;
       }
 

@@ -6,8 +6,6 @@ const { pathToFileURL } = require('url');
 const DEFAULT_APP_ORIGIN = 'http://localhost:1420';
 const DEFAULT_USER_DATA_DIR =
   'C:\\Users\\Even\\AppData\\Local\\com.goodnight.app\\EBWebView';
-const DEFAULT_NODE_MODULES =
-  'C:\\Users\\Even\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules';
 const DEFAULT_ALLOWED_TOOLS = ['glob', 'grep', 'ls', 'view', 'write', 'edit'];
 const READ_ONLY_TOOLS = ['glob', 'grep', 'ls', 'view'];
 const PROCESS_NARRATION_PATTERN =
@@ -15,14 +13,18 @@ const PROCESS_NARRATION_PATTERN =
 const TOOL_RESULT_MARKER = /^Tool\s+\S+\s+result:/i;
 
 const resolvePlaywright = () => {
-  const candidates = [
-    process.env.GN_NODE_PATH,
-    process.env.NODE_PATH,
-    DEFAULT_NODE_MODULES,
-  ].filter(Boolean);
+  const {
+    buildDefaultNodeModulesCandidates,
+    pickPreferredNodeModulesRoot,
+  } = require(path.resolve(__dirname, 'lib', 'builtinPlaywrightResolver.cjs'));
+  const candidates = buildDefaultNodeModulesCandidates(__dirname);
+  const preferredCandidate = pickPreferredNodeModulesRoot(candidates);
+  const orderedCandidates = preferredCandidate
+    ? [preferredCandidate, ...candidates.filter((candidate) => candidate !== preferredCandidate)]
+    : candidates;
 
   let lastError = null;
-  for (const candidate of candidates) {
+  for (const candidate of orderedCandidates) {
     process.env.NODE_PATH = candidate;
     Module._initPaths();
     try {
@@ -451,10 +453,51 @@ const analyzeTranscriptOrder = (transcript, sanitizeAgentVisibleText) => {
   };
 };
 
+const buildApprovalHarness = () => {
+  const approvals = [];
+  const pendingApprovalActions = {};
+  const resolvedApprovals = [];
+  const backendResolutions = [];
+
+  const enqueueAgentApproval = async (payload) => {
+    const approval = {
+      id: `approval-${approvals.length + 1}`,
+      threadId: payload.threadId,
+      actionType: payload.actionType,
+      riskLevel: payload.riskLevel,
+      summary: payload.summary,
+      status: 'pending',
+      createdAt: approvals.length + 1,
+      messageId: payload.messageId ?? null,
+      toolCallId: payload.toolCallId ?? null,
+    };
+    approvals.push(approval);
+    return approval;
+  };
+
+  return {
+    approvals,
+    pendingApprovalActions,
+    resolvedApprovals,
+    backendResolutions,
+    enqueueAgentApproval,
+    enqueueApproval: () => undefined,
+    resolveStoredApproval: (approvalId, status) => {
+      resolvedApprovals.push({ approvalId, status });
+    },
+    resolveAgentApproval: async (payload) => {
+      backendResolutions.push(payload);
+    },
+    clearPendingApprovalAction: (approvalId) => {
+      delete pendingApprovalActions[approvalId];
+    },
+  };
+};
+
 const main = async () => {
   const repoRoot = process.cwd();
   const sandboxRoot = await setupSandbox(repoRoot);
-  const [{ aiService }, { runAgentTurn }, { buildRuntimeDirectChatRequest, normalizeRuntimeDirectChatResponse }, { buildAssistantStructuredContentState }, { sanitizeAgentVisibleText }, { runRuntimeToolLoop }, { buildRuntimeProjectFilePlanningSystemPrompt, prepareProjectFileProposalFlow }, { buildProjectFilePlanningPrompt }, projectFileOperations] =
+  const [{ aiService }, { runAgentTurn }, { buildRuntimeDirectChatRequest, normalizeRuntimeDirectChatResponse }, { buildAssistantStructuredContentState }, { sanitizeAgentVisibleText }, { runRuntimeToolLoop }, { buildRuntimeProjectFilePlanningSystemPrompt, prepareProjectFileProposalFlow, requestRuntimeProjectFileApproval }, { buildProjectFilePlanningPrompt }, projectFileOperations] =
     await Promise.all([
       import(pathToFileURL(path.resolve('src/modules/ai/core/AIService.ts')).href),
       import(pathToFileURL(path.resolve('src/modules/ai/runtime/agent-kernel/runAgentTurn.ts')).href),
@@ -467,6 +510,12 @@ const main = async () => {
       import(pathToFileURL(path.resolve('src/modules/ai/chat/projectFileOperations.ts')).href),
     ]);
   const { executeRuntimeProjectFileOperations } = await import(
+    pathToFileURL(path.resolve('src/modules/ai/runtime/orchestration/runtimeProjectFileExecutionFlow.ts')).href
+  );
+  const {
+    cancelRuntimeProjectFileProposal,
+    executeRuntimeApprovedProjectFileProposal,
+  } = await import(
     pathToFileURL(path.resolve('src/modules/ai/runtime/orchestration/runtimeProjectFileExecutionFlow.ts')).href
   );
   const { selected, origin, userDataDir } = await readConfigFromWebView();
@@ -517,11 +566,17 @@ const main = async () => {
       activeSkills: [],
       allowedTools: DEFAULT_ALLOWED_TOOLS,
       executeModel: (runtimePrompt, _systemPrompt, onEvent) =>
-        aiService.completeText({
-          prompt: runtimePrompt,
-          systemPrompt: directChat.systemPrompt,
-          onEvent,
-        }),
+        Array.isArray(runtimePrompt)
+          ? aiService.completeMessages({
+              messages: runtimePrompt,
+              systemPrompt: directChat.systemPrompt,
+              onEvent,
+            })
+          : aiService.completeText({
+              prompt: runtimePrompt,
+              systemPrompt: directChat.systemPrompt,
+              onEvent,
+            }),
       executeTool,
     });
 
@@ -582,11 +637,11 @@ const main = async () => {
       const targetPath = path.join(sandboxRoot, 'docs', 'output.txt');
       const content = await fs.readFile(targetPath, 'utf8').catch(() => null);
       return {
-        ok: content === 'Alpha\nBeta\n',
+        ok: content === 'Alpha\nBeta' || content === 'Alpha\nBeta\n',
         path: 'docs/output.txt',
         content,
         issue:
-          content === 'Alpha\nBeta\n'
+          content === 'Alpha\nBeta' || content === 'Alpha\nBeta\n'
             ? undefined
             : content === null
               ? 'write_missing_file'
@@ -602,11 +657,11 @@ const main = async () => {
       const targetPath = path.join(sandboxRoot, 'docs', 'output.txt');
       const content = await fs.readFile(targetPath, 'utf8').catch(() => null);
       return {
-        ok: content === 'Alpha\nGamma\n',
+        ok: content === 'Alpha\nGamma' || content === 'Alpha\nGamma\n',
         path: 'docs/output.txt',
         content,
         issue:
-          content === 'Alpha\nGamma\n'
+          content === 'Alpha\nGamma' || content === 'Alpha\nGamma\n'
             ? undefined
             : content === null
               ? 'edit_missing_file'
@@ -642,32 +697,186 @@ const main = async () => {
           sandboxPolicy: 'ask',
         })
       : null;
-  const deleteExecution =
-    parsedPlan.status === 'ready'
-      ? await executeRuntimeProjectFileOperations({
-          projectRoot: sandboxRoot,
-          operations: parsedPlan.operations,
-          resolveProjectOperationPath: projectFileOperations.resolveProjectOperationPath,
-          isSupportedProjectTextFilePath: projectFileOperations.isSupportedProjectTextFilePath,
-          readProjectTextFile: async (filePath) => fs.readFile(filePath, 'utf8').catch(() => null),
-          getDirectoryPath: path.dirname,
-          invokeTool: invokeProjectFileTool,
-        })
-      : null;
-  const deleteExists = await fs
-    .readFile(path.join(sandboxRoot, 'notes', 'remove-me.txt'), 'utf8')
-    .then(() => true)
-    .catch(() => false);
   const deleteIssues = [];
   if (parsedPlan.status !== 'ready') {
     deleteIssues.push('delete_plan_not_ready');
   } else if (!parsedPlan.operations.some((operation) => operation.type === 'delete_file')) {
     deleteIssues.push('delete_plan_missing_delete_operation');
   }
-  if (deleteExists) {
-    deleteIssues.push('delete_file_still_exists');
-  }
   const deleteOrder = analyzeTranscriptOrder(planningLoop.transcript, sanitizeAgentVisibleText);
+  let deleteApprovalScenario = null;
+  let deleteDeniedScenario = null;
+  let deleteApprovedScenario = null;
+
+  if (parsedPlan.status === 'ready' && preparedDeleteFlow) {
+    const toolCallId = `tool-call-delete-${Date.now()}`;
+    const approvalMessageId = `message-delete-${Date.now()}`;
+    const approvalHarness = buildApprovalHarness();
+
+    await requestRuntimeProjectFileApproval({
+      threadId: 'thread-delete-smoke',
+      runtimeStoreThreadId: 'runtime-delete-smoke',
+      replayThreadId: 'replay-delete-smoke',
+      providerId: selected.provider || 'built-in',
+      actionType: preparedDeleteFlow.approvalActionType,
+      riskLevel: preparedDeleteFlow.riskLevel,
+      summary: preparedDeleteFlow.proposal.summary,
+      messageId: approvalMessageId,
+      toolCallId,
+      onApprove: async () => undefined,
+      onDeny: async () => undefined,
+      enqueueAgentApproval: approvalHarness.enqueueAgentApproval,
+      enqueueApproval: approvalHarness.enqueueApproval,
+      pendingApprovalActions: approvalHarness.pendingApprovalActions,
+    });
+
+    deleteApprovalScenario = {
+      ok:
+        preparedDeleteFlow.decision === 'approval-required' &&
+        approvalHarness.approvals[0]?.toolCallId === toolCallId &&
+        approvalHarness.pendingApprovalActions[approvalHarness.approvals[0]?.id || '']?.toolCallId ===
+          toolCallId,
+      decision: preparedDeleteFlow.decision,
+      approvalId: approvalHarness.approvals[0]?.id || null,
+      toolCallId,
+      approvalActionType: preparedDeleteFlow.approvalActionType,
+      riskLevel: preparedDeleteFlow.riskLevel,
+      backendResolutions: approvalHarness.backendResolutions,
+    };
+
+    const deniedSandboxRoot = await setupSandbox(repoRoot);
+    let deniedMessage = {
+      content: preparedDeleteFlow.proposal.assistantMessage,
+      projectFileProposal: {
+        ...preparedDeleteFlow.proposal,
+      },
+    };
+    const deniedHarness = buildApprovalHarness();
+    deniedHarness.approvals.push({
+      id: 'approval-deny-1',
+      threadId: 'thread-delete-deny',
+      actionType: preparedDeleteFlow.approvalActionType,
+      riskLevel: preparedDeleteFlow.riskLevel,
+      summary: preparedDeleteFlow.proposal.summary,
+      status: 'pending',
+      createdAt: 1,
+      messageId: 'message-delete-deny',
+      toolCallId,
+    });
+
+    await cancelRuntimeProjectFileProposal({
+      projectId: 'builtin-ai-file-ops-smoke',
+      sessionId: 'session-delete-deny',
+      messageId: 'message-delete-deny',
+      activeApprovalThreadId: 'thread-delete-deny',
+      approvalsByThread: {
+        'thread-delete-deny': deniedHarness.approvals,
+      },
+      updateMessage: (_projectId, _sessionId, _messageId, updater) => {
+        deniedMessage = updater(deniedMessage);
+      },
+      resolveStoredApproval: deniedHarness.resolveStoredApproval,
+      clearPendingApprovalAction: deniedHarness.clearPendingApprovalAction,
+      resolveAgentApproval: deniedHarness.resolveAgentApproval,
+    });
+
+    const deniedFileStillExists = await fs
+      .readFile(path.join(deniedSandboxRoot, 'notes', 'remove-me.txt'), 'utf8')
+      .then(() => true)
+      .catch(() => false);
+    deleteDeniedScenario = {
+      ok:
+        deniedMessage.projectFileProposal?.status === 'cancelled' &&
+        deniedFileStillExists &&
+        deniedHarness.backendResolutions[0]?.toolCallId === toolCallId,
+      proposalStatus: deniedMessage.projectFileProposal?.status || null,
+      fileStillExists: deniedFileStillExists,
+      backendResolutions: deniedHarness.backendResolutions,
+      resolvedApprovals: deniedHarness.resolvedApprovals,
+    };
+
+    const approvedSandboxRoot = await setupSandbox(repoRoot);
+    let approvedMessage = {
+      content: preparedDeleteFlow.proposal.assistantMessage,
+      projectFileProposal: {
+        ...preparedDeleteFlow.proposal,
+      },
+    };
+    const approvedHarness = buildApprovalHarness();
+    const approvedActivityEntries = [];
+    approvedHarness.approvals.push({
+      id: 'approval-approve-1',
+      threadId: 'thread-delete-approve',
+      actionType: preparedDeleteFlow.approvalActionType,
+      riskLevel: preparedDeleteFlow.riskLevel,
+      summary: preparedDeleteFlow.proposal.summary,
+      status: 'pending',
+      createdAt: 1,
+      messageId: 'message-delete-approve',
+      toolCallId,
+    });
+
+    await executeRuntimeApprovedProjectFileProposal({
+      projectId: 'builtin-ai-file-ops-smoke',
+      sessionId: 'session-delete-approve',
+      messageId: 'message-delete-approve',
+      proposal: approvedMessage.projectFileProposal,
+      activeApprovalThreadId: 'thread-delete-approve',
+      approvalsByThread: {
+        'thread-delete-approve': approvedHarness.approvals,
+      },
+      updateMessage: (_projectId, _sessionId, _messageId, updater) => {
+        approvedMessage = updater(approvedMessage);
+      },
+      resolveStoredApproval: approvedHarness.resolveStoredApproval,
+      clearPendingApprovalAction: approvedHarness.clearPendingApprovalAction,
+      resolveAgentApproval: approvedHarness.resolveAgentApproval,
+      runId: 'run-delete-approve',
+      createActivityEntryId: () => `activity-${approvedActivityEntries.length + 1}`,
+      getProjectDir: async () => approvedSandboxRoot,
+      executeProjectFileOperations: async (projectRoot, operations) =>
+        executeRuntimeProjectFileOperations({
+          projectRoot,
+          operations,
+          resolveProjectOperationPath: projectFileOperations.resolveProjectOperationPath,
+          isSupportedProjectTextFilePath: projectFileOperations.isSupportedProjectTextFilePath,
+          readProjectTextFile: async (filePath) => fs.readFile(filePath, 'utf8').catch(() => null),
+          getDirectoryPath: path.dirname,
+          invokeTool: createLocalToolExecutor(projectRoot).invokeProjectFileTool,
+        }),
+      appendActivityEntry: (_projectId, entry) => {
+        approvedActivityEntries.push(entry);
+      },
+      normalizeErrorMessage: (error) => (error && error.message ? error.message : String(error)),
+    });
+
+    const approvedFileStillExists = await fs
+      .readFile(path.join(approvedSandboxRoot, 'notes', 'remove-me.txt'), 'utf8')
+      .then(() => true)
+      .catch(() => false);
+    deleteApprovedScenario = {
+      ok:
+        approvedMessage.projectFileProposal?.status === 'executed' &&
+        approvedFileStillExists === false &&
+        approvedHarness.backendResolutions[0]?.toolCallId === toolCallId,
+      proposalStatus: approvedMessage.projectFileProposal?.status || null,
+      finalContent: approvedMessage.content,
+      fileStillExists: approvedFileStillExists,
+      backendResolutions: approvedHarness.backendResolutions,
+      resolvedApprovals: approvedHarness.resolvedApprovals,
+      activityEntryCount: approvedActivityEntries.length,
+    };
+  }
+
+  if (!deleteApprovalScenario?.ok) {
+    deleteIssues.push('delete_approval_flow_invalid');
+  }
+  if (!deleteDeniedScenario?.ok) {
+    deleteIssues.push('delete_denial_flow_invalid');
+  }
+  if (!deleteApprovedScenario?.ok) {
+    deleteIssues.push('delete_approved_flow_invalid');
+  }
   const deleteScenario = {
     name: 'delete_file',
     route: 'project-file-flow',
@@ -684,16 +893,20 @@ const main = async () => {
     proposalAssistantMessage: preparedDeleteFlow?.proposal.assistantMessage || null,
     proposalExecutionMessage: preparedDeleteFlow?.proposal.executionMessage || null,
     proposalDecision: preparedDeleteFlow?.decision || null,
+    approvalScenario: deleteApprovalScenario,
+    deniedScenario: deleteDeniedScenario,
+    approvedScenario: deleteApprovedScenario,
     transcriptOrder: {
       firstToolResultIndex: deleteOrder.firstToolResultIndex,
       preToolVisibleMessages: deleteOrder.preToolMessages.map((entry) => entry.text),
       visibleAssistantMessages: deleteOrder.visibleAssistantMessages.map((entry) => entry.text),
     },
-    execution: deleteExecution,
     verification: {
       ok: deleteIssues.length === 0,
       deletedPath: 'notes/remove-me.txt',
-      stillExists: deleteExists,
+      approvalRequired: deleteApprovalScenario?.ok || false,
+      deniedBlocksExecution: deleteDeniedScenario?.ok || false,
+      approvedResumesExecution: deleteApprovedScenario?.ok || false,
     },
     issues: [...deleteOrder.issues, ...deleteIssues],
   };

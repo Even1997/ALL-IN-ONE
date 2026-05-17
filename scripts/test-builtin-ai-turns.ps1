@@ -34,6 +34,8 @@ function Resolve-NodeExecutable {
 function Resolve-PlaywrightNodePath {
   $candidates = @(
     "C:\Users\Even\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules",
+    "C:\Users\Even\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules\.pnpm\playwright@1.59.1\node_modules",
+    "C:\Users\Even\.gstack\repos\gstack\node_modules",
     (Join-Path $PSScriptRoot "..\node_modules")
   ) | ForEach-Object {
     try {
@@ -41,15 +43,23 @@ function Resolve-PlaywrightNodePath {
     } catch {
       $null
     }
-  } | Where-Object {
-    $_ -and (Test-Path (Join-Path $_ "playwright"))
+  } | Where-Object { $_ }
+
+  $completeCandidates = $candidates | Where-Object {
+    (Test-Path (Join-Path $_ "playwright")) -and (Test-Path (Join-Path $_ "playwright-core"))
+  }
+  if ($completeCandidates.Count -gt 0) {
+    return $completeCandidates[0]
   }
 
-  if ($candidates.Count -eq 0) {
+  $playwrightOnlyCandidates = $candidates | Where-Object {
+    Test-Path (Join-Path $_ "playwright")
+  }
+  if ($playwrightOnlyCandidates.Count -eq 0) {
     throw "Unable to find playwright in bundled or workspace node_modules."
   }
 
-  return $candidates[0]
+  return $playwrightOnlyCandidates[0]
 }
 
 function Start-DevServerIfNeeded {

@@ -42,10 +42,15 @@ type UseAIChatRuntimeInteractionStateInput = {
     riskLevel: ApprovalRecord['riskLevel'];
     summary: string;
     messageId?: string | null;
+    toolCallId?: string | null;
   }) => Promise<ApprovalRecord>;
   enqueueApproval: ReturnType<typeof useApprovalStore.getState>['enqueueApproval'];
   resolveStoredApproval: ReturnType<typeof useApprovalStore.getState>['resolveApproval'];
-  resolveAgentApproval: (payload: { approvalId: string; status: ApprovalStatus }) => Promise<unknown>;
+  resolveAgentApproval: (payload: {
+    approvalId: string;
+    status: ApprovalStatus;
+    toolCallId?: string | null;
+  }) => Promise<unknown>;
   patchLiveState: ReturnType<typeof useAgentRuntimeStore.getState>['patchLiveState'];
   appendRuntimeTimelineEvent: ReturnType<typeof useAgentRuntimeStore.getState>['appendTimelineEvent'];
   persistRuntimeTimelineEvent: (input: {

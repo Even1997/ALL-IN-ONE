@@ -2,6 +2,10 @@
 // 所在链路：负责模型调用、流式输出与底层 AI 协议接入。
 // 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 import type { ChangeScope, AIStreamChunk } from '../../../types/index.ts';
+import type {
+  RuntimeToolMessage,
+  RuntimeToolPromptMessage,
+} from '../runtime/agent-kernel/agentKernelTypes.ts';
 // AIService 是旧有 AI 能力接入层的总入口之一。
 // 它负责组织 provider 请求、流式输出、工具协议识别与部分执行辅助，是聊天能力的底层服务面。
 // 如果你在排查“模型请求、流式返回、工具标记识别”为何异常，先看这里。
@@ -98,6 +102,49 @@ interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
+
+type StructuredOpenAIMessage =
+  | {
+      role: 'system' | 'user' | 'assistant';
+      content: string;
+      tool_calls?: Array<{
+        id: string;
+        type: 'function';
+        function: {
+          name: string;
+          arguments: string;
+        };
+      }>;
+    }
+  | {
+      role: 'tool';
+      content: string;
+      tool_call_id: string;
+    };
+
+type StructuredAnthropicMessage =
+  | {
+      role: 'user' | 'assistant';
+      content:
+        | string
+        | Array<
+            | {
+                type: 'text';
+                text: string;
+              }
+            | {
+                type: 'tool_use';
+                id: string;
+                name: string;
+                input: Record<string, unknown>;
+              }
+            | {
+                type: 'tool_result';
+                tool_use_id: string;
+                content: string;
+              }
+          >;
+    };
 
 type RunAgentLoopOptions = {
   allowedTools?: string[];
@@ -290,6 +337,37 @@ class AIService {
     }
 
     const content = await this.callProvider([{ role: 'user', content: prompt }], systemPrompt, signal, onEvent);
+    if (onChunk && !onEvent) {
+      this.emitChunkText(content, {
+        onStart: () => undefined,
+        onChunk: (chunk) => onChunk(chunk.content),
+        onComplete: () => undefined,
+        onError: () => undefined,
+        onInterrupt: () => undefined,
+      });
+    }
+
+    return content;
+  }
+
+  async completeMessages(options: {
+    messages: RuntimeToolMessage[] | RuntimeToolPromptMessage[];
+    systemPrompt: string;
+    onChunk?: (text: string) => void;
+    onEvent?: (event: AITextStreamEvent) => void;
+    signal?: AbortSignal;
+  }): Promise<string> {
+    const { messages, systemPrompt, onChunk, onEvent, signal } = options;
+
+    if (!this.isConfigured()) {
+      throw buildAIConfigurationError();
+    }
+
+    if (!this.config.apiKey) {
+      throw new Error('AI provider is not configured');
+    }
+
+    const content = await this.callProvider(messages, systemPrompt, signal, onEvent);
     if (onChunk && !onEvent) {
       this.emitChunkText(content, {
         onStart: () => undefined,
@@ -572,7 +650,7 @@ ${this.buildToolInstructions()}
   }
 
   private async callProvider(
-    messages: ChatMessage[],
+    messages: ChatMessage[] | RuntimeToolMessage[],
     systemPrompt: string,
     signal?: AbortSignal,
     onEvent?: (event: AITextStreamEvent) => void
@@ -585,11 +663,12 @@ ${this.buildToolInstructions()}
   }
 
   private async callOpenAICompatible(
-    messages: ChatMessage[],
+    messages: ChatMessage[] | RuntimeToolMessage[],
     systemPrompt: string,
     signal?: AbortSignal,
     onEvent?: (event: AITextStreamEvent) => void
   ): Promise<string> {
+    const payloadMessages = this.buildOpenAICompatibleMessages(messages, systemPrompt);
     const payload = {
       model: this.config.model,
       temperature: this.config.temperature,
@@ -597,7 +676,7 @@ ${this.buildToolInstructions()}
       stream: Boolean(onEvent),
       tools: this.buildOpenAICompatibleTools(),
       tool_choice: 'auto',
-      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      messages: payloadMessages,
     };
 
     const doFetch = async () => {
@@ -723,19 +802,14 @@ ${this.buildToolInstructions()}
   }
 
   private async callAnthropic(
-    messages: ChatMessage[],
+    messages: ChatMessage[] | RuntimeToolMessage[],
     systemPrompt: string,
     signal?: AbortSignal,
     onEvent?: (event: AITextStreamEvent) => void
   ): Promise<string> {
     const baseURL = this.config.baseURL || 'https://api.anthropic.com/v1';
     const url = this.joinUrl(baseURL, '/messages');
-    const anthropicMessages = messages
-      .filter((message) => message.role !== 'system')
-      .map((message) => ({
-        role: message.role,
-        content: message.content,
-      }));
+    const anthropicMessages = this.buildAnthropicMessages(messages);
 
     const doFetch = async () => {
       const response = await fetch(url, {
@@ -822,6 +896,130 @@ ${this.buildToolInstructions()}
         required: tool.required,
       },
     }));
+  }
+
+  private buildOpenAICompatibleMessages(
+    messages: ChatMessage[] | RuntimeToolMessage[] | RuntimeToolPromptMessage[],
+    systemPrompt: string,
+  ): StructuredOpenAIMessage[] {
+    const normalizedMessages = this.normalizeProviderMessages(messages);
+    return [
+      { role: 'system', content: systemPrompt },
+      ...normalizedMessages.map((message) => {
+        if (message.kind === 'assistant_tool_call') {
+          return {
+            role: 'assistant' as const,
+            content: message.content,
+            tool_calls: [
+              {
+                id: message.toolCallId,
+                type: 'function' as const,
+                function: {
+                  name: message.toolName,
+                  arguments: JSON.stringify(message.input),
+                },
+              },
+            ],
+          };
+        }
+
+        if (message.kind === 'tool_result') {
+          return {
+            role: 'tool' as const,
+            content: message.content,
+            tool_call_id: message.toolCallId,
+          };
+        }
+
+        return {
+          role: message.role,
+          content: message.content,
+        };
+      }),
+    ];
+  }
+
+  private buildAnthropicMessages(
+    messages: ChatMessage[] | RuntimeToolMessage[] | RuntimeToolPromptMessage[]
+  ): StructuredAnthropicMessage[] {
+    const normalized = this.normalizeProviderMessages(messages);
+    const result: StructuredAnthropicMessage[] = [];
+
+    for (const message of normalized) {
+      if (message.kind === 'assistant_tool_call') {
+        // Anthropic 原生工具协议要求 assistant 用 tool_use block 挂出调用事实。
+        result.push({
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: message.toolCallId,
+              name: message.toolName,
+              input: message.input,
+            },
+          ],
+        });
+        continue;
+      }
+
+      if (message.kind === 'tool_result') {
+        // tool_result 不是独立 role，而是下一条 user message 的 content block。
+        result.push({
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: message.toolCallId,
+              content: message.content,
+            },
+          ],
+        });
+        continue;
+      }
+
+      result.push({
+        role: message.role,
+        content: message.content,
+      });
+    }
+
+    return result;
+  }
+
+  private normalizeProviderMessages(
+    messages: ChatMessage[] | RuntimeToolMessage[] | RuntimeToolPromptMessage[],
+  ): RuntimeToolMessage[] {
+    return messages.map((message) => {
+      if ('kind' in message) {
+        return message;
+      }
+
+      if ('role' in message && (message.role === 'user' || message.role === 'assistant')) {
+        return message.role === 'user'
+          ? {
+              kind: 'user' as const,
+              role: 'user' as const,
+              content: message.content,
+            }
+          : {
+              kind: 'assistant_text' as const,
+              role: 'assistant' as const,
+              content: message.content,
+            };
+      }
+
+      return message.role === 'user'
+        ? {
+            kind: 'user' as const,
+            role: 'user' as const,
+            content: message.content,
+          }
+        : {
+            kind: 'assistant_text' as const,
+            role: 'assistant' as const,
+            content: message.content,
+          };
+    });
   }
 
   private buildOpenAICompatibleTools(): Array<{

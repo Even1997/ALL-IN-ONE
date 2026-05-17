@@ -6,8 +6,6 @@ const { pathToFileURL } = require('url');
 const DEFAULT_APP_ORIGIN = 'http://localhost:1420';
 const DEFAULT_USER_DATA_DIR =
   'C:\\Users\\Even\\AppData\\Local\\com.goodnight.app\\EBWebView';
-const DEFAULT_NODE_MODULES =
-  'C:\\Users\\Even\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules';
 const DEFAULT_PROMPTS = [
   '用一句话介绍你自己，不要展示任何内部协议或思考过程。',
   '这个项目里的 built-in AI 测试入口在哪里？给我最短答案。',
@@ -47,14 +45,18 @@ const PROJECT_FACT_PROMPT_PATTERN =
 const TEMP_ARTIFACT_PATTERN = /(?:^|[/\\])(?:\.tmp|\.worktrees)(?:[/\\]|$)|\.log\b/i;
 
 const resolvePlaywright = () => {
-  const candidates = [
-    process.env.GN_NODE_PATH,
-    process.env.NODE_PATH,
-    DEFAULT_NODE_MODULES,
-  ].filter(Boolean);
+  const {
+    buildDefaultNodeModulesCandidates,
+    pickPreferredNodeModulesRoot,
+  } = require(path.resolve(__dirname, 'lib', 'builtinPlaywrightResolver.cjs'));
+  const candidates = buildDefaultNodeModulesCandidates(__dirname);
+  const preferredCandidate = pickPreferredNodeModulesRoot(candidates);
+  const orderedCandidates = preferredCandidate
+    ? [preferredCandidate, ...candidates.filter((candidate) => candidate !== preferredCandidate)]
+    : candidates;
 
   let lastError = null;
-  for (const candidate of candidates) {
+  for (const candidate of orderedCandidates) {
     process.env.NODE_PATH = candidate;
     Module._initPaths();
     try {
@@ -438,11 +440,17 @@ const main = async () => {
       contextLabels: [],
       allowedTools: ['glob', 'grep', 'ls', 'view'],
       executeModel: (runtimePrompt, systemPrompt, onEvent) =>
-        aiService.completeText({
-          prompt: runtimePrompt,
-          systemPrompt,
-          onEvent,
-        }),
+        Array.isArray(runtimePrompt)
+          ? aiService.completeMessages({
+              messages: runtimePrompt,
+              systemPrompt,
+              onEvent,
+            })
+          : aiService.completeText({
+              prompt: runtimePrompt,
+              systemPrompt,
+              onEvent,
+            }),
       executeTool,
     });
 

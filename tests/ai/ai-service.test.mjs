@@ -476,3 +476,155 @@ test('completeText streams anthropic tool_use blocks as structured tool_call eve
     globalThis.fetch = originalFetch;
   }
 });
+
+test('completeMessages sends structured runtime messages without flattening them into one prompt string', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    apiKey: 'sk-test',
+    baseURL: 'https://example.com/v1',
+    model: 'test-model',
+  });
+
+  const originalFetch = globalThis.fetch;
+  let lastBody = null;
+
+  globalThis.fetch = async (_input, init) => {
+    lastBody = JSON.parse(String(init?.body));
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: 'Done.',
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  };
+
+  try {
+    const result = await aiService.completeMessages({
+      systemPrompt: 'system',
+      messages: [
+        { kind: 'user', role: 'user', content: 'Inspect the app file.' },
+        {
+          kind: 'assistant_tool_call',
+          role: 'assistant',
+          content: '',
+          toolCallId: 'call_1',
+          toolName: 'view',
+          input: { file_path: 'src/app.ts' },
+        },
+        {
+          kind: 'tool_result',
+          role: 'tool',
+          content: '1: console.log("app");',
+          toolCallId: 'call_1',
+          toolName: 'view',
+        },
+      ],
+    });
+
+    assert.equal(result, 'Done.');
+    assert.equal(Array.isArray(lastBody?.messages), true);
+    assert.equal(lastBody.messages[0]?.role, 'system');
+    assert.equal(lastBody.messages[1]?.role, 'user');
+    assert.equal(lastBody.messages[2]?.role, 'assistant');
+    assert.equal(Array.isArray(lastBody.messages[2]?.tool_calls), true);
+    assert.equal(lastBody.messages[3]?.role, 'tool');
+    assert.equal(lastBody.messages[3]?.tool_call_id, 'call_1');
+    assert.doesNotMatch(JSON.stringify(lastBody.messages), /assistant:\n|user:\n|Tool view result:/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('completeMessages sends anthropic structured tool turns with native tool_result blocks', async () => {
+  aiService.setConfig({
+    provider: 'anthropic',
+    apiKey: 'sk-ant-test',
+    baseURL: 'https://api.anthropic.com/v1',
+    model: 'claude-test',
+  });
+
+  const originalFetch = globalThis.fetch;
+  let lastBody = null;
+
+  globalThis.fetch = async (_input, init) => {
+    lastBody = JSON.parse(String(init?.body));
+    return new Response(
+      JSON.stringify({
+        content: [{ type: 'text', text: 'Done.' }],
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  };
+
+  try {
+    const result = await aiService.completeMessages({
+      systemPrompt: 'system',
+      messages: [
+        { kind: 'user', role: 'user', content: 'Inspect the app file.' },
+        {
+          kind: 'assistant_tool_call',
+          role: 'assistant',
+          content: '',
+          toolCallId: 'toolu_1',
+          toolName: 'view',
+          input: { file_path: 'src/app.ts' },
+        },
+        {
+          kind: 'tool_result',
+          role: 'tool',
+          content: '1: console.log("app");',
+          toolCallId: 'toolu_1',
+          toolName: 'view',
+        },
+      ],
+    });
+
+    assert.equal(result, 'Done.');
+    assert.equal(Array.isArray(lastBody?.messages), true);
+    assert.deepEqual(lastBody.messages, [
+      {
+        role: 'user',
+        content: 'Inspect the app file.',
+      },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_1',
+            name: 'view',
+            input: { file_path: 'src/app.ts' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu_1',
+            content: '1: console.log("app");',
+          },
+        ],
+      },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

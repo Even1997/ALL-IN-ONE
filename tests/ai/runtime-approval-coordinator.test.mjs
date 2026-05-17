@@ -33,6 +33,7 @@ test('runtime approval coordinator registers pending actions and resolves them t
       status: 'pending',
       createdAt: 1,
       messageId: payload.messageId,
+      toolCallId: payload.toolCallId,
     }),
     enqueueApproval: (record) => {
       frontendApprovals.push(record);
@@ -63,6 +64,8 @@ test('runtime approval coordinator registers pending actions and resolves them t
 
   assert.equal(typeof pendingAction?.onApprove, 'function');
   assert.deepEqual(localResolutions, [{ approvalId: 'approval-1', status: 'approved' }]);
-  assert.deepEqual(backendResolutions, [{ approvalId: 'approval-1', status: 'approved' }]);
+  assert.deepEqual(backendResolutions, [
+    { approvalId: 'approval-1', status: 'approved', toolCallId: 'tool-1' },
+  ]);
   assert.equal('approval-1' in pendingApprovalActions, false);
 });

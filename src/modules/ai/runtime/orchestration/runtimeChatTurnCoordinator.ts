@@ -43,6 +43,7 @@ import {
   RISKY_RUNTIME_TOOLS,
 } from '../tools/runtimeToolPolicy.ts';
 import { createRuntimeChatToolExecutor } from './runtimeChatTurnTools.ts';
+import { requestBuiltInToolApproval } from './runtimeBuiltInToolApproval.ts';
 import { isWindowsHost } from '../../../../utils/hostPlatform.ts';
 export { createRuntimeChatToolExecutor };
 
@@ -1772,7 +1773,7 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
         changedPaths: teamResult.changedPaths,
       });
     };
-    const requestBuiltInToolApproval = async (call: ToolCall) => {
+    const requestBuiltInToolApprovalForTurn = async (call: ToolCall) => {
       if (!RISKY_RUNTIME_TOOLS.has(call.name)) {
         return;
       }
@@ -1788,24 +1789,20 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
         return;
       }
 
-      const approved = await interactionPort.waitForApproval({
-          threadId: runtimeThreadId || targetSessionId,
-          runtimeStoreThreadId,
-          replayThreadId,
-          providerId: runtimeProviderId,
-          actionType,
-          riskLevel,
-          summary: buildBuiltInToolApprovalSummary(call.name, call.input),
-          messageId: assistantMessage.id,
-          toolCallId: call.id,
-          display: buildBuiltInToolApprovalDisplay(call.name, call.input),
-          onApprove: async () => {},
-          onDeny: async () => {},
-        });
-
-      if (!approved) {
-        throw new Error(`User denied ${call.name}.`);
-      }
+      await requestBuiltInToolApproval({
+        call,
+        sandboxPolicy,
+        runtimeThreadId,
+        targetSessionId,
+        runtimeStoreThreadId,
+        replayThreadId,
+        runtimeProviderId,
+        assistantMessageId: assistantMessage.id,
+        interactionPort,
+        buildBuiltInToolApprovalActionType,
+        buildBuiltInToolApprovalSummary,
+        buildBuiltInToolApprovalDisplay,
+      });
     };
     setThreadToolCalls(targetSessionId, []);
     let toolStartTime = 0;
@@ -1952,7 +1949,7 @@ export const submitRuntimeChatTurn = async (input: RuntimeChatTurnCoordinatorInp
               }
             : {}),
         }));
-        await requestBuiltInToolApproval(call);
+        await requestBuiltInToolApprovalForTurn(call);
       },
       executeModel: (prompt: any, systemPrompt: any, onEvent: any) =>
         ports.executeRuntimePrompt({

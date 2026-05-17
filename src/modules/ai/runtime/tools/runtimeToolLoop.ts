@@ -12,6 +12,7 @@ import {
 } from './toolExecutor.ts';
 import type { AITextStreamEvent } from '../../core/AIService.ts';
 import type {
+  RuntimeToolPromptMessage,
   RuntimeToolLoopOptions,
   RuntimeToolLoopResult,
   RuntimeToolMessage,
@@ -74,8 +75,43 @@ const createToolResultMessage = (
   step: RuntimeToolStep,
   result: ToolResult,
 ): RuntimeToolMessage => ({
-  role: 'user',
-  content: `Tool ${step.name} result:\n${formatToolResult(result)}`,
+  kind: 'tool_result',
+  role: 'tool',
+  content: result.content,
+  toolCallId: step.id,
+  toolName: step.name,
+});
+
+const createPromptMessage = (message: RuntimeToolMessage): RuntimeToolPromptMessage => {
+  if (message.kind === 'tool_result') {
+    return {
+      role: 'user',
+      content: `Tool ${message.toolName} result:\n${formatToolResult({
+        type: 'text',
+        content: message.content,
+      })}`,
+    };
+  }
+
+  return {
+    role: message.role,
+    content: message.content,
+  };
+};
+
+const createAssistantToolCallMessage = (call: ToolCall): RuntimeToolMessage => ({
+  kind: 'assistant_tool_call',
+  role: 'assistant',
+  content: '',
+  toolCallId: call.id,
+  toolName: call.name,
+  input: call.input,
+});
+
+const createAssistantTextMessage = (content: string): RuntimeToolMessage => ({
+  kind: 'assistant_text',
+  role: 'assistant',
+  content,
 });
 
 const createExhaustedMessage = (maxRounds: number) =>
@@ -155,6 +191,7 @@ export async function runRuntimeToolLoop(
 ): Promise<RuntimeToolLoopResult> {
   const messages: RuntimeToolMessage[] = [
     {
+      kind: 'user',
       role: 'user',
       content: options.initialPrompt,
     },
@@ -378,7 +415,7 @@ export async function runRuntimeToolLoop(
 
     try {
       assistantContent = await options.callModel(
-        [...messages],
+        messages.map(createPromptMessage),
         options.systemPrompt,
         streamAwareOnEvent,
       );
@@ -392,7 +429,7 @@ export async function runRuntimeToolLoop(
         agentEvents.emit({ type: 'context_compacted', reason: 'tool_results_trimmed' });
         try {
           assistantContent = await options.callModel(
-            [...messages],
+            messages.map(createPromptMessage),
             options.systemPrompt,
             streamAwareOnEvent,
           );
@@ -404,7 +441,7 @@ export async function runRuntimeToolLoop(
             options.onContextCompaction?.('old_turns_removed');
             agentEvents.emit({ type: 'context_compacted', reason: 'old_turns_removed' });
             assistantContent = await options.callModel(
-              [...messages],
+              messages.map(createPromptMessage),
               options.systemPrompt,
               streamAwareOnEvent,
             );
@@ -418,7 +455,7 @@ export async function runRuntimeToolLoop(
           options.onContextCompaction?.('old_turns_removed');
           agentEvents.emit({ type: 'context_compacted', reason: 'old_turns_removed' });
           assistantContent = await options.callModel(
-            [...messages],
+            messages.map(createPromptMessage),
             options.systemPrompt,
             streamAwareOnEvent,
           );
@@ -439,11 +476,6 @@ export async function runRuntimeToolLoop(
       visibleTextPerRound.push(roundVisibleText);
     }
     finalContent = roundVisibleText;
-    messages.push({
-      role: 'assistant',
-      content: assistantContent,
-    });
-
     // Determine which tools were executed during streaming vs. need execution now
     const parsedCalls =
       eventToolCalls.length > 0
@@ -472,7 +504,10 @@ export async function runRuntimeToolLoop(
     }
 
     if (orderedStreamExecutedResults.length > 0 || remainingCalls.length > 0) {
+      const assistantToolMessages = parsedCalls.map(createAssistantToolCallMessage);
+
       // Append stream-executed results first
+      messages.push(...assistantToolMessages);
       for (const { step, result } of orderedStreamExecutedResults) {
         messages.push(createToolResultMessage(step, result));
       }
@@ -486,12 +521,15 @@ export async function runRuntimeToolLoop(
       // Phase 7c: finish_reason === 'length' — response truncated, continue
       if (parsedCalls.length === 0 && getFinishReason() === 'length') {
         messages.push({
+          kind: 'user',
           role: 'user',
           content: 'Your last response was cut off due to token limit. Continue from where you left off.',
         });
       }
       continue;
     }
+
+    messages.push(createAssistantTextMessage(assistantContent));
 
     // No tool calls found in either stream or full parse
     if (containsToolProtocolMarkers(assistantContent)) {
@@ -505,6 +543,7 @@ export async function runRuntimeToolLoop(
         };
       }
       messages.push({
+        kind: 'user',
         role: 'user',
         content: createToolCallRepairMessage(),
       });
@@ -513,6 +552,7 @@ export async function runRuntimeToolLoop(
 
     if (getFinishReason() === 'length') {
       messages.push({
+        kind: 'user',
         role: 'user',
         content: 'Your last response was cut off due to token limit. Continue from where you left off.',
       });

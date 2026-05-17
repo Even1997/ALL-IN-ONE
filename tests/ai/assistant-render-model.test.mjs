@@ -126,6 +126,43 @@ test('assistant render model keeps streaming thinking collapsed by default', asy
   assert.match(source, /type:\s*'thinking'/);
 });
 
+test('assistant render model keeps an active empty reasoning lane visible while streaming', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const model = buildAssistantRenderModel({
+    id: 'assistant_active_reasoning_empty',
+    role: 'assistant',
+    timeline: [
+      {
+        id: 'reasoning_1',
+        kind: 'reasoning',
+        content: '',
+        collapsed: true,
+        status: 'streaming',
+        createdAt: 10,
+      },
+    ],
+    createdAt: 1,
+  }, {
+    timeline: [
+      {
+        id: 'reasoning_1',
+        kind: 'reasoning',
+        content: '',
+        collapsed: true,
+        status: 'streaming',
+        createdAt: 10,
+      },
+    ],
+    isStreaming: true,
+  });
+
+  assert.deepEqual(
+    model.processItems.map((item) => [item.kind, item.part.type, item.part.content]),
+    [['thinking_lane', 'thinking', '']],
+  );
+  assert.equal(model.hasFinalAnswer, false);
+});
+
 test('assistant render model tolerates assistant messages without timeline', async () => {
   const { buildAssistantRenderModel } = await loadRenderModel();
   const model = buildAssistantRenderModel({
@@ -267,4 +304,30 @@ test('assistant render model uses reasoning content directly from the shared tim
 
   assert.equal(model.items[0]?.part.content, 'First thought. Hidden unfinished fragment');
   assert.equal(timeline[0].content, 'First thought. Hidden unfinished fragment');
+});
+
+test('assistant render model keeps the latest text as the final answer even when later runtime events exist', async () => {
+  const { buildAssistantRenderModel } = await loadRenderModel();
+  const model = buildAssistantRenderModel({
+    id: 'assistant_text_before_runtime_card',
+    role: 'assistant',
+    timeline: [
+      { id: 'text_1', kind: 'text', content: 'Final answer stays visible.', createdAt: 10 },
+      {
+        id: 'approval_1',
+        kind: 'approval',
+        approvalId: 'approval-1',
+        actionType: 'tool_edit',
+        summary: 'Need approval',
+        riskLevel: 'medium',
+        status: 'pending',
+        createdAt: 20,
+      },
+    ],
+    createdAt: 1,
+  });
+
+  assert.equal(model.content, 'Final answer stays visible.');
+  assert.equal(model.finalAnswerItem?.part.content, 'Final answer stays visible.');
+  assert.equal(model.copyText, 'Final answer stays visible.');
 });

@@ -7,7 +7,12 @@ import type { AITextStreamEvent } from '../../core/AIService.ts';
 import { buildAgentContext } from '../context/buildAgentContext.ts';
 import type { AgentContextBuildInput, AgentContextSnapshot } from '../context/agentContextTypes.ts';
 import { runRuntimeToolLoop } from '../tools/runtimeToolLoop.ts';
-import type { RuntimeToolLoopOptions, RuntimeToolMessage, RuntimeToolStep } from './agentKernelTypes.ts';
+import type {
+  RuntimeToolLoopOptions,
+  RuntimeToolMessage,
+  RuntimeToolPromptMessage,
+  RuntimeToolStep,
+} from './agentKernelTypes.ts';
 import { isWindowsHost } from '../../../../utils/hostPlatform.ts';
 import { getBuiltInRuntimeToolNames } from '../tools/runtimeToolPolicy.ts';
 
@@ -62,7 +67,7 @@ export type RunAgentTurnInput = AgentContextBuildInput & {
   onToolCallsChange?: (toolCalls: RuntimeToolStep[]) => void;
   onModelEvent?: (event: AITextStreamEvent) => void;
   executeModel(
-    prompt: string,
+    prompt: string | RuntimeToolPromptMessage[],
     systemPrompt: string,
     onEvent?: (event: AITextStreamEvent) => void
   ): Promise<string>;
@@ -75,9 +80,6 @@ export type RunAgentTurnResult = {
   toolCalls: RuntimeToolStep[];
   transcript: RuntimeToolMessage[];
 };
-
-const renderModelPrompt = (messages: RuntimeToolMessage[]) =>
-  messages.map((message) => `${message.role}:\n${message.content}`).join('\n\n');
 
 export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTurnResult> {
   const context = buildAgentContext(input);
@@ -92,7 +94,7 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
     onToolCallsChange: input.onToolCallsChange,
     onModelEvent: input.onModelEvent,
     callModel: (messages, systemPrompt, onEvent) =>
-      input.executeModel(renderModelPrompt(messages), systemPrompt, onEvent),
+      input.executeModel(messages, systemPrompt, onEvent),
     executeTool: input.executeTool,
   });
 

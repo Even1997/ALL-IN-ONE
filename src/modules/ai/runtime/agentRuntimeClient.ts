@@ -22,6 +22,7 @@ import type {
   AgentThreadRecord,
   AgentTimelineEvent,
 } from './agentRuntimeTypes';
+import type { RuntimeToolPromptMessage } from './agent-kernel/agentKernelTypes';
 
 const claudeRuntime = new ClaudeRuntime();
 const codexRuntime = new CodexRuntime();
@@ -66,11 +67,13 @@ type EnqueueAgentApprovalInput = {
   riskLevel: ApprovalRecord['riskLevel'];
   summary: string;
   messageId?: string | null;
+  toolCallId?: string | null;
 };
 
 type ResolveAgentApprovalInput = {
   approvalId: string;
   status: ApprovalRecord['status'];
+  toolCallId?: string | null;
 };
 
 type SaveAgentTurnCheckpointInput = {
@@ -261,6 +264,7 @@ export const enqueueAgentApproval = async (
       status: 'pending',
       createdAt: Date.now(),
       messageId: input.messageId || null,
+      toolCallId: input.toolCallId || null,
     };
   }
 
@@ -280,6 +284,7 @@ export const resolveAgentApproval = async (
       status: input.status,
       createdAt: Date.now(),
       messageId: null,
+      toolCallId: input.toolCallId || null,
     };
   }
 
@@ -444,7 +449,7 @@ export const executePrompt = async (options: {
   sessionId: string;
   config: AIConfigEntry | null;
   systemPrompt: string;
-  prompt: string;
+  prompt: string | RuntimeToolPromptMessage[];
   onChunk?: (text: string) => void;
   onEvent?: (event: AITextStreamEvent) => void;
   signal?: AbortSignal;
@@ -481,13 +486,21 @@ export const executePrompt = async (options: {
   }
 
   try {
-    return await aiService.completeText({
-      systemPrompt,
-      prompt,
-      onChunk,
-      onEvent,
-      signal,
-    });
+    return Array.isArray(prompt)
+      ? await aiService.completeMessages({
+          systemPrompt,
+          messages: prompt,
+          onChunk,
+          onEvent,
+          signal,
+        })
+      : await aiService.completeText({
+          systemPrompt,
+          prompt,
+          onChunk,
+          onEvent,
+          signal,
+        });
   } finally {
     if (config) {
       aiService.setConfig(previousConfig);

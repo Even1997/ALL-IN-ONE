@@ -63,3 +63,40 @@ test('canonical narrative projection ignores commentary as durable answer text',
   assert.deepEqual(timeline.map((item) => item.kind), ['text']);
   assert.equal(timeline[0].content, 'Final answer');
 });
+
+test('canonical narrative projection does not duplicate reasoning when sidecar replays full snapshot text then final text', async () => {
+  const { projectCanonicalEventsToAssistantTimeline } = await loadProjection();
+
+  const timeline = projectCanonicalEventsToAssistantTimeline([
+    event('reasoning.started', {}, 1, 101),
+    event('reasoning.delta', { textChunk: '好的，让我先看看这个项目的结构。' }, 2, 102),
+    event('reasoning.completed', { finalText: '好的，让我先看看这个项目的结构。' }, 3, 103),
+  ]);
+
+  assert.deepEqual(timeline.map((item) => item.kind), ['reasoning']);
+  assert.equal(timeline[0].content, '好的，让我先看看这个项目的结构。');
+  assert.equal(timeline[0].status, 'completed');
+});
+
+test('canonical narrative projection appends reasoning suffix deltas from sidecar snapshots without duplicating prior text', async () => {
+  const { projectCanonicalEventsToAssistantTimeline } = await loadProjection();
+
+  const timeline = projectCanonicalEventsToAssistantTimeline([
+    event('reasoning.started', {}, 1, 101),
+    event('reasoning.delta', { textChunk: '好的，让我先看看这个项目的结构。' }, 2, 102),
+    event('reasoning.delta', { textChunk: '然后我会顺着运行链路继续排查。' }, 3, 103),
+    event(
+      'reasoning.completed',
+      { finalText: '好的，让我先看看这个项目的结构。然后我会顺着运行链路继续排查。' },
+      4,
+      104,
+    ),
+  ]);
+
+  assert.deepEqual(timeline.map((item) => item.kind), ['reasoning']);
+  assert.equal(
+    timeline[0].content,
+    '好的，让我先看看这个项目的结构。然后我会顺着运行链路继续排查。',
+  );
+  assert.equal(timeline[0].status, 'completed');
+});

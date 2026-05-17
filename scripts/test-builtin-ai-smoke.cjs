@@ -1,14 +1,19 @@
 const { Module } = require("module");
+const path = require("path");
 
 const resolvePlaywright = () => {
-  const candidates = [
-    process.env.GN_NODE_PATH,
-    process.env.NODE_PATH,
-    "C:\\Users\\Even\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules",
-  ].filter(Boolean);
+  const {
+    buildDefaultNodeModulesCandidates,
+    pickPreferredNodeModulesRoot,
+  } = require(path.resolve(__dirname, "lib", "builtinPlaywrightResolver.cjs"));
+  const candidates = buildDefaultNodeModulesCandidates(__dirname);
+  const preferredCandidate = pickPreferredNodeModulesRoot(candidates);
+  const orderedCandidates = preferredCandidate
+    ? [preferredCandidate, ...candidates.filter((candidate) => candidate !== preferredCandidate)]
+    : candidates;
 
   let lastError = null;
-  for (const candidate of candidates) {
+  for (const candidate of orderedCandidates) {
     process.env.NODE_PATH = candidate;
     Module._initPaths();
     try {

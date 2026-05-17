@@ -217,16 +217,22 @@ export const denyRuntimeProjectFileApproval = async (input: {
   riskLevel: ApprovalRiskLevel;
   summary: string;
   messageId?: string | null;
+  toolCallId?: string | null;
   enqueueAgentApproval: (payload: {
     threadId: string;
     actionType: string;
     riskLevel: ApprovalRiskLevel;
     summary: string;
     messageId: string | null;
+    toolCallId?: string | null;
   }) => Promise<ApprovalRecord>;
   enqueueApproval: (approval: ApprovalRecord) => void;
   resolveStoredApproval: (approvalId: string, status: ApprovalRecord['status']) => void;
-  resolveAgentApproval: (payload: { approvalId: string; status: ApprovalRecord['status'] }) => Promise<unknown>;
+  resolveAgentApproval: (payload: {
+    approvalId: string;
+    status: ApprovalRecord['status'];
+    toolCallId?: string | null;
+  }) => Promise<unknown>;
 }) => {
   const approval = await input.enqueueAgentApproval({
     threadId: input.threadId,
@@ -234,11 +240,16 @@ export const denyRuntimeProjectFileApproval = async (input: {
     riskLevel: input.riskLevel,
     summary: input.summary,
     messageId: input.messageId || null,
+    toolCallId: input.toolCallId || null,
   });
 
   input.enqueueApproval(approval);
   input.resolveStoredApproval(approval.id, 'denied');
-  await input.resolveAgentApproval({ approvalId: approval.id, status: 'denied' });
+  await input.resolveAgentApproval({
+    approvalId: approval.id,
+    status: 'denied',
+    toolCallId: approval.toolCallId || null,
+  });
 
   return approval;
 };
@@ -276,6 +287,7 @@ export const requestRuntimeProjectFileApproval = async (input: {
     riskLevel: ApprovalRiskLevel;
     summary: string;
     messageId: string | null;
+    toolCallId?: string | null;
   }) => Promise<ApprovalRecord>;
   enqueueApproval: (approval: ApprovalRecord) => void;
   pendingApprovalActions: Record<string, RuntimePendingApprovalAction>;
@@ -296,11 +308,17 @@ export const requestRuntimeProjectFileApproval = async (input: {
         display: input.display,
       })
     : requestRuntimeApproval({
+        // 这里走默认 runtime 审批分支时，也要把线程/回放/toolCallId 原样带下去，
+        // 否则审批卡和恢复执行会丢失结构化关联，只能退回正文猜测。
         threadId: input.threadId,
+        runtimeStoreThreadId: input.runtimeStoreThreadId,
+        replayThreadId: input.replayThreadId,
+        providerId: input.providerId,
         actionType: input.actionType,
         riskLevel: input.riskLevel,
         summary: input.summary,
         messageId: input.messageId,
+        toolCallId: input.toolCallId,
         onApprove: input.onApprove,
         onDeny: input.onDeny,
         display: input.display,

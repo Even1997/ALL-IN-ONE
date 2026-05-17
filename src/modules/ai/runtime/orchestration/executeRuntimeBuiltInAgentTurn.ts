@@ -9,7 +9,11 @@ import type { ReferenceFile } from '../../../knowledge/referenceFiles.ts';
 import type { AITextStreamEvent } from '../../core/AIService.ts';
 import type { SkillIntent } from '../../workflow/skillRouting.ts';
 import { runAgentTurn } from '../agent-kernel/runAgentTurn.ts';
-import type { RuntimeToolMessage, RuntimeToolStep } from '../agent-kernel/agentKernelTypes.ts';
+import type {
+  RuntimeToolMessage,
+  RuntimeToolPromptMessage,
+  RuntimeToolStep,
+} from '../agent-kernel/agentKernelTypes.ts';
 import type { AgentMemoryEntry } from '../agentRuntimeTypes.ts';
 import type { AgentContextConversationMessage } from '../context/agentContextTypes.ts';
 import { extractMemoryCandidates } from '../memory/extractMemoryCandidates.ts';
@@ -139,7 +143,7 @@ export type ExecuteRuntimeBuiltInAgentTurnInput = {
   onSkillHookEvent?: (event: RuntimeSkillHookEvent) => Promise<void> | void;
   onModelEvent?: (event: AITextStreamEvent) => void;
   executeModel: (
-    prompt: string,
+    prompt: string | RuntimeToolPromptMessage[],
     systemPrompt: string,
     onEvent?: (event: AITextStreamEvent) => void
   ) => Promise<string>;
