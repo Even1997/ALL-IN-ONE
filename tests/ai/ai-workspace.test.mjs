@@ -13,7 +13,7 @@ test('ai workspace mounts the embedded ai chat surface directly', async () => {
   const source = await readFile(aiWorkspacePath, 'utf8');
 
   assert.match(source, /AIChat/);
-  assert.match(source, /variant="gn-agent-embedded"/);
+  assert.match(source, /variant="embedded"/);
   assert.doesNotMatch(source, /GNAgentWorkspace/);
 });
 

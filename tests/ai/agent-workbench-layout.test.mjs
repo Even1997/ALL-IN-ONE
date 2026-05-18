@@ -61,6 +61,10 @@ const timelineDetailDrawerPath = path.resolve(
   __dirname,
   '../../src/components/workspace/timeline/TimelineDetailDrawer.tsx',
 );
+const desktopTopbarPath = path.resolve(
+  __dirname,
+  '../../src/components/ui/workbench/DesktopWorkbenchTopbar.tsx',
+);
 
 test('AgentShellPage composes the new workbench shell', async () => {
   const source = await readFile(agentShellPagePath, 'utf8');
@@ -68,7 +72,8 @@ test('AgentShellPage composes the new workbench shell', async () => {
   assert.match(source, /AgentWorkbenchLayout/);
   assert.match(source, /AgentChatStage/);
   assert.match(source, /AgentWorkbenchSidebar/);
-  assert.match(source, /AgentFloatingPlanCard/);
+  assert.match(source, /AgentUtilitySidebar/);
+  assert.doesNotMatch(source, /AgentFloatingPlanCard/);
   assert.doesNotMatch(source, /AgentWorkbenchInspector/);
   assert.doesNotMatch(source, /rightInspector=/);
   assert.doesNotMatch(source, /inspectorCollapsed=/);
@@ -124,13 +129,12 @@ test('Agent workbench has low-height responsive rules for the floating plan and 
   const css = await readFile(agentWorkbenchCssPath, 'utf8');
 
   assert.match(css, /\.agent-workbench-shell\s*{[\s\S]*?box-sizing:\s*border-box;/);
-  assert.match(css, /\.agent-workbench-sidebar-shell,\s*\.agent-workbench-center\s*{[\s\S]*?height:\s*100%;/);
+  assert.match(css, /\.agent-workbench-sidebar-shell,[\s\S]*?\.agent-workbench-center,[\s\S]*?\.agent-workbench-companion\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /\.agent-workbench-sidebar\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /\.agent-workbench-left-rail\s*{[\s\S]*?height:\s*100%;/);
   assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{/);
-  assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{[\s\S]*?\.agent-workbench-floating-overlay\s*{[\s\S]*?top:\s*12px;/);
   assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{[\s\S]*?\.agent-workbench-shell\s*{[\s\S]*?gap:\s*8px;[\s\S]*?padding:\s*8px;/);
-  assert.match(css, /@media\s*\(max-height:\s*860px\)\s*{[\s\S]*?\.agent-floating-plan-card header\s*{[\s\S]*?padding:\s*12px 14px;/);
+  assert.doesNotMatch(css, /\.agent-workbench-floating-overlay/);
 });
 
 test('embedded agent composer can compress and wrap at small sizes instead of overflowing the bottom edge', async () => {
@@ -222,6 +226,7 @@ test('desktop workbench shell constrains the embedded agent page instead of lett
 test('desktop window switches to a frameless custom titlebar with in-app menus and controls', async () => {
   const tauriConf = await readFile(tauriConfPath, 'utf8');
   const source = await readFile(appTsxPath, 'utf8');
+  const topbarSource = await readFile(desktopTopbarPath, 'utf8');
   const tauriLib = await readFile(tauriLibPath, 'utf8');
   const appCss = await readFile(appCssPath, 'utf8');
   const capability = await readFile(path.resolve(__dirname, '../../src-tauri/capabilities/default.json'), 'utf8');
@@ -230,10 +235,10 @@ test('desktop window switches to a frameless custom titlebar with in-app menus a
   assert.match(tauriConf, /"decorations":\s*false/);
   assert.match(source, /getCurrentWindow/);
   assert.match(source, /handleDesktopTopbarDoubleClick/);
-  assert.match(source, /onDoubleClick=/);
+  assert.match(source, /onTitleDoubleClick=/);
   assert.match(source, /data-app-menu-root="desktop"/);
-  assert.match(source, /data-tauri-drag-region/);
-  assert.match(source, /desktop-workbench-drag-spacer/);
+  assert.match(topbarSource, /data-tauri-drag-region/);
+  assert.match(topbarSource, /desktop-workbench-drag-spacer/);
   assert.match(source, /desktop-window-controls/);
   assert.match(source, /desktop-window-control/);
   assert.match(source, /handleDesktopMenuAction/);

@@ -19,7 +19,8 @@ test('gnAgent compatibility page is a thin wrapper around the shared agent shell
   assert.match(source, /useGNAgentWorkbenchSession/);
   assert.match(agentShellPageSource, /AgentWorkbenchLayout/);
   assert.match(agentShellPageSource, /AgentWorkbenchSidebar/);
-  assert.match(agentShellPageSource, /AgentFloatingPlanCard/);
+  assert.match(agentShellPageSource, /AgentUtilitySidebar/);
+  assert.doesNotMatch(agentShellPageSource, /AgentFloatingPlanCard/);
 });
 
 test('gnAgent tab badges read sessions from ai chat store', async () => {

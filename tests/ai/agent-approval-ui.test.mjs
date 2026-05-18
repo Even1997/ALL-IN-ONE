@@ -75,4 +75,6 @@ test('approval cards and runtime summary expose approval actions and approval-po
   assert.match(cards, /onDeny\(event\.approvalId\)/);
   assert.match(summary, /approval:/i);
   assert.match(summary, /approval policy/i);
+  assert.doesNotMatch(summary, /ClaudeRuntime/);
+  assert.doesNotMatch(summary, /CodexRuntime/);
 });

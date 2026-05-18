@@ -28,7 +28,7 @@ export const AIWorkspace: React.FC<AIWorkspaceProps> = ({ collapsed, onCollapsed
     <section className="floating-ai-workspace gn-agent-workspace">
       <div className="ai-workspace-shell">
         <div className="ai-workspace-body">
-          <AIChat variant="gn-agent-embedded" collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
+          <AIChat variant="embedded" collapsed={collapsed} onCollapsedChange={onCollapsedChange} />
         </div>
       </div>
     </section>

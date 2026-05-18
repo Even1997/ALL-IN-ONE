@@ -9,7 +9,6 @@ type AIChatComposerModelSwitcherProps = {
   activeRuntimeConfig: AIConfigEntry | null;
   enabledRuntimeConfigs: AIConfigEntry[];
   runtimeModelOptions: string[];
-  isRuntimeConfigLocked: boolean;
   allowConfigSelection: boolean;
   onSelectConfig: (configId: string) => void;
   onSelectModel: (model: string) => void;
@@ -19,7 +18,6 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
   activeRuntimeConfig,
   enabledRuntimeConfigs,
   runtimeModelOptions,
-  isRuntimeConfigLocked,
   allowConfigSelection,
   onSelectConfig,
   onSelectModel,
@@ -59,7 +57,7 @@ export const AIChatComposerModelSwitcher: React.FC<AIChatComposerModelSwitcherPr
     <div ref={containerRef} className="chat-model-switcher">
       <button
         type="button"
-        className={`chat-model-switcher-trigger ${isRuntimeConfigLocked ? 'locked' : ''}`}
+        className="chat-model-switcher-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Switch model (${activeModelLabel})`}

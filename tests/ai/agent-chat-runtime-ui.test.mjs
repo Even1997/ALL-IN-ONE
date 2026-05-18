@@ -41,9 +41,10 @@ test('AI chat wiring uses runtime stores, coordinator entry points, and project 
   assert.doesNotMatch(source, /buildThreadPrompt/);
 });
 
-test('GN agent chat page still routes provider identity through the existing UI shell', async () => {
+test('GN agent chat page stays a thin session-to-stage wrapper without provider remapping', async () => {
   const source = await readFile(agentPagePath, 'utf8');
 
-  assert.match(source, /providerId=\{providerId\}/);
+  assert.match(source, /AgentChatStage/);
   assert.match(source, /session=\{session\}/);
+  assert.doesNotMatch(source, /providerId/);
 });

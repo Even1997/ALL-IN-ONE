@@ -146,7 +146,7 @@ const buildStarterFeatureTree = (projectName: string): FeatureTree => ({
     },
     {
       id: uuidv4(),
-      name: '开发工作区接入',
+      name: 'Agent 协作衔接',
       status: 'pending',
       priority: 'medium',
       progress: 0,
@@ -464,7 +464,9 @@ const ensureFeatureName = (feature?: FeatureNode) => feature?.name || '核心功
 const buildDefaultPageMetadata = (
   node: Pick<PageStructureNode, 'name' | 'kind' | 'description'>
 ): PageStructureNode['metadata'] => ({
-  route: `/${node.kind}/${node.name.toLowerCase().replace(/\s+/g, '-')}`,
+  route: `${
+    node.kind === 'page' ? '/sketch/pages' : node.kind === 'module' ? '/sketch' : `/${node.kind}`
+  }/${node.name.toLowerCase().replace(/\s+/g, '-')}`,
   title: node.name,
   goal: node.description,
   template: node.kind === 'page' ? 'detail' : 'workspace',
@@ -511,7 +513,7 @@ const buildProjectBriefFromProject = (
       {
         id: uuidv4(),
         title: '核心流程',
-        content: '聊天 -> /wiki -> /sketch -> /ui-design -> 开发工作区',
+        content: '聊天 -> /notes -> /sketch -> /ui-design -> Agent',
       },
     ],
   };
@@ -544,7 +546,7 @@ export const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | nul
           description: `集中录入原始信息、补充约束，并沉淀成项目简报。`,
           featureIds: features[0] ? [features[0].id] : [],
           metadata: {
-            route: '/wiki',
+            route: '/notes',
             title: '需求工作台',
             goal: '沉淀原始需求并生成项目简报。',
             template: 'form',
@@ -610,33 +612,33 @@ export const buildPageStructureFromFeatureTree = (featureTree: FeatureTree | nul
     },
     {
       id: uuidv4(),
-      name: '开发工作台',
+      name: 'Agent 工作台',
       kind: 'flow',
-      description: '连接真实文件系统、AI 编码和终端执行。',
+      description: '连接 Agent 执行、文件编辑和命令运行。',
       featureIds: features[2] ? [features[2].id] : [],
       metadata: {
-        route: '/develop',
-        title: '开发工作台',
-        goal: '连接代码生成、文件编辑与执行。',
+        route: '/agent',
+        title: 'Agent 工作台',
+        goal: '连接任务执行、文件编辑与命令运行。',
         template: 'workspace',
         ownerRole: '开发',
-        notes: '下一阶段接真实文件树与终端。',
+        notes: '作为 Agent 执行与交付动作的统一入口。',
         status: 'draft',
       },
       children: [
         {
           id: uuidv4(),
-          name: '代码生成入口',
+          name: '执行与交付入口',
           kind: 'page',
-          description: `围绕 ${ensureFeatureName(features[2])} 打通开发链路。`,
+          description: `围绕 ${ensureFeatureName(features[2])} 打通执行、验证与交付链路。`,
           featureIds: features[2] ? [features[2].id] : [],
           metadata: {
-            route: '/develop/codegen',
-            title: '代码生成入口',
-            goal: '将结构化设计产物转为开发任务。',
+            route: '/agent/session',
+            title: '执行与交付入口',
+            goal: '将结构化产物转为可执行任务和交付动作。',
             template: 'dashboard',
             ownerRole: '开发',
-            notes: '后续会接入真实文件树和任务编排。',
+            notes: '后续会继续承接真实文件树、任务编排和运行反馈。',
             status: 'draft',
           },
           children: [],
@@ -982,7 +984,7 @@ const buildPlanningFiles = (
 
   const files: GeneratedFile[] = [
     {
-      path: 'src/generated/wiki/notes.md',
+      path: 'src/generated/notes/notes.md',
       content: [
         `# ${project.name} 需求资料`,
         '',
@@ -1018,7 +1020,7 @@ const buildPlanningFiles = (
       updatedAt: now,
     },
     {
-      path: 'src/generated/wiki/brief.md',
+      path: 'src/generated/notes/brief.md',
       content: brief
         ? `# ${brief.title}\n\n${brief.summary}\n\n${brief.sections.map((section) => `## ${section.title}\n\n${section.content}`).join('\n\n')}\n`
         : '# 项目简报\n\n暂无内容。\n',
@@ -2006,7 +2008,7 @@ const createPageNodeDraft = ({
   goal: string;
   notes: string;
 }): PageStructureNode => {
-  const cleanRouteBase = routeBase.replace(/\/+$/, '') || '/pages';
+  const cleanRouteBase = routeBase.replace(/\/+$/, '') || '/sketch/pages';
   const routeSuffix = toKebabCase(name) || `page-${Date.now()}`;
 
   return {
@@ -2852,7 +2854,7 @@ export const useProjectStore = create<ProjectState>()(
           name: `新页面 ${nextIndex}`,
           description: '由页面工作台直接维护的页面。',
           featureIds: [],
-          routeBase: '/pages',
+          routeBase: '/sketch/pages',
           template: 'custom',
           ownerRole: 'UI设计',
           goal: '在页面侧独立维护页面结构、线框和后续 UI 产物。',

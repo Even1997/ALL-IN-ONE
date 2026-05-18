@@ -9,22 +9,14 @@ export type AgentShellProviderMode = 'classic' | 'claude' | 'codex';
 
 export type AgentShellSettingsRecord = {
   mode: AgentShellProviderMode;
-  claudeConfigId: string | null;
-  codexConfigId: string | null;
 };
 
 type UpdateAgentShellSettingsInput = {
   mode?: AgentShellProviderMode;
-  claudeConfigId?: string | null;
-  clearClaudeConfigId?: boolean;
-  codexConfigId?: string | null;
-  clearCodexConfigId?: boolean;
 };
 
 let localShellSettings: AgentShellSettingsRecord = {
   mode: 'classic',
-  claudeConfigId: null,
-  codexConfigId: null,
 };
 
 const normalizeProviderMode = (value: string | null | undefined): AgentShellProviderMode =>
@@ -32,8 +24,6 @@ const normalizeProviderMode = (value: string | null | undefined): AgentShellProv
 
 const normalizeShellSettings = (settings: AgentShellSettingsRecord): AgentShellSettingsRecord => ({
   mode: normalizeProviderMode(settings.mode),
-  claudeConfigId: settings.claudeConfigId || null,
-  codexConfigId: settings.codexConfigId || null,
 });
 
 export const getAgentShellSettings = async (): Promise<AgentShellSettingsRecord> => {
@@ -50,8 +40,6 @@ export const updateAgentShellSettings = async (
   if (!isTauriRuntimeAvailable()) {
     localShellSettings = normalizeShellSettings({
       mode: input.mode ?? localShellSettings.mode,
-      claudeConfigId: input.clearClaudeConfigId ? null : input.claudeConfigId ?? localShellSettings.claudeConfigId,
-      codexConfigId: input.clearCodexConfigId ? null : input.codexConfigId ?? localShellSettings.codexConfigId,
     });
     return localShellSettings;
   }

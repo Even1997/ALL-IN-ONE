@@ -17,7 +17,7 @@ test('GN Agent keeps local runtimes internal instead of exposing Claude/Codex as
   const source = await readFile(chatPath, 'utf8');
   const coordinator = await readFile(coordinatorPath, 'utf8');
 
-  assert.match(source, /CHAT_AGENTS/);
+  assert.match(source, /selectedChatAgentId/);
   assert.match(source, /selectedChatAgentId/);
   assert.match(source, /getLocalAgentConfigSnapshot/);
   assert.match(coordinator, /prepareRuntimeLocalAgentFlow/);
@@ -37,9 +37,11 @@ test('built-in AI remains the default execution path', async () => {
 
   assert.match(source, /useState<ChatAgentId>\('built-in'\)/);
   assert.match(source, /selectedChatAgentId !== 'built-in' && !agentAvailability\[selectedChatAgentId\]\.ready/);
-  assert.match(source, /const runtimeProviderId = \(providerExecutionMode \|\| 'built-in'\) as AgentProviderId;/);
+  assert.match(source, /const runtimeProviderId = 'built-in' as AgentProviderId;/);
+  assert.doesNotMatch(source, /providerExecutionMode/);
   assert.match(coordinator, /runAgentTurn|runRuntimeChatBuiltInAgentTurn/);
   assert.match(coordinator, /runRuntimeChatBuiltInAgentTurn\(\{/);
   assert.match(coordinator, /allowedTools:\s*builtInAllowedTools/);
-  assert.match(runtimeClient, /return await aiService\.completeText\(/);
+  assert.match(runtimeClient, /return Array\.isArray\(prompt\)/);
+  assert.match(runtimeClient, /await aiService\.completeText/);
 });

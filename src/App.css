@@ -1,3 +1,8 @@
+/* 文件作用：承接应用级旧页面样式与桌面 shell 的入口级布局补充。
+ * 所在链路：UI composition 层，位于全局 workbench tokens/primitives 之后加载。
+ * 排查入口：若页面仍出现旧式硬编码视觉，优先检查这里是否需要迁移到 src/styles/workbench/*。
+ */
+
 * {
   box-sizing: border-box;
 }
@@ -48,39 +53,10 @@ body.desktop-workbench-mode #root {
 
 body.desktop-workbench-mode {
   background: transparent;
-  --desktop-shell-surface: #171c24;
-  --desktop-shell-surface-strong: #1d242f;
-  --desktop-shell-surface-muted: #222b38;
-  --desktop-shell-border: rgba(255, 255, 255, 0.08);
-  --desktop-shell-border-strong: rgba(255, 255, 255, 0.14);
-  --desktop-shell-shadow: 0 20px 46px rgba(0, 0, 0, 0.28);
-  --desktop-shell-shadow-strong: 0 28px 56px rgba(0, 0, 0, 0.34);
-  --desktop-shell-text: #f5f7fb;
-  --desktop-shell-text-muted: rgba(214, 221, 232, 0.62);
-  --desktop-shell-toolbar-bg: rgba(255, 255, 255, 0.03);
-  --desktop-shell-toolbar-bg-subtle: rgba(255, 255, 255, 0.02);
-  --desktop-shell-toolbar-border: rgba(255, 255, 255, 0.05);
-  --desktop-shell-pane-bg: linear-gradient(180deg, rgba(29, 36, 47, 0.98), rgba(22, 28, 36, 0.98));
 }
 
 body.desktop-workbench-mode::before {
   opacity: 0;
-}
-
-:root[data-theme='light'] body.desktop-workbench-mode {
-  --desktop-shell-surface: #eef3f9;
-  --desktop-shell-surface-strong: #ffffff;
-  --desktop-shell-surface-muted: #e3ebf4;
-  --desktop-shell-border: rgba(100, 116, 139, 0.14);
-  --desktop-shell-border-strong: rgba(100, 116, 139, 0.22);
-  --desktop-shell-shadow: 0 18px 42px rgba(71, 85, 105, 0.14);
-  --desktop-shell-shadow-strong: 0 24px 52px rgba(71, 85, 105, 0.18);
-  --desktop-shell-text: #111827;
-  --desktop-shell-text-muted: rgba(71, 85, 105, 0.78);
-  --desktop-shell-toolbar-bg: rgba(15, 23, 42, 0.035);
-  --desktop-shell-toolbar-bg-subtle: rgba(15, 23, 42, 0.02);
-  --desktop-shell-toolbar-border: rgba(100, 116, 139, 0.1);
-  --desktop-shell-pane-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 252, 0.98));
 }
 
 /* Project Setup */
@@ -12267,81 +12243,7 @@ body.desktop-workbench-mode.ai-chat-sidebar-collapsed .app-main-desktop {
 }
 
 .desktop-shell-codex {
-  --desktop-shell-surface: #171c24;
-  --desktop-shell-surface-strong: #1d242f;
-  --desktop-shell-surface-muted: #222b38;
-  --desktop-shell-border: rgba(255, 255, 255, 0.08);
-  --desktop-shell-border-strong: rgba(255, 255, 255, 0.14);
-  --desktop-shell-shadow: 0 20px 46px rgba(0, 0, 0, 0.28);
-  --desktop-shell-shadow-strong: 0 28px 56px rgba(0, 0, 0, 0.34);
-  --desktop-shell-text: #f5f7fb;
-  --desktop-shell-text-muted: rgba(214, 221, 232, 0.62);
-  --desktop-shell-hover: rgba(255, 255, 255, 0.06);
-  --desktop-titlebar-fg: rgba(232, 238, 247, 0.86);
-  --desktop-titlebar-fg-strong: #ffffff;
-  --desktop-titlebar-hover-bg: rgba(255, 255, 255, 0.06);
-  --desktop-titlebar-menu-bg: #202733;
-  --desktop-titlebar-menu-border: rgba(255, 255, 255, 0.08);
-  --desktop-titlebar-menu-shadow: 0 24px 48px rgba(0, 0, 0, 0.38);
-  --desktop-titlebar-divider: rgba(255, 255, 255, 0.07);
-  --desktop-shell-rail-bg: var(--wb-sidebar-background);
-  --desktop-shell-topbar-bg: var(--wb-toolbar-background);
-  --desktop-shell-pane-bg: var(--wb-pane-background);
-  --desktop-shell-ai-pane-bg: var(--wb-inspector-background);
-  --desktop-shell-toolbar-bg: rgba(255, 255, 255, 0.03);
-  --desktop-shell-toolbar-bg-subtle: rgba(255, 255, 255, 0.02);
-  --desktop-shell-toolbar-border: rgba(255, 255, 255, 0.05);
-  --desktop-shell-control-bg: rgba(255, 255, 255, 0.03);
-  --desktop-shell-control-divider: rgba(255, 255, 255, 0.05);
-  --desktop-shell-resize-track: rgba(255, 255, 255, 0.08);
-  --desktop-shell-button-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 8px 18px rgba(0, 0, 0, 0.16);
-  --desktop-shell-role-pill-bg: color-mix(
-    in srgb,
-    var(--workbench-role-accent, var(--role-knowledge-accent)) 18%,
-    rgba(255, 255, 255, 0.04)
-  );
-  background: var(--wb-app-background, #16181c);
-}
-
-:root[data-theme='light'] .desktop-shell-codex {
-  --desktop-shell-surface: #eef3f9;
-  --desktop-shell-surface-strong: #ffffff;
-  --desktop-shell-surface-muted: #e3ebf4;
-  --desktop-shell-border: rgba(100, 116, 139, 0.14);
-  --desktop-shell-border-strong: rgba(100, 116, 139, 0.22);
-  --desktop-shell-shadow: 0 18px 42px rgba(71, 85, 105, 0.14);
-  --desktop-shell-shadow-strong: 0 24px 52px rgba(71, 85, 105, 0.18);
-  --desktop-shell-text: #111827;
-  --desktop-shell-text-muted: rgba(71, 85, 105, 0.78);
-  --desktop-shell-hover: rgba(15, 23, 42, 0.05);
-  --desktop-titlebar-fg: rgba(31, 41, 55, 0.84);
-  --desktop-titlebar-fg-strong: #0f172a;
-  --desktop-titlebar-hover-bg: rgba(15, 23, 42, 0.05);
-  --desktop-titlebar-menu-bg: rgba(255, 255, 255, 0.96);
-  --desktop-titlebar-menu-border: rgba(100, 116, 139, 0.14);
-  --desktop-titlebar-menu-shadow: 0 24px 48px rgba(71, 85, 105, 0.16);
-  --desktop-titlebar-divider: rgba(100, 116, 139, 0.14);
-  --desktop-shell-rail-bg: var(--wb-sidebar-background);
-  --desktop-shell-topbar-bg: var(--wb-toolbar-background);
-  --desktop-shell-pane-bg: var(--wb-pane-background);
-  --desktop-shell-ai-pane-bg: var(--wb-inspector-background);
-  --desktop-shell-toolbar-bg: rgba(15, 23, 42, 0.035);
-  --desktop-shell-toolbar-bg-subtle: rgba(15, 23, 42, 0.02);
-  --desktop-shell-toolbar-border: rgba(100, 116, 139, 0.10);
-  --desktop-shell-control-bg: rgba(15, 23, 42, 0.03);
-  --desktop-shell-control-divider: rgba(100, 116, 139, 0.12);
-  --desktop-shell-resize-track: rgba(100, 116, 139, 0.18);
-  --desktop-shell-button-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
-    0 8px 18px rgba(71, 85, 105, 0.12);
-  --desktop-shell-role-pill-bg: color-mix(
-    in srgb,
-    var(--workbench-role-accent, var(--role-knowledge-accent)) 14%,
-    rgba(255, 255, 255, 0.92)
-  );
-  background: var(--wb-app-background, #e9eef5);
+  background: var(--wb-app-background);
 }
 
 .desktop-shell-frame {

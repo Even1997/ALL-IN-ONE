@@ -27,6 +27,10 @@ import { withRetry } from '../runtime/retry/withRetry.ts';
 export type AIModule = 'feature-tree' | 'canvas' | 'code-editor' | 'backend' | 'bug-fix' | 'deploy';
 export type AIAction = 'generate' | 'modify' | 'review' | 'fix' | 'explain' | 'optimize';
 export type AIProviderType = 'openai-compatible' | 'anthropic';
+export type AIProtocolType =
+  | 'anthropic-messages'
+  | 'openai-chat-completions'
+  | 'openai-responses';
 
 export interface AIRequest {
   id: string;
@@ -87,6 +91,7 @@ export interface AIStreamHandler {
 
 export interface AIConfig {
   provider: AIProviderType;
+  protocol: AIProtocolType;
   apiKey: string;
   baseURL: string;
   model: string;
@@ -183,11 +188,19 @@ type OpenAICompatiblePartialToolCall = {
   partialArguments: string;
 };
 
+type OpenAIResponsesPartialToolCall = {
+  itemId?: string;
+  callId?: string;
+  name?: string;
+  partialArguments: string;
+};
+
 // 这个类更偏“服务编排层”，不是单纯的 provider adapter。
 // 它把 provider 输出、工具协议和前端 handler 串成一个完整回合。
 class AIService {
   private config: AIConfig = {
     provider: 'openai-compatible',
+    protocol: 'openai-chat-completions',
     apiKey: '',
     baseURL: DEFAULT_BASE_URL,
     model: 'gpt-4o-mini',
@@ -659,7 +672,78 @@ ${this.buildToolInstructions()}
       return this.callAnthropic(messages, systemPrompt, signal, onEvent);
     }
 
+    if (this.config.protocol === 'openai-responses') {
+      try {
+        return await this.callOpenAIResponses(messages, systemPrompt, signal, onEvent);
+      } catch (error) {
+        if (!this.shouldFallbackFromResponsesToChat(error)) {
+          throw error;
+        }
+      }
+    }
+
     return this.callOpenAICompatible(messages, systemPrompt, signal, onEvent);
+  }
+
+  private async callOpenAIResponses(
+    messages: ChatMessage[] | RuntimeToolMessage[],
+    systemPrompt: string,
+    signal?: AbortSignal,
+    onEvent?: (event: AITextStreamEvent) => void
+  ): Promise<string> {
+    const payload = {
+      model: this.config.model,
+      temperature: this.config.temperature,
+      max_output_tokens: this.config.maxTokens,
+      stream: true,
+      reasoning: {
+        summary: 'auto' as const,
+      },
+      tools: this.buildOpenAIResponsesTools(),
+      input: this.buildOpenAIResponsesInput(systemPrompt, messages),
+    };
+
+    const doFetch = async () => {
+      const response = await this.fetchOpenAICompatibleJson('/responses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal,
+      });
+
+      const responseToolCallPartials = new Map<string, OpenAIResponsesPartialToolCall>();
+      const emittedToolCallIds = new Set<string>();
+      const responseToolCalls = new Map<string, Extract<AITextStreamEvent, { kind: 'tool_call' }>['toolCall']>();
+
+      if (response.body) {
+        const streamed = await this.readOpenAIResponsesStream(
+          response.body,
+          onEvent,
+          responseToolCallPartials,
+          emittedToolCallIds,
+          responseToolCalls,
+        );
+        const toolCalls = [...responseToolCalls.values()];
+        return onEvent ? streamed.answer : this.buildOpenAICompatibleToolCallsFallbackContent(streamed.answer, toolCalls);
+      }
+
+      const payloadJson = await response.json();
+      const parsed = this.parseOpenAIResponsesJsonPayload(payloadJson);
+      parsed.toolCalls.forEach((toolCall) => {
+        emittedToolCallIds.add(toolCall.id);
+        responseToolCalls.set(toolCall.id, toolCall);
+        onEvent?.({
+          kind: 'tool_call',
+          delta: '',
+          toolCall,
+        });
+      });
+      return onEvent ? parsed.answer : this.buildOpenAICompatibleToolCallsFallbackContent(parsed.answer, parsed.toolCalls);
+    };
+
+    return withRetry(doFetch, { signal });
   }
 
   private async callOpenAICompatible(
@@ -737,7 +821,8 @@ ${this.buildToolInstructions()}
     const response = await this.fetchWithV1Fallback(path, requestInit);
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OpenAI-compatible API error (${response.status}): ${errorText}`);
+      const label = path === '/responses' ? 'OpenAI Responses API' : 'OpenAI-compatible API';
+      throw new Error(`${label} error (${response.status}): ${errorText}`);
     }
 
     const contentType = (response.headers.get('content-type') || '').toLowerCase();
@@ -745,7 +830,8 @@ ${this.buildToolInstructions()}
       const fallbackResponse = await this.fetchWithV1Fallback(path, requestInit, true);
       if (!fallbackResponse.ok) {
         const errorText = await fallbackResponse.text();
-        throw new Error(`OpenAI-compatible API error (${fallbackResponse.status}): ${errorText}`);
+        const label = path === '/responses' ? 'OpenAI Responses API' : 'OpenAI-compatible API';
+        throw new Error(`${label} error (${fallbackResponse.status}): ${errorText}`);
       }
       return fallbackResponse;
     }
@@ -1053,6 +1139,52 @@ ${this.buildToolInstructions()}
     }));
   }
 
+  private buildOpenAIResponsesTools(): Array<{
+    type: 'function';
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  }> {
+    return TOOLS.map((tool) => ({
+      type: 'function',
+      name: tool.name,
+      description: tool.description,
+      parameters: {
+        type: 'object',
+        properties: Object.fromEntries(
+          Object.entries(tool.parameters).map(([name, parameter]) => [
+            name,
+            {
+              type: parameter.type,
+              description: parameter.description,
+              ...(parameter.items ? { items: parameter.items } : {}),
+            },
+          ])
+        ),
+        required: tool.required,
+      },
+    }));
+  }
+
+  private buildOpenAIResponsesInput(
+    systemPrompt: string,
+    messages: ChatMessage[] | RuntimeToolMessage[] | RuntimeToolPromptMessage[],
+  ) {
+    const normalizedMessages = this.normalizeProviderMessages(messages);
+    return [
+      {
+        role: 'system',
+        content: systemPrompt,
+      },
+      ...normalizedMessages
+        .filter((message) => message.role === 'user' || message.role === 'assistant')
+        .map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+    ];
+  }
+
   private joinUrl(baseURL: string, path: string) {
     if (baseURL.endsWith(path)) {
       return baseURL;
@@ -1113,6 +1245,187 @@ ${this.buildToolInstructions()}
     });
 
     return text.answer;
+  }
+
+  private buildOpenAIResponsesToolCallKey(payload: any) {
+    const itemId =
+      typeof payload?.item?.id === 'string' && payload.item.id.trim()
+        ? payload.item.id.trim()
+        : typeof payload?.item_id === 'string' && payload.item_id.trim()
+          ? payload.item_id.trim()
+          : '';
+    if (itemId) {
+      return `item:${itemId}`;
+    }
+
+    const callId =
+      typeof payload?.item?.call_id === 'string' && payload.item.call_id.trim()
+        ? payload.item.call_id.trim()
+        : '';
+    if (callId) {
+      return `call:${callId}`;
+    }
+
+    if (typeof payload?.output_index === 'number') {
+      return `index:${payload.output_index}`;
+    }
+
+    return 'response_call';
+  }
+
+  private finalizeOpenAIResponsesToolCall(
+    partial: OpenAIResponsesPartialToolCall,
+    emittedToolCallIds: Set<string>,
+    responseToolCalls: Map<string, Extract<AITextStreamEvent, { kind: 'tool_call' }>['toolCall']>,
+  ) {
+    const parsed = this.buildOpenAICompatibleToolCall(
+      {
+        id: partial.callId || partial.itemId,
+        name: partial.name,
+        partialArguments: partial.partialArguments,
+      },
+      partial.callId || partial.itemId || 'response_call',
+    );
+    if (!parsed) {
+      return null;
+    }
+
+    responseToolCalls.set(parsed.id, parsed);
+    if (emittedToolCallIds.has(parsed.id)) {
+      return null;
+    }
+
+    emittedToolCallIds.add(parsed.id);
+    return parsed;
+  }
+
+  private parseOpenAIResponsesJsonPayload(payload: any) {
+    const answerParts: string[] = [];
+    const toolCalls: Array<Extract<AITextStreamEvent, { kind: 'tool_call' }>['toolCall']> = [];
+    const output = Array.isArray(payload?.output) ? payload.output : [];
+
+    output.forEach((item: any, index: number) => {
+      if (item?.type === 'message' && Array.isArray(item.content)) {
+        const text = item.content
+          .map((block: any) =>
+            typeof block?.text === 'string' && (block.type === 'output_text' || block.type === 'text')
+              ? block.text
+              : '',
+          )
+          .join('');
+        if (text) {
+          answerParts.push(text);
+        }
+        return;
+      }
+
+      if (item?.type === 'function_call') {
+        const parsed = this.buildOpenAICompatibleToolCall(
+          {
+            id: item.call_id || item.id,
+            name: item.name,
+            partialArguments:
+              typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments ?? {}),
+          },
+          item.call_id || item.id || `response_call_${index}`,
+        );
+        if (parsed) {
+          toolCalls.push(parsed);
+        }
+      }
+    });
+
+    return {
+      answer: answerParts.join('\n').trim(),
+      toolCalls,
+    };
+  }
+
+  private async readOpenAIResponsesStream(
+    body: ReadableStream<Uint8Array>,
+    onEvent: ((event: AITextStreamEvent) => void) | undefined,
+    responseToolCallPartials: Map<string, OpenAIResponsesPartialToolCall>,
+    emittedToolCallIds: Set<string>,
+    responseToolCalls: Map<string, Extract<AITextStreamEvent, { kind: 'tool_call' }>['toolCall']>,
+  ): Promise<{ answer: string; thinking: string }> {
+    return this.readEventStream(body, onEvent || (() => undefined), (data) => {
+      const payload = JSON.parse(data);
+      const type = typeof payload?.type === 'string' ? payload.type : '';
+
+      if (type === 'response.reasoning_summary_text.delta') {
+        return this.buildEventList('thinking', typeof payload?.delta === 'string' ? payload.delta : null);
+      }
+
+      if (type === 'response.output_text.delta') {
+        return this.buildEventList('text', typeof payload?.delta === 'string' ? payload.delta : null);
+      }
+
+      if (
+        (type === 'response.output_item.added' || type === 'response.output_item.done')
+        && payload?.item?.type === 'function_call'
+      ) {
+        const key = this.buildOpenAIResponsesToolCallKey(payload);
+        const partial = responseToolCallPartials.get(key) || { partialArguments: '' };
+        if (typeof payload.item.id === 'string' && payload.item.id.trim()) {
+          partial.itemId = payload.item.id.trim();
+        }
+        if (typeof payload.item.call_id === 'string' && payload.item.call_id.trim()) {
+          partial.callId = payload.item.call_id.trim();
+        }
+        if (typeof payload.item.name === 'string' && payload.item.name.trim()) {
+          partial.name = payload.item.name.trim();
+        }
+        if (typeof payload.item.arguments === 'string') {
+          partial.partialArguments = payload.item.arguments;
+        }
+        responseToolCallPartials.set(key, partial);
+
+        const parsed = this.finalizeOpenAIResponsesToolCall(partial, emittedToolCallIds, responseToolCalls);
+        return parsed
+          ? [{
+              kind: 'tool_call',
+              delta: '',
+              toolCall: parsed,
+            }]
+          : [];
+      }
+
+      if (type === 'response.function_call_arguments.delta') {
+        const key = this.buildOpenAIResponsesToolCallKey(payload);
+        const partial = responseToolCallPartials.get(key) || { partialArguments: '' };
+        if (typeof payload?.item_id === 'string' && payload.item_id.trim()) {
+          partial.itemId = payload.item_id.trim();
+        }
+        if (typeof payload?.delta === 'string') {
+          partial.partialArguments += payload.delta;
+        }
+        responseToolCallPartials.set(key, partial);
+        return [];
+      }
+
+      if (type === 'response.function_call_arguments.done') {
+        const key = this.buildOpenAIResponsesToolCallKey(payload);
+        const partial = responseToolCallPartials.get(key) || { partialArguments: '' };
+        if (typeof payload?.item_id === 'string' && payload.item_id.trim()) {
+          partial.itemId = payload.item_id.trim();
+        }
+        if (typeof payload?.arguments === 'string') {
+          partial.partialArguments = payload.arguments;
+        }
+        responseToolCallPartials.set(key, partial);
+
+        const parsed = this.finalizeOpenAIResponsesToolCall(partial, emittedToolCallIds, responseToolCalls);
+        return parsed
+          ? [{
+              kind: 'tool_call',
+              delta: '',
+              toolCall: parsed,
+            }]
+          : [];
+      }
+
+      return [];
+    });
   }
 
   private accumulateOpenAICompatibleToolCalls(
@@ -1486,6 +1799,17 @@ ${this.buildToolInstructions()}
 
   private buildEventList(kind: AITextStreamTextEventKind, delta: string | null): AITextStreamEvent[] {
     return delta ? [{ kind, delta }] : [];
+  }
+
+  private shouldFallbackFromResponsesToChat(error: unknown) {
+    const message = String(error);
+    if (/OpenAI Responses API error \(404\)/i.test(message)) {
+      return true;
+    }
+
+    return /OpenAI Responses API error \((400|405|501)\):.*(not found|unknown (url|path|endpoint)|unsupported|unavailable)/i.test(
+      message,
+    );
   }
 }
 

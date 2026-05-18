@@ -1,6 +1,6 @@
-// 文件作用：状态仓库，位于应用支持层。
-// 所在链路：负责承接当前模块在整体链路中的实现职责。
-// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 文件作用：维护全局 AI 配置、当前运行时配置投影和请求历史。
+// 所在链路：设置页 / store -> AIService。
+// 排查入口：先看 buildRuntimeState / applyRuntimeConfig，再看 updateConfig 和 rehydrate。
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -21,17 +21,19 @@ import {
   createAIConfigEntry,
   hasUsableAIConfigEntry,
   mergePresetAIConfigEntries,
+  normalizeAIProtocol,
   normalizeSavedModels,
   resolveSelectedAIConfigId,
   type AIConfigEntry,
+  type AIProtocolType,
 } from './aiConfigState';
 
 interface GlobalAIState {
   aiConfigs: AIConfigEntry[];
   selectedConfigId: string | null;
 
-  // Config
   provider: AIProviderType;
+  protocol: AIProtocolType;
   apiKey: string;
   baseURL: string;
   model: string;
@@ -39,22 +41,19 @@ interface GlobalAIState {
   customHeaders: string;
   isConfigured: boolean;
 
-  // Active request
   currentRequestId: string | null;
   isStreaming: boolean;
   error: string | null;
 
-  // History
   requestHistory: AIRequestRecord[];
   codeBlocks: CodeBlock[];
   suggestions: AISuggestion[];
 
-  // Panel state
   isPanelOpen: boolean;
   panelPosition: 'right' | 'bottom';
 
-  // Actions
   setProvider: (provider: AIProviderType) => void;
+  setProtocol: (protocol: AIProtocolType) => void;
   setApiKey: (key: string) => void;
   setBaseURL: (baseURL: string) => void;
   setModel: (model: string) => void;
@@ -64,9 +63,8 @@ interface GlobalAIState {
   setConfigEnabled: (configId: string, enabled: boolean) => boolean;
   deleteConfig: (configId: string) => void;
   selectConfig: (configId: string | null) => void;
-  applyConfiguration: (config: Partial<Pick<AIConfig, 'provider' | 'apiKey' | 'baseURL' | 'model' | 'contextWindowTokens' | 'customHeaders'>>) => void;
+  applyConfiguration: (config: Partial<Pick<AIConfig, 'provider' | 'protocol' | 'apiKey' | 'baseURL' | 'model' | 'contextWindowTokens' | 'customHeaders'>>) => void;
 
-  // AI operations (can be called from anywhere)
   generateForModule: (
     module: AIModule,
     action: AIAction,
@@ -76,12 +74,8 @@ interface GlobalAIState {
   ) => Promise<string>;
 
   interrupt: () => void;
-
-  // Panel
   togglePanel: () => void;
   setPanelPosition: (position: 'right' | 'bottom') => void;
-
-  // History
   clearHistory: () => void;
   getHistory: () => AIRequestRecord[];
 }
@@ -104,6 +98,7 @@ type PersistedGlobalAIState = Pick<
   | 'aiConfigs'
   | 'selectedConfigId'
   | 'provider'
+  | 'protocol'
   | 'apiKey'
   | 'baseURL'
   | 'model'
@@ -118,6 +113,7 @@ const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
 const DEFAULT_RUNTIME_STATE = {
   provider: 'openai-compatible' as AIProviderType,
+  protocol: 'openai-chat-completions' as AIProtocolType,
   apiKey: '',
   baseURL: DEFAULT_BASE_URL,
   model: '',
@@ -128,6 +124,7 @@ const DEFAULT_RUNTIME_STATE = {
 
 const buildLegacyConfigEntry = (state: {
   provider: AIProviderType;
+  protocol?: AIProtocolType;
   apiKey: string;
   baseURL: string;
   model: string;
@@ -136,8 +133,9 @@ const buildLegacyConfigEntry = (state: {
 }): AIConfigEntry =>
   createAIConfigEntry({
     id: 'legacy-default',
-    name: '默认 AI',
+    name: '榛樿 AI',
     provider: state.provider,
+    protocol: normalizeAIProtocol(state.provider, state.protocol),
     apiKey: state.apiKey,
     baseURL: state.baseURL || DEFAULT_BASE_URL,
     model: state.model,
@@ -156,6 +154,7 @@ const buildRuntimeState = (selectedConfig: AIConfigEntry | null) => {
 
   return {
     provider: selectedConfig.provider,
+    protocol: selectedConfig.protocol,
     apiKey: selectedConfig.apiKey,
     baseURL: selectedConfig.baseURL,
     model: selectedConfig.model,
@@ -174,9 +173,10 @@ const syncStateFromConfigs = (configs: AIConfigEntry[], previousSelectedId: stri
   };
 };
 
-const applyRuntimeConfig = (state: Pick<GlobalAIState, 'provider' | 'apiKey' | 'baseURL' | 'model' | 'contextWindowTokens' | 'customHeaders'>) => {
+const applyRuntimeConfig = (state: Pick<GlobalAIState, 'provider' | 'protocol' | 'apiKey' | 'baseURL' | 'model' | 'contextWindowTokens' | 'customHeaders'>) => {
   aiService.setConfig({
     provider: state.provider,
+    protocol: state.protocol,
     apiKey: state.apiKey,
     baseURL: state.baseURL,
     model: state.model,
@@ -189,6 +189,7 @@ const buildPersistedGlobalAIState = (state: GlobalAIState): PersistedGlobalAISta
   aiConfigs: state.aiConfigs,
   selectedConfigId: state.selectedConfigId,
   provider: state.provider,
+  protocol: state.protocol,
   apiKey: state.apiKey,
   baseURL: state.baseURL,
   model: state.model,
@@ -205,6 +206,7 @@ export const useGlobalAIStore = create<GlobalAIState>()(
       aiConfigs: buildDefaultAIConfigEntries(),
       selectedConfigId: null,
       provider: DEFAULT_RUNTIME_STATE.provider,
+      protocol: DEFAULT_RUNTIME_STATE.protocol,
       apiKey: DEFAULT_RUNTIME_STATE.apiKey,
       baseURL: DEFAULT_RUNTIME_STATE.baseURL,
       model: DEFAULT_RUNTIME_STATE.model,
@@ -221,14 +223,27 @@ export const useGlobalAIStore = create<GlobalAIState>()(
       panelPosition: 'right',
 
       setProvider: (provider) => {
-        const { selectedConfigId } = get();
-        if (selectedConfigId) {
-          get().updateConfig(selectedConfigId, { provider });
+        const state = get();
+        const protocol = normalizeAIProtocol(provider, state.protocol);
+        if (state.selectedConfigId) {
+          state.updateConfig(state.selectedConfigId, { provider, protocol });
           return;
         }
 
-        aiService.setConfig({ provider });
-        set({ provider, isConfigured: Boolean(get().apiKey.trim() && get().model.trim()) });
+        aiService.setConfig({ provider, protocol });
+        set({ provider, protocol, isConfigured: Boolean(state.apiKey.trim() && state.model.trim()) });
+      },
+
+      setProtocol: (protocol) => {
+        const state = get();
+        const normalizedProtocol = normalizeAIProtocol(state.provider, protocol);
+        if (state.selectedConfigId) {
+          state.updateConfig(state.selectedConfigId, { protocol: normalizedProtocol });
+          return;
+        }
+
+        aiService.setConfig({ protocol: normalizedProtocol });
+        set({ protocol: normalizedProtocol });
       },
 
       setApiKey: (apiKey) => {
@@ -277,7 +292,7 @@ export const useGlobalAIStore = create<GlobalAIState>()(
 
       addConfig: (seed) => {
         const nextConfig = createAIConfigEntry({
-          name: `AI 配置 ${get().aiConfigs.length + 1}`,
+          name: `AI 閰嶇疆 ${get().aiConfigs.length + 1}`,
           ...seed,
         });
         set((state) => ({
@@ -293,13 +308,18 @@ export const useGlobalAIStore = create<GlobalAIState>()(
             ? createAIConfigEntry({
                 ...item,
                 ...updates,
+                provider: typeof updates.provider === 'string' ? updates.provider : item.provider,
+                protocol: normalizeAIProtocol(
+                  typeof updates.provider === 'string' ? updates.provider : item.provider,
+                  'protocol' in updates ? updates.protocol : item.protocol,
+                ),
                 name: typeof updates.name === 'string' && updates.name.trim() ? updates.name.trim() : item.name,
                 savedModels: normalizeSavedModels(
                   'savedModels' in updates ? updates.savedModels : item.savedModels,
                   typeof updates.model === 'string' ? updates.model : item.model,
                 ),
               })
-            : item
+            : item,
         );
         const nextState = syncStateFromConfigs(nextConfigs, state.selectedConfigId);
         applyRuntimeConfig(nextState);
@@ -331,7 +351,7 @@ export const useGlobalAIStore = create<GlobalAIState>()(
                 ...item,
                 enabled,
               }
-            : item
+            : item,
         );
         const nextState = syncStateFromConfigs(nextConfigs, state.selectedConfigId);
         applyRuntimeConfig(nextState);
@@ -355,6 +375,7 @@ export const useGlobalAIStore = create<GlobalAIState>()(
         if (state.selectedConfigId) {
           state.updateConfig(state.selectedConfigId, {
             provider: config.provider,
+            protocol: config.protocol,
             apiKey: config.apiKey,
             baseURL: config.baseURL,
             model: config.model,
@@ -363,8 +384,10 @@ export const useGlobalAIStore = create<GlobalAIState>()(
           return;
         }
 
+        const nextProvider = config.provider ?? state.provider;
         const nextState = {
-          provider: config.provider ?? state.provider,
+          provider: nextProvider,
+          protocol: normalizeAIProtocol(nextProvider, config.protocol ?? state.protocol),
           apiKey: config.apiKey ?? state.apiKey,
           baseURL: config.baseURL ?? state.baseURL,
           model: config.model ?? state.model,
@@ -394,7 +417,7 @@ export const useGlobalAIStore = create<GlobalAIState>()(
               set({ currentRequestId: requestId, isStreaming: true, error: null });
             },
             onChunk: (_chunk: AIStreamChunk) => {
-              // Chunks are handled by the panel subscription
+              void _chunk;
             },
             onComplete: (response: AIResponse) => {
               set({
@@ -425,7 +448,7 @@ export const useGlobalAIStore = create<GlobalAIState>()(
             onInterrupt: () => {
               set({ isStreaming: false, currentRequestId: null });
             },
-          }
+          },
         );
 
         return requestId;
@@ -439,16 +462,13 @@ export const useGlobalAIStore = create<GlobalAIState>()(
       },
 
       togglePanel: () => set((state) => ({ isPanelOpen: !state.isPanelOpen })),
-
       setPanelPosition: (position) => set({ panelPosition: position }),
-
       clearHistory: () => set({ requestHistory: [], codeBlocks: [], suggestions: [] }),
-
       getHistory: () => get().requestHistory,
     }),
     {
       name: 'goodnight-ai-store',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => buildPersistedGlobalAIState(state),
       migrate: (persistedState) => persistedState as GlobalAIState,
@@ -460,13 +480,14 @@ export const useGlobalAIStore = create<GlobalAIState>()(
         state.aiConfigs = mergePresetAIConfigEntries(
           !Array.isArray(state.aiConfigs) || state.aiConfigs.length === 0
             ? [buildLegacyConfigEntry(state)]
-            : state.aiConfigs
+            : state.aiConfigs,
         );
 
         const nextSelectedId = resolveSelectedAIConfigId(state.aiConfigs, state.selectedConfigId || null);
         const runtimeState = buildRuntimeState(getConfigById(state.aiConfigs, nextSelectedId));
         state.selectedConfigId = nextSelectedId;
         state.provider = runtimeState.provider;
+        state.protocol = runtimeState.protocol;
         state.apiKey = runtimeState.apiKey;
         state.baseURL = runtimeState.baseURL;
         state.model = runtimeState.model;
@@ -475,6 +496,6 @@ export const useGlobalAIStore = create<GlobalAIState>()(
         state.isConfigured = runtimeState.isConfigured;
         applyRuntimeConfig(runtimeState);
       },
-    }
-  )
+    },
+  ),
 );

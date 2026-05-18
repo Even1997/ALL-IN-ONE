@@ -22,15 +22,22 @@ const getDefaultRouteableSkills = (): RouteableSkillDefinition[] => getRouteable
 const buildSkillPatterns = (skills: RouteableSkillDefinition[]) =>
   skills
     .filter((skill) => skill.userInvocable)
-    .map((skill) => ({
-      patterns:
-        skill.userTagInvocable === false
-          ? []
-          : [skill.token || `@${skill.id}`, ...(skill.aliases || [])],
-      slashCommand: `/${skill.id}`,
-      skill: skill.id,
-      token: skill.token || `@${skill.id}`,
-    }));
+    .map((skill) => {
+      const aliases = skill.aliases || [];
+      const slashAliases = aliases.filter((alias) => alias.startsWith('/'));
+      const tagAliases = aliases.filter((alias) => !alias.startsWith('/'));
+
+      return {
+        patterns:
+          skill.userTagInvocable === false
+            ? []
+            : [skill.token || `@${skill.id}`, ...tagAliases],
+        slashCommands: [`/${skill.id}`, ...slashAliases],
+        primarySlashCommand: slashAliases[0] || `/${skill.id}`,
+        skill: skill.id,
+        token: skill.token || `@${skill.id}`,
+      };
+    });
 
 const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -54,9 +61,12 @@ export const resolveSkillIntent = (
   }
 
   const skillPatterns = buildSkillPatterns(skills);
-  const slashMatched = skillPatterns.find(
-    ({ slashCommand }) => normalized.toLowerCase() === slashCommand || normalized.toLowerCase().startsWith(`${slashCommand} `)
-  );
+  const slashMatched = skillPatterns
+    .flatMap(({ slashCommands, ...rest }) => slashCommands.map((slashCommand) => ({ ...rest, slashCommand })))
+    .find(
+      ({ slashCommand }) =>
+        normalized.toLowerCase() === slashCommand || normalized.toLowerCase().startsWith(`${slashCommand} `)
+    );
   if (slashMatched) {
     return {
       skill: slashMatched.skill,
@@ -90,5 +100,5 @@ export const AVAILABLE_CHAT_SKILLS: Array<Pick<SkillIntent, 'skill' | 'token'> &
   buildSkillPatterns(getDefaultRouteableSkills()).map((skill) => ({
     skill: skill.skill,
     token: skill.token,
-    slashCommand: skill.slashCommand,
+    slashCommand: skill.primarySlashCommand,
   }));

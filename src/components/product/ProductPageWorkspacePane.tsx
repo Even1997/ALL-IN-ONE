@@ -2097,7 +2097,7 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
             className="pm-page-structure-panel pm-page-panel-surface"
             eyebrow="Files"
             title="文档目录树"
-            subtitle="按真实项目文件系统浏览 PAG 文档与页面草图。"
+            subtitle="按真实项目文件系统浏览 Sketch 文档与页面草图。"
             toolbar={
               <div className="pm-inline-actions">
                 <input
@@ -2117,7 +2117,7 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
                   + 文件夹
                 </button>
                 <button className="doc-action-btn secondary" type="button" onClick={onAddPage}>
-                  + 页面
+                  + Sketch
                 </button>
                 <div className="gn-note-sort-menu" ref={sortMenuRef}>
                   <button
@@ -2128,7 +2128,7 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
                     排序
                   </button>
                   {sortMenuOpen ? (
-                    <div className="pm-knowledge-context-menu" role="menu" aria-label="PAG 文件排序">
+                    <div className="pm-knowledge-context-menu" role="menu" aria-label="Sketch 文件排序">
                       {PAG_TREE_SORT_OPTIONS.map((option) => {
                         const active = option.value === fileTreeSortMode;
                         return (
@@ -2158,10 +2158,10 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
             }
           >
             {pagErrorMessage ? (
-              <StatusBanner tone="danger" title="PAG 文件工作台异常" message={pagErrorMessage} />
+              <StatusBanner tone="danger" title="Sketch 文件工作台异常" message={pagErrorMessage} />
             ) : null}
             {pagStatusMessage ? (
-              <StatusBanner tone="info" title="PAG 文件工作台" message={pagStatusMessage} />
+              <StatusBanner tone="info" title="Sketch 文件工作台" message={pagStatusMessage} />
             ) : null}
             {selectedTreePaths.length > 1 ? (
               <StatusBanner
@@ -2203,7 +2203,7 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
                   description={
                     pageSearch.trim()
                       ? '换个关键词试试，或刷新目录。'
-                      : '从这里新建文件、文件夹或页面，开始整理 PAG 工作台。'
+                      : '从这里新建文件、文件夹或 Sketch 页面，开始整理 Sketch 工作台。'
                   }
                 />
               )}
@@ -2336,7 +2336,7 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
                     className="pm-wireframe-main pm-wireframe-main-canvas pm-page-panel-surface"
                     eyebrow="Canvas"
                     title={effectiveSelectedPage.name}
-                    subtitle="当前文件是 sketch 页面，主区继续使用现有页面画布。"
+                    subtitle="当前文件是 Sketch 页面，主区继续使用现有页面画布。"
                     toolbar={
                       <div className="pm-inline-actions pm-wireframe-canvas-actions">
                         <button
@@ -2477,8 +2477,8 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
                   <NoteSurface
                     className="pm-wireframe-main pm-page-panel-surface"
                     eyebrow="Workbench"
-                    title="PAG 文档工作台"
-                    subtitle="从左侧目录树中选择文件，或打开 sketch 页面进入画布。"
+                    title="Sketch 文档工作台"
+                    subtitle="从左侧目录树中选择文件，或打开 Sketch 页面进入画布。"
                   >
                     <EmptyStateView
                       icon="document"
@@ -2504,13 +2504,13 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
         content={
           <NoteSurface
             className="pm-empty-panel pm-page-panel-surface"
-            eyebrow="Page"
-            title="页面工作区"
+            eyebrow="Sketch"
+            title="Sketch 工作区"
             subtitle="先创建一个页面，再进入统一的线框与模块工作流。"
           >
             <EmptyStateView
               icon="page"
-              title="还没有页面草图"
+              title="还没有 Sketch 草图"
               description="页面树、线框画布和模块侧栏都已经按统一工作台标准组织好，选中页面后会直接展开。"
             />
           </NoteSurface>
@@ -2525,8 +2525,8 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
         <div className="pm-page-hub-grid">
           <NoteSurface
             className="pm-page-structure-panel pm-page-panel-surface"
-            eyebrow="Pages"
-            title="页面结构"
+            eyebrow="Sketch"
+            title="Sketch 结构"
             subtitle="用统一的目录树视觉管理页面层级、选择与删除。"
             toolbar={
               <div className="pm-inline-actions">
@@ -2535,10 +2535,10 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
                   type="search"
                   value={pageSearch}
                   onChange={(event) => onPageSearchChange(event.target.value)}
-                  placeholder="搜索页面"
+                  placeholder="搜索 Sketch 页面"
                 />
                 <button className="doc-action-btn" type="button" onClick={onAddPage}>
-                  + 页面
+                  + Sketch
                 </button>
               </div>
             }
@@ -2560,14 +2560,14 @@ export const ProductPageWorkspacePane = (props: ProductPageWorkspacePaneProps) =
               ) : (
                 <EmptyStateView
                   icon="search"
-                  title="没有匹配的页面"
+                  title="没有匹配的 Sketch 页面"
                   description="换一个关键词试试，或者直接创建新页面。"
                 />
               )
             ) : (
               <EmptyStateView
                 icon="document"
-                title="还没有页面"
+                title="还没有 Sketch 页面"
                 description="先创建一个页面，后续画布、模块和属性面板会自动接到这套统一 UI。"
               />
             )}

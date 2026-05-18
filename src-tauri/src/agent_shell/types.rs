@@ -25,18 +25,10 @@ pub struct CreateAgentShellSessionInput {
 #[serde(rename_all = "camelCase")]
 pub struct AgentShellSettingsRecord {
     pub mode: String,
-    pub claude_config_id: Option<String>,
-    pub codex_config_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateAgentShellSettingsInput {
     pub mode: Option<String>,
-    pub claude_config_id: Option<String>,
-    #[serde(default)]
-    pub clear_claude_config_id: bool,
-    pub codex_config_id: Option<String>,
-    #[serde(default)]
-    pub clear_codex_config_id: bool,
 }

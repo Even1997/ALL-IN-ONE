@@ -1273,6 +1273,7 @@ const mapRuntimeConfig = (config?: AIConfigEntry | null) => {
 
   return {
     provider: config.provider,
+    protocol: config.protocol,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     model: config.model,

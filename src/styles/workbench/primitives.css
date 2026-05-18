@@ -1,3 +1,8 @@
+/* 文件作用：定义桌面 Workbench 的基础控件、模块边界与内容 primitive 样式。
+ * 所在链路：UI composition 层，被 App.tsx 全局引入后供各业务模块复用。
+ * 排查入口：按钮、字段、目录树、笔记面板或模块模板边界样式异常时先看这里。
+ */
+
 :root {
   font-family: var(--wb-font-sans);
   font-size: var(--wb-font-size-body);

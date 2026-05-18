@@ -1,16 +1,21 @@
-// 文件作用：模块实现文件，位于应用支持层。
-// 所在链路：负责承接当前模块在整体链路中的实现职责。
-// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
-
+// 文件作用：渲染 AI 设置页主面板，负责配置列表、协议选择、模型维护与导入导出表单。
+// 所在链路：设置页 UI composition。
+// 排查入口：先看 provider/protocol 控件，再看保存、测试连接、导入导出按钮的接线。
 import React, { type Dispatch, type SetStateAction } from 'react';
 import type { AIProviderType } from '../../modules/ai/core/AIService';
 import type { ProviderPreset } from '../../modules/ai/providerPresets';
-import { hasUsableAIConfigEntry, type AIConfigEntry } from '../../modules/ai/store/aiConfigState';
+import {
+  hasUsableAIConfigEntry,
+  normalizeAIProtocol,
+  type AIConfigEntry,
+  type AIProtocolType,
+} from '../../modules/ai/store/aiConfigState';
 
 type AISettingsDraft = {
   id: string | null;
   name: string;
   provider: AIProviderType;
+  protocol: AIProtocolType;
   apiKey: string;
   baseURL: string;
   model: string;
@@ -22,6 +27,12 @@ type AISettingsDraft = {
 
 type AIProviderTypeOption = {
   value: AIProviderType;
+  label: string;
+  description: string;
+};
+
+type AIProtocolOption = {
+  value: AIProtocolType;
   label: string;
   description: string;
 };
@@ -44,6 +55,7 @@ type AIChatAISettingsTabProps = {
   isSettingsDraftComplete: boolean;
   isSettingsDraftSelected: boolean;
   providerTypeOptions: AIProviderTypeOption[];
+  protocolOptions: AIProtocolOption[];
   setSettingsDraft: Dispatch<SetStateAction<AISettingsDraft>>;
   customProviderPresetId: string;
   getSuggestedBaseURL: (provider: AIProviderType, preset: ProviderPreset) => string;
@@ -89,6 +101,7 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
   isSettingsDraftComplete,
   isSettingsDraftSelected,
   providerTypeOptions,
+  protocolOptions,
   setSettingsDraft,
   customProviderPresetId,
   getSuggestedBaseURL,
@@ -165,7 +178,9 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                   setTestMessage('');
                 }}
               >
-                <span className={`chat-settings-provider-badge ${configPreset.accent}`}>{config.name.slice(0, 2).toUpperCase()}</span>
+                <span className={`chat-settings-provider-badge ${configPreset.accent}`}>
+                  {config.name.slice(0, 2).toUpperCase()}
+                </span>
                 <span className="chat-settings-provider-copy">
                   <strong>{config.name}</strong>
                   <span>
@@ -208,6 +223,7 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                       setSettingsDraft((current) => ({
                         ...current,
                         provider: option.value,
+                        protocol: normalizeAIProtocol(option.value, current.protocol),
                         baseURL:
                           current.baseURL.trim()
                           || (
@@ -223,6 +239,37 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                   </button>
                 ))}
               </div>
+            </section>
+
+            <section className="chat-settings-section-block">
+              <div className="chat-settings-section-header">
+                <strong>协议</strong>
+                <span>统一通过下拉显式选择协议，不再靠 Base URL 自动猜测。</span>
+              </div>
+              <label className="chat-settings-field chat-settings-field-full">
+                <span>请求协议</span>
+                <select
+                  value={settingsDraft.protocol}
+                  onChange={(event) =>
+                    setSettingsDraft((current) => ({
+                      ...current,
+                      protocol: normalizeAIProtocol(current.provider, event.target.value as AIProtocolType),
+                    }))
+                  }
+                >
+                  {protocolOptions
+                    .filter((option) =>
+                      settingsDraft.provider === 'anthropic'
+                        ? option.value === 'anthropic-messages'
+                        : option.value !== 'anthropic-messages'
+                    )
+                    .map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
             </section>
 
             <section className="chat-settings-section-block">
@@ -255,7 +302,11 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                       }
                       placeholder={selectedSettingsPreset.keyHint}
                     />
-                    <button className="chat-settings-inline-btn" type="button" onClick={() => setShowApiKey((current) => !current)}>
+                    <button
+                      className="chat-settings-inline-btn"
+                      type="button"
+                      onClick={() => setShowApiKey((current) => !current)}
+                    >
                       {showApiKey ? '隐藏' : '显示'}
                     </button>
                   </div>
@@ -308,7 +359,7 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                   <div className="chat-settings-model-rows">
                     {settingsDraft.savedModels.map((savedModel, index) => {
                       const trimmedModel = savedModel.trim();
-                      const isActiveModel = trimmedModel && settingsDraft.model === trimmedModel;
+                      const isActiveModel = Boolean(trimmedModel) && settingsDraft.model === trimmedModel;
                       const validCandidateCount = settingsDraft.savedModels.filter((item) => item.trim()).length;
                       const disableRemove = validCandidateCount <= 1 && Boolean(trimmedModel);
 
@@ -319,16 +370,29 @@ export const AIChatAISettingsTab: React.FC<AIChatAISettingsTabProps> = ({
                             onChange={(event) => handleUpdateSavedModel(index, event.target.value)}
                             placeholder="输入模型 ID"
                           />
-                          <button type="button" className="chat-settings-inline-btn" onClick={() => handleSelectActiveModel(savedModel)}>
+                          <button
+                            type="button"
+                            className="chat-settings-inline-btn"
+                            onClick={() => handleSelectActiveModel(savedModel)}
+                          >
                             {isActiveModel ? '当前使用' : '设为当前'}
                           </button>
-                          <button type="button" className="chat-settings-inline-btn" onClick={() => handleRemoveSavedModel(index)} disabled={disableRemove}>
+                          <button
+                            type="button"
+                            className="chat-settings-inline-btn"
+                            onClick={() => handleRemoveSavedModel(index)}
+                            disabled={disableRemove}
+                          >
                             移除
                           </button>
                         </div>
                       );
                     })}
-                    <button type="button" className="chat-settings-inline-btn chat-settings-model-add-btn" onClick={handleAddSavedModel}>
+                    <button
+                      type="button"
+                      className="chat-settings-inline-btn chat-settings-model-add-btn"
+                      onClick={handleAddSavedModel}
+                    >
                       添加模型
                     </button>
                   </div>

@@ -10,6 +10,7 @@ import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 import { RuntimeMcpSettingsPage } from './RuntimeMcpSettingsPage';
 import { useAIChatSettingsState } from './useAIChatSettingsState';
 import {
+  AI_PROTOCOL_OPTIONS,
   AI_PROVIDER_TYPE_OPTIONS,
   CUSTOM_PROVIDER_PRESET,
   SETTINGS_TABS,
@@ -113,7 +114,6 @@ export const GlobalSettingsPage: React.FC<GlobalSettingsPageProps> = ({
     handleImportConfigs,
   } = useAIChatSettingsState({
     aiConfigs,
-    runtimeConfigIdOverride: null,
     selectedConfigId,
     addConfig,
     updateConfig,
@@ -123,7 +123,6 @@ export const GlobalSettingsPage: React.FC<GlobalSettingsPageProps> = ({
     buildSettingsDraft,
     findPresetByConfig,
     customProviderPreset: CUSTOM_PROVIDER_PRESET,
-    providerTypeOptions: AI_PROVIDER_TYPE_OPTIONS,
     buildProviderKey,
     mergeModelCandidates,
     buildProviderEndpointPreview,
@@ -178,6 +177,7 @@ export const GlobalSettingsPage: React.FC<GlobalSettingsPageProps> = ({
               isSettingsDraftComplete={isSettingsDraftComplete}
               isSettingsDraftSelected={isSettingsDraftSelected}
               providerTypeOptions={AI_PROVIDER_TYPE_OPTIONS}
+              protocolOptions={AI_PROTOCOL_OPTIONS}
               setSettingsDraft={setSettingsDraft}
               customProviderPresetId={CUSTOM_PROVIDER_PRESET.id}
               getSuggestedBaseURL={getSuggestedBaseURL}

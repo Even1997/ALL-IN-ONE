@@ -3,21 +3,17 @@
 // 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 
 import React from 'react';
-import type { LocalAgentConfigSnapshot } from '../../../modules/ai/gn-agent/localConfig';
 import { AgentChatStage } from '../../../features/agent-shell/components/AgentChatStage';
 import { useGNAgentWorkbenchSession } from './useGNAgentWorkbenchSession';
 
 export const GNAgentChatPage: React.FC<{
-  providerId: 'classic' | 'claude' | 'codex';
   mode?: 'panel' | 'full-page';
-  localSnapshot?: LocalAgentConfigSnapshot | null;
-}> = ({ providerId, mode = 'full-page' }) => {
+}> = ({ mode = 'full-page' }) => {
   const session = useGNAgentWorkbenchSession();
 
   return (
     <section className="agent-compat-stage-page">
       <AgentChatStage
-        providerId={providerId}
         mode={mode === 'panel' ? 'stage-only' : 'stage-plus'}
         session={session}
       />

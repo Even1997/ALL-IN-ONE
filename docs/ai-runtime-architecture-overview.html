@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 架构总览</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --panel-muted: #f8fafc;
+      --text: #111827;
+      --text-muted: #4b5563;
+      --line: #d7dce3;
+      --accent: #2563eb;
+      --accent-soft: rgba(37, 99, 235, 0.1);
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      --code-bg: #f3f4f6;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1115;
+        --panel: #171a21;
+        --panel-muted: #1d212b;
+        --text: #edf1f7;
+        --text-muted: #a6b0c0;
+        --line: #2c3443;
+        --accent: #6ea8ff;
+        --accent-soft: rgba(110, 168, 255, 0.14);
+        --shadow: none;
+        --code-bg: #12151c;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    .page {
+      width: min(1200px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 32px 0 64px;
+    }
+
+    .hero,
+    .section,
+    .layer-card,
+    .module-card,
+    .entry-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 28px 30px;
+      margin-bottom: 20px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    h1 {
+      margin: 14px 0 10px;
+      font-size: 34px;
+      line-height: 1.2;
+    }
+
+    .hero p {
+      margin: 8px 0 0;
+      color: var(--text-muted);
+      max-width: 900px;
+    }
+
+    .hero-grid,
+    .layer-grid,
+    .module-grid,
+    .entry-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 20px;
+    }
+
+    .hero-stat {
+      padding: 16px;
+      border-radius: 12px;
+      background: var(--panel-muted);
+      border: 1px solid var(--line);
+    }
+
+    .hero-stat strong {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 4px;
+    }
+
+    .hero-stat span {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .section {
+      padding: 22px 24px;
+      margin-top: 18px;
+    }
+
+    h2 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+
+    .section > p {
+      margin: 0 0 18px;
+      color: var(--text-muted);
+    }
+
+    .layer-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .layer-card,
+    .module-card,
+    .entry-card {
+      padding: 18px;
+    }
+
+    .layer-card h3,
+    .module-card h3,
+    .entry-card h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .layer-card ul,
+    .module-card ul,
+    .entry-card ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    .layer-card li,
+    .module-card li,
+    .entry-card li {
+      margin: 6px 0;
+      color: var(--text-muted);
+    }
+
+    .layer-tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .module-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .entry-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .diagram {
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--panel-muted);
+      border: 1px solid var(--line);
+      overflow: auto;
+    }
+
+    code {
+      font-family: "Cascadia Code", "Consolas", monospace;
+      font-size: 13px;
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 2px 6px;
+      word-break: break-all;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-left: 3px solid var(--accent);
+      background: var(--panel-muted);
+      color: var(--text-muted);
+      border-radius: 10px;
+    }
+
+    .footer {
+      margin-top: 18px;
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .hero-grid,
+      .layer-grid,
+      .module-grid,
+      .entry-grid {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="eyebrow">AI Runtime / 总览优先</div>
+      <h1>当前 AI 架构总览</h1>
+      <p>
+        这套 AI 主链路可以压缩成一句话：<strong>AIChat 发起用户回合 → Runtime 编排与工具循环 →
+        Provider/Sidecar 输出运行时事实 → Canonical/Timeline 映射 → Render Model 组装 → UI 分 lane 展示</strong>。
+        这页重点不是“理想架构”，而是把仓库里现在真正跑着的层、模块、链路和排查入口收拢到一张页面里。
+      </p>
+      <div class="hero-grid">
+        <div class="hero-stat">
+          <strong>8 层</strong>
+          <span>从 UI 入口到 Rust / Node sidecar / 协议与持久化</span>
+        </div>
+        <div class="hero-stat">
+          <strong>4 条实际运行路线</strong>
+          <span>Built-in、Provider 壳层 Claude/Codex、Local Claude CLI、Local Codex CLI</span>
+        </div>
+        <div class="hero-stat">
+          <strong>4 个核心边界</strong>
+          <span>Provider 适配 → Canonical 事件 → Timeline / Projection → Render / UI</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>一、分层总览</h2>
+      <p>先看“谁负责什么”，再往下看“数据怎么流”。这里按当前仓库里的真实边界来分，而不是按抽象概念重命名。</p>
+      <div class="layer-grid">
+        <article class="layer-card">
+          <div class="layer-tag">L1 / UI 入口层</div>
+          <h3>AIChat 与工作台装配</h3>
+          <div>负责把会话、输入、消息列表、运行时交互、设置与 sidecar 动作拼成完整聊天工作台。</div>
+          <ul>
+            <li>关键文件：<code>src/components/workspace/AIChat.tsx</code></li>
+            <li>作用：页面级总入口，连聊天 store、runtime store、approval、replay、sidecar</li>
+            <li>排查入口：消息为什么没发出去、会话为什么没切对、页面为什么没联动</li>
+          </ul>
+        </article>
+
+        <article class="layer-card">
+          <div class="layer-tag">L2 / 交互编排层</div>
+          <h3>Chat Turn 协调与回合总入口</h3>
+          <div>负责一次用户提交后的主链路编排：建 session、路由 provider、工具、审批、流式草稿与收口。</div>
+          <ul>
+            <li>关键文件：<code>src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts</code></li>
+            <li>作用：前端侧 runtime turn 的总协调入口</li>
+            <li>排查入口：某一轮 turn 为什么走 built-in / mcp / local agent，为什么被审批或中断</li>
+          </ul>
+        </article>
+
+        <article class="layer-card">
+          <div class="layer-tag">L3 / Agent Kernel 层</div>
+          <h3>Built-in Agent 执行与工具循环</h3>
+          <div>负责真正执行 built-in agent：上下文构建、工具循环、技能准备、兜底重试与最终文本收口。</div>
+          <ul>
+            <li>关键文件：<code>src/modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn.ts</code>、<code>src/modules/ai/runtime/agent-kernel/runAgentTurn.ts</code>、<code>src/modules/ai/runtime/tools/runtimeToolLoop.ts</code></li>
+            <li>作用：把“模型 + 工具 + 技能 + 上下文”串成一轮完整执行</li>
+            <li>排查入口：为什么没调工具、为什么 tool loop 耗尽、为什么 final 被兜底改写</li>
+          </ul>
+        </article>
+
+        <article class="layer-card">
+          <div class="layer-tag">L4 / Provider 适配层</div>
+          <h3>Provider 协议适配与原生流解析</h3>
+          <div>负责请求 OpenAI / Anthropic / 兼容 OpenAI，并把各家的原生流统一成 runtime provider 事件。</div>
+          <ul>
+            <li>关键文件：<code>apps/runtime/src/nodeRuntimeProviderClient.ts</code>、<code>src/modules/ai/runtime/provider/runtimeProviderEvents.ts</code></li>
+            <li>作用：只做协议选择、SSE/JSON 解析、tool call 装配、usage 与 reasoning 透传</li>
+            <li>排查入口：thinking 为什么没出来、Responses / Chat Completions 怎么切、tool args 为什么拼错</li>
+          </ul>
+        </article>
+
+        <article class="layer-card">
+          <div class="layer-tag">L5 / Canonical 真相层</div>
+          <h3>Runtime 事实标准化</h3>
+          <div>负责把 provider 原生事件、assistant timeline、sidecar snapshot 映射成统一 canonical 事件与 timeline 事实。</div>
+          <ul>
+            <li>关键文件：<code>src/modules/ai/store/assistantTimeline.ts</code>、<code>src/modules/runtime-sidecar/runtimeSidecarCanonical.ts</code>、<code>packages/runtime-protocol/src/index.ts</code></li>
+            <li>作用：把 thinking / text / tool / approval / question 分开建模</li>
+            <li>排查入口：正文为什么和 tool lane 混了、为什么后端有事件前端没显示</li>
+          </ul>
+        </article>
+
+        <article class="layer-card">
+          <div class="layer-tag">L6 / Sidecar 桥接层</div>
+          <h3>Desktop / Node Runtime Sidecar 桥</h3>
+          <div>负责前端与 node runtime sidecar 之间的连接、事件订阅、snapshot 映射和动作回传。</div>
+          <ul>
+            <li>关键文件：<code>src/modules/runtime-sidecar/desktopRuntimeSidecar.ts</code>、<code>src/modules/runtime-sidecar/runtimeSidecarSessionBridge.ts</code>、<code>apps/runtime/src/index.ts</code></li>
+            <li>作用：把 runtime sidecar 的会话真相接入前端 store</li>
+            <li>排查入口：前端为什么连不上 sidecar、snapshot 为什么没落到 chat store</li>
+          </ul>
+        </article>
+
+        <article class="layer-card">
+          <div class="layer-tag">L7 / Projection 与 Render 层</div>
+          <h3>Render Model 与输出模型</h3>
+          <div>负责把 assistant timeline 压成 thinking / feedback / answer 三种可展示 lane，再组装成 UI 输出。</div>
+          <ul>
+            <li>关键文件：<code>src/components/workspace/assistantRenderModel.ts</code>、<code>src/components/workspace/assistantMessageOutputModel.ts</code></li>
+            <li>作用：保证 thinking 是过程、final answer 是最终正文、tool 卡片来自 runtime truth</li>
+            <li>排查入口：为什么正文被拼接、为什么 thinking 和 final 顺序不对、为什么 approval-only 消息不显示</li>
+          </ul>
+        </article>
+
+        <article class="layer-card">
+          <div class="layer-tag">L8 / 状态与持久化层</div>
+          <h3>Chat Store / Runtime Store / Rust 命令层</h3>
+          <div>负责聊天视角、执行视角、sidecar 连接态以及桌面端持久化命令。</div>
+          <ul>
+            <li>关键文件：<code>src/modules/ai/store/aiChatStore.ts</code>、<code>src/modules/ai/runtime/agentRuntimeStore.ts</code>、<code>src/modules/ai/runtime/agentRuntimeClient.ts</code>、<code>src-tauri/src/agent_runtime/commands.rs</code></li>
+            <li>作用：分别保存聊天展示真相、运行现场真相、桌面侧数据读写</li>
+            <li>排查入口：刷新后为什么丢、timeline 为什么没持久化、审批 / memory / checkpoint 为什么没写入</li>
+          </ul>
+        </article>
+      </div>
+      <div class="note">
+        当前架构最重要的约束是：<strong>不要把 UI 展示策略下沉到 provider adapter 或 canonical 真相层</strong>。
+        thinking、tool、feedback、final 必须继续分开，最终正文只应该来自 final answer。
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>二、关键模块</h2>
+      <p>下面这些文件是现在最常需要回看的骨架节点。它们不是“所有模块”，而是对理解主链路最关键的一组。</p>
+      <div class="module-grid">
+        <article class="module-card">
+          <h3>1. AIService（旧总入口 / 仍在 Provider 路线上扮演关键角色）</h3>
+          <ul>
+            <li>文件：<code>src/modules/ai/core/AIService.ts</code></li>
+            <li>作用：旧的通用 AI 调用入口，仍承接 provider 请求、流式回调、工具协议识别与部分执行辅助</li>
+            <li>现在的位置：更像“服务编排层”，不是单纯 provider adapter</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>2. Built-in Runtime 执行器</h3>
+          <ul>
+            <li>文件：<code>src/modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn.ts</code></li>
+            <li>作用：built-in agent 的完整回合执行器，是 runtime turn 的主执行器</li>
+            <li>特点：这里会处理技能、memory、工具循环、失败兜底与最终内容标准化</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>3. Tool Loop</h3>
+          <ul>
+            <li>文件：<code>src/modules/ai/runtime/tools/runtimeToolLoop.ts</code></li>
+            <li>作用：解析 assistant 输出中的工具调用、执行工具、压缩上下文、继续回合</li>
+            <li>典型问题：tool protocol 解析失败、重复 tool call、context compaction、loop exhausted</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>4. Node Runtime Provider Client</h3>
+          <ul>
+            <li>文件：<code>apps/runtime/src/nodeRuntimeProviderClient.ts</code></li>
+            <li>作用：当前 built-in GPT / OpenAI-compatible / Anthropic 的真正 provider 流入口</li>
+            <li>近期重点：官方 OpenAI 优先走 <code>/responses</code>，兼容 provider 继续走 <code>/chat/completions</code></li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>5. Sidecar Session Bridge</h3>
+          <ul>
+            <li>文件：<code>src/modules/runtime-sidecar/runtimeSidecarSessionBridge.ts</code></li>
+            <li>作用：把 sidecar snapshot / event 同步到 chat store、runtime store、approval store</li>
+            <li>典型问题：后端明明有事件，但前端消息没动；approval / question 没闭环</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>6. Assistant Timeline / Render Model</h3>
+          <ul>
+            <li>文件：<code>src/modules/ai/store/assistantTimeline.ts</code>、<code>src/components/workspace/assistantRenderModel.ts</code></li>
+            <li>作用：前者维护消息里的运行时事实，后者决定最终 UI 如何分 lane 展示</li>
+            <li>典型问题：正文被拼接、thinking 跑到 final 里、tool / approval 卡片顺序错</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>7. Claude / Codex Runtime 壳层</h3>
+          <ul>
+            <li>文件：<code>src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts</code>、<code>src/modules/ai/gn-agent/runtime/codex/CodexRuntime.ts</code></li>
+            <li>作用：把 GN agent 运行时映射到当前配置，并复用 AIService 执行 prompt</li>
+            <li>意义：Claude / Codex 是 provider 壳层，不是另一套完全独立的 UI 体系</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>8. Tauri Commands</h3>
+          <ul>
+            <li>文件：<code>src-tauri/src/agent_runtime/commands.rs</code></li>
+            <li>作用：桌面端持久化命令入口，处理 thread、timeline、approval、memory、checkpoint、settings 等</li>
+            <li>典型问题：桌面侧数据没写进去、列表读不到、跨会话信息消失</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>三、主执行链路</h2>
+      <p>这张图回答的是：一条用户消息进入系统后，当前代码里到底经过了哪些层。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TD
+    A["用户输入 / AIChat"] --> B["runtimeChatTurnCoordinator<br/>回合总协调入口"]
+    B --> C["executeRuntimeBuiltInAgentTurn<br/>Built-in 回合执行器"]
+    C --> D["runAgentTurn / runtimeToolLoop<br/>上下文 + 工具循环"]
+    D --> E["nodeRuntimeProviderClient<br/>Provider 协议适配"]
+    E --> F["runtimeProviderEvents<br/>provider 原生事件"]
+    F --> G["assistantTimeline / runtimeSidecarCanonical<br/>canonical / timeline 真相"]
+    G --> H["runtimeSidecarSessionBridge<br/>snapshot / event 桥接"]
+    H --> I["aiChatStore / agentRuntimeStore<br/>聊天视图 + 运行视图"]
+    I --> J["assistantRenderModel / assistantMessageOutputModel<br/>thinking / feedback / answer 分 lane"]
+    J --> K["AIChat UI 最终渲染"]
+        </pre>
+      </div>
+      <div class="note">
+        这条链路里最容易出问题的不是“模型没回”，而是<strong>事件从 provider 进来后，到 canonical/timeline，再到 render model 的过程里语义被混掉</strong>。
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>四、把所有链路放到一个例子里</h2>
+      <p>假设用户问一句：“帮我分析这个项目的 AI 聊天为什么正文会被拼接。”同一个问题，根据入口模式不同，会走下面 4 条路线之一。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TD
+    A["用户在 AIChat / AgentChatStage 输入问题"] --> B{"当前走哪条执行模式？"}
+
+    B -->|"classic / built-in"| C1["runtimeChatTurnCoordinator"]
+    C1 --> D1["executeRuntimeBuiltInAgentTurn"]
+    D1 --> E1["runAgentTurn / runtimeToolLoop"]
+    E1 --> F1["nodeRuntimeProviderClient"]
+    F1 --> G1["Anthropic 或 OpenAI-compatible 协议流"]
+    G1 --> H["assistantTimeline / canonical / render / UI"]
+
+    B -->|"providerExecutionMode = claude"| C2["agentRuntimeClient.executePrompt"]
+    C2 --> D2["ClaudeRuntime.ts"]
+    D2 --> E2["AIService.complete*"]
+    E2 --> F2["Anthropic app-config 调用"]
+    F2 --> H
+
+    B -->|"providerExecutionMode = codex"| C3["agentRuntimeClient.executePrompt"]
+    C3 --> D3["CodexRuntime.ts"]
+    D3 --> E3["AIService.complete*"]
+    E3 --> F3["OpenAI-compatible app-config 调用"]
+    F3 --> H
+
+    B -->|"local agent flow"| C4["runtimeLocalAgentFlow"]
+    C4 --> D4["Tauri 命令层"]
+    D4 --> E4["claude -p / codex exec"]
+    E4 --> F4["本地 Claude / Codex CLI"]
+    F4 --> G4["结果回流到聊天 / 审批 / 执行摘要"]
+    G4 --> H
+        </pre>
+      </div>
+      <div class="note">
+        这里最容易混淆的点是：<strong>`ClaudeRuntime.ts / CodexRuntime.ts` 目前不是本地 Claude/Codex CLI 对接层</strong>。
+        它们现在是“按 provider 壳子复用 <code>AIService</code> 与 app-config”的执行层；真正的本地终端链路是
+        <code>runtimeLocalAgentFlow</code> + Tauri 里的 <code>claude -p</code> / <code>codex exec</code>。
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>五、Built-in / Claude / Codex 到底怎么分</h2>
+      <p>这是这次最需要澄清的一点，直接按当前代码结论写死：</p>
+      <div class="module-grid">
+        <article class="module-card">
+          <h3>1. Built-in 不是只支持 OpenAI-compatible</h3>
+          <ul>
+            <li>配置模型来源：<code>src/modules/ai/store/aiConfigState.ts</code></li>
+            <li>当前 provider 类型只有两个：<code>openai-compatible</code>、<code>anthropic</code></li>
+            <li>Built-in 的 provider 适配在：<code>apps/runtime/src/nodeRuntimeProviderClient.ts</code></li>
+            <li>结论：built-in 这条线本身同时支持 <strong>Anthropic</strong> 和 <strong>OpenAI-compatible</strong></li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>2. ClaudeRuntime 是“Anthropic 壳层”，不是本地 Claude CLI</h3>
+          <ul>
+            <li>文件：<code>src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts</code></li>
+            <li>它要求配置必须是 <code>provider === 'anthropic'</code></li>
+            <li>它内部仍然调用：<code>AIService.completeText / completeMessages</code></li>
+            <li>结论：它现在更像“Claude 模式下的 app-config 执行壳层”</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>3. CodexRuntime 是“OpenAI-compatible 壳层”，不是本地 Codex CLI</h3>
+          <ul>
+            <li>文件：<code>src/modules/ai/gn-agent/runtime/codex/CodexRuntime.ts</code></li>
+            <li>它要求配置必须是 <code>provider === 'openai-compatible'</code></li>
+            <li>它内部也复用：<code>AIService.completeText / completeMessages</code></li>
+            <li>结论：它是 Codex 模式下的 app-config 执行壳层，不等于本地 codex 终端</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>4. 本地 Claude / Codex CLI 是另一条 local agent 链</h3>
+          <ul>
+            <li>前端流控：<code>src/modules/ai/runtime/orchestration/runtimeLocalAgentFlow.ts</code></li>
+            <li>Tauri 命令：<code>src-tauri/src/lib.rs</code></li>
+            <li>真实命令：<code>claude -p</code>、<code>codex exec ... --output-last-message</code></li>
+            <li>结论：本地终端版 Claude/Codex 是独立于 <code>ClaudeRuntime.ts / CodexRuntime.ts</code> 的另一条链</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>六、Provider 路线差异</h2>
+      <p>如果只看“协议 / 入口差异”，可以再压缩成下面这张图。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart LR
+    A["统一聊天入口"] --> B1["Built-in 路线"]
+    A --> B2["ClaudeRuntime 壳层"]
+    A --> B3["CodexRuntime 壳层"]
+    A --> B4["Local Agent 路线"]
+
+    B1 --> C1["nodeRuntimeProviderClient"]
+    C1 --> D1["Anthropic / OpenAI-compatible"]
+
+    B2 --> C2["AIService"]
+    C2 --> D2["Anthropic"]
+
+    B3 --> C3["AIService"]
+    C3 --> D3["OpenAI-compatible"]
+
+    B4 --> C4["Tauri 命令"]
+    C4 --> D4["claude CLI / codex CLI"]
+        </pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>七、常见排查入口</h2>
+      <p>如果你不是在做重构，而是在追问题，下面这组“从症状倒推文件”的入口通常最快。</p>
+      <div class="entry-grid">
+        <article class="entry-card">
+          <h3>thinking 显示 / 不显示 / 只显示状态不显示内容</h3>
+          <ul>
+            <li>先看：<code>apps/runtime/src/nodeRuntimeProviderClient.ts</code></li>
+            <li>再看：<code>src/modules/ai/store/assistantTimeline.ts</code></li>
+            <li>最后看：<code>src/components/workspace/assistantRenderModel.ts</code></li>
+          </ul>
+        </article>
+
+        <article class="entry-card">
+          <h3>正文被拼在一起，tool / feedback / final 混掉</h3>
+          <ul>
+            <li>先看：<code>src/modules/ai/store/assistantTimeline.ts</code></li>
+            <li>再看：<code>src/components/workspace/assistantRenderModel.ts</code></li>
+            <li>最后看：<code>src/components/workspace/assistantMessageOutputModel.ts</code></li>
+          </ul>
+        </article>
+
+        <article class="entry-card">
+          <h3>工具没调起来 / tool loop 提前耗尽</h3>
+          <ul>
+            <li>先看：<code>src/modules/ai/runtime/tools/runtimeToolLoop.ts</code></li>
+            <li>再看：<code>src/modules/ai/runtime/orchestration/executeRuntimeBuiltInAgentTurn.ts</code></li>
+            <li>补看：<code>src/modules/ai/runtime/agent-kernel/runAgentTurn.ts</code></li>
+          </ul>
+        </article>
+
+        <article class="entry-card">
+          <h3>后端事件到了，前端没跟上</h3>
+          <ul>
+            <li>先看：<code>src/modules/runtime-sidecar/runtimeSidecarCanonical.ts</code></li>
+            <li>再看：<code>src/modules/runtime-sidecar/runtimeSidecarSessionBridge.ts</code></li>
+            <li>补看：<code>src/modules/runtime-sidecar/desktopRuntimeSidecar.ts</code></li>
+          </ul>
+        </article>
+
+        <article class="entry-card">
+          <h3>审批 / 问题卡片没闭环</h3>
+          <ul>
+            <li>先看：<code>src/components/workspace/useAIChatRuntimeInteractionState.ts</code></li>
+            <li>再看：<code>src/modules/runtime-sidecar/runtimeSidecarSessionBridge.ts</code></li>
+            <li>补看：<code>src/modules/ai/runtime/approval/approvalTypes.ts</code></li>
+          </ul>
+        </article>
+
+        <article class="entry-card">
+          <h3>刷新后状态丢失 / 历史没落盘</h3>
+          <ul>
+            <li>先看：<code>src/modules/ai/store/aiChatStore.ts</code></li>
+            <li>再看：<code>src/modules/ai/runtime/agentRuntimeStore.ts</code></li>
+            <li>最后看：<code>src-tauri/src/agent_runtime/commands.rs</code></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <div class="footer">
+      基于当前仓库实现整理 · 生成时间：2026-05-17 · 页面定位：总览优先、兼顾排查
+    </div>
+  </div>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default",
+      securityLevel: "loose"
+    });
+  </script>
+</body>
+</html>

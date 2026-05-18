@@ -1,25 +1,16 @@
-// 文件作用：模块实现文件，位于应用支持层。
-// 所在链路：负责承接当前模块在整体链路中的实现职责。
-// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
-
+// 文件作用：汇总本地 Agent 运行态、审批态、MCP 与恢复态，不再承担云配置绑定壳层判断。
+// 所在链路：Agent shell UI composition。
+// 排查入口：先看 localSnapshot 派生摘要，再看 live runtime / approval / replay 的聚合结果。
 import React, { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useApprovalStore } from '../../../modules/ai/runtime/approval/approvalStore';
 import { PERMISSION_MODE_LABELS } from '../../../modules/ai/runtime/approval/permissionMode';
-import { useGNAgentShellStore } from '../../../modules/ai/gn-agent/gnAgentShellStore';
 import { useRuntimeMcpStore } from '../../../modules/ai/runtime/mcp/runtimeMcpStore';
 import { useAgentRuntimeStore } from '../../../modules/ai/runtime/agentRuntimeStore';
-import { useGlobalAIStore } from '../../../modules/ai/store/globalAIStore';
-import { hasUsableAIConfigEntry } from '../../../modules/ai/store/aiConfigState';
 import type { LocalAgentConfigSnapshot } from '../../../modules/ai/gn-agent/localConfig';
-import { ClaudeRuntime } from '../../../modules/ai/gn-agent/runtime/claude/ClaudeRuntime';
-import { CodexRuntime } from '../../../modules/ai/gn-agent/runtime/codex/CodexRuntime';
 import { canResumeFromRecovery } from '../../../modules/ai/runtime/replay/runtimeReplayRecovery';
 import { useAIChatStore } from '../../../modules/ai/store/aiChatStore';
 import { useProjectStore } from '../../../store/projectStore';
-
-const claudeRuntime = new ClaudeRuntime();
-const codexRuntime = new CodexRuntime();
 
 export const GNAgentRuntimeSummary: React.FC<{
   providerId: 'claude' | 'codex';
@@ -28,11 +19,6 @@ export const GNAgentRuntimeSummary: React.FC<{
   const currentProject = useProjectStore((state) => state.currentProject);
   const activeSessionId = useAIChatStore((state) =>
     currentProject ? state.projects[currentProject.id]?.activeSessionId || null : null
-  );
-  const { aiConfigs } = useGlobalAIStore(
-    useShallow((state) => ({
-      aiConfigs: state.aiConfigs,
-    }))
   );
   const { approvalsByThread, permissionMode } = useApprovalStore(
     useShallow((state) => ({
@@ -54,31 +40,26 @@ export const GNAgentRuntimeSummary: React.FC<{
       toolCallsByThread: state.toolCallsByThread,
     }))
   );
-  const { claudeConfigId, codexConfigId } = useGNAgentShellStore(
-    useShallow((state) => ({
-      claudeConfigId: state.claudeConfigId,
-      codexConfigId: state.codexConfigId,
-    }))
-  );
 
-  const runtime = providerId === 'claude' ? claudeRuntime : codexRuntime;
-  const boundConfigId = providerId === 'claude' ? claudeConfigId : codexConfigId;
-  const selectedConfig = useMemo(() => {
-    const boundConfig = boundConfigId ? aiConfigs.find((item) => item.id === boundConfigId) || null : null;
-    const usableBoundConfig =
-      boundConfig &&
-      ((providerId === 'claude' && boundConfig.provider === 'anthropic') ||
-        (providerId === 'codex' && boundConfig.provider === 'openai-compatible')) &&
-      boundConfig.enabled &&
-      hasUsableAIConfigEntry(boundConfig)
-        ? boundConfig
-        : null;
-    return usableBoundConfig || runtime.resolvePreferredConfig(aiConfigs);
-  }, [aiConfigs, boundConfigId, providerId, runtime]);
-  const status = useMemo(
-    () => runtime.getStatus({ selectedConfig, localSnapshot }),
-    [localSnapshot, runtime, selectedConfig]
-  );
+  const status = useMemo(() => {
+    const homeProbe = providerId === 'claude' ? localSnapshot?.claudeHome : localSnapshot?.codexHome;
+    const extraProbe = providerId === 'claude' ? localSnapshot?.claudeSettings : localSnapshot?.codexSkills;
+    const label = providerId === 'claude' ? 'Claude Agent Runtime' : 'Codex Agent Runtime';
+    const ready = Boolean(homeProbe?.exists);
+
+    return {
+      ready,
+      source: ready ? 'local runtime detected' : 'local runtime missing',
+      summary: ready
+        ? `${label} 的本地目录已检测到；实际执行状态以下方 live runtime 数据为准。`
+        : `${label} 的本地目录尚未检测到；当前摘要仅展示审批、MCP 与恢复态。`,
+      details: [
+        homeProbe?.path ? `home: ${homeProbe.path}` : null,
+        extraProbe?.path ? `config: ${extraProbe.path}` : null,
+      ].filter((detail): detail is string => Boolean(detail)),
+    };
+  }, [localSnapshot, providerId]);
+
   const pendingApprovalCount = useMemo(
     () =>
       Object.values(approvalsByThread)
@@ -108,7 +89,7 @@ export const GNAgentRuntimeSummary: React.FC<{
   return (
     <section className={`gn-agent-runtime-summary ${status.ready ? 'ready' : 'missing'}`}>
       <div className="gn-agent-runtime-summary-header">
-        <strong>{providerId === 'claude' ? 'Claude Runtime' : 'Codex Agent Runtime'}</strong>
+        <strong>{providerId === 'claude' ? 'Claude Agent Runtime' : 'Codex Agent Runtime'}</strong>
         <span>{status.source}</span>
       </div>
       <p>{status.summary}</p>

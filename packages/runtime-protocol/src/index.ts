@@ -363,6 +363,7 @@ export type RuntimeSessionDeleteResult = {
 
 export type RuntimeModelConfig = {
   provider: 'openai-compatible' | 'anthropic';
+  protocol: 'anthropic-messages' | 'openai-chat-completions' | 'openai-responses';
   apiKey: string;
   baseURL: string;
   model: string;

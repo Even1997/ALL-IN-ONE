@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -16,47 +16,48 @@ const coordinatorPath = path.resolve(
   '../../src/modules/ai/runtime/orchestration/runtimeChatTurnCoordinator.ts',
 );
 
-test('gnAgent shell store tracks dedicated config ids for claude and codex', async () => {
+test('gnAgent shell store only keeps the active provider mode after shell binding cleanup', async () => {
   const source = await readFile(storePath, 'utf8');
-  assert.match(source, /claudeConfigId/);
-  assert.match(source, /codexConfigId/);
-  assert.match(source, /setProviderConfigId/);
+  assert.match(source, /providerMode/);
+  assert.match(source, /setProviderMode/);
+  assert.doesNotMatch(source, /claudeConfigId/);
+  assert.doesNotMatch(source, /codexConfigId/);
+  assert.doesNotMatch(source, /setProviderConfigId/);
 });
 
-test('agent chat stage passes provider-specific execution mode and config overrides into AIChat', async () => {
+test('agent chat stage only passes config override into AIChat for provider tabs', async () => {
   const [chatPageSource, stageSource] = await Promise.all([
     readFile(chatPagePath, 'utf8'),
     readFile(stagePath, 'utf8'),
   ]);
+
   assert.match(chatPageSource, /AgentChatStage/);
-  assert.match(stageSource, /runtimeConfigIdOverride/);
-  assert.match(stageSource, /providerExecutionMode/);
-  assert.match(stageSource, /providerId === 'classic' \? null : providerId/);
+  assert.match(stageSource, /variant="embedded"/);
+  assert.doesNotMatch(stageSource, /claudeConfigId/);
+  assert.doesNotMatch(stageSource, /codexConfigId/);
+  assert.doesNotMatch(stageSource, /providerExecutionMode/);
 });
 
-test('ai chat routes claude and codex pages through provider runtimes', async () => {
+test('ai chat routes all built-in model requests through the unified runtime client', async () => {
   const [source, coordinatorSource, runtimeClient] = await Promise.all([
     readFile(aiChatPath, 'utf8'),
     readFile(coordinatorPath, 'utf8'),
     readFile(runtimeClientPath, 'utf8'),
   ]);
 
-  assert.match(source, /runtimeConfigIdOverride\?: string \| null/);
-  assert.match(source, /providerExecutionMode\?: 'claude' \| 'codex' \| null/);
-  assert.match(source, /variant\?: 'default' \| 'provider-embedded' \| 'gn-agent-embedded'/);
-  assert.match(source, /const isProviderEmbedded = variant === 'provider-embedded';/);
-  assert.match(source, /const isGNAgentEmbedded = variant === 'gn-agent-embedded';/);
-  assert.match(source, /const isEmbedded = isProviderEmbedded \|\| isGNAgentEmbedded;/);
-  assert.match(source, /const lockExpandedForEmbedded = isProviderEmbedded;/);
-  assert.match(source, /isRuntimeConfigLocked/);
-  assert.match(source, /allowConfigSelection:\s*!isRuntimeConfigLocked/);
-  assert.match(source, /const runtimeProviderId = \(providerExecutionMode \|\| 'built-in'\) as AgentProviderId;/);
+  assert.match(source, /variant\?: 'default' \| 'embedded'/);
+  assert.match(source, /const isEmbedded = variant === 'embedded';/);
+  assert.doesNotMatch(source, /runtimeConfigIdOverride/);
+  assert.doesNotMatch(source, /isRuntimeConfigLocked/);
+  assert.match(source, /allowConfigSelection:\s*true/);
+  assert.match(source, /const runtimeProviderId = 'built-in' as AgentProviderId;/);
+  assert.doesNotMatch(source, /providerExecutionMode/);
   assert.match(coordinatorSource, /runAgentTurn/);
-  assert.match(coordinatorSource, /executeModel:\s*\(prompt: any, systemPrompt: any, onEvent: any\)\s*=>/);
   assert.match(coordinatorSource, /ports\.executeRuntimePrompt\(\{/);
   assert.match(coordinatorSource, /providerId:\s*runtimeProviderId/);
-  assert.match(runtimeClient, /if \(providerId === 'claude' && config\)/);
-  assert.match(runtimeClient, /claudeRuntime\.executePrompt/);
-  assert.match(runtimeClient, /if \(providerId === 'codex' && config\)/);
-  assert.match(runtimeClient, /codexRuntime\.executePrompt/);
+  assert.match(runtimeClient, /return Array\.isArray\(prompt\)/);
+  assert.match(runtimeClient, /await aiService\.completeMessages/);
+  assert.match(runtimeClient, /await aiService\.completeText/);
+  assert.doesNotMatch(runtimeClient, /claudeRuntime\.executePrompt/);
+  assert.doesNotMatch(runtimeClient, /codexRuntime\.executePrompt/);
 });

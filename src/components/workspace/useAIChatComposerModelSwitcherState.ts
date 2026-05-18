@@ -12,7 +12,6 @@ type UseAIChatComposerModelSwitcherStateInput = {
   aiConfigs: AIConfigEntry[];
   modelCatalog: ModelCatalog;
   selectedConfigId: string | null;
-  runtimeConfigIdOverride: string | null;
   selectConfig: (configId: string | null) => void;
   updateConfig: (configId: string, updates: Partial<Omit<AIConfigEntry, 'id'>>) => void;
   findPresetByConfig: (provider: AIProviderType, baseURL: string) => ProviderPreset | null;
@@ -24,7 +23,6 @@ export const useAIChatComposerModelSwitcherState = ({
   aiConfigs,
   modelCatalog,
   selectedConfigId,
-  runtimeConfigIdOverride,
   selectConfig,
   updateConfig,
   findPresetByConfig,
@@ -38,14 +36,11 @@ export const useAIChatComposerModelSwitcherState = ({
 
   const activeRuntimeConfig = useMemo(
     () =>
-      (runtimeConfigIdOverride ? aiConfigs.find((item) => item.id === runtimeConfigIdOverride) : null)
-      || enabledRuntimeConfigs.find((item) => item.id === selectedConfigId)
+      enabledRuntimeConfigs.find((item) => item.id === selectedConfigId)
       || enabledRuntimeConfigs[0]
       || null,
-    [aiConfigs, enabledRuntimeConfigs, runtimeConfigIdOverride, selectedConfigId],
+    [enabledRuntimeConfigs, selectedConfigId],
   );
-
-  const isRuntimeConfigLocked = Boolean(runtimeConfigIdOverride);
 
   const runtimeModelOptions = useMemo(() => {
     if (!activeRuntimeConfig) {
@@ -62,10 +57,8 @@ export const useAIChatComposerModelSwitcherState = ({
   }, [activeRuntimeConfig, buildProviderKey, findPresetByConfig, mergeModelCandidates, modelCatalog]);
 
   const handleSelectRuntimeConfig = useCallback((configId: string) => {
-    if (!isRuntimeConfigLocked) {
-      selectConfig(configId);
-    }
-  }, [isRuntimeConfigLocked, selectConfig]);
+    selectConfig(configId);
+  }, [selectConfig]);
 
   const handleSelectRuntimeModel = useCallback((model: string) => {
     if (!activeRuntimeConfig) {
@@ -87,7 +80,6 @@ export const useAIChatComposerModelSwitcherState = ({
     enabledRuntimeConfigs,
     activeRuntimeConfig,
     runtimeModelOptions,
-    isRuntimeConfigLocked,
     handleSelectRuntimeConfig,
     handleSelectRuntimeModel,
   };

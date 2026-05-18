@@ -3,10 +3,11 @@
 // 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
 
 export const wikiSkillMarkdown = `---
-name: Wiki
-description: Read the current project notes and files, then answer or update context with a wiki-first view.
-when_to_use: Use when the user wants project understanding, context stitching, note-grounded answers, or wiki-style upkeep.
+name: Notes
+description: Read the current project notes and files, then answer or update context with a notes-first view.
+when_to_use: Use when the user wants project understanding, context stitching, note-grounded answers, or notes upkeep.
 skill: wiki
+aliases: [/notes]
 context: inline
 allowed-tools: read, grep, glob, ls, view
 user-invocable: true

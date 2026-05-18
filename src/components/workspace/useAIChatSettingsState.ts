@@ -1,6 +1,6 @@
-// 文件作用：状态或行为封装 Hook，位于应用支持层。
-// 所在链路：负责承接当前模块在整体链路中的实现职责。
-// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 文件作用：封装 AI 设置页的草稿状态、模型加载、导入导出与保存交互。
+// 所在链路：设置页 UI composition -> 配置草稿 -> globalAIStore / AIService。
+// 排查入口：先看 settingsDraft 的同步，再看 handleApplySettings / handleImportConfigs。
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listModelsSupportMode } from '../../modules/ai/core/configStatus';
@@ -8,9 +8,11 @@ import type { AIProviderType, aiService as sharedAIService } from '../../modules
 import type { ProviderPreset } from '../../modules/ai/providerPresets';
 import {
   hasUsableAIConfigEntry,
+  normalizeAIProtocol,
   normalizeSavedModels,
   resolveActiveModel,
   type AIConfigEntry,
+  type AIProtocolType,
 } from '../../modules/ai/store/aiConfigState';
 import { useGlobalAIStore } from '../../modules/ai/store/globalAIStore';
 
@@ -18,6 +20,7 @@ type AISettingsDraft = {
   id: string | null;
   name: string;
   provider: AIProviderType;
+  protocol: AIProtocolType;
   apiKey: string;
   baseURL: string;
   model: string;
@@ -27,18 +30,11 @@ type AISettingsDraft = {
   enabled: boolean;
 };
 
-type AIProviderTypeOption = {
-  value: AIProviderType;
-  label: string;
-  description: string;
-};
-
 type ModelCatalog = Record<string, string[]>;
 type TestState = 'idle' | 'testing' | 'success' | 'error';
 
 type UseAIChatSettingsStateInput = {
   aiConfigs: AIConfigEntry[];
-  runtimeConfigIdOverride: string | null;
   selectedConfigId: string | null;
   addConfig: ReturnType<typeof useGlobalAIStore.getState>['addConfig'];
   updateConfig: ReturnType<typeof useGlobalAIStore.getState>['updateConfig'];
@@ -48,17 +44,15 @@ type UseAIChatSettingsStateInput = {
   buildSettingsDraft: (config: AIConfigEntry | null) => AISettingsDraft;
   findPresetByConfig: (provider: AIProviderType, baseURL: string) => ProviderPreset | null;
   customProviderPreset: ProviderPreset;
-  providerTypeOptions: AIProviderTypeOption[];
   buildProviderKey: (provider: AIProviderType, baseURL: string) => string;
   mergeModelCandidates: (...groups: string[][]) => string[];
-  buildProviderEndpointPreview: (provider: AIProviderType, baseURL: string) => string;
+  buildProviderEndpointPreview: (provider: AIProviderType, baseURL: string, protocol?: AIProtocolType) => string;
   getSuggestedBaseURL: (provider: AIProviderType, preset: ProviderPreset) => string;
   aiServiceClient: typeof sharedAIService;
 };
 
 export const useAIChatSettingsState = ({
   aiConfigs,
-  runtimeConfigIdOverride,
   selectedConfigId,
   addConfig,
   updateConfig,
@@ -68,7 +62,6 @@ export const useAIChatSettingsState = ({
   buildSettingsDraft,
   findPresetByConfig,
   customProviderPreset,
-  providerTypeOptions,
   buildProviderKey,
   mergeModelCandidates,
   buildProviderEndpointPreview,
@@ -113,10 +106,9 @@ export const useAIChatSettingsState = ({
 
   const selectedRuntimeConfig = useMemo(
     () =>
-      (runtimeConfigIdOverride ? aiConfigs.find((item) => item.id === runtimeConfigIdOverride) : null)
-      || aiConfigs.find((item) => item.id === selectedConfigId)
+      aiConfigs.find((item) => item.id === selectedConfigId)
       || null,
-    [aiConfigs, runtimeConfigIdOverride, selectedConfigId],
+    [aiConfigs, selectedConfigId],
   );
 
   const isRuntimeConfigured = Boolean(
@@ -131,11 +123,6 @@ export const useAIChatSettingsState = ({
   const selectedSettingsPreset = useMemo(
     () => findPresetByConfig(settingsDraft.provider, settingsDraft.baseURL) || customProviderPreset,
     [customProviderPreset, findPresetByConfig, settingsDraft.baseURL, settingsDraft.provider],
-  );
-
-  const selectedProviderTypeOption = useMemo(
-    () => providerTypeOptions.find((item) => item.value === settingsDraft.provider) || providerTypeOptions[0],
-    [providerTypeOptions, settingsDraft.provider],
   );
 
   const syncModelCatalog = useCallback((nextProvider: AIProviderType, nextBaseURL: string, models: string[]) => {
@@ -208,8 +195,8 @@ export const useAIChatSettingsState = ({
   );
 
   const selectedProviderEndpoint = useMemo(
-    () => buildProviderEndpointPreview(settingsDraft.provider, settingsDraft.baseURL),
-    [buildProviderEndpointPreview, settingsDraft.baseURL, settingsDraft.provider],
+    () => buildProviderEndpointPreview(settingsDraft.provider, settingsDraft.baseURL, settingsDraft.protocol),
+    [buildProviderEndpointPreview, settingsDraft.baseURL, settingsDraft.protocol, settingsDraft.provider],
   );
 
   const isSettingsDraftComplete = hasUsableAIConfigEntry(settingsDraft);
@@ -228,7 +215,7 @@ export const useAIChatSettingsState = ({
     setTestState('testing');
     setTestMessage('');
 
-      const result = await aiServiceClient.testConnection(settingsDraft);
+    const result = await aiServiceClient.testConnection(settingsDraft);
     setTestState(result.ok ? 'success' : 'error');
     setTestMessage(result.message);
   }, [aiServiceClient, settingsDraft]);
@@ -339,6 +326,7 @@ export const useAIChatSettingsState = ({
     updateConfig(settingsDraft.id, {
       name: settingsDraft.name.trim() || 'Untitled AI',
       provider: settingsDraft.provider,
+      protocol: normalizeAIProtocol(settingsDraft.provider, settingsDraft.protocol),
       apiKey: settingsDraft.apiKey,
       baseURL: settingsDraft.baseURL,
       model: activeModel,
@@ -380,6 +368,7 @@ export const useAIChatSettingsState = ({
       updateConfig(settingsDraft.id, {
         name: settingsDraft.name.trim() || 'Untitled AI',
         provider: settingsDraft.provider,
+        protocol: normalizeAIProtocol(settingsDraft.provider, settingsDraft.protocol),
         apiKey: settingsDraft.apiKey,
         baseURL: settingsDraft.baseURL,
         model: activeModel,
@@ -409,8 +398,9 @@ export const useAIChatSettingsState = ({
 
   const handleCreateConfig = useCallback(() => {
     const nextId = addConfig({
-      name: `AI 閰嶇疆 ${aiConfigs.length + 1}`,
+      name: `AI 闁板秶鐤?${aiConfigs.length + 1}`,
       provider: settingsDraft.provider,
+      protocol: normalizeAIProtocol(settingsDraft.provider, settingsDraft.protocol),
       baseURL: settingsDraft.baseURL || getSuggestedBaseURL(settingsDraft.provider, selectedSettingsPreset),
       model: settingsDraft.model,
       savedModels: buildDraftValidSavedModels(settingsDraft.savedModels, settingsDraft.model),
@@ -486,6 +476,7 @@ export const useAIChatSettingsState = ({
           addConfig({
             name: entry.name || `Imported ${entry.provider}`,
             provider: entry.provider,
+            protocol: normalizeAIProtocol(entry.provider, entry.protocol),
             apiKey: entry.apiKey,
             baseURL: entry.baseURL,
             model: entry.model,
@@ -521,7 +512,6 @@ export const useAIChatSettingsState = ({
     isRuntimeConfigured,
     selectedSettingsConfig,
     selectedSettingsPreset,
-    selectedProviderTypeOption,
     settingsModelOptions,
     selectedProviderListMode,
     selectedProviderEndpoint,

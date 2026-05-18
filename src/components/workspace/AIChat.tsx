@@ -7,7 +7,7 @@ import React, { lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, u
 // 如果你在排查“聊天页为什么没按预期联动”，通常先从这里看页面级状态和子组件接线。
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
-import { aiService, type AIProviderType } from '../../modules/ai/core/AIService';
+import { aiService } from '../../modules/ai/core/AIService';
 import { buildDirectChatPrompt } from '../../modules/ai/chat/directChatPrompt';
 import type { ChatStructuredCard } from '../../modules/ai/chat/chatCards';
 import { buildContextUsageSummary } from '../../modules/ai/chat/contextBudget';
@@ -23,13 +23,11 @@ import {
   collectDesignPages,
   getSelectedElementLabel,
 } from '../../modules/ai/chat/chatContext';
-import { PROVIDER_PRESETS, type ProviderPreset } from '../../modules/ai/providerPresets';
 import type { ActivityEntry } from '../../modules/ai/skills/activityLog';
 import {
   getDefaultRuntimeSkillDefinitions,
   loadRuntimeSkillCatalog,
 } from '../../modules/ai/skills/skillLibrary';
-import type { AIConfigEntry } from '../../modules/ai/store/aiConfigState';
 import { getLocalAgentConfigSnapshot, type LocalAgentConfigSnapshot } from '../../modules/ai/gn-agent/localConfig';
 import {
   appendAgentTimelineEvent as persistRuntimeTimelineEvent,
@@ -67,7 +65,6 @@ import {
   recordFinalVisibleDone,
   recordFirstVisibleChar,
   recordFrontendFlush,
-  type StreamingLatencyTrace,
 } from '../../modules/ai/runtime/streamingLatencyTrace.ts';
 import {
   createChatSession,
@@ -76,7 +73,6 @@ import {
 } from '../../modules/ai/store/aiChatStore';
 import {
   applyAssistantReasoningProgress,
-  getAssistantRuntimeTimelineEvents,
   getAssistantTimelineText,
   type AssistantTimelineEvent,
 } from '../../modules/ai/store/assistantTimeline.ts';
@@ -142,6 +138,15 @@ import { useAIChatSettingsState } from './useAIChatSettingsState';
 import { useAIChatRuntimeInteractionState } from './useAIChatRuntimeInteractionState';
 import { useAIChatSidecarSessionActions } from './useAIChatSidecarSessionActions';
 import { getRuntimeQuestionRenderEntries } from './runtimeInteractionRenderModel.ts';
+import {
+  CUSTOM_PROVIDER_PRESET,
+  buildProviderEndpointPreview,
+  buildProviderKey,
+  buildSettingsDraft,
+  findPresetByConfig,
+  getSuggestedBaseURL,
+  mergeModelCandidates,
+} from './globalSettingsPageShared';
 import './AIChat.css';
 
 void lazy;
@@ -150,31 +155,11 @@ void lazy;
 // 1. 负责把项目上下文、知识库、runtime 会话和 UI 状态装配到一起。
 // 2. 这里适合找“发送消息”“切换会话”“流式渲染”“审批/回放/检查点”等主流程。
 // 3. 如果后续要排查聊天页行为，通常先从这个文件往下追。
+// 4. 回放入口语义上对应 listRuntimeReplayEvents / appendRuntimeReplayEvent，目前由 sidecar bridge 负责承接。
 const EMPTY_PAG_REFERENCE_FILES: readonly ReferenceFile[] = [];
 
-type AISettingsDraft = {
-  id: string | null;
-  name: string;
-  provider: AIProviderType;
-  apiKey: string;
-  baseURL: string;
-  model: string;
-  savedModels: string[];
-  contextWindowTokens: number;
-  customHeaders: string;
-  enabled: boolean;
-};
-
-type AIProviderTypeOption = {
-  value: AIProviderType;
-  label: string;
-  description: string;
-};
-
 type AIChatProps = {
-  variant?: 'default' | 'provider-embedded' | 'gn-agent-embedded';
-  runtimeConfigIdOverride?: string | null;
-  providerExecutionMode?: 'claude' | 'codex' | null;
+  variant?: 'default' | 'embedded';
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   headerActionSlot?: ReactNode;
@@ -199,6 +184,58 @@ const formatTimestamp = (value: number) =>
     hour: '2-digit',
     minute: '2-digit',
   });
+
+// 图标定义集中放在这里，避免聊天页在重构后出现 JSX 引用存在但组件声明丢失的首屏渲染错误。
+const SettingsIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path
+      d="M6.6 1.7h2.8l.4 1.6c.3.1.7.3 1 .4l1.5-.7 1.4 1.4-.7 1.5c.2.3.3.7.4 1l1.6.4v2.8l-1.6.4c-.1.3-.2.7-.4 1l.7 1.5-1.4 1.4-1.5-.7c-.3.2-.7.3-1 .4l-.4 1.6H6.6l-.4-1.6c-.3-.1-.7-.2-1-.4l-1.5.7-1.4-1.4.7-1.5c-.2-.3-.3-.7-.4-1l-1.6-.4V7.1l1.6-.4c.1-.3.2-.7.4-1l-.7-1.5L3.7 2.8l1.5.7c.3-.2.7-.3 1-.4l.4-1.4Z"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />
+    <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+);
+
+const ChevronDownIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const HistoryIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path d="M3 4.5V1.8m0 2.7h2.7M3.5 7.8A4.8 4.8 0 1 0 8 3.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M8 5.3v2.9l2 1.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const ComposeIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path d="M3.3 12.7 4 10l6.8-6.8a1.4 1.4 0 0 1 2 2L6 12l-2.7.7Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    <path d="M9.7 4.3 11.7 6.3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+);
+
+const CollapseIcon: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <rect x="2.5" y="3" width="11" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
+    <path d={collapsed ? 'M9.8 5.5 7 8l2.8 2.5' : 'M6.2 5.5 9 8l-2.8 2.5'} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const PauseIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path d="M5.5 3.5v9m5-9v9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const SendIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+    <path d="M2 13.5 14 8 2 2.5l1.8 4.1L9 8 3.8 9.4 2 13.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+  </svg>
+);
 
 const normalizeErrorMessage = (error: unknown) => {
   const raw = error instanceof Error ? error.message : String(error);
@@ -460,6 +497,15 @@ const summarizeProjectFilePath = (value: string) => {
   return `.../${parts.slice(-3).join('/')}`;
 };
 
+const summarizeReferencePath = (value: string) => summarizeProjectFilePath(value);
+
+const normalizeSearchToken = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/\\/g, '/')
+    .replace(/\s+/g, ' ');
+
 const buildRunDiffKey = (runId: string, path: string) => `${runId}::${path}`;
 const isRunDiffActive = (expandedRunDiffKey: string | null, runId: string, path: string) =>
   expandedRunDiffKey === buildRunDiffKey(runId, path);
@@ -613,213 +659,6 @@ const KnowledgeTruthStructuredCards: React.FC<{
   </div>
 );
 
-const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
-  id: 'custom',
-  label: '自定义 Provider',
-  type: 'openai-compatible',
-  baseURL: '',
-  docsUrl: 'https://platform.openai.com/docs/api-reference',
-  iconText: 'CU',
-  accent: 'gray',
-  enabled: true,
-  models: [],
-  keyHint: '填写你的平台 API Key',
-  note: '用于接入未内置的平台。你可以自行切换 API 类型、Base URL、模型和自定义请求头。',
-};
-
-const SETTINGS_PROVIDER_PRESETS = [...PROVIDER_PRESETS, CUSTOM_PROVIDER_PRESET];
-
-const AI_PROVIDER_TYPE_OPTIONS: AIProviderTypeOption[] = [
-  {
-    value: 'openai-compatible',
-    label: 'OpenAI Compatible',
-    description: '适用于 OpenAI、OpenRouter、DeepSeek、Ollama 等兼容 chat/completions 的平台。',
-  },
-  {
-    value: 'anthropic',
-    label: 'Anthropic',
-    description: '适用于 Claude 原生 /messages 协议。',
-  },
-];
-
-const findPresetByConfig = (provider: AIProviderType, baseURL: string) =>
-  SETTINGS_PROVIDER_PRESETS.find(
-    (item) => item.id !== CUSTOM_PROVIDER_PRESET.id && item.type === provider && item.baseURL === baseURL
-  ) || null;
-
-const buildProviderEndpointPreview = (provider: AIProviderType, baseURL: string) =>
-  `${baseURL.replace(/\/+$/, '')}/${provider === 'anthropic' ? 'messages' : 'chat/completions'}`;
-
-const getSuggestedBaseURL = (provider: AIProviderType, preset: ProviderPreset) => {
-  if (preset.baseURL.trim()) {
-    return preset.baseURL;
-  }
-
-  return provider === 'anthropic' ? 'https://api.anthropic.com/v1' : 'https://api.openai.com/v1';
-};
-
-const buildProviderKey = (provider: AIProviderType, baseURL: string) =>
-  `${provider}::${baseURL.trim().replace(/\/+$/, '')}`;
-
-const HistoryIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M3.5 10A6.5 6.5 0 1 0 5.4 5.36" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    <path d="M3.5 4.75V7.75H6.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    <path d="M10 6.7V10L12.55 11.55" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-  </svg>
-);
-
-const ComposeIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M4.5 14.8L5.05 11.85L12.85 4.05C13.43 3.47 14.37 3.47 14.95 4.05L15.95 5.05C16.53 5.63 16.53 6.57 15.95 7.15L8.15 14.95L5.2 15.5L4.5 14.8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-  </svg>
-);
-
-const SettingsIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M10 6.75A3.25 3.25 0 1 0 10 13.25A3.25 3.25 0 1 0 10 6.75Z" stroke="currentColor" strokeWidth="1.5" />
-    <path d="M10 2.9V4.35M10 15.65V17.1M17.1 10H15.65M4.35 10H2.9M14.98 5.02L13.95 6.05M6.05 13.95L5.02 14.98M14.98 14.98L13.95 13.95M6.05 6.05L5.02 5.02" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-  </svg>
-);
-
-const ChevronDownIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M5.75 7.75L10 12.25L14.25 7.75" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const CollapseIcon = ({ collapsed }: { collapsed: boolean }) => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    {collapsed ? (
-      <path d="M7 4.5L12.5 10L7 15.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    ) : (
-      <path d="M12.5 4.5L7 10L12.5 15.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    )}
-  </svg>
-);
-
-const SendIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <path d="M3.35 9.65L15.95 4.55C16.56 4.3 17.16 4.9 16.91 5.51L11.81 18.11C11.53 18.81 10.52 18.75 10.33 18.02L8.92 12.56L3.44 11.13C2.72 10.94 2.66 9.94 3.35 9.65Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-  </svg>
-);
-
-const PauseIcon = () => (
-  <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-    <rect x="5" y="3" width="3" height="14" rx="1" fill="currentColor" />
-    <rect x="12" y="3" width="3" height="14" rx="1" fill="currentColor" />
-  </svg>
-);
-
-const normalizeSearchToken = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
-const summarizeReferencePath = (value: string) => {
-  const normalized = value.replace(/\\/g, '/');
-  const parts = normalized.split('/').filter(Boolean);
-
-  if (parts.length <= 2) {
-    return normalized;
-  }
-
-  return `.../${parts.slice(-2).join('/')}`;
-};
-
-const renderMessagePart = (
-  message: StoredChatMessage,
-  messageId: string,
-  part: AIChatMessagePart,
-  index: number,
-  options?: {
-    content: string;
-    isStreaming: boolean;
-    streamingLatencyTrace?: StreamingLatencyTrace | null;
-    onFirstVisibleChar?: () => void;
-    onFinalVisibleDone?: () => void;
-  }
-) => {
-  if (part.type === 'thinking') {
-    return (
-      <AssistantThinkingBlock
-        key={`${messageId}-thinking-${index}`}
-        part={part}
-      />
-    );
-  }
-
-  if (part.type === 'tool') {
-    if (
-      message.role === 'assistant' &&
-      getAssistantRuntimeTimelineEvents(message.timeline).some(
-        (event) => event.kind === 'tool_use' || event.kind === 'tool_result'
-      )
-    ) {
-      return null;
-    }
-    return (
-      <details className={`chat-tool-card ${part.status}`} key={`${messageId}-tool-${index}`}>
-        <summary className="chat-tool-card-header chat-tool-card-summary">
-          <span className="chat-tool-icon" aria-hidden="true" />
-          <div className="chat-inline-disclosure-copy">
-            <strong>{part.title}</strong>
-            <span>{part.status === 'running' ? '正在执行' : part.status === 'error' ? '执行失败' : '已完成'}</span>
-          </div>
-          <span className="chat-inline-disclosure-caret" aria-hidden="true" />
-        </summary>
-        {part.command ? (
-          <div className="chat-tool-section">
-            <span className="chat-tool-section-label">Command</span>
-            <pre className="chat-tool-command">{part.command}</pre>
-          </div>
-        ) : null}
-        {part.input && part.input !== part.command ? (
-          <div className="chat-tool-section">
-            <span className="chat-tool-section-label">Input</span>
-            <pre className="chat-tool-command">{part.input}</pre>
-          </div>
-        ) : null}
-        {part.output ? (
-          <div className="chat-tool-section">
-            <span className="chat-tool-section-label">Output</span>
-            <pre className="chat-tool-output">{part.output}</pre>
-          </div>
-        ) : null}
-      </details>
-    );
-  }
-
-  return (
-    <AssistantTextBlock
-      key={`${messageId}-text-${index}`}
-      content={part.content}
-      isStreaming={options?.isStreaming ?? false}
-      onFirstVisibleChar={options?.onFirstVisibleChar}
-      onFinalVisibleDone={options?.onFinalVisibleDone}
-    />
-  );
-};
-
-const mergeModelCandidates = (...groups: string[][]) =>
-  Array.from(
-    new Set(
-      groups
-        .flat()
-        .map((item) => item.trim())
-        .filter(Boolean)
-    )
-  );
-
-const buildSettingsDraft = (config: AIConfigEntry | null): AISettingsDraft => ({
-  id: config?.id || null,
-  name: config?.name || '',
-  provider: config?.provider || 'openai-compatible',
-  apiKey: config?.apiKey || '',
-  baseURL: config?.baseURL || PROVIDER_PRESETS[0]?.baseURL || '',
-  model: config?.model || PROVIDER_PRESETS[0]?.models[0] || '',
-  savedModels: config?.savedModels || (config?.model ? [config.model] : (PROVIDER_PRESETS[0]?.models[0] ? [PROVIDER_PRESETS[0].models[0]] : [])),
-  contextWindowTokens: config?.contextWindowTokens || 258000,
-  customHeaders: config?.customHeaders || '',
-  enabled: config?.enabled || false,
-});
-
 const createRuntimeEventId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -858,17 +697,12 @@ const toConversationHistoryMessages = (messages: StoredChatMessage[] = []) =>
 // - 这里集中声明页面级状态，后面再把状态分发给消息区、输入区、runtime 交互卡片等子模块。
 export const AIChat: React.FC<AIChatProps> = ({
   variant = 'default',
-  runtimeConfigIdOverride = null,
-  providerExecutionMode = null,
   collapsed,
   onCollapsedChange,
   headerActionSlot = null,
   showHeaderChrome = true,
 }) => {
-  const isProviderEmbedded = variant === 'provider-embedded';
-  const isGNAgentEmbedded = variant === 'gn-agent-embedded';
-  const isEmbedded = isProviderEmbedded || isGNAgentEmbedded;
-  const lockExpandedForEmbedded = isProviderEmbedded;
+  const isEmbedded = variant === 'embedded';
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(false);
@@ -894,7 +728,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const [rewindError, setRewindError] = useState('');
   const isControlledCollapse = typeof collapsed === 'boolean';
   const isCollapsed = isControlledCollapse ? Boolean(collapsed) : internalIsCollapsed;
-  const showExpandedShell = !isCollapsed || lockExpandedForEmbedded;
+  const showExpandedShell = !isCollapsed;
 
   // 这组 ref 主要服务于“流式输出中的瞬时状态”：
   // 包括自动滚动、当前 live thread、流式草稿缓冲、正在执行的提交和中止控制器。
@@ -1008,29 +842,36 @@ export const AIChat: React.FC<AIChatProps> = ({
 
   const {
     ensureProjectState,
-    upsertSession,
-    setActiveSession,
+    upsertSession,
+
+    setActiveSession,
+
     setActivityEntries,
     updateMessage,
     queueComposerPrefill,
     clearComposerPrefill,
     syncSessionReplayState,
-    replaceSessionMessages,
+    replaceSessionMessages,
+
   } = useAIChatStore(
     useShallow((state) => ({
       ensureProjectState: state.ensureProjectState,
-      upsertSession: state.upsertSession,
-      setActiveSession: state.setActiveSession,
+      upsertSession: state.upsertSession,
+
+      setActiveSession: state.setActiveSession,
+
       setActivityEntries: state.setActivityEntries,
       updateMessage: state.updateMessage,
       queueComposerPrefill: state.queueComposerPrefill,
       clearComposerPrefill: state.clearComposerPrefill,
       syncSessionReplayState: state.syncSessionReplayState,
-      replaceSessionMessages: state.replaceSessionMessages,
+      replaceSessionMessages: state.replaceSessionMessages,
+
     }))
   );
   const {
-    appendTimelineEvent: appendRuntimeTimelineEvent,
+    appendTimelineEvent: appendRuntimeTimelineEvent,
+
     setReplayEvents: setRuntimeReplayEvents,
     appendReplayEvent: cacheReplayEventEntry,
     setRecoveryState: setRuntimeRecoveryState,
@@ -1040,7 +881,10 @@ export const AIChat: React.FC<AIChatProps> = ({
     patchLiveState,
   } = useAgentRuntimeStore(
     useShallow((state) => ({
-      appendTimelineEvent: state.appendTimelineEvent,
+      appendTimelineEvent: state.appendTimelineEvent,
+
+
+
       setReplayEvents: state.setReplayEvents,
       appendReplayEvent: state.appendReplayEvent,
       setRecoveryState: state.setRecoveryState,
@@ -1065,7 +909,7 @@ export const AIChat: React.FC<AIChatProps> = ({
   const activeSessionTitle = isConversationEmptyState
     ? '暂无对话'
     : activeSession?.title || '新对话';
-  const emptyConversationLeadingContent = isConversationEmptyState && !isGNAgentEmbedded ? (
+  const emptyConversationLeadingContent = isConversationEmptyState && !isEmbedded ? (
     <div className="chat-empty-conversation-state">
       <strong>暂无历史对话</strong>
       <span>点击“新对话”开始，或直接发送消息创建新会话。</span>
@@ -1078,6 +922,38 @@ export const AIChat: React.FC<AIChatProps> = ({
     projectId: currentProjectId,
   });
   const activeStreamingLatencyTrace = liveState?.streamingLatencyTrace ?? null;
+  // 这里只负责把 assistant part 分发到具体展示块；
+  // thinking / final 的显示分离属于 UI composition 层，不回写 runtime truth。
+  const renderMessagePart = useCallback((
+    _message: StoredChatMessage,
+    _messageId: string,
+    part: AIChatMessagePart,
+    _index: number,
+    options?: {
+      content: string;
+      isStreaming: boolean;
+      streamingLatencyTrace?: unknown;
+      onFirstVisibleChar?: () => void;
+      onFinalVisibleDone?: () => void;
+    },
+  ) => {
+    if (part.type === 'thinking') {
+      return <AssistantThinkingBlock part={part} />;
+    }
+
+    if (part.type !== 'text') {
+      return null;
+    }
+
+    return (
+      <AssistantTextBlock
+        content={part.content}
+        isStreaming={options?.isStreaming ?? false}
+        onFirstVisibleChar={options?.onFirstVisibleChar}
+        onFinalVisibleDone={options?.onFinalVisibleDone}
+      />
+    );
+  }, []);
   useEffect(() => {
     const activeMessages = activeSession?.messages || [];
     const activeAssistantIds = new Set(
@@ -1149,7 +1025,7 @@ export const AIChat: React.FC<AIChatProps> = ({
       setSandboxPolicy: state.setSandboxPolicy,
     }))
   );
-  const runtimeProviderId = (providerExecutionMode || 'built-in') as AgentProviderId;
+  const runtimeProviderId = 'built-in' as AgentProviderId;
 
   useEffect(() => {
     let alive = true;
@@ -1687,7 +1563,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     modelCatalog,
   } = useAIChatSettingsState({
     aiConfigs,
-    runtimeConfigIdOverride,
     selectedConfigId,
     addConfig,
     updateConfig,
@@ -1697,7 +1572,6 @@ export const AIChat: React.FC<AIChatProps> = ({
     buildSettingsDraft,
     findPresetByConfig,
     customProviderPreset: CUSTOM_PROVIDER_PRESET,
-    providerTypeOptions: AI_PROVIDER_TYPE_OPTIONS,
     buildProviderKey,
     mergeModelCandidates,
     buildProviderEndpointPreview,
@@ -1709,14 +1583,12 @@ export const AIChat: React.FC<AIChatProps> = ({
     enabledRuntimeConfigs,
     activeRuntimeConfig,
     runtimeModelOptions,
-    isRuntimeConfigLocked,
     handleSelectRuntimeConfig,
     handleSelectRuntimeModel,
   } = useAIChatComposerModelSwitcherState({
     aiConfigs,
     modelCatalog,
     selectedConfigId,
-    runtimeConfigIdOverride,
     selectConfig,
     updateConfig,
     findPresetByConfig,
@@ -1728,8 +1600,7 @@ export const AIChat: React.FC<AIChatProps> = ({
     activeRuntimeConfig,
     enabledRuntimeConfigs,
     runtimeModelOptions,
-    isRuntimeConfigLocked,
-    allowConfigSelection: !isRuntimeConfigLocked,
+    allowConfigSelection: true,
     onSelectConfig: handleSelectRuntimeConfig,
     onSelectModel: handleSelectRuntimeModel,
   };
@@ -2266,7 +2137,8 @@ export const AIChat: React.FC<AIChatProps> = ({
       activeSession?.providerId,
       activeSession?.messages,
       activeSessionId,
-      activityEntries,
+      activityEntries,
+
       currentProject,
       expandedDiffTarget,
       isRewindingRunId,
@@ -2898,14 +2770,14 @@ export const AIChat: React.FC<AIChatProps> = ({
   return (
     <>
       <section
-        className={`${getChatShellLayoutClassName(lockExpandedForEmbedded ? false : isCollapsed)}${isEmbedded ? ' chat-shell-embedded' : ''}${showHeaderChrome ? '' : ' chat-shell-no-header'}`}
+        className={`${getChatShellLayoutClassName(isCollapsed)}${isEmbedded ? ' chat-shell-embedded' : ''}${showHeaderChrome ? '' : ' chat-shell-no-header'}`}
       >
         {showHeaderChrome ? (
           <header className={`chat-shell-header chat-shell-gn-header${isEmbedded ? ' embedded' : ''}`}>
             <div className="chat-shell-header-main">
               <div className="chat-shell-title">
                 {!isEmbedded ? <span className="chat-shell-kicker">GN Agent</span> : null}
-                <strong>{isCollapsed && !lockExpandedForEmbedded ? 'GN' : activeSessionTitle}</strong>
+                <strong>{isCollapsed ? 'GN' : activeSessionTitle}</strong>
                 {showExpandedShell && !isEmbedded ? <span>{currentProject?.name || '未打开项目'}</span> : null}
               </div>
 

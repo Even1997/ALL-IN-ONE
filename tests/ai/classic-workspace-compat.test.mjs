@@ -6,11 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const classicPath = path.resolve(__dirname, '../../src/components/ai/workspaces/ClassicWorkspace.tsx');
+const aiWorkspacePath = path.resolve(__dirname, '../../src/components/ai/AIWorkspace.tsx');
 
-test('classic workspace keeps AIChat as compatibility mode only', async () => {
-  const source = await readFile(classicPath, 'utf8');
-  assert.match(source, /GNAgentChatPage/);
-  assert.match(source, /providerId="classic"/);
-  assert.match(source, /classic/i);
+test('built-in AI workspace now uses the unified embedded chat surface directly', async () => {
+  const source = await readFile(aiWorkspacePath, 'utf8');
+  assert.match(source, /AIChat variant="embedded"/);
+  assert.doesNotMatch(source, /ClassicWorkspace/);
 });

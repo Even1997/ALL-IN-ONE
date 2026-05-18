@@ -1,7 +1,6 @@
-// 文件作用：状态仓库，位于应用支持层。
-// 所在链路：负责承接当前模块在整体链路中的实现职责。
-// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
-
+// 文件作用：全局通用设置状态仓库，负责启动页、语言、更新通道等桌面级偏好。
+// 所在链路：设置面板 -> Zustand 状态 -> 本地持久化 -> 应用启动与新窗口默认行为。
+// 排查入口：先看 normalizeGeneralSettings 与 STARTUP_PAGE_OPTIONS，再顺着 store 的读写链路排查持久化结果。
 import { create } from 'zustand';
 
 export type UiLanguage = 'system' | 'zh-CN' | 'en-US';
@@ -69,17 +68,16 @@ export const GENERAL_SETTINGS_DEFAULTS: GeneralSettings = {
 export const UI_LANGUAGE_OPTIONS: GeneralSettingsOption<UiLanguage>[] = [
   { value: 'system', label: '系统', description: '跟随当前系统语言。' },
   { value: 'zh-CN', label: '简体中文', description: '优先使用中文界面。' },
-  { value: 'en-US', label: '英文', description: '优先使用英文界面。' },
+  { value: 'en-US', label: 'English', description: '优先使用英文界面。' },
 ];
 
 export const STARTUP_PAGE_OPTIONS: GeneralSettingsOption<StartupPage>[] = [
   { value: 'last-opened', label: '上次工作区', description: '优先回到上次使用的工作上下文。' },
   { value: 'project-picker', label: '项目选择器', description: '启动后先进入项目列表。' },
-  { value: 'agent', label: '助手工作台', description: '直接进入助手工作台。' },
-  { value: 'knowledge', label: '知识库', description: '直接进入知识与笔记工作区。' },
-  { value: 'page', label: '页面草图', description: '直接进入页面与草图工作区。' },
-  { value: 'design', label: '设计', description: '直接进入设计工作台。' },
-  { value: 'develop', label: '开发', description: '直接进入开发视图。' },
+  { value: 'agent', label: 'Agent', description: '直接进入 Agent 协作工作台。' },
+  { value: 'knowledge', label: 'Notes', description: '直接进入 Notes 笔记工作区。' },
+  { value: 'page', label: 'Sketch', description: '直接进入 Sketch 页面草图工作区。' },
+  { value: 'design', label: 'UI Design', description: '直接进入设计工作台。' },
   { value: 'test', label: '测试', description: '直接进入测试视图。' },
   { value: 'operations', label: '运维', description: '直接进入运维与发布视图。' },
 ];
@@ -92,7 +90,7 @@ export const UPDATE_CHANNEL_OPTIONS: GeneralSettingsOption<UpdateChannel>[] = [
 export const NEW_WINDOW_BEHAVIOR_OPTIONS: GeneralSettingsOption<NewWindowBehavior>[] = [
   { value: 'project-picker', label: '项目选择器', description: '新窗口从项目列表开始。' },
   { value: 'recent-project', label: '最近项目', description: '新窗口优先打开最近项目。' },
-  { value: 'blank-agent', label: '空白助手', description: '新窗口直接进入空白助手工作台。' },
+  { value: 'blank-agent', label: '空白 Agent', description: '新窗口直接进入空白 Agent 工作台。' },
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -120,15 +118,19 @@ const normalizeGeneralSettings = (value: unknown): GeneralSettings => {
   const storedUiLanguage = UI_LANGUAGE_VALUES.has(value.uiLanguage as UiLanguage)
     ? (value.uiLanguage as UiLanguage)
     : null;
+  const normalizedStartupPage =
+    value.startupPage === 'develop'
+      ? 'agent'
+      : STARTUP_PAGE_VALUES.has(value.startupPage as StartupPage)
+        ? (value.startupPage as StartupPage)
+        : GENERAL_SETTINGS_DEFAULTS.startupPage;
 
   return {
     uiLanguage:
       legacyFollowSystemLanguage === true
         ? 'system'
         : (storedUiLanguage ?? GENERAL_SETTINGS_DEFAULTS.uiLanguage),
-    startupPage: STARTUP_PAGE_VALUES.has(value.startupPage as StartupPage)
-      ? (value.startupPage as StartupPage)
-      : GENERAL_SETTINGS_DEFAULTS.startupPage,
+    startupPage: normalizedStartupPage,
     restoreLastSessionOnLaunch:
       typeof value.restoreLastSessionOnLaunch === 'boolean'
         ? value.restoreLastSessionOnLaunch

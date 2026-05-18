@@ -1,0 +1,3315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoodNight Desktop Component Standards</title>
+    <link rel="stylesheet" href="./workbench-preview.css" />
+    <style>
+      .component-standards-shell {
+        --component-shell-bg: #eceef1;
+        --component-topbar-bg: rgba(255, 255, 255, 0.9);
+        --component-sidebar-bg: linear-gradient(180deg, #f6f7f9 0%, #f2f4f7 100%);
+        --component-sidebar-card-bg: rgba(255, 255, 255, 0.64);
+        --component-sidebar-card-border: rgba(15, 23, 42, 0.06);
+        --component-sidebar-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+        --component-sidebar-brand-border: rgba(15, 23, 42, 0.08);
+        --component-nav-dot: rgba(15, 23, 42, 0.14);
+        --component-nav-dot-ring: inset 0 0 0 2px rgba(255, 255, 255, 0.9);
+        --component-nav-active-bg: rgba(255, 255, 255, 0.96);
+        --component-content-bg: #f7f8fa;
+        --component-example-bg: #fbfbfc;
+        --component-stage-overlay: rgba(15, 23, 42, 0.08);
+        --component-stage-muted: rgba(15, 23, 42, 0.03);
+        --component-stage-dashed: rgba(15, 23, 42, 0.16);
+        --component-flyout-border: rgba(15, 23, 42, 0.08);
+        --component-flyout-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+        --component-code-bg: #111827;
+        --component-code-fg: #eef2ff;
+        --component-code-muted: #cbd5e1;
+        --component-code-accent: #9ca3af;
+        --component-ai-card-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        --component-ai-card-shadow-hover: 0 14px 28px rgba(15, 23, 42, 0.08);
+        --component-ai-card-shadow-collapsed: 0 6px 14px rgba(15, 23, 42, 0.035);
+        min-height: 100vh;
+        padding: 12px;
+        background: var(--component-shell-bg);
+        color: var(--wb-text);
+        transition: background 180ms ease, color 180ms ease;
+      }
+
+      .component-standards-shell.theme-dark {
+        --wb-bg: #111317;
+        --wb-surface: rgba(22, 24, 30, 0.84);
+        --wb-surface-strong: rgba(24, 27, 34, 0.96);
+        --wb-surface-muted: rgba(30, 34, 42, 0.92);
+        --wb-line: rgba(255, 255, 255, 0.08);
+        --wb-line-strong: rgba(255, 255, 255, 0.14);
+        --wb-text: #f3f4f6;
+        --wb-text-soft: rgba(243, 244, 246, 0.72);
+        --wb-text-faint: rgba(243, 244, 246, 0.46);
+        --wb-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+        --component-shell-bg: #0f1115;
+        --component-topbar-bg: rgba(20, 23, 29, 0.92);
+        --component-sidebar-bg: linear-gradient(180deg, #151922 0%, #12161d 100%);
+        --component-sidebar-card-bg: rgba(255, 255, 255, 0.03);
+        --component-sidebar-card-border: rgba(255, 255, 255, 0.06);
+        --component-sidebar-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        --component-sidebar-brand-border: rgba(255, 255, 255, 0.08);
+        --component-nav-dot: rgba(255, 255, 255, 0.18);
+        --component-nav-dot-ring: inset 0 0 0 2px rgba(15, 23, 42, 0.36);
+        --component-nav-active-bg: rgba(255, 255, 255, 0.05);
+        --component-content-bg: #0f1319;
+        --component-example-bg: rgba(255, 255, 255, 0.025);
+        --component-stage-overlay: rgba(0, 0, 0, 0.24);
+        --component-stage-muted: rgba(255, 255, 255, 0.03);
+        --component-stage-dashed: rgba(255, 255, 255, 0.16);
+        --component-flyout-border: rgba(255, 255, 255, 0.08);
+        --component-flyout-shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
+        --component-code-bg: #0b0f14;
+        --component-code-fg: #eef4ff;
+        --component-code-muted: #aebbd3;
+        --component-code-accent: #7c8aa5;
+        --component-ai-card-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+        --component-ai-card-shadow-hover: 0 16px 30px rgba(0, 0, 0, 0.3);
+        --component-ai-card-shadow-collapsed: 0 6px 14px rgba(0, 0, 0, 0.2);
+      }
+
+      .component-standards-window {
+        min-height: calc(100vh - 24px);
+        display: grid;
+        grid-template-rows: 48px minmax(0, 1fr);
+        overflow: hidden;
+        border: 1px solid var(--wb-line);
+        border-radius: 14px;
+        background: var(--wb-surface-strong);
+      }
+
+      .component-standards-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--wb-line);
+        background: var(--component-topbar-bg);
+      }
+
+      .component-standards-title {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+      }
+
+      .component-standards-title strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--wb-text);
+        font-size: 13px;
+      }
+
+      .component-standards-layout {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 236px minmax(0, 1fr);
+      }
+
+      .component-standards-sidebar {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 14px 10px;
+        border-right: 1px solid var(--wb-line);
+        background: var(--component-sidebar-bg);
+        overflow: auto;
+        position: sticky;
+        top: 0;
+        align-self: start;
+        height: 100vh;
+      }
+
+      .component-standards-brand {
+        display: grid;
+        gap: 6px;
+        padding: 8px 10px 14px;
+        border-bottom: 1px solid var(--component-sidebar-brand-border);
+      }
+
+      .component-standards-brand h1 {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.25;
+      }
+
+      .component-standards-brand p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .component-nav-group {
+        display: grid;
+        gap: 5px;
+        padding: 10px 8px;
+        border: 1px solid var(--component-sidebar-card-border);
+        border-radius: 12px;
+        background: var(--component-sidebar-card-bg);
+        box-shadow: var(--component-sidebar-card-shadow);
+      }
+
+      .component-nav-label {
+        padding: 0 8px 4px;
+        color: var(--wb-text-faint);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .component-nav-item {
+        min-height: 32px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 10px;
+        border-radius: 8px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        text-decoration: none;
+        transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+      }
+
+      .component-nav-item::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--component-nav-dot);
+        box-shadow: var(--component-nav-dot-ring);
+        flex: 0 0 auto;
+      }
+
+      .component-nav-item.active,
+      .component-nav-item:hover {
+        background: var(--component-nav-active-bg);
+        color: var(--wb-text);
+        box-shadow: inset 0 0 0 1px rgba(0, 122, 255, 0.12);
+      }
+
+      .component-nav-item.active::before,
+      .component-nav-item:hover::before {
+        background: rgba(0, 122, 255, 0.84);
+      }
+
+      .component-standards-content {
+        min-height: 0;
+        overflow: auto;
+        background: var(--component-content-bg);
+      }
+
+      .component-topbar-actions {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .component-theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--wb-line);
+        border-radius: 999px;
+        background: var(--wb-surface-muted);
+      }
+
+      .component-theme-button {
+        min-width: 84px;
+        height: 30px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        padding: 0 12px;
+        cursor: pointer;
+        transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+      }
+
+      .component-theme-button:hover,
+      .component-theme-button[aria-pressed="true"] {
+        background: var(--wb-surface-strong);
+        color: var(--wb-text);
+        box-shadow: inset 0 0 0 1px var(--wb-line);
+      }
+
+      .component-theme-button-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+
+      .component-theme-button-icon {
+        font-size: 13px;
+        color: var(--wb-text-faint);
+      }
+
+      .component-theme-button[aria-pressed="true"] .component-theme-button-icon,
+      .component-theme-button:hover .component-theme-button-icon {
+        color: currentColor;
+      }
+
+      .component-standards-document {
+        width: 100%;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 28px 32px 56px;
+      }
+
+      .component-page-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 20px;
+        align-items: start;
+        padding-bottom: 22px;
+        border-bottom: 1px solid var(--wb-line);
+      }
+
+      .component-page-header > *,
+      .component-section,
+      .component-grid-2 > *,
+      .component-grid-3 > *,
+      .component-grid-4 > * {
+        min-width: 0;
+      }
+
+      .component-page-header h2 {
+        margin: 6px 0 8px;
+        font-size: 30px;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+      }
+
+      .component-page-header p {
+        max-width: 760px;
+        margin: 0;
+        color: var(--wb-text-soft);
+        line-height: 1.65;
+      }
+
+      .component-meta-stack {
+        display: grid;
+        gap: 8px;
+        min-width: min(220px, 100%);
+      }
+
+      .component-meta-row {
+        min-width: 0;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 10px;
+        border: 1px solid var(--wb-line);
+        border-radius: 8px;
+        background: var(--wb-surface-strong);
+        font-size: 12px;
+      }
+
+      .component-meta-row span {
+        min-width: 0;
+        color: var(--wb-text-soft);
+      }
+
+      .component-meta-row strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: right;
+      }
+
+      .component-section {
+        padding-top: 28px;
+      }
+
+      .component-section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: end;
+        margin-bottom: 14px;
+      }
+
+      .component-section-head h3 {
+        margin: 4px 0 0;
+        font-size: 20px;
+      }
+
+      .component-section-head p {
+        max-width: 620px;
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .component-card {
+        min-width: 0;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+        overflow: hidden;
+      }
+
+      .component-card-pad {
+        padding: 16px;
+      }
+
+      .component-grid-2,
+      .component-grid-3,
+      .component-grid-4 {
+        display: grid;
+        gap: 12px;
+      }
+
+      .component-grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .component-grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .component-grid-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .component-rule-card {
+        min-width: 0;
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .component-rule-card strong {
+        font-size: 13px;
+      }
+
+      .component-rule-card p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+      }
+
+      .component-reference-card {
+        display: grid;
+        gap: 10px;
+      }
+
+      .component-reference-card .component-pill-row {
+        margin-top: 2px;
+      }
+
+      .component-catalog-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .component-catalog-card {
+        min-width: 0;
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .component-catalog-card header {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .component-catalog-card strong {
+        font-size: 13px;
+      }
+
+      .component-catalog-card ul {
+        display: grid;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .component-spec-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 12px;
+      }
+
+      .component-module-stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .component-module-card {
+        display: grid;
+        grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+        gap: 0;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+        overflow: hidden;
+      }
+
+      .component-module-summary {
+        display: grid;
+        align-content: start;
+        gap: 12px;
+        padding: 16px;
+        border-right: 1px solid var(--wb-line);
+        background: var(--wb-surface-muted);
+      }
+
+      .component-module-summary h4 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .component-module-subtitle {
+        color: var(--wb-text-faint);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .component-module-summary p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .component-module-body {
+        min-width: 0;
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      .component-module-example {
+        min-width: 0;
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--wb-line);
+        border-radius: 9px;
+        background: var(--component-example-bg);
+      }
+
+      .component-module-example strong {
+        font-size: 12px;
+      }
+
+      .component-code-toggle {
+        border: 1px solid var(--wb-line);
+        border-radius: 9px;
+        background: var(--component-code-bg);
+        overflow: hidden;
+      }
+
+      .component-code-toggle summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        cursor: pointer;
+        color: var(--component-code-fg);
+        font-size: 12px;
+        font-weight: 700;
+        list-style: none;
+      }
+
+      .component-code-toggle summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .component-code-toggle summary::after {
+        content: "+";
+        color: var(--component-code-accent);
+        font-size: 14px;
+      }
+
+      .component-code-toggle[open] summary::after {
+        content: "-";
+      }
+
+      .component-code-note {
+        padding: 0 12px 10px;
+        color: var(--component-code-muted);
+        font-size: 11px;
+        line-height: 1.6;
+      }
+
+      .component-code-toggle .code-block {
+        margin: 0;
+        border-radius: 0;
+        border-width: 1px 0 0;
+      }
+
+      .component-example-row {
+        min-width: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .component-example-stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .sample-divider-line {
+        width: 100%;
+        height: 1px;
+        background: var(--wb-line);
+      }
+
+      .sample-divider-vertical {
+        width: 1px;
+        height: 28px;
+        background: var(--wb-line);
+      }
+
+      .sample-token-swatch {
+        width: 44px;
+        height: 28px;
+        border: 1px solid var(--wb-line);
+        border-radius: 8px;
+      }
+
+      .sample-token-swatch.surface {
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-token-swatch.muted {
+        background: var(--wb-surface-muted);
+      }
+
+      .sample-token-swatch.blue {
+        background: var(--wb-blue-soft);
+      }
+
+      .sample-token-swatch.line {
+        background: linear-gradient(to bottom, transparent 13px, var(--wb-line) 13px, var(--wb-line) 14px, transparent 14px);
+      }
+
+      .sample-tabs {
+        display: inline-flex;
+        align-items: end;
+        gap: 14px;
+        padding-bottom: 1px;
+        border-bottom: 1px solid var(--wb-line);
+      }
+
+      .sample-tab {
+        position: relative;
+        padding: 0 0 10px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .sample-tab.active {
+        color: var(--wb-text);
+      }
+
+      .sample-tab.active::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: -1px;
+        left: 0;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--wb-blue);
+      }
+
+      .sample-select {
+        min-width: 156px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 10px;
+        min-height: 32px;
+        border: 1px solid var(--wb-line);
+        border-radius: 8px;
+        background: var(--wb-surface-strong);
+        color: var(--wb-text);
+        font-size: 12px;
+      }
+
+      .sample-menu {
+        min-width: 220px;
+        display: grid;
+        gap: 2px;
+        padding: 6px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-menu-item {
+        min-height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 10px;
+        border-radius: 8px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+      }
+
+      .sample-menu-item.active,
+      .sample-menu-item:hover {
+        background: var(--wb-blue-soft);
+        color: var(--wb-text);
+      }
+
+      .sample-choice-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .sample-checkbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+      }
+
+      .sample-checkbox-box {
+        width: 16px;
+        height: 16px;
+        border: 1px solid var(--wb-line-strong);
+        border-radius: 4px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-checkbox.checked .sample-checkbox-box {
+        border-color: rgba(0, 122, 255, 0.2);
+        background: var(--wb-blue);
+        box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9);
+      }
+
+      .sample-switch {
+        position: relative;
+        width: 34px;
+        height: 20px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.32);
+      }
+
+      .sample-switch::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14);
+      }
+
+      .sample-switch.on {
+        background: rgba(0, 122, 255, 0.48);
+      }
+
+      .sample-switch.on::after {
+        left: 16px;
+      }
+
+      .sample-tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .sample-tag,
+      .sample-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .sample-tag {
+        border: 1px solid var(--wb-line);
+        background: var(--wb-surface-muted);
+        color: var(--wb-text-soft);
+      }
+
+      .sample-badge {
+        background: rgba(0, 122, 255, 0.1);
+        color: var(--wb-blue);
+      }
+
+      .sample-panel-stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .sample-panel {
+        padding: 12px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-panel strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+
+      .sample-panel p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .sample-modal-shell {
+        display: grid;
+        place-items: center;
+        min-height: 180px;
+        border-radius: 10px;
+        background: var(--component-stage-overlay);
+      }
+
+      .sample-modal {
+        width: min(360px, 100%);
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border: 1px solid var(--component-flyout-border);
+        border-radius: 12px;
+        background: var(--wb-surface-strong);
+        box-shadow: var(--component-flyout-shadow);
+      }
+
+      .sample-modal h5 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .sample-modal p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .sample-textarea,
+      .sample-editor {
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-textarea {
+        min-height: 104px;
+        padding: 12px 13px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .sample-editor {
+        overflow: hidden;
+      }
+
+      .sample-editor-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--wb-line);
+        background: var(--wb-surface-muted);
+        color: var(--wb-text-faint);
+        font-size: 11px;
+      }
+
+      .sample-editor-body {
+        min-height: 108px;
+        padding: 12px 13px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .sample-tree-panel {
+        display: grid;
+        gap: 4px;
+        padding: 8px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-tree-node {
+        min-height: 30px;
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        border-radius: 8px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+      }
+
+      .sample-tree-node.depth-1 {
+        padding-left: 26px;
+      }
+
+      .sample-tree-node.depth-2 {
+        padding-left: 44px;
+      }
+
+      .sample-tree-node.active,
+      .sample-tree-node:hover {
+        background: var(--wb-blue-soft);
+        color: var(--wb-text);
+      }
+
+      .sample-tooltip-stage {
+        position: relative;
+        min-height: 160px;
+        display: grid;
+        place-items: center;
+        border: 1px dashed var(--component-stage-dashed);
+        border-radius: 10px;
+        background: var(--component-stage-muted);
+      }
+
+      .sample-tooltip-anchor {
+        min-height: 32px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 10px;
+        border: 1px solid var(--wb-line);
+        border-radius: 8px;
+        background: var(--wb-surface-strong);
+        color: var(--wb-text-soft);
+        font-size: 12px;
+      }
+
+      .sample-tooltip,
+      .sample-popover {
+        position: absolute;
+        border: 1px solid var(--component-flyout-border);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+        box-shadow: var(--component-flyout-shadow);
+      }
+
+      .sample-tooltip {
+        top: 26px;
+        padding: 8px 10px;
+        color: var(--wb-text-soft);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .sample-popover {
+        top: 82px;
+        width: min(240px, calc(100% - 24px));
+        display: grid;
+        gap: 6px;
+        padding: 12px;
+      }
+
+      .sample-popover strong {
+        font-size: 12px;
+      }
+
+      .sample-popover p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .sample-banner-stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .sample-banner {
+        display: grid;
+        gap: 6px;
+        padding: 12px;
+        border: 1px solid rgba(0, 122, 255, 0.12);
+        border-radius: 10px;
+        background: rgba(0, 122, 255, 0.06);
+      }
+
+      .sample-banner strong {
+        font-size: 12px;
+      }
+
+      .sample-banner p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .sample-progress {
+        display: grid;
+        gap: 6px;
+      }
+
+      .sample-progress-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--wb-text-soft);
+        font-size: 11px;
+      }
+
+      .sample-progress-track {
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.08);
+        overflow: hidden;
+      }
+
+      .sample-progress-track span {
+        display: block;
+        width: 64%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, rgba(0, 122, 255, 0.68), rgba(0, 122, 255, 0.92));
+      }
+
+      .component-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .component-table th,
+      .component-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--wb-line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .component-table th {
+        color: var(--wb-text-faint);
+        font-size: 11px;
+        text-transform: uppercase;
+        background: var(--wb-surface-muted);
+      }
+
+      .component-table td {
+        color: var(--wb-text-soft);
+      }
+
+      .component-table strong,
+      .component-table code {
+        color: var(--wb-text);
+      }
+
+      .component-pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .component-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 8px;
+        border: 1px solid var(--wb-line);
+        border-radius: 999px;
+        background: var(--wb-surface-muted);
+        color: var(--wb-text-soft);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .component-pill::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        margin-right: 6px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.2);
+      }
+
+      .component-preview-shell {
+        display: grid;
+        grid-template-rows: 34px minmax(0, 1fr);
+        min-height: 360px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        overflow: hidden;
+        background: #f7f8fa;
+      }
+
+      .component-preview-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--wb-line);
+        background: rgba(255, 255, 255, 0.94);
+        color: var(--wb-text-soft);
+        font-size: 11px;
+      }
+
+      .component-preview-layout {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 46px 190px minmax(0, 1fr) 220px;
+      }
+
+      .sample-rail,
+      .sample-sidebar,
+      .sample-stage,
+      .sample-companion {
+        min-width: 0;
+        min-height: 0;
+        border-right: 1px solid var(--wb-line);
+      }
+
+      .sample-rail {
+        display: grid;
+        align-content: start;
+        justify-items: center;
+        gap: 6px;
+        padding: 8px 5px;
+        background: var(--wb-surface-muted);
+      }
+
+      .sample-rail button,
+      .sample-icon-button {
+        width: 32px;
+        height: 32px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--wb-text-soft);
+      }
+
+      .sample-rail button.active,
+      .sample-icon-button.active {
+        border-color: rgba(0, 122, 255, 0.12);
+        background: var(--wb-blue-soft);
+        color: var(--wb-blue);
+      }
+
+      .sample-sidebar {
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.82);
+      }
+
+      .sample-sidebar-head,
+      .sample-panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-size: 12px;
+      }
+
+      .sample-tree {
+        display: grid;
+        gap: 2px;
+      }
+
+      .sample-row {
+        min-height: 28px;
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        border-radius: 8px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+      }
+
+      .sample-row.active,
+      .sample-row:hover {
+        background: var(--wb-blue-soft);
+        color: var(--wb-text);
+      }
+
+      .sample-stage {
+        padding: 14px;
+        background: #fbfbfc;
+      }
+
+      .sample-note {
+        height: 100%;
+        padding: 18px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-note h4 {
+        margin: 8px 0;
+        font-size: 20px;
+      }
+
+      .sample-note p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        line-height: 1.6;
+      }
+
+      .sample-companion {
+        border-right: 0;
+        padding: 10px;
+        background: var(--wb-surface-muted);
+      }
+
+      .sample-state-card {
+        display: grid;
+        gap: 7px;
+        padding: 10px;
+        border: 1px solid var(--wb-line);
+        border-radius: 9px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-state-card + .sample-state-card {
+        margin-top: 8px;
+      }
+
+      .sample-state-card strong {
+        font-size: 12px;
+      }
+
+      .sample-state-card p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .sample-control-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .sample-button,
+      .sample-segment,
+      .sample-field {
+        min-height: 32px;
+        border: 1px solid var(--wb-line);
+        border-radius: 8px;
+        background: var(--wb-surface-strong);
+        color: var(--wb-text);
+        font: inherit;
+        font-size: 12px;
+      }
+
+      .sample-button {
+        padding: 0 12px;
+        font-weight: 700;
+        color: var(--wb-text);
+        cursor: default;
+      }
+
+      .sample-button.primary {
+        border-color: rgba(0, 122, 255, 0.18);
+        background: var(--wb-blue);
+        color: #fff;
+      }
+
+      .sample-button:disabled {
+        opacity: 0.48;
+      }
+
+      .sample-segment {
+        display: inline-flex;
+        padding: 3px;
+        background: var(--wb-surface-muted);
+      }
+
+      .sample-segment span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 8px;
+        border-radius: 6px;
+        color: var(--wb-text-soft);
+      }
+
+      .sample-segment span.active {
+        background: var(--wb-surface-strong);
+        color: var(--wb-text);
+      }
+
+      .sample-field {
+        display: inline-flex;
+        align-items: center;
+        min-width: 190px;
+        padding: 0 10px;
+        color: var(--wb-text-faint);
+      }
+
+      .code-block {
+        max-width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding: 14px;
+        overflow: auto;
+        border-top: 1px solid var(--wb-line);
+        background: #111827;
+        color: #d1d5db;
+        font: 12px/1.6 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        white-space: pre;
+      }
+
+      .sample-state-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .sample-status {
+        min-height: 96px;
+        display: grid;
+        align-content: start;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid var(--wb-line);
+        border-radius: 9px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-status strong {
+        font-size: 12px;
+      }
+
+      .sample-status span {
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .sample-status.selected {
+        border-color: rgba(0, 122, 255, 0.24);
+        background: var(--wb-blue-soft);
+      }
+
+      .sample-status.error {
+        border-color: rgba(220, 38, 38, 0.18);
+      }
+
+      .sample-ai-lanes {
+        display: grid;
+        gap: 8px;
+      }
+
+      .sample-ai-thread {
+        display: grid;
+        gap: 12px;
+      }
+
+      .sample-ai-card {
+        position: relative;
+        border: 1px solid var(--wb-line);
+        border-radius: 12px;
+        background: var(--wb-surface-strong);
+        overflow: hidden;
+        box-shadow: var(--component-ai-card-shadow);
+        transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+      }
+
+      .sample-ai-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 3px;
+        background: rgba(15, 23, 42, 0.12);
+      }
+
+      .sample-ai-card:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--component-ai-card-shadow-hover);
+      }
+
+      .sample-ai-card.lane-user::before {
+        background: rgba(99, 102, 241, 0.48);
+      }
+
+      .sample-ai-card.lane-user {
+        border-color: rgba(99, 102, 241, 0.12);
+        background: rgba(99, 102, 241, 0.03);
+      }
+
+      .sample-ai-card.lane-thinking::before {
+        background: rgba(217, 119, 6, 0.52);
+      }
+
+      .sample-ai-card.lane-thinking {
+        border-color: rgba(217, 119, 6, 0.12);
+        background: rgba(217, 119, 6, 0.04);
+      }
+
+      .sample-ai-card.lane-tool::before {
+        background: rgba(0, 122, 255, 0.58);
+      }
+
+      .sample-ai-card.lane-tool {
+        border-color: rgba(0, 122, 255, 0.14);
+        background: rgba(0, 122, 255, 0.035);
+      }
+
+      .sample-ai-card.lane-final::before {
+        background: rgba(16, 185, 129, 0.54);
+      }
+
+      .sample-ai-card.lane-final {
+        border-color: rgba(16, 185, 129, 0.14);
+        background: rgba(16, 185, 129, 0.035);
+      }
+
+      .sample-ai-card.lane-confirm::before {
+        background: rgba(245, 158, 11, 0.54);
+      }
+
+      .sample-ai-card.lane-confirm {
+        border-color: rgba(245, 158, 11, 0.14);
+        background: rgba(245, 158, 11, 0.04);
+      }
+
+      .sample-ai-card.collapsed .sample-ai-card-body {
+        display: none;
+      }
+
+      .sample-ai-card.collapsed {
+        box-shadow: var(--component-ai-card-shadow-collapsed);
+      }
+
+      .sample-ai-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        cursor: pointer;
+      }
+
+      .sample-ai-card-head:hover {
+        background: rgba(255, 255, 255, 0.56);
+      }
+
+      .sample-ai-card-head:focus-visible,
+      .sample-checkbox:focus-visible,
+      .sample-switch:focus-visible,
+      .sample-row:focus-visible,
+      .sample-tree-node:focus-visible,
+      .sample-tab:focus-visible,
+      .sample-segment span:focus-visible {
+        outline: 2px solid rgba(0, 122, 255, 0.36);
+        outline-offset: -2px;
+      }
+
+      .sample-ai-card-title {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .sample-ai-card-title strong {
+        font-size: 12px;
+        letter-spacing: 0.01em;
+      }
+
+      .sample-ai-card-copy {
+        color: var(--wb-text-faint);
+        font-size: 11px;
+        line-height: 1.35;
+      }
+
+      .sample-ai-pill,
+      .sample-ai-toggle {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .sample-ai-pill {
+        background: rgba(0, 122, 255, 0.08);
+        color: var(--wb-blue);
+      }
+
+      .sample-ai-pill.state-done {
+        background: rgba(16, 185, 129, 0.12);
+        color: #047857;
+      }
+
+      .sample-ai-pill.state-running {
+        background: rgba(0, 122, 255, 0.11);
+        color: var(--wb-blue);
+      }
+
+      .sample-ai-pill.state-pending {
+        background: rgba(245, 158, 11, 0.12);
+        color: #b45309;
+      }
+
+      .sample-ai-toggle {
+        border: 1px solid var(--wb-line);
+        background: var(--wb-surface-muted);
+        color: var(--wb-text-soft);
+        min-width: 30px;
+        justify-content: center;
+        padding: 0 6px;
+      }
+
+      .sample-ai-card-body {
+        display: grid;
+        gap: 10px;
+        padding: 0 14px 14px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .sample-ai-body-note {
+        padding: 9px 11px;
+        border: 1px solid rgba(15, 23, 42, 0.05);
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.74);
+      }
+
+      .sample-ai-tool-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .sample-ai-tool-item {
+        display: grid;
+        gap: 6px;
+        padding: 10px 11px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      }
+
+      .sample-ai-tool-item header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .sample-ai-tool-item p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--wb-text-soft);
+      }
+
+      .sample-ai-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .sample-ai-composer {
+        display: grid;
+        gap: 12px;
+        padding: 13px;
+        border: 1px solid rgba(0, 122, 255, 0.12);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+      }
+
+      .sample-ai-composer-top,
+      .sample-ai-composer-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .sample-ai-composer-bottom {
+        display: grid;
+        gap: 10px;
+      }
+
+      .sample-ai-ref-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .sample-ai-ref-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 28px;
+        padding: 0 10px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--wb-text-soft);
+        font-size: 11px;
+      }
+
+      .sample-ai-ref-chip strong {
+        color: var(--wb-text);
+        font-size: 11px;
+      }
+
+      .sample-ai-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .sample-ai-chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 8px;
+        border: 1px solid var(--wb-line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.88);
+        color: var(--wb-text-soft);
+        font-size: 11px;
+      }
+
+      .sample-ai-chip::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        margin-right: 6px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.18);
+      }
+
+      .sample-ai-input {
+        min-height: 84px;
+        padding: 12px 13px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 12px;
+        background: #fcfcfd;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.6;
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+
+      .sample-ai-select {
+        min-height: 28px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 10px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--wb-text-soft);
+        font-size: 11px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+      }
+
+      .sample-ai-input-shell {
+        position: relative;
+        width: 100%;
+      }
+
+      .sample-ai-input-inline-send {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--wb-accent, var(--wb-blue));
+        color: #fff;
+        font-size: 13px;
+        box-shadow: 0 6px 14px rgba(0, 122, 255, 0.18);
+      }
+
+      .sample-ai-footer-start {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-width: 0;
+        justify-content: space-between;
+      }
+
+      .sample-ai-control-chip {
+        min-height: 26px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 9px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--wb-text-soft);
+        font-size: 11px;
+      }
+
+      .sample-ai-runtime-strip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .sample-ai-runtime-strip span {
+        min-height: 20px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 8px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--wb-text-faint);
+        font-size: 9px;
+        font-weight: 700;
+      }
+
+      .sample-ai-lane {
+        display: grid;
+        grid-template-columns: 126px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding: 10px;
+        border: 1px solid var(--wb-line);
+        border-radius: 9px;
+        background: var(--wb-surface-strong);
+      }
+
+      .sample-ai-lane strong {
+        color: var(--wb-text);
+        font-size: 12px;
+      }
+
+      .sample-tab,
+      .sample-segment span,
+      .sample-checkbox,
+      .sample-switch,
+      .sample-row,
+      .sample-tree-node {
+        cursor: pointer;
+      }
+
+      .sample-ai-lane p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .sample-template-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .sample-template-row {
+        display: grid;
+        grid-template-columns: 120px 170px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+        padding: 10px 12px;
+        border: 1px solid var(--wb-line);
+        border-radius: 9px;
+        background: var(--wb-surface-strong);
+        font-size: 12px;
+      }
+
+      .sample-template-row span {
+        color: var(--wb-text-soft);
+      }
+
+      .component-do-dont {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .component-do-dont article {
+        padding: 14px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .component-do-dont ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .component-standards-shell.theme-dark .component-standards-window {
+        box-shadow: var(--wb-shadow);
+      }
+
+      .component-standards-shell.theme-dark .component-meta-row,
+      .component-standards-shell.theme-dark .sample-select,
+      .component-standards-shell.theme-dark .sample-menu,
+      .component-standards-shell.theme-dark .sample-panel,
+      .component-standards-shell.theme-dark .sample-tree-panel,
+      .component-standards-shell.theme-dark .sample-textarea,
+      .component-standards-shell.theme-dark .sample-editor,
+      .component-standards-shell.theme-dark .sample-tooltip-anchor,
+      .component-standards-shell.theme-dark .sample-ai-lane,
+      .component-standards-shell.theme-dark .sample-template-row {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .component-standards-shell.theme-dark .sample-checkbox.checked .sample-checkbox-box {
+        box-shadow: inset 0 0 0 3px rgba(12, 14, 18, 0.92);
+      }
+
+      .component-standards-shell.theme-dark .sample-switch::after {
+        background: #f8fafc;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+      }
+
+      .component-standards-shell.theme-dark .sample-modal-shell,
+      .component-standards-shell.theme-dark .sample-banner-stack .sample-panel {
+        backdrop-filter: blur(10px);
+      }
+
+      .component-standards-shell.theme-dark .sample-tree-node.active,
+      .component-standards-shell.theme-dark .sample-tree-node:hover,
+      .component-standards-shell.theme-dark .sample-row.active,
+      .component-standards-shell.theme-dark .sample-row:hover,
+      .component-standards-shell.theme-dark .sample-menu-item.active,
+      .component-standards-shell.theme-dark .sample-menu-item:hover {
+        background: rgba(0, 122, 255, 0.16);
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-card-head:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-body-note,
+      .component-standards-shell.theme-dark .sample-ai-tool-item {
+        border-color: rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: none;
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-composer {
+        border-color: rgba(0, 122, 255, 0.18);
+        background: rgba(255, 255, 255, 0.03);
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.2);
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-ref-chip,
+      .component-standards-shell.theme-dark .sample-ai-chip,
+      .component-standards-shell.theme-dark .sample-ai-select,
+      .component-standards-shell.theme-dark .sample-ai-control-chip,
+      .component-standards-shell.theme-dark .sample-ai-runtime-strip span {
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: none;
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-chip::before {
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-input {
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(9, 12, 18, 0.7);
+        color: var(--wb-text-soft);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.26);
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-input-inline-send {
+        box-shadow: 0 10px 18px rgba(0, 122, 255, 0.24);
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-toggle {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-pill.state-done {
+        color: #34d399;
+      }
+
+      .component-standards-shell.theme-dark .sample-ai-pill.state-pending {
+        color: #fbbf24;
+      }
+
+      .component-standards-shell.theme-dark .code-block {
+        background: transparent;
+      }
+
+      .component-theme-button:focus-visible {
+        outline: 2px solid rgba(0, 122, 255, 0.36);
+        outline-offset: 1px;
+      }
+
+      .component-page-header + .component-section,
+      #ant-model,
+      #catalog,
+      #spec-template {
+        display: none;
+      }
+
+      @media (max-width: 980px) {
+        .component-standards-layout,
+        .component-page-header,
+        .component-grid-2,
+        .component-grid-3,
+        .component-grid-4,
+        .component-catalog-grid,
+        .component-spec-grid,
+        .component-module-card,
+        .component-do-dont {
+          grid-template-columns: 1fr;
+        }
+
+        .component-module-summary {
+          border-right: 0;
+          border-bottom: 1px solid var(--wb-line);
+        }
+
+        .component-standards-sidebar {
+          display: none;
+        }
+
+        .component-standards-window {
+          width: 100%;
+          min-width: 0;
+          border-radius: 12px;
+        }
+
+        .component-standards-layout,
+        .component-standards-content {
+          width: 100%;
+          min-width: 0;
+        }
+
+        .component-standards-topbar {
+          min-width: 0;
+        }
+
+        .component-standards-title > span {
+          display: none;
+        }
+
+        .component-standards-title strong {
+          max-width: 260px;
+        }
+
+        .component-standards-topbar .component-pill-row {
+          display: none;
+        }
+
+        .component-topbar-actions {
+          width: auto;
+          justify-content: flex-end;
+        }
+
+        .component-theme-button {
+          min-width: 44px;
+          padding: 0 10px;
+        }
+
+        .component-theme-button-label span:last-child {
+          display: none;
+        }
+
+        .component-standards-document {
+          min-width: 0;
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          padding: 20px 16px 40px;
+        }
+
+        .component-page-header h2 {
+          font-size: 28px;
+          word-break: break-word;
+        }
+
+        .component-section-head {
+          display: grid;
+          align-items: start;
+        }
+
+        .component-preview-layout {
+          grid-template-columns: 42px minmax(0, 1fr);
+        }
+
+        .sample-sidebar,
+        .sample-companion {
+          display: none;
+        }
+
+        .sample-state-grid,
+        .sample-template-row {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 520px) {
+        html,
+        body {
+          max-width: 100vw;
+          overflow-x: hidden;
+        }
+
+        .component-standards-shell {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: hidden;
+          padding: 0;
+        }
+
+        .component-standards-window {
+          min-height: 100vh;
+          border-width: 0;
+          border-radius: 0;
+        }
+
+        .component-standards-title strong {
+          max-width: 250px;
+        }
+
+        .component-page-header h2 {
+          font-size: 26px;
+          word-break: break-all;
+        }
+
+        .component-page-header p,
+        .component-rule-card,
+        .component-card,
+        .component-meta-row {
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          overflow-wrap: anywhere;
+        }
+
+        .component-standards-document *,
+        .component-table th,
+        .component-table td {
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+
+        .component-table {
+          table-layout: fixed;
+        }
+
+        .component-meta-row {
+          display: grid;
+          gap: 4px;
+        }
+
+        .component-meta-row strong {
+          text-align: left;
+        }
+
+        .code-block {
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="component-standards-shell theme-light" data-theme="light">
+      <section class="component-standards-window">
+        <header class="component-standards-topbar">
+          <div class="component-standards-title">
+            <div class="traffic-lights"><span></span><span></span><span></span></div>
+            <strong>GoodNight Desktop Component Standards</strong>
+            <span>Workbench UI Library</span>
+          </div>
+          <div class="component-topbar-actions">
+            <div class="component-pill-row">
+              <a class="component-pill" href="#overview">Overview</a>
+              <a class="component-pill" href="#component-modules">Components</a>
+              <a class="component-pill" href="#contract">Contract</a>
+            </div>
+            <div class="component-theme-toggle" role="group" aria-label="Theme switch">
+              <button type="button" class="component-theme-button" data-theme-option="light" aria-label="Light / 浅色" aria-pressed="true" title="Light / 浅色">
+                <span class="component-theme-button-label"><span class="component-theme-button-icon">☼</span><span>浅色 Light</span></span>
+              </button>
+              <button type="button" class="component-theme-button" data-theme-option="dark" aria-label="Dark / 深色" aria-pressed="false" title="Dark / 深色">
+                <span class="component-theme-button-label"><span class="component-theme-button-icon">◐</span><span>深色 Dark</span></span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div class="component-standards-layout">
+          <aside class="component-standards-sidebar">
+            <div class="component-standards-brand">
+              <span class="eyebrow">Component Library</span>
+              <h1>桌面端组件标准页</h1>
+              <p>统一组件与交互。按模块查看，直接替换。</p>
+            </div>
+
+            <nav class="component-nav-group" aria-label="Component standard modules">
+              <span class="component-nav-label">Modules</span>
+              <a class="component-nav-item active" href="#overview">00 Overview</a>
+              <a class="component-nav-item" href="#component-modules">01 Components</a>
+              <a class="component-nav-item" href="#contract">02 Code Contract</a>
+            </nav>
+
+            <div class="component-nav-group">
+              <span class="component-nav-label">Components</span>
+              <a class="component-nav-item" href="#module-tokens">Tokens</a>
+              <a class="component-nav-item" href="#module-button">Button</a>
+              <a class="component-nav-item" href="#module-divider">Divider</a>
+              <a class="component-nav-item" href="#module-field">Field</a>
+              <a class="component-nav-item" href="#module-textarea">Textarea / Editor</a>
+              <a class="component-nav-item" href="#module-segmented">Segmented</a>
+              <a class="component-nav-item" href="#module-tabs">Tabs</a>
+              <a class="component-nav-item" href="#module-select">Select / Menu</a>
+              <a class="component-nav-item" href="#module-choice">Checkbox / Switch</a>
+              <a class="component-nav-item" href="#module-toolbar">Toolbar</a>
+              <a class="component-nav-item" href="#module-list">List / Table</a>
+              <a class="component-nav-item" href="#module-tree">Tree</a>
+              <a class="component-nav-item" href="#module-tag">Tag / Badge</a>
+              <a class="component-nav-item" href="#module-tooltip">Tooltip / Popover</a>
+              <a class="component-nav-item" href="#module-panel">Panel</a>
+              <a class="component-nav-item" href="#module-modal">Modal</a>
+              <a class="component-nav-item" href="#module-banner">Banner / Progress</a>
+              <a class="component-nav-item" href="#module-state">State</a>
+              <a class="component-nav-item" href="#module-ai-lane">AI Lane</a>
+              <a class="component-nav-item" href="#module-ai-composer">AI Composer</a>
+              <a class="component-nav-item" href="#module-ai-runtime">AI Runtime Card</a>
+            </div>
+
+            <div class="component-nav-group">
+              <span class="component-nav-label">Usage Rule</span>
+              <div class="component-nav-item">先定模板 / Template first</div>
+              <div class="component-nav-item">只做组合 / Compose only</div>
+              <div class="component-nav-item">补全交互 / Cover interaction states</div>
+            </div>
+          </aside>
+
+          <section class="component-standards-content">
+            <article class="component-standards-document">
+              <header id="overview" class="component-page-header">
+                <div>
+                  <span class="eyebrow">Standard Page</span>
+                  <h2>GoodNight Desktop Component Standard</h2>
+                  <p>单页组件目录。桌面原生、安静、可替换。</p>
+                </div>
+                <div class="component-meta-stack">
+                  <div class="component-meta-row"><span>◫ Source</span><strong>single-page</strong></div>
+                  <div class="component-meta-row"><span>⌘ Tone</span><strong>desktop native</strong></div>
+                  <div class="component-meta-row"><span>◐ Theme</span><strong>light / dark</strong></div>
+                  <div class="component-meta-row"><span>▣ Replace</span><strong>module first</strong></div>
+                </div>
+              </header>
+
+              <section class="component-section">
+                <div class="component-grid-4">
+                  <article class="component-rule-card">
+                    <strong>1. 先模板</strong>
+                    <p>每个页面先归属到 document、canvas、agent、quality、operations 等模板。</p>
+                  </article>
+                  <article class="component-rule-card">
+                    <strong>2. 再 primitive</strong>
+                    <p>中心区域只能选择一个主 primitive：note surface、directory tree、canvas 或 chat stage。</p>
+                  </article>
+                  <article class="component-rule-card">
+                    <strong>3. 组件组合</strong>
+                    <p>业务模块传内容和状态，不直接发明新卡片、新按钮、新面板。</p>
+                  </article>
+                  <article class="component-rule-card">
+                    <strong>4. 状态完整</strong>
+                    <p>默认、hover、selected、collapsed、loading、empty、error、confirm 必须有一致表现。</p>
+                  </article>
+                </div>
+              </section>
+
+              <section id="ant-model" class="component-section">
+                <div class="component-section-head">
+                  <div>
+                    <span class="eyebrow">00.1 Reference Model</span>
+                    <h3>Ant Design 给我们的组织方式</h3>
+                  </div>
+                  <p>Ant Design 的关键不是某个按钮长什么样，而是把组件系统做成“目录、示例、API、Token、状态”的可执行文档。</p>
+                </div>
+
+                <div class="component-grid-4">
+                  <article class="component-rule-card component-reference-card">
+                    <strong>分类入口</strong>
+                    <p>组件按通用、布局、导航、数据录入、数据展示、反馈等职能分组，开发者先按任务找组件。</p>
+                    <div class="component-pill-row"><span class="component-pill">catalog</span><span class="component-pill">searchable</span></div>
+                  </article>
+                  <article class="component-rule-card component-reference-card">
+                    <strong>组件详情</strong>
+                    <p>每个组件都有独立说明页，固定展示使用场景、代码演示、API、语义结构和主题 Token。</p>
+                    <div class="component-pill-row"><span class="component-pill">usage</span><span class="component-pill">api</span></div>
+                  </article>
+                  <article class="component-rule-card component-reference-card">
+                    <strong>状态闭环</strong>
+                    <p>组件不只展示默认样子，还要覆盖 disabled、loading、selected、error、empty、compact 等状态。</p>
+                    <div class="component-pill-row"><span class="component-pill">states</span><span class="component-pill">variants</span></div>
+                  </article>
+                  <article class="component-rule-card component-reference-card">
+                    <strong>Token 驱动</strong>
+                    <p>视觉变化通过主题变量和组件 Token 收敛，业务模块调用组件，不再散落硬编码样式。</p>
+                    <div class="component-pill-row"><span class="component-pill">tokens</span><span class="component-pill">theme</span></div>
+                  </article>
+                </div>
+              </section>
+
+              <section id="catalog" class="component-section">
+                <div class="component-section-head">
+                  <div>
+                    <span class="eyebrow">00.2 Component Catalog</span>
+                    <h3>GoodNight 桌面端组件目录</h3>
+                  </div>
+                  <p>后续模块替换时先从这里选组件，再进入组件详情模板看 props、状态和禁用写法。</p>
+                </div>
+
+                <div class="component-catalog-grid">
+                  <article class="component-catalog-card">
+                    <header><strong>Shell</strong><span class="component-pill">layout</span></header>
+                    <ul>
+                      <li>DesktopWorkbenchFrame</li>
+                      <li>DesktopWorkbenchTopbar</li>
+                      <li>WorkbenchModuleBoundary</li>
+                    </ul>
+                  </article>
+                  <article class="component-catalog-card">
+                    <header><strong>Navigation</strong><span class="component-pill">finder</span></header>
+                    <ul>
+                      <li>DesktopWorkbenchRail</li>
+                      <li>UtilitySidebar</li>
+                      <li>DirectoryTree</li>
+                    </ul>
+                  </article>
+                  <article class="component-catalog-card">
+                    <header><strong>Controls</strong><span class="component-pill">input</span></header>
+                    <ul>
+                      <li>MacButton / MacIconButton</li>
+                      <li>SegmentedControl</li>
+                      <li>WorkbenchField</li>
+                    </ul>
+                  </article>
+                  <article class="component-catalog-card">
+                    <header><strong>Work Surfaces</strong><span class="component-pill">stage</span></header>
+                    <ul>
+                      <li>NoteSurface</li>
+                      <li>InfiniteCanvas</li>
+                      <li>InspectorPane</li>
+                    </ul>
+                  </article>
+                  <article class="component-catalog-card">
+                    <header><strong>States</strong><span class="component-pill">feedback</span></header>
+                    <ul>
+                      <li>StateCard</li>
+                      <li>EmptyStateView</li>
+                      <li>StatusBanner / ConfirmPanel</li>
+                    </ul>
+                  </article>
+                  <article class="component-catalog-card">
+                    <header><strong>AI</strong><span class="component-pill">lanes</span></header>
+                    <ul>
+                      <li>AIUserInputLane</li>
+                      <li>AIProcessLane</li>
+                      <li>AIFinalAnswerSurface</li>
+                    </ul>
+                  </article>
+                </div>
+              </section>
+
+              <section id="spec-template" class="component-section">
+                <div class="component-section-head">
+                  <div>
+                    <span class="eyebrow">00.3 Component Module Template</span>
+                    <h3>单页内每个组件模块必须包含的标准块</h3>
+                  </div>
+                  <p>这就是我们自己的 Ant Design 式组件详情格式，但全部收在一个页面里。模块落地时，缺任意一块都不算真正接入标准。</p>
+                </div>
+
+                <div class="component-spec-grid">
+                  <article class="component-card">
+                    <table class="component-table">
+                      <thead>
+                        <tr><th>Block</th><th>Required Content</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr><td><strong>When To Use</strong></td><td>适用模块、禁止场景、是否是主工作面。</td></tr>
+                        <tr><td><strong>Anatomy</strong></td><td>区域结构、插槽、密度、可折叠或可调整边界。</td></tr>
+                        <tr><td><strong>States</strong></td><td>default / hover / active / selected / loading / empty / error / disabled。</td></tr>
+                        <tr><td><strong>API</strong></td><td>props、事件、slot、受控状态、默认值。</td></tr>
+                        <tr><td><strong>Tokens</strong></td><td>颜色、间距、圆角、边框、焦点、暗色主题映射。</td></tr>
+                      </tbody>
+                    </table>
+                  </article>
+                  <article class="component-card">
+                    <details class="component-code-toggle" open>
+                      <summary>引用代码 Code</summary>
+                      <div class="component-code-note">中文：单页组件模块统一按这个结构写。English: each component module on this page follows this shared structure.</div>
+                      <pre class="code-block"><code>&lt;ComponentSpec
+  name="NoteSurface"
+  category="Work Surfaces"
+  whenToUse="long-form reading, writing, AI final answer"
+  states={["expanded", "editing", "empty", "syncing", "conflict"]}
+  tokens={["--wb-surface-strong", "--wb-line", "--wb-focus-ring"]}
+  api={[
+    "title",
+    "meta",
+    "actions",
+    "children",
+    "onResolveConflict"
+  ]}
+/&gt;</code></pre>
+                    </details>
+                  </article>
+                </div>
+              </section>
+
+              <section id="component-modules" class="component-section">
+                <div class="component-section-head">
+                  <div>
+                    <span class="eyebrow">00.4 Component Modules</span>
+                    <h3>单页组件模块汇总 / Single-Page Component Modules</h3>
+                  </div>
+                  <p>基础件、布局件、反馈件和 AI 件都在这一页连续展示。业务模块只能引用这些组件或组合模板，不再单独发明一套 UI。</p>
+                </div>
+
+                <div class="component-module-stack">
+                  <article id="module-tokens" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Foundation</span>
+                      <h4>Token / Theme</h4>
+                      <span class="component-module-subtitle">基础令牌 / Foundation Tokens</span>
+                      <p>所有颜色、边框、背景、焦点、间距和圆角先从 token 取值。组件可以定义语义别名，但不能在业务模块里散落新色值。</p>
+                      <div class="component-pill-row"><span class="component-pill">light</span><span class="component-pill">dark-ready</span><span class="component-pill">semantic</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="component-example-row">
+                          <span class="sample-token-swatch surface"></span>
+                          <span class="sample-token-swatch muted"></span>
+                          <span class="sample-token-swatch blue"></span>
+                          <span class="sample-token-swatch line"></span>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：统一从主题 token 读取颜色与边界。English: read visual values from shared semantic tokens.</div>
+                        <pre class="code-block"><code>import { workbenchTokens } from "@/features/desktopShell/workbenchDesignSystem";
+
+const surface = workbenchTokens.color.surfaceStrong;
+const border = workbenchTokens.color.line;
+
+&lt;WorkbenchModuleBoundary role={role} template={template.template}&gt;
+  &lt;ModuleContent /&gt;
+&lt;/WorkbenchModuleBoundary&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-button" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Action</span>
+                      <h4>Button / IconButton</h4>
+                      <span class="component-module-subtitle">按钮 / 图标按钮</span>
+                      <p>按钮只承载明确动作。常用工具优先 icon-only + aria-label，主动作才用文字按钮。状态必须覆盖 hover、active、disabled、loading。</p>
+                      <div class="component-pill-row"><span class="component-pill">primary</span><span class="component-pill">quiet</span><span class="component-pill">danger</span><span class="component-pill">loading</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="component-example-row">
+                          <button class="sample-button primary">Run</button>
+                          <button class="sample-button">Cancel</button>
+                          <button class="sample-button" disabled>Disabled</button>
+                          <button class="sample-icon-button active" aria-label="Save">S</button>
+                          <button class="sample-icon-button" aria-label="More">...</button>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：主动作用文字按钮，工具动作优先图标按钮。English: use text buttons for primary actions and icon buttons for compact tools.</div>
+                        <pre class="code-block"><code>import { MacButton, MacIconButton, WorkbenchIcon } from "@/components/ui/workbench";
+
+&lt;MacButton variant="primary" onClick={runTask}&gt;Run&lt;/MacButton&gt;
+&lt;MacButton variant="quiet" disabled={isSaving}&gt;Cancel&lt;/MacButton&gt;
+&lt;MacIconButton aria-label="Save" isActive={isDirty}&gt;
+  &lt;WorkbenchIcon name="save" /&gt;
+&lt;/MacIconButton&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-divider" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Structure</span>
+                      <h4>Divider</h4>
+                      <span class="component-module-subtitle">分割线 / Structural Divider</span>
+                      <p>分割线是结构边界，不是装饰。用于 toolbar 分组、sidebar 区块、表格行、面板边界。禁止用深色粗线或渐变线制造层级。</p>
+                      <div class="component-pill-row"><span class="component-pill">horizontal</span><span class="component-pill">vertical</span><span class="component-pill">inset</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="component-example-row">
+                          <span>Filter</span>
+                          <span class="sample-divider-vertical"></span>
+                          <span>Sort</span>
+                          <span class="sample-divider-vertical"></span>
+                          <span>View</span>
+                          <span class="sample-divider-line"></span>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：分割线只做结构切分，不做视觉装饰。English: dividers separate groups structurally instead of adding decoration.</div>
+                        <pre class="code-block"><code>import { WorkbenchDivider } from "@/components/ui/workbench";
+
+&lt;WorkbenchToolbar&gt;
+  &lt;ToolbarGroup&gt;...&lt;/ToolbarGroup&gt;
+  &lt;WorkbenchDivider orientation="vertical" /&gt;
+  &lt;ToolbarGroup&gt;...&lt;/ToolbarGroup&gt;
+&lt;/WorkbenchToolbar&gt;
+
+&lt;WorkbenchDivider orientation="horizontal" inset="content" /&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-field" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Input</span>
+                      <h4>Field / SearchField</h4>
+                      <span class="component-module-subtitle">输入框 / 搜索框</span>
+                      <p>输入控件必须有明确 label 或 aria-label。搜索框用于过滤当前范围，不承担全局导航。错误提示就地展示。</p>
+                      <div class="component-pill-row"><span class="component-pill">default</span><span class="component-pill">focused</span><span class="component-pill">error</span><span class="component-pill">disabled</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="component-example-row">
+                          <div class="sample-field">Search notes or files</div>
+                          <div class="sample-field">Project name</div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：搜索用于当前范围过滤，字段错误就地提示。English: search stays scope-local and field errors render inline.</div>
+                        <pre class="code-block"><code>import { WorkbenchField, WorkbenchSearchField } from "@/components/ui/workbench";
+
+&lt;WorkbenchSearchField
+  aria-label="Filter knowledge sources"
+  value={query}
+  onChange={setQuery}
+/&gt;
+
+&lt;WorkbenchField label="Project name" error={nameError} value={name} onChange={setName} /&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-textarea" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Input</span>
+                      <h4>Textarea / Editor</h4>
+                      <span class="component-module-subtitle">多行输入 / 文档编辑器</span>
+                      <p>Textarea 负责短到中等长度的多行输入；Editor 负责结构化正文编辑。两者都应保持文档表面，不做聊天气泡或营销卡片。</p>
+                      <div class="component-pill-row"><span class="component-pill">textarea</span><span class="component-pill">editor</span><span class="component-pill">focused</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="component-example-stack">
+                          <div class="sample-textarea">Write a short project summary, update notes, or paste a structured instruction block.</div>
+                          <div class="sample-editor">
+                            <div class="sample-editor-toolbar">H1 · Quote · Checklist · Link</div>
+                            <div class="sample-editor-body"># Knowledge Review&#10;&#10;- Summarize the source&#10;- Compare with previous notes&#10;- Mark missing citations</div>
+                          </div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：短文本用 textarea，正文编辑用 editor surface。English: use textareas for simple multiline entry and editor surfaces for structured document work.</div>
+                        <pre class="code-block"><code>import { WorkbenchTextarea, WorkbenchEditorSurface } from "@/components/ui/workbench";
+
+&lt;WorkbenchTextarea
+  label="Summary"
+  value={summary}
+  onChange={setSummary}
+  minRows={5}
+/&gt;
+
+&lt;WorkbenchEditorSurface
+  document={draftDoc}
+  onChange={setDraftDoc}
+  mode="edit"
+/&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-segmented" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Mode</span>
+                      <h4>Segmented Control</h4>
+                      <span class="component-module-subtitle">分段控件 / Mode Switcher</span>
+                      <p>分段控件用于同一内容的视图或模式切换，例如 Edit / Preview / Diff。不能用来替代导航菜单或执行动作。</p>
+                      <div class="component-pill-row"><span class="component-pill">controlled</span><span class="component-pill">selected</span><span class="component-pill">disabled</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-segment"><span class="active">Edit</span><span>Preview</span><span>Diff</span></div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：分段控件只切换同层内容视图。English: segmented controls switch peer views, not global navigation.</div>
+                        <pre class="code-block"><code>import { WorkbenchSegmentedControl } from "@/components/ui/workbench";
+
+&lt;WorkbenchSegmentedControl
+  value={viewMode}
+  onChange={setViewMode}
+  options={[
+    { value: "edit", label: "Edit" },
+    { value: "preview", label: "Preview" },
+    { value: "diff", label: "Diff" }
+  ]}
+/&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-tabs" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Navigation</span>
+                      <h4>Tabs</h4>
+                      <span class="component-module-subtitle">页签 / Section Tabs</span>
+                      <p>Tabs 用于同级内容分组，例如 Files / Notes / History。它是内容切换，不是动作区，也不承担全局导航。</p>
+                      <div class="component-pill-row"><span class="component-pill">default</span><span class="component-pill">active</span><span class="component-pill">compact</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-tabs">
+                          <span class="sample-tab active">Files</span>
+                          <span class="sample-tab">Notes</span>
+                          <span class="sample-tab">History</span>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：Tabs 只在同级内容面之间切换。English: tabs switch peer content sections instead of global app navigation.</div>
+                        <pre class="code-block"><code>import { WorkbenchTabs } from "@/components/ui/workbench";
+
+&lt;WorkbenchTabs
+  value={activeTab}
+  onChange={setActiveTab}
+  items={[
+    { value: "files", label: "Files" },
+    { value: "notes", label: "Notes" },
+    { value: "history", label: "History" }
+  ]}
+/&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-select" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Selection</span>
+                      <h4>Select / Menu</h4>
+                      <span class="component-module-subtitle">下拉选择 / 菜单</span>
+                      <p>Select 用于单值选择，Menu 用于局部操作列表。两者都应保持轻量，不做浮夸阴影和营销式浮层。</p>
+                      <div class="component-pill-row"><span class="component-pill">closed</span><span class="component-pill">open</span><span class="component-pill">selected</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="component-example-row">
+                          <div class="sample-select"><span>Newest first</span><span>v</span></div>
+                          <div class="sample-menu">
+                            <div class="sample-menu-item active"><span>Rename</span><span>R</span></div>
+                            <div class="sample-menu-item"><span>Duplicate</span><span>D</span></div>
+                            <div class="sample-menu-item"><span>Archive</span><span>A</span></div>
+                          </div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：选择器承载值选择，菜单承载局部命令。English: selects hold value choices while menus expose local actions.</div>
+                        <pre class="code-block"><code>import { WorkbenchSelect, WorkbenchMenu } from "@/components/ui/workbench";
+
+&lt;WorkbenchSelect value={sortOrder} onChange={setSortOrder} options={sortOptions} /&gt;
+&lt;WorkbenchMenu items={noteActions} onAction={handleNoteAction} /&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-choice" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Choice</span>
+                      <h4>Checkbox / Switch</h4>
+                      <span class="component-module-subtitle">多选框 / 开关</span>
+                      <p>Checkbox 用于多项选择，Switch 用于即时开关。不要把 Switch 用到需要二次确认的危险动作上。</p>
+                      <div class="component-pill-row"><span class="component-pill">unchecked</span><span class="component-pill">checked</span><span class="component-pill">on</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-choice-row">
+                          <span class="sample-checkbox checked"><span class="sample-checkbox-box"></span><span>Sync notes</span></span>
+                          <span class="sample-checkbox"><span class="sample-checkbox-box"></span><span>Show hidden files</span></span>
+                          <span class="sample-switch on"></span>
+                          <span class="sample-switch"></span>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：多选框管集合选择，开关管即时状态。English: checkboxes manage selections while switches flip immediate settings.</div>
+                        <pre class="code-block"><code>import { WorkbenchCheckbox, WorkbenchSwitch } from "@/components/ui/workbench";
+
+&lt;WorkbenchCheckbox checked={syncEnabled} onChange={setSyncEnabled}&gt;Sync notes&lt;/WorkbenchCheckbox&gt;
+&lt;WorkbenchSwitch checked={showHidden} onChange={setShowHidden} aria-label="Show hidden files" /&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-toolbar" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Command</span>
+                      <h4>Toolbar</h4>
+                      <span class="component-module-subtitle">工具栏 / Command Strip</span>
+                      <p>Toolbar 是页面局部命令区。它组织按钮、分割线、搜索、分段控件，不应该变成标题栏、营销 CTA 或大面积卡片。</p>
+                      <div class="component-pill-row"><span class="component-pill">compact</span><span class="component-pill">grouped</span><span class="component-pill">sticky-ready</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-control-strip">
+                          <button class="sample-icon-button active">S</button>
+                          <button class="sample-icon-button">F</button>
+                          <span class="sample-divider-vertical"></span>
+                          <button class="sample-button primary">Run</button>
+                          <div class="sample-field">Filter</div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：工具栏组合动作，不抢页面主层级。English: toolbars group local commands without becoming a second stage.</div>
+                        <pre class="code-block"><code>import { WorkbenchToolbar, ToolbarGroup, WorkbenchDivider } from "@/components/ui/workbench";
+
+&lt;WorkbenchToolbar aria-label="Knowledge actions"&gt;
+  &lt;ToolbarGroup&gt;&lt;MacIconButton aria-label="Save" /&gt;&lt;/ToolbarGroup&gt;
+  &lt;WorkbenchDivider orientation="vertical" /&gt;
+  &lt;ToolbarGroup&gt;&lt;MacButton variant="primary"&gt;Run&lt;/MacButton&gt;&lt;/ToolbarGroup&gt;
+&lt;/WorkbenchToolbar&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-list" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Data</span>
+                      <h4>List / Table</h4>
+                      <span class="component-module-subtitle">列表 / 表格</span>
+                      <p>列表用于选择和扫描，表格用于比较。sidebar 里优先列表/树，不做卡片墙；密集数据保留行高和分割线节奏。</p>
+                      <div class="component-pill-row"><span class="component-pill">row</span><span class="component-pill">selected</span><span class="component-pill">empty</span><span class="component-pill">loading</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-tree">
+                          <div class="sample-row active"><span>v</span><strong>knowledge</strong><span>24</span></div>
+                          <div class="sample-row"><span>.</span><span>research.md</span><span></span></div>
+                          <div class="sample-row"><span>.</span><span>notes.md</span><span></span></div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：列表负责选择与扫描，空状态由统一组件承接。English: lists handle selection and scanning, with shared empty states.</div>
+                        <pre class="code-block"><code>import { WorkbenchList, WorkbenchTable } from "@/components/ui/workbench";
+
+&lt;WorkbenchList
+  aria-label="Knowledge notes"
+  items={notes}
+  selectedId={selectedNoteId}
+  onSelect={setSelectedNoteId}
+  emptyState={&lt;EmptyStateView title="No notes yet" /&gt;}
+/&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-tree" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Navigation</span>
+                      <h4>Tree / Directory</h4>
+                      <span class="component-module-subtitle">树形目录 / Directory Tree</span>
+                      <p>目录树是桌面端的一等导航 primitive。使用缩进、披露箭头和行选中，不要把文件夹和文件渲染成堆叠卡片。</p>
+                      <div class="component-pill-row"><span class="component-pill">collapsed</span><span class="component-pill">expanded</span><span class="component-pill">selected</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-tree-panel">
+                          <div class="sample-tree-node active"><span>▾</span><strong>Workspace</strong><span>12</span></div>
+                          <div class="sample-tree-node depth-1"><span>▸</span><span>Knowledge</span><span>7</span></div>
+                          <div class="sample-tree-node depth-1"><span>▾</span><span>Notes</span><span>3</span></div>
+                          <div class="sample-tree-node depth-2"><span>·</span><span>research.md</span><span></span></div>
+                          <div class="sample-tree-node depth-2"><span>·</span><span>summary.md</span><span></span></div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：树形导航用行结构和层级缩进，不做卡片墙。English: directory trees stay row-based with indentation and disclosure affordances.</div>
+                        <pre class="code-block"><code>import { WorkbenchTree } from "@/components/ui/workbench";
+
+&lt;WorkbenchTree
+  nodes={sourceNodes}
+  selectedId={selectedSourceId}
+  onSelect={setSelectedSourceId}
+  onToggle={toggleSourceNode}
+/&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-tag" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Metadata</span>
+                      <h4>Tag / Badge</h4>
+                      <span class="component-module-subtitle">标签 / 徽标</span>
+                      <p>Tag 用于分类与过滤，Badge 用于数量或状态提示。它们应该轻，不要做成抢视觉中心的彩色按钮。</p>
+                      <div class="component-pill-row"><span class="component-pill">tag</span><span class="component-pill">badge</span><span class="component-pill">status</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-tag-row">
+                          <span class="sample-tag">Draft</span>
+                          <span class="sample-tag">Research</span>
+                          <span class="sample-badge">12</span>
+                          <span class="sample-badge">Synced</span>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：标签负责分类，徽标负责数量和状态。English: tags classify content while badges surface counts and status.</div>
+                        <pre class="code-block"><code>import { WorkbenchTag, WorkbenchBadge } from "@/components/ui/workbench";
+
+&lt;WorkbenchTag&gt;Research&lt;/WorkbenchTag&gt;
+&lt;WorkbenchBadge tone="info"&gt;12&lt;/WorkbenchBadge&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-tooltip" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Overlay</span>
+                      <h4>Tooltip / Popover</h4>
+                      <span class="component-module-subtitle">悬浮提示 / 轻量浮层</span>
+                      <p>Tooltip 只负责短说明；Popover 负责轻量上下文或快速操作。它们是辅助层，不应该替代主面板或模态框。</p>
+                      <div class="component-pill-row"><span class="component-pill">tooltip</span><span class="component-pill">popover</span><span class="component-pill">non-blocking</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-tooltip-stage">
+                          <span class="sample-tooltip-anchor">Hover or click actions</span>
+                          <div class="sample-tooltip">Rename this note</div>
+                          <div class="sample-popover">
+                            <strong>Quick actions</strong>
+                            <p>Move, duplicate, or pin the current item without leaving the stage.</p>
+                          </div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：tooltip 短、popover 轻，不要把长内容塞进悬浮层。English: tooltips stay terse and popovers stay lightweight.</div>
+                        <pre class="code-block"><code>import { WorkbenchTooltip, WorkbenchPopover } from "@/components/ui/workbench";
+
+&lt;WorkbenchTooltip content="Rename this note"&gt;
+  &lt;MacIconButton aria-label="Rename" /&gt;
+&lt;/WorkbenchTooltip&gt;
+
+&lt;WorkbenchPopover trigger={&lt;MacButton&gt;More&lt;/MacButton&gt;}&gt;
+  &lt;QuickActionMenu /&gt;
+&lt;/WorkbenchPopover&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-panel" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Surface</span>
+                      <h4>Panel</h4>
+                      <span class="component-module-subtitle">信息面板 / Content Panel</span>
+                      <p>Panel 是容纳信息的安静表面，不是营销卡片。它适合 Inspector、Context、Summary、Properties 这类二级内容。</p>
+                      <div class="component-pill-row"><span class="component-pill">default</span><span class="component-pill">stacked</span><span class="component-pill">secondary</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-panel-stack">
+                          <div class="sample-panel"><strong>Context</strong><p>Current file, source range, and related notes.</p></div>
+                          <div class="sample-panel"><strong>Properties</strong><p>Tags, owner, sync state, and quick actions.</p></div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：Panel 用于二级信息面，不是首页大卡片。English: panels hold secondary context instead of turning pages into card walls.</div>
+                        <pre class="code-block"><code>import { WorkbenchPanel } from "@/components/ui/workbench";
+
+&lt;WorkbenchPanel title="Context"&gt;
+  &lt;ContextSummary /&gt;
+&lt;/WorkbenchPanel&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-modal" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Overlay</span>
+                      <h4>Modal / Dialog</h4>
+                      <span class="component-module-subtitle">模态框 / 对话框</span>
+                      <p>Modal 只用于确认、创建、编辑这种需要临时中断流程的任务。不要把常驻信息或长阅读内容塞进模态框。</p>
+                      <div class="component-pill-row"><span class="component-pill">confirm</span><span class="component-pill">form</span><span class="component-pill">blocking</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-modal-shell">
+                          <div class="sample-modal">
+                            <h5>Delete this note?</h5>
+                            <p>This action removes the file from the project workspace and cannot be undone.</p>
+                            <div class="component-example-row">
+                              <button class="sample-button">Cancel</button>
+                              <button class="sample-button primary">Delete</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：模态框承接短流程任务和风险确认。English: dialogs should stay focused on short tasks and risky confirmations.</div>
+                        <pre class="code-block"><code>import { WorkbenchDialog } from "@/components/ui/workbench";
+
+&lt;WorkbenchDialog open={isOpen} onOpenChange={setIsOpen} title="Delete this note?"&gt;
+  &lt;DeleteNoteConfirm /&gt;
+&lt;/WorkbenchDialog&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-banner" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Feedback</span>
+                      <h4>Banner / Progress</h4>
+                      <span class="component-module-subtitle">状态横幅 / 进度条</span>
+                      <p>Banner 用于页内提醒、同步状态和恢复建议；Progress 用于有时长或分段感知的任务。它们应平静、明确，不抢主工作面。</p>
+                      <div class="component-pill-row"><span class="component-pill">info</span><span class="component-pill">progress</span><span class="component-pill">recovery</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-banner-stack">
+                          <div class="sample-banner">
+                            <strong>Sync in progress</strong>
+                            <p>12 of 19 notes uploaded. You can keep working while the queue finishes in the background.</p>
+                          </div>
+                          <div class="sample-progress">
+                            <div class="sample-progress-meta"><span>Embedding sources</span><span>64%</span></div>
+                            <div class="sample-progress-track"><span></span></div>
+                          </div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：横幅表达页内状态，进度条表达连续任务进度。English: banners surface inline status while progress bars show measurable task completion.</div>
+                        <pre class="code-block"><code>import { WorkbenchBanner, WorkbenchProgress } from "@/components/ui/workbench";
+
+&lt;WorkbenchBanner tone="info" title="Sync in progress"&gt;
+  12 of 19 notes uploaded.
+&lt;/WorkbenchBanner&gt;
+
+&lt;WorkbenchProgress label="Embedding sources" value={64} /&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-state" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">Feedback</span>
+                      <h4>State / Empty / Error / Confirm</h4>
+                      <span class="component-module-subtitle">状态 / 空态 / 错误 / 确认</span>
+                      <p>状态组件统一表达加载、空、错误、确认和警告。危险动作必须走 confirm；普通空状态给出恢复或创建动作。</p>
+                      <div class="component-pill-row"><span class="component-pill">loading</span><span class="component-pill">empty</span><span class="component-pill">error</span><span class="component-pill">confirm</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-state-grid">
+                          <div class="sample-status"><strong>empty</strong><span>No records in this scope.</span></div>
+                          <div class="sample-status error"><strong>error</strong><span>Retry or inspect detail.</span></div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：反馈状态统一从共享组件输出。English: loading, empty, error, and confirm states should come from shared feedback components.</div>
+                        <pre class="code-block"><code>import { EmptyStateView, StateCard, ConfirmPanel } from "@/components/ui/workbench";
+
+&lt;StateCard tone="warning" title="Sync paused" action={&lt;MacButton&gt;Retry&lt;/MacButton&gt;} /&gt;
+&lt;EmptyStateView title="No sources" actionLabel="Add source" onAction={openSourcePicker} /&gt;
+&lt;ConfirmPanel title="Delete this note?" onConfirm={deleteNote} onCancel={closeConfirm} /&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-ai-lane" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">AI</span>
+                      <h4>AI Lane / Thread</h4>
+                      <span class="component-module-subtitle">AI 语义泳道 / AI Thread Surface</span>
+                      <p>拆 lane、拆状态、拆交互，不做一整坨 chat。</p>
+                      <div class="component-pill-row"><span class="component-pill">semantic</span><span class="component-pill">runtime-truth</span><span class="component-pill">final-only-durable</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-ai-thread">
+                          <div class="sample-ai-card lane-user">
+                            <div class="sample-ai-card-head">
+                              <div class="sample-ai-card-title"><strong>user_input</strong><span class="sample-ai-pill">source</span><span class="sample-ai-card-copy">compact input record</span></div>
+                              <span class="sample-ai-toggle">⌄</span>
+                            </div>
+                            <div class="sample-ai-card-body">
+                              <div class="sample-ai-body-note">Summarize selected sources and mark evidence gaps.</div>
+                            </div>
+                          </div>
+                          <div class="sample-ai-card lane-thinking collapsed">
+                            <div class="sample-ai-card-head">
+                              <div class="sample-ai-card-title"><strong>thinking</strong><span class="sample-ai-pill">transient</span><span class="sample-ai-card-copy">folded process trace</span></div>
+                              <span class="sample-ai-toggle">+</span>
+                            </div>
+                            <div class="sample-ai-card-body">Short, foldable, never durable.</div>
+                          </div>
+                          <div class="sample-ai-card lane-tool">
+                            <div class="sample-ai-card-head">
+                              <div class="sample-ai-card-title"><strong>tool_execution</strong><span class="sample-ai-pill">runtime</span><span class="sample-ai-card-copy">status from runtime</span></div>
+                              <span class="sample-ai-toggle">2</span>
+                            </div>
+                            <div class="sample-ai-card-body">
+                              <div class="sample-ai-tool-list">
+                                <div class="sample-ai-tool-item">
+                                  <header><strong>search_sources</strong><span class="sample-ai-pill state-done">done</span></header>
+                                  <p>Scanned files and extracted evidence passages.</p>
+                                </div>
+                                <div class="sample-ai-tool-item">
+                                  <header><strong>compare_notes</strong><span class="sample-ai-pill state-running">running</span></header>
+                                  <p>Aligning notes and flagging contradictions.</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="sample-ai-card lane-final">
+                            <div class="sample-ai-card-head">
+                              <div class="sample-ai-card-title"><strong>final_answer</strong><span class="sample-ai-pill state-done">durable</span><span class="sample-ai-card-copy">primary reading surface</span></div>
+                              <span class="sample-ai-toggle">→</span>
+                            </div>
+                            <div class="sample-ai-card-body">
+                              <div class="sample-ai-body-note">Structured answer, citations, next step.</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：AI 线程本身就是组件组合，不应退回成一整坨 chat blob。English: the AI thread should be composed from explicit lane components instead of a merged chat blob.</div>
+                        <pre class="code-block"><code>import {
+  AILaneStack,
+  AIUserInputCard,
+  AIThinkingCard,
+  AIToolExecutionCard,
+  AIFinalAnswerSurface
+} from "@/components/ui/workbench";
+
+&lt;AILaneStack
+  lanes={[
+    { type: "user_input", component: AIUserInputCard, content: userPrompt },
+    { type: "thinking", component: AIThinkingCard, content: projection.processSummary, collapsible: true },
+    { type: "tool_execution", component: AIToolExecutionCard, events: runtimeToolEvents },
+    { type: "final_answer", component: AIFinalAnswerSurface, content: assistantFinalAnswer }
+  ]}
+/&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-ai-composer" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">AI</span>
+                      <h4>AI Composer</h4>
+                      <span class="component-module-subtitle">AI 输入区 / Prompt Composer</span>
+                      <p>参考现网结构：引用 chips、主输入框、底部控制条。这里只保留一半复杂度。</p>
+                      <div class="component-pill-row"><span class="component-pill">input</span><span class="component-pill">attachments</span><span class="component-pill">send</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-ai-composer">
+                          <div class="sample-ai-ref-chips">
+                            <span class="sample-ai-ref-chip"><strong>@Research summary</strong><span>knowledge/research.md</span></span>
+                            <span class="sample-ai-ref-chip"><strong>@Source 02</strong><span>references/interview.txt</span></span>
+                          </div>
+                          <div class="sample-ai-composer-bottom">
+                            <div class="sample-ai-input-shell">
+                              <div class="sample-ai-input">Compare the selected note with attached sources. Draft a cleaner answer and mark unsupported claims.</div>
+                              <button class="sample-ai-input-inline-send">↗</button>
+                            </div>
+                            <div class="sample-ai-footer-start">
+                              <span class="sample-ai-control-chip">⌥ Workspace</span>
+                              <span class="sample-ai-control-chip">⌘ GPT-5.5</span>
+                              <div class="sample-ai-runtime-strip">
+                                <span>18k / 64k</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：参考现网 composer 的三段结构：引用 chips、主输入、底部 runtime strip。English: keep the live three-part composer structure: reference chips, main input, and footer runtime strip.</div>
+                        <pre class="code-block"><code>import { AIComposer, AIContextChipRow, AIModelSwitcher, AIRuntimeStrip } from "@/components/ui/workbench";
+
+&lt;AIComposer
+  value={draft}
+  onChange={setDraft}
+  contextChips={&lt;AIContextChipRow items={selectedContext} /&gt;}
+  footerStart={(
+    &lt;&gt;
+      &lt;PermissionModeChip value={permissionMode} /&gt;
+      &lt;AIModelSwitcher value={model} onChange={setModel} /&gt;
+      &lt;AIRuntimeStrip used={usedLabel} limit={limitLabel} /&gt;
+    &lt;/&gt;
+  )}
+  onSubmit={submitPrompt}
+/&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+
+                  <article id="module-ai-runtime" class="component-module-card">
+                    <div class="component-module-summary">
+                      <span class="eyebrow">AI</span>
+                      <h4>AI Runtime / Confirm Card</h4>
+                      <span class="component-module-subtitle">工具执行卡 / 确认卡</span>
+                      <p>工具卡和确认卡独立组件化，状态直接来自 runtime。</p>
+                      <div class="component-pill-row"><span class="component-pill">tool</span><span class="component-pill">approval</span><span class="component-pill">next-step</span></div>
+                    </div>
+                    <div class="component-module-body">
+                      <div class="component-module-example">
+                        <strong>预览 Preview</strong>
+                        <div class="sample-ai-thread">
+                          <div class="sample-ai-card lane-tool">
+                            <div class="sample-ai-card-head">
+                              <div class="sample-ai-card-title"><strong>tool_execution</strong><span class="sample-ai-pill state-pending">approval</span><span class="sample-ai-card-copy">runtime step with decision boundary</span></div>
+                              <span class="sample-ai-toggle">!</span>
+                            </div>
+                            <div class="sample-ai-card-body">
+                              <div class="sample-ai-tool-item">
+                                <header><strong>move_note</strong><span class="sample-ai-pill state-pending">pending</span></header>
+                                <p>Move <code>summary.md</code> to archive after merge check.</p>
+                              </div>
+                              <div class="sample-ai-actions">
+                                <button class="sample-button">×</button>
+                                <button class="sample-button primary">✓</button>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="sample-ai-card lane-confirm collapsed">
+                            <div class="sample-ai-card-head">
+                              <div class="sample-ai-card-title"><strong>confirm_or_next_step</strong><span class="sample-ai-pill">optional</span><span class="sample-ai-card-copy">only for real escalation</span></div>
+                              <span class="sample-ai-toggle">+</span>
+                            </div>
+                            <div class="sample-ai-card-body">Only surface when a real decision is needed.</div>
+                          </div>
+                        </div>
+                      </div>
+                      <details class="component-code-toggle">
+                        <summary>引用代码 Code</summary>
+                        <div class="component-code-note">中文：工具卡和确认卡都应有清晰状态、动作和来源。English: runtime cards should expose clear status, provenance, and approval actions.</div>
+                        <pre class="code-block"><code>import { AIToolExecutionCard, AIConfirmCard } from "@/components/ui/workbench";
+
+&lt;AIToolExecutionCard
+  event={runtimeEvent}
+  actions={toolApprovalActions}
+  expanded={expandedToolId === runtimeEvent.id}
+  onToggle={toggleToolCard}
+/&gt;
+
+&lt;AIConfirmCard
+  title="Move this note to archive?"
+  description="Only shown when the action crosses a risk boundary."
+  onConfirm={approveMove}
+  onCancel={rejectMove}
+/&gt;</code></pre>
+                      </details>
+                    </div>
+                  </article>
+                </div>
+              </section>
+
+              <section id="contract" class="component-section">
+                <div class="component-section-head">
+                  <div>
+                    <span class="eyebrow">02 Code Contract</span>
+                    <h3>调用规范</h3>
+                  </div>
+                  <p>代码层统一使用 workbench components 和 tokens。模块不得直接复制标准页 HTML，只引用组件、状态和交互契约。</p>
+                </div>
+
+                <div class="component-card">
+                  <table class="component-table">
+                    <thead>
+                      <tr><th>Layer</th><th>Should Use</th><th>Should Avoid</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td><strong>Theme</strong></td><td><code>src/styles/workbench/tokens.css</code></td><td>组件内硬编码 hex / rgba</td></tr>
+                      <tr><td><strong>Navigation</strong></td><td><code>DirectoryTree</code>, <code>WorkbenchList</code>, shared sidebar rows</td><td>把导航区做成卡片墙或自定义一套 hover/selected</td></tr>
+                      <tr><td><strong>Surface</strong></td><td><code>NoteSurface</code>, <code>WorkbenchPanel</code>, <code>StateCard</code></td><td>rounded card stacks / dashboard chrome</td></tr>
+                      <tr><td><strong>AI</strong></td><td><code>AIComposer</code>, <code>AILaneStack</code>, <code>AIToolExecutionCard</code>, <code>AIConfirmCard</code></td><td>把工具、思考、最终答案合成一个 bubble</td></tr>
+                    </tbody>
+                  </table>
+                  <details class="component-code-toggle">
+                    <summary>引用代码 Code</summary>
+                    <div class="component-code-note">中文：模块页面通过模板归属接入标准。English: module pages join the system through template assignment and shared primitives.</div>
+                    <pre class="code-block"><code>const template = getDesktopWorkbenchModuleTemplate(currentRole);
+
+&lt;WorkbenchModuleBoundary
+  role={currentRole}
+  template={template.template}
+  primaryPrimitive={template.primaryPrimitive}
+  companionPane={template.companionPane}
+&gt;
+  &lt;ModuleContent /&gt;
+&lt;/WorkbenchModuleBoundary&gt;</code></pre>
+                  </details>
+                </div>
+              </section>
+            </article>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script>
+      (() => {
+        const standardsShell = document.querySelector(".component-standards-shell");
+        const contentRoot = document.querySelector(".component-standards-content");
+        const navLinks = [...document.querySelectorAll('.component-nav-item[href^="#"]')];
+        const themeButtons = [...document.querySelectorAll("[data-theme-option]")];
+        const themeStorageKey = "goodnight-component-standards-theme";
+
+        const applyTheme = (theme) => {
+          if (!standardsShell) return;
+          const normalizedTheme = theme === "dark" ? "dark" : "light";
+          standardsShell.dataset.theme = normalizedTheme;
+          standardsShell.classList.toggle("theme-dark", normalizedTheme === "dark");
+          standardsShell.classList.toggle("theme-light", normalizedTheme === "light");
+          themeButtons.forEach((button) => {
+            const isActive = button.dataset.themeOption === normalizedTheme;
+            button.setAttribute("aria-pressed", isActive ? "true" : "false");
+          });
+        };
+
+        const getInitialTheme = () => {
+          const requestedTheme = new URLSearchParams(window.location.search).get("theme");
+          if (requestedTheme === "light" || requestedTheme === "dark") return requestedTheme;
+          const persistedTheme = window.localStorage.getItem(themeStorageKey);
+          if (persistedTheme === "light" || persistedTheme === "dark") return persistedTheme;
+          return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        };
+
+        applyTheme(getInitialTheme());
+
+        themeButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            const nextTheme = button.dataset.themeOption === "dark" ? "dark" : "light";
+            applyTheme(nextTheme);
+            window.localStorage.setItem(themeStorageKey, nextTheme);
+          });
+        });
+
+        const setActiveNav = (id) => {
+          navLinks.forEach((link) => {
+            link.classList.toggle("active", link.getAttribute("href") === `#${id}`);
+          });
+        };
+
+        const syncActiveNav = () => {
+          if (!contentRoot) return;
+          const rootTop = contentRoot.getBoundingClientRect().top;
+          let currentId = "overview";
+
+          navLinks.forEach((link) => {
+            const id = link.getAttribute("href")?.slice(1);
+            const node = id ? document.getElementById(id) : null;
+            if (!node) return;
+            const top = node.getBoundingClientRect().top - rootTop;
+            if (top <= 84) currentId = id;
+          });
+
+          setActiveNav(currentId);
+        };
+
+        navLinks.forEach((link) => {
+          link.addEventListener("click", () => {
+            const id = link.getAttribute("href")?.slice(1);
+            if (id) setActiveNav(id);
+          });
+        });
+
+        contentRoot?.addEventListener("scroll", syncActiveNav, { passive: true });
+        window.addEventListener("load", syncActiveNav);
+
+        document.querySelectorAll(".sample-tabs, .sample-segment").forEach((group) => {
+          const items = [...group.children];
+          items.forEach((item) => {
+            item.tabIndex = 0;
+            const activate = () => {
+              items.forEach((entry) => entry.classList.remove("active"));
+              item.classList.add("active");
+            };
+            item.addEventListener("click", activate);
+            item.addEventListener("keydown", (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                activate();
+              }
+            });
+          });
+        });
+
+        document.querySelectorAll(".sample-checkbox").forEach((item) => {
+          item.tabIndex = 0;
+          const toggle = () => item.classList.toggle("checked");
+          item.addEventListener("click", toggle);
+          item.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              toggle();
+            }
+          });
+        });
+
+        document.querySelectorAll(".sample-switch").forEach((item) => {
+          item.tabIndex = 0;
+          const toggle = () => item.classList.toggle("on");
+          item.addEventListener("click", toggle);
+          item.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              toggle();
+            }
+          });
+        });
+
+        document.querySelectorAll(".sample-row, .sample-tree-node").forEach((item) => {
+          item.tabIndex = 0;
+          const select = () => {
+            const group = item.closest(".sample-tree, .sample-tree-panel");
+            group?.querySelectorAll(".active").forEach((entry) => entry.classList.remove("active"));
+            item.classList.add("active");
+          };
+          item.addEventListener("click", select);
+          item.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              select();
+            }
+          });
+        });
+
+        document.querySelectorAll(".sample-ai-card-head").forEach((head) => {
+          head.tabIndex = 0;
+          const toggle = () => head.parentElement?.classList.toggle("collapsed");
+          head.addEventListener("click", toggle);
+          head.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              toggle();
+            }
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -161,12 +161,10 @@ const DESKTOP_APP_MENUS: DesktopMenuGroup[] = [
     id: 'view',
     label: 'View',
     items: [
-      { label: 'Knowledge', action: { kind: 'native', id: 'view.knowledge' } },
-      { label: 'Wiki Graph', action: { kind: 'native', id: 'view.wiki' } },
-      { label: 'Pages', action: { kind: 'native', id: 'view.page' } },
+      { label: 'Notes', action: { kind: 'native', id: 'view.knowledge' } },
+      { label: 'Sketch', action: { kind: 'native', id: 'view.page' } },
       { label: 'Design', action: { kind: 'native', id: 'view.design' } },
       { label: 'Agent', action: { kind: 'native', id: 'view.agent' } },
-      { label: 'Develop', action: { kind: 'native', id: 'view.develop' } },
       { label: 'Test', action: { kind: 'native', id: 'view.test' } },
       { label: 'Ops', action: { kind: 'native', id: 'view.operations' } },
       { label: 'Toggle Theme', action: { kind: 'native', id: 'view.toggle_theme' } },
@@ -187,8 +185,8 @@ const DESKTOP_APP_MENUS: DesktopMenuGroup[] = [
     items: [
       { label: 'About GoodNight', action: { kind: 'native', id: 'help.about' } },
       { label: 'Layout Guide', action: { kind: 'native', id: 'help.layout_overview' } },
-      { label: 'Knowledge Guide', action: { kind: 'native', id: 'help.knowledge_overview' } },
-      { label: 'Page Guide', action: { kind: 'native', id: 'help.page_overview' } },
+      { label: 'Notes Guide', action: { kind: 'native', id: 'help.knowledge_overview' } },
+      { label: 'Sketch Guide', action: { kind: 'native', id: 'help.page_overview' } },
     ],
   },
 ];
@@ -302,10 +300,12 @@ const ROLE_STARTUP_PAGES = new Set<RoleView>([
   'knowledge',
   'page',
   'design',
-  'develop',
   'test',
   'operations',
 ]);
+
+const normalizeLegacyRoleView = (role: RoleView | null): RoleView | null =>
+  role === 'develop' ? 'agent' : role;
 
 const isRoleView = (value: string | null): value is RoleView =>
   value === 'agent' ||
@@ -324,7 +324,7 @@ const readStoredDesktopRole = (): RoleView | null => {
 
   try {
     const raw = window.localStorage.getItem(LAST_DESKTOP_ROLE_STORAGE_KEY);
-    return isRoleView(raw) ? raw : null;
+    return isRoleView(raw) ? normalizeLegacyRoleView(raw) : null;
   } catch {
     return null;
   }
@@ -335,7 +335,8 @@ const resolveStartupRole = (startupPage: StartupPage): RoleView => {
     return readStoredDesktopRole() || 'agent';
   }
 
-  return ROLE_STARTUP_PAGES.has(startupPage as RoleView) ? (startupPage as RoleView) : 'agent';
+  const nextRole = ROLE_STARTUP_PAGES.has(startupPage as RoleView) ? (startupPage as RoleView) : 'agent';
+  return normalizeLegacyRoleView(nextRole) || 'agent';
 };
 
 const collectDesignPages = (nodes: PageStructureNode[]): PageStructureNode[] =>
@@ -418,8 +419,6 @@ const App: React.FC = () => {
 
         hydrateProviderSettings({
           providerMode: settings.mode,
-          claudeConfigId: settings.claudeConfigId,
-          codexConfigId: settings.codexConfigId,
         });
       })
       .catch(() => undefined);
@@ -841,7 +840,7 @@ const App: React.FC = () => {
     }
 
     try {
-      window.localStorage.setItem(LAST_DESKTOP_ROLE_STORAGE_KEY, currentRole);
+      window.localStorage.setItem(LAST_DESKTOP_ROLE_STORAGE_KEY, normalizeLegacyRoleView(currentRole) || 'agent');
     } catch {
       // Ignore persistence failures for non-critical role memory.
     }
@@ -1291,8 +1290,6 @@ const App: React.FC = () => {
         setIsProjectManagerOpen(true);
         break;
       case 'view.knowledge':
-        setCurrentRole('knowledge');
-        break;
       case 'view.wiki':
         setCurrentRole('knowledge');
         break;
@@ -1306,7 +1303,7 @@ const App: React.FC = () => {
         setCurrentRole('agent');
         break;
       case 'view.develop':
-        setCurrentRole('develop');
+        setCurrentRole('agent');
         break;
       case 'view.test':
         setCurrentRole('test');
@@ -1321,10 +1318,10 @@ const App: React.FC = () => {
         window.alert('The current layout uses a desktop-style menu bar: workspace navigation on the left, project actions on the top, and content arranged like a native window.');
         break;
       case 'help.knowledge_overview':
-        window.alert('Knowledge stores user content, and AI answers directly against the current project and skill context.');
+        window.alert('Notes stores project notes and references, and AI answers against the current project context.');
         break;
       case 'help.page_overview':
-        window.alert('Pages are used to manage page structure, sketches, and canvas modules.');
+        window.alert('Sketch is used to manage page structure, sketches, and canvas modules.');
         break;
       case 'help.about':
         window.alert('GoodNight - visual software development platform');
@@ -1624,11 +1621,11 @@ const App: React.FC = () => {
         ? renderAgentView()
       : currentRole === 'design'
         ? <LazyDesignWorkbenchView key={currentProject?.id ?? 'design-workbench'} {...designWorkbenchViewProps} />
-        : currentRole === 'develop'
-          ? renderDevelopView()
-          : currentRole === 'test'
-            ? renderTestView()
-            : renderOperationsView();
+      : currentRole === 'develop'
+        ? renderDevelopView()
+        : currentRole === 'test'
+          ? renderTestView()
+          : renderOperationsView();
 
   const appMainContent = isGlobalSettingsOpen ? (
     <LazyGlobalSettingsPage

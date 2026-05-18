@@ -27,7 +27,18 @@ test('resolveSkillIntent keeps removed legacy workflow tags disabled', () => {
   assert.equal(resolveSkillIntent('@变更同步 检查当前原型变更'), null);
 });
 
-test('resolveSkillIntent routes wiki through slash commands', () => {
+test('resolveSkillIntent routes notes through slash commands', () => {
+  const result = resolveSkillIntent('/notes sync the current note and project context');
+
+  assert.deepEqual(result, {
+    skill: 'wiki',
+    cleanedInput: 'sync the current note and project context',
+    token: '/notes',
+    invocationKind: 'slash',
+  });
+});
+
+test('resolveSkillIntent keeps legacy wiki slash commands compatible', () => {
   const result = resolveSkillIntent('/wiki sync the current note and project context');
 
   assert.deepEqual(result, {

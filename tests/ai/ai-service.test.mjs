@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 
 import { aiService } from '../../src/modules/ai/core/AIService.ts';
 
@@ -287,6 +288,16 @@ test('completeText sends OpenAI-compatible tool declarations with auto tool choi
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('agent chat stage no longer depends on ClaudeRuntime or CodexRuntime shells', async () => {
+  const source = await readFile(
+    'src/features/agent-shell/components/AgentChatStage.tsx',
+    'utf8',
+  );
+
+  assert.doesNotMatch(source, /ClaudeRuntime/);
+  assert.doesNotMatch(source, /CodexRuntime/);
 });
 
 test('completeText returns parseable OpenAI-compatible tool calls for non-streaming responses', async () => {
@@ -623,6 +634,115 @@ test('completeMessages sends anthropic structured tool turns with native tool_re
           },
         ],
       },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('completeText uses explicit OpenAI Responses API protocol when configured', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    protocol: 'openai-responses',
+    apiKey: 'sk-test',
+    baseURL: 'https://api.openai.com/v1',
+    model: 'gpt-5',
+  });
+
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  const events = [];
+
+  globalThis.fetch = async (input) => {
+    requests.push(String(input));
+    return createStreamResponse([
+      'data: {"type":"response.reasoning_summary_text.delta","delta":"Inspect files first. "}\n\n',
+      'data: {"type":"response.output_text.delta","delta":"Done reviewing."}\n\n',
+      'data: {"type":"response.completed"}\n\n',
+    ]);
+  };
+
+  try {
+    const result = await aiService.completeText({
+      systemPrompt: 'system',
+      prompt: 'prompt',
+      onEvent: (event) => events.push(event),
+    });
+
+    assert.equal(result, 'Done reviewing.');
+    assert.deepEqual(requests, ['https://api.openai.com/v1/responses']);
+    assert.deepEqual(
+      events
+        .filter((event) => event.kind === 'thinking' || event.kind === 'text')
+        .map((event) => [event.kind, event.delta]),
+      [
+        ['thinking', 'Inspect files first. '],
+        ['text', 'Done reviewing.'],
+      ],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('completeText falls back from OpenAI Responses API to chat completions only when responses is unavailable', async () => {
+  aiService.setConfig({
+    provider: 'openai-compatible',
+    protocol: 'openai-responses',
+    apiKey: 'sk-test',
+    baseURL: 'https://api.openai.com/v1',
+    model: 'gpt-5',
+  });
+
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    requests.push(url);
+
+    if (url === 'https://api.openai.com/v1/responses') {
+      return new Response(JSON.stringify({ error: { message: 'not found' } }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    }
+
+    if (url === 'https://api.openai.com/v1/chat/completions') {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: 'Fallback answer',
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+    }
+
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  try {
+    const result = await aiService.completeText({
+      systemPrompt: 'system',
+      prompt: 'prompt',
+    });
+
+    assert.equal(result, 'Fallback answer');
+    assert.deepEqual(requests, [
+      'https://api.openai.com/v1/responses',
+      'https://api.openai.com/v1/chat/completions',
     ]);
   } finally {
     globalThis.fetch = originalFetch;

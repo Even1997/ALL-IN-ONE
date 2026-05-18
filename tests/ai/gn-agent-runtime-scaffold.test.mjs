@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -6,16 +6,22 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const claudeRuntimePath = path.resolve(__dirname, '../../src/modules/ai/gn-agent/runtime/claude/ClaudeRuntime.ts');
-const codexRuntimePath = path.resolve(__dirname, '../../src/modules/ai/gn-agent/runtime/codex/CodexRuntime.ts');
+const runtimeClientPath = path.resolve(__dirname, '../../src/modules/ai/runtime/agentRuntimeClient.ts');
+const stagePath = path.resolve(__dirname, '../../src/features/agent-shell/components/AgentChatStage.tsx');
 
-test('claude runtime exists as a dedicated sdk-backed runtime layer', async () => {
-  const source = await readFile(claudeRuntimePath, 'utf8');
-  assert.match(source, /class ClaudeRuntime/);
+test('unified runtime client no longer depends on ClaudeRuntime or CodexRuntime shells', async () => {
+  const source = await readFile(runtimeClientPath, 'utf8');
+  assert.doesNotMatch(source, /ClaudeRuntime/);
+  assert.doesNotMatch(source, /CodexRuntime/);
+  assert.match(source, /toRuntimeAIConfig/);
+  assert.match(source, /await aiService\.completeText/);
 });
 
-test('codex runtime exists as a dedicated runtime layer', async () => {
-  const source = await readFile(codexRuntimePath, 'utf8');
-  assert.match(source, /class CodexRuntime/);
+test('embedded agent pages now share one AIChat variant without runtime shell swapping', async () => {
+  const source = await readFile(stagePath, 'utf8');
+  assert.match(source, /variant=\"embedded\"/);
+  assert.doesNotMatch(source, /runtimeConfigIdOverride/);
+  assert.doesNotMatch(source, /claudeConfigId/);
+  assert.doesNotMatch(source, /codexConfigId/);
+  assert.doesNotMatch(source, /providerExecutionMode/);
 });
-

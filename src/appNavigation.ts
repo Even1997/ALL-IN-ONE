@@ -37,10 +37,9 @@ export type DesktopWorkbenchRole = {
 
 export const DESKTOP_WORKBENCH_ROLES: DesktopWorkbenchRole[] = [
   { id: 'agent', label: 'Agent', summary: 'Unified AI runtime workspace', group: 'primary', showCompanionPane: false },
-  { id: 'knowledge', label: 'Wiki', summary: 'Notes and references', group: 'primary', showCompanionPane: true },
-  { id: 'page', label: 'Sketch', summary: 'Pages and canvas drafts', group: 'primary', showCompanionPane: true },
+  { id: 'knowledge', label: 'Notes', summary: 'Project notes and references', group: 'primary', showCompanionPane: true },
+  { id: 'page', label: 'Sketch', summary: 'Page structure and canvas drafts', group: 'primary', showCompanionPane: true },
   { id: 'design', label: 'UI Design', summary: 'Boards and visual system', group: 'primary', showCompanionPane: true },
-  { id: 'develop', label: 'Develop', summary: 'Files and tasks', group: 'secondary', showCompanionPane: true },
   { id: 'test', label: 'Test', summary: 'Plans and defects', group: 'secondary', showCompanionPane: true },
   { id: 'operations', label: 'Ops', summary: 'Deploy and release flow', group: 'secondary', showCompanionPane: true },
 ];

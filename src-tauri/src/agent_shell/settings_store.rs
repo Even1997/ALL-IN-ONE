@@ -9,8 +9,6 @@ use std::path::{Path, PathBuf};
 struct AgentShellSettingsStoreData {
     #[serde(default = "default_mode")]
     mode: String,
-    claude_config_id: Option<String>,
-    codex_config_id: Option<String>,
 }
 
 fn default_mode() -> String {
@@ -19,21 +17,13 @@ fn default_mode() -> String {
 
 impl Default for AgentShellSettingsStoreData {
     fn default() -> Self {
-        Self {
-            mode: default_mode(),
-            claude_config_id: None,
-            codex_config_id: None,
-        }
+        Self { mode: default_mode() }
     }
 }
 
 impl AgentShellSettingsStoreData {
     fn into_record(self) -> AgentShellSettingsRecord {
-        AgentShellSettingsRecord {
-            mode: self.mode,
-            claude_config_id: self.claude_config_id,
-            codex_config_id: self.codex_config_id,
-        }
+        AgentShellSettingsRecord { mode: self.mode }
     }
 }
 
@@ -81,16 +71,6 @@ pub fn update_settings(
     if let Some(mode) = input.mode {
         store.mode = mode;
     }
-    if input.clear_claude_config_id {
-        store.claude_config_id = None;
-    } else if let Some(claude_config_id) = input.claude_config_id {
-        store.claude_config_id = Some(claude_config_id);
-    }
-    if input.clear_codex_config_id {
-        store.codex_config_id = None;
-    } else if let Some(codex_config_id) = input.codex_config_id {
-        store.codex_config_id = Some(codex_config_id);
-    }
 
     save_settings_store(app_data_dir, &store)?;
     Ok(store.into_record())
@@ -122,71 +102,26 @@ mod tests {
         let settings = get_settings(&app_data_dir).expect("load settings");
 
         assert_eq!(settings.mode, "classic");
-        assert_eq!(settings.claude_config_id, None);
-        assert_eq!(settings.codex_config_id, None);
 
         fs::remove_dir_all(app_data_dir).ok();
     }
 
     #[test]
-    fn update_settings_persists_bindings_and_mode() {
+    fn update_settings_persists_mode() {
         let app_data_dir = create_temp_app_data_dir("update");
 
         let updated = update_settings(
             &app_data_dir,
             UpdateAgentShellSettingsInput {
                 mode: Some("claude".into()),
-                claude_config_id: Some("cfg-claude".into()),
-                clear_claude_config_id: false,
-                codex_config_id: Some("cfg-codex".into()),
-                clear_codex_config_id: false,
             },
         )
         .expect("update settings");
 
         assert_eq!(updated.mode, "claude");
-        assert_eq!(updated.claude_config_id.as_deref(), Some("cfg-claude"));
-        assert_eq!(updated.codex_config_id.as_deref(), Some("cfg-codex"));
 
         let reloaded = get_settings(&app_data_dir).expect("reload settings");
         assert_eq!(reloaded.mode, "claude");
-        assert_eq!(reloaded.claude_config_id.as_deref(), Some("cfg-claude"));
-        assert_eq!(reloaded.codex_config_id.as_deref(), Some("cfg-codex"));
-
-        fs::remove_dir_all(app_data_dir).ok();
-    }
-
-    #[test]
-    fn update_settings_can_clear_provider_bindings() {
-        let app_data_dir = create_temp_app_data_dir("clear");
-
-        update_settings(
-            &app_data_dir,
-            UpdateAgentShellSettingsInput {
-                mode: None,
-                claude_config_id: Some("cfg-claude".into()),
-                clear_claude_config_id: false,
-                codex_config_id: Some("cfg-codex".into()),
-                clear_codex_config_id: false,
-            },
-        )
-        .expect("seed settings");
-
-        let cleared = update_settings(
-            &app_data_dir,
-            UpdateAgentShellSettingsInput {
-                mode: Some("classic".into()),
-                claude_config_id: None,
-                clear_claude_config_id: true,
-                codex_config_id: None,
-                clear_codex_config_id: true,
-            },
-        )
-        .expect("clear settings");
-
-        assert_eq!(cleared.mode, "classic");
-        assert_eq!(cleared.claude_config_id, None);
-        assert_eq!(cleared.codex_config_id, None);
 
         fs::remove_dir_all(app_data_dir).ok();
     }

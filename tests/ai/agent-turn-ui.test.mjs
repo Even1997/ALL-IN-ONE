@@ -7,14 +7,13 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const chatPagePath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentChatPage.tsx');
-const planPanelPath = path.resolve(__dirname, '../../src/components/ai/gn-agent-shell/GNAgentPlanPanel.tsx');
 const agentShellPagePath = path.resolve(
   __dirname,
   '../../src/features/agent-shell/pages/AgentShellPage.tsx',
 );
-const floatingPlanCardPath = path.resolve(
+const utilitySidebarPath = path.resolve(
   __dirname,
-  '../../src/features/agent-shell/components/AgentFloatingPlanCard.tsx',
+  '../../src/features/agent-shell/components/AgentUtilitySidebar.tsx',
 );
 const sessionHookPath = path.resolve(
   __dirname,
@@ -39,25 +38,23 @@ test('GN agent compatibility shell delegates plan actions through the shared wor
   assert.match(aiChatSource, /useAIChatStore/);
 });
 
-test('GN agent plan panel renders structured plan state for the latest turn session', async () => {
-  const source = await readFile(planPanelPath, 'utf8');
+test('agent utility sidebar renders structured review state for the latest turn session', async () => {
+  const source = await readFile(utilitySidebarPath, 'utf8');
 
-  assert.match(source, /session\?\.plan/);
-  assert.match(source, /session\.plan\.steps\.map/);
-  assert.match(source, /No structured plan/);
+  assert.match(source, /latestTurn\?\.plan/);
+  assert.match(source, /pendingApprovalCount/);
+  assert.match(source, /affectedPaths/);
 });
 
-test('agent shell page surfaces floating plan review instead of legacy turn summary cards', async () => {
-  const [pageSource, floatingCardSource] = await Promise.all([
+test('agent shell page surfaces utility review instead of legacy floating plan cards', async () => {
+  const [pageSource, utilitySidebarSource] = await Promise.all([
     readFile(agentShellPagePath, 'utf8'),
-    readFile(floatingPlanCardPath, 'utf8'),
+    readFile(utilitySidebarPath, 'utf8'),
   ]);
 
-  assert.match(pageSource, /AgentFloatingPlanCard/);
-  assert.match(pageSource, /session=\{session\.latestTurnSession\}/);
-  assert.match(pageSource, /onOpenInspector/);
-  assert.match(floatingCardSource, /session\?\.plan/);
-  assert.match(floatingCardSource, /session\.plan\.steps\.slice\(0,\s*3\)/);
-  assert.match(floatingCardSource, /查看完整详情/);
-  assert.match(floatingCardSource, /进度 \/ 计划/);
+  assert.match(pageSource, /AgentUtilitySidebar/);
+  assert.match(pageSource, /session=\{session\}/);
+  assert.match(utilitySidebarSource, /latestTurn\?\.plan/);
+  assert.match(utilitySidebarSource, /pendingApprovalCount/);
+  assert.doesNotMatch(pageSource, /AgentFloatingPlanCard/);
 });

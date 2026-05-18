@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI UI Standard Gap Board</title>
+    <link rel="stylesheet" href="./workbench-preview.css" />
+    <style>
+      body {
+        background: #eceef1;
+      }
+
+      .gap-board-shell {
+        width: min(1440px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 24px 0 48px;
+      }
+
+      .gap-board-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        align-items: end;
+        padding: 26px 28px;
+        border: 1px solid var(--wb-line);
+        border-radius: 16px;
+        background: var(--wb-surface-strong);
+        box-shadow: var(--wb-shadow);
+      }
+
+      .gap-board-hero h1 {
+        margin: 6px 0 8px;
+        font-size: 30px;
+        letter-spacing: 0;
+      }
+
+      .gap-board-hero p {
+        max-width: 820px;
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .gap-status {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        min-width: 430px;
+      }
+
+      .gap-status-card {
+        display: grid;
+        gap: 4px;
+        padding: 12px;
+        border: 1px solid var(--wb-line);
+        border-radius: 12px;
+        background: var(--wb-surface-muted);
+      }
+
+      .gap-status-card span {
+        color: var(--wb-text-faint);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .gap-status-card strong {
+        font-size: 13px;
+      }
+
+      .gap-board-section {
+        margin-top: 18px;
+        padding: 22px;
+        border: 1px solid var(--wb-line);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .gap-board-section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .gap-board-section-head h2 {
+        margin: 4px 0 0;
+        font-size: 18px;
+      }
+
+      .gap-board-section-head p {
+        max-width: 650px;
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .gap-comparison-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .gap-panel {
+        min-width: 0;
+        padding: 16px;
+        border: 1px solid var(--wb-line);
+        border-radius: 14px;
+        background: var(--wb-surface-muted);
+      }
+
+      .gap-panel h3 {
+        margin: 0 0 12px;
+        font-size: 14px;
+      }
+
+      .gap-lane-stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .gap-lane {
+        display: grid;
+        grid-template-columns: 132px minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+        padding: 12px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-strong);
+      }
+
+      .gap-lane-label {
+        display: inline-flex;
+        width: fit-content;
+        padding: 4px 8px;
+        border-radius: 8px;
+        background: rgba(0, 122, 255, 0.1);
+        color: var(--wb-blue);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .gap-lane-label.warn {
+        background: rgba(234, 88, 12, 0.12);
+        color: var(--wb-orange);
+      }
+
+      .gap-lane-copy {
+        display: grid;
+        gap: 4px;
+      }
+
+      .gap-lane-copy strong {
+        font-size: 13px;
+      }
+
+      .gap-lane-copy span {
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .gap-code {
+        margin: 12px 0 0;
+        padding: 12px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: #f7f8fa;
+        color: #334155;
+        font: 12px/1.55 "SFMono-Regular", Consolas, monospace;
+        white-space: pre-wrap;
+      }
+
+      .gap-findings {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .gap-finding-card {
+        display: grid;
+        align-content: start;
+        gap: 10px;
+        min-height: 178px;
+        padding: 15px;
+        border: 1px solid var(--wb-line);
+        border-radius: 12px;
+        background: var(--wb-surface-strong);
+      }
+
+      .gap-finding-card strong {
+        font-size: 14px;
+      }
+
+      .gap-finding-card p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .gap-tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .gap-tag {
+        padding: 3px 7px;
+        border: 1px solid var(--wb-line);
+        border-radius: 8px;
+        background: var(--wb-surface-muted);
+        color: var(--wb-text-soft);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .gap-flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .gap-step {
+        position: relative;
+        display: grid;
+        gap: 8px;
+        padding: 16px;
+        border: 1px solid var(--wb-line);
+        border-radius: 12px;
+        background: var(--wb-surface-strong);
+      }
+
+      .gap-step span {
+        color: var(--wb-text-faint);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .gap-step strong {
+        font-size: 14px;
+      }
+
+      .gap-step p {
+        margin: 0;
+        color: var(--wb-text-soft);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .gap-reference-list {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .gap-reference-list li {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--wb-line);
+        border-radius: 10px;
+        background: var(--wb-surface-muted);
+        color: var(--wb-text-soft);
+        font-size: 12px;
+      }
+
+      .gap-reference-list code {
+        color: var(--wb-text);
+      }
+
+      @media (max-width: 980px) {
+        .gap-board-hero,
+        .gap-comparison-grid,
+        .gap-findings,
+        .gap-flow {
+          grid-template-columns: 1fr;
+        }
+
+        .gap-status {
+          min-width: 0;
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="gap-board-shell">
+      <section class="gap-board-hero">
+        <div>
+          <span class="eyebrow">AI Workbench Review</span>
+          <h1>Standard Alignment Gap Board</h1>
+          <p>
+            This board compares the current AI chat rendering path with the
+            GoodNight Workbench UI Standard. It keeps runtime facts separate
+            from display recommendations: the fix should live in projection,
+            render model, message ordering, and UI composition.
+          </p>
+        </div>
+        <div class="gap-status">
+          <div class="gap-status-card">
+            <span>Standard</span>
+            <strong>ui-standards.html</strong>
+          </div>
+          <div class="gap-status-card">
+            <span>Current path</span>
+            <strong>assistant output model</strong>
+          </div>
+          <div class="gap-status-card">
+            <span>Severity</span>
+            <strong>Medium-high UI drift</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="gap-board-section">
+        <div class="gap-board-section-head">
+          <div>
+            <span class="eyebrow">Lane Contract</span>
+            <h2>Expected Standard Vs Current Render Model</h2>
+          </div>
+          <p>
+            The visible UI is close in tone, but the lane taxonomy is still too
+            broad. Several distinct concepts collapse into a generic bubble lane.
+          </p>
+        </div>
+
+        <div class="gap-comparison-grid">
+          <article class="gap-panel">
+            <h3>Standard lane model</h3>
+            <div class="gap-lane-stack">
+              <div class="gap-lane">
+                <span class="gap-lane-label">user_input</span>
+                <div class="gap-lane-copy">
+                  <strong>Compact source record</strong>
+                  <span>Anchors the turn without becoming a loud chat bubble.</span>
+                </div>
+              </div>
+              <div class="gap-lane">
+                <span class="gap-lane-label">thinking</span>
+                <div class="gap-lane-copy">
+                  <strong>Transient process context</strong>
+                  <span>Reads like a margin note and never persists as final body.</span>
+                </div>
+              </div>
+              <div class="gap-lane">
+                <span class="gap-lane-label">tool_execution</span>
+                <div class="gap-lane-copy">
+                  <strong>Runtime-sourced tool facts</strong>
+                  <span>Uses canonical runtime/tool events, not assistant prose.</span>
+                </div>
+              </div>
+              <div class="gap-lane">
+                <span class="gap-lane-label">final_answer</span>
+                <div class="gap-lane-copy">
+                  <strong>Durable reading surface</strong>
+                  <span>The only completed-turn assistant answer body.</span>
+                </div>
+              </div>
+              <div class="gap-lane">
+                <span class="gap-lane-label">confirm_or_next</span>
+                <div class="gap-lane-copy">
+                  <strong>Decision-only confirm card</strong>
+                  <span>Appears only for approval, conflict, or risky continuation.</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="gap-panel">
+            <h3>Current implementation model</h3>
+            <div class="gap-lane-stack">
+              <div class="gap-lane">
+                <span class="gap-lane-label warn">user bubble</span>
+                <div class="gap-lane-copy">
+                  <strong>User remains chat-bubble shaped</strong>
+                  <span>Better than before, but still not a compact source row.</span>
+                </div>
+              </div>
+              <div class="gap-lane">
+                <span class="gap-lane-label">thinking_lane</span>
+                <div class="gap-lane-copy">
+                  <strong>Thinking is separated</strong>
+                  <span>This part is directionally aligned with the standard.</span>
+                </div>
+              </div>
+              <div class="gap-lane">
+                <span class="gap-lane-label warn">bubble</span>
+                <div class="gap-lane-copy">
+                  <strong>Tools, feedback, approval, question mix together</strong>
+                  <span>Timeline cards and interaction cards all enter as generic bubble items.</span>
+                </div>
+              </div>
+              <div class="gap-lane">
+                <span class="gap-lane-label">answer_lane</span>
+                <div class="gap-lane-copy">
+                  <strong>Final answer exists</strong>
+                  <span>Correct concept, but visual treatment is not a full card family.</span>
+                </div>
+              </div>
+            </div>
+            <pre class="gap-code">type ChatMessageTimelineRenderItem = {
+  laneKind?: "thinking_lane" | "bubble" | "answer_lane";
+}
+
+timelineItems.map(... laneKind: "bubble")
+approval/question cards -> timeline item -> bubble lane</pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="gap-board-section">
+        <div class="gap-board-section-head">
+          <div>
+            <span class="eyebrow">Findings</span>
+            <h2>Where The UI Drifts From The Standard</h2>
+          </div>
+          <p>
+            These are presentation-layer gaps. None require changing provider
+            adapters, canonical event semantics, tool truth, or replay meaning.
+          </p>
+        </div>
+
+        <div class="gap-findings">
+          <article class="gap-finding-card">
+            <div class="gap-tag-row">
+              <span class="gap-tag">render model</span>
+              <span class="gap-tag">lane taxonomy</span>
+            </div>
+            <strong>Tool execution is not a first-class lane</strong>
+            <p>
+              Tool trace cards exist visually, but the output model classifies
+              them as generic bubbles. The standard asks for an explicit
+              tool_execution card/lane sourced from runtime events.
+            </p>
+          </article>
+
+          <article class="gap-finding-card">
+            <div class="gap-tag-row">
+              <span class="gap-tag">confirm</span>
+              <span class="gap-tag">approval</span>
+            </div>
+            <strong>Approval and question cards are inserted as bubbles</strong>
+            <p>
+              StateCard improves the surface, but confirm_or_next_step is still
+              not represented in message ordering. This makes risky decisions
+              feel like another timeline card instead of a distinct decision lane.
+            </p>
+          </article>
+
+          <article class="gap-finding-card">
+            <div class="gap-tag-row">
+              <span class="gap-tag">visual grammar</span>
+              <span class="gap-tag">chat residue</span>
+            </div>
+            <strong>User input still reads like chat UI</strong>
+            <p>
+              The right-aligned user bubble conflicts with the standard's
+              compact source-record pattern. It should anchor the turn like a
+              note row, not compete with the document surface.
+            </p>
+          </article>
+
+          <article class="gap-finding-card">
+            <div class="gap-tag-row">
+              <span class="gap-tag">states</span>
+              <span class="gap-tag">coverage</span>
+            </div>
+            <strong>State coverage is partial</strong>
+            <p>
+              Approval/question cards use StateCard and wb-state polish, but
+              thinking, final, tool, loading, collapsed, and error variants do
+              not share one state-card vocabulary.
+            </p>
+          </article>
+
+          <article class="gap-finding-card">
+            <div class="gap-tag-row">
+              <span class="gap-tag">tokens</span>
+              <span class="gap-tag">CSS</span>
+            </div>
+            <strong>Old token families still leak through</strong>
+            <p>
+              The CSS mixes mode vars, gn-agent vars, and wb vars. Later
+              overrides calm the page, but the source still carries conflicting
+              radius, hover, and surface rules.
+            </p>
+          </article>
+
+          <article class="gap-finding-card">
+            <div class="gap-tag-row">
+              <span class="gap-tag">architecture</span>
+              <span class="gap-tag">safe layer</span>
+            </div>
+            <strong>The fix belongs above runtime truth</strong>
+            <p>
+              Runtime facts already exist. The correct layer is projection and
+              UI composition: expand render lanes, remap ordering, then restyle
+              surfaces to match the workbench standard.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="gap-board-section">
+        <div class="gap-board-section-head">
+          <div>
+            <span class="eyebrow">Fix Direction</span>
+            <h2>Recommended Implementation Path</h2>
+          </div>
+          <p>
+            The safest path is incremental: preserve runtime facts, introduce a
+            richer display taxonomy, then update the card families.
+          </p>
+        </div>
+
+        <div class="gap-flow">
+          <article class="gap-step">
+            <span>01</span>
+            <strong>Expand lane kinds</strong>
+            <p>
+              Add user_input, thinking, feedback, tool_execution, final_answer,
+              and confirm_or_next_step to the message render model.
+            </p>
+          </article>
+          <article class="gap-step">
+            <span>02</span>
+            <strong>Map runtime cards by meaning</strong>
+            <p>
+              Convert tool traces to tool_execution and approval/question to
+              confirm_or_next_step without reparsing assistant text.
+            </p>
+          </article>
+          <article class="gap-step">
+            <span>03</span>
+            <strong>Unify card surfaces</strong>
+            <p>
+              Create AI lane card styles that mirror ui-standards: compact user,
+              margin-note thinking, tool facts, document final, confirm card.
+            </p>
+          </article>
+          <article class="gap-step">
+            <span>04</span>
+            <strong>Verify states and themes</strong>
+            <p>
+              Cover collapsed, loading, error, hover, selected, and dark mode
+              for every lane family before changing runtime behavior.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="gap-board-section">
+        <div class="gap-board-section-head">
+          <div>
+            <span class="eyebrow">Source Anchors</span>
+            <h2>Files Reviewed</h2>
+          </div>
+          <p>
+            These are the direct implementation anchors for the audit. The
+            standard files remain the visual contract.
+          </p>
+        </div>
+        <ul class="gap-reference-list">
+          <li><code>design/workbench-unified-previews/ui-standards.html</code><span>lane and card contract</span></li>
+          <li><code>design/workbench-unified-previews/state-standards.html</code><span>state coverage contract</span></li>
+          <li><code>src/components/workspace/assistantRenderModel.ts</code><span>thinking, feedback, final split</span></li>
+          <li><code>src/components/workspace/assistantMessageOutputModel.ts</code><span>timeline card to bubble mapping</span></li>
+          <li><code>src/components/workspace/timeline/chatMessageTimelineRenderModel.ts</code><span>current lane taxonomy</span></li>
+          <li><code>src/components/ai/gn-agent/GNAgentMessageItem.tsx</code><span>actual lane rendering</span></li>
+          <li><code>src/components/workspace/AIChatRuntimeInteractionCards.tsx</code><span>approval/question card rendering</span></li>
+          <li><code>src/components/workspace/AIChat.css</code><span>visual shell and lane styling</span></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

@@ -4,8 +4,6 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { aiService, type AITextStreamEvent } from '../core/AIService';
-import { ClaudeRuntime } from '../gn-agent/runtime/claude/ClaudeRuntime';
-import { CodexRuntime } from '../gn-agent/runtime/codex/CodexRuntime';
 import type { ApprovalRecord, PermissionMode, SandboxPolicy } from './approval/approvalTypes';
 import { permissionModeToSandboxPolicy } from './approval/permissionMode';
 import { ensureDesktopRuntimeSidecar } from '../../runtime-sidecar/desktopRuntimeSidecar.ts';
@@ -23,9 +21,6 @@ import type {
   AgentTimelineEvent,
 } from './agentRuntimeTypes';
 import type { RuntimeToolPromptMessage } from './agent-kernel/agentKernelTypes';
-
-const claudeRuntime = new ClaudeRuntime();
-const codexRuntime = new CodexRuntime();
 export type AgentRuntimeSettings = {
   sandboxPolicy: SandboxPolicy;
   permissionMode: PermissionMode;
@@ -455,30 +450,8 @@ export const executePrompt = async (options: {
   signal?: AbortSignal;
 }) => {
   const { providerId, sessionId, config, systemPrompt, prompt, onChunk, onEvent, signal } = options;
-
-  if (providerId === 'claude' && config) {
-    return claudeRuntime.executePrompt({
-      sessionId,
-      config,
-      systemPrompt,
-      prompt,
-      onChunk,
-      onEvent,
-      signal,
-    });
-  }
-
-  if (providerId === 'codex' && config) {
-    return codexRuntime.executePrompt({
-      sessionId,
-      config,
-      systemPrompt,
-      prompt,
-      onChunk,
-      onEvent,
-      signal,
-    });
-  }
+  void providerId;
+  void sessionId;
 
   const previousConfig = aiService.getConfig();
   if (config) {

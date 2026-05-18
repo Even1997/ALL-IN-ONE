@@ -1,13 +1,18 @@
-// 文件作用：状态模型，位于应用支持层。
-// 所在链路：负责承接当前模块在整体链路中的实现职责。
-// 排查入口：先看这个文件对外导出的状态、投影、协调或执行入口，再顺着上下游模块继续追。
+// 文件作用：定义 AI 配置持久化模型，并把设置页配置投影到运行时配置。
+// 所在链路：设置页 / store -> 运行时配置映射 -> provider protocol adapters。
+// 排查入口：先看 protocol/provider 的归一化规则，再看 createAIConfigEntry 和 toRuntimeAIConfig。
 
 import { PROVIDER_PRESETS, type ProviderPreset } from '../providerPresets.ts';
 
 export type AIProviderType = 'openai-compatible' | 'anthropic';
+export type AIProtocolType =
+  | 'anthropic-messages'
+  | 'openai-chat-completions'
+  | 'openai-responses';
 
 type RuntimeAIConfig = {
   provider: AIProviderType;
+  protocol: AIProtocolType;
   apiKey: string;
   baseURL: string;
   model: string;
@@ -19,6 +24,7 @@ export type AIConfigEntry = {
   id: string;
   name: string;
   provider: AIProviderType;
+  protocol: AIProtocolType;
   apiKey: string;
   baseURL: string;
   model: string;
@@ -28,12 +34,31 @@ export type AIConfigEntry = {
   enabled: boolean;
 };
 
-const createDefaultName = () => `AI 閰嶇疆 ${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+const createDefaultName = () => `AI 闁板秶鐤?${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 258000;
+
+export const resolveDefaultAIProtocol = (provider: AIProviderType): AIProtocolType =>
+  provider === 'anthropic' ? 'anthropic-messages' : 'openai-chat-completions';
+
+// 中文导航：协议是显式字段，但仍要按 provider 做兜底归一化，避免导入旧配置或切换 provider 后留下非法组合。
+export const normalizeAIProtocol = (
+  provider: AIProviderType,
+  protocol: AIProtocolType | null | undefined,
+): AIProtocolType => {
+  if (provider === 'anthropic') {
+    return 'anthropic-messages';
+  }
+
+  if (protocol === 'openai-chat-completions' || protocol === 'openai-responses') {
+    return protocol;
+  }
+
+  return 'openai-chat-completions';
+};
 
 export const normalizeSavedModels = (savedModels: string[] | undefined, model: string) => {
   const normalized = Array.from(
-    new Set((savedModels || []).map((item) => item.trim()).filter(Boolean))
+    new Set((savedModels || []).map((item) => item.trim()).filter(Boolean)),
   );
   const fallbackModel = model.trim();
   return normalized.length > 0 ? normalized : (fallbackModel ? [fallbackModel] : []);
@@ -45,12 +70,14 @@ export const resolveActiveModel = (model: string, savedModels: string[]) => {
 };
 
 export const createAIConfigEntry = (overrides: Partial<AIConfigEntry> = {}): AIConfigEntry => {
+  const provider = overrides.provider || 'openai-compatible';
   const defaultModel = overrides.model || 'gpt-4o-mini';
   const savedModels = normalizeSavedModels(overrides.savedModels, defaultModel);
   return {
     id: overrides.id || `ai-config-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: overrides.name?.trim() || createDefaultName(),
-    provider: overrides.provider || 'openai-compatible',
+    provider,
+    protocol: normalizeAIProtocol(provider, overrides.protocol),
     apiKey: overrides.apiKey || '',
     baseURL: overrides.baseURL || 'https://openrouter.ai/api/v1',
     model: resolveActiveModel(defaultModel, savedModels),
@@ -66,6 +93,7 @@ export const buildPresetAIConfigEntry = (preset: ProviderPreset): AIConfigEntry 
     id: `preset-${preset.id}`,
     name: preset.label,
     provider: preset.type,
+    protocol: resolveDefaultAIProtocol(preset.type),
     baseURL: preset.baseURL,
     model: preset.models[0] || '',
     contextWindowTokens: DEFAULT_CONTEXT_WINDOW_TOKENS,
@@ -102,6 +130,7 @@ export const resolveSelectedAIConfigId = (configs: AIConfigEntry[], previousSele
 
 export const toRuntimeAIConfig = (config: AIConfigEntry): Partial<RuntimeAIConfig> => ({
   provider: config.provider,
+  protocol: config.protocol,
   apiKey: config.apiKey,
   baseURL: config.baseURL,
   model: config.model,
